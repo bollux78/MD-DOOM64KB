@@ -28,7 +28,7 @@ def main() -> None:
         return '"' + value.ljust(length) + '"'
 
     display = identity
-    title = identity.upper()
+    title = identity  # Keep case identical to the ROM filename and demo screen
     note = "DOOM MD 68000 RENDERER BENCHMARK"
 
     # Keep layout and memory map the same as SGDK's stock ROMHeader.
