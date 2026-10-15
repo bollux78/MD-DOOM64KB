@@ -84,6 +84,15 @@ typedef char assertMemblockSize[sizeof(memblock_t) <= PARAGRAPH_SIZE ? 1 : -1];
 static memblock_t __far* mainzone_sentinal;
 static segment_t   mainzone_rover_segment;
 
+#if defined(DOOM_RAM_STATS)
+/* Diagnostic ROMs only: account for the zone allocator's live/peak occupancy.
+ * Include block headers and internal fragmentation, not just requested bytes.
+ * This measures Doom's fixed zone, NOT the SGDK heap or 68000 stacks. */
+static uint32_t ram_zone_size;
+static uint32_t ram_zone_live;
+static uint32_t ram_zone_peak;
+#endif
+
 
 static segment_t pointerToSegment(const memblock_t __far* ptr)
 {
@@ -115,6 +124,10 @@ void Z_Init (void)
 	// allocate all available conventional memory.
 	uint32_t heapSize;
 	static uint8_t __far* mainzone; mainzone = I_ZoneBase(&heapSize);
+#if defined(DOOM_RAM_STATS)
+    ram_zone_size = heapSize;
+    ram_zone_live = ram_zone_peak = 0;
+#endif
 
 	// align blocklist
 	uint_fast8_t i = 0;
@@ -153,6 +166,10 @@ void Z_Init (void)
 
 static void Z_FreeBlock(memblock_t __far* block)
 {
+#if defined(DOOM_RAM_STATS)
+    /* Every Z_FreeBlock call here frees a live block, before coalescing. */
+    ram_zone_live -= block->size;
+#endif
 #if defined ZONEIDCHECK
     if (block->id != ZONEID)
         I_Error("Z_FreeBlock: block has id %x instead of ZONEID", block->id);
@@ -239,6 +256,12 @@ static uint32_t Z_GetLargestFreeBlockSize(void)
 	return largestFreeBlockSize;
 }
 
+#if defined(DOOM_RAM_STATS)
+uint32_t Z_RamZoneSize(void) { return ram_zone_size; }
+uint32_t Z_RamCurrentUsed(void) { return ram_zone_live; }
+uint32_t Z_RamPeakUsed(void) { return ram_zone_peak; }
+#endif
+
 static uint32_t Z_GetTotalFreeMemory(void)
 {
 	uint32_t totalFreeMemory = 0;
@@ -252,6 +275,10 @@ static uint32_t Z_GetTotalFreeMemory(void)
 	return totalFreeMemory;
 }
 
+
+#if defined(DOOM_RAM_STATS)
+uint32_t Z_RamFreeNow(void) { return Z_GetTotalFreeMemory(); }
+#endif
 
 //
 // Z_TryMalloc
@@ -339,6 +366,10 @@ static void __far* Z_TryMalloc(uint16_t size, int8_t tag, void __far*__far* user
         base->next = newblock_segment;
     }
 
+#if defined(DOOM_RAM_STATS)
+    ram_zone_live += base->size;
+    if (ram_zone_live > ram_zone_peak) ram_zone_peak = ram_zone_live;
+#endif
     base->tag  = tag;
     if (user)
         base->user = user;
