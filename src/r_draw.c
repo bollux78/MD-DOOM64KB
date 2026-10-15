@@ -1870,15 +1870,33 @@ static void R_DrawColumnInCache(const column_t __far* patch, byte* cache, int16_
  * straight from const patch_t*.
 */
 
-/* Test whether a less collision-prone composed-column cache pays off.
- * Original: 4 slots x 128 bytes. Experimental: 8 slots (+512 B RAM).
- * Keep the maximum number of hash probes fixed at four. */
-#if defined(DOOM_CACHE8)
+/* Round 4: compare 8/16/32/64 composed-column slots without changing
+ * the renderer or the maximum four hash probes. Each slot holds 128 bytes
+ * plus a 16-bit tag in main RAM. Default behavior remains unchanged. */
+#if defined(DOOM_CACHE_SLOTS)
+#if DOOM_CACHE_SLOTS != 8 && DOOM_CACHE_SLOTS != 16 && DOOM_CACHE_SLOTS != 32 && DOOM_CACHE_SLOTS != 64
+#error DOOM_CACHE_SLOTS must be 8, 16, 32 or 64
+#endif
+#define MAX_CACHE_ENTRIES DOOM_CACHE_SLOTS
+#elif defined(DOOM_CACHE8)
 #define MAX_CACHE_ENTRIES 8
 #else
 #define MAX_CACHE_ENTRIES 4
 #endif
 #define MAX_CACHE_TRIES 4
+
+#if defined(DOOM_CACHE_STATS)
+/* Separate diagnostic ROMs: benchmarking ROMs do not pay counter overhead. */
+uint32_t doom_cache_hits = 0;
+uint32_t doom_cache_misses = 0;
+uint32_t doom_cache_evictions = 0;
+void R_CacheStatsReset(void)
+{
+    doom_cache_hits = 0;
+    doom_cache_misses = 0;
+    doom_cache_evictions = 0;
+}
+#endif
 
 static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
 {
@@ -1921,11 +1939,13 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     byte __far* colcache = &columnCache[cachekey*128];
     uint16_t cacheEntry = columnCacheEntries[cachekey];
 
-    //total++;
-
     if (cacheEntry != CACHE_ENTRY(xc, texture))
     {
-        //misses++;
+#if defined(DOOM_CACHE_STATS)
+        doom_cache_misses++;
+        if (cacheEntry != 0)
+            doom_cache_evictions++;
+#endif
         static byte tmpCache[128];
 
         uint8_t i = 0;
@@ -1957,6 +1977,10 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 
         columnCacheEntries[cachekey] = CACHE_ENTRY(xc, texture);
     }
+#if defined(DOOM_CACHE_STATS)
+    else
+        doom_cache_hits++;
+#endif
 
     return colcache;
 }
