@@ -34,6 +34,12 @@ extern const int16_t CENTERY;
 // 16 個のベタ塗りタイルを置く VRAM 先頭 index
 #define SOLID_TILE_INDEX  TILE_USER_INDEX
 
+#if defined(DOOM_CELL_LUT)
+/* 32 x 256 tilemap words in ROM; built from WAD COLORMAP and genpal_cell. */
+#include "colormap_cells.h"
+extern const uint8_t *fullcolormap;
+#endif
+
 // チャンキー FB。各要素は完成済み VDP タイルマップ語。
 static uint16_t _s_screen[VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT];
 
@@ -450,6 +456,31 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 	const uint16_t fracstep = dcvars->fracstep;
 	uint16_t frac = (dcvars->texturemid >> COLEXTRABITS) + (dcvars->yl - CENTERY) * fracstep;
 	const uint8_t colbits = COLBITS;
+
+#if defined(DOOM_CELL_LUT)
+    /*
+     * One bounds-checked selection per wall/sprite column; the inner pixel
+     * loop performs a single 16-bit lookup instead of two chained lookups.
+     * Use original path for any colormap not in the standard COLORMAP lump.
+     * The tile palette is constant across PLAYPAL flash changes; those
+     * change CRAM only, so this mapping remains correct.
+     */
+    if (colormap && fullcolormap)
+    {
+        const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
+        if (offset < (32u * 256u) && (offset & 255u) == 0u)
+        {
+            const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
+            do
+            {
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+            } while (--count);
+            return;
+        }
+    }
+#endif
 
 #if defined(DOOM_UNROLL_COLUMNS)
     /* Two pixels per loop, identical 16-bit fractional wraparound. */
