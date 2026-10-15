@@ -98,12 +98,21 @@ if set -q DOOM_CACHE_STATS; and test "$DOOM_CACHE_STATS" = 1
     end
     set render_flags "$render_flags -DDOOM_CACHE_STATS"
 end
+# Generate matching ROM header and on-screen timedemo title per build.
+# SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
+# No changes to shared SGDK files or boot code are required.
+set -l stamp_options "$render_flags"
+if set -q DOOM_BUILD_ID
+    python3 scripts/set_rom_identity.py --id "$DOOM_BUILD_ID"; or exit 1
+    set render_flags "$render_flags -DDOOM_BUILD_VARIANT"
+    set stamp_options "$render_flags $DOOM_BUILD_ID"
+end
 set -l stamp out/.render_options
-if test -f $stamp; and test (cat $stamp) != "$render_flags"
+if test -f $stamp; and test (cat $stamp) != "$stamp_options"
     rm -rf out
 end
 mkdir -p out
-printf '%s' "$render_flags" > $stamp
+printf '%s' "$stamp_options" > $stamp
 rm -f out/rom.bin
 set -l libgcc ($gcc -m68000 -print-libgcc-file-name)
 if test $status -ne 0; or not test -f "$libgcc"
