@@ -504,9 +504,31 @@ void I_FinishUpdate(void)
     I_DrawClassicTextHUD();
 #endif
 
-#if defined(DOOM_HUD_DMA24)
-    /* The 3D framebuffer has 24 rows (DMA). The status strip is
-     * CPU-updated only for changed tilemap rows, avoiding multi-DMA. */
+#if defined(DOOM_HUD_SINGLE_DMA)
+    /* Exactly ONE VDP tilemap DMA each frame.
+     * 24 gameplay rows normally; 28 rows whenever HUD changes.
+     * This avoids the extra DMA/CPU VRAM accesses that previously
+     * caused hangs in BlastEm. Initial frame always sends the HUD.
+     */
+    {
+        static uint16_t lastHud[4 * VIEWWINDOWWIDTH];
+        static uint8_t hudInitialized = 0;
+        const uint16_t *now = &_s_screen[VIEWWINDOWHEIGHT * VIEWWINDOWWIDTH];
+        uint8_t dirty = !hudInitialized;
+        for (uint16_t i = 0; i < (4 * VIEWWINDOWWIDTH); i++)
+        {
+            uint16_t current = now[i];
+            if (lastHud[i] != current) dirty = 1;
+            lastHud[i] = current;
+        }
+        hudInitialized = 1;
+        VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                               VIEWWINDOWWIDTH,
+                               dirty ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT,
+                               VIEWWINDOWWIDTH, DMA);
+    }
+#elif defined(DOOM_HUD_DMA24)
+    /* Old DMA24 experiments retained as historical controls. */
     VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
                            VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
                            VIEWWINDOWWIDTH, DMA);
@@ -525,8 +547,6 @@ void I_FinishUpdate(void)
                 old[x] = src[x];
             }
             if (changed)
-                /* CPU-write the few dirty HUD cells. This avoids issuing
-                 * several more DMA requests during a NO_VSYNC frame. */
                 VDP_setTileMapDataRect(BG_A, src, 0,
                                        VIEWWINDOWHEIGHT + row,
                                        VIEWWINDOWWIDTH, 1,
@@ -536,9 +556,9 @@ void I_FinishUpdate(void)
     }
 #endif
 #else
-	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
-	                       VIEWWINDOWWIDTH, VDP_DISPLAY_ROWS,
-	                       VIEWWINDOWWIDTH, DMA);
+    VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                           VIEWWINDOWWIDTH, VDP_DISPLAY_ROWS,
+                           VIEWWINDOWWIDTH, DMA);
 #endif
 #if defined(DOOM_PROFILE)
     prof_vdp_vb += _g_vblankCount - start_vb;
