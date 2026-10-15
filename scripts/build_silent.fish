@@ -120,6 +120,8 @@ if set -q DOOM_BUILD_ID
     set render_flags "$render_flags -DDOOM_BUILD_VARIANT"
     set stamp_options "$render_flags $DOOM_BUILD_ID"
 end
+# Make can build silently; record real flags for laboratory verification.
+echo "BUILD_FLAGS: $render_flags"
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$stamp_options"
     rm -rf out
