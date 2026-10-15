@@ -263,6 +263,18 @@ static void I_ShutdownTimer(void)
 }
 
 
+#if defined(DOOM_RAM_STATS)
+/* Minimum *sampled* 68000 stack pointer. This is not a stack high-water mark:
+ * interrupts and deeper callees can consume more stack between samples. */
+volatile uint32_t doom_ram_min_sp = 0xFFFFFFFFu;
+void I_RamProbeSample(void)
+{
+    uint32_t sp;
+    __asm__ volatile ("move.l %%sp,%0" : "=d" (sp));
+    if (sp < doom_ram_min_sp) doom_ram_min_sp = sp;
+}
+#endif
+
 //**************************************************************************************
 //
 // Memory : Doom の zone ヒープ。Genesis は RAM 64KB なので SGDK 使用分を除いた静的配列。
