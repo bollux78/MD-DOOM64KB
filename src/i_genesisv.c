@@ -148,6 +148,119 @@ static void I_DrawDebugCounters(void)
 }
 
 
+#if defined(TIMEDEMO)
+/* Benchmark v2: displayed frames, wall-clock VBlanks and one-second FPS windows.
+   VDP/Z80 clocks are unchanged even when the 68000 is overclocked. */
+static uint32_t bench_start_vb;
+static uint32_t bench_window_vb;
+static uint32_t bench_frames;
+static uint32_t bench_window_frames;
+static uint16_t bench_min_x10;
+static uint16_t bench_max_x10;
+static uint16_t bench_windows;
+static boolean bench_active;
+
+void I_BenchmarkReset(void)
+{
+    bench_start_vb = _g_vblankCount;
+    bench_window_vb = bench_start_vb;
+    bench_frames = 0;
+    bench_window_frames = 0;
+    bench_min_x10 = 0xffff;
+    bench_max_x10 = 0;
+    bench_windows = 0;
+    bench_active = true;
+}
+
+static void I_BenchmarkFrame(void)
+{
+    if (!bench_active) return;
+    bench_frames++;
+    bench_window_frames++;
+    uint32_t elapsed = _g_vblankCount - bench_window_vb;
+    if (elapsed >= 60)
+    {
+        uint16_t fps_x10 = (uint16_t)((bench_window_frames * 600u + elapsed / 2) / elapsed);
+        if (fps_x10 < bench_min_x10) bench_min_x10 = fps_x10;
+        if (fps_x10 > bench_max_x10) bench_max_x10 = fps_x10;
+        bench_windows++;
+        bench_window_frames = 0;
+        bench_window_vb = _g_vblankCount;
+    }
+}
+
+/* Plain text results avoid dependence on libc printf/formatting stubs. */
+static void bench_u32(char *out, uint32_t n)
+{
+    char tmp[11];
+    uint16_t len = 0;
+    do { tmp[len++] = (char)('0' + n % 10); n /= 10; } while (n);
+    for (uint16_t i = 0; i < len; i++) out[i] = tmp[len - i - 1];
+    out[len] = 0;
+}
+
+static void bench_fixed(char *out, uint32_t n, uint8_t decimals)
+{
+    uint32_t scale = 1;
+    for (uint8_t i = 0; i < decimals; i++) scale *= 10;
+    bench_u32(out, n / scale);
+    while (*out) out++;
+    if (decimals)
+    {
+        *out++ = '.';
+        uint32_t remainder = n % scale;
+        uint32_t divisor = scale / 10;
+        while (divisor)
+        {
+            *out++ = (char)('0' + (remainder / divisor) % 10);
+            divisor /= 10;
+        }
+        *out = 0;
+    }
+}
+
+void I_BenchmarkShowResults(void)
+{
+    bench_active = false;
+    uint32_t elapsed = _g_vblankCount - bench_start_vb;
+    if (!elapsed) elapsed = 1;
+    uint32_t avg_x100 = (bench_frames * 6000u + elapsed / 2) / elapsed;
+    uint32_t seconds_x100 = (elapsed * 100u + 30u) / 60u;
+    char buffer[16];
+
+    VDP_init();
+    VDP_setTextPalette(PAL0);
+    PAL_setColor(15, 0x0EEE);
+    VDP_drawText("DOOM MD - TIMEDEMO 2.0", 5, 3);
+    VDP_drawText("DEMO3 / NTSC 60HZ", 5, 5);
+
+    VDP_drawText("AVERAGE FPS", 5, 8);
+    bench_fixed(buffer, avg_x100, 2);
+    VDP_drawText(buffer, 24, 8);
+
+    VDP_drawText("MIN FPS (1S)", 5, 10);
+    if (bench_windows) bench_fixed(buffer, bench_min_x10, 1);
+    else { buffer[0] = '-'; buffer[1] = 0; }
+    VDP_drawText(buffer, 24, 10);
+
+    VDP_drawText("MAX FPS (1S)", 5, 12);
+    if (bench_windows) bench_fixed(buffer, bench_max_x10, 1);
+    else { buffer[0] = '-'; buffer[1] = 0; }
+    VDP_drawText(buffer, 24, 12);
+
+    VDP_drawText("TOTAL FRAMES", 5, 15);
+    bench_u32(buffer, bench_frames);
+    VDP_drawText(buffer, 24, 15);
+
+    VDP_drawText("TIME (SECONDS)", 5, 17);
+    bench_fixed(buffer, seconds_x100, 2);
+    VDP_drawText(buffer, 24, 17);
+
+    VDP_drawText("MIN/MAX: FULL 1S WINDOWS", 3, 23);
+    for (;;) SYS_doVBlankProcess();
+}
+#endif
+
 //**************************************************************************************
 //
 // Palette
@@ -249,6 +362,9 @@ void I_FinishUpdate(void)
 	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
 	                       VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
 	                       VIEWWINDOWWIDTH, DMA);
+#if defined(TIMEDEMO)
+	I_BenchmarkFrame();
+#endif
 }
 
 
