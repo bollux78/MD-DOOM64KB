@@ -5,6 +5,7 @@
 set -l root (realpath (dirname (status filename))/../..)
 cd $root; or exit 1
 set -l outdir dist/round5
+python3 scripts/lab/test_ram_symbols.py; or exit 1
 mkdir -p $outdir; or exit 1
 
 # Cache16 is the stability control; Cache32/64 are UNSAFE until diagnosed.
@@ -45,6 +46,15 @@ for config in $configurations
             echo "Expected ROM or ELF missing: $DOOM_BUILD_ID"
             exit 1
         end
+        # Fail closed on stale/mislabeled ROMs before sending to the lab.
+        python3 -c 'import pathlib,sys
+rom=pathlib.Path(sys.argv[1]).read_bytes()
+expected=sys.argv[2]
+assert len(rom)>=0x200, "ROM too short"
+domestic=rom[0x120:0x150].decode("ascii").strip()
+international=rom[0x150:0x180].decode("ascii").strip()
+assert domestic==international==expected, (domestic,international,expected)
+' out/rom.bin "$DOOM_BUILD_ID"; or exit 1
         cp out/rom.bin "$outdir/$DOOM_BUILD_ID.bin"; or exit 1
 
         python3 scripts/lab/ram_usage.py \
