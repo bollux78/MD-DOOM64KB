@@ -45,7 +45,6 @@
 #undef realloc
 // SGDK / libmd に無い libc 関数（i_stubs.c で実装）。プロトタイプを全 Doom へ供給して
 // 暗黙宣言による引数 ABI 不一致を防ぐ。memcmp/memchr の長さは SGDK 流儀の u16。
-int   memcmp(const void *s1, const void *s2, u16 n);
 void *memchr(const void *s, int c, u16 n);
 long  labs(long x);
 int   strcasecmp(const char *a, const char *b);
@@ -97,7 +96,9 @@ typedef uint32_t segment_t;
 #if defined __WATCOMC__
 #include <endian.h>
 #else
+#if !defined(SGDK_GCC)
 #include <machine/endian.h>
+#endif
 #endif
 
 
