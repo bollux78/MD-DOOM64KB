@@ -1,0 +1,78 @@
+name: Hosted lab (experimental)
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Doom test build'
+        required: true
+        type: choice
+        options: [timedemo, routine_profiler, normal]
+        default: timedemo
+      smoke_seconds:
+        description: 'Emulator smoke test wall-clock seconds (not benchmark FPS)'
+        required: true
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doom-hosted-lab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential git make bison flex texinfo wget curl xz-utils \
+            python3 fish default-jre-headless openjdk-17-jdk-headless \
+            libpng-dev libz-dev zlib1g-dev libncurses-dev \
+            xvfb xauth imagemagick
+      - name: Cache Linux toolchain
+        id: toolchain-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/mars
+          key: doom-md-marsdev-ubuntu2404-v1
+      - name: Build Linux marsdev toolchain and SGDK
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        run: bash scripts/lab/bootstrap_marsdev.sh
+      - name: Inspect toolchain
+        run: |
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+          test -f "$HOME/mars/m68k-elf/makefile.gen"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-gcc" --version | head -1
+      - name: Build Doom ROM
+        env:
+          DOOM_TIMEDEMO: ${{ inputs.test_mode != 'normal' && '1' || '0' }}
+          DOOM_ROUTINE_PROFILE: ${{ inputs.test_mode == 'routine_profiler' && '1' || '0' }}
+        run: fish scripts/build_silent.fish 2>&1 | tee build.log
+      - name: ROM metadata
+        if: success()
+        run: python3 scripts/lab/report.py --rom out/rom.bin --mode "${{ inputs.test_mode }}" --output lab-report.json
+      - name: Emulator availability and smoke test
+        if: success()
+        continue-on-error: true
+        env:
+          SMOKE_SECONDS: ${{ inputs.smoke_seconds }}
+        run: bash scripts/lab/emulator_smoke.sh out/rom.bin
+      - name: Upload lab outputs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: hosted-doom-lab-${{ inputs.test_mode }}
+          path: |
+            out/rom.bin
+            build.log
+            lab-report.json
+            emulator.log
+            emulator-smoke.png
+          if-no-files-found: warn
