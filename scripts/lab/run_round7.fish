@@ -46,7 +46,7 @@ for variant in asm unroll4 fixed128
             set DOOM_CACHE_STATS 1
         end
         set -lx DOOM_BUILD_ID "doom-md-r7-$variant-$mode"
-        echo "R6 compiling $DOOM_BUILD_ID"
+        echo "R7 compiling $DOOM_BUILD_ID"
         fish scripts/build_silent.fish > "$outdir/build-$DOOM_BUILD_ID.log" 2>&1
         if test $status -ne 0
             echo "Build failed for $DOOM_BUILD_ID"
@@ -99,15 +99,15 @@ assert struct.unpack_from(">II",rom,0x1B4)==(0x200000,0x20FFFF)
     end
 end
 
-printf '%s\\n' \\
-    'R7 SRAM copy optimization experiment (all use 16 SRAM cache slots).' \\
-    'asm: Round 6 proven scalar DBRA copy reference.' \\
-    'unroll4: four SRAM byte transfers per DBRA iteration.' \\
-    'fixed128: unroll4 with specialized constant-count paths for 64/128 bytes.' \\
-    '43KiB Doom zone, DEMO3 2134 frames, NTSC 60Hz, divider 7.' \\
-    'Use PERF for FPS; STATS should match 15685 hits, 5590 misses, 5574 evictions.' \\
-    'BlastEm 1.0.0 only; cartridge SRAM mapping must be enabled.' \\
-    'Not suitable for real hardware or flashcart without SRAM compatibility review.' \\
+printf '%s\n' \
+    'R7 SRAM copy optimization experiment (all use 16 SRAM cache slots).' \
+    'asm: Round 6 proven scalar DBRA copy reference.' \
+    'unroll4: four SRAM byte transfers per DBRA iteration.' \
+    'fixed128: unroll4 with specialized constant-count paths for 64/128 bytes.' \
+    '43KiB Doom zone, DEMO3 2134 frames, NTSC 60Hz, divider 7.' \
+    'Use PERF for FPS; STATS should match 15685 hits, 5590 misses, 5574 evictions.' \
+    'BlastEm 1.0.0 only; cartridge SRAM mapping must be enabled.' \
+    'Not suitable for real hardware or flashcart without SRAM compatibility review.' \
     > "$outdir/README.txt"
 python3 -c 'import pathlib,sys,zipfile
 root=pathlib.Path(sys.argv[1])
