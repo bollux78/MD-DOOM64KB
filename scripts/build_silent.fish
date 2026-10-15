@@ -98,6 +98,22 @@ if set -q DOOM_CACHE_STATS; and test "$DOOM_CACHE_STATS" = 1
     end
     set render_flags "$render_flags -DDOOM_CACHE_STATS"
 end
+# Round 5 controlled experiments. Do not change the default 43 KiB zone.
+# Restrict variants to known experimental settings; no SGDK files touched.
+if set -q DOOM_ZONE_KIB
+    switch "$DOOM_ZONE_KIB"
+        case 39 41 43
+            set -l zone_bytes (math "$DOOM_ZONE_KIB * 1024")
+            set render_flags "$render_flags -DHEAP_SIZE=$zone_bytes"
+        case '*'
+            echo "Invalid DOOM_ZONE_KIB: $DOOM_ZONE_KIB (expected 39, 41 or 43)"
+            exit 1
+    end
+end
+if set -q DOOM_RAM_STATS; and test "$DOOM_RAM_STATS" = 1
+    set render_flags "$render_flags -DDOOM_RAM_STATS"
+end
+
 # Generate matching ROM header and on-screen timedemo title per build.
 # SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
 # No changes to shared SGDK files or boot code are required.
