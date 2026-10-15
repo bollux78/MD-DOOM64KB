@@ -2812,8 +2812,15 @@ static void R_AddLine(const seg_t __far* line)
 // Draw one or more line segments.
 //
 
+#if defined(DOOM_RAM_STATS)
+extern void I_RamProbeSample(void);
+#endif
+
 static void R_Subsector(int16_t num)
 {
+#if defined(DOOM_RAM_STATS)
+    I_RamProbeSample(); /* nested BSP traversal stack sample */
+#endif
     int16_t         count;
     const seg_t       __far* line;
     subsector_t __far* sub;
