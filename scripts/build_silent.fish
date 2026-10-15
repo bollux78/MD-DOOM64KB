@@ -98,6 +98,14 @@ if set -q DOOM_CACHE_STATS; and test "$DOOM_CACHE_STATS" = 1
     end
     set render_flags "$render_flags -DDOOM_CACHE_STATS"
 end
+# Cartridge SRAM cache experiment: only 16 entries, 8-bit odd-lane SRAM.
+if set -q DOOM_SRAM_CACHE16; and test "$DOOM_SRAM_CACHE16" = 1
+    if not set -q DOOM_CACHE_SLOTS; or test "$DOOM_CACHE_SLOTS" != 16
+        echo "DOOM_SRAM_CACHE16 requires DOOM_CACHE_SLOTS=16"
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_CACHE16"
+end
 # Round 5 controlled experiments. Do not change the default 43 KiB zone.
 # Restrict variants to known experimental settings; no SGDK files touched.
 if set -q DOOM_ZONE_KIB
