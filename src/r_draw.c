@@ -2083,7 +2083,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                 {
                     uint32_t quotient = 0x01ffffffu;
                     __asm__ ("divu.w %1, %0"
-                             : "+d" (quotient)
+                             : "+&d" (quotient)
                              : "d" ((uint16_t)scale));
                     dcvars.fracstep = (uint16_t)quotient;
                 }
