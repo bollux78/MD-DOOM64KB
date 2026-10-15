@@ -100,6 +100,37 @@ do SGDK, sem modificar nenhum arquivo da toolchain compartilhada.
 anteriores não mudam. É necessário executar novamente o workflow para
 receber ROMs com os novos identificadores no cabeçalho e na DEMO3.
 
+
+## Diagnóstico após falhas do Cache32 e Cache64
+
+O usuário relatou tela preta com ambas as ROMs Cache32 e exceção
+`ADDRESS ERROR` no BlastEm com Cache64. Captura do erro:
+`Address: 0x010013` (ímpar), instrução/offset `0x020FCA`,
+`SP=0xE0FFFB1A`. O 68000 não permite leitura de word/long em
+endereço ímpar. Esses sintomas são compatíveis com corrupção de dados,
+incluindo possível colisão entre a região de dados estáticos e
+a pilha/heap, **mas não provam ainda a causa**.
+
+O linker SGDK coloca `.data` e `.bss` a partir de `0xE0FF0000`
+e a pilha no topo `0xE1000000` dos 64 KiB de RAM.
+A verificação automática adicionada ao workflow chama
+`scripts/lab/ram_usage.py` em cada variante logo após compilar,
+usando `out/release/rom.out` e `m68k-elf-nm`, e cria arquivos
+`ram-doom-md-r4-cache*-*.txt` dentro do artefato:
+
+- Quantos bytes de RAM `.data` + `.bss` consomem
+- Endereço da variável linker `_bend`
+- Distância livre em bytes até `__stack`, compartilhada entre heap e pilha
+- Símbolo de ROM mais próximo da instrução `0x020FCA`
+
+Os valores são diagnósticos **estáticos** e não substituem uma medição
+do uso máximo real de pilha/heap. Antes de repetir experimentos de
+Cache32/64 ou tentar SRAM externa, comparar os relatórios com
+`SP=0xE0FFFB1A` e investigar o local real da falha.
+
+Por segurança, **não testar Cache32 ou Cache64 no Mega Drive real**
+enquanto o travamento não for explicado.
+
 ## Etapa posterior
 
 Só depois de escolher o tamanho do cache interno, investigar SRAM
