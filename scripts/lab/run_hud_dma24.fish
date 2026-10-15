@@ -1,5 +1,5 @@
 #!/usr/bin/env fish
-# Isolated 38x28 baseline vs 38x24+4-row black text HUD, Cache16 RAM only.
+# Controlled HUD24 reference versus HUD24 with 24-row-only gameplay DMA.
 set -l root (realpath (dirname (status filename))/../..)
 cd $root; or exit 1
 set -l dest dist/hud-dma24
@@ -64,19 +64,19 @@ assert b[0x150:0x180].decode("ascii").strip()==ident
             --output "$dest/ram-$DOOM_BUILD_ID.txt"; or exit 1
     end
 end
-printf '%s\\n' \\
-    'DMA24 isolated experiment: HUD 38x24 old full 28-row DMA vs split.' \\
-    'hud24: original stable classic text HUD, DMA 28 rows each frame.' \\
-    'dma24: DMA 24 3D rows each frame; copy changed HUD tilemap rows only.' \\
-    'Both have the same 24-row 3D renderer and same HUD content.' \\
-    'Compare DEMO3 2134 frames and ensure the black strip remains visible.' \\
-    'Do not merge until both PERF and STATS pass BlastEm.' \\
+printf '%s\n' \
+    'DMA24 isolated experiment: HUD 38x24 old full 28-row DMA vs split.' \
+    'hud24: original stable classic text HUD, DMA 28 rows each frame.' \
+    'dma24: DMA 24 3D rows each frame; copy changed HUD tilemap rows only.' \
+    'Both have the same 24-row 3D renderer and same HUD content.' \
+    'Compare DEMO3 2134 frames and ensure the black strip remains visible.' \
+    'Do not merge until both PERF and STATS pass BlastEm.' \
     > "$dest/README.txt"
 python3 -c 'import pathlib,sys,zipfile
 d=pathlib.Path(sys.argv[1])
 with zipfile.ZipFile(d.parent/"doom-md-hud-dma24.zip","w",zipfile.ZIP_DEFLATED) as z:
  for p in sorted(d.iterdir()):
   if p.is_file(): z.write(p,p.name)
-print("Created:",d.parent/"doom-md-classic-hud.zip")
+print("Created:",d.parent/"doom-md-hud-dma24.zip")
 ' "$dest"; or exit 1
 echo 'HUD DMA24: 4 ROMs built.'
