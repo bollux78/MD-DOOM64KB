@@ -1292,7 +1292,26 @@ static void R_RenderMaskedSegRange(const drawseg_t *ds, int16_t x1, int16_t x2)
 
 			sprtopscreen = CENTERY * FRACUNIT - FixedMul(dcvars.texturemid, spryscale);
 
+#if defined(DOOM_MASKED_DIVU) && (COLEXTRABITS == 7)
+            /* Same bit-exact 68000 fast reciprocal used for wall columns:
+             * (0xffffffffu / scale) >> 7 == 0x01ffffffu / scale.
+             * For 512..65535 the quotient fits DIVU.W's 16-bit result. */
+            {
+                const uint32_t scale = (uint32_t)spryscale;
+                if (scale >= 512u && scale <= 65535u)
+                {
+                    uint32_t quotient = 0x01ffffffu;
+                    __asm__ ("divu.w %1, %0"
+                             : "+&d" (quotient)
+                             : "d" ((uint16_t)scale));
+                    dcvars.fracstep = (uint16_t)quotient;
+                }
+                else
+                    dcvars.fracstep = FixedReciprocal(scale) >> COLEXTRABITS;
+            }
+#else
 			dcvars.fracstep = FixedReciprocal((uint32_t)spryscale) >> COLEXTRABITS;
+#endif
 
 			// draw the texture
 			const column_t __far* column = (const column_t __far*) ((const byte __far*)patch + patch->columnofs[xc]);
@@ -1851,7 +1870,14 @@ static void R_DrawColumnInCache(const column_t __far* patch, byte* cache, int16_
  * straight from const patch_t*.
 */
 
+/* Test whether a less collision-prone composed-column cache pays off.
+ * Original: 4 slots x 128 bytes. Experimental: 8 slots (+512 B RAM).
+ * Keep the maximum number of hash probes fixed at four. */
+#if defined(DOOM_CACHE8)
+#define MAX_CACHE_ENTRIES 8
+#else
 #define MAX_CACHE_ENTRIES 4
+#endif
 #define MAX_CACHE_TRIES 4
 
 static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
