@@ -2,8 +2,8 @@ name: Build Doom ROM (local toolchain)
 on:
   workflow_dispatch:
     inputs:
-      no_vsync:
-        description: 'Experimental: no explicit VBlank wait (may tear)'
+      vsync:
+        description: 'Enable VSync (comparison mode; default is no VSync)'
         type: boolean
         required: false
         default: false
@@ -43,7 +43,7 @@ jobs:
       - name: Compile ROM
         shell: bash
         env:
-          DOOM_NO_VSYNC: ${{ inputs.no_vsync && '1' || '0' }}
+          DOOM_NO_VSYNC: ${{ inputs.vsync && '0' || '1' }}
           DOOM_TIMEDEMO: ${{ (inputs.benchmark || inputs.profiler || inputs.routine_profiler) && '1' || '0' }}
           DOOM_ROUTINE_PROFILE: ${{ inputs.routine_profiler && '1' || '0' }}
           DOOM_PROFILE: ${{ inputs.profiler && '1' || '0' }}
@@ -52,6 +52,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v5
         with:
-          name: ${{ inputs.no_vsync && 'doom-md-no-vsync-rom' || (inputs.routine_profiler && 'doom-md-routine-profiler-rom' || (inputs.profiler && 'doom-md-profiler-rom' || (inputs.benchmark && 'doom-md-timedemo-rom' || 'doom-md-silent-rom'))) }}
+          name: ${{ inputs.routine_profiler && 'doom-md-routine-profiler-rom' || (inputs.profiler && 'doom-md-profiler-rom' || (inputs.benchmark && 'doom-md-timedemo-rom' || 'doom-md-playable-rom')) }}
           path: out/rom.bin
           if-no-files-found: error
