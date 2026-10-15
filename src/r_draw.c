@@ -2069,7 +2069,30 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 			}
 #endif
 
+#if defined(DOOM_FAST_DIVU) && (COLEXTRABITS == 7)
+            /*
+             * Exact identity: (0xffffffffu / scale) >> 7
+             *               = (0x01ffffffu / scale).
+             * On 68000, DIVU.W divides 32 by 16 bits in hardware.
+             * For 512 <= scale <= 65535 the quotient fits in 16 bits.
+             * All other scales use the original expression.
+             */
+            {
+                const uint32_t scale = (uint32_t)rw_scale;
+                if (scale >= 512u && scale <= 65535u)
+                {
+                    uint32_t quotient = 0x01ffffffu;
+                    __asm__ ("divu.w %1, %0"
+                             : "+d" (quotient)
+                             : "d" ((uint16_t)scale));
+                    dcvars.fracstep = (uint16_t)quotient;
+                }
+                else
+                    dcvars.fracstep = FixedReciprocal(scale) >> COLEXTRABITS;
+            }
+#else
             dcvars.fracstep = FixedReciprocal((uint32_t)rw_scale) >> COLEXTRABITS;
+#endif
         }
 
         // draw the wall tiers
