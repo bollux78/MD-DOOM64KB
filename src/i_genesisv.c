@@ -177,6 +177,9 @@ void I_BenchmarkReset(void)
     bench_max_x10 = 0;
     bench_windows = 0;
     bench_active = true;
+#if defined(DOOM_ROUTINE_PROFILE)
+    I_ProfileSampleReset();
+#endif
 #if defined(DOOM_PROFILE)
     prof_logic_vb = prof_render_vb = prof_vdp_vb = 0;
 #endif
@@ -241,7 +244,11 @@ void I_BenchmarkShowResults(void)
     VDP_init();
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
+    #if defined(DOOM_ROUTINE_PROFILE)
+    VDP_drawText("DOOM MD - ROUTINE PROFILE", 2, 2);
+#else
     VDP_drawText("DOOM MD - TIMEDEMO 3.0", 5, 2);
+#endif
     VDP_drawText("DEMO3 / NTSC 60HZ", 5, 5);
 
     VDP_drawText("AVERAGE FPS", 5, 8);
@@ -266,7 +273,21 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
-#if defined(DOOM_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE)
+    {
+        const char *names[6] = { "OTHER/LOGIC", "SETUP", "BSP TRAVERSE", "WALL COLUMNS", "MASKED/SPR", "VDP WAIT/DMA" };
+        uint32_t total = 0;
+        for (uint16_t n = 0; n < 6; n++) total += doom_profile_samples[n];
+        if (!total) total = 1;
+        for (uint16_t n = 0; n < 6; n++)
+        {
+            uint32_t pct_x10 = (doom_profile_samples[n] * 1000u + total / 2) / total;
+            VDP_drawText(names[n], 3, 19 + n);
+            bench_fixed(buffer, pct_x10, 1);
+            VDP_drawText(buffer, 24, 19 + n);
+        }
+    }
+#elif defined(DOOM_PROFILE)
     VDP_drawText("CPU LOGIC", 5, 19);
     bench_fixed(buffer, (prof_logic_vb * 100u + 30u) / 60u, 2);
     VDP_drawText(buffer, 24, 19);
@@ -372,6 +393,9 @@ void I_ShutdownGraphics(void)
 
 void I_FinishUpdate(void)
 {
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 5;
+#endif
 #if defined(DOOM_PROFILE)
     uint32_t start_vb = _g_vblankCount;
 #endif
@@ -390,6 +414,9 @@ void I_FinishUpdate(void)
 	                       VIEWWINDOWWIDTH, DMA);
 #if defined(DOOM_PROFILE)
     prof_vdp_vb += _g_vblankCount - start_vb;
+#endif
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 0;
 #endif
 #if defined(TIMEDEMO)
 	I_BenchmarkFrame();
