@@ -1,0 +1,21 @@
+name: Source checks
+on:
+  push:
+    branches: [main, dev/sgdk-linux-ci]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bare-metal compatibility header
+        run: |
+          printf '#include <stdint.h>\nint check[(sizeof(uint32_t)==4 && sizeof(uint16_t)==2 && sizeof(int_fast8_t)>=1)?1:-1];\n' | gcc -std=c11 -nostdinc -Icompat -x c -fsyntax-only -
+      - name: Verify source compatibility changes
+        run: |
+          grep -q 'XGM_loadDriver(TRUE)' src/i_genesis.c
+          ! grep -q 'Z80_loadDriver(Z80_DRIVER_XGM' src/i_genesis.c
+          ! grep -q '^int memcmp(' src/i_stubs.c
+          test -f compat/strings.h
