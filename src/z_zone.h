@@ -27,6 +27,7 @@
 #define __Z_ZONE__
 
 #include <stddef.h>
+#include <stdint.h>
 #include "doomtype.h"
 
 void Z_Init(void);
