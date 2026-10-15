@@ -78,6 +78,16 @@ end
 if set -q DOOM_HUD_DMA24_NOHUDWRITE; and test "$DOOM_HUD_DMA24_NOHUDWRITE" = 1
     set render_flags "$render_flags -DDOOM_HUD_DMA24_NOHUDWRITE"
 end
+# Round C2: use an exact precomputed wall-angle tangent LUT in ROM only.
+# No shared SGDK changes, no WRAM table, and never combine with folded tangent.
+if set -q DOOM_WALL_TAN_LUT; and test "$DOOM_WALL_TAN_LUT" = 1
+    if set -q DOOM_FOLDED_TANGENT; and test "$DOOM_FOLDED_TANGENT" = 1
+        echo 'DOOM_WALL_TAN_LUT conflicts with DOOM_FOLDED_TANGENT'
+        exit 1
+    end
+    python3 scripts/gen_wall_tangent_lut.py; or exit 1
+    set render_flags "$render_flags -DDOOM_WALL_TAN_LUT"
+end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
