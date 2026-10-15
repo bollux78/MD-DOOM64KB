@@ -1919,6 +1919,42 @@ static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
 #define DOOM_SRAM_FIRST 0x00200001UL
 #define DOOM_SRAM_CONTROL 0x00A130F1UL
 static byte tmpCache[128];
+#if defined(DOOM_SRAM_FASTCOPY)
+/* 68000 byte-lane copies. Explicit DBRA loop removes indexed-byte address
+ * arithmetic from C, but still performs one SRAM byte access per iteration. */
+static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
+{
+    uint8_t* dst = (uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    const byte* from = src;
+    uint16_t count = size;
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1: move.b (%1)+,%%d0\n\t"
+        "move.b %%d0,(%0)\n\t"
+        "addq.l #2,%0\n\t"
+        "dbra %2,1b"
+        : "+a"(dst), "+a"(from), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
+{
+    const uint8_t* src = (const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    byte* to = dest;
+    uint16_t count = size;
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1: move.b (%1),%%d0\n\t"
+        "move.b %%d0,(%0)+\n\t"
+        "addq.l #2,%1\n\t"
+        "dbra %2,1b"
+        : "+a"(to), "+a"(src), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+#else
 static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
 {
     volatile uint8_t* const dest = (volatile uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
@@ -1931,6 +1967,47 @@ static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
     for (uint16_t i = 0; i < size; ++i)
         dest[i] = src[(uint16_t)(i << 1)];
 }
+#endif
+
+#if defined(DOOM_SRAM_HOT_SLOTS)
+/* Small, fully-associative front-cache: SRAM remains authoritative.
+ * Each hot line is tagged by 16-slot index AND the actual texture key.
+ * Replacements invalidate by key mismatch; LRU ages 1..N, 0 newest. */
+#if DOOM_SRAM_HOT_SLOTS != 2 && DOOM_SRAM_HOT_SLOTS != 4
+#error DOOM_SRAM_HOT_SLOTS must be 2 or 4
+#endif
+static byte sramHotColumns[DOOM_SRAM_HOT_SLOTS][128];
+static uint16_t sramHotKeys[DOOM_SRAM_HOT_SLOTS];
+static uint8_t sramHotSlots[DOOM_SRAM_HOT_SLOTS];
+static uint8_t sramHotAge[DOOM_SRAM_HOT_SLOTS];
+static byte* SramHotFind(uint16_t slot, uint16_t key)
+{
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+        if (sramHotKeys[i] == key && sramHotSlots[i] == slot)
+        {
+            uint8_t old = sramHotAge[i];
+            for (uint16_t j = 0; j < DOOM_SRAM_HOT_SLOTS; ++j)
+                if (sramHotAge[j] < old) ++sramHotAge[j];
+            sramHotAge[i] = 0;
+            return sramHotColumns[i];
+        }
+    return NULL;
+}
+static void SramHotPut(uint16_t slot, uint16_t key, const byte* column, uint16_t bytes)
+{
+    uint16_t victim = 0;
+    uint8_t maxAge = 0;
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+        if (sramHotAge[i] >= maxAge) { maxAge = sramHotAge[i]; victim = i; }
+    for (uint16_t j = 0; j < DOOM_SRAM_HOT_SLOTS; ++j)
+        if (j != victim && sramHotAge[j] < DOOM_SRAM_HOT_SLOTS - 1)
+            ++sramHotAge[j];
+    sramHotAge[victim] = 0;
+    sramHotSlots[victim] = slot;
+    sramHotKeys[victim] = key;
+    _fmemcpy(sramHotColumns[victim], column, bytes);
+}
+#endif
 /* Return 0 on unsupported/missing SRAM; do not run a misleading benchmark. */
 int R_SramCacheInit(void)
 {
@@ -1950,6 +2027,14 @@ int R_SramCacheInit(void)
     *last = saved_last;
     for (uint16_t i = 0; i < 16; ++i)
         columnCacheEntries[i] = 0;
+#if defined(DOOM_SRAM_HOT_SLOTS)
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+    {
+        sramHotKeys[i] = 0;
+        sramHotSlots[i] = 0xFF;
+        sramHotAge[i] = (uint8_t)i;
+    }
+#endif
     return ok1 && ok2;
 }
 #else
@@ -2042,8 +2127,22 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         doom_cache_hits++;
 #endif
 #if defined(DOOM_SRAM_CACHE16)
+    /* Do not alter SRAM's 16-slot hash/replacement scheme. The RAM front
+     * cache only eliminates SRAM reads for recent repeated accesses. */
+#if defined(DOOM_SRAM_HOT_SLOTS)
+    uint16_t entryKey = CACHE_ENTRY(xc, texture);
+    uint16_t bytes = (tex->height + 3) & ~3;
+    if (cacheEntry == entryKey)
+    {
+        byte* hot = SramHotFind(cachekey, entryKey);
+        if (hot) return hot;
+        SramCacheCopyFrom(cachekey, tmpCache, bytes);
+    }
+    SramHotPut(cachekey, entryKey, tmpCache, bytes);
+#else
     if (cacheEntry == CACHE_ENTRY(xc, texture))
         SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
+#endif
 #endif
 
     return colcache;
