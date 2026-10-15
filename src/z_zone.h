@@ -39,6 +39,14 @@ void Z_Free(const void __far* ptr);
 void Z_FreeTags(void);
 void Z_CheckHeap(void);
 
+#if defined(DOOM_RAM_STATS)
+/* Diagnostic-only zone allocator metrics (bytes, including block headers). */
+uint32_t Z_RamZoneSize(void);
+uint32_t Z_RamCurrentUsed(void);
+uint32_t Z_RamPeakUsed(void);
+uint32_t Z_RamFreeNow(void);
+#endif
+
 boolean Z_EqualNames(const char __far* farName, const char* nearName);
 
 #endif
