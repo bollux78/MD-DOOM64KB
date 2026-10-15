@@ -510,6 +510,7 @@ void I_FinishUpdate(void)
     VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
                            VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
                            VIEWWINDOWWIDTH, DMA);
+#if !defined(DOOM_HUD_DMA24_NOHUDWRITE)
     {
         static uint16_t lastHud[4 * VIEWWINDOWWIDTH];
         static uint8_t hudInitialized = 0;
@@ -533,6 +534,7 @@ void I_FinishUpdate(void)
         }
         hudInitialized = 1;
     }
+#endif
 #else
 	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
 	                       VIEWWINDOWWIDTH, VDP_DISPLAY_ROWS,
