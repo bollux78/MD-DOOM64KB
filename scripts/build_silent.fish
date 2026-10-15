@@ -50,6 +50,9 @@ set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
+if set -q DOOM_ROUTINE_PROFILE; and test "$DOOM_ROUTINE_PROFILE" = 1
+    set render_flags "$render_flags -DTIMEDEMO -DDOOM_ROUTINE_PROFILE"
+end
 if set -q DOOM_PROFILE; and test "$DOOM_PROFILE" = 1
     set render_flags "$render_flags -DTIMEDEMO -DDOOM_PROFILE"
 end
