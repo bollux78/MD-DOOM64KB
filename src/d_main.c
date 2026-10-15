@@ -264,7 +264,9 @@ _Noreturn static void D_DoomLoop(void)
     for (;;)
     {
         // frame syncronous IO operations
-
+#if defined(DOOM_PROFILE)
+        uint32_t profile_start_vb = _g_vblankCount;
+#endif
         // process one or more tics
         if (singletics)
         {
@@ -282,6 +284,11 @@ _Noreturn static void D_DoomLoop(void)
         }
         else
             TryRunTics (); // will run at least one tic
+
+#if defined(DOOM_PROFILE)
+        I_ProfileLogic(_g_vblankCount - profile_start_vb);
+        profile_start_vb = _g_vblankCount;
+#endif
 
         // killough 3/16/98: change consoleplayer to displayplayer
         if (_g_player.mo) // cph 2002/08/10
@@ -305,7 +312,9 @@ _Noreturn static void D_DoomLoop(void)
 
         // Update display, next frame, with current state.
         D_Display();
-
+#if defined(DOOM_PROFILE)
+        I_ProfileRender(_g_vblankCount - profile_start_vb);
+#endif
 
         if(_g_fps_show)
         {
