@@ -354,9 +354,24 @@ void I_Error(const char *error, ...)
 // Entry point (SGDK が main を呼ぶ)
 //
 
+#if defined(DOOM_SRAM_CACHE16)
+extern int R_SramCacheInit(void);
+#endif
+
 int main(bool hardReset)
 {
 	(void)hardReset;
+
+#if defined(DOOM_SRAM_CACHE16)
+    /* Enable and verify 8-bit odd-lane cartridge SRAM before any rendering.
+     * Never silently benchmark ROM reads or open bus as a working cache. */
+    if (!R_SramCacheInit())
+    {
+        VDP_drawText("SRAM CACHE16: SRAM NOT FOUND", 1, 10);
+        VDP_drawText("CHECK BLASTEM SAVE RAM SUPPORT", 1, 12);
+        for (;;) SYS_doVBlankProcess();
+    }
+#endif
 
 #if defined TIMEDEMO || defined SFXDEBUG
 	int argc = 3;
