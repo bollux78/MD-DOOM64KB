@@ -29,20 +29,6 @@ void exit(int code)
 }
 
 
-// SGDK は memcmp を提供しないため自前実装（Doom の _fmemcmp）。
-int memcmp(const void *s1, const void *s2, u16 n)
-{
-	const unsigned char *a = (const unsigned char*)s1;
-	const unsigned char *b = (const unsigned char*)s2;
-	while (n--)
-	{
-		int d = (int)*a++ - (int)*b++;
-		if (d)
-			return d;
-	}
-	return 0;
-}
-
 
 // r_draw.c が abs() を関数として参照する（移植可能ファイルは maths.h を読まない）。
 // このファイルは genesis.h 経由で maths.h の abs マクロを得るため undef してから実体を定義。
