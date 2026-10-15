@@ -1,0 +1,77 @@
+#!/usr/bin/env fish
+# Doom Mega Drive: silent build using an existing SGDK toolchain.
+# Never edits the shared toolchain.
+set -l root (pwd)
+if set -q DOOM_MD_ROOT
+    set root $DOOM_MD_ROOT
+end
+set -l gdk $HOME/mars/m68k-elf
+if set -q DOOM_MD_GDK
+    set gdk $DOOM_MD_GDK
+end
+set -l gcc $gdk/bin/m68k-elf-gcc
+if not test -f $root/Makefile; or not test -f $gdk/makefile.gen; or not test -f $gdk/lib/libmd.a; or not test -x $gcc
+    echo 'Missing Doom source or SGDK / m68k-elf GCC:' $root $gdk
+    exit 1
+end
+cd $root; or exit 1
+python3 -c 'import pathlib,struct
+root=pathlib.Path("res")
+root.mkdir(parents=True,exist_ok=True)
+data=bytes([0x52,0x28,0x00,0x62,0x66])
+header=bytearray(0x40)
+header[:4]=b"Vgm "
+struct.pack_into("<I",header,4,len(header)+len(data)-4)
+struct.pack_into("<I",header,8,0x00000150)
+struct.pack_into("<I",header,0x2c,7670454)
+struct.pack_into("<I",header,0x18,735)
+struct.pack_into("<I",header,0x34,0x0c)
+for name in ("silent.vgm","e1m1.vgm"):
+    path=root/name
+    if not path.exists(): path.write_bytes(header+data)
+'; or exit 1
+set -lx GDK $gdk
+set -lx PATH $gdk/bin $PATH
+set -lx PREFIX m68k-elf-
+if not test -f scripts/doom64.wad
+    python3 scripts/wad_from_header.py; or exit 1
+end
+python3 scripts/repack_wad.py; or exit 1
+python3 scripts/genpal.py; or exit 1
+python3 scripts/gen_sfx.py --silent; or exit 1
+# Use SGDK boot files; disable the duplicate upstream boot and ROM header
+# only inside the Doom working tree.
+for f in src/boot/sega.s src/boot/rom_head.c
+    if test -f $f
+        mv $f $f.disabled
+    end
+end
+set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=28 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT'
+if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
+    set render_flags "$render_flags -DTIMEDEMO"
+end
+set -l stamp out/.render_options
+if test -f $stamp; and test (cat $stamp) != "$render_flags"
+    rm -rf out
+end
+mkdir -p out
+printf '%s' "$render_flags" > $stamp
+rm -f out/rom.bin
+set -l libgcc ($gcc -m68000 -print-libgcc-file-name)
+if test $status -ne 0; or not test -f "$libgcc"
+    echo 'Could not locate cross compiler libgcc.'
+    exit 1
+end
+make GDK=$gdk PREFIX=m68k-elf- JAVA=java \
+    EXTRA_FLAGS="-Isrc -Icompat -std=gnu11 $render_flags" \
+    LIBGCC="$libgcc -lgcc" $argv
+set -l rc $status
+if test $rc -eq 0; and test -f out/rom.bin
+    echo 'ROM created:' $root/out/rom.bin
+else
+    echo 'Build failed or ROM missing. Check output above.'
+    if test $rc -eq 0
+        set rc 1
+    end
+end
+exit $rc
