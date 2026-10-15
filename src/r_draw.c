@@ -1903,8 +1903,58 @@ static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
 	return column | (texture << 8);
 }
 
-static byte __far columnCache[MAX_CACHE_ENTRIES*128];
 static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
+#if defined(DOOM_SRAM_CACHE16)
+/*
+ * Standard Mega Drive cartridge SRAM is an 8-bit device on the ODD data
+ * lane: 0x200001, 0x200003, ... . It is NOT byte-contiguous in 68000
+ * address space, so the renderer cannot point dcvars->source at SRAM.
+ * Keep one 128-byte work buffer in work RAM; copy columns to/from SRAM
+ * on cache misses/hits. This trades bus traffic for ~1920 bytes of RAM.
+ * SRAM must be enabled and verified before D_DoomMain().
+ */
+#if MAX_CACHE_ENTRIES != 16
+#error DOOM_SRAM_CACHE16 requires DOOM_CACHE_SLOTS=16
+#endif
+#define DOOM_SRAM_FIRST 0x00200001UL
+#define DOOM_SRAM_CONTROL 0x00A130F1UL
+static byte tmpCache[128];
+static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
+{
+    volatile uint8_t* const dest = (volatile uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    for (uint16_t i = 0; i < size; ++i)
+        dest[(uint16_t)(i << 1)] = src[i];
+}
+static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
+{
+    volatile const uint8_t* const src = (volatile const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    for (uint16_t i = 0; i < size; ++i)
+        dest[i] = src[(uint16_t)(i << 1)];
+}
+/* Return 0 on unsupported/missing SRAM; do not run a misleading benchmark. */
+int R_SramCacheInit(void)
+{
+    volatile uint8_t* const control = (volatile uint8_t*)DOOM_SRAM_CONTROL;
+    volatile uint8_t* const first = (volatile uint8_t*)DOOM_SRAM_FIRST;
+    volatile uint8_t* const last = (volatile uint8_t*)0x00200FFFUL;
+    *control = 1; /* enable SRAM; writable, do not disable during demo */
+    const uint8_t saved_first = *first;
+    const uint8_t saved_last = *last;
+    *first = 0x5A;
+    *last = 0xA5;
+    const int ok1 = (*first == 0x5A && *last == 0xA5);
+    *first = 0xA5;
+    *last = 0x5A;
+    const int ok2 = (*first == 0xA5 && *last == 0x5A);
+    *first = saved_first;
+    *last = saved_last;
+    for (uint16_t i = 0; i < 16; ++i)
+        columnCacheEntries[i] = 0;
+    return ok1 && ok2;
+}
+#else
+static byte __far columnCache[MAX_CACHE_ENTRIES*128];
+#endif
 
 static uint16_t FindColumnCacheItem(int16_t texture, int16_t column)
 {
@@ -1936,7 +1986,11 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 
     uint16_t cachekey = FindColumnCacheItem(texture, xc);
 
+#if defined(DOOM_SRAM_CACHE16)
+    byte __far* colcache = tmpCache;
+#else
     byte __far* colcache = &columnCache[cachekey*128];
+#endif
     uint16_t cacheEntry = columnCacheEntries[cachekey];
 
     if (cacheEntry != CACHE_ENTRY(xc, texture))
@@ -1946,7 +2000,9 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         if (cacheEntry != 0)
             doom_cache_evictions++;
 #endif
+#if !defined(DOOM_SRAM_CACHE16)
         static byte tmpCache[128];
+#endif
 
         uint8_t i = 0;
         uint8_t patchcount = tex->patchcount;
@@ -1973,13 +2029,21 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         } while(++i < patchcount);
 
         //Block copy will drop low 2 bits of len.
+#if defined(DOOM_SRAM_CACHE16)
+        SramCacheCopyTo(cachekey, tmpCache, (tex->height + 3) & ~3);
+#else
         _fmemcpy(colcache, tmpCache, (tex->height + 3) & ~3);
+#endif
 
         columnCacheEntries[cachekey] = CACHE_ENTRY(xc, texture);
     }
 #if defined(DOOM_CACHE_STATS)
     else
         doom_cache_hits++;
+#endif
+#if defined(DOOM_SRAM_CACHE16)
+    if (cacheEntry == CACHE_ENTRY(xc, texture))
+        SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
 #endif
 
     return colcache;
