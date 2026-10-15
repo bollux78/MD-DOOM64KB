@@ -56,6 +56,9 @@ end
 if set -q DOOM_PROFILE; and test "$DOOM_PROFILE" = 1
     set render_flags "$render_flags -DTIMEDEMO -DDOOM_PROFILE"
 end
+if set -q DOOM_NO_VSYNC; and test "$DOOM_NO_VSYNC" = 1
+    set render_flags "$render_flags -DDOOM_NO_VSYNC"
+end
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$render_flags"
     rm -rf out
