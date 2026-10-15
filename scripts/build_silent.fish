@@ -106,6 +106,27 @@ if set -q DOOM_SRAM_CACHE16; and test "$DOOM_SRAM_CACHE16" = 1
     end
     set render_flags "$render_flags -DDOOM_SRAM_CACHE16"
 end
+# Round 6 SRAM-only speed/memory variants.
+if set -q DOOM_SRAM_HOT_SLOTS; and test "$DOOM_SRAM_HOT_SLOTS" != 0
+    if not set -q DOOM_SRAM_CACHE16; or test "$DOOM_SRAM_CACHE16" != 1
+        echo 'DOOM_SRAM_HOT_SLOTS requires DOOM_SRAM_CACHE16=1'
+        exit 1
+    end
+    switch "$DOOM_SRAM_HOT_SLOTS"
+        case 2 4
+            set render_flags "$render_flags -DDOOM_SRAM_HOT_SLOTS=$DOOM_SRAM_HOT_SLOTS"
+        case '*'
+            echo 'DOOM_SRAM_HOT_SLOTS must be 0, 2 or 4'
+            exit 1
+    end
+end
+if set -q DOOM_SRAM_FASTCOPY; and test "$DOOM_SRAM_FASTCOPY" = 1
+    if not set -q DOOM_SRAM_CACHE16; or test "$DOOM_SRAM_CACHE16" != 1
+        echo 'DOOM_SRAM_FASTCOPY requires DOOM_SRAM_CACHE16=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY"
+end
 # Round 5 controlled experiments. Do not change the default 43 KiB zone.
 # Restrict variants to known experimental settings; no SGDK files touched.
 if set -q DOOM_ZONE_KIB
