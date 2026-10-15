@@ -1910,7 +1910,7 @@ static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
  * lane: 0x200001, 0x200003, ... . It is NOT byte-contiguous in 68000
  * address space, so the renderer cannot point dcvars->source at SRAM.
  * Keep one 128-byte work buffer in work RAM; copy columns to/from SRAM
- * on cache misses/hits. This trades bus traffic for ~1920 bytes of RAM.
+ * on cache misses/hits. This trades bus traffic for 2048 bytes of RAM (the original tmpCache remains).
  * SRAM must be enabled and verified before D_DoomMain().
  */
 #if MAX_CACHE_ENTRIES != 16
