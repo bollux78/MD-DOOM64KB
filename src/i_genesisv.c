@@ -31,6 +31,13 @@
 
 extern const int16_t CENTERY;
 
+#if defined(DOOM_CACHE_STATS)
+extern uint32_t doom_cache_hits;
+extern uint32_t doom_cache_misses;
+extern uint32_t doom_cache_evictions;
+extern void R_CacheStatsReset(void);
+#endif
+
 // 16 個のベタ塗りタイルを置く VRAM 先頭 index
 #define SOLID_TILE_INDEX  TILE_USER_INDEX
 
@@ -183,6 +190,9 @@ void I_BenchmarkReset(void)
     bench_max_x10 = 0;
     bench_windows = 0;
     bench_active = true;
+#if defined(DOOM_CACHE_STATS)
+    R_CacheStatsReset();
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     I_ProfileSampleReset();
 #endif
@@ -304,6 +314,29 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, (prof_vdp_vb * 100u + 30u) / 60u, 2);
     VDP_drawText(buffer, 24, 21);
     VDP_drawText("TIMES APPROX / VB=16.7MS", 2, 24);
+#elif defined(DOOM_CACHE_STATS)
+    /* Statistics count only requests to R_ComposeColumn, not all textures.
+     * Counter increments add overhead; compare FPS using non-stats ROMs. */
+    VDP_drawText("CACHE SLOTS", 5, 19);
+    bench_u32(buffer, DOOM_CACHE_SLOTS);
+    VDP_drawText(buffer, 24, 19);
+    VDP_drawText("CACHE HITS", 5, 20);
+    bench_u32(buffer, doom_cache_hits);
+    VDP_drawText(buffer, 24, 20);
+    VDP_drawText("CACHE MISSES", 5, 21);
+    bench_u32(buffer, doom_cache_misses);
+    VDP_drawText(buffer, 24, 21);
+    VDP_drawText("CACHE EVICTIONS", 5, 22);
+    bench_u32(buffer, doom_cache_evictions);
+    VDP_drawText(buffer, 24, 22);
+    VDP_drawText("HIT RATE %", 5, 24);
+    {
+        uint32_t requests = doom_cache_hits + doom_cache_misses;
+        uint32_t ratio = requests ? (doom_cache_hits * 1000u + requests / 2) / requests : 0;
+        bench_fixed(buffer, ratio, 1);
+        VDP_drawText(buffer, 24, 24);
+    }
+    VDP_drawText("STATS ROM: FPS HAS OVERHEAD", 2, 26);
 #else
     VDP_drawText("MIN/MAX: FULL 1S WINDOWS", 3, 23);
 #endif
