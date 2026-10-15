@@ -28,6 +28,10 @@
 #include "globdata.h"
 #include "gen_pal.h"
 
+#if defined(DOOM_BUILD_VARIANT)
+#include "doom_build_identity.h"
+#endif
+
 
 extern const int16_t CENTERY;
 
@@ -260,7 +264,10 @@ void I_BenchmarkShowResults(void)
     VDP_init();
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
-    #if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_BUILD_VARIANT)
+    /* Same exact variant name used for the ROM title and artifact filename. */
+    VDP_drawText(DOOM_BUILD_TITLE, 4, 2);
+#elif defined(DOOM_ROUTINE_PROFILE)
     VDP_drawText("DOOM MD - ROUTINE PROFILE", 2, 2);
 #else
     VDP_drawText("DOOM MD - TIMEDEMO 3.0", 5, 2);
