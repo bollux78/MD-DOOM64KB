@@ -81,6 +81,23 @@ end
 if set -q DOOM_CACHE8; and test "$DOOM_CACHE8" = 1
     set render_flags "$render_flags -DDOOM_CACHE8"
 end
+# Round 4 cache slot sizes and separate cache-stat diagnostics.
+if set -q DOOM_CACHE_SLOTS
+    switch "$DOOM_CACHE_SLOTS"
+        case 8 16 32 64
+            set render_flags "$render_flags -DDOOM_CACHE_SLOTS=$DOOM_CACHE_SLOTS"
+        case '*'
+            echo "Invalid DOOM_CACHE_SLOTS: $DOOM_CACHE_SLOTS (expected 8, 16, 32 or 64)"
+            exit 1
+    end
+end
+if set -q DOOM_CACHE_STATS; and test "$DOOM_CACHE_STATS" = 1
+    if not set -q DOOM_CACHE_SLOTS
+        echo 'DOOM_CACHE_STATS requires DOOM_CACHE_SLOTS'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_CACHE_STATS"
+end
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$render_flags"
     rm -rf out
