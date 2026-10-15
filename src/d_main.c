@@ -190,8 +190,11 @@ static void D_Display (void)
             AM_Drawer();
 
         ST_doPaletteStuff();  // Do red-/gold-shifts from damage/items
-        ST_Drawer();
-
+#if !defined(DOOM_CLASSIC_TEXT_HUD)
+        ST_Drawer();  // Original status text shares 3D framebuffer.
+#endif
+        /* In classic-HUD builds, i_genesisv.c draws a dedicated bottom
+         * tile-text bar after the 3D framebuffer, outside its viewport. */
         HU_Drawer();
     }
 
