@@ -96,7 +96,19 @@ typedef uint32_t segment_t;
 #if defined __WATCOMC__
 #include <endian.h>
 #else
-#if !defined(SGDK_GCC)
+#if defined(SGDK_GCC)
+/* Motorola 68000 on Genesis is big-endian. Use distinct numeric values:
+   undefined endian macros both evaluate to zero in #if expressions. */
+#ifndef LITTLE_ENDIAN
+#define LITTLE_ENDIAN 1234
+#endif
+#ifndef BIG_ENDIAN
+#define BIG_ENDIAN 4321
+#endif
+#ifndef BYTE_ORDER
+#define BYTE_ORDER BIG_ENDIAN
+#endif
+#else
 #include <machine/endian.h>
 #endif
 #endif
