@@ -451,12 +451,28 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 	uint16_t frac = (dcvars->texturemid >> COLEXTRABITS) + (dcvars->yl - CENTERY) * fracstep;
 	const uint8_t colbits = COLBITS;
 
+#if defined(DOOM_UNROLL_COLUMNS)
+    /* Two pixels per loop, identical 16-bit fractional wraparound. */
+    while (count >= 2)
+    {
+        *dest = colorcell[colormap[source[frac >> colbits]]];
+        dest += VIEWWINDOWWIDTH;
+        frac += fracstep;
+        *dest = colorcell[colormap[source[frac >> colbits]]];
+        dest += VIEWWINDOWWIDTH;
+        frac += fracstep;
+        count -= 2;
+    }
+    if (count)
+        *dest = colorcell[colormap[source[frac >> colbits]]];
+#else
 	do
 	{
 		*dest = colorcell[colormap[source[frac >> colbits]]];
 		dest += VIEWWINDOWWIDTH;
 		frac += fracstep;
 	} while (--count);
+#endif
 }
 
 
@@ -475,11 +491,29 @@ void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
 	uint16_t cell = colorcell[color];
 	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
 
+#if defined(DOOM_UNROLL_COLUMNS)
+    /* Fixed-color spans: four writes with one loop branch. */
+    while (count >= 4)
+    {
+        dest[0] = cell;
+        dest[VIEWWINDOWWIDTH] = cell;
+        dest[2 * VIEWWINDOWWIDTH] = cell;
+        dest[3 * VIEWWINDOWWIDTH] = cell;
+        dest += 4 * VIEWWINDOWWIDTH;
+        count -= 4;
+    }
+    while (count-- > 0)
+    {
+        *dest = cell;
+        dest += VIEWWINDOWWIDTH;
+    }
+#else
 	do
 	{
 		*dest = cell;
 		dest += VIEWWINDOWWIDTH;
 	} while (--count);
+#endif
 }
 
 
