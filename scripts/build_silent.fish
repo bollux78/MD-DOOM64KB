@@ -56,6 +56,18 @@ if set -q DOOM_CLASSIC_TEXT_HUD; and test "$DOOM_CLASSIC_TEXT_HUD" = 1
     set render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=24 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT -DDOOM_CLASSIC_TEXT_HUD'
 end
 # Opt-in HUD DMA split. Keep 24-row HUD layout and standard 28-row control intact.
+# Validated single-DMA approach: 24 gameplay rows, 28 only if HUD changed.
+if set -q DOOM_HUD_SINGLE_DMA; and test "$DOOM_HUD_SINGLE_DMA" = 1
+    if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
+        echo 'DOOM_HUD_SINGLE_DMA requires DOOM_CLASSIC_TEXT_HUD=1'
+        exit 1
+    end
+    if set -q DOOM_HUD_DMA24; and test "$DOOM_HUD_DMA24" = 1
+        echo 'DOOM_HUD_SINGLE_DMA is mutually exclusive with DOOM_HUD_DMA24'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_HUD_SINGLE_DMA"
+end
 if set -q DOOM_HUD_DMA24; and test "$DOOM_HUD_DMA24" = 1
     if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
         echo 'DOOM_HUD_DMA24 needs DOOM_CLASSIC_TEXT_HUD=1'
