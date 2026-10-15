@@ -693,17 +693,17 @@ static void R_DrawColumnWallAsm(const draw_column_vars_t *dcvars)
             uint16_t iterations = (uint16_t)count;
 
             __asm__ volatile (
-                "subq.w #1,%[n]\\n\\t"
-                "1: move.w %[phase],%%d0\\n\\t"
-                "lsr.w #8,%%d0\\n\\t"
-                "lsr.w #1,%%d0\\n\\t"
-                "move.b (%[src],%%d0.w),%%d0\\n\\t"
-                "andi.w #255,%%d0\\n\\t"
-                "add.w %%d0,%%d0\\n\\t"
-                "move.w (%[map],%%d0.w),%%d0\\n\\t"
-                "move.w %%d0,(%[out])\\n\\t"
-                "adda.w #76,%[out]\\n\\t"
-                "add.w %[step],%[phase]\\n\\t"
+                "subq.w #1,%[n]\n\t"
+                "1: move.w %[phase],%%d0\n\t"
+                "lsr.w #8,%%d0\n\t"
+                "lsr.w #1,%%d0\n\t"
+                "move.b (%[src],%%d0.w),%%d0\n\t"
+                "andi.w #255,%%d0\n\t"
+                "add.w %%d0,%%d0\n\t"
+                "move.w (%[map],%%d0.w),%%d0\n\t"
+                "move.w %%d0,(%[out])\n\t"
+                "adda.w #76,%[out]\n\t"
+                "add.w %[step],%[phase]\n\t"
                 "dbra %[n],1b"
                 : [phase] "+&d" (frac),
                   [n] "+&d" (iterations),
