@@ -16,13 +16,14 @@ set -lx DOOM_CELL_LUT 1
 set -lx DOOM_CACHE_SLOTS 16
 set -lx DOOM_CACHE_STATS 0
 set -lx DOOM_CLASSIC_TEXT_HUD 0
+set -gx DOOM_HUD_DMA24 0
 
 for variant in hud24 dma24
     set DOOM_CLASSIC_TEXT_HUD 1
     if test $variant = dma24
-        set -lx DOOM_HUD_DMA24 1
+        set -gx DOOM_HUD_DMA24 1
     else
-        set -lx DOOM_HUD_DMA24 0
+        set -gx DOOM_HUD_DMA24 0
     end
     for mode in perf stats
         if test $mode = stats
@@ -42,9 +43,15 @@ for variant in hud24 dma24
             echo "Missing ROM or ELF for $DOOM_BUILD_ID"
             exit 1
         end
+        # Validate exactly which feature macro reached the compiler.
         if test $variant = dma24
             if not grep -q -- '-DDOOM_HUD_DMA24' "$dest/build-$DOOM_BUILD_ID.log"
-                echo 'HUD macro missing from compiler command'
+                echo 'ERROR: DMA24 macro did not reach the compiler'
+                exit 1
+            end
+        else
+            if grep -q -- '-DDOOM_HUD_DMA24' "$dest/build-$DOOM_BUILD_ID.log"
+                echo 'ERROR: baseline was compiled with DMA24 enabled'
                 exit 1
             end
         end
