@@ -36,8 +36,8 @@ def main():
     p.add_argument("--elf", type=Path, default=Path("out/release/rom.out"))
     p.add_argument("--nm", default="m68k-elf-nm")
     p.add_argument("--variant", default="unknown")
-    p.add_argument("--fault-pc", type=lambda v: int(v, 0), default=0x20FCA,
-                   help="ROM address reported by BlastEm (Cache64 screenshot)")
+    p.add_argument("--fault-pc", type=lambda v: int(v, 0),
+                   help="Optional PC from THIS exact ROM/ELF build")
     p.add_argument("--output", type=Path)
     args = p.parse_args()
     if not args.elf.is_file():
@@ -64,12 +64,15 @@ def main():
         f"Top of RAM / stack:   0x{stack:08X}\n"
         f"Remaining for heap + stack(s): {headroom} bytes ({headroom / 1024:.2f} KiB)\n"
         f"Assessment: {status}\n"
-        f"BlastEm fault instruction at 0x{args.fault_pc:06X}: "
-        f"{nearest_rom_symbol(symbols, args.fault_pc)}\n"
-        "Note: Address Error 0x010013 is an odd memory address;\n"
-        "the instruction offset 0x020FCA is the place to investigate.\n"
-        "The observed fault does not by itself prove stack collision.\n"
+        "Remaining bytes are a STATIC upper bound, not measured runtime free RAM.\n"
+        "R5 diagnostic ROMs measure Doom zone use and sampled stack position.\n"
     )
+    if args.fault_pc is not None:
+        message += (
+            f"ROM PC (valid only for this exact ROM): 0x{args.fault_pc:06X}\n"
+            f"Nearest ROM symbol: {nearest_rom_symbol(symbols, args.fault_pc)}\n"
+            "An Address Error PC by itself does not prove stack collision.\n"
+        )
     print(message)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
