@@ -31,7 +31,11 @@ for variant in hud24 dma24
         else
             set DOOM_CACHE_STATS 0
         end
-        set -lx DOOM_BUILD_ID "doom-md-dma-$variant-$mode"
+        if test $variant = dma24
+            set -lx DOOM_BUILD_ID "doom-md-dma-dma24cpu-$mode"
+        else
+            set -lx DOOM_BUILD_ID "doom-md-dma-hud24-$mode"
+        end
         echo "Building $DOOM_BUILD_ID"
         fish scripts/build_silent.fish > "$dest/build-$DOOM_BUILD_ID.log" 2>&1
         if test $status -ne 0
@@ -74,7 +78,7 @@ end
 printf '%s\n' \
     'DMA24 isolated experiment: HUD 38x24 old full 28-row DMA vs split.' \
     'hud24: original stable classic text HUD, DMA 28 rows each frame.' \
-    'dma24: DMA 24 3D rows each frame; copy changed HUD tilemap rows only.' \
+    'dma24cpu: DMA 24 3D rows; CPU writes only changed HUD tilemap rows.' \
     'Both have the same 24-row 3D renderer and same HUD content.' \
     'Compare DEMO3 2134 frames and ensure the black strip remains visible.' \
     'Do not merge until both PERF and STATS pass BlastEm.' \
