@@ -78,6 +78,28 @@ O que significam os dados:
 idêntico, com o menor custo em RAM. Se 16/32/64 não superarem o
 cache de 8, retornar ao cache de 8.
 
+## Identificação automática das ROMs
+
+Ao gerar cada variante, o workflow define exatamente um identificador
+`DOOM_BUILD_ID`, por exemplo `doom-md-r4-cache8-perf`. O script
+`scripts/set_rom_identity.py` prepara duas partes no checkout de Doom:
+
+- `src/rom_header.c`: os campos *domestic title* e *overseas title*
+  do cabeçalho do cartucho recebem esse identificador.
+- `src/doom_build_identity.h`: a tela final da DEMO3 mostra exatamente
+  o mesmo identificador, no lugar de `DOOM MD - TIMEDEMO 3.0`.
+
+O arquivo também é salvo como `DOOM_BUILD_ID.bin`. O workflow confere
+automaticamente os títulos nos offsets `0x120` e `0x150` da ROM
+gerada; não aceita um arquivo cujo cabeçalho permaneça `SAMPLE PROGRAM`.
+
+O processo usa `src/rom_header.c`, ponto oficial de personalização
+do SGDK, sem modificar nenhum arquivo da toolchain compartilhada.
+
+**Aplicável aos novos builds**: arquivos ZIP produzidos por execuções
+anteriores não mudam. É necessário executar novamente o workflow para
+receber ROMs com os novos identificadores no cabeçalho e na DEMO3.
+
 ## Etapa posterior
 
 Só depois de escolher o tamanho do cache interno, investigar SRAM
