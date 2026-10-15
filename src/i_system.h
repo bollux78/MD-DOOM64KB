@@ -59,6 +59,11 @@ void I_InitGraphics(void);
 
 void I_FinishUpdate(void);
 
+#if defined(TIMEDEMO)
+void I_BenchmarkReset(void);
+_Noreturn void I_BenchmarkShowResults(void);
+#endif
+
 void I_ReloadPalette(void);
 void I_SetPalette(int8_t pal);
 
