@@ -504,7 +504,39 @@ void I_FinishUpdate(void)
     I_DrawClassicTextHUD();
 #endif
 
-#if defined(DOOM_HUD_DMA24)
+#if defined(DOOM_HUD_DMA_STATUS_ONLY)
+    /* Single-DMA, minimal-state diagnostic based on the successful
+     * 24-row-only ROM. No 304-byte lastHud array, no extra VDP writes.
+     * Status fields are precisely those printed in the black HUD strip. */
+    {
+        static uint16_t previousHealth;
+        static uint16_t previousArmor;
+        static uint16_t previousBullets;
+        static uint8_t previousLevel;
+        static uint8_t initialized;
+
+        uint8_t level = _g_gamestate == GS_LEVEL;
+        uint16_t health = level
+            ? hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health)
+            : 0;
+        uint16_t armor = level ? hud_saturate3(_g_player.armorpoints) : 0;
+        uint16_t bullets = level ? hud_saturate3(_g_player.ammo[am_clip]) : 0;
+        uint8_t changed = !initialized || previousLevel != level
+            || previousHealth != health || previousArmor != armor
+            || previousBullets != bullets;
+
+        previousHealth = health;
+        previousArmor = armor;
+        previousBullets = bullets;
+        previousLevel = level;
+        initialized = 1;
+
+        VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                               VIEWWINDOWWIDTH,
+                               changed ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT,
+                               VIEWWINDOWWIDTH, DMA);
+    }
+#elif defined(DOOM_HUD_DMA24)
     /* The 3D framebuffer has 24 rows (DMA). The status strip is
      * CPU-updated only for changed tilemap rows, avoiding multi-DMA. */
     VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
