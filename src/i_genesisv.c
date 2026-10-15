@@ -658,9 +658,75 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 }
 
 
+/*
+ * Round W1: isolate the inner TEXTURED WALL pixel loop in M68000 assembly.
+ * Sprites, fuzz, flat columns, palette/colormap fallback and the HUD
+ * keep using the original C renderer. Only the verified standard
+ * COLORMAP LUT path is eligible for the ASM loop.
+ *
+ * Each iteration must exactly match the C reference:
+ *   map[source[frac >> 9]], dest += 38 words, frac += step (uint16 wrap).
+ * Memory-indirect lookup uses 68000 word index addressing; column
+ * indices are unsigned bytes, so a byte->word zero-extension is needed.
+ */
+#if defined(DOOM_WALLCOL_ASM)
+#if !defined(DOOM_CELL_LUT) || VIEWWINDOWWIDTH != 38
+#error DOOM_WALLCOL_ASM requires DOOM_CELL_LUT and 38-column viewport
+#endif
+static void R_DrawColumnWallAsm(const draw_column_vars_t *dcvars)
+{
+    int16_t count = (dcvars->yh - dcvars->yl) + 1;
+    if (count <= 0) return;
+
+    const uint8_t *colormap = dcvars->colormap;
+    if (colormap && fullcolormap)
+    {
+        const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
+        if (offset < (32u * 256u) && (offset & 255u) == 0u)
+        {
+            const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
+            const uint8_t *source = dcvars->source;
+            uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
+            uint16_t frac = (dcvars->texturemid >> COLEXTRABITS)
+                + (dcvars->yl - CENTERY) * dcvars->fracstep;
+            const uint16_t step = dcvars->fracstep;
+            uint16_t iterations = (uint16_t)count;
+
+            __asm__ volatile (
+                "subq.w #1,%[n]\\n\\t"
+                "1: move.w %[phase],%%d0\\n\\t"
+                "lsr.w #8,%%d0\\n\\t"
+                "lsr.w #1,%%d0\\n\\t"
+                "move.b (%[src],%%d0.w),%%d0\\n\\t"
+                "andi.w #255,%%d0\\n\\t"
+                "add.w %%d0,%%d0\\n\\t"
+                "move.w (%[map],%%d0.w),%%d0\\n\\t"
+                "move.w %%d0,(%[out])\\n\\t"
+                "adda.w #76,%[out]\\n\\t"
+                "add.w %[step],%[phase]\\n\\t"
+                "dbra %[n],1b"
+                : [phase] "+&d" (frac),
+                  [n] "+&d" (iterations),
+                  [out] "+&a" (dest)
+                : [step] "d" (step),
+                  [src] "a" (source),
+                  [map] "a" (cellmap)
+                : "d0", "cc", "memory");
+            return;
+        }
+    }
+    /* If colormap is not the standard 32x256 WAD block, retain C. */
+    R_DrawColumnSprite(dcvars);
+}
+#endif
+
 void R_DrawColumnWall(const draw_column_vars_t *dcvars)
 {
-	R_DrawColumnSprite(dcvars);
+#if defined(DOOM_WALLCOL_ASM)
+    R_DrawColumnWallAsm(dcvars);
+#else
+    R_DrawColumnSprite(dcvars);
+#endif
 }
 
 
