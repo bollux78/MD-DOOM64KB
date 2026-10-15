@@ -127,6 +127,21 @@ if set -q DOOM_SRAM_FASTCOPY; and test "$DOOM_SRAM_FASTCOPY" = 1
     end
     set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY"
 end
+# R7: selectable SRAM copy strategies, independent of R6 front-cache.
+if set -q DOOM_SRAM_UNROLL4; and test "$DOOM_SRAM_UNROLL4" = 1
+    if not set -q DOOM_SRAM_CACHE16; or test "$DOOM_SRAM_CACHE16" != 1
+        echo 'DOOM_SRAM_UNROLL4 requires DOOM_SRAM_CACHE16=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY -DDOOM_SRAM_UNROLL4"
+end
+if set -q DOOM_SRAM_SPECIAL128; and test "$DOOM_SRAM_SPECIAL128" = 1
+    if not set -q DOOM_SRAM_UNROLL4; or test "$DOOM_SRAM_UNROLL4" != 1
+        echo 'DOOM_SRAM_SPECIAL128 requires DOOM_SRAM_UNROLL4=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_SPECIAL128"
+end
 # Round 5 controlled experiments. Do not change the default 43 KiB zone.
 # Restrict variants to known experimental settings; no SGDK files touched.
 if set -q DOOM_ZONE_KIB
