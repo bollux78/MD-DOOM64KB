@@ -159,6 +159,13 @@ static uint16_t bench_min_x10;
 static uint16_t bench_max_x10;
 static uint16_t bench_windows;
 static boolean bench_active;
+#if defined(DOOM_PROFILE)
+/* Coarse, low-overhead sampling: VBlank increments at 60 Hz.
+   Totals are approximate, NOT cycle-accurate. */
+static uint32_t prof_logic_vb, prof_render_vb, prof_vdp_vb;
+void I_ProfileLogic(uint32_t elapsed) { prof_logic_vb += elapsed; }
+void I_ProfileRender(uint32_t elapsed) { prof_render_vb += elapsed; }
+#endif
 
 void I_BenchmarkReset(void)
 {
@@ -170,6 +177,9 @@ void I_BenchmarkReset(void)
     bench_max_x10 = 0;
     bench_windows = 0;
     bench_active = true;
+#if defined(DOOM_PROFILE)
+    prof_logic_vb = prof_render_vb = prof_vdp_vb = 0;
+#endif
 }
 
 static void I_BenchmarkFrame(void)
@@ -231,7 +241,7 @@ void I_BenchmarkShowResults(void)
     VDP_init();
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
-    VDP_drawText("DOOM MD - TIMEDEMO 2.0", 5, 3);
+    VDP_drawText("DOOM MD - TIMEDEMO 3.0", 5, 2);
     VDP_drawText("DEMO3 / NTSC 60HZ", 5, 5);
 
     VDP_drawText("AVERAGE FPS", 5, 8);
@@ -256,7 +266,20 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
+#if defined(DOOM_PROFILE)
+    VDP_drawText("CPU LOGIC", 5, 19);
+    bench_fixed(buffer, (prof_logic_vb * 100u + 30u) / 60u, 2);
+    VDP_drawText(buffer, 24, 19);
+    VDP_drawText("RENDER/SCREEN", 5, 20);
+    bench_fixed(buffer, (prof_render_vb * 100u + 30u) / 60u, 2);
+    VDP_drawText(buffer, 24, 20);
+    VDP_drawText("VDP SYNC + DMA", 5, 21);
+    bench_fixed(buffer, (prof_vdp_vb * 100u + 30u) / 60u, 2);
+    VDP_drawText(buffer, 24, 21);
+    VDP_drawText("TIMES APPROX / VB=16.7MS", 2, 24);
+#else
     VDP_drawText("MIN/MAX: FULL 1S WINDOWS", 3, 23);
+#endif
     for (;;) SYS_doVBlankProcess();
 }
 #endif
@@ -349,6 +372,9 @@ void I_ShutdownGraphics(void)
 
 void I_FinishUpdate(void)
 {
+#if defined(DOOM_PROFILE)
+    uint32_t start_vb = _g_vblankCount;
+#endif
 	VDP_waitVSync();
 
 	if (newpal != NO_PALETTE_CHANGE)
@@ -362,6 +388,9 @@ void I_FinishUpdate(void)
 	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
 	                       VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
 	                       VIEWWINDOWWIDTH, DMA);
+#if defined(DOOM_PROFILE)
+    prof_vdp_vb += _g_vblankCount - start_vb;
+#endif
 #if defined(TIMEDEMO)
 	I_BenchmarkFrame();
 #endif
