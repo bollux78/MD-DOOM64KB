@@ -61,6 +61,11 @@ void I_FinishUpdate(void);
 
 #if defined(TIMEDEMO)
 void I_BenchmarkReset(void);
+#if defined(DOOM_PROFILE)
+extern volatile uint32_t _g_vblankCount;
+void I_ProfileLogic(uint32_t elapsed);
+void I_ProfileRender(uint32_t elapsed);
+#endif
 _Noreturn void I_BenchmarkShowResults(void);
 #endif
 
