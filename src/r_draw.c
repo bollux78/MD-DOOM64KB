@@ -1922,10 +1922,122 @@ static byte tmpCache[128];
 #if defined(DOOM_SRAM_FASTCOPY)
 /* 68000 byte-lane copies. Explicit DBRA loop removes indexed-byte address
  * arithmetic from C, but still performs one SRAM byte access per iteration. */
+#if defined(DOOM_SRAM_UNROLL4)
+static void SramCopyToOptimized(uint8_t* dst, const byte* from, uint16_t size)
+{
+    /* All renderer sizes are rounded to 4. Any unusual size uses the
+     * existing DBRA scalar fallback in the calling wrapper. */
+    uint16_t count = size >> 2;
+#if defined(DOOM_SRAM_SPECIAL128)
+    if (size == 128)
+    {
+    __asm__ volatile(
+        "moveq #31,%2\n\t"
+        "1:\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "dbra %2,1b"
+        : "+a"(dst), "+a"(from), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+        return;
+    }
+    if (size == 64)
+    {
+    __asm__ volatile(
+        "moveq #15,%2\n\t"
+        "1:\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "dbra %2,1b"
+        : "+a"(dst), "+a"(from), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+        return;
+    }
+#endif
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1:\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "move.b (%1)+,%%d0\n\tmove.b %%d0,(%0)\n\taddq.l #2,%0\n\t"
+        "dbra %2,1b"
+        : "+a"(dst), "+a"(from), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+
+static void SramCopyFromOptimized(const uint8_t* src, byte* to, uint16_t size)
+{
+    /* All renderer sizes are rounded to 4. Any unusual size uses the
+     * existing DBRA scalar fallback in the calling wrapper. */
+    uint16_t count = size >> 2;
+#if defined(DOOM_SRAM_SPECIAL128)
+    if (size == 128)
+    {
+    __asm__ volatile(
+        "moveq #31,%2\n\t"
+        "1:\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "dbra %2,1b"
+        : "+a"(to), "+a"(src), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+        return;
+    }
+    if (size == 64)
+    {
+    __asm__ volatile(
+        "moveq #15,%2\n\t"
+        "1:\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "dbra %2,1b"
+        : "+a"(to), "+a"(src), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+        return;
+    }
+#endif
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1:\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "move.b (%1),%%d0\n\tmove.b %%d0,(%0)+\n\taddq.l #2,%1\n\t"
+        "dbra %2,1b"
+        : "+a"(to), "+a"(src), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+
+#endif
+
 static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
 {
     uint8_t* dst = (uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
     const byte* from = src;
+#if defined(DOOM_SRAM_UNROLL4)
+    if (size && !(size & 3))
+    {
+        SramCopyToOptimized(dst, from, size);
+        return;
+    }
+#endif
     uint16_t count = size;
     if (!count) return;
     __asm__ volatile(
@@ -1942,6 +2054,13 @@ static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
 {
     const uint8_t* src = (const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
     byte* to = dest;
+#if defined(DOOM_SRAM_UNROLL4)
+    if (size && !(size & 3))
+    {
+        SramCopyFromOptimized(src, to, size);
+        return;
+    }
+#endif
     uint16_t count = size;
     if (!count) return;
     __asm__ volatile(
