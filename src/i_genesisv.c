@@ -26,6 +26,12 @@
 #include "w_wad.h"
 
 #include "globdata.h"
+#if defined(DOOM_RAM_STATS)
+#include "z_zone.h"
+extern volatile uint32_t doom_ram_min_sp;
+extern uint8_t _bend;  /* SGDK linker: first byte after static RAM */
+extern void I_RamProbeSample(void);
+#endif
 #include "gen_pal.h"
 
 #if defined(DOOM_BUILD_VARIANT)
@@ -186,6 +192,9 @@ void I_ProfileRender(uint32_t elapsed) { prof_render_vb += elapsed; }
 
 void I_BenchmarkReset(void)
 {
+#if defined(DOOM_RAM_STATS)
+    I_RamProbeSample();
+#endif
     bench_start_vb = _g_vblankCount;
     bench_window_vb = bench_start_vb;
     bench_frames = 0;
@@ -207,6 +216,9 @@ void I_BenchmarkReset(void)
 
 static void I_BenchmarkFrame(void)
 {
+#if defined(DOOM_RAM_STATS)
+    I_RamProbeSample();
+#endif
     if (!bench_active) return;
     bench_frames++;
     bench_window_frames++;
@@ -321,6 +333,46 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, (prof_vdp_vb * 100u + 30u) / 60u, 2);
     VDP_drawText(buffer, 24, 21);
     VDP_drawText("TIMES APPROX / VB=16.7MS", 2, 24);
+#elif defined(DOOM_RAM_STATS)
+    /* Zone occupancy is exact for this allocator; SP is only sampled. */
+    VDP_drawText("ZONE CAPACITY", 3, 19);
+    bench_u32(buffer, Z_RamZoneSize());
+    VDP_drawText(buffer, 24, 19);
+
+    VDP_drawText("ZONE PEAK USED", 3, 20);
+    bench_u32(buffer, Z_RamPeakUsed());
+    VDP_drawText(buffer, 24, 20);
+
+    VDP_drawText("ZONE LIVE NOW", 3, 21);
+    bench_u32(buffer, Z_RamCurrentUsed());
+    VDP_drawText(buffer, 24, 21);
+
+    VDP_drawText("ZONE FREE NOW", 3, 22);
+    bench_u32(buffer, Z_RamFreeNow());
+    VDP_drawText(buffer, 24, 22);
+
+    VDP_drawText("PEAK ZONE LEFT", 3, 23);
+    {
+        uint32_t cap = Z_RamZoneSize();
+        uint32_t peak = Z_RamPeakUsed();
+        bench_u32(buffer, cap >= peak ? cap - peak : 0);
+        VDP_drawText(buffer, 24, 23);
+    }
+
+    VDP_drawText("STACK GAP SAMPLED", 3, 24);
+    {
+        uint32_t bottom = (uint32_t)&_bend;
+        /* A small/negative gap suggests a collision; do not claim
+         * this is the deepest actual interrupt/call-chain stack usage. */
+        if (doom_ram_min_sp < bottom)
+            VDP_drawText("COLLISION", 24, 24);
+        else
+        {
+            bench_u32(buffer, doom_ram_min_sp - bottom);
+            VDP_drawText(buffer, 24, 24);
+        }
+    }
+    VDP_drawText("SP SAMPLE, NOT HIGH-WATER", 3, 26);
 #elif defined(DOOM_CACHE_STATS)
     /* Statistics count only requests to R_ComposeColumn, not all textures.
      * Counter increments add overhead; compare FPS using non-stats ROMs. */
