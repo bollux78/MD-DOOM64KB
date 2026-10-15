@@ -7,6 +7,11 @@ on:
         type: boolean
         required: false
         default: false
+      routine_profiler:
+        description: 'TIMEDEMO 4.0: renderer routine sampling'
+        type: boolean
+        required: false
+        default: false
       profiler:
         description: 'TIMEDEMO 3.0: per-stage VBlank profiling'
         type: boolean
@@ -33,13 +38,14 @@ jobs:
       - name: Compile ROM
         shell: bash
         env:
-          DOOM_TIMEDEMO: ${{ (inputs.benchmark || inputs.profiler) && '1' || '0' }}
+          DOOM_TIMEDEMO: ${{ (inputs.benchmark || inputs.profiler || inputs.routine_profiler) && '1' || '0' }}
+          DOOM_ROUTINE_PROFILE: ${{ inputs.routine_profiler && '1' || '0' }}
           DOOM_PROFILE: ${{ inputs.profiler && '1' || '0' }}
         run: fish scripts/build_silent.fish
       - name: Upload ROM
         if: success()
         uses: actions/upload-artifact@v5
         with:
-          name: ${{ inputs.profiler && 'doom-md-profiler-rom' || (inputs.benchmark && 'doom-md-timedemo-rom' || 'doom-md-silent-rom') }}
+          name: ${{ inputs.routine_profiler && 'doom-md-routine-profiler-rom' || (inputs.profiler && 'doom-md-profiler-rom' || (inputs.benchmark && 'doom-md-timedemo-rom' || 'doom-md-silent-rom')) }}
           path: out/rom.bin
           if-no-files-found: error
