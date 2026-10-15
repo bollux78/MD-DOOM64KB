@@ -1969,6 +1969,10 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
 
 static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling)
 {
+#if defined(DOOM_ROUTINE_PROFILE)
+    uint16_t previous_stage = doom_profile_stage;
+    doom_profile_stage = 3;
+#endif
     draw_column_vars_t dcvars;
     int16_t  texturecolumn = 0;   // shut up compiler warning
 
@@ -2163,6 +2167,9 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
         floorclip[rw_x] = fc_rwx;
         ceilingclip[rw_x] = cc_rwx;
     }
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = previous_stage;
+#endif
 }
 
 static boolean R_CheckOpenings(const int16_t start)
@@ -3012,6 +3019,9 @@ static void R_SetupFrame (player_t *player)
 //
 void R_RenderPlayerView (player_t* player)
 {
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 1;
+#endif
     R_SetupFrame (player);
 
     // Clear buffers.
@@ -3027,6 +3037,9 @@ void R_RenderPlayerView (player_t* player)
     R_ClearSprites ();
 
     // The head node is the last node output.
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 2;
+#endif
     R_RenderBSPNode (numnodes-1);
 
 #if defined FLAT_SPAN
@@ -3035,7 +3048,13 @@ void R_RenderPlayerView (player_t* player)
     R_DrawPlanes ();
 #endif
 
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 4;
+#endif
     R_DrawMasked ();
+#if defined(DOOM_ROUTINE_PROFILE)
+    doom_profile_stage = 0;
+#endif
 }
 
 
