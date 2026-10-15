@@ -2054,6 +2054,23 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #if !defined FLAT_WALL
 			texturecolumn = rw_offset;
 			int16_t ang = (angle16_t)(rw_centerangle + xtoviewangleTable[rw_x]) >> ANGLETOFINESHIFT_16;
+#if defined(DOOM_FOLDED_TANGENT)
+            /*
+             * Exact 4-quadrant table folding. Mirror the first half of
+             * the circle, then select the small or large tangent table.
+             * No precision reduction or new generated trigonometry data.
+             */
+            const uint16_t folded = (ang < 2048) ?
+                    (uint16_t)(2047 - ang) : (uint16_t)(ang - 2048);
+            const fixed_t tangent = folded < 1024 ?
+                    finetangentTable_part_3[folded] :
+                    finetangentTable_part_4[folded - 1024];
+            const fixed_t delta = (rw_distance * tangent) >> FRACBITS;
+            if (ang < 2048)
+                texturecolumn += delta;
+            else
+                texturecolumn -= delta;
+#else
 			if (ang < 1024) {			//    0 <= ang < 1024
 				fixed_t tan = finetangentTable_part_4[1023 - ang];
 				texturecolumn += (rw_distance * tan) >> FRACBITS;
@@ -2067,6 +2084,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 				fixed_t tan = finetangentTable_part_4[ang - 3072];
 				texturecolumn -= (rw_distance * tan) >> FRACBITS;
 			}
+#endif
 #endif
 
 #if defined(DOOM_FAST_DIVU) && (COLEXTRABITS == 7)
