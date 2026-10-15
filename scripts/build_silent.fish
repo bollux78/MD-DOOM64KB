@@ -75,6 +75,12 @@ end
 if set -q DOOM_FOLDED_TANGENT; and test "$DOOM_FOLDED_TANGENT" = 1
     set render_flags "$render_flags -DDOOM_FOLDED_TANGENT"
 end
+if set -q DOOM_MASKED_DIVU; and test "$DOOM_MASKED_DIVU" = 1
+    set render_flags "$render_flags -DDOOM_MASKED_DIVU"
+end
+if set -q DOOM_CACHE8; and test "$DOOM_CACHE8" = 1
+    set render_flags "$render_flags -DDOOM_CACHE8"
+end
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$render_flags"
     rm -rf out
