@@ -127,6 +127,10 @@ if set -q DOOM_SRAM_FASTCOPY; and test "$DOOM_SRAM_FASTCOPY" = 1
     end
     set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY"
 end
+# R6 narrow debug guard; never enabled by default.
+if set -q DOOM_R6_CACHE_GUARDS; and test "$DOOM_R6_CACHE_GUARDS" = 1
+    set render_flags "$render_flags -DDOOM_R6_CACHE_GUARDS"
+end
 # Round 5 controlled experiments. Do not change the default 43 KiB zone.
 # Restrict variants to known experimental settings; no SGDK files touched.
 if set -q DOOM_ZONE_KIB
