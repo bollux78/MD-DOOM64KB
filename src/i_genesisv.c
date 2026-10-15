@@ -270,8 +270,8 @@ void I_BenchmarkShowResults(void)
     VDP_drawText("CPU LOGIC", 5, 19);
     bench_fixed(buffer, (prof_logic_vb * 100u + 30u) / 60u, 2);
     VDP_drawText(buffer, 24, 19);
-    VDP_drawText("RENDER/SCREEN", 5, 20);
-    bench_fixed(buffer, (prof_render_vb * 100u + 30u) / 60u, 2);
+    VDP_drawText("RENDER OTHER", 5, 20);
+    bench_fixed(buffer, ((prof_render_vb > prof_vdp_vb ? prof_render_vb - prof_vdp_vb : 0) * 100u + 30u) / 60u, 2);
     VDP_drawText(buffer, 24, 20);
     VDP_drawText("VDP SYNC + DMA", 5, 21);
     bench_fixed(buffer, (prof_vdp_vb * 100u + 30u) / 60u, 2);
