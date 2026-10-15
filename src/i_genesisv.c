@@ -504,9 +504,38 @@ void I_FinishUpdate(void)
     I_DrawClassicTextHUD();
 #endif
 
+#if defined(DOOM_HUD_DMA24)
+    /* The 3D framebuffer has 24 rows. The status strip is a separate
+     * 4-row tilemap region: upload only changed HUD rows. */
+    VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                           VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
+                           VIEWWINDOWWIDTH, DMA);
+    {
+        static uint16_t lastHud[4 * VIEWWINDOWWIDTH];
+        static uint8_t hudInitialized = 0;
+        for (uint16_t row = 0; row < 4; row++)
+        {
+            const uint16_t *src = &_s_screen[(VIEWWINDOWHEIGHT + row) * VIEWWINDOWWIDTH];
+            uint16_t *old = &lastHud[row * VIEWWINDOWWIDTH];
+            uint8_t changed = !hudInitialized;
+            for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+            {
+                if (src[x] != old[x]) changed = 1;
+                old[x] = src[x];
+            }
+            if (changed)
+                VDP_setTileMapDataRect(BG_A, src, 0,
+                                       VIEWWINDOWHEIGHT + row,
+                                       VIEWWINDOWWIDTH, 1,
+                                       VIEWWINDOWWIDTH, DMA);
+        }
+        hudInitialized = 1;
+    }
+#else
 	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
 	                       VIEWWINDOWWIDTH, VDP_DISPLAY_ROWS,
 	                       VIEWWINDOWWIDTH, DMA);
+#endif
 #if defined(DOOM_PROFILE)
     prof_vdp_vb += _g_vblankCount - start_vb;
 #endif
