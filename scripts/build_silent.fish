@@ -63,6 +63,9 @@ if set -q DOOM_HUD_DMA24; and test "$DOOM_HUD_DMA24" = 1
     end
     set render_flags "$render_flags -DDOOM_HUD_DMA24"
 end
+if set -q DOOM_HUD_DMA24_NOHUDWRITE; and test "$DOOM_HUD_DMA24_NOHUDWRITE" = 1
+    set render_flags "$render_flags -DDOOM_HUD_DMA24_NOHUDWRITE"
+end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
