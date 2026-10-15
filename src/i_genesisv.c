@@ -505,8 +505,8 @@ void I_FinishUpdate(void)
 #endif
 
 #if defined(DOOM_HUD_DMA24)
-    /* The 3D framebuffer has 24 rows. The status strip is a separate
-     * 4-row tilemap region: upload only changed HUD rows. */
+    /* The 3D framebuffer has 24 rows (DMA). The status strip is
+     * CPU-updated only for changed tilemap rows, avoiding multi-DMA. */
     VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
                            VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
                            VIEWWINDOWWIDTH, DMA);
@@ -524,10 +524,12 @@ void I_FinishUpdate(void)
                 old[x] = src[x];
             }
             if (changed)
+                /* CPU-write the few dirty HUD cells. This avoids issuing
+                 * several more DMA requests during a NO_VSYNC frame. */
                 VDP_setTileMapDataRect(BG_A, src, 0,
                                        VIEWWINDOWHEIGHT + row,
                                        VIEWWINDOWWIDTH, 1,
-                                       VIEWWINDOWWIDTH, DMA);
+                                       VIEWWINDOWWIDTH, CPU);
         }
         hudInitialized = 1;
     }
