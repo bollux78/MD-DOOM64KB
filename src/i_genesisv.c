@@ -113,7 +113,7 @@ extern volatile uint32_t _g_vblankCount;   // i_genesis.c（60Hz）
 
 static void hud_putc(int16_t cx, int16_t cy, char c)
 {
-	if ((uint16_t)cx < VIEWWINDOWWIDTH && (uint16_t)cy < VIEWWINDOWHEIGHT)
+	if ((uint16_t)cx < VIEWWINDOWWIDTH && (uint16_t)cy < VDP_DISPLAY_ROWS)
 		_s_screen[cy * VIEWWINDOWWIDTH + cx] = font_cell(HUD_COL, c);
 }
 
