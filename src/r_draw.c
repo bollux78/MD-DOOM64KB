@@ -1842,6 +1842,10 @@ static void R_AddSprites(subsector_t __far* subsec, int16_t lightlevel)
 #else
 static void R_DrawColumnInCache(const column_t __far* patch, byte* cache, int16_t originy, int16_t cacheheight)
 {
+#if defined(DOOM_R6_CACHE_GUARDS)
+    if (cacheheight < 0 || cacheheight > 128)
+        I_Error("GUARD: CACHE HEIGHT %d", cacheheight);
+#endif
     while (patch->topdelta != 0xff)
     {
         const byte __far* source = (const byte __far*)patch + 3;
@@ -2070,6 +2074,15 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 #endif
 
     uint16_t cachekey = FindColumnCacheItem(texture, xc);
+
+#if defined(DOOM_R6_CACHE_GUARDS)
+    /* Check *before* any compose/write. A height >128 would overrun the
+     * 128-byte staging column; SRAM is 128 bytes per logical slot. */
+    if (tex->height < 0 || tex->height > 128)
+        I_Error("GUARD: TEX %d HEIGHT %d", texture, tex->height);
+    if (cachekey >= MAX_CACHE_ENTRIES)
+        I_Error("GUARD: CACHE SLOT %u", cachekey);
+#endif
 
 #if defined(DOOM_SRAM_CACHE16)
     byte __far* colcache = tmpCache;
