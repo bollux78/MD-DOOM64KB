@@ -1,0 +1,48 @@
+name: Memory laboratory - Round 5 (heap and cache)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  memory-lab:
+    name: Isolated zone-size and cache diagnostics
+    # Trusted manual builds only; never execute arbitrary PR code on personal runner.
+    runs-on: [self-hosted, linux, x64, doom-md]
+    timeout-minutes: 120
+    steps:
+      - name: Checkout R5 experiment (never change main)
+        uses: actions/checkout@v5
+        with:
+          ref: exp/68k-memory-round5
+
+      - name: Verify existing cross toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          command -v java
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+          python3 scripts/bench/test_exact_reciprocal.py
+
+      - name: Compile R5 matrix and export static RAM reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish scripts/lab/run_round5.fish
+
+      - name: Publish RAM/zone diagnostics and ROMs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-round5-memory-lab
+          path: |
+            dist/round5/
+            dist/doom-md-round5-memory-lab.zip
+          if-no-files-found: warn
+          retention-days: 14
