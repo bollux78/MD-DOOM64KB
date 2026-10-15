@@ -37,7 +37,7 @@ jobs:
             xvfb xauth imagemagick
       - name: Cache Linux toolchain
         id: toolchain-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/mars
           key: doom-md-marsdev-ubuntu2404-v1
@@ -66,7 +66,7 @@ jobs:
         run: bash scripts/lab/emulator_smoke.sh out/rom.bin
       - name: Upload lab outputs
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: hosted-doom-lab-${{ inputs.test_mode }}
           path: |
