@@ -399,7 +399,10 @@ void I_FinishUpdate(void)
 #if defined(DOOM_PROFILE)
     uint32_t start_vb = _g_vblankCount;
 #endif
+	/* Diagnostic only: permit the renderer to run without explicit frame pacing. */
+#if !defined(DOOM_NO_VSYNC)
 	VDP_waitVSync();
+#endif
 
 	if (newpal != NO_PALETTE_CHANGE)
 	{
