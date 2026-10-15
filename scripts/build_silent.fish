@@ -55,6 +55,14 @@ set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -
 if set -q DOOM_CLASSIC_TEXT_HUD; and test "$DOOM_CLASSIC_TEXT_HUD" = 1
     set render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=24 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT -DDOOM_CLASSIC_TEXT_HUD'
 end
+# Opt-in HUD DMA split. Keep 24-row HUD layout and standard 28-row control intact.
+if set -q DOOM_HUD_DMA24; and test "$DOOM_HUD_DMA24" = 1
+    if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
+        echo 'DOOM_HUD_DMA24 needs DOOM_CLASSIC_TEXT_HUD=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_HUD_DMA24"
+end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
