@@ -38,6 +38,9 @@ if not test -f scripts/doom64.wad
 end
 python3 scripts/repack_wad.py; or exit 1
 python3 scripts/genpal.py; or exit 1
+if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
+    python3 scripts/gen_colormap_cells.py; or exit 1
+end
 python3 scripts/gen_sfx.py --silent; or exit 1
 # Use SGDK boot files; disable the duplicate upstream boot and ROM header
 # only inside the Doom working tree.
@@ -65,6 +68,12 @@ if set -q DOOM_FAST_DIVU; and test "$DOOM_FAST_DIVU" = 1
 end
 if set -q DOOM_UNROLL_COLUMNS; and test "$DOOM_UNROLL_COLUMNS" = 1
     set render_flags "$render_flags -DDOOM_UNROLL_COLUMNS"
+end
+if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
+    set render_flags "$render_flags -DDOOM_CELL_LUT"
+end
+if set -q DOOM_FOLDED_TANGENT; and test "$DOOM_FOLDED_TANGENT" = 1
+    set render_flags "$render_flags -DDOOM_FOLDED_TANGENT"
 end
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$render_flags"
