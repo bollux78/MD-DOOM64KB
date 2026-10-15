@@ -52,7 +52,17 @@ extern const uint8_t *fullcolormap;
 #endif
 
 // チャンキー FB。各要素は完成済み VDP タイルマップ語。
-static uint16_t _s_screen[VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT];
+/* In classic-HUD mode, 3D renders 24 rows but DMA presents 28 rows.
+ * The bottom four rows never enter the 3D renderer. */
+#if defined(DOOM_CLASSIC_TEXT_HUD)
+#if VIEWWINDOWHEIGHT != 24 || VIEWWINDOWWIDTH != 38
+#error DOOM_CLASSIC_TEXT_HUD requires 38x24 3D viewport
+#endif
+#define VDP_DISPLAY_ROWS 28
+#else
+#define VDP_DISPLAY_ROWS VIEWWINDOWHEIGHT
+#endif
+static uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
 
 // Doom 8bit 色 index -> VDP タイルマップ語
 static uint16_t colorcell[256];
@@ -116,6 +126,39 @@ static void hud_num(int16_t cx, int16_t cy, uint16_t v, int8_t digits)
 		v /= 10;
 	}
 }
+
+#if defined(DOOM_CLASSIC_TEXT_HUD)
+/* Minimal tile HUD; no SRAM; no 3D drawing into the four bottom rows. */
+static void hud_label(int16_t x, int16_t y, const char* text)
+{
+    while (*text && x < VIEWWINDOWWIDTH)
+        _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(HUD_COL, *text++);
+}
+static uint16_t hud_saturate3(int32_t value)
+{
+    if (value < 0) return 0;
+    if (value > 999) return 999;
+    return (uint16_t)value;
+}
+static void I_DrawClassicTextHUD(void)
+{
+    for (int16_t y = VIEWWINDOWHEIGHT; y < VDP_DISPLAY_ROWS; y++)
+        for (int16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+            _s_screen[y * VIEWWINDOWWIDTH + x] = BLACK_CELL;
+
+    if (_g_gamestate != GS_LEVEL) return;
+
+    /* Only updates numbers/labels in tilemap RAM; no extra pixel rendering.
+     * Labels deliberately describe bullet ammo, not weapon-dependent ammo. */
+    hud_label(1, 25, "HEALTH");
+    hud_num(8, 25, hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health), 3);
+    hud_label(13, 25, "ARMOR");
+    hud_num(19, 25, hud_saturate3(_g_player.armorpoints), 3);
+    hud_label(24, 25, "BULLETS");
+    hud_num(32, 25, hud_saturate3(_g_player.ammo[am_clip]), 3);
+    hud_label(1, 27, "DOOM - MEGA DRIVE");
+}
+#endif
 
 static void I_DrawDebugCounters(void)
 {
@@ -426,7 +469,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	newpal = NO_PALETTE_CHANGE;
 
 	// 画面を黒で埋める
-	for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+	for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
 		_s_screen[i] = BLACK_CELL;
 }
 
@@ -457,9 +500,12 @@ void I_FinishUpdate(void)
 	}
 
 	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
+#if defined(DOOM_CLASSIC_TEXT_HUD)
+    I_DrawClassicTextHUD();
+#endif
 
 	VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
-	                       VIEWWINDOWWIDTH, VIEWWINDOWHEIGHT,
+	                       VIEWWINDOWWIDTH, VDP_DISPLAY_ROWS,
 	                       VIEWWINDOWWIDTH, DMA);
 #if defined(DOOM_PROFILE)
     prof_vdp_vb += _g_vblankCount - start_vb;
