@@ -54,6 +54,10 @@
 
 #include "globdata.h"
 
+#if defined(DOOM_WALL_TAN_LUT)
+#include "wall_tangent_lut.h" /* Auto-generated from the original tables. */
+#endif
+
 
 // Silhouette, needed for clipping Segs (mainly)
 // and sprites representing things.
@@ -2104,7 +2108,38 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #if !defined FLAT_WALL
 			texturecolumn = rw_offset;
 			int16_t ang = (angle16_t)(rw_centerangle + xtoviewangleTable[rw_x]) >> ANGLETOFINESHIFT_16;
-#if defined(DOOM_FOLDED_TANGENT)
+#if defined(DOOM_WALL_TAN_LUT)
+            /*
+             * C-only experiment: one direct ROM tangent lookup per column.
+             * All arithmetic and the sign/shift order match the original.
+             * Explicit original fallback for unexpected out-of-domain angles.
+             */
+            if ((uint16_t)ang < 4096u)
+            {
+                const fixed_t tan = doom_wall_tangent_lut[(uint16_t)ang];
+                const fixed_t delta = (rw_distance * tan) >> FRACBITS;
+                if (ang < 2048)
+                    texturecolumn += delta;
+                else
+                    texturecolumn -= delta;
+            }
+            else
+            {
+                if (ang < 1024) {
+                    fixed_t tan = finetangentTable_part_4[1023 - ang];
+                    texturecolumn += (rw_distance * tan) >> FRACBITS;
+                } else if (ang < 2048) {
+                    fixed_t tan = finetangentTable_part_3[2047 - ang];
+                    texturecolumn += (rw_distance * tan) >> FRACBITS;
+                } else if (ang < 3072) {
+                    fixed_t tan = finetangentTable_part_3[ang - 2048];
+                    texturecolumn -= (rw_distance * tan) >> FRACBITS;
+                } else {
+                    fixed_t tan = finetangentTable_part_4[ang - 3072];
+                    texturecolumn -= (rw_distance * tan) >> FRACBITS;
+                }
+            }
+#elif defined(DOOM_FOLDED_TANGENT)
             /*
              * Exact 4-quadrant table folding. Mirror the first half of
              * the circle, then select the small or large tangent table.
