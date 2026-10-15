@@ -78,6 +78,14 @@ end
 if set -q DOOM_HUD_DMA24_NOHUDWRITE; and test "$DOOM_HUD_DMA24_NOHUDWRITE" = 1
     set render_flags "$render_flags -DDOOM_HUD_DMA24_NOHUDWRITE"
 end
+# Round Wall1: texture column ASM only, no HUD/DMA/renderer geometry changes.
+if set -q DOOM_WALLCOL_ASM; and test "$DOOM_WALLCOL_ASM" = 1
+    if not set -q DOOM_CELL_LUT; or test "$DOOM_CELL_LUT" != 1
+        echo 'DOOM_WALLCOL_ASM requires DOOM_CELL_LUT=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_WALLCOL_ASM"
+end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
