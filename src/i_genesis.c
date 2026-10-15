@@ -157,7 +157,7 @@ void DMX_Init(void)
 	// XGM ドライバを明示ロードしてから PCM を登録する。
 	// 遅延ロード任せだと、後続の XGM_startPlay がドライバをロードする際に
 	// Z80 RAM ごとリセットされ、先に登録した PCM サンプル表が消えて SFX が無音になる。
-	Z80_loadDriver(Z80_DRIVER_XGM, TRUE);
+	XGM_loadDriver(TRUE);
 	DMX_RegisterPCM();
 }
 
