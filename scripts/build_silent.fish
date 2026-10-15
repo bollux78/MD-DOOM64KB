@@ -59,6 +59,13 @@ end
 if not set -q DOOM_NO_VSYNC; or test "$DOOM_NO_VSYNC" != 0
     set render_flags "$render_flags -DDOOM_NO_VSYNC"
 end
+# Experimental renderer switches are local to this ROM, never global SGDK.
+if set -q DOOM_FAST_DIVU; and test "$DOOM_FAST_DIVU" = 1
+    set render_flags "$render_flags -DDOOM_FAST_DIVU"
+end
+if set -q DOOM_UNROLL_COLUMNS; and test "$DOOM_UNROLL_COLUMNS" = 1
+    set render_flags "$render_flags -DDOOM_UNROLL_COLUMNS"
+end
 set -l stamp out/.render_options
 if test -f $stamp; and test (cat $stamp) != "$render_flags"
     rm -rf out
