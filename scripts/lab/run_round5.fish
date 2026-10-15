@@ -30,13 +30,21 @@ for config in $configurations
 
     for mode in perf ram
         set -lx DOOM_BUILD_ID "doom-md-r5-c$slots-z$zone-$mode"
+        # Declare in the enclosing loop scope: fish's if branches have their
+        # own local scopes, so set -lx inside if can vanish before the build.
+        set -lx DOOM_RAM_STATS 0
         if test $mode = ram
-            set -lx DOOM_RAM_STATS 1
-        else
-            set -lx DOOM_RAM_STATS 0
+            set DOOM_RAM_STATS 1
         end
         echo "== Building $DOOM_BUILD_ID =="
         fish scripts/build_silent.fish > "$outdir/build-$DOOM_BUILD_ID.log" 2>&1
+        # Catch silent loss of diagnostic flags immediately.
+        if test $mode = ram
+            if not grep -q -- '-DDOOM_RAM_STATS' "$outdir/build-$DOOM_BUILD_ID.log"
+                echo "R5 ERROR: missing -DDOOM_RAM_STATS in $DOOM_BUILD_ID compile log"
+                exit 1
+            end
+        end
         if test $status -ne 0
             echo "Build failed. Last 60 lines of $outdir/build-$DOOM_BUILD_ID.log:"
             tail -n 60 "$outdir/build-$DOOM_BUILD_ID.log"
