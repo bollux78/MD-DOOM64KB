@@ -1065,6 +1065,9 @@ static void G_DoPlayDemo(void)
     _g_demoplayback = true;
 
     starttime = I_GetTime();
+#if defined(TIMEDEMO)
+    if (_g_timingdemo) I_BenchmarkReset();
+#endif
 }
 
 /* G_CheckDemoStatus
@@ -1079,9 +1082,13 @@ void G_CheckDemoStatus (void)
         // killough -- added fps information and made it work for longer demos:
         uint32_t realtics = endtime - starttime;
         uint32_t resultfps = TICRATE * 1000L * _g_gametic / realtics;
+#if defined(TIMEDEMO)
+        I_BenchmarkShowResults(); /* Counts presented frames, not gametics. */
+#else
         I_Error ("Timed %lu gametics in %lu realtics = %lu.%.3lu frames per second",
                  (uint32_t) _g_gametic,realtics,
                  resultfps / 1000, resultfps % 1000);
+#endif
     }
 
     if (_g_demoplayback)
