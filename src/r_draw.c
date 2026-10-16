@@ -825,12 +825,24 @@ static CONSTFUNC int16_t SlopeDiv(uint32_t num, uint32_t den)
 
 static CONSTFUNC int16_t SlopeDiv16(uint16_t n, uint16_t d)
 {
-	if (d == 0)
-		return SLOPERANGE;
-
-	const uint16_t ans = ((uint32_t)n * SLOPERANGE) / d;
-
-	return (ans <= SLOPERANGE) ? ans : SLOPERANGE;
+    if (d == 0)
+        return SLOPERANGE;
+#if defined(DOOM_R9_SLOPE_DIVU)
+    /* In the octants used by R_PointToAngle16, n <= d, so the
+       (n << 11)/d quotient fits in 16 bits. Explicitly guard to
+       retain the original behavior in all other input cases. */
+    if (n <= d)
+    {
+        uint32_t dividend = (uint32_t)n * SLOPERANGE;
+        __asm__ ("divu.w %1, %0"
+                 : "+&d" (dividend)
+                 : "d" (d)
+                 : "cc");
+        return (uint16_t)dividend;
+    }
+#endif
+    const uint16_t ans = ((uint32_t)n * SLOPERANGE) / d;
+    return (ans <= SLOPERANGE) ? ans : SLOPERANGE;
 }
 
 
@@ -2550,7 +2562,31 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
     if (stop > start)
     {
         ds_p->scale2 = R_ScaleFromGlobalAngle(stop);
+#if defined(DOOM_R9_STEP_DIVS)
+        /* DIVS.W supports a signed 32-bit dividend and signed 16-bit
+           divisor, but requires the quotient to fit in signed 16 bits.
+           Test exact bounds before using the instruction. A width of
+           1..37 keeps the 32768*width bound within signed 32 bits. */
+        {
+            const int16_t width = stop - start;
+            const int32_t delta = ds_p->scale2 - rw_scale;
+            const int32_t limit = (int32_t)width * 32768L;
+            if (delta >= -limit && delta < limit)
+            {
+                int32_t quotient = delta;
+                __asm__ ("divs.w %1, %0"
+                         : "+&d" (quotient)
+                         : "d" (width)
+                         : "cc");
+                rw_scalestep = (int16_t)quotient;
+            }
+            else
+                rw_scalestep = delta / width;
+            ds_p->scalestep = rw_scalestep;
+        }
+#else
         ds_p->scalestep = rw_scalestep = (ds_p->scale2 - rw_scale) / (stop - start);
+#endif
     }
     else
         ds_p->scale2 = ds_p->scale1;

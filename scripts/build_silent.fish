@@ -103,6 +103,13 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R9 independent geometry arithmetic experiments; both disabled by default.
+if set -q DOOM_R9_SLOPE_DIVU; and test "$DOOM_R9_SLOPE_DIVU" = 1
+    set render_flags "$render_flags -DDOOM_R9_SLOPE_DIVU"
+end
+if set -q DOOM_R9_STEP_DIVS; and test "$DOOM_R9_STEP_DIVS" = 1
+    set render_flags "$render_flags -DDOOM_R9_STEP_DIVS"
+end
 # R8 controlled fast-path variants (disabled for original baseline).
 if set -q DOOM_R8_LUT_UNROLL
     switch "$DOOM_R8_LUT_UNROLL"
