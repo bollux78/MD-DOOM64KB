@@ -837,7 +837,25 @@ void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
 	uint16_t cell = colorcell[color];
 	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
 
-#if defined(DOOM_UNROLL_COLUMNS)
+#if defined(DOOM_R19_FLAT_DBRA)
+#if VIEWWINDOWWIDTH != 38
+#error R19_FLAT_DBRA requires the R18 38-column tilemap
+#endif
+    /* R19: keep the R18 renderer, framebuffer, HUD, DMA, heap and XGM.
+     * Only change the flat-color column's innermost store loop.
+     * count is always positive here; DBRA expects (count - 1).
+     * One 16-bit tile word per row, 38*2 = 76 bytes stride. */
+    uint16_t n = (uint16_t)count - 1;
+    __asm__ volatile (
+        "1:\n\t"
+        "move.w %[color],(%[dst])\n\t"
+        "adda.w #76,%[dst]\n\t"
+        "dbra %[n],1b"
+        : [dst] "+&a" (dest),
+          [n] "+&d" (n)
+        : [color] "d" (cell)
+        : "cc", "memory");
+#elif defined(DOOM_UNROLL_COLUMNS)
     /* Fixed-color spans: four writes with one loop branch. */
     while (count >= 4)
     {
