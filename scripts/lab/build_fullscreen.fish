@@ -26,7 +26,7 @@ set -gx DOOM_CACHE_STATS 0
 set -gx DOOM_ROUTINE_PROFILE 0
 set -gx DOOM_PROFILE 0
 set -gx DOOM_CLASSIC_TEXT_HUD 0
-set -gx DOOM_BUILD_ID doom-md-fullscreen-sramasm-perf
+set -gx DOOM_BUILD_ID doom-md-r6-sramasm-perf
 
 echo "FULLSCREEN: R6 Cache16 SRAM ASM - 38x28 - no HUD"
 set -l logfile "$dest/build-$DOOM_BUILD_ID.log"
@@ -61,7 +61,7 @@ end
 python3 -c 'from pathlib import Path
 import struct
 b=Path("out/rom.bin").read_bytes()
-n="doom-md-fullscreen-sramasm-perf"
+n="doom-md-r6-sramasm-perf"
 assert len(b)<0x200000, "ROM overlaps SRAM cartridge address"
 assert b[0x120:0x150].decode("ascii").strip()==n
 assert b[0x150:0x180].decode("ascii").strip()==n
@@ -70,8 +70,10 @@ assert struct.unpack_from(">II",b,0x1B4)==(0x200000,0x20FFFF)
 print("Validated R6 SRAM ASM ROM:",n,len(b),"bytes")
 '; or exit 1
 
-cp out/rom.bin "$dest/$DOOM_BUILD_ID.bin"; or exit 1
-cp out/release/rom.out "$dest/$DOOM_BUILD_ID.elf"; or exit 1
-echo "READY: $dest/$DOOM_BUILD_ID.bin"
+cp out/rom.bin "$dest/doom-md-fullscreen-sramasm-perf.bin"; or exit 1
+cp out/release/rom.out "$dest/doom-md-fullscreen-sramasm-perf.elf"; or exit 1
+echo "READY: $dest/doom-md-fullscreen-sramasm-perf.bin"
+echo "Internal ROM title remains: doom-md-r6-sramasm-perf (original R6)."
+echo "Only the output filename was renamed, not ROM header or linked layout."
 echo "Validate in BlastEm: 2134 frames, approx. 8.86 FPS at divider 7."
 echo "This R6 SRAM configuration was originally an emulator experiment."
