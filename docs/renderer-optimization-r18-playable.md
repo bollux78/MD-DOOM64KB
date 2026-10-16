@@ -1,36 +1,28 @@
-# R18 — Playable Doom with E1M1 VGM music
+# R18 Playable — single music-enabled ROM
 
-**Baseline:** R17 DBRA (BlastEm NTSC divider 7: 10.55 FPS, 202.23 s for 2134 frames), confirmed running on original Mega Drive hardware. Do not enable R17 FRACMUL: it was slower.
+This branch is an **isolated one-off playable build** based on the hardware-tested R17 DBRA winner, not a replacement for the ongoing `hud` renderer experiments. R12–R17 scripts and ROMs remain intact.
 
-**R18 changes:** Disable TIMEDEMO and automatic PLAYTEST, retain R16 Hand1 38x22 CRT geometry/HUD, R15 SETUPMUL, R17 DBRA, no explicit VSync, and all previous stable renderer flags. Use normal Doom title/menu, joystick controls and gameplay. SGDK rescomp converts the supplied Mega Drive VGM to XGM, and the existing XGM driver plays it on the title screen and in E1M1. SFX remain silent for this first music-only build because the external doom1.wad samples have not been supplied.
+## ROM
+- `doom-md-r18-playable-e1m1.bin`
+- 38×22 true viewport, R16 Hand1 CRT HUD, R15 SETUPMUL, R17 DBRA (not FRACMUL).
+- **No timedemo, no benchmark screen, no automatic playtest**: standard title/menu and normal joypad gameplay.
+- User-supplied `e1m1.vgm`, losslessly archived in `assets/r18-e1m1.vgm.xz`. Restored by GitHub Actions, SHA256-verified, converted to XGM by SGDK, then embedded in the ROM.
+- Source VGM SHA256: `64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226`.
+- First R18 release is **music-only**; sound effects are still disabled (`SFX_SILENT`).
+- Music looping must be verified on original hardware. R17 timedemo FPS is **not** a benchmark of R18 with audio.
 
-## Supply music locally (do not commit VGM to the public repository)
+## Build
+The workflow `R18 Playable — E1M1 Music (single ROM)` builds exactly one ROM on the existing self-hosted Mega Drive toolchain runner on push to `r18-playable`.
 
-On the **self-hosted runner machine** (same Linux PC):
+To rebuild locally on the same runner checkout:
 
 ```fish
-mkdir -p ~/Projetos/doom-assets
-cp /caminho/para/seu/e1m1.vgm ~/Projetos/doom-assets/e1m1.vgm
-```
-
-Then open GitHub Actions > **HUD R18 Playable E1M1 music** > **Run workflow** (branch `fullscreen`). The job checks out `hud` and embeds the VGM. Artifact: `doom-md-r18-playable-e1m1`.
-
-Or build from the source checkout directly:
-
-```fish
-cd ~/Projetos/MD-DOOM64KB
-git pull origin hud
-set -lx DOOM_R18_BGM_VGM ~/Projetos/doom-assets/e1m1.vgm
+git switch r18-playable
+python3 -c 'import lzma,pathlib;pathlib.Path("res/e1m1.vgm").write_bytes(lzma.decompress(pathlib.Path("assets/r18-e1m1.vgm.xz").read_bytes()))'
+set -lx DOOM_R18_BGM_VGM "$PWD/res/e1m1.vgm"
 fish scripts/lab/build_r18_playable.fish
 ```
 
-ROM: `dist/r18-playable/doom-md-r18-playable-e1m1.bin`.
+The other benchmark builds and ongoing optimization work stay in the `hud` branch.
 
-## Important notes
-
-- The original VGM is **not** stored in GitHub source; the runner must read it from the external path. This avoids accidental replacement by the old silent placeholder.
-- The build validates the VGM header, rejects a tiny silent placeholder, forces a fresh rescomp conversion and records the input SHA256.
-- The existing audio code already calls `XGM_startPlay(bgm_e1m1)` and sets infinite looping when Doom requests it. Confirm actual looping on hardware; the source VGM may lack loop markers.
-- Controls: directional pad moves/turns, B fires, A uses/accepts, C+left/right strafes, Start opens the menu.
-- Music timing and video smoothness must be verified on real hardware: the R17 FPS numbers came from a **timedemo with a silent VGM**, not from this new audio workload.
-- PCM SFX can be added in a later round using an external `doom1.wad`; they are not part of this initial build.
+**Music redistribution:** this branch includes the uploaded VGM as an XZ-compressed source asset. Verify any third-party redistribution rights before distributing the music-enabled ROM publicly.
