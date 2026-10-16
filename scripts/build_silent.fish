@@ -103,6 +103,13 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R10 independently controlled hardware divisions (R9 Combined remains enabled separately).
+if set -q DOOM_R10_DIST_DIVU; and test "$DOOM_R10_DIST_DIVU" = 1
+    set render_flags "$render_flags -DDOOM_R10_DIST_DIVU"
+end
+if set -q DOOM_R10_RECIP_DIVU; and test "$DOOM_R10_RECIP_DIVU" = 1
+    set render_flags "$render_flags -DDOOM_R10_RECIP_DIVU"
+end
 # R9 independent geometry arithmetic experiments; both disabled by default.
 if set -q DOOM_R9_SLOPE_DIVU; and test "$DOOM_R9_SLOPE_DIVU" = 1
     set render_flags "$render_flags -DDOOM_R9_SLOPE_DIVU"

@@ -733,12 +733,37 @@ fixed_t CONSTFUNC FixedMul3216(fixed_t a, uint16_t blw)
 #else
 inline
 #endif
+#if defined(DOOM_R10_RECIP_DIVU)
+/* Exact unsigned 32/16 division of 0xffffffff using two DIVU.W operations.
+   High quotient digit first, then divide remainder:0xffff for the low
+   quotient digit. Each division has a 16-bit quotient by construction.
+   Retain the original code for divisor zero (undefined in both paths). */
+static uint32_t R10_ReciprocalSmall(uint16_t d)
+{
+    uint32_t hi = 0xffffu;
+    __asm__ ("divu.w %1, %0"
+             : "+&d" (hi)
+             : "d" (d)
+             : "cc");
+    uint32_t lo = (hi & 0xffff0000u) | 0xffffu;
+    __asm__ ("divu.w %1, %0"
+             : "+&d" (lo)
+             : "d" (d)
+             : "cc");
+    return ((uint32_t)(uint16_t)hi << 16) | (uint16_t)lo;
+}
+#endif
+
 fixed_t CONSTFUNC FixedApproxDiv(fixed_t a, fixed_t b)
 {
-	if (b <= 0xffffu)
-		return FixedMul3232(a, FixedReciprocalSmall(b));
-	else
-		return FixedMul3216(a, FixedReciprocalBig(b));
+    if (b <= 0xffffu)
+#if defined(DOOM_R10_RECIP_DIVU)
+        return FixedMul3232(a, b ? R10_ReciprocalSmall((uint16_t)b) : FixedReciprocalSmall(b));
+#else
+        return FixedMul3232(a, FixedReciprocalSmall(b));
+#endif
+    else
+        return FixedMul3216(a, FixedReciprocalBig(b));
 }
 
 
@@ -1039,7 +1064,27 @@ static CONSTFUNC int16_t R_PointToDist(int16_t x, int16_t y)
         dy = t;
     }
 
+#if defined(DOOM_R10_DIST_DIVU)
+    /* Exact 32/16 hardware quotient for the final point-distance divide.
+       DIVU.W traps if quotient >= 65536; check high dividend word.
+       Preserve original signed division outside the safe positive range. */
+    {
+        const fixed_t divisor = finecosineapprox((FixedApproxDiv(dy,dx) >> DBITS) / 2);
+        if (dx >= 0 && divisor > 0 && (uint32_t)divisor <= 65535u &&
+            ((uint32_t)dx >> 16) < (uint32_t)divisor)
+        {
+            uint32_t result = (uint32_t)dx;
+            __asm__ ("divu.w %1, %0"
+                     : "+&d" (result)
+                     : "d" ((uint16_t)divisor)
+                     : "cc");
+            return (int16_t)(uint16_t)result;
+        }
+        return dx / divisor;
+    }
+#else
     return dx / finecosineapprox((FixedApproxDiv(dy,dx) >> DBITS) / 2);
+#endif
 }
 
 
