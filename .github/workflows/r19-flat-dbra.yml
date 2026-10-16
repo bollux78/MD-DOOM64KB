@@ -1,0 +1,58 @@
+name: R19 Flat DBRA — R18 Safe Renderer + E1M1
+
+on:
+  push:
+    branches:
+      - r19-flat-dbra
+  workflow_dispatch:
+
+concurrency:
+  group: r19-flat-dbra
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-r19-flat-dbra:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R19 flat-DBRA branch (R18 untouched)
+        uses: actions/checkout@v4
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Check R19 flat-DBRA and VGM
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r19_flat_dbra.fish
+          python3 scripts/lab/test_r18_playable.py
+          python3 scripts/lab/test_r19_flat_dbra.py
+          python3 scripts/lab/check_r18_vgm.py res/e1m1.vgm
+      - name: Build ONE R19 flat-DBRA ROM, without timedemo
+        shell: bash
+        run: |
+          DOOM_R19_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r19_flat_dbra.fish
+      - name: Upload ONE playable ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r19-flat-dbra-e1m1
+          path: |
+            dist/r19-flat-dbra/*.bin
+            dist/r19-flat-dbra/*.log
+            dist/r19-flat-dbra/*.txt
+          if-no-files-found: error
+          retention-days: 90
