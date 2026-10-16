@@ -26,6 +26,9 @@
 #include "w_wad.h"
 
 #include "globdata.h"
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+#include "d_items.h" /* weaponinfo: current weapon's ammunition type */
+#endif
 #include "gen_pal.h"
 
 #if defined(DOOM_BUILD_VARIANT)
@@ -44,6 +47,15 @@ extern void R_CacheStatsReset(void);
 
 // 16 個のベタ塗りタイルを置く VRAM 先頭 index
 #define SOLID_TILE_INDEX  TILE_USER_INDEX
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+/* Sixteen original solid tiles already occupy USER_INDEX+0..15.
+ * Reserve 4 decorative tiles + 16 face tiles once at boot. */
+#define HUD_METAL_TILE   (SOLID_TILE_INDEX + 16)
+#define HUD_TOP_TILE     (SOLID_TILE_INDEX + 17)
+#define HUD_BOTTOM_TILE  (SOLID_TILE_INDEX + 18)
+#define HUD_SEAM_TILE    (SOLID_TILE_INDEX + 19)
+#define HUD_FACE_TILE    (SOLID_TILE_INDEX + 20)
+#endif
 
 #if defined(DOOM_CELL_LUT)
 /* 32 x 256 tilemap words in ROM; built from WAD COLORMAP and genpal_cell. */
@@ -140,6 +152,179 @@ static uint16_t hud_saturate3(int32_t value)
     if (value > 999) return 999;
     return (uint16_t)value;
 }
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+/* 32x32 static monochrome portrait. Bit 31 is the leftmost pixel.
+ * Pal3/15 is the existing gray HUD text color. No PAL writes or
+ * per-frame VRAM tile generation. Static test artwork, not WAD STFACE. */
+static const uint32_t doom_hud_face_rows[32] = {
+    0x7ffffffeu, /* row 0 */
+    0x80000001u, /* row 1 */
+    0x80000001u, /* row 2 */
+    0x803ffc01u, /* row 3 */
+    0x81ffff81u, /* row 4 */
+    0x87ffffe1u, /* row 5 */
+    0x8ffffff1u, /* row 6 */
+    0x8ffffff1u, /* row 7 */
+    0x8ffffff1u, /* row 8 */
+    0x8bffffd1u, /* row 9 */
+    0x8bffffd1u, /* row 10 */
+    0x89ffff91u, /* row 11 */
+    0x89000091u, /* row 12 */
+    0x89f00f91u, /* row 13 */
+    0x89000091u, /* row 14 */
+    0x897e7e91u, /* row 15 */
+    0x81381c81u, /* row 16 */
+    0x81010081u, /* row 17 */
+    0x81010081u, /* row 18 */
+    0x81010081u, /* row 19 */
+    0x81410281u, /* row 20 */
+    0x8103c081u, /* row 21 */
+    0x81000081u, /* row 22 */
+    0x80000001u, /* row 23 */
+    0x800ff001u, /* row 24 */
+    0x8007e001u, /* row 25 */
+    0x80000001u, /* row 26 */
+    0x80000001u, /* row 27 */
+    0x801ff801u, /* row 28 */
+    0x800ff001u, /* row 29 */
+    0x80000001u, /* row 30 */
+    0x7ffffffeu, /* row 31 */
+};
+
+static uint16_t I_HudCurrentAmmo(void)
+{
+    const int16_t weapon = (int16_t)_g_player.readyweapon;
+    if (weapon < 0 || weapon >= NUMWEAPONS) return 0;
+    const ammotype_t type = weaponinfo[weapon].ammo;
+    if ((int16_t)type < 0 || type >= NUMAMMO) return 0;
+    return hud_saturate3(_g_player.ammo[type]);
+}
+
+static uint8_t I_HudKeys(void)
+{
+    return (uint8_t)((_g_player.cards[0] ? 1u : 0u)
+        | (_g_player.cards[1] ? 2u : 0u)
+        | (_g_player.cards[2] ? 4u : 0u));
+}
+
+/* This boot-only work uses one 8-word stack tile and an 128-byte ROM mask.
+ * Do NOT allocate a 32x32 image in 64 KiB WRAM. */
+static void I_BuildDoomStyleTiles(void)
+{
+    uint32_t tile[8];
+    for (uint16_t kind = 0; kind < 4u; kind++)
+    {
+        for (uint16_t y = 0; y < 8u; y++)
+        {
+            uint32_t row = 0;
+            for (uint16_t x = 0; x < 8u; x++)
+            {
+                uint16_t on = 0;
+                if (kind == 0u) /* riveted plate, alternating gray specks */
+                    on = (y == 0u || y == 7u || ((x + (y & 1u)) % 4u == 0u));
+                else if (kind == 1u) /* top bevel */
+                    on = y <= 1u || (y == 3u && x == 3u);
+                else if (kind == 2u) /* bottom bevel */
+                    on = y >= 6u || (y == 4u && x == 4u);
+                else /* vertical metal rib */
+                    on = x == 0u || x == 1u || x == 7u;
+                row = (row << 4) | (on ? 15u : 0u);
+            }
+            tile[y] = row;
+        }
+        VDP_loadTileData(tile, HUD_METAL_TILE + kind, 1, CPU);
+    }
+
+    /* Face tiles laid out 4x4, 4 bpp, 0=black 15=gray. */
+    for (uint16_t tileY = 0; tileY < 4u; tileY++)
+    for (uint16_t tileX = 0; tileX < 4u; tileX++)
+    {
+        for (uint16_t y = 0; y < 8u; y++)
+        {
+            const uint32_t bits = doom_hud_face_rows[tileY * 8u + y];
+            uint32_t row = 0;
+            for (uint16_t x = 0; x < 8u; x++)
+            {
+                const uint16_t bitX = tileX * 8u + x;
+                row = (row << 4) | ((bits & (1UL << (31u - bitX))) ? 15u : 0u);
+            }
+            tile[y] = row;
+        }
+        VDP_loadTileData(tile, HUD_FACE_TILE + tileY * 4u + tileX, 1, CPU);
+    }
+}
+
+static void I_DoomStyleText(uint16_t x, uint16_t y, uint8_t color,
+                             const char *value)
+{
+    while (*value && x < VIEWWINDOWWIDTH)
+        _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(color, *value++);
+}
+
+static void I_DoomStyleHud(void)
+{
+    /* Four rows are always built in the CPU framebuffer, but DMA uploads
+     * them only on the first frame or when a displayed value changes. */
+    if (_g_gamestate != GS_LEVEL)
+    {
+        for (uint16_t y = 24; y < 28; y++)
+            for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+                _s_screen[y * VIEWWINDOWWIDTH + x] = BLACK_CELL;
+        return;
+    }
+
+    for (uint16_t y = 24; y < 28; y++)
+    for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+    {
+        uint16_t tile = y == 24 ? HUD_TOP_TILE :
+                        (y == 27 ? HUD_BOTTOM_TILE : HUD_METAL_TILE);
+        if (x == 0 || x == 37 || x == 8 || x == 16 ||
+            x == 21 || x == 29)
+            tile = HUD_SEAM_TILE;
+        _s_screen[y * VIEWWINDOWWIDTH + x] =
+            TILE_ATTR_FULL(3, 0, 0, 0, tile);
+    }
+
+    /* Center portrait: fixed artwork. Labels and values use stock SGDK
+     * font tiles. The selected-weapon ammo number is genuinely dynamic. */
+    for (uint16_t y = 0; y < 4; y++)
+        for (uint16_t x = 0; x < 4; x++)
+            _s_screen[(24 + y) * VIEWWINDOWWIDTH + 17 + x] =
+                TILE_ATTR_FULL(3, 0, 0, 0,
+                               HUD_FACE_TILE + y * 4u + x);
+
+    I_DoomStyleText(1, 24, 14, "AMMO");
+    I_DoomStyleText(9, 24, 14, "HEALTH");
+    I_DoomStyleText(22, 24, 14, "ARMOR");
+    I_DoomStyleText(30, 24, 14, "KEYS");
+
+    hud_num(2, 25, I_HudCurrentAmmo(), 3);
+    hud_num(10, 25, hud_saturate3(
+        _g_player.mo ? _g_player.mo->health : _g_player.health), 3);
+    hud_num(23, 25, hud_saturate3(_g_player.armorpoints), 3);
+
+    I_DoomStyleText(1, 26, 7, "WEAP");
+    {
+        int16_t weapon = (int16_t)_g_player.readyweapon;
+        if (weapon < 0 || weapon >= NUMWEAPONS) weapon = 0;
+        hud_num(6, 26, (uint16_t)weapon, 1);
+    }
+    I_DoomStyleText(9, 26, 7, "HP%");
+    I_DoomStyleText(22, 26, 7, "AR%");
+    I_DoomStyleText(30, 26, 7, "CARDS");
+
+    /* Keycards are dynamically read and tinted with existing text colors.
+     * Blue uses gray because a reserved blue font color is unavailable. */
+    const uint8_t keys = I_HudKeys();
+    _s_screen[25 * VIEWWINDOWWIDTH + 31] =
+        font_cell(7, (keys & 1u) ? 'B' : '-');
+    _s_screen[25 * VIEWWINDOWWIDTH + 33] =
+        font_cell(14, (keys & 2u) ? 'Y' : '-');
+    _s_screen[25 * VIEWWINDOWWIDTH + 35] =
+        font_cell(4, (keys & 4u) ? 'R' : '-');
+}
+#endif
+
 static void I_DrawClassicTextHUD(void)
 {
     for (int16_t y = VIEWWINDOWHEIGHT; y < VDP_DISPLAY_ROWS; y++)
@@ -459,6 +644,9 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	VDP_setPlaneSize(64, 32, TRUE);
 
 	I_BuildSolidTiles();
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+    I_BuildDoomStyleTiles();
+#endif
 
 	// 256 色 -> セル語 LUT を構築
 	for (uint16_t i = 0; i < 256; i++)
@@ -500,7 +688,9 @@ void I_FinishUpdate(void)
 	}
 
 	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
-#if defined(DOOM_CLASSIC_TEXT_HUD)
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+    I_DoomStyleHud();
+#elif defined(DOOM_CLASSIC_TEXT_HUD)
     I_DrawClassicTextHUD();
 #endif
 
@@ -520,10 +710,26 @@ void I_FinishUpdate(void)
             ? hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health)
             : 0;
         uint16_t armor = level ? hud_saturate3(_g_player.armorpoints) : 0;
+#if defined(DOOM_HUD_DOOMSTYLE_TEST)
+        /* WAD-style mockup draws current-weapon ammo, selected weapon
+         * and all three keycards, so they must invalidate the 4 HUD rows. */
+        static uint8_t previousKeys;
+        static int16_t previousWeapon;
+        uint16_t bullets = level ? I_HudCurrentAmmo() : 0;
+        uint8_t keys = level ? I_HudKeys() : 0;
+        int16_t weapon = level ? (int16_t)_g_player.readyweapon : 0;
+        uint8_t changed = !initialized || previousLevel != level
+            || previousHealth != health || previousArmor != armor
+            || previousBullets != bullets || previousKeys != keys
+            || previousWeapon != weapon;
+        previousKeys = keys;
+        previousWeapon = weapon;
+#else
         uint16_t bullets = level ? hud_saturate3(_g_player.ammo[am_clip]) : 0;
         uint8_t changed = !initialized || previousLevel != level
             || previousHealth != health || previousArmor != armor
             || previousBullets != bullets;
+#endif
 
         previousHealth = health;
         previousArmor = armor;
