@@ -1,0 +1,41 @@
+name: HUD24 R13 exact FixedMul matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r13-fixedmul.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r13-fixedmul:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 80
+    steps:
+      - name: Checkout HUD renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check 68000 toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Validate signed arithmetic and compile four variants
+        shell: bash
+        run: fish scripts/lab/build_r13_fixedmul.fish
+      - name: Publish ROMs, flags, logs, sizes and disassembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r13-fixedmul-four-roms
+          path: |
+            dist/r13-mul/*.bin
+            dist/r13-mul/*.elf
+            dist/r13-mul/*.log
+            dist/r13-mul/*.txt
+          if-no-files-found: error
+          retention-days: 30
