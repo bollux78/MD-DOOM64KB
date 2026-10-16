@@ -181,9 +181,25 @@ static void I_DrawDebugCounters(void)
 		lastFrame = frameCount;
 	}
 
-	// FPS はゲーム画面(GS_LEVEL)のときだけ表示する（タイトル/メニュー/集計画面では出さない）。
-	if (_g_gamestate != GS_LEVEL)
-		return;
+    // Show FPS only in-level. On entering a level, clear the entire
+    // dedicated top bar once; HUD messages may reuse its left-hand side.
+#if defined(DOOM_R11_TOPBAR_CLIP)
+    static uint8_t topbar_in_level;
+    if (_g_gamestate != GS_LEVEL)
+    {
+        topbar_in_level = 0;
+        return;
+    }
+    if (!topbar_in_level)
+    {
+        for (uint16_t i = 0; i < VIEWWINDOWWIDTH; i++)
+            _s_screen[i] = BLACK_CELL;
+        topbar_in_level = 1;
+    }
+#else
+    if (_g_gamestate != GS_LEVEL)
+        return;
+#endif
 
 	// 右上に "D.Dfps" / "DD.Dfps" を右詰め(col 37 右端)で表示。cols 31..37 を使用。
 	{
@@ -546,10 +562,38 @@ void I_FinishUpdate(void)
         previousLevel = level;
         initialized = 1;
 
-        VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
-                               VIEWWINDOWWIDTH,
-                               changed ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT,
-                               VIEWWINDOWWIDTH, DMA);
+#if defined(DOOM_R11_TOPBAR_DMA)
+        /* The row is black except for FPS and optional text messages.
+           Compare the actual tile words (not just FPS) so that gameplay
+           messages, automap transitions and future telemetry still update.
+           If unchanged, transfer only rows 1..23, or 1..27 when HUD changes. */
+        static uint16_t lastTopRow[VIEWWINDOWWIDTH];
+        static uint8_t topRowInitialized;
+        uint8_t topRowChanged = !topRowInitialized;
+        if (level)
+        {
+            for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+            {
+                if (_s_screen[x] != lastTopRow[x])
+                    topRowChanged = 1;
+                lastTopRow[x] = _s_screen[x];
+            }
+            topRowInitialized = 1;
+        }
+        else
+            topRowInitialized = 0;
+
+        if (level && !topRowChanged)
+            VDP_setTileMapDataRect(BG_A, &_s_screen[VIEWWINDOWWIDTH],
+                                   0, 1, VIEWWINDOWWIDTH,
+                                   changed ? VDP_DISPLAY_ROWS - 1 : VIEWWINDOWHEIGHT - 1,
+                                   VIEWWINDOWWIDTH, DMA);
+        else
+#endif
+            VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                                   VIEWWINDOWWIDTH,
+                                   changed ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT,
+                                   VIEWWINDOWWIDTH, DMA);
     }
 #elif defined(DOOM_HUD_DMA24)
     /* The 3D framebuffer has 24 rows (DMA). The status strip is
@@ -864,8 +908,12 @@ void V_DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color)
 	int err = dx + dy;
 	for (;;)
 	{
-		if ((uint16_t)x0 < VIEWWINDOWWIDTH && (uint16_t)y0 < VIEWWINDOWHEIGHT)
-			_s_screen[y0 * VIEWWINDOWWIDTH + x0] = cell;
+        if ((uint16_t)x0 < VIEWWINDOWWIDTH && (uint16_t)y0 < VIEWWINDOWHEIGHT
+#if defined(DOOM_R11_TOPBAR_CLIP)
+            && (_g_gamestate != GS_LEVEL || y0 != 0)
+#endif
+           )
+            _s_screen[y0 * VIEWWINDOWWIDTH + x0] = cell;
 		if (x0 == x1 && y0 == y1)
 			break;
 		int e2 = 2 * err;

@@ -103,6 +103,25 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R11 dedicated top tile row: clip the 3D drawing and optionally omit unchanged row-0 DMA.
+if set -q DOOM_R11_TOPBAR_CLIP; and test "$DOOM_R11_TOPBAR_CLIP" = 1
+    if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
+        echo 'DOOM_R11_TOPBAR_CLIP requires DOOM_CLASSIC_TEXT_HUD=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_R11_TOPBAR_CLIP"
+end
+if set -q DOOM_R11_TOPBAR_DMA; and test "$DOOM_R11_TOPBAR_DMA" = 1
+    if not set -q DOOM_R11_TOPBAR_CLIP; or test "$DOOM_R11_TOPBAR_CLIP" != 1
+        echo 'DOOM_R11_TOPBAR_DMA requires DOOM_R11_TOPBAR_CLIP=1'
+        exit 1
+    end
+    if not set -q DOOM_HUD_DMA_STATUS_ONLY; or test "$DOOM_HUD_DMA_STATUS_ONLY" != 1
+        echo 'DOOM_R11_TOPBAR_DMA requires DOOM_HUD_DMA_STATUS_ONLY=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_R11_TOPBAR_DMA"
+end
 # R10 independently controlled hardware divisions (R9 Combined remains enabled separately).
 if set -q DOOM_R10_DIST_DIVU; and test "$DOOM_R10_DIST_DIVU" = 1
     set render_flags "$render_flags -DDOOM_R10_DIST_DIVU"

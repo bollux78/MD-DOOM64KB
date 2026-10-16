@@ -1157,6 +1157,13 @@ static void R_DrawMaskedColumn(R_DrawColumn_f colfunc, draw_column_vars_t *dcvar
 
         if (yl <= cclip_x)
             yl = cclip_x + 1;
+#if defined(DOOM_R11_TOPBAR_CLIP)
+        /* World sprites and weapon sprites can use independent -1 clip
+           arrays, so wall ceilingclip=0 alone is insufficient. Prevent
+           ALL masked sprite posts from writing the telemetry row. */
+        if (yl < 1)
+            yl = 1;
+#endif
 
         // killough 3/2/98, 3/27/98: Failsafe against overflow/crash:
         if (yl <= yh && yh < VIEWWINDOWHEIGHT)
@@ -2519,8 +2526,18 @@ static boolean R_CheckOpenings(const int16_t start)
 static void R_ClearOpeningClippingDetermination(void)
 {
 	// opening / clipping determination
-	for (uint8_t i = 0; i < VIEWWINDOWWIDTH; i++)
-		floorclip[i] = VIEWWINDOWHEIGHT, ceilingclip[i] = -1;
+    /* R11: reserve physical tile row 0 for FPS / text telemetry.
+       Clipping the ceiling at 0 makes all walls, sky and masked sprite
+       columns begin at y=1 while retaining the exact 38x24 projection. */
+    for (uint8_t i = 0; i < VIEWWINDOWWIDTH; i++)
+    {
+        floorclip[i] = VIEWWINDOWHEIGHT;
+#if defined(DOOM_R11_TOPBAR_CLIP)
+        ceilingclip[i] = 0;
+#else
+        ceilingclip[i] = -1;
+#endif
+    }
 }
 
 
