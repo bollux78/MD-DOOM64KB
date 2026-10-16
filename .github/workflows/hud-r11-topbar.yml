@@ -1,0 +1,41 @@
+name: HUD24 R11 topbar render and DMA matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r11-topbar.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r11-topbar:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout experimental HUD branch
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Preflight and compile R11 topbar matrix
+        shell: bash
+        run: fish scripts/lab/build_r11_topbar.fish
+      - name: Upload R11 ROMs, flags, logs and disassembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r11-topbar-three-roms
+          path: |
+            dist/r11/*.bin
+            dist/r11/*.elf
+            dist/r11/*.log
+            dist/r11/*.txt
+          if-no-files-found: error
+          retention-days: 30
