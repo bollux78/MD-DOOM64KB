@@ -1,0 +1,41 @@
+name: HUD24 R8 renderer optimization matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r8-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r8-matrix:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout HUD24 experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Verify CachyOS toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Compile five independent R8 ROMs
+        shell: bash
+        run: fish scripts/lab/build_r8_matrix.fish
+      - name: Publish R8 ROMs, compile flags and logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r8-five-roms
+          path: |
+            dist/r8/*.bin
+            dist/r8/*.elf
+            dist/r8/*.log
+            dist/r8/*.txt
+          if-no-files-found: error
+          retention-days: 30
