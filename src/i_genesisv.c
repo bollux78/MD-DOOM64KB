@@ -381,9 +381,16 @@ static void I_DoomStyleHud(void)
 #endif
         int16_t weapon = (int16_t)_g_player.readyweapon;
         if (weapon < 0 || weapon >= NUMWEAPONS) weapon = 0;
+#if defined(DOOM_HUD_CELSO_ART)
+        /* Don't overwrite the wider 16px AMMO glyphs. */
+        _s_screen[27 * VIEWWINDOWWIDTH + 31] = font_cell(7, 'W');
+        _s_screen[27 * VIEWWINDOWWIDTH + 32] =
+            font_cell(7, (char)('0' + weapon));
+#else
         _s_screen[26 * VIEWWINDOWWIDTH + 6] = font_cell(7, 'W');
         _s_screen[26 * VIEWWINDOWWIDTH + 7] =
             font_cell(7, (char)('0' + weapon));
+#endif
     }
 #else
     for (uint16_t y = 24; y < 28; y++)
