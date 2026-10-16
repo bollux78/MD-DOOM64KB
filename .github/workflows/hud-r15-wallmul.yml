@@ -1,18 +1,18 @@
-name: HUD24 R14 BSP and clip scan matrix
+name: HUD24 R15 heavy wall multiplication matrix
 on:
   workflow_dispatch:
   push:
     branches: [fullscreen]
     paths:
-      - '.github/workflows/hud-r14-bsp-clip.yml'
+      - '.github/workflows/hud-r15-wallmul.yml'
 
 permissions:
   contents: read
 
 jobs:
-  r14-bsp-clip:
+  r15-wallmul:
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 80
+    timeout-minutes: 100
     steps:
       - name: Checkout R12-based HUD renderer
         uses: actions/checkout@v4
@@ -25,17 +25,17 @@ jobs:
           command -v python3
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
           test -f "$HOME/mars/m68k-elf/lib/libmd.a"
-      - name: Test clipping equivalence and compile six R14 variants
+      - name: Exhaustive multiplication preflight and compile seven R15 variants
         shell: bash
-        run: fish scripts/lab/build_r14_bsp_clip.fish
-      - name: Publish ROMs, flags, logs, sizes and disassembly
+        run: fish scripts/lab/build_r15_wallmul.fish
+      - name: Publish ROMs, compiler flags, logs and disassembly
         uses: actions/upload-artifact@v4
         with:
-          name: doom-md-hud-r14-bsp-clip-six-roms
+          name: doom-md-hud-r15-wallmul-seven-roms
           path: |
-            dist/r14-bsp/*.bin
-            dist/r14-bsp/*.elf
-            dist/r14-bsp/*.log
-            dist/r14-bsp/*.txt
+            dist/r15-wallmul/*.bin
+            dist/r15-wallmul/*.elf
+            dist/r15-wallmul/*.log
+            dist/r15-wallmul/*.txt
           if-no-files-found: error
           retention-days: 30
