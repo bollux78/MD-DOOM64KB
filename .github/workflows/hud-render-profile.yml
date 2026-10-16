@@ -1,0 +1,37 @@
+name: HUD24 renderer profiling (control + sampling)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout HUD branch
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Build baseline and renderer sample ROMs
+        shell: bash
+        run: fish scripts/lab/build_render_profile.fish
+      - name: Upload experiment
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-render-profile
+          path: |
+            dist/render-profile/*.bin
+            dist/render-profile/*.elf
+            dist/render-profile/*.log
+            dist/render-profile/*.txt
+          if-no-files-found: error
+          retention-days: 30
