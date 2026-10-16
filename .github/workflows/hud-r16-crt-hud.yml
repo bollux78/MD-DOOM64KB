@@ -1,0 +1,41 @@
+name: HUD24 R16 CRT-safe HUD up two rows
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r16-crt-hud.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r16-crt-hud:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout R15 setupu-based HUD renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check 68000 toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Preflight and compile R16 CRT HUD four-ROM matrix
+        shell: bash
+        run: fish scripts/lab/build_r16_crt_hud.fish
+      - name: Publish ROMs and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r16-crt-hud-four-roms
+          path: |
+            dist/r16-crt-hud/*.bin
+            dist/r16-crt-hud/*.elf
+            dist/r16-crt-hud/*.log
+            dist/r16-crt-hud/*.txt
+          if-no-files-found: error
+          retention-days: 30
