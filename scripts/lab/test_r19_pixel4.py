@@ -29,7 +29,7 @@ assert "r19_nearest[best_pal]" in encoder
 assert 80 * 44 == 3520
 assert 40 * 22 == 880
 assert 880 * 32 == 28160
-assert 40 * 8 * 4 == 1280
+assert 20 * 8 * 4 == 640
 
 def expand(a, b, c, d):
     assert all(0 <= x <= 15 for x in (a, b, c, d))
@@ -40,4 +40,4 @@ def expand(a, b, c, d):
 assert expand(1, 2, 3, 4) == [0x11112222] * 4 + [0x33334444] * 4
 assert expand(0, 15, 8, 7) == [0x0000ffff] * 4 + [0x88887777] * 4
 assert len(b"".join(x.to_bytes(4, "big") for x in expand(1, 2, 3, 4))) == 32
-print("PASS R19: 80x44 pixels, H40 40x22 tiles, 4x4 expansion, per-tile palette, 1280-byte staging")
+print("PASS R19: 80x44 pixels, H40 40x22 tiles, 4x4 expansion, per-tile palette, 640-byte staging")
