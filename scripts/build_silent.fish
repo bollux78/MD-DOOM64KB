@@ -126,6 +126,23 @@ if set -q DOOM_CACHE_STATS; and test "$DOOM_CACHE_STATS" = 1
     end
     set render_flags "$render_flags -DDOOM_CACHE_STATS"
 end
+# Optional R6 Cache16 cartridge SRAM (C or 68000 DBRA assembly).
+# Off by default: canonical HUD24 RAM reference is unchanged.
+if set -q DOOM_SRAM_CACHE16; and test "$DOOM_SRAM_CACHE16" = 1
+    if not set -q DOOM_CACHE_SLOTS; or test "$DOOM_CACHE_SLOTS" != 16
+        echo "DOOM_SRAM_CACHE16 requires DOOM_CACHE_SLOTS=16"
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_CACHE16"
+end
+if set -q DOOM_SRAM_FASTCOPY; and test "$DOOM_SRAM_FASTCOPY" = 1
+    if not set -q DOOM_SRAM_CACHE16; or test "$DOOM_SRAM_CACHE16" != 1
+        echo "DOOM_SRAM_FASTCOPY requires DOOM_SRAM_CACHE16=1"
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY"
+end
+
 # Generate matching ROM header and on-screen timedemo title per build.
 # SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
 # No changes to shared SGDK files or boot code are required.
