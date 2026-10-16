@@ -186,6 +186,20 @@ def main():
     repr_disp = [gen_to_rgb(gen_color(cols[repr_idx[k]])) for k in range(NVIEW)]
     slot_of = [min(range(NVIEW), key=lambda k: dist2(cols[i], repr_disp[k])) for i in range(NCOL)]
 
+    # In MegalDoom-inspired HUD mode PAL0..PAL2 no longer contain
+    # original quantized 3D colors. Re-map all 256 Doom source colors
+    # ONLY to PAL3's existing 14 entries (slots 42..55). This prevents
+    # palette-mismatched 3D pixels. It necessarily reduces the world
+    # palette from 56 to 14 colors, so it remains a performance/quality
+    # experiment rather than replacing the known-good renderer.
+    if os.environ.get("DOOM_HUD_CELSO_PALETTES") == "1":
+        world_slots = list(range(3 * VIEW_PER_PAL, 4 * VIEW_PER_PAL))
+        slot_of = [min(world_slots,
+                       key=lambda k: dist2(cols[i], repr_disp[k]))
+                   for i in range(NCOL)]
+        print("Experimental dedicated HUD: world colour slots reduced to 14")
+
+
     print("実効色数(distinct Genesis):", len(used_gen), "/", NVIEW)
 
     def cram_pos(slot):
