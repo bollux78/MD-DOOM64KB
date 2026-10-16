@@ -1,4 +1,4 @@
-name: HUD24 renderer profiling (control + sampling)
+name: HUD24 R7 fine renderer profiling
 on:
   workflow_dispatch:
   push:
