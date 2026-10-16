@@ -270,7 +270,12 @@ static void I_ShutdownTimer(void)
 
 // 調整可能。リンク時 RAM 使用量を見て増減する。
 #ifndef HEAP_SIZE
+#if defined(DOOM_R19_PIXEL4)
+/* R19 pixel buffers need work RAM. Experimental zone size. */
+#define HEAP_SIZE (39 * 1024)
+#else
 #define HEAP_SIZE (43 * 1024)
+#endif
 #endif
 
 
