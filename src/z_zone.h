@@ -38,6 +38,9 @@ void __far* Z_CallocLevSpec(uint16_t size);
 void Z_Free(const void __far* ptr);
 void Z_FreeTags(void);
 void Z_CheckHeap(void);
+#if defined(DOOM_MEM_DIAG)
+void Z_DiagSample(uint16_t *total_free, uint16_t *largest_free, uint8_t *invalid);
+#endif
 
 boolean Z_EqualNames(const char __far* farName, const char* nearName);
 
