@@ -1,0 +1,63 @@
+name: HUD R18 Playable E1M1 music
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r18-playable.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r18-preflight:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout HUD renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Validate R18 source, fish syntax and VGM checker
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r18_playable.fish
+          python3 -m py_compile scripts/lab/check_r18_vgm.py scripts/lab/test_r18_playable.py
+          python3 scripts/lab/test_r18_playable.py
+
+  r18-playable:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout hardware-proven R17 DBRA renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check SGDK toolchain and local VGM
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+          if [ ! -s "$HOME/Projetos/doom-assets/e1m1.vgm" ]; then
+            echo "::error::Missing E1M1 music: place the real VGM at ~/Projetos/doom-assets/e1m1.vgm on this self-hosted runner"
+            exit 1
+          fi
+      - name: Build playable ROM with real E1M1 XGM music
+        shell: bash
+        run: |
+          DOOM_R18_BGM_VGM="$HOME/Projetos/doom-assets/e1m1.vgm" fish scripts/lab/build_r18_playable.fish
+      - name: Upload playable ROM and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r18-playable-e1m1
+          path: |
+            dist/r18-playable/*.bin
+            dist/r18-playable/*.elf
+            dist/r18-playable/*.log
+            dist/r18-playable/*.txt
+          if-no-files-found: error
+          retention-days: 30
