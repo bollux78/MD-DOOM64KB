@@ -163,7 +163,7 @@ a = (d / "flags-doom-md-r19-timedemo-control.txt").read_text().split()
 b = (d / "flags-doom-md-r19-timedemo-flat-dbra.txt").read_text().split()
 def strip_ident(flags):
     return sorted(x for x in flags if x != "-DDOOM_R19_FLAT_DBRA" and
-                  not x.startswith("-DDOOM_BUILD_VARIANT"))
+                  not x.startswith("doom-md-"))
 assert "-DDOOM_R19_FLAT_DBRA" not in a
 assert "-DDOOM_R19_FLAT_DBRA" in b
 assert strip_ident(a) == strip_ident(b), (
