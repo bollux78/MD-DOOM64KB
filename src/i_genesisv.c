@@ -140,6 +140,73 @@ static uint16_t hud_saturate3(int32_t value)
     if (value > 999) return 999;
     return (uint16_t)value;
 }
+#if defined(DOOM_HUD_GRAPHIC_TEST)
+/* Experimental 38x4 tile HUD: zero new tiles, palettes or DMA commands.
+ * Uses the existing SGDK font and SOLID_TILE_INDEX+15 (solid color 15).
+ * PAL1=red, PAL2=yellow, PAL3=grey are the already reserved font colors.
+ * Only three numeric values and GS_LEVEL affect this graphic, matching
+ * the existing DOOM_HUD_DMA_STATUS_ONLY dirty-state detection exactly. */
+static void hud_graphic_label(int16_t x, int16_t y, uint8_t color, const char *label)
+{
+    while (*label && x < VIEWWINDOWWIDTH)
+        _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(color, *label++);
+}
+
+static void hud_graphic_gauge(int16_t x, int16_t y,
+                              uint16_t value, uint16_t capacity, uint8_t pal)
+{
+    const uint16_t full = TILE_ATTR_FULL(pal, 0, 0, 0, SOLID_TILE_INDEX + 15);
+    /* Ten full-color tile segments (8x8 each) with black empty segments.
+     * Use ceil so nonzero values always show one segment. */
+    uint16_t filled = (uint16_t)(((uint32_t)value * 10u + capacity - 1u) / capacity);
+    if (filled > 10u) filled = 10u;
+    for (uint16_t i = 0; i < 10u; i++)
+        _s_screen[y * VIEWWINDOWWIDTH + x + i] = (i < filled) ? full : BLACK_CELL;
+}
+
+static void I_DrawGraphicTestHUD(void)
+{
+    for (int16_t y = VIEWWINDOWHEIGHT; y < VDP_DISPLAY_ROWS; y++)
+        for (int16_t x = 0; x < VIEWWINDOWWIDTH; x++)
+            _s_screen[y * VIEWWINDOWWIDTH + x] = BLACK_CELL;
+
+    if (_g_gamestate != GS_LEVEL) return;
+
+    uint16_t health = hud_saturate3(_g_player.mo
+        ? _g_player.mo->health : _g_player.health);
+    uint16_t armor = hud_saturate3(_g_player.armorpoints);
+    uint16_t bullets = hud_saturate3(_g_player.ammo[am_clip]);
+
+    /* Three 10-cell gauges plus compact numeric readouts.
+     * Top/bottom labels and separators are font tiles; no extra VRAM tiles. */
+    hud_graphic_label(1, 24, 4, "HEALTH");
+    hud_graphic_label(14, 24, 14, "ARMOR");
+    hud_graphic_label(27, 24, 7, "AMMO");
+
+    hud_num(4, 25, health, 3);
+    hud_num(17, 25, armor, 3);
+    hud_num(30, 25, bullets, 3);
+
+    hud_graphic_gauge(1, 26, health, 100, 1);
+    hud_graphic_gauge(14, 26, armor, 200, 2);
+    hud_graphic_gauge(27, 26, bullets, 200, 3);
+
+    hud_graphic_label(1, 27, 7, "HP /100");
+    hud_graphic_label(14, 27, 7, "AR /200");
+    hud_graphic_label(27, 27, 7, "AM /200");
+
+    /* Thin textual columns, not extra transfer calls. */
+    _s_screen[24 * VIEWWINDOWWIDTH + 12] = font_cell(7, '|');
+    _s_screen[25 * VIEWWINDOWWIDTH + 12] = font_cell(7, '|');
+    _s_screen[26 * VIEWWINDOWWIDTH + 12] = font_cell(7, '|');
+    _s_screen[27 * VIEWWINDOWWIDTH + 12] = font_cell(7, '|');
+    _s_screen[24 * VIEWWINDOWWIDTH + 25] = font_cell(7, '|');
+    _s_screen[25 * VIEWWINDOWWIDTH + 25] = font_cell(7, '|');
+    _s_screen[26 * VIEWWINDOWWIDTH + 25] = font_cell(7, '|');
+    _s_screen[27 * VIEWWINDOWWIDTH + 25] = font_cell(7, '|');
+}
+#endif
+
 static void I_DrawClassicTextHUD(void)
 {
     for (int16_t y = VIEWWINDOWHEIGHT; y < VDP_DISPLAY_ROWS; y++)
@@ -500,7 +567,9 @@ void I_FinishUpdate(void)
 	}
 
 	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
-#if defined(DOOM_CLASSIC_TEXT_HUD)
+#if defined(DOOM_HUD_GRAPHIC_TEST)
+    I_DrawGraphicTestHUD();
+#elif defined(DOOM_CLASSIC_TEXT_HUD)
     I_DrawClassicTextHUD();
 #endif
 
