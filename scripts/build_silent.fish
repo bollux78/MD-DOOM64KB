@@ -136,6 +136,14 @@ if set -q DOOM_R17_PIXEL_DBRA; and test "$DOOM_R17_PIXEL_DBRA" = 1
     end
     set render_flags "$render_flags -DDOOM_R17_PIXEL_DBRA"
 end
+# R19: exact flat-color column DBRA loop; no framebuffer, DMA or RAM changes.
+if set -q DOOM_R19_FLAT_DBRA; and test "$DOOM_R19_FLAT_DBRA" = 1
+    if not set -q DOOM_R16_HUD_UP2; or test "$DOOM_R16_HUD_UP2" != 1
+        echo 'DOOM_R19_FLAT_DBRA requires the R16 38x22 classic HUD'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_R19_FLAT_DBRA"
+end
 if set -q DOOM_R17_FRAC_MULU; and test "$DOOM_R17_FRAC_MULU" = 1
     set render_flags "$render_flags -DDOOM_R17_FRAC_MULU"
 end
