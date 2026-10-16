@@ -218,7 +218,7 @@ static uint8_t I_HudKeys(void)
 static void I_BuildDoomStyleTiles(void)
 {
 #if defined(DOOM_HUD_WAD_ATLAS)
-    /* One boot-time upload of all 8x8 status graphics (6016 bytes VRAM).
+    /* One boot-time upload of the HUD tiles (188 or 211, no VBlank DMA).
      * No new framebuffer or per-frame VRAM uploads. */
     for (uint16_t tile = 0; tile < DOOM_WAD_HUD_TOTAL_TILES; tile++)
         VDP_loadTileData(doom_wad_hud_words[tile],
@@ -292,9 +292,22 @@ static void I_WadHudNum3(uint16_t x, uint16_t value)
     const uint16_t digits[3] = {hundreds, tens, units};
     for (uint16_t i = 0; i < 3; i++)
     {
+#if defined(DOOM_HUD_CELSO_ART)
+        /* Celso's original 16x16 numeral canvas. Keep every source pixel,
+         * two horizontal tiles by two vertical tiles, with no runtime
+         * VRAM uploads. This v2 test intentionally uses fixed 16px spacing;
+         * exact proportional pixel anchors need a separate DMA experiment. */
+        const uint16_t start = DOOM_WAD_HUD_DIGIT_OFFSET + digits[i] * 4u;
+        const uint16_t cx = x + i * 2u;
+        _s_screen[25 * VIEWWINDOWWIDTH + cx]     = I_WadHudCell(start);
+        _s_screen[25 * VIEWWINDOWWIDTH + cx + 1] = I_WadHudCell(start + 1u);
+        _s_screen[26 * VIEWWINDOWWIDTH + cx]     = I_WadHudCell(start + 2u);
+        _s_screen[26 * VIEWWINDOWWIDTH + cx + 1] = I_WadHudCell(start + 3u);
+#else
         const uint16_t start = DOOM_WAD_HUD_DIGIT_OFFSET + digits[i] * 2u;
         _s_screen[25 * VIEWWINDOWWIDTH + x + i] = I_WadHudCell(start);
         _s_screen[26 * VIEWWINDOWWIDTH + x + i] = I_WadHudCell(start + 1u);
+#endif
     }
 }
 #endif
@@ -327,22 +340,45 @@ static void I_DoomStyleHud(void)
         }
 
     /* Doom original red numeral glyphs, values from live player state. */
+#if defined(DOOM_HUD_CELSO_ART)
+    /* Six tile columns (48 px) per large native glyph field.
+     * No overlap with centered 4x4 face tiles (columns 17..20). */
+    I_WadHudNum3(1, I_HudCurrentAmmo());
+    I_WadHudNum3(9, hud_saturate3(
+        _g_player.mo ? _g_player.mo->health : _g_player.health));
+    I_WadHudNum3(22, hud_saturate3(_g_player.armorpoints));
+#else
     I_WadHudNum3(2, I_HudCurrentAmmo());
     I_WadHudNum3(10, hud_saturate3(
         _g_player.mo ? _g_player.mo->health : _g_player.health));
     I_WadHudNum3(23, hud_saturate3(_g_player.armorpoints));
+#endif
 
     /* Three actual card states; these remain stock-font indicators in V1.
      * Keep the existing dirty-state bitmask for keys and weapon changes. */
     I_DoomStyleText(30, 24, 14, "KEYS");
     {
         const uint8_t keys = I_HudKeys();
+#if defined(DOOM_HUD_CELSO_ART)
+        /* Genuine 7x5 key-card art from Celso's source. Redraw only
+         * on dirty key changes through the existing 28-row tile DMA. */
+        _s_screen[25 * VIEWWINDOWWIDTH + 31] =
+            (keys & 1u) ? I_WadHudCell(DOOM_WAD_HUD_KEY_OFFSET)
+                        : font_cell(7, '-');
+        _s_screen[25 * VIEWWINDOWWIDTH + 33] =
+            (keys & 2u) ? I_WadHudCell(DOOM_WAD_HUD_KEY_OFFSET + 1u)
+                        : font_cell(7, '-');
+        _s_screen[25 * VIEWWINDOWWIDTH + 35] =
+            (keys & 4u) ? I_WadHudCell(DOOM_WAD_HUD_KEY_OFFSET + 2u)
+                        : font_cell(7, '-');
+#else
         _s_screen[25 * VIEWWINDOWWIDTH + 31] =
             font_cell(7, (keys & 1u) ? 'B' : '-');
         _s_screen[25 * VIEWWINDOWWIDTH + 33] =
             font_cell(14, (keys & 2u) ? 'Y' : '-');
         _s_screen[25 * VIEWWINDOWWIDTH + 35] =
             font_cell(4, (keys & 4u) ? 'R' : '-');
+#endif
         int16_t weapon = (int16_t)_g_player.readyweapon;
         if (weapon < 0 || weapon >= NUMWEAPONS) weapon = 0;
         _s_screen[26 * VIEWWINDOWWIDTH + 6] = font_cell(7, 'W');
