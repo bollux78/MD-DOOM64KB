@@ -1903,6 +1903,9 @@ static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
 	return column | (texture << 8);
 }
 
+#if !defined(DOOM_SRAM_CACHE16)
+static byte __far columnCache[MAX_CACHE_ENTRIES*128];
+#endif
 static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
 #if defined(DOOM_SRAM_CACHE16)
 /*
@@ -2037,8 +2040,6 @@ int R_SramCacheInit(void)
 #endif
     return ok1 && ok2;
 }
-#else
-static byte __far columnCache[MAX_CACHE_ENTRIES*128];
 #endif
 
 static uint16_t FindColumnCacheItem(int16_t texture, int16_t column)
