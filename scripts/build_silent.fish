@@ -127,6 +127,18 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R17: pixel-loop and initial-fraction optimizations, only for the
+# existing standard color-cell LUT path. Never change the R16 baseline.
+if set -q DOOM_R17_PIXEL_DBRA; and test "$DOOM_R17_PIXEL_DBRA" = 1
+    if not set -q DOOM_CELL_LUT; or test "$DOOM_CELL_LUT" != 1
+        echo 'DOOM_R17_PIXEL_DBRA requires DOOM_CELL_LUT=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_R17_PIXEL_DBRA"
+end
+if set -q DOOM_R17_FRAC_MULU; and test "$DOOM_R17_FRAC_MULU" = 1
+    set render_flags "$render_flags -DDOOM_R17_FRAC_MULU"
+end
 # R11 left-column clip: pair with the already measured topclip (R10 Dist).
 if set -q DOOM_R11_LEFTCOL_CLIP; and test "$DOOM_R11_LEFTCOL_CLIP" = 1
     if not set -q DOOM_R11_TOPBAR_CLIP; or test "$DOOM_R11_TOPBAR_CLIP" != 1

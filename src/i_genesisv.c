@@ -686,7 +686,22 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
 
 	const uint16_t fracstep = dcvars->fracstep;
+#if defined(DOOM_R17_FRAC_MULU)
+    /*
+     * R17: only the low 16 bits of the initial texture fraction survive.
+     * For signed delta (yl-CENTERY), unsigned MULU.W on its low word is
+     * bit-exact modulo 65536, including negative deltas and step=65535.
+     * Avoid generic signed 32x32 multiplication on the MC68000.
+     */
+    uint32_t row_product = (uint16_t)(dcvars->yl - CENTERY);
+    __asm__ ("mulu.w %1,%0"
+             : "+&d" (row_product)
+             : "d" (fracstep)
+             : "cc");
+    uint16_t frac = (uint16_t)((dcvars->texturemid >> COLEXTRABITS) + (uint16_t)row_product);
+#else
 	uint16_t frac = (dcvars->texturemid >> COLEXTRABITS) + (dcvars->yl - CENTERY) * fracstep;
+#endif
 	const uint8_t colbits = COLBITS;
 
 #if defined(DOOM_CELL_LUT)
@@ -703,7 +718,39 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
         if (offset < (32u * 256u) && (offset & 255u) == 0u)
         {
             const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
-#if defined(DOOM_R8_LUT_UNROLL) && (DOOM_R8_LUT_UNROLL == 2 || DOOM_R8_LUT_UNROLL == 4)
+#if defined(DOOM_R17_PIXEL_DBRA)
+            /*
+             * R17: exact MC68000 DBRA loop for the standard COLORMAP.
+             * frac is 16-bit modulo 65536, texel index is frac>>9.
+             * Lookup is byte-indexed source -> 16-bit VDP tilemap word.
+             * Index is zero-extended after MOVE.B; cellmap index is
+             * doubled because its entries are words. 38*2=76-byte stride.
+             * Non-standard/fixed colormaps retain the original C fallback.
+             */
+            uint16_t loopcount = (uint16_t)count;
+            uint16_t idx;
+            __asm__ volatile(
+                "subq.w #1,%[n]\n\t"
+                "1:\n\t"
+                "move.w %[f],%[i]\n\t"
+                "lsr.w #9,%[i]\n\t"
+                "move.b (%[s],%[i].w),%[i]\n\t"
+                "andi.w #255,%[i]\n\t"
+                "add.w %[i],%[i]\n\t"
+                "move.w (%[m],%[i].w),(%[d])\n\t"
+                "adda.w #76,%[d]\n\t"
+                "add.w %[step],%[f]\n\t"
+                "dbra %[n],1b"
+                : [d] "+&a" (dest),
+                  [f] "+&d" (frac),
+                  [n] "+&d" (loopcount),
+                  [i] "=&d" (idx)
+                : [s] "a" (source),
+                  [m] "a" (cellmap),
+                  [step] "d" (fracstep)
+                : "cc", "memory");
+            return;
+#elif defined(DOOM_R8_LUT_UNROLL) && (DOOM_R8_LUT_UNROLL == 2 || DOOM_R8_LUT_UNROLL == 4)
             /* Exact 16-bit frac stepping; no change to colour, texels or clipping.
                Tests only the fast Color LUT path (the normal fall-back is untouched). */
             while (count >= DOOM_R8_LUT_UNROLL)
