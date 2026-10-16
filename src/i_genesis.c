@@ -278,11 +278,32 @@ static void I_ShutdownTimer(void)
 #endif
 
 
+#if defined(DOOM_MEM_DIAG)
+/* Two 32-bit sentinels flank only Doom's static heap allocation.
+ * The allocator receives the same HEAP_SIZE bytes as the baseline. */
+static struct {
+    uint32_t before;
+    uint8_t heap[HEAP_SIZE];
+    uint32_t after;
+} r19_heap_guard;
+uint8_t I_MemDiagHeapCanaryOK(void)
+{
+    return r19_heap_guard.before == 0x51AFC0DEu &&
+           r19_heap_guard.after == 0xBEEFB00Bu;
+}
+#endif
+
 uint8_t __far* I_ZoneBase(uint32_t *heapSize)
 {
-	static uint8_t heap[HEAP_SIZE];
-	uint32_t paragraphs = HEAP_SIZE / PARAGRAPH_SIZE;
-	uint8_t *ptr = heap;
+#if defined(DOOM_MEM_DIAG)
+    r19_heap_guard.before = 0x51AFC0DEu;
+    r19_heap_guard.after = 0xBEEFB00Bu;
+    uint8_t *ptr = r19_heap_guard.heap;
+#else
+    static uint8_t heap[HEAP_SIZE];
+    uint8_t *ptr = heap;
+#endif
+    uint32_t paragraphs = HEAP_SIZE / PARAGRAPH_SIZE;
 
 	uint32_t m = (uint32_t) ptr;
 	if ((m & (PARAGRAPH_SIZE - 1)) != 0)
