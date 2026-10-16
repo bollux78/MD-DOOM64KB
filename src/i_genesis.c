@@ -21,6 +21,7 @@
 #endif
 
 #include "globdata.h"
+#include "r19_memdiag.h"
 #include "music.h"        // rescomp 生成: const u8 bgm_e1m1[]（res/music.res）
 
 
@@ -43,7 +44,10 @@ static boolean isGraphicsModeSet = false;
 void I_InitGraphics(void)
 {
 	I_InitGraphicsHardwareSpecificCode();
-	isGraphicsModeSet = true;
+#if defined(DOOM_MEM_DIAG)
+    I_MemDiagInit();
+#endif
+    isGraphicsModeSet = true;
 }
 
 
