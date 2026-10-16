@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 # R19 memory diagnostic: three DEMO3 builds with identical Flat DBRA
-# and 43/40/38 KiB static zone, bounded zone checker and stack watermark.
+# and 43/40/38 KiB static zone, bounded zone checker, heap sentinels and read-only SP sampling.
 # Instrumentation adds overhead; NOT a fair FPS comparison.
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
@@ -169,12 +169,12 @@ printf '%s\\n' \
     'R19 DEMO3 MEMORY DIAGNOSTIC: all builds use Flat DBRA and the same music.' \
     'RUN IN ORDER: 43k, then 40k, then 38k (stop after meaningful result).' \
     'LIVE TOP BAR: T=game tic (mod 65536), F=free zone bytes, L=largest free block,' \
-    'S=minimum sampled stack gap to end of static RAM, X=invalid zone, !=stack warning.' \
+    'S=minimum sampled SP gap to _bend, X=bad zone links, G=heap guard, !=low gap.' \
     'On hang: capture the last visible T/F/L/S, or screenshot the error screen.' \
     'On success: photograph benchmark result with min zone and stack readings.' \
     'Diagnostics add overhead: DO NOT compare these FPS numbers to R18/R19 baseline.' \
     'If smaller zone fails to allocate, this is evidence of heap pressure.' \
-    'Stack watermark is an estimate, not a complete hardware stack trace.' \
+    'S is a sampled SP gap, NOT guaranteed free stack: SGDK may allocate in that gap.' \
     'All playable and pixel4 branches are untouched.' \
     > "$dest/README.txt"
 echo "READY: $dest (three instrumented DEMO3 memory diagnostic ROMs)"
