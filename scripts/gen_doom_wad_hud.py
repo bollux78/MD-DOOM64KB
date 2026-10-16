@@ -226,34 +226,39 @@ def read_genesis_palette():
     return [list(map(unpack, words[p*16:(p+1)*16])) for p in range(4)]
 
 
-def quantize_tile(pixels, cram):
-    """A tile can use exactly one 16-color VDP palette; choose the best."""
-    best = None
-    for pal, choices in enumerate(cram):
-        indices = []
-        error = 0
-        for r, g, b in pixels:
+# MegalDoom (celsowm/megaldoom, MIT) pioneered a dedicated colour
+# ramp for each HUD material: status-bar steel in PAL0, red numerals in
+# PAL1 and skin tones in PAL2, with PAL3 reserved for the 3D world.
+# This experiment borrows the material separation, not its VDP plane
+# management or dynamic DMA. Pixel art and palette values are taken from
+# the assets already present in this project, not copied blindly from
+# the other engine.
+def quantize_tile(pixels, cram, palette_id):
+    """Choose ONLY the intended material palette (0=steel,1=red,2=skin).
+
+    A 4-bit Mega Drive tile has a single palette line. Cross-material
+    nearest-color matching can make metal green and faces dull.
+    """
+    choices = cram[palette_id]
+    indices = []
+    rows = []
+    for y in range(8):
+        word = 0
+        for x in range(8):
+            r, g, b = pixels[y * 8 + x]
             if r <= 12 and g <= 12 and b <= 12:
-                idx, d = 0, 0
+                idx = 0
             else:
                 distances = [
                     (r-c[0])**2 + (g-c[1])**2 + (b-c[2])**2
                     for c in choices
                 ]
-                idx = min(range(16), key=distances.__getitem__)
-                d = distances[idx]
-            indices.append(idx)
-            error += d
-        if best is None or error < best[0]:
-            best = (error, pal, indices)
-    _, pal, indices = best
-    rows = []
-    for y in range(8):
-        word = 0
-        for x in range(8):
-            word = (word << 4) | indices[y * 8 + x]
+                # Palette index 15 stays the original reserved SGDK
+                # font color; don't use it in graphics.
+                idx = min(range(1, 15), key=distances.__getitem__)
+            word = (word << 4) | idx
         rows.append(word)
-    return pal, rows
+    return palette_id, rows
 
 
 def main():
@@ -282,9 +287,17 @@ def main():
                 for py in range(8) for px in range(8)
             ])
     assert len(source_tiles) == TOTAL_TILES
-    converted = [quantize_tile(tile, cram) for tile in source_tiles]
+    if len(cram) != 4:
+        raise ValueError("Expected four CRAM banks")
+    # Dedicated material palette lines from MegalDoom's HUD strategy.
+    converted = [
+        quantize_tile(tile, cram, 0 if i < BG_TILES
+                      else (2 if i < BG_TILES + FACE_TILES else 1))
+        for i, tile in enumerate(source_tiles)
+    ]
     header = [
         "/* AUTO-GENERATED: DOOM HUD. scripts/gen_doom_wad_hud.py */",
+        "/* Palette layout: PAL0 metal / PAL1 digits / PAL2 face / PAL3 world. */",
         "/* Sources: background=%s, face=%s, digits=%s */" % tuple(sources),
         "#ifndef DOOM_WAD_HUD_TILES_H",
         "#define DOOM_WAD_HUD_TILES_H",
