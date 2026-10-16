@@ -38,6 +38,11 @@ if not test -f scripts/doom64.wad
 end
 python3 scripts/repack_wad.py; or exit 1
 python3 scripts/genpal.py; or exit 1
+# Per-tile quantization against the real 4x16 CRAM layout must run only
+# after genpal.py has produced the matching Genesis palette.
+if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
+    python3 scripts/gen_doom_wad_hud.py; or exit 1
+end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     python3 scripts/gen_colormap_cells.py; or exit 1
 end
@@ -90,6 +95,19 @@ if set -q DOOM_HUD_DOOMSTYLE_TEST; and test "$DOOM_HUD_DOOMSTYLE_TEST" = 1
         exit 1
     end
     set render_flags "$render_flags -DDOOM_HUD_DOOMSTYLE_TEST"
+end
+# Imported status graphics (WAD patches preferred; bundled Doom sprite
+# sheet fallback) are isolated from the renderer and other HUD variants.
+if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
+    if not set -q DOOM_HUD_DOOMSTYLE_TEST; or test "$DOOM_HUD_DOOMSTYLE_TEST" != 1
+        echo "DOOM_HUD_WAD_ATLAS requires DOOM_HUD_DOOMSTYLE_TEST=1"
+        exit 1
+    end
+    if not set -q DOOM_HUD_DMA_STATUS_ONLY; or test "$DOOM_HUD_DMA_STATUS_ONLY" != 1
+        echo "DOOM_HUD_WAD_ATLAS requires DOOM_HUD_DMA_STATUS_ONLY=1"
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_HUD_WAD_ATLAS"
 end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
