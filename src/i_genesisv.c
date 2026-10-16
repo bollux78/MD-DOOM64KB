@@ -350,7 +350,7 @@ static void I_DoomStyleHud(void)
             font_cell(7, (char)('0' + weapon));
     }
 #else
-    for (uint16_t y = 24; y < 28; y>
+    for (uint16_t y = 24; y < 28; y++)
     for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
     {
         uint16_t tile = y == 24 ? HUD_TOP_TILE :
