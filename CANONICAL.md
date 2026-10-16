@@ -22,7 +22,8 @@ fish scripts/lab/build_fullscreen.fish
 ~/Projetos/blastem64-1.0.0/blastem dist/fullscreen/doom-md-fullscreen-sramasm-perf.bin
 ```
 
-The canonical build wrapper changes only ROM identity and reproduces
+The canonical build wrapper preserves the original internal ROM identity
+(`doom-md-r6-sramasm-perf`) and reproduces
 the verified R6 compiler options. Source renderer/cache logic is
 unchanged from R6. Original physical hardware behaviour of cartridge
 SRAM depends on your flashcart's odd-byte SRAM support, so verify
