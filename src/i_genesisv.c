@@ -27,6 +27,7 @@
 
 #include "globdata.h"
 #include "gen_pal.h"
+#include "r19_memdiag.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -246,6 +247,28 @@ static void I_DrawDebugCounters(void)
 }
 
 
+#if defined(DOOM_MEM_DIAG)
+/* Live telemetry on the dedicated top row. T=tic modulo 65536,
+ * F=free zone bytes, L=largest free block, S=min sampled SP gap to _bend.
+ * X=corrupt zone links, !=stack/watermark danger. Sample every 16 frames.
+ * Visible in the last fully displayed frame if a subsequent scene hangs. */
+static void I_DrawMemDiagCounters(void)
+{
+    I_MemDiagSample();
+    if (_g_gamestate != GS_LEVEL) return;
+    hud_putc(0, 0, 'T');
+    hud_num(1, 0, (uint16_t)_g_gametic, 5);
+    hud_putc(7, 0, 'F');
+    hud_num(8, 0, r19_memdiag.zone_free, 5);
+    hud_putc(14, 0, 'L');
+    hud_num(15, 0, r19_memdiag.zone_largest, 5);
+    hud_putc(21, 0, 'S');
+    hud_num(22, 0, r19_memdiag.min_stack_gap, 5);
+    hud_putc(28, 0, r19_memdiag.zone_bad ? 'X' : ' ');
+    hud_putc(29, 0, r19_memdiag.stack_warning ? '!' : ' ');
+}
+#endif
+
 #if defined(TIMEDEMO)
 /* Benchmark v2: displayed frames, wall-clock VBlanks and one-second FPS windows.
    VDP/Z80 clocks are unchanged even when the 68000 is overclocked. */
@@ -377,7 +400,22 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_MEM_DIAG)
+    VDP_drawText("MIN ZONE FREE (B)", 3, 19);
+    bench_u32(buffer, r19_memdiag.min_zone_free);
+    VDP_drawText(buffer, 24, 19);
+    VDP_drawText("MIN LARGEST (B)", 3, 20);
+    bench_u32(buffer, r19_memdiag.min_zone_largest);
+    VDP_drawText(buffer, 24, 20);
+    VDP_drawText("MIN STACK GAP (B)", 3, 21);
+    bench_u32(buffer, r19_memdiag.min_stack_gap);
+    VDP_drawText(buffer, 24, 21);
+    VDP_drawText("ZONE LINKS", 3, 22);
+    VDP_drawText(r19_memdiag.zone_bad ? "BAD" : "OK", 24, 22);
+    VDP_drawText("STACK WATERMARK", 3, 23);
+    VDP_drawText(r19_memdiag.stack_warning ? "WARN" : "OK", 24, 23);
+    VDP_drawText("DIAG OVERHEAD: NOT FPS BASELINE", 2, 26);
+#elif defined(DOOM_ROUTINE_PROFILE)
     {
 #if defined(DOOM_R7_PROFILE)
         const char *names[11] = { "OTHER/LOGIC", "SETUP", "BSP OTHER", "SEG LOOP REST", "MASKED/SPR", "VDP/DMA", "DRAW WALL", "COMPOSE COL", "STORE RANGE", "ADD LINE", "CHECK BBOX" };
@@ -555,6 +593,9 @@ void I_FinishUpdate(void)
 	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
 #if defined(DOOM_CLASSIC_TEXT_HUD)
     I_DrawClassicTextHUD();
+#endif
+#if defined(DOOM_MEM_DIAG)
+    I_DrawMemDiagCounters();
 #endif
 
 #if defined(DOOM_HUD_DMA_STATUS_ONLY)
