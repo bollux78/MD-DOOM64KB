@@ -65,6 +65,18 @@ if set -q DOOM_R16_HUD_UP2; and test "$DOOM_R16_HUD_UP2" = 1
     set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=24' '-DVIEWWINDOWHEIGHT=22' "$render_flags")
     set render_flags "$render_flags -DDOOM_R16_HUD_UP2"
 end
+# R19 4x4 pixels: 80x44 logical view maps to 40x22 VDP tiles (H40).
+# Apply AFTER R16 has selected its 22-row classic-HUD viewport.
+if set -q DOOM_R19_PIXEL4; and test "$DOOM_R19_PIXEL4" = 1
+    if not set -q DOOM_R16_HUD_UP2; or test "$DOOM_R16_HUD_UP2" != 1
+        echo 'DOOM_R19_PIXEL4 requires DOOM_R16_HUD_UP2=1'
+        exit 1
+    end
+    set render_flags (string replace -- '-DVIEWWINDOWWIDTH=38' '-DVIEWWINDOWWIDTH=80' "$render_flags")
+    set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=22' '-DVIEWWINDOWHEIGHT=44' "$render_flags")
+    set render_flags (string replace -- '-DMAPWIDTH=38' '-DMAPWIDTH=80' "$render_flags")
+    set render_flags "$render_flags -DDOOM_R19_PIXEL4"
+end
 if set -q DOOM_R16_WEAPON_LIFT
     switch "$DOOM_R16_WEAPON_LIFT"
         case 0
