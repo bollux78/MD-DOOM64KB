@@ -35,6 +35,31 @@ TEXT_FG = [
     (200, 200, 200),   # PAL3 ライトグレー
 ]
 
+# Material-separated HUD palette method inspired by MegalDoom (Celso
+# Fontes, MIT). On V1 the palette entries are built from this project's
+# real Doom metal/skin/red asset colours. PAL3 is kept as the full 14
+# original wall colours so the classic-HUD render stays unchanged.
+HUD_STEEL = [
+    (0,0,0), (26,24,22), (38,35,33), (50,47,44),
+    (62,59,56), (74,71,67), (86,83,79), (98,94,90),
+    (110,106,101), (122,118,112), (134,129,122),
+    (148,141,134), (163,157,149), (181,175,165)
+]
+HUD_RED = [
+    (0,0,0), (44,0,0), (66,0,0), (85,0,0),
+    (102,0,0), (119,0,0), (136,0,0), (151,0,0),
+    (168,0,0), (184,0,0), (201,0,0), (218,0,0),
+    (233,24,16), (248,48,32)
+]
+HUD_FACE = [
+    (0,0,0), (36,26,18), (57,38,27), (78,49,31),
+    (96,60,35), (115,73,44), (133,84,51),
+    (150,94,58), (168,105,66), (186,119,78),
+    (202,133,88), (218,152,107), (230,174,133),
+    (243,201,167)
+]
+
+
 def load_playpal():
     b = open(WAD, "rb").read()
     n = struct.unpack_from('>h', b, 4)[0]
@@ -179,6 +204,21 @@ def main():
         for slot in range(NVIEW):
             words[cram_pos(slot)] = gen_color(rgb[repr_idx[slot]])
         cram.append(words)
+
+    if os.environ.get("DOOM_HUD_CELSO_PALETTES") == "1":
+        # Keep index0 black and index15 SGDK font foreground.
+        # Palette banks 0..2 are wholly dedicated to HUD materials.
+        # PAL3 remains exactly as generated for wall/3D rendering.
+        # The HUD build flag also changes the world lookup so all 56
+        # world colours map to these 14 surviving PAL3 slots.
+        ramps = (HUD_STEEL, HUD_RED, HUD_FACE)
+        for sub in range(NSUB):
+            for p in range(3):
+                for i, rgb in enumerate(ramps[p], start=1):
+                    if i >= 15:
+                        break
+                    cram[sub][p * 16 + i] = gen_color(rgb)
+        print("Dedicated HUD palettes: PAL0 metal, PAL1 red, PAL2 face, PAL3 world.")
 
     with open(OUT, "w") as f:
         f.write("// 自動生成 (scripts/genpal.py) — 編集禁止\n")
