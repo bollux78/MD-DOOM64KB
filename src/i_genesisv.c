@@ -56,7 +56,16 @@ extern const uint8_t *fullcolormap;
  * status strip from rows 24..27 to 22..25 and reserves rows 26..27 as
  * black CRT overscan safety margin. The 3D viewport is truly 38x22,
  * so its projection, weapon scale and clipping are recomputed. */
+#if defined(DOOM_R19_PIXEL4)
+#define VDP_MAP_COLS 40
+#define VDP_VIEW_ROWS 22
+#else
+#define VDP_MAP_COLS VIEWWINDOWWIDTH
+#define VDP_VIEW_ROWS VIEWWINDOWHEIGHT
+#endif
+
 #if defined(DOOM_CLASSIC_TEXT_HUD)
+#if !defined(DOOM_R19_PIXEL4)
 #if VIEWWINDOWWIDTH != 38
 #error DOOM_CLASSIC_TEXT_HUD requires 38 columns
 #endif
@@ -69,11 +78,15 @@ extern const uint8_t *fullcolormap;
 #error DOOM_CLASSIC_TEXT_HUD requires 38x24 viewport unless R16 enabled
 #endif
 #endif
+#endif /* R19 uses an 80x44 logical viewport with a 40x22 tilemap */
 #define VDP_DISPLAY_ROWS 28
 #else
-#define VDP_DISPLAY_ROWS VIEWWINDOWHEIGHT
+#define VDP_DISPLAY_ROWS VDP_VIEW_ROWS
 #endif
-static uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
+static uint16_t _s_screen[VDP_MAP_COLS * VDP_DISPLAY_ROWS];
+#if defined(DOOM_R19_PIXEL4)
+#include "r19_pixel4.h"
+#endif
 
 // Doom 8bit 色 index -> VDP タイルマップ語
 static uint16_t colorcell[256];
@@ -124,8 +137,8 @@ extern volatile uint32_t _g_vblankCount;   // i_genesis.c（60Hz）
 
 static void hud_putc(int16_t cx, int16_t cy, char c)
 {
-	if ((uint16_t)cx < VIEWWINDOWWIDTH && (uint16_t)cy < VDP_DISPLAY_ROWS)
-		_s_screen[cy * VIEWWINDOWWIDTH + cx] = font_cell(HUD_COL, c);
+	if ((uint16_t)cx < VDP_MAP_COLS && (uint16_t)cy < VDP_DISPLAY_ROWS)
+		_s_screen[cy * VDP_MAP_COLS + cx] = font_cell(HUD_COL, c);
 }
 
 // v を cx から digits 桁、ゼロ埋め右詰めで描画
@@ -142,8 +155,8 @@ static void hud_num(int16_t cx, int16_t cy, uint16_t v, int8_t digits)
 /* Minimal tile HUD; no SRAM; no 3D drawing into the four bottom rows. */
 static void hud_label(int16_t x, int16_t y, const char* text)
 {
-    while (*text && x < VIEWWINDOWWIDTH)
-        _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(HUD_COL, *text++);
+    while (*text && x < VDP_MAP_COLS)
+        _s_screen[y * VDP_MAP_COLS + x++] = font_cell(HUD_COL, *text++);
 }
 static uint16_t hud_saturate3(int32_t value)
 {
@@ -153,9 +166,9 @@ static uint16_t hud_saturate3(int32_t value)
 }
 static void I_DrawClassicTextHUD(void)
 {
-    for (int16_t y = VIEWWINDOWHEIGHT; y < VDP_DISPLAY_ROWS; y++)
-        for (int16_t x = 0; x < VIEWWINDOWWIDTH; x++)
-            _s_screen[y * VIEWWINDOWWIDTH + x] = BLACK_CELL;
+    for (int16_t y = VDP_VIEW_ROWS; y < VDP_DISPLAY_ROWS; y++)
+        for (int16_t x = 0; x < VDP_MAP_COLS; x++)
+            _s_screen[y * VDP_MAP_COLS + x] = BLACK_CELL;
 
     if (_g_gamestate != GS_LEVEL) return;
 
@@ -163,8 +176,8 @@ static void I_DrawClassicTextHUD(void)
      * Labels deliberately describe bullet ammo, not weapon-dependent ammo. */
     /* Use viewport-relative coordinates: original 24 -> 25/27,
      * R16 22 -> 23/25. Rows 26/27 remain black on a CRT. */
-    const int16_t hud_values_row = VIEWWINDOWHEIGHT + 1;
-    const int16_t hud_title_row = VIEWWINDOWHEIGHT + 3;
+    const int16_t hud_values_row = VDP_VIEW_ROWS + 1;
+    const int16_t hud_title_row = VDP_VIEW_ROWS + 3;
     hud_label(1, hud_values_row, "HEALTH");
     hud_num(8, hud_values_row, hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health), 3);
     hud_label(13, hud_values_row, "ARMOR");
@@ -207,14 +220,14 @@ static void I_DrawDebugCounters(void)
     }
     if (!topbar_in_level)
     {
-        for (uint16_t i = 0; i < VIEWWINDOWWIDTH; i++)
+        for (uint16_t i = 0; i < VDP_MAP_COLS; i++)
             _s_screen[i] = BLACK_CELL;
 #if defined(DOOM_R11_LEFTCOL_CLIP)
         /* Clear the border once on entering a level, including pixels
            left over from a menu or fullscreen image. Wall, sprite and
            automap paths do not draw column zero afterwards. */
-        for (uint16_t y = 1; y < VIEWWINDOWHEIGHT; y++)
-            _s_screen[y * VIEWWINDOWWIDTH] = BLACK_CELL;
+        for (uint16_t y = 1; y < VDP_VIEW_ROWS; y++)
+            _s_screen[y * VDP_MAP_COLS] = BLACK_CELL;
 #endif
         topbar_in_level = 1;
     }
@@ -522,8 +535,14 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	newpal = NO_PALETTE_CHANGE;
 
 	// 画面を黒で埋める
-	for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
-		_s_screen[i] = BLACK_CELL;
+	for (int i = 0; i < VDP_MAP_COLS * VDP_DISPLAY_ROWS; i++)
+        _s_screen[i] = BLACK_CELL;
+#if defined(DOOM_R19_PIXEL4)
+    R19_InitPaletteMapping();
+    for (uint16_t i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+        r19_pixels[i] = R19_BLACK_SLOT;
+    R19_ResetTilemap();
+#endif
 }
 
 
@@ -552,12 +571,19 @@ void I_FinishUpdate(void)
 		newpal = NO_PALETTE_CHANGE;
 	}
 
-	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
+	#if defined(DOOM_R19_PIXEL4)
+    R19_UploadPixels();
+#endif
+    I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
 #if defined(DOOM_CLASSIC_TEXT_HUD)
     I_DrawClassicTextHUD();
 #endif
 
-#if defined(DOOM_HUD_DMA_STATUS_ONLY)
+#if defined(DOOM_R19_PIXEL4)
+    VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
+                           VDP_MAP_COLS, VDP_DISPLAY_ROWS,
+                           VDP_MAP_COLS, DMA);
+#elif defined(DOOM_HUD_DMA_STATUS_ONLY)
     /* Single-DMA, minimal-state diagnostic based on the successful
      * 24-row-only ROM. No 304-byte lastHud array, no extra VDP writes.
      * Status fields are precisely those printed in the black HUD strip. */
@@ -677,10 +703,24 @@ void I_FinishUpdate(void)
 void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 {
 	int16_t count = (dcvars->yh - dcvars->yl) + 1;
-	if (count <= 0)
-		return;
+    if (count <= 0) return;
+#if defined(DOOM_R19_PIXEL4)
+    const uint8_t *src19 = dcvars->source;
+    const uint8_t *map19 = dcvars->colormap;
+    uint8_t *dest19 = &r19_pixels[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
+    uint16_t step19 = dcvars->fracstep;
+    uint16_t frac19 = (uint16_t)((dcvars->texturemid >> COLEXTRABITS)
+                    + (uint16_t)(dcvars->yl - CENTERY) * step19);
+    do
+    {
+        *dest19 = genpal_cell[map19[src19[frac19 >> COLBITS]]];
+        dest19 += VIEWWINDOWWIDTH;
+        frac19 += step19;
+    } while (--count);
+    return;
+#endif
 
-	const uint8_t *source   = dcvars->source;
+    const uint8_t *source   = dcvars->source;
 	const uint8_t *colormap = dcvars->colormap;
 
 	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
@@ -830,7 +870,15 @@ void R_DrawColumnWall(const draw_column_vars_t *dcvars)
 
 void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
 {
-	int16_t count = (dcvars->yh - dcvars->yl) + 1;
+#if defined(DOOM_R19_PIXEL4)
+    int16_t n19 = (dcvars->yh - dcvars->yl) + 1;
+    if (n19 <= 0) return;
+    uint8_t *dest19 = &r19_pixels[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
+    uint8_t slot19 = genpal_cell[color];
+    do { *dest19 = slot19; dest19 += VIEWWINDOWWIDTH; } while (--n19);
+    return;
+#endif
+    int16_t count = (dcvars->yh - dcvars->yl) + 1;
 	if (count <= 0)
 		return;
 
@@ -882,14 +930,23 @@ void V_DrawRawFullScreen(int16_t num)
 	static const fixed_t DXI = ((fixed_t)SCREENWIDTH  << FRACBITS) / VIEWWINDOWWIDTH;
 	static const fixed_t DYI = ((fixed_t)SCREENHEIGHT << FRACBITS) / VIEWWINDOWHEIGHT;
 
-	uint16_t *dst = &_s_screen[0];
-	fixed_t y = 0;
+	#if defined(DOOM_R19_PIXEL4)
+    R19_ResetTilemap();
+    uint8_t *dst = r19_pixels;
+#else
+    uint16_t *dst = &_s_screen[0];
+#endif
+    fixed_t y = 0;
 	for (int h = 0; h < VIEWWINDOWHEIGHT; h++)
 	{
 		fixed_t x = 0;
 		for (int w = 0; w < VIEWWINDOWWIDTH; w++)
 		{
-			*dst++ = colorcell[lump[(y >> FRACBITS) * SCREENWIDTH + (x >> FRACBITS)]];
+			#if defined(DOOM_R19_PIXEL4)
+            *dst++ = genpal_cell[lump[(y >> FRACBITS) * SCREENWIDTH + (x >> FRACBITS)]];
+#else
+            *dst++ = colorcell[lump[(y >> FRACBITS) * SCREENWIDTH + (x >> FRACBITS)]];
+#endif
 			x += DXI;
 		}
 		y += DYI;
@@ -899,17 +956,29 @@ void V_DrawRawFullScreen(int16_t num)
 
 void V_DrawBackground(int16_t backgroundnum)
 {
-	// メニュー/ヘルプ背景。チャンキー FB では黒で塗ってテキストを読みやすくする。
-	(void)backgroundnum;
-	for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
-		_s_screen[i] = BLACK_CELL;
+    (void)backgroundnum;
+#if defined(DOOM_R19_PIXEL4)
+    for (uint16_t i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+        r19_pixels[i] = R19_BLACK_SLOT;
+    for (uint16_t i = 0; i < VDP_MAP_COLS * VDP_VIEW_ROWS; i++)
+        _s_screen[i] = BLACK_CELL;
+#else
+    for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+        _s_screen[i] = BLACK_CELL;
+#endif
 }
 
 
 void V_ClearViewWindow(void)
 {
-	for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
-		_s_screen[i] = BLACK_CELL;
+#if defined(DOOM_R19_PIXEL4)
+    for (uint16_t i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+        r19_pixels[i] = R19_BLACK_SLOT;
+    R19_ResetTilemap();
+#else
+    for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
+        _s_screen[i] = BLACK_CELL;
+#endif
 }
 
 
@@ -920,8 +989,8 @@ void V_ClearViewWindow(void)
 
 void V_DrawCharacter(int16_t x, int16_t y, uint8_t color, char c)
 {
-	if ((uint16_t)x < VIEWWINDOWWIDTH && (uint16_t)y < VIEWWINDOWHEIGHT)
-		_s_screen[y * VIEWWINDOWWIDTH + x] = font_cell(color, c);
+	if ((uint16_t)x < VDP_MAP_COLS && (uint16_t)y < VDP_VIEW_ROWS)
+		_s_screen[y * VDP_MAP_COLS + x] = font_cell(color, c);
 }
 
 void V_DrawSTCharacter(int16_t x, int16_t y, uint8_t color, char c)
@@ -936,12 +1005,12 @@ void V_DrawCharacterForeground(int16_t x, int16_t y, uint8_t color, char c)
 
 void V_DrawString(int16_t x, int16_t y, uint8_t color, const char* s)
 {
-	if ((uint16_t)y >= VIEWWINDOWHEIGHT)
+	if ((uint16_t)y >= VDP_VIEW_ROWS)
 		return;
 	while (*s)
 	{
-		if ((uint16_t)x < VIEWWINDOWWIDTH)
-			_s_screen[y * VIEWWINDOWWIDTH + x] = font_cell(color, *s);
+		if ((uint16_t)x < VDP_MAP_COLS)
+			_s_screen[y * VDP_MAP_COLS + x] = font_cell(color, *s);
 		s++;
 		x++;
 	}
@@ -954,10 +1023,10 @@ void V_DrawSTString(int16_t x, int16_t y, uint8_t color, const char* s)
 
 void V_ClearString(int16_t y, size_t len)
 {
-	if ((uint16_t)y >= VIEWWINDOWHEIGHT)
+	if ((uint16_t)y >= VDP_VIEW_ROWS)
 		return;
-	uint16_t *d = &_s_screen[y * VIEWWINDOWWIDTH];
-	for (size_t i = 0; i < len && i < VIEWWINDOWWIDTH; i++)
+	uint16_t *d = &_s_screen[y * VDP_MAP_COLS];
+	for (size_t i = 0; i < len && i < VDP_MAP_COLS; i++)
 		d[i] = BLACK_CELL;
 }
 
@@ -972,8 +1041,12 @@ void V_ShutdownDrawLine(void)  { }
 
 void V_DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color)
 {
-	uint16_t cell = colorcell[color];
-	int dx =  abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+	#if defined(DOOM_R19_PIXEL4)
+    uint8_t cell = genpal_cell[color];
+#else
+    uint16_t cell = colorcell[color];
+#endif
+    int dx =  abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
 	int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
 	int err = dx + dy;
 	for (;;)
@@ -986,7 +1059,11 @@ void V_DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color)
             && (_g_gamestate != GS_LEVEL || x0 != 0)
 #endif
            )
+            #if defined(DOOM_R19_PIXEL4)
+            r19_pixels[y0 * VIEWWINDOWWIDTH + x0] = cell;
+#else
             _s_screen[y0 * VIEWWINDOWWIDTH + x0] = cell;
+#endif
 		if (x0 == x1 && y0 == y1)
 			break;
 		int e2 = 2 * err;
