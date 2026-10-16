@@ -1,0 +1,37 @@
+name: HUD SRAM experiment (3 ROMs)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hud-sram:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact HUD commit
+        uses: actions/checkout@v4
+      - name: Check local CachyOS toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          command -v java
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/makefile.gen"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Build RAM reference and both SRAM HUD variants
+        shell: bash
+        run: fish scripts/lab/build_hud_sram_matrix.fish
+      - name: Upload 3 ROMs and logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-sram-experiment
+          path: |
+            dist/hud-sram/*.bin
+            dist/hud-sram/*.elf
+            dist/hud-sram/*.log
+            dist/hud-sram/*.txt
+          if-no-files-found: error
+          retention-days: 30
