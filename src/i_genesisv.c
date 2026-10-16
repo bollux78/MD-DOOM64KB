@@ -28,6 +28,9 @@
 #include "globdata.h"
 #if defined(DOOM_HUD_DOOMSTYLE_TEST)
 #include "d_items.h" /* weaponinfo: current weapon's ammunition type */
+#if defined(DOOM_HUD_WAD_ATLAS)
+#include "doom_wad_hud_tiles.h"
+#endif
 #endif
 #include "gen_pal.h"
 
@@ -156,6 +159,7 @@ static uint16_t hud_saturate3(int32_t value)
 /* 32x32 static monochrome portrait. Bit 31 is the leftmost pixel.
  * Pal3/15 is the existing gray HUD text color. No PAL writes or
  * per-frame VRAM tile generation. Static test artwork, not WAD STFACE. */
+#if !defined(DOOM_HUD_WAD_ATLAS)
 static const uint32_t doom_hud_face_rows[32] = {
     0x7ffffffeu, /* row 0 */
     0x80000001u, /* row 1 */
@@ -191,6 +195,8 @@ static const uint32_t doom_hud_face_rows[32] = {
     0x7ffffffeu, /* row 31 */
 };
 
+#endif /* !DOOM_HUD_WAD_ATLAS */
+
 static uint16_t I_HudCurrentAmmo(void)
 {
     const int16_t weapon = (int16_t)_g_player.readyweapon;
@@ -211,6 +217,13 @@ static uint8_t I_HudKeys(void)
  * Do NOT allocate a 32x32 image in 64 KiB WRAM. */
 static void I_BuildDoomStyleTiles(void)
 {
+#if defined(DOOM_HUD_WAD_ATLAS)
+    /* One boot-time upload of all 8x8 status graphics (6016 bytes VRAM).
+     * No new framebuffer or per-frame VRAM uploads. */
+    for (uint16_t tile = 0; tile < DOOM_WAD_HUD_TOTAL_TILES; tile++)
+        VDP_loadTileData(doom_wad_hud_words[tile],
+                         HUD_METAL_TILE + tile, 1, CPU);
+#else
     uint32_t tile[8];
     for (uint16_t kind = 0; kind < 4u; kind++)
     {
@@ -252,6 +265,7 @@ static void I_BuildDoomStyleTiles(void)
         }
         VDP_loadTileData(tile, HUD_FACE_TILE + tileY * 4u + tileX, 1, CPU);
     }
+#endif /* DOOM_HUD_WAD_ATLAS */
 }
 
 static void I_DoomStyleText(uint16_t x, uint16_t y, uint8_t color,
@@ -260,6 +274,30 @@ static void I_DoomStyleText(uint16_t x, uint16_t y, uint8_t color,
     while (*value && x < VIEWWINDOWWIDTH)
         _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(color, *value++);
 }
+
+#if defined(DOOM_HUD_WAD_ATLAS)
+static inline uint16_t I_WadHudCell(uint16_t source)
+{
+    return TILE_ATTR_FULL(doom_wad_hud_pal[source], 0, 0, 0,
+                          HUD_METAL_TILE + source);
+}
+
+/* One 8x16 red-number glyph = two tiles. Changes are still picked up by
+ * the existing health/armor/ammo conditional 28-row DMA. */
+static void I_WadHudNum3(uint16_t x, uint16_t value)
+{
+    uint16_t hundreds = value / 100;
+    uint16_t tens = (value / 10) % 10;
+    uint16_t units = value % 10;
+    const uint16_t digits[3] = {hundreds, tens, units};
+    for (uint16_t i = 0; i < 3; i++)
+    {
+        const uint16_t start = DOOM_WAD_HUD_DIGIT_OFFSET + digits[i] * 2u;
+        _s_screen[25 * VIEWWINDOWWIDTH + x + i] = I_WadHudCell(start);
+        _s_screen[26 * VIEWWINDOWWIDTH + x + i] = I_WadHudCell(start + 1u);
+    }
+}
+#endif
 
 static void I_DoomStyleHud(void)
 {
@@ -273,7 +311,46 @@ static void I_DoomStyleHud(void)
         return;
     }
 
-    for (uint16_t y = 24; y < 28; y++)
+#if defined(DOOM_HUD_WAD_ATLAS)
+    /* Real Doom status artwork: WAD patches if available, or the user's
+     * Doom sprite reference sheet embedded as fallback. Source selection
+     * is reported by the asset generator during the build. */
+    for (uint16_t i = 0; i < DOOM_WAD_HUD_BG_TILES; i++)
+        _s_screen[24 * VIEWWINDOWWIDTH + i] = I_WadHudCell(i);
+
+    /* Center: fixed neutral Doomguy face from the original artwork. */
+    for (uint16_t y = 0; y < 4; y++)
+        for (uint16_t x = 0; x < 4; x++)
+        {
+            const uint16_t tile = DOOM_WAD_HUD_FACE_OFFSET + 4u*y + x;
+            _s_screen[(24+y) * VIEWWINDOWWIDTH + 17+x] = I_WadHudCell(tile);
+        }
+
+    /* Doom original red numeral glyphs, values from live player state. */
+    I_WadHudNum3(2, I_HudCurrentAmmo());
+    I_WadHudNum3(10, hud_saturate3(
+        _g_player.mo ? _g_player.mo->health : _g_player.health));
+    I_WadHudNum3(23, hud_saturate3(_g_player.armorpoints));
+
+    /* Three actual card states; these remain stock-font indicators in V1.
+     * Keep the existing dirty-state bitmask for keys and weapon changes. */
+    I_DoomStyleText(30, 24, 14, "KEYS");
+    {
+        const uint8_t keys = I_HudKeys();
+        _s_screen[25 * VIEWWINDOWWIDTH + 31] =
+            font_cell(7, (keys & 1u) ? 'B' : '-');
+        _s_screen[25 * VIEWWINDOWWIDTH + 33] =
+            font_cell(14, (keys & 2u) ? 'Y' : '-');
+        _s_screen[25 * VIEWWINDOWWIDTH + 35] =
+            font_cell(4, (keys & 4u) ? 'R' : '-');
+        int16_t weapon = (int16_t)_g_player.readyweapon;
+        if (weapon < 0 || weapon >= NUMWEAPONS) weapon = 0;
+        _s_screen[26 * VIEWWINDOWWIDTH + 6] = font_cell(7, 'W');
+        _s_screen[26 * VIEWWINDOWWIDTH + 7] =
+            font_cell(7, (char)('0' + weapon));
+    }
+#else
+    for (uint16_t y = 24; y < 28; y>
     for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++)
     {
         uint16_t tile = y == 24 ? HUD_TOP_TILE :
@@ -322,6 +399,7 @@ static void I_DoomStyleHud(void)
         font_cell(14, (keys & 2u) ? 'Y' : '-');
     _s_screen[25 * VIEWWINDOWWIDTH + 35] =
         font_cell(4, (keys & 4u) ? 'R' : '-');
+#endif /* DOOM_HUD_WAD_ATLAS */
 }
 #endif
 
