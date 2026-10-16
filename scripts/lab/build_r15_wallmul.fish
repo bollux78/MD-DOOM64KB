@@ -1,12 +1,12 @@
 #!/usr/bin/env fish
-# R14 clipping/BSP scan matrix; R12 LUT Full baseline. R13 discarded.
-# Exact pixels and 38x24 projection preserved.
+# R15: optimize heavy per-column texture multiplications on R12 LUT Full.
+# R13 and R14 discarded. No geometry, precision, tiles or VDP changes.
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r14-bsp
+set -l dest dist/r15-wallmul
 mkdir -p "$dest"; or exit 1
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
-python3 scripts/lab/test_r14_clip.py; or exit 1
+python3 scripts/lab/test_r15_wallmul.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 
 set -gx DOOM_TIMEDEMO 1
@@ -29,6 +29,8 @@ set -gx DOOM_R10_RECIP_DIVU 0
 set -gx DOOM_R12_RECIP_LUT 65535
 set -gx DOOM_R12_RECIP_MASKED 0
 set -e DOOM_R13_MUL_DECOMP
+set -e DOOM_R14_CLIPSCAN
+set -e DOOM_R14_BBOXSCAN
 set -gx DOOM_FOLDED_TANGENT 0
 set -gx DOOM_UNROLL_COLUMNS 0
 set -gx DOOM_MASKED_DIVU 0
@@ -43,29 +45,32 @@ set -gx DOOM_R11_LEFTCOL_CLIP 1
 set -e DOOM_ZONE_KIB
 
 
-for variant in control clip1 clip2 bbox clip1bbox clip2bbox
-    set -gx DOOM_R14_CLIPSCAN 0
-    set -gx DOOM_R14_BBOXSCAN 0
+for variant in control tanu tans setupu setups bothu boths
+    set -gx DOOM_R15_TANMUL 0
+    set -gx DOOM_R15_SETUPMUL 0
     switch $variant
         case control
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-control
-        case clip1
-            set -gx DOOM_R14_CLIPSCAN 1
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip1
-        case clip2
-            set -gx DOOM_R14_CLIPSCAN 2
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip2
-        case bbox
-            set -gx DOOM_R14_BBOXSCAN 1
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-bbox
-        case clip1bbox
-            set -gx DOOM_R14_CLIPSCAN 1
-            set -gx DOOM_R14_BBOXSCAN 1
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip1bbox
-        case clip2bbox
-            set -gx DOOM_R14_CLIPSCAN 2
-            set -gx DOOM_R14_BBOXSCAN 1
-            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip2bbox
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-control
+        case tanu
+            set -gx DOOM_R15_TANMUL 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-tanu
+        case tans
+            set -gx DOOM_R15_TANMUL 2
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-tans
+        case setupu
+            set -gx DOOM_R15_SETUPMUL 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-setupu
+        case setups
+            set -gx DOOM_R15_SETUPMUL 2
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-setups
+        case bothu
+            set -gx DOOM_R15_TANMUL 1
+            set -gx DOOM_R15_SETUPMUL 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-bothu
+        case boths
+            set -gx DOOM_R15_TANMUL 2
+            set -gx DOOM_R15_SETUPMUL 2
+            set -gx DOOM_BUILD_ID doom-md-hud-r15-boths
     end
     echo "BUILD: $DOOM_BUILD_ID"
     set -l logfile "$dest/build-$DOOM_BUILD_ID.log"
@@ -84,28 +89,28 @@ for variant in control clip1 clip2 bbox clip1bbox clip2bbox
             exit 1
         end
     end
-    for forbidden in '-DDOOM_R10_RECIP_DIVU' '-DDOOM_ROUTINE_PROFILE' '-DDOOM_R7_PROFILE' '-DDOOM_SRAM_CACHE16' '-DDOOM_R8_LUT_UNROLL' '-DDOOM_R8_SKIP_MASKED_RECIP' '-DDOOM_R11_TOPBAR_DMA' '-DDOOM_MASKED_DIVU' '-DDOOM_R12_RECIP_MASKED' '-DDOOM_R13_MUL_DECOMP'
+    for forbidden in '-DDOOM_R10_RECIP_DIVU' '-DDOOM_ROUTINE_PROFILE' '-DDOOM_R7_PROFILE' '-DDOOM_SRAM_CACHE16' '-DDOOM_R8_LUT_UNROLL' '-DDOOM_R8_SKIP_MASKED_RECIP' '-DDOOM_R11_TOPBAR_DMA' '-DDOOM_MASKED_DIVU' '-DDOOM_R12_RECIP_MASKED' '-DDOOM_R13_MUL_DECOMP' '-DDOOM_R14_CLIPSCAN' '-DDOOM_R14_BBOXSCAN'
         if string match -q -- "*$forbidden*" "$flags"
             echo "ERROR: unexpected compiler flag $forbidden"
             exit 1
         end
     end
-    if test "$DOOM_R14_CLIPSCAN" != 0
-        string match -q -- "*-DDOOM_R14_CLIPSCAN=$DOOM_R14_CLIPSCAN*" "$flags"; or begin
-            echo 'ERROR: R14 clip flag mismatch'
+    if test "$DOOM_R15_TANMUL" != 0
+        string match -q -- "*-DDOOM_R15_TANMUL=$DOOM_R15_TANMUL*" "$flags"; or begin
+            echo 'ERROR: R15 tangent multiply flag mismatch'
             exit 1
         end
-    else if string match -q -- '*-DDOOM_R14_CLIPSCAN*' "$flags"
-        echo 'ERROR: clip flag on non-clip variant'
+    else if string match -q -- '*-DDOOM_R15_TANMUL*' "$flags"
+        echo 'ERROR: R15 tangent flag present in control/setup variant'
         exit 1
     end
-    if test "$DOOM_R14_BBOXSCAN" = 1
-        string match -q -- '*-DDOOM_R14_BBOXSCAN*' "$flags"; or begin
-            echo 'ERROR: R14 bbox flag missing'
+    if test "$DOOM_R15_SETUPMUL" != 0
+        string match -q -- "*-DDOOM_R15_SETUPMUL=$DOOM_R15_SETUPMUL*" "$flags"; or begin
+            echo 'ERROR: R15 setup multiply flag mismatch'
             exit 1
         end
-    else if string match -q -- '*-DDOOM_R14_BBOXSCAN*' "$flags"
-        echo 'ERROR: bbox flag on non-bbox variant'
+    else if string match -q -- '*-DDOOM_R15_SETUPMUL*' "$flags"
+        echo 'ERROR: R15 setup flag present in control/tangent variant'
         exit 1
     end
     python3 -c 'import pathlib,sys
@@ -129,15 +134,17 @@ print("VERIFIED",name,len(b),"bytes")
     end
 end
 printf '%s\n' \
-    'R14 short-column clipping and BSP bbox visibility scans. Baseline R12 LUT Full user result 10.12 FPS / 210.95 s / 2134 frames.' \
-    'R13 discarded: original R12 FixedMul and original R12 flags; no R13 code compiled.' \
-    'control: exact R12 Full, R14 feature flags disabled.' \
-    'clip1: inline scalar first-match search for zero/one instead of memchr in R_ClipWallSegment.' \
-    'clip2: two-byte unrolled first-match search, without unaligned word loads.' \
-    'bbox: inline first-zero search instead of memchr in R_CheckBBox.' \
-    'clip1bbox: both scalar clip and bbox; clip2bbox: unrolled clip and bbox.' \
-    'Preflight tests compare all visible runs, solidcol changes, and bbox answers against baseline.' \
-    'BlastEm: NTSC60, stock 68000 divider7, 1000% fast-forward, DEMO3 2134 frames. Repeat each 3x.' \
-    'Reject variants with crashes, mismatched visuals, or gains smaller than repeatability noise.' \
+    'R15 68000 exact signed 16x32 wall multiplications; R12 Full stable baseline: 10.12 FPS / 210.95s / DEMO3 2134 frames.' \
+    'R13 and R14 discarded; original R12 FixedMul and original R12 clip/BSP memchr.' \
+    'control: unmodified R12 Full, R15 macros disabled.' \
+    'tanu: replace four per-column tangent products by two MULU.W and signed correction.' \
+    'tans: same tangent products by signed-high and unsigned-low MULS/MULU.' \
+    'setupu: optimize per-segment distance and texture-offset products using MULU.W.' \
+    'setups: optimize per-segment products with signed-high MULS.W and MULU.W.' \
+    'bothu: tangent + setup unsigned decomposition. boths: signed-high decomposition.' \
+    'Both implementations preserve original low-32-bit wraparound and arithmetic >>16.' \
+    'Arithmetic preflight is not a guarantee of in-game or real-hardware correctness.' \
+    'BlastEm: NTSC60, stock 68000 divider7 (7.67MHz), fast-forward 1000%, DEMO3 2134 frames; repeat 3x.' \
+    'Reject unstable variants; inspect wall textures, doors, masked sprites, and sky.' \
     > "$dest/README.txt"
-echo 'READY: R14 six ROMs'
+echo 'READY: R15 seven ROMs'

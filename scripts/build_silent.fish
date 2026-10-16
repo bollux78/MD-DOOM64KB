@@ -137,24 +137,25 @@ end
 if set -q DOOM_R10_RECIP_DIVU; and test "$DOOM_R10_RECIP_DIVU" = 1
     set render_flags "$render_flags -DDOOM_R10_RECIP_DIVU"
 end
-# R14: isolated clipping and BSP visibility scan variants.
-if set -q DOOM_R14_CLIPSCAN
-    switch "$DOOM_R14_CLIPSCAN"
+# R15: exact 16x32 multiplication in wall texture mapping and setup.
+# 1 = two unsigned MULU.W, 2 = signed-high + unsigned-low MULS/MULU.
+if set -q DOOM_R15_TANMUL
+    switch "$DOOM_R15_TANMUL"
         case 1 2
-            set render_flags "$render_flags -DDOOM_R14_CLIPSCAN=$DOOM_R14_CLIPSCAN"
+            set render_flags "$render_flags -DDOOM_R15_TANMUL=$DOOM_R15_TANMUL"
         case 0
         case '*'
-            echo "Invalid DOOM_R14_CLIPSCAN: $DOOM_R14_CLIPSCAN (expected 0, 1, 2)"
+            echo "Invalid DOOM_R15_TANMUL: $DOOM_R15_TANMUL (expected 0, 1 or 2)"
             exit 1
     end
 end
-if set -q DOOM_R14_BBOXSCAN
-    switch "$DOOM_R14_BBOXSCAN"
-        case 1
-            set render_flags "$render_flags -DDOOM_R14_BBOXSCAN"
+if set -q DOOM_R15_SETUPMUL
+    switch "$DOOM_R15_SETUPMUL"
+        case 1 2
+            set render_flags "$render_flags -DDOOM_R15_SETUPMUL=$DOOM_R15_SETUPMUL"
         case 0
         case '*'
-            echo "Invalid DOOM_R14_BBOXSCAN: $DOOM_R14_BBOXSCAN (expected 0 or 1)"
+            echo "Invalid DOOM_R15_SETUPMUL: $DOOM_R15_SETUPMUL (expected 0, 1 or 2)"
             exit 1
     end
 end

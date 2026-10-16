@@ -595,6 +595,55 @@ static uint32_t mulu(uint16_t a, uint16_t b) {
 #endif
 }
 
+/* R15: exact low-32-bit 16x32 signed product, then arithmetic >>16.
+   The original wall expressions use a 32-bit product on 68000,
+   NOT a widened 64-bit product. The helpers preserve wraparound. */
+#if defined(DOOM_R15_TANMUL) || defined(DOOM_R15_SETUPMUL)
+static inline int16_t R15_Mul16x32Shift16U(int16_t a, int32_t b)
+{
+    const uint32_t ua = (uint16_t)a;
+    const uint32_t ub = (uint32_t)b;
+    const uint32_t lo = mulu((uint16_t)ua, (uint16_t)ub);
+    const uint32_t hi = mulu((uint16_t)ua, (uint16_t)(ub >> 16));
+    uint32_t product = lo + (hi << 16);
+    if (a < 0)
+        product -= ub << 16;
+    return (int16_t)((int32_t)product >> 16);
+}
+
+/* Signed-high variant: signed MULS.W for a*b_hi, unsigned MULU.W
+   for abs(a)*b_lo, correcting negative fractional rounding. */
+static inline int16_t R15_Mul16x32Shift16S(int16_t a, int32_t b)
+{
+    const int32_t high = (int32_t)a * (int16_t)((uint32_t)b >> 16);
+    const uint16_t abs_a = (uint16_t)(a < 0 ? -(int32_t)a : a);
+    const uint32_t low = mulu(abs_a, (uint16_t)b);
+    const int32_t fractional = a < 0 ?
+        -(int32_t)((low + 65535u) >> 16) : (int32_t)(low >> 16);
+    return (int16_t)(high + fractional);
+}
+#endif
+
+#if defined(DOOM_R15_TANMUL)
+#if DOOM_R15_TANMUL == 1
+#define R15_TAN_PRODUCT(a, b) R15_Mul16x32Shift16U((a), (b))
+#else
+#define R15_TAN_PRODUCT(a, b) R15_Mul16x32Shift16S((a), (b))
+#endif
+#else
+#define R15_TAN_PRODUCT(a, b) (((a) * (b)) >> FRACBITS)
+#endif
+
+#if defined(DOOM_R15_SETUPMUL)
+#if DOOM_R15_SETUPMUL == 1
+#define R15_SETUP_PRODUCT(a, b) R15_Mul16x32Shift16U((a), (b))
+#else
+#define R15_SETUP_PRODUCT(a, b) R15_Mul16x32Shift16S((a), (b))
+#endif
+#else
+#define R15_SETUP_PRODUCT(a, b) (((a) * (b)) >> FRACBITS)
+#endif
+
 
 #if defined __WATCOMC__
 //
@@ -2392,16 +2441,16 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #else
 			if (ang < 1024) {			//    0 <= ang < 1024
 				fixed_t tan = finetangentTable_part_4[1023 - ang];
-				texturecolumn += (rw_distance * tan) >> FRACBITS;
+				texturecolumn += R15_TAN_PRODUCT(rw_distance, tan);
 			} else if (ang < 2048) {	// 1024 <= ang < 2048
 				fixed_t tan = finetangentTable_part_3[1023 - (ang - 1024)];
-				texturecolumn += (rw_distance * tan) >> FRACBITS;
+				texturecolumn += R15_TAN_PRODUCT(rw_distance, tan);
 			} else if (ang < 3072) {	// 2048 <= ang < 3072
 				fixed_t tan = finetangentTable_part_3[ang - 2048];
-				texturecolumn -= (rw_distance * tan) >> FRACBITS;
+				texturecolumn -= R15_TAN_PRODUCT(rw_distance, tan);
 			} else {					// 3072 <= ang < 4096
 				fixed_t tan = finetangentTable_part_4[ang - 3072];
-				texturecolumn -= (rw_distance * tan) >> FRACBITS;
+				texturecolumn -= R15_TAN_PRODUCT(rw_distance, tan);
 			}
 #endif
 #endif
@@ -2646,7 +2695,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
 
     int16_t hyp = R_PointToDist(curline->v1.x, curline->v1.y);
 
-    rw_distance = (hyp * finecosineapprox(offsetangle >> ANGLETOFINESHIFT_16)) >> FRACBITS;
+    rw_distance = R15_SETUP_PRODUCT(hyp, finecosineapprox(offsetangle >> ANGLETOFINESHIFT_16));
 
     int16_t rw_x = ds_p->x1 = start;
     ds_p->x2 = stop;
@@ -2830,8 +2879,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
 
     if (segtextured)
     {
-        fixed_t rw_offset32 = hyp * -finesineapprox(offsetangle >> ANGLETOFINESHIFT_16);
-        rw_offset = rw_offset32 >> FRACBITS;
+        rw_offset = R15_SETUP_PRODUCT(hyp, -finesineapprox(offsetangle >> ANGLETOFINESHIFT_16));
         rw_offset += sidedef->textureoffset + curline->offset;
 
         rw_centerangle = ANG90_16 + viewangle16 - rw_normalangle;
@@ -3014,35 +3062,6 @@ static void R_RecalcLineFlags(void)
 // Replaces the old R_Clip*WallSegment functions. It draws bits of walls in those
 // columns which aren't solid, and updates the solidcol[] array appropriately
 
-/* R14: replace short memchr calls (38 columns) with inlined byte scans.
-   Both variants preserve first-match semantics and never read past 'end'.
-   1 = scalar, 2 = two-byte unrolled. No unaligned 68000 word reads. */
-#if defined(DOOM_R14_CLIPSCAN)
-static inline byte *R14_FindByte(byte *p, byte *end, byte target)
-{
-#if DOOM_R14_CLIPSCAN == 2
-    while (end - p >= 2)
-    {
-        if (p[0] == target) return p;
-        if (p[1] == target) return p + 1;
-        p += 2;
-    }
-#endif
-    while (p < end)
-    {
-        if (*p == target) return p;
-        ++p;
-    }
-    return NULL;
-}
-#endif
-
-#if defined(DOOM_R14_CLIPSCAN)
-#define R14_CLIP_MEMCHR(p, val, count) R14_FindByte((p), (p) + (count), (byte)(val))
-#else
-#define R14_CLIP_MEMCHR(p, val, count) memchr((p), (val), (count))
-#endif
-
 static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 {
     byte *p;
@@ -3050,7 +3069,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
     {
         if (solidcol[first])
         {
-            if (!(p = R14_CLIP_MEMCHR(solidcol+first, 0, last-first)))
+            if (!(p = memchr(solidcol+first, 0, last-first)))
                 return; // All solid
 
             first = p - solidcol;
@@ -3058,7 +3077,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
         else
         {
             int16_t to;
-            if (!(p = R14_CLIP_MEMCHR(solidcol+first, 1, last-first)))
+            if (!(p = memchr(solidcol+first, 1, last-first)))
                 to = last;
             else
                 to = p - solidcol;
@@ -3290,19 +3309,7 @@ static boolean R_CheckBBox(const int16_t __far* bspcoord)
     if (sx1 == sx2)
         return false;
 
-#if defined(DOOM_R14_BBOXSCAN)
-    /* Same first-zero existence test as memchr, for a <=38-byte window.
-       Scan bounded by sx2, no word loads or unaligned memory accesses. */
-    {
-        uint8_t col = sx1;
-        while (col < sx2 && solidcol[col] != 0)
-            ++col;
-        if (col == sx2)
-            return false;
-    }
-#else
     if (!memchr(solidcol+sx1, 0, sx2-sx1)) return false;
-#endif
     // All columns it covers are already solidly covered
 
 
