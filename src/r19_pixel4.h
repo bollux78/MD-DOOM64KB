@@ -14,7 +14,7 @@
 
 /* Keep the large 28 KiB pattern set in VRAM, not work RAM. */
 static uint8_t r19_pixels[VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT];
-static uint32_t r19_tile_row[VDP_MAP_COLS * 8]; /* 1280-byte DMA staging */
+static uint32_t r19_tile_row[20 * 8]; /* 640-byte DMA staging, two transfers/row */
 static uint8_t r19_nearest[4][GENPAL_NVIEW + 1];
 static uint8_t r19_cost[4][GENPAL_NVIEW + 1];
 
@@ -89,9 +89,13 @@ static void R19_UploadPixels(void)
                          | (uint32_t)(m[b] * 0x1111u);
             uint32_t bottom = ((uint32_t)(m[c] * 0x1111u) << 16)
                             | (uint32_t)(m[d] * 0x1111u);
-            uint32_t *tile = &r19_tile_row[x * 8];
+            uint32_t *tile = &r19_tile_row[(x % 20) * 8];
             tile[0] = top; tile[1] = top; tile[2] = top; tile[3] = top;
             tile[4] = bottom; tile[5] = bottom; tile[6] = bottom; tile[7] = bottom;
+            if ((x % 20) == 19)
+                VDP_loadTileData(r19_tile_row,
+                                 R19_TILE_BASE + y * VDP_MAP_COLS + x - 19,
+                                 20, DMA);
             /* Keep text overlay intact: the tilemap was reset before M_Drawer.
              * Only change the palette bits for entries still pointing at
              * the R19 pattern assigned to this screen position. */
@@ -101,7 +105,5 @@ static void R19_UploadPixels(void)
                     TILE_ATTR_FULL(best_pal, 0, 0, 0,
                                    R19_TILE_BASE + y * VDP_MAP_COLS + x);
         }
-        VDP_loadTileData(r19_tile_row, R19_TILE_BASE + y * VDP_MAP_COLS,
-                         VDP_MAP_COLS, DMA);
     }
 }
