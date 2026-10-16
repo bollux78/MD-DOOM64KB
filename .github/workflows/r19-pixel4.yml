@@ -22,7 +22,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, lzma
           from pathlib import Path
-          raw = lzma.decompress(Path('assets/r19-e1m1.vgm.xz').read_bytes())
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
           sha = hashlib.sha256(raw).hexdigest()
           expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
           if sha != expected:
@@ -36,7 +36,7 @@ jobs:
         run: |
           fish -n scripts/lab/build_r19_pixel4.fish
           python3 scripts/lab/test_r19_pixel4.py
-          python3 scripts/lab/check_r19_vgm.py res/e1m1.vgm
+          python3 scripts/lab/check_r18_vgm.py res/e1m1.vgm
       - name: Build ONE experimental R19 Pixel4 ROM, without timedemo
         shell: bash
         run: |
@@ -47,7 +47,7 @@ jobs:
           name: doom-md-r19-pixel4-e1m1
           path: |
             dist/r19-pixel4/*.bin
-            dist/r19-playable/*.log
-            dist/r19-playable/*.txt
+            dist/r19-pixel4/*.log
+            dist/r19-pixel4/*.txt
           if-no-files-found: error
           retention-days: 90
