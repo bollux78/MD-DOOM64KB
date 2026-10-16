@@ -1,6 +1,10 @@
 name: HUD24 renderer profiling (control + sampling)
 on:
   workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-render-profile.yml'
 
 permissions:
   contents: read
