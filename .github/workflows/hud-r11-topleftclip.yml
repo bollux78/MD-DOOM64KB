@@ -1,0 +1,41 @@
+name: HUD24 R11 top-left clip matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r11-topleftclip.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r11-topleftclip:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout HUD renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check 68000 toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Validate and compile topclip versus topleftclip
+        shell: bash
+        run: fish scripts/lab/build_r11_topleftclip.fish
+      - name: Publish ROMs, flags, logs, disassembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r11-topleftclip-two-roms
+          path: |
+            dist/r11-topleft/*.bin
+            dist/r11-topleft/*.elf
+            dist/r11-topleft/*.log
+            dist/r11-topleft/*.txt
+          if-no-files-found: error
+          retention-days: 30
