@@ -65,7 +65,7 @@ if not test -s "$music"
     echo 'Put it at ~/Projetos/doom-assets/e1m1.vgm or set DOOM_R19_BGM_VGM.'
     exit 2
 end
-python3 scripts/lab/check_r19_vgm.py "$music"; or exit 1
+python3 scripts/lab/check_r18_vgm.py "$music"; or exit 1
 set -l source_path (realpath "$music"); or exit 1
 set -l target_path "$root/res/e1m1.vgm"
 mkdir -p "$root/res"; or exit 1
@@ -81,7 +81,7 @@ rm -rf out
 rm -f res/music.rs res/music.d
 
 set -gx DOOM_R16_HUD_UP2 1
-set -gx DOOM_R16_WEAPON_LIFT 1
+set -gx DOOM_R16_WEAPON_LIFT 2
 set -gx DOOM_R17_PIXEL_DBRA 0
 set -gx DOOM_R19_PIXEL4 1
 set -gx DOOM_R17_FRAC_MULU 0
