@@ -137,14 +137,24 @@ end
 if set -q DOOM_R10_RECIP_DIVU; and test "$DOOM_R10_RECIP_DIVU" = 1
     set render_flags "$render_flags -DDOOM_R10_RECIP_DIVU"
 end
-# R13: exact signed 16.16 multiplication decomposition experiment.
-if set -q DOOM_R13_MUL_DECOMP
-    switch "$DOOM_R13_MUL_DECOMP"
-        case 1 2 3
-            set render_flags "$render_flags -DDOOM_R13_MUL_DECOMP=$DOOM_R13_MUL_DECOMP"
+# R14: isolated clipping and BSP visibility scan variants.
+if set -q DOOM_R14_CLIPSCAN
+    switch "$DOOM_R14_CLIPSCAN"
+        case 1 2
+            set render_flags "$render_flags -DDOOM_R14_CLIPSCAN=$DOOM_R14_CLIPSCAN"
         case 0
         case '*'
-            echo "Invalid DOOM_R13_MUL_DECOMP: $DOOM_R13_MUL_DECOMP (expected 0..3)"
+            echo "Invalid DOOM_R14_CLIPSCAN: $DOOM_R14_CLIPSCAN (expected 0, 1, 2)"
+            exit 1
+    end
+end
+if set -q DOOM_R14_BBOXSCAN
+    switch "$DOOM_R14_BBOXSCAN"
+        case 1
+            set render_flags "$render_flags -DDOOM_R14_BBOXSCAN"
+        case 0
+        case '*'
+            echo "Invalid DOOM_R14_BBOXSCAN: $DOOM_R14_BBOXSCAN (expected 0 or 1)"
             exit 1
     end
 end

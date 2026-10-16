@@ -603,56 +603,6 @@ inline
 #endif
 fixed_t CONSTFUNC FixedMul(fixed_t a, fixed_t b)
 {
-#if defined(DOOM_R13_MUL_DECOMP)
-    /*
-     * R13: exact signed 16.16 multiplication using 16x16 MULU.W
-     * partial products, without abs()/sign/rounding correction.
-     *
-     * Let ua,ub be the 32-bit unsigned bit patterns of a,b:
-     * (int64_t)a*b >> 16, modulo 2^32, is
-     *   (ahi*bhi<<16) + ahi*blo + alo*bhi + (alo*blo>>16)
-     *   - (a<0 ? blo<<16 : 0) - (b<0 ? alo<<16 : 0).
-     * This is exact even for negative fractional values; do not
-     * substitute truncating signed division for the final >>16.
-     */
-    const uint32_t ua = (uint32_t)a;
-    const uint32_t ub = (uint32_t)b;
-    const uint16_t alo = (uint16_t)ua;
-    const uint16_t blo = (uint16_t)ub;
-    const uint16_t ahi = (uint16_t)(ua >> 16);
-    const uint16_t bhi = (uint16_t)(ub >> 16);
-
-#if DOOM_R13_MUL_DECOMP >= 2
-    /* Common case: b is nonnegative and fits in 16 bits.
-       Two MULU.W instead of four. */
-    if (bhi == 0)
-    {
-        uint32_t result = mulu(ahi, blo) + (mulu(alo, blo) >> 16);
-        if (a < 0)
-            result -= (uint32_t)blo << 16;
-        return (fixed_t)result;
-    }
-#endif
-#if DOOM_R13_MUL_DECOMP >= 3
-    /* Symmetric case: a fits in 16 bits, b does not. */
-    if (ahi == 0)
-    {
-        uint32_t result = mulu(bhi, alo) + (mulu(blo, alo) >> 16);
-        if (b < 0)
-            result -= (uint32_t)alo << 16;
-        return (fixed_t)result;
-    }
-#endif
-    uint32_t result = (mulu(ahi, bhi) << 16)
-                    + mulu(ahi, blo)
-                    + mulu(alo, bhi)
-                    + (mulu(alo, blo) >> 16);
-    if (a < 0)
-        result -= (uint32_t)blo << 16;
-    if (b < 0)
-        result -= (uint32_t)alo << 16;
-    return (fixed_t)result;
-#else
 	// Is the result a negative number?
 	uint32_t neg = (a ^ b) < 0 ? 0xffff : 0;
 
@@ -687,7 +637,6 @@ fixed_t CONSTFUNC FixedMul(fixed_t a, fixed_t b)
 
 	if (neg) result = -result;
 	return result;
-#endif /* DOOM_R13_MUL_DECOMP */
 }
 
 
@@ -3065,6 +3014,35 @@ static void R_RecalcLineFlags(void)
 // Replaces the old R_Clip*WallSegment functions. It draws bits of walls in those
 // columns which aren't solid, and updates the solidcol[] array appropriately
 
+/* R14: replace short memchr calls (38 columns) with inlined byte scans.
+   Both variants preserve first-match semantics and never read past 'end'.
+   1 = scalar, 2 = two-byte unrolled. No unaligned 68000 word reads. */
+#if defined(DOOM_R14_CLIPSCAN)
+static inline byte *R14_FindByte(byte *p, byte *end, byte target)
+{
+#if DOOM_R14_CLIPSCAN == 2
+    while (end - p >= 2)
+    {
+        if (p[0] == target) return p;
+        if (p[1] == target) return p + 1;
+        p += 2;
+    }
+#endif
+    while (p < end)
+    {
+        if (*p == target) return p;
+        ++p;
+    }
+    return NULL;
+}
+#endif
+
+#if defined(DOOM_R14_CLIPSCAN)
+#define R14_CLIP_MEMCHR(p, val, count) R14_FindByte((p), (p) + (count), (byte)(val))
+#else
+#define R14_CLIP_MEMCHR(p, val, count) memchr((p), (val), (count))
+#endif
+
 static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 {
     byte *p;
@@ -3072,7 +3050,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
     {
         if (solidcol[first])
         {
-            if (!(p = memchr(solidcol+first, 0, last-first)))
+            if (!(p = R14_CLIP_MEMCHR(solidcol+first, 0, last-first)))
                 return; // All solid
 
             first = p - solidcol;
@@ -3080,7 +3058,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
         else
         {
             int16_t to;
-            if (!(p = memchr(solidcol+first, 1, last-first)))
+            if (!(p = R14_CLIP_MEMCHR(solidcol+first, 1, last-first)))
                 to = last;
             else
                 to = p - solidcol;
@@ -3312,7 +3290,19 @@ static boolean R_CheckBBox(const int16_t __far* bspcoord)
     if (sx1 == sx2)
         return false;
 
+#if defined(DOOM_R14_BBOXSCAN)
+    /* Same first-zero existence test as memchr, for a <=38-byte window.
+       Scan bounded by sx2, no word loads or unaligned memory accesses. */
+    {
+        uint8_t col = sx1;
+        while (col < sx2 && solidcol[col] != 0)
+            ++col;
+        if (col == sx2)
+            return false;
+    }
+#else
     if (!memchr(solidcol+sx1, 0, sx2-sx1)) return false;
+#endif
     // All columns it covers are already solidly covered
 
 

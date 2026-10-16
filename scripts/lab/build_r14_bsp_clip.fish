@@ -1,11 +1,12 @@
 #!/usr/bin/env fish
-# R13 bit-exact FixedMul arithmetic matrix on the fastest verified R12 Full.
+# R14 clipping/BSP scan matrix; R12 LUT Full baseline. R13 discarded.
+# Exact pixels and 38x24 projection preserved.
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r13-mul
+set -l dest dist/r14-bsp
 mkdir -p "$dest"; or exit 1
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
-python3 scripts/lab/test_r13_fixedmul.py; or exit 1
+python3 scripts/lab/test_r14_clip.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 
 set -gx DOOM_TIMEDEMO 1
@@ -27,6 +28,7 @@ set -gx DOOM_R10_DIST_DIVU 1
 set -gx DOOM_R10_RECIP_DIVU 0
 set -gx DOOM_R12_RECIP_LUT 65535
 set -gx DOOM_R12_RECIP_MASKED 0
+set -e DOOM_R13_MUL_DECOMP
 set -gx DOOM_FOLDED_TANGENT 0
 set -gx DOOM_UNROLL_COLUMNS 0
 set -gx DOOM_MASKED_DIVU 0
@@ -40,20 +42,30 @@ set -gx DOOM_R11_TOPBAR_DMA 0
 set -gx DOOM_R11_LEFTCOL_CLIP 1
 set -e DOOM_ZONE_KIB
 
-for variant in control mul4 mulfast mulswap
-    set -gx DOOM_R13_MUL_DECOMP 0
+
+for variant in control clip1 clip2 bbox clip1bbox clip2bbox
+    set -gx DOOM_R14_CLIPSCAN 0
+    set -gx DOOM_R14_BBOXSCAN 0
     switch $variant
         case control
-            set -gx DOOM_BUILD_ID doom-md-hud-r13-control
-        case mul4
-            set -gx DOOM_R13_MUL_DECOMP 1
-            set -gx DOOM_BUILD_ID doom-md-hud-r13-mul4
-        case mulfast
-            set -gx DOOM_R13_MUL_DECOMP 2
-            set -gx DOOM_BUILD_ID doom-md-hud-r13-mulfast
-        case mulswap
-            set -gx DOOM_R13_MUL_DECOMP 3
-            set -gx DOOM_BUILD_ID doom-md-hud-r13-mulswap
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-control
+        case clip1
+            set -gx DOOM_R14_CLIPSCAN 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip1
+        case clip2
+            set -gx DOOM_R14_CLIPSCAN 2
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip2
+        case bbox
+            set -gx DOOM_R14_BBOXSCAN 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-bbox
+        case clip1bbox
+            set -gx DOOM_R14_CLIPSCAN 1
+            set -gx DOOM_R14_BBOXSCAN 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip1bbox
+        case clip2bbox
+            set -gx DOOM_R14_CLIPSCAN 2
+            set -gx DOOM_R14_BBOXSCAN 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r14-clip2bbox
     end
     echo "BUILD: $DOOM_BUILD_ID"
     set -l logfile "$dest/build-$DOOM_BUILD_ID.log"
@@ -72,19 +84,28 @@ for variant in control mul4 mulfast mulswap
             exit 1
         end
     end
-    for forbidden in '-DDOOM_R10_RECIP_DIVU' '-DDOOM_ROUTINE_PROFILE' '-DDOOM_R7_PROFILE' '-DDOOM_SRAM_CACHE16' '-DDOOM_R8_LUT_UNROLL' '-DDOOM_R8_SKIP_MASKED_RECIP' '-DDOOM_R11_TOPBAR_DMA' '-DDOOM_MASKED_DIVU' '-DDOOM_R12_RECIP_MASKED'
+    for forbidden in '-DDOOM_R10_RECIP_DIVU' '-DDOOM_ROUTINE_PROFILE' '-DDOOM_R7_PROFILE' '-DDOOM_SRAM_CACHE16' '-DDOOM_R8_LUT_UNROLL' '-DDOOM_R8_SKIP_MASKED_RECIP' '-DDOOM_R11_TOPBAR_DMA' '-DDOOM_MASKED_DIVU' '-DDOOM_R12_RECIP_MASKED' '-DDOOM_R13_MUL_DECOMP'
         if string match -q -- "*$forbidden*" "$flags"
             echo "ERROR: unexpected compiler flag $forbidden"
             exit 1
         end
     end
-    if test "$DOOM_R13_MUL_DECOMP" != 0
-        string match -q -- "*-DDOOM_R13_MUL_DECOMP=$DOOM_R13_MUL_DECOMP*" "$flags"; or begin
-            echo 'ERROR: R13 multiply flag mismatch'
+    if test "$DOOM_R14_CLIPSCAN" != 0
+        string match -q -- "*-DDOOM_R14_CLIPSCAN=$DOOM_R14_CLIPSCAN*" "$flags"; or begin
+            echo 'ERROR: R14 clip flag mismatch'
             exit 1
         end
-    else if string match -q -- '*-DDOOM_R13_MUL_DECOMP*' "$flags"
-        echo 'ERROR: R13 multiply flag present in control'
+    else if string match -q -- '*-DDOOM_R14_CLIPSCAN*' "$flags"
+        echo 'ERROR: clip flag on non-clip variant'
+        exit 1
+    end
+    if test "$DOOM_R14_BBOXSCAN" = 1
+        string match -q -- '*-DDOOM_R14_BBOXSCAN*' "$flags"; or begin
+            echo 'ERROR: R14 bbox flag missing'
+            exit 1
+        end
+    else if string match -q -- '*-DDOOM_R14_BBOXSCAN*' "$flags"
+        echo 'ERROR: bbox flag on non-bbox variant'
         exit 1
     end
     python3 -c 'import pathlib,sys
@@ -108,14 +129,15 @@ print("VERIFIED",name,len(b),"bytes")
     end
 end
 printf '%s\n' \
-    'R13 exact signed FixedMul 16.16 decomposition. Baseline: R12 LUT Full user result 10.12 FPS / 210.95 s / 2134 frames.' \
-    'control: R12 Full unchanged, no R13 macro.' \
-    'mul4: always four unsigned 16x16 products; no abs or magnitude rounding.' \
-    'mulfast: fast path when b high word is zero, using two products.' \
-    'mulswap: fast path when either a or b high word is zero.' \
-    'All paths are exact modulo 2^32 for normal 16.16 values, including negative fractional results.' \
-    'Exhaustive/seeded Python arithmetic tests pass before compiling; they do NOT prove in-game correctness.' \
-    'BlastEm: NTSC60 stock 68000 divider7, 1000% fast-forward; DEMO3 2134 frames. Repeat 3x.' \
-    'Check sprites, wall textures, doors and sky, and then gameplay on real hardware before merging.' \
+    'R14 short-column clipping and BSP bbox visibility scans. Baseline R12 LUT Full user result 10.12 FPS / 210.95 s / 2134 frames.' \
+    'R13 discarded: original R12 FixedMul and original R12 flags; no R13 code compiled.' \
+    'control: exact R12 Full, R14 feature flags disabled.' \
+    'clip1: inline scalar first-match search for zero/one instead of memchr in R_ClipWallSegment.' \
+    'clip2: two-byte unrolled first-match search, without unaligned word loads.' \
+    'bbox: inline first-zero search instead of memchr in R_CheckBBox.' \
+    'clip1bbox: both scalar clip and bbox; clip2bbox: unrolled clip and bbox.' \
+    'Preflight tests compare all visible runs, solidcol changes, and bbox answers against baseline.' \
+    'BlastEm: NTSC60, stock 68000 divider7, 1000% fast-forward, DEMO3 2134 frames. Repeat each 3x.' \
+    'Reject variants with crashes, mismatched visuals, or gains smaller than repeatability noise.' \
     > "$dest/README.txt"
-echo 'READY: R13 four ROMs'
+echo 'READY: R14 six ROMs'
