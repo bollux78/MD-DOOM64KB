@@ -52,6 +52,15 @@
 
 #include "globdata.h"
 
+/* R19 doubles logical 3D resolution, not the character-cell menu grid.
+ * Keep the original 40-column text coordinates on the H40 tilemap. */
+#if defined(DOOM_R19_PIXEL4)
+#undef VIEWWINDOWWIDTH
+#define VIEWWINDOWWIDTH 40
+#undef VIEWWINDOWHEIGHT
+#define VIEWWINDOWHEIGHT 22
+#endif
+
 
 #define DISABLE_QUIT_DOOM
 #define DISABLE_SAVE_GAME
