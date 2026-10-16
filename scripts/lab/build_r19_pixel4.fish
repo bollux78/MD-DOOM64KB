@@ -131,6 +131,9 @@ cp out/.render_options "$dest/flags-$DOOM_BUILD_ID.txt"; or exit 1
 sha256sum res/e1m1.vgm > "$dest/e1m1-source-sha256.txt"; or exit 1
 if test -s out/release/rom.out
     cp out/release/rom.out "$dest/$DOOM_BUILD_ID.elf"; or exit 1
+    set -l nm "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+    python3 scripts/lab/ram_usage.py --elf out/release/rom.out --nm "$nm" \
+        --variant R19-PIXEL4 --output "$dest/ram-usage.txt"; or exit 1
 end
 printf '%s\n' \
     'R19 PIXEL4: experimental, not performance-validated; no timedemo, no PLAYTEST.' \
