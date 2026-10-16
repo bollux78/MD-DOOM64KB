@@ -23,3 +23,18 @@ On original Mega Drive 7.67 MHz with CRT, R15 **setupu** completed DEMO3: **10.0
 **Benchmark:** BlastEm NTSC 60 Hz, 68000 divider 7, DEMO3 2134 frames. **Visual CRT test:** check visibility of HEALTH/ARMOR/BULLETS and the bottom title, hand/weapon while idle and firing, clipping of walls and sprites, and game transitions. Do not promote any variant until stable on real hardware.
 
 If weapon looks too high, prefer `up2`; if bottom of the hand is cut, compare `hand1` and `hand2`. Repeated measurements are needed before attributing a small FPS change to code.
+
+## Verified results — 2026-10-16
+
+All four R16 variants **completed DEMO3 in BlastEm and ran correctly on the original Mega Drive**. Real CRT photo confirms that the HUD text is now visible, with a clear black overscan margin. The first-person weapon is visible in the CRT photograph. The user reports no hardware execution issues.
+
+| Variant | BlastEm average FPS | BlastEm seconds | Mega Drive average FPS | Frames |
+|---|---:|---:|---:|---:|
+| control | 10.16 | 210.03 | not measured | 2134 |
+| up2 | 10.34 | 206.30 | not reported | 2134 |
+| hand1 | 10.33 | 206.58 | **10.20** | 2134 |
+| hand2 | 10.31 | 206.97 | **10.20** | 2134 |
+
+Hardware baseline R15 setupu: **10.04 FPS / 212.48 seconds**. Both hand variants: **+0.16 FPS / +1.59%** relative to that hardware baseline. In BlastEm, `up2` is +1.77% against the R16 control (10.34 vs 10.16). The difference between `hand1` and `hand2` is too small to establish a performance winner from these single measurements.
+
+**Status:** R16 geometry and HUD positioning are hardware-validated. Choose between hand1 and hand2 by CRT visual framing, not FPS. Preserve R15 setupu as the previous verified baseline. Avoid treating the instantaneous FPS in the CRT photograph as a timedemo average.
