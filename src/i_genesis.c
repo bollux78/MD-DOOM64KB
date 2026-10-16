@@ -225,10 +225,10 @@ static boolean isTimerSet;
 volatile uint32_t _g_vblankCount;
 #if defined(DOOM_ROUTINE_PROFILE)
 volatile uint16_t doom_profile_stage;
-volatile uint32_t doom_profile_samples[6];
+volatile uint32_t doom_profile_samples[11];
 void I_ProfileSampleReset(void)
 {
-    for (uint16_t j = 0; j < 6; j++) doom_profile_samples[j] = 0;
+    for (uint16_t j = 0; j < 11; j++) doom_profile_samples[j] = 0;
     doom_profile_stage = 0;
 }
 #endif
@@ -239,7 +239,7 @@ static void I_VBlankCallback(void)
 	ticcount++;
 	_g_vblankCount++;
 #if defined(DOOM_ROUTINE_PROFILE)
-    if (doom_profile_stage < 6) doom_profile_samples[doom_profile_stage]++;
+    if (doom_profile_stage < 11) doom_profile_samples[doom_profile_stage]++;
 #endif
 }
 

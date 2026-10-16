@@ -63,7 +63,7 @@ void I_FinishUpdate(void);
 void I_BenchmarkReset(void);
 #if defined(DOOM_ROUTINE_PROFILE)
 extern volatile uint16_t doom_profile_stage;
-extern volatile uint32_t doom_profile_samples[6];
+extern volatile uint32_t doom_profile_samples[11];
 void I_ProfileSampleReset(void);
 #endif
 #if defined(DOOM_PROFILE)

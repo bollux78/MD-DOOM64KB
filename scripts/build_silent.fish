@@ -84,6 +84,9 @@ end
 if set -q DOOM_ROUTINE_PROFILE; and test "$DOOM_ROUTINE_PROFILE" = 1
     set render_flags "$render_flags -DTIMEDEMO -DDOOM_ROUTINE_PROFILE"
 end
+if set -q DOOM_R7_PROFILE; and test "$DOOM_R7_PROFILE" = 1
+    set render_flags "$render_flags -DDOOM_R7_PROFILE"
+end
 if set -q DOOM_PROFILE; and test "$DOOM_PROFILE" = 1
     set render_flags "$render_flags -DTIMEDEMO -DDOOM_PROFILE"
 end

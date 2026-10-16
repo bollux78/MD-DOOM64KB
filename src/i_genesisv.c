@@ -341,6 +341,20 @@ void I_BenchmarkShowResults(void)
 
 #if defined(DOOM_ROUTINE_PROFILE)
     {
+#if defined(DOOM_R7_PROFILE)
+        const char *names[11] = { "OTHER/LOGIC", "SETUP", "BSP OTHER", "SEG LOOP REST", "MASKED/SPR", "VDP/DMA", "DRAW WALL", "COMPOSE COL", "STORE RANGE", "ADD LINE", "CHECK BBOX" };
+        uint32_t total = 0;
+        for (uint16_t n = 0; n < 11; n++) total += doom_profile_samples[n];
+        if (!total) total = 1;
+        for (uint16_t n = 0; n < 11; n++) {
+            uint32_t pct_x10 = (doom_profile_samples[n] * 1000u + total / 2) / total;
+            uint16_t x = n < 6 ? 1 : 21;
+            uint16_t y = 20 + (n < 6 ? n : n - 6);
+            VDP_drawText(names[n], x, y);
+            bench_fixed(buffer, pct_x10, 1);
+            VDP_drawText(buffer, x + 14, y);
+        }
+#else
         const char *names[6] = { "OTHER/LOGIC", "SETUP", "BSP TRAVERSE", "WALL COLUMNS", "MASKED/SPR", "VDP WAIT/DMA" };
         uint32_t total = 0;
         for (uint16_t n = 0; n < 6; n++) total += doom_profile_samples[n];
@@ -352,6 +366,7 @@ void I_BenchmarkShowResults(void)
             bench_fixed(buffer, pct_x10, 1);
             VDP_drawText(buffer, 24, 19 + n);
         }
+#endif
     }
 #elif defined(DOOM_PROFILE)
     VDP_drawText("CPU LOGIC", 5, 19);

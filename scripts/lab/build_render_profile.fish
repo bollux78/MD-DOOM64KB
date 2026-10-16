@@ -23,14 +23,16 @@ set -gx DOOM_SRAM_CACHE16 0
 set -gx DOOM_SRAM_FASTCOPY 0
 set -e DOOM_ZONE_KIB
 
-for variant in base sample
+for variant in base r7
     set -gx DOOM_ROUTINE_PROFILE 0
+    set -gx DOOM_R7_PROFILE 0
     switch $variant
         case base
             set -gx DOOM_BUILD_ID doom-md-hud-render-base
-        case sample
+        case r7
             set -gx DOOM_ROUTINE_PROFILE 1
-            set -gx DOOM_BUILD_ID doom-md-hud-render-sample
+            set -gx DOOM_R7_PROFILE 1
+            set -gx DOOM_BUILD_ID doom-md-hud-r7-profile
     end
     set -l logfile "$dest/build-$DOOM_BUILD_ID.log"
     echo "BUILD: $DOOM_BUILD_ID"
@@ -77,7 +79,7 @@ end
 printf '%s\n' \
     'HUD24 render profile: control vs VBlank sampling; 38x24 and status DMA, cache16 in WRAM.' \
     'base: expected approximately 9.39 FPS; compare new result with previous reference.' \
-    'sample: stage samples at 60 Hz; FPS not comparable to baseline.' \
+    'R7: 11 exclusive VBlank sampling categories, not cycle-exact.' \
     'Sample stages: OTHER/LOGIC, SETUP, BSP TRAVERSE (includes line prep), WALL COLUMNS (seg loop), MASKED/SPR, VDP WAIT/DMA.' \
     'These are broad stages, not function-level or cycle-accurate timing.' \
     'DEMO3 2134 frames, NTSC 60Hz, BlastEm 68000 divider 7.' \

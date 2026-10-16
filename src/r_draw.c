@@ -54,6 +54,14 @@
 
 #include "globdata.h"
 
+#if defined(DOOM_R7_PROFILE)
+#define R7_VOID(stage, expr) do { uint16_t old = doom_profile_stage; doom_profile_stage = stage; expr; doom_profile_stage = old; } while (0)
+#define R7_VALUE(stage, expr) (__extension__ ({ uint16_t old = doom_profile_stage; doom_profile_stage = stage; __typeof__(expr) result = (expr); doom_profile_stage = old; result; }))
+#else
+#define R7_VOID(stage, expr) do { expr; } while (0)
+#define R7_VALUE(stage, expr) (expr)
+#endif
+
 
 // Silhouette, needed for clipping Segs (mainly)
 // and sprites representing things.
@@ -2162,11 +2170,11 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
         const column_t __far* column = (const column_t __far*) ((const byte __far*)patch + patch->columnofs[x_c]);
 
         dcvars->source = (const byte __far*)column + 3;
-        R_DrawColumnWall(dcvars);
+        R7_VOID(6, R_DrawColumnWall(dcvars));
     }
     else
     {
-        dcvars->source = R_ComposeColumn(texture, tex, texcolumn);
+        dcvars->source = R7_VALUE(7, R_ComposeColumn(texture, tex, texcolumn));
         R_DrawColumnWall(dcvars);
     }
 }
@@ -2879,7 +2887,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
             else
                 to = p - solidcol;
 
-            R_StoreWallRange(first, to-1);
+            R7_VOID(8, R_StoreWallRange(first, to-1));
 
             if (solid)
             {
@@ -3032,7 +3040,7 @@ static void R_Subsector(int16_t num)
     R_AddSprites(sub, frontsector->lightlevel);
     while (count--)
     {
-        R_AddLine (line);
+        R7_VOID(9, R_AddLine(line));
         line++;
         curline = NULL; /* cph 2001/11/18 - must clear curline now we're done with it, so R_LoadColorMap doesn't try using it for other things */
     }
@@ -3189,7 +3197,7 @@ static void R_RenderBSPNode(int16_t bspnum)
         // Possibly divide back space.
         //Walk back up the tree until we find
         //a node that has a visible backspace.
-        while (!R_CheckBBox(bsp->bbox[side]))
+        while (!R7_VALUE(10, R_CheckBBox(bsp->bbox[side])))
         {
             if (sp == 0)
             {
@@ -3223,7 +3231,7 @@ static void R_RenderBSPNode(int16_t bspnum)
 
 	R_RenderBSPNode(bsp->children[side]); // recursively divide front space
 
-	if (R_CheckBBox(bsp->bbox[side ^ 1]))	// possibly divide back space
+	if (R7_VALUE(10, R_CheckBBox(bsp->bbox[side ^ 1])))	// possibly divide back space
 		R_RenderBSPNode(bsp->children[side ^ 1]);
 }
 #endif
