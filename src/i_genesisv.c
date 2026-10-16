@@ -264,8 +264,9 @@ static void I_DrawMemDiagCounters(void)
     hud_num(15, 0, r19_memdiag.zone_largest, 5);
     hud_putc(21, 0, 'S');
     hud_num(22, 0, r19_memdiag.min_stack_gap, 5);
+    hud_putc(27, 0, r19_memdiag.stack_warning ? '!' : ' ');
     hud_putc(28, 0, r19_memdiag.zone_bad ? 'X' : ' ');
-    hud_putc(29, 0, r19_memdiag.stack_warning ? '!' : ' ');
+    hud_putc(29, 0, r19_memdiag.zone_guard_bad ? 'G' : ' ');
 }
 #endif
 
@@ -412,8 +413,10 @@ void I_BenchmarkShowResults(void)
     VDP_drawText(buffer, 24, 21);
     VDP_drawText("ZONE LINKS", 3, 22);
     VDP_drawText(r19_memdiag.zone_bad ? "BAD" : "OK", 24, 22);
-    VDP_drawText("STACK WATERMARK", 3, 23);
-    VDP_drawText(r19_memdiag.stack_warning ? "WARN" : "OK", 24, 23);
+    VDP_drawText("HEAP GUARDS", 3, 23);
+    VDP_drawText(r19_memdiag.zone_guard_bad ? "BAD" : "OK", 24, 23);
+    VDP_drawText("STACK GAP", 3, 24);
+    VDP_drawText(r19_memdiag.stack_warning ? "LOW" : "OK", 24, 24);
     VDP_drawText("DIAG OVERHEAD: NOT FPS BASELINE", 2, 26);
 #elif defined(DOOM_ROUTINE_PROFILE)
     {
