@@ -78,6 +78,18 @@ end
 if set -q DOOM_HUD_DMA24_NOHUDWRITE; and test "$DOOM_HUD_DMA24_NOHUDWRITE" = 1
     set render_flags "$render_flags -DDOOM_HUD_DMA24_NOHUDWRITE"
 end
+# Graphic HUD tiles test: preserve known-good 38x24 and single conditional DMA.
+if set -q DOOM_HUD_GRAPHIC_TEST; and test "$DOOM_HUD_GRAPHIC_TEST" = 1
+    if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
+        echo 'DOOM_HUD_GRAPHIC_TEST needs DOOM_CLASSIC_TEXT_HUD=1'
+        exit 1
+    end
+    if not set -q DOOM_HUD_DMA_STATUS_ONLY; or test "$DOOM_HUD_DMA_STATUS_ONLY" != 1
+        echo 'DOOM_HUD_GRAPHIC_TEST needs DOOM_HUD_DMA_STATUS_ONLY=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_HUD_GRAPHIC_TEST"
+end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
 end
