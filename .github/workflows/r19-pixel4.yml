@@ -1,0 +1,53 @@
+name: R19 Pixel4 — H40 80x44 with E1M1
+
+on:
+  push:
+    branches:
+      - r19-pixel4
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-r19-playable:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R19 branch (R18 untouched)
+        uses: actions/checkout@v4
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r19-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Check R19 renderer and VGM
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r19_pixel4.fish
+          python3 scripts/lab/test_r19_pixel4.py
+          python3 scripts/lab/check_r19_vgm.py res/e1m1.vgm
+      - name: Build ONE experimental R19 Pixel4 ROM, without timedemo
+        shell: bash
+        run: |
+          DOOM_R19_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r19_pixel4.fish
+      - name: Upload ONE experimental ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r19-pixel4-e1m1
+          path: |
+            dist/r19-pixel4/*.bin
+            dist/r19-playable/*.log
+            dist/r19-playable/*.txt
+          if-no-files-found: error
+          retention-days: 90
