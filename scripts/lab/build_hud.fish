@@ -38,9 +38,18 @@ if test $status -ne 0
     exit 1
 end
 
-set -l flags (string match -r '^BUILD_FLAGS:.*' < "$logfile")
-if test (count $flags) -ne 1
-    echo 'ERROR: cannot verify exactly one compiler BUILD_FLAGS line'
+# Validate the same exact options stamp that build_silent.fish gives to
+# Make. Avoid relying on stdout-log parsing across Fish installations.
+if not test -s out/.render_options
+    echo "ERROR: missing compiler-flag stamp out/.render_options"
+    tail -n 30 "$logfile"
+    exit 1
+end
+set -l flags (cat out/.render_options)
+if test (count $flags) -ne 1; or not string match -q -- "*$DOOM_BUILD_ID" "$flags"
+    echo "ERROR: invalid compiler-flag stamp or incorrect ROM identity"
+    echo "STAMP: $flags"
+    tail -n 30 "$logfile"
     exit 1
 end
 for required in '-DDOOM_CLASSIC_TEXT_HUD' '-DDOOM_HUD_DMA_STATUS_ONLY' '-DDOOM_CACHE_SLOTS=16' '-DDOOM_FAST_DIVU' '-DDOOM_CELL_LUT' '-DVIEWWINDOWHEIGHT=24' '-DTIMEDEMO' '-DDOOM_NO_VSYNC'
