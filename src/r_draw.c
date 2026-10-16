@@ -1903,8 +1903,143 @@ static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
 	return column | (texture << 8);
 }
 
-static byte __far columnCache[MAX_CACHE_ENTRIES*128];
 static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
+#if defined(DOOM_SRAM_CACHE16)
+/*
+ * Standard Mega Drive cartridge SRAM is an 8-bit device on the ODD data
+ * lane: 0x200001, 0x200003, ... . It is NOT byte-contiguous in 68000
+ * address space, so the renderer cannot point dcvars->source at SRAM.
+ * Keep one 128-byte work buffer in work RAM; copy columns to/from SRAM
+ * on cache misses/hits. This trades bus traffic for 2048 bytes of RAM (the original tmpCache remains).
+ * SRAM must be enabled and verified before D_DoomMain().
+ */
+#if MAX_CACHE_ENTRIES != 16
+#error DOOM_SRAM_CACHE16 requires DOOM_CACHE_SLOTS=16
+#endif
+#define DOOM_SRAM_FIRST 0x00200001UL
+#define DOOM_SRAM_CONTROL 0x00A130F1UL
+static byte tmpCache[128];
+#if defined(DOOM_SRAM_FASTCOPY)
+/* 68000 byte-lane copies. Explicit DBRA loop removes indexed-byte address
+ * arithmetic from C, but still performs one SRAM byte access per iteration. */
+static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
+{
+    uint8_t* dst = (uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    const byte* from = src;
+    uint16_t count = size;
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1: move.b (%1)+,%%d0\n\t"
+        "move.b %%d0,(%0)\n\t"
+        "addq.l #2,%0\n\t"
+        "dbra %2,1b"
+        : "+a"(dst), "+a"(from), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
+{
+    const uint8_t* src = (const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    byte* to = dest;
+    uint16_t count = size;
+    if (!count) return;
+    __asm__ volatile(
+        "subq.w #1,%2\n\t"
+        "1: move.b (%1),%%d0\n\t"
+        "move.b %%d0,(%0)+\n\t"
+        "addq.l #2,%1\n\t"
+        "dbra %2,1b"
+        : "+a"(to), "+a"(src), "+d"(count)
+        :
+        : "d0", "cc", "memory");
+}
+#else
+static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
+{
+    volatile uint8_t* const dest = (volatile uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    for (uint16_t i = 0; i < size; ++i)
+        dest[(uint16_t)(i << 1)] = src[i];
+}
+static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
+{
+    volatile const uint8_t* const src = (volatile const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+    for (uint16_t i = 0; i < size; ++i)
+        dest[i] = src[(uint16_t)(i << 1)];
+}
+#endif
+
+#if defined(DOOM_SRAM_HOT_SLOTS)
+/* Small, fully-associative front-cache: SRAM remains authoritative.
+ * Each hot line is tagged by 16-slot index AND the actual texture key.
+ * Replacements invalidate by key mismatch; LRU ages 1..N, 0 newest. */
+#if DOOM_SRAM_HOT_SLOTS != 2 && DOOM_SRAM_HOT_SLOTS != 4
+#error DOOM_SRAM_HOT_SLOTS must be 2 or 4
+#endif
+static byte sramHotColumns[DOOM_SRAM_HOT_SLOTS][128];
+static uint16_t sramHotKeys[DOOM_SRAM_HOT_SLOTS];
+static uint8_t sramHotSlots[DOOM_SRAM_HOT_SLOTS];
+static uint8_t sramHotAge[DOOM_SRAM_HOT_SLOTS];
+static byte* SramHotFind(uint16_t slot, uint16_t key)
+{
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+        if (sramHotKeys[i] == key && sramHotSlots[i] == slot)
+        {
+            uint8_t old = sramHotAge[i];
+            for (uint16_t j = 0; j < DOOM_SRAM_HOT_SLOTS; ++j)
+                if (sramHotAge[j] < old) ++sramHotAge[j];
+            sramHotAge[i] = 0;
+            return sramHotColumns[i];
+        }
+    return NULL;
+}
+static void SramHotPut(uint16_t slot, uint16_t key, const byte* column, uint16_t bytes)
+{
+    uint16_t victim = 0;
+    uint8_t maxAge = 0;
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+        if (sramHotAge[i] >= maxAge) { maxAge = sramHotAge[i]; victim = i; }
+    for (uint16_t j = 0; j < DOOM_SRAM_HOT_SLOTS; ++j)
+        if (j != victim && sramHotAge[j] < DOOM_SRAM_HOT_SLOTS - 1)
+            ++sramHotAge[j];
+    sramHotAge[victim] = 0;
+    sramHotSlots[victim] = slot;
+    sramHotKeys[victim] = key;
+    _fmemcpy(sramHotColumns[victim], column, bytes);
+}
+#endif
+/* Return 0 on unsupported/missing SRAM; do not run a misleading benchmark. */
+int R_SramCacheInit(void)
+{
+    volatile uint8_t* const control = (volatile uint8_t*)DOOM_SRAM_CONTROL;
+    volatile uint8_t* const first = (volatile uint8_t*)DOOM_SRAM_FIRST;
+    volatile uint8_t* const last = (volatile uint8_t*)0x00200FFFUL;
+    *control = 1; /* enable SRAM; writable, do not disable during demo */
+    const uint8_t saved_first = *first;
+    const uint8_t saved_last = *last;
+    *first = 0x5A;
+    *last = 0xA5;
+    const int ok1 = (*first == 0x5A && *last == 0xA5);
+    *first = 0xA5;
+    *last = 0x5A;
+    const int ok2 = (*first == 0xA5 && *last == 0x5A);
+    *first = saved_first;
+    *last = saved_last;
+    for (uint16_t i = 0; i < 16; ++i)
+        columnCacheEntries[i] = 0;
+#if defined(DOOM_SRAM_HOT_SLOTS)
+    for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
+    {
+        sramHotKeys[i] = 0;
+        sramHotSlots[i] = 0xFF;
+        sramHotAge[i] = (uint8_t)i;
+    }
+#endif
+    return ok1 && ok2;
+}
+#else
+static byte __far columnCache[MAX_CACHE_ENTRIES*128];
+#endif
 
 static uint16_t FindColumnCacheItem(int16_t texture, int16_t column)
 {
@@ -1936,7 +2071,11 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 
     uint16_t cachekey = FindColumnCacheItem(texture, xc);
 
+#if defined(DOOM_SRAM_CACHE16)
+    byte __far* colcache = tmpCache;
+#else
     byte __far* colcache = &columnCache[cachekey*128];
+#endif
     uint16_t cacheEntry = columnCacheEntries[cachekey];
 
     if (cacheEntry != CACHE_ENTRY(xc, texture))
@@ -1946,7 +2085,9 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         if (cacheEntry != 0)
             doom_cache_evictions++;
 #endif
+#if !defined(DOOM_SRAM_CACHE16)
         static byte tmpCache[128];
+#endif
 
         uint8_t i = 0;
         uint8_t patchcount = tex->patchcount;
@@ -1973,13 +2114,35 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         } while(++i < patchcount);
 
         //Block copy will drop low 2 bits of len.
+#if defined(DOOM_SRAM_CACHE16)
+        SramCacheCopyTo(cachekey, tmpCache, (tex->height + 3) & ~3);
+#else
         _fmemcpy(colcache, tmpCache, (tex->height + 3) & ~3);
+#endif
 
         columnCacheEntries[cachekey] = CACHE_ENTRY(xc, texture);
     }
 #if defined(DOOM_CACHE_STATS)
     else
         doom_cache_hits++;
+#endif
+#if defined(DOOM_SRAM_CACHE16)
+    /* Do not alter SRAM's 16-slot hash/replacement scheme. The RAM front
+     * cache only eliminates SRAM reads for recent repeated accesses. */
+#if defined(DOOM_SRAM_HOT_SLOTS)
+    uint16_t entryKey = CACHE_ENTRY(xc, texture);
+    uint16_t bytes = (tex->height + 3) & ~3;
+    if (cacheEntry == entryKey)
+    {
+        byte* hot = SramHotFind(cachekey, entryKey);
+        if (hot) return hot;
+        SramCacheCopyFrom(cachekey, tmpCache, bytes);
+    }
+    SramHotPut(cachekey, entryKey, tmpCache, bytes);
+#else
+    if (cacheEntry == CACHE_ENTRY(xc, texture))
+        SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
+#endif
 #endif
 
     return colcache;
