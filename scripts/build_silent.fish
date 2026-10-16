@@ -37,7 +37,19 @@ if not test -f scripts/doom64.wad
     python3 scripts/wad_from_header.py; or exit 1
 end
 python3 scripts/repack_wad.py; or exit 1
-python3 scripts/genpal.py; or exit 1
+# MegalDoom-inspired palette isolation: import only the HUD palette
+# strategy, never its different renderer or DMA scheduling. The option
+# forces the 3D colour lookup into PAL3 to avoid palette mismatches.
+if set -q DOOM_HUD_CELSO_PALETTES; and test "$DOOM_HUD_CELSO_PALETTES" = 1
+    if not set -q DOOM_HUD_WAD_ATLAS; or test "$DOOM_HUD_WAD_ATLAS" != 1
+        echo 'DOOM_HUD_CELSO_PALETTES needs DOOM_HUD_WAD_ATLAS=1'
+        exit 1
+    end
+    set -lx DOOM_HUD_CELSO_PALETTES 1
+    python3 scripts/genpal.py; or exit 1
+else
+    python3 scripts/genpal.py; or exit 1
+end
 # Per-tile quantization against the real 4x16 CRAM layout must run only
 # after genpal.py has produced the matching Genesis palette.
 if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
@@ -108,6 +120,9 @@ if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
         exit 1
     end
     set render_flags "$render_flags -DDOOM_HUD_WAD_ATLAS"
+end
+if set -q DOOM_HUD_CELSO_PALETTES; and test "$DOOM_HUD_CELSO_PALETTES" = 1
+    set render_flags "$render_flags -DDOOM_HUD_CELSO_PALETTES"
 end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
