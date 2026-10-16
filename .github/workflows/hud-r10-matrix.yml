@@ -1,0 +1,41 @@
+name: HUD24 R10 exact arithmetic matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r10-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r10-matrix:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout R10 HUD24 source
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check local 68000 toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Exact arithmetic preflight and four independent ROM builds
+        shell: bash
+        run: fish scripts/lab/build_r10_matrix.fish
+      - name: Publish R10 ROMs and compiler reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r10-four-roms
+          path: |
+            dist/r10/*.bin
+            dist/r10/*.elf
+            dist/r10/*.log
+            dist/r10/*.txt
+          if-no-files-found: error
+          retention-days: 30
