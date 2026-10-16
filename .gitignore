@@ -11,6 +11,7 @@
 /src/doom64ng.h
 /src/gen_pal.h
 /src/gen_sfx.h
+/src/r12_recip_lut.h
 
 # SFX 音源 WAD（リポジトリには含めない。各自 scripts/ に配置）
 /scripts/doom1.wad

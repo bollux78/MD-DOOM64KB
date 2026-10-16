@@ -54,6 +54,12 @@
 
 #include "globdata.h"
 
+/* R12: generated, bit-exact wall reciprocal lookup in cartridge ROM.
+   Compare ROM bus reads with DIVU.W in timedemo. */
+#if defined(DOOM_R12_RECIP_LUT)
+#include "r12_recip_lut.h"
+#endif
+
 #if defined(DOOM_R7_PROFILE)
 #define R7_VOID(stage, expr) do { uint16_t old = doom_profile_stage; doom_profile_stage = stage; expr; doom_profile_stage = old; } while (0)
 #define R7_VALUE(stage, expr) (__extension__ ({ uint16_t old = doom_profile_stage; doom_profile_stage = stage; __typeof__(expr) result = (expr); doom_profile_stage = old; result; }))
@@ -1364,7 +1370,16 @@ static void R_RenderMaskedSegRange(const drawseg_t *ds, int16_t x1, int16_t x2)
 
 			sprtopscreen = CENTERY * FRACUNIT - FixedMul(dcvars.texturemid, spryscale);
 
-#if defined(DOOM_MASKED_DIVU) && (COLEXTRABITS == 7)
+#if defined(DOOM_R12_RECIP_MASKED) && (COLEXTRABITS == 7)
+            /* Separate masked-column experiment. Original fallback unchanged. */
+            {
+                const uint32_t scale = (uint32_t)spryscale;
+                if (scale >= 512u && scale <= R12_RECIP_MAX)
+                    dcvars.fracstep = r12_recip_table[(uint16_t)scale - 512u];
+                else
+                    dcvars.fracstep = FixedReciprocal(scale) >> COLEXTRABITS;
+            }
+#elif defined(DOOM_MASKED_DIVU) && (COLEXTRABITS == 7)
             /* Same bit-exact 68000 fast reciprocal used for wall columns:
              * (0xffffffffu / scale) >> 7 == 0x01ffffffu / scale.
              * For 512..65535 the quotient fits DIVU.W's 16-bit result. */
@@ -2408,6 +2423,12 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
              */
             {
                 const uint32_t scale = (uint32_t)rw_scale;
+#if defined(DOOM_R12_RECIP_LUT)
+                /* Exact 0x01ffffffu/scale. Fallback is unchanged. */
+                if (scale >= 512u && scale <= R12_RECIP_MAX)
+                    dcvars.fracstep = r12_recip_table[(uint16_t)scale - 512u];
+                else
+#endif
                 if (scale >= 512u && scale <= 65535u)
                 {
                     uint32_t quotient = 0x01ffffffu;
