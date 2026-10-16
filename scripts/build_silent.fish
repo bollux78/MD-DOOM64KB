@@ -103,6 +103,14 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R11 left-column clip: pair with the already measured topclip (R10 Dist).
+if set -q DOOM_R11_LEFTCOL_CLIP; and test "$DOOM_R11_LEFTCOL_CLIP" = 1
+    if not set -q DOOM_R11_TOPBAR_CLIP; or test "$DOOM_R11_TOPBAR_CLIP" != 1
+        echo 'DOOM_R11_LEFTCOL_CLIP requires DOOM_R11_TOPBAR_CLIP=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_R11_LEFTCOL_CLIP"
+end
 # R11 dedicated top tile row: clip the 3D drawing and optionally omit unchanged row-0 DMA.
 if set -q DOOM_R11_TOPBAR_CLIP; and test "$DOOM_R11_TOPBAR_CLIP" = 1
     if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1

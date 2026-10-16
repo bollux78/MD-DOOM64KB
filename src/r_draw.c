@@ -1563,7 +1563,11 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
     x2 = CENTERX + (hl >> FRACBITS) - 1;
 
     // off the side
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+    if (x2 < 1 || x1 > VIEWWINDOWWIDTH)
+#else
     if (x2 < 0 || x1 > VIEWWINDOWWIDTH)
+#endif
     {
         return;
     }
@@ -1575,7 +1579,11 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
     // killough 12/98: fix psprite positioning problem
     vis->texturemid = (BASEYCENTER<<FRACBITS) /* +  FRACUNIT/2 */ -
             (psp->sy-topoffset);
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+    vis->x1 = x1 < 1 ? 1 : x1;
+#else
     vis->x1 = x1 < 0 ? 0 : x1;
+#endif
     vis->x2 = x2 >= VIEWWINDOWWIDTH ? VIEWWINDOWWIDTH - 1 : x2;
     // proff 11/06/98: Added for high-res
     vis->scale = PSPRITEYSCALE;
@@ -1832,6 +1840,12 @@ static void R_ProjectSprite (mobj_t __far* thing, int16_t lightlevel)
     }
 
 
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+    /* World sprite entirely within the excluded left column. */
+    if (x2 < 1)
+        return;
+#endif
+
     // store information in a vissprite
     vissprite_t* vis = R_NewVisSprite ();
 
@@ -1850,7 +1864,11 @@ static void R_ProjectSprite (mobj_t __far* thing, int16_t lightlevel)
     vis->gy              = fy;
     vis->gz              = fz;
     vis->texturemid      = (fz + (((int32_t)patch->topoffset) << FRACBITS)) - viewz;
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+    vis->x1              = x1 < 1 ? 1 : x1;
+#else
     vis->x1              = x1 < 0 ? 0 : x1;
+#endif
     vis->x2              = x2 >= VIEWWINDOWWIDTH ? VIEWWINDOWWIDTH - 1 : x2;
 
 
@@ -3353,6 +3371,13 @@ static void R_ClearDrawSegs(void)
 static void R_ClearClipSegs (void)
 {
     memset(solidcol, 0, VIEWWINDOWWIDTH);
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+    /* Column 0 is a permanent black border, not a visible wall column.
+       Mark it solid before BSP traversal: R_ClipWallSegment and R_CheckBBox
+       will never issue R_StoreWallRange for this column. No per-column
+       test inside the expensive wall texture loop. */
+    solidcol[0] = 1;
+#endif
 }
 
 

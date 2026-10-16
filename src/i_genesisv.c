@@ -194,6 +194,13 @@ static void I_DrawDebugCounters(void)
     {
         for (uint16_t i = 0; i < VIEWWINDOWWIDTH; i++)
             _s_screen[i] = BLACK_CELL;
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+        /* Clear the border once on entering a level, including pixels
+           left over from a menu or fullscreen image. Wall, sprite and
+           automap paths do not draw column zero afterwards. */
+        for (uint16_t y = 1; y < VIEWWINDOWHEIGHT; y++)
+            _s_screen[y * VIEWWINDOWWIDTH] = BLACK_CELL;
+#endif
         topbar_in_level = 1;
     }
 #else
@@ -911,6 +918,9 @@ void V_DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color)
         if ((uint16_t)x0 < VIEWWINDOWWIDTH && (uint16_t)y0 < VIEWWINDOWHEIGHT
 #if defined(DOOM_R11_TOPBAR_CLIP)
             && (_g_gamestate != GS_LEVEL || y0 != 0)
+#endif
+#if defined(DOOM_R11_LEFTCOL_CLIP)
+            && (_g_gamestate != GS_LEVEL || x0 != 0)
 #endif
            )
             _s_screen[y0 * VIEWWINDOWWIDTH + x0] = cell;
