@@ -83,6 +83,11 @@ typedef char assertMemblockSize[sizeof(memblock_t) <= PARAGRAPH_SIZE ? 1 : -1];
 
 static memblock_t __far* mainzone_sentinal;
 static segment_t   mainzone_rover_segment;
+#if defined(DOOM_MEM_DIAG)
+static uintptr_t r19_zone_start;
+static uintptr_t r19_zone_end;
+#endif
+
 
 
 static segment_t pointerToSegment(const memblock_t __far* ptr)
@@ -132,6 +137,11 @@ void Z_Init (void)
 	// set the entire zone to one free block
 	memblock_t __far* block = (memblock_t __far*)mainzone;
 	mainzone_rover_segment = pointerToSegment(block);
+#if defined(DOOM_MEM_DIAG)
+    r19_zone_start = (uintptr_t)mainzone;
+    r19_zone_end = r19_zone_start + heapSize;
+#endif
+
 
 	mainzone_sentinal->tag  = PU_STATIC;
 	mainzone_sentinal->user = (void __far*)mainzone;
@@ -461,3 +471,49 @@ void Z_CheckHeap (void)
             I_Error ("Z_CheckHeap: two consecutive free blocks\n");
     }
 }
+
+#if defined(DOOM_MEM_DIAG)
+/* Inspect zone without following unchecked pointers. This deliberately
+ * avoids Z_CheckHeap, whose unbounded traversal could hang on corruption.
+ * Free totals include 16-byte block headers; values are diagnostic only. */
+void Z_DiagSample(uint16_t *total_free, uint16_t *largest_free, uint8_t *invalid)
+{
+    uint32_t total = 0, largest = 0;
+    uint8_t bad = 0;
+    segment_t sentinel = pointerToSegment(mainzone_sentinal);
+    segment_t next = mainzone_sentinal->next;
+    segment_t previous = sentinel;
+    uintptr_t expected = r19_zone_start;
+    uint16_t steps = 0;
+    while (next != sentinel)
+    {
+        uintptr_t addr = (uintptr_t)segmentToPointer(next);
+        if (addr != expected || addr < r19_zone_start ||
+            addr >= r19_zone_end || ++steps > 4096u)
+        {
+            bad = 1;
+            break;
+        }
+        memblock_t __far *block = (memblock_t __far *)addr;
+        uint32_t size = block->size;
+        if (size < PARAGRAPH_SIZE || (size & (PARAGRAPH_SIZE - 1u)) ||
+            size > r19_zone_end - addr || block->prev != previous)
+        {
+            bad = 1;
+            break;
+        }
+        if (!block->user)
+        {
+            total += size;
+            if (size > largest) largest = size;
+        }
+        expected = addr + size;
+        previous = next;
+        next = block->next;
+    }
+    if (expected != r19_zone_end) bad = 1;
+    *total_free = (uint16_t)(total > 65535u ? 65535u : total);
+    *largest_free = (uint16_t)(largest > 65535u ? 65535u : largest);
+    *invalid = bad;
+}
+#endif
