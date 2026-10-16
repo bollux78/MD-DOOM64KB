@@ -41,7 +41,11 @@ python3 scripts/genpal.py; or exit 1
 # Per-tile quantization against the real 4x16 CRAM layout must run only
 # after genpal.py has produced the matching Genesis palette.
 if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
-    python3 scripts/gen_doom_wad_hud.py; or exit 1
+    if set -q DOOM_HUD_CELSO_ART; and test "$DOOM_HUD_CELSO_ART" = 1
+        python3 scripts/gen_celso_hud_art.py; or exit 1
+    else
+        python3 scripts/gen_doom_wad_hud.py; or exit 1
+    end
 end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     python3 scripts/gen_colormap_cells.py; or exit 1
@@ -108,6 +112,15 @@ if set -q DOOM_HUD_WAD_ATLAS; and test "$DOOM_HUD_WAD_ATLAS" = 1
         exit 1
     end
     set render_flags "$render_flags -DDOOM_HUD_WAD_ATLAS"
+end
+# Source-grounded Celso graphic art only, no palette overwrite, renderer
+# or DMA changes. Compile-time choice belongs to HUD atlas branch only.
+if set -q DOOM_HUD_CELSO_ART; and test "$DOOM_HUD_CELSO_ART" = 1
+    if not set -q DOOM_HUD_WAD_ATLAS; or test "$DOOM_HUD_WAD_ATLAS" != 1
+        echo 'DOOM_HUD_CELSO_ART requires DOOM_HUD_WAD_ATLAS=1'
+        exit 1
+    end
+    set render_flags "$render_flags -DDOOM_HUD_CELSO_ART"
 end
 if set -q DOOM_TIMEDEMO; and test "$DOOM_TIMEDEMO" = 1
     set render_flags "$render_flags -DTIMEDEMO"
