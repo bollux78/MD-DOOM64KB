@@ -6,6 +6,10 @@ on:
       - r19-pixel4
   workflow_dispatch:
 
+concurrency:
+  group: r19-pixel4
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
