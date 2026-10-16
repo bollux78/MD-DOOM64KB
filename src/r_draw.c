@@ -1643,6 +1643,15 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
     // killough 12/98: fix psprite positioning problem
     vis->texturemid = (BASEYCENTER<<FRACBITS) /* +  FRACUNIT/2 */ -
             (psp->sy-topoffset);
+#if defined(DOOM_R16_HUD_UP2) && defined(DOOM_R16_WEAPON_LIFT)
+    /* R16: compensate for CRT bottom overscan by lifting ONLY the
+     * first-person weapon. Adjust texturemid, not sprtopscreen alone:
+     * this moves the sprite and its texture sampling together. The
+     * 22-row viewport automatically recomputes PSPRITEYSCALE.
+     * Constant division is resolved at compile time. */
+    vis->texturemid += DOOM_R16_WEAPON_LIFT *
+        (FRACUNIT * SCREENHEIGHT_VGA / (VIEWWINDOWHEIGHT * 5 / 4));
+#endif
 #if defined(DOOM_R11_LEFTCOL_CLIP)
     vis->x1 = x1 < 1 ? 1 : x1;
 #else

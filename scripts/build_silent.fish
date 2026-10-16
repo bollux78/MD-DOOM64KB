@@ -55,7 +55,31 @@ set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -
 if set -q DOOM_CLASSIC_TEXT_HUD; and test "$DOOM_CLASSIC_TEXT_HUD" = 1
     set render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=24 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT -DDOOM_CLASSIC_TEXT_HUD'
 end
-# Opt-in HUD DMA split. Keep 24-row HUD layout and standard 28-row control intact.
+# R16 CRT experiment: lift HUD by 2 tile rows and reproject the true 22-row
+# viewport instead of cropping the 24-row image (which clips the hand).
+if set -q DOOM_R16_HUD_UP2; and test "$DOOM_R16_HUD_UP2" = 1
+    if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1
+        echo 'DOOM_R16_HUD_UP2 requires DOOM_CLASSIC_TEXT_HUD=1'
+        exit 1
+    end
+    set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=24' '-DVIEWWINDOWHEIGHT=22' "$render_flags")
+    set render_flags "$render_flags -DDOOM_R16_HUD_UP2"
+end
+if set -q DOOM_R16_WEAPON_LIFT
+    switch "$DOOM_R16_WEAPON_LIFT"
+        case 0
+        case 1 2
+            if not set -q DOOM_R16_HUD_UP2; or test "$DOOM_R16_HUD_UP2" != 1
+                echo 'DOOM_R16_WEAPON_LIFT requires DOOM_R16_HUD_UP2=1'
+                exit 1
+            end
+            set render_flags "$render_flags -DDOOM_R16_WEAPON_LIFT=$DOOM_R16_WEAPON_LIFT"
+        case '*'
+            echo 'DOOM_R16_WEAPON_LIFT must be 0, 1 or 2 tile rows'
+            exit 1
+    end
+end
+# Opt-in HUD DMA split. Keep classic 28-row VDP buffer intact.
 # Minimal HUD status-only DMA variant; no extra HUD buffer or VDP calls.
 if set -q DOOM_HUD_DMA_STATUS_ONLY; and test "$DOOM_HUD_DMA_STATUS_ONLY" = 1
     if not set -q DOOM_CLASSIC_TEXT_HUD; or test "$DOOM_CLASSIC_TEXT_HUD" != 1

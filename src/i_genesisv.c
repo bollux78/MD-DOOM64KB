@@ -52,11 +52,22 @@ extern const uint8_t *fullcolormap;
 #endif
 
 // チャンキー FB。各要素は完成済み VDP タイルマップ語。
-/* In classic-HUD mode, 3D renders 24 rows but DMA presents 28 rows.
- * The bottom four rows never enter the 3D renderer. */
+/* Classic HUD uses a fixed 28-row VDP buffer. R16 lifts the four-row
+ * status strip from rows 24..27 to 22..25 and reserves rows 26..27 as
+ * black CRT overscan safety margin. The 3D viewport is truly 38x22,
+ * so its projection, weapon scale and clipping are recomputed. */
 #if defined(DOOM_CLASSIC_TEXT_HUD)
-#if VIEWWINDOWHEIGHT != 24 || VIEWWINDOWWIDTH != 38
-#error DOOM_CLASSIC_TEXT_HUD requires 38x24 3D viewport
+#if VIEWWINDOWWIDTH != 38
+#error DOOM_CLASSIC_TEXT_HUD requires 38 columns
+#endif
+#if defined(DOOM_R16_HUD_UP2)
+#if VIEWWINDOWHEIGHT != 22
+#error DOOM_R16_HUD_UP2 requires 38x22 viewport
+#endif
+#else
+#if VIEWWINDOWHEIGHT != 24
+#error DOOM_CLASSIC_TEXT_HUD requires 38x24 viewport unless R16 enabled
+#endif
 #endif
 #define VDP_DISPLAY_ROWS 28
 #else
@@ -150,13 +161,17 @@ static void I_DrawClassicTextHUD(void)
 
     /* Only updates numbers/labels in tilemap RAM; no extra pixel rendering.
      * Labels deliberately describe bullet ammo, not weapon-dependent ammo. */
-    hud_label(1, 25, "HEALTH");
-    hud_num(8, 25, hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health), 3);
-    hud_label(13, 25, "ARMOR");
-    hud_num(19, 25, hud_saturate3(_g_player.armorpoints), 3);
-    hud_label(24, 25, "BULLETS");
-    hud_num(32, 25, hud_saturate3(_g_player.ammo[am_clip]), 3);
-    hud_label(1, 27, "DOOM - MEGA DRIVE");
+    /* Use viewport-relative coordinates: original 24 -> 25/27,
+     * R16 22 -> 23/25. Rows 26/27 remain black on a CRT. */
+    const int16_t hud_values_row = VIEWWINDOWHEIGHT + 1;
+    const int16_t hud_title_row = VIEWWINDOWHEIGHT + 3;
+    hud_label(1, hud_values_row, "HEALTH");
+    hud_num(8, hud_values_row, hud_saturate3(_g_player.mo ? _g_player.mo->health : _g_player.health), 3);
+    hud_label(13, hud_values_row, "ARMOR");
+    hud_num(19, hud_values_row, hud_saturate3(_g_player.armorpoints), 3);
+    hud_label(24, hud_values_row, "BULLETS");
+    hud_num(32, hud_values_row, hud_saturate3(_g_player.ammo[am_clip]), 3);
+    hud_label(1, hud_title_row, "DOOM - MEGA DRIVE");
 }
 #endif
 
