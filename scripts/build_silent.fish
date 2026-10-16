@@ -50,25 +50,6 @@ for f in src/boot/sega.s src/boot/rom_head.c
     end
 end
 set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=28 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT'
-# R19 memory diagnostic only: explicitly control the static Doom zone.
-# Do not change defaults or R18/R19 playable builds.
-if set -q DOOM_MEM_DIAG; and test "$DOOM_MEM_DIAG" = 1
-    set render_flags "$render_flags -DDOOM_MEM_DIAG"
-end
-if set -q DOOM_ZONE_KIB
-    switch "$DOOM_ZONE_KIB"
-        case 38 40 43
-            if not set -q DOOM_MEM_DIAG; or test "$DOOM_MEM_DIAG" != 1
-                echo 'DOOM_ZONE_KIB is only supported for DOOM_MEM_DIAG=1'
-                exit 1
-            end
-            set -l zone_bytes (math "$DOOM_ZONE_KIB * 1024")
-            set render_flags "$render_flags -DHEAP_SIZE=$zone_bytes"
-        case '*'
-            echo 'DOOM_ZONE_KIB must be 38, 40 or 43'
-            exit 1
-    end
-end
 # Optional classic HUD layout: only 24 rows 3D, four-row black status bar.
 # Default 38x28 build remains unchanged.
 if set -q DOOM_CLASSIC_TEXT_HUD; and test "$DOOM_CLASSIC_TEXT_HUD" = 1
@@ -95,6 +76,25 @@ if set -q DOOM_R16_WEAPON_LIFT
             set render_flags "$render_flags -DDOOM_R16_WEAPON_LIFT=$DOOM_R16_WEAPON_LIFT"
         case '*'
             echo 'DOOM_R16_WEAPON_LIFT must be 0, 1 or 2 tile rows'
+            exit 1
+    end
+end
+# R19 memory diagnostic only: explicitly control the static Doom zone.
+# Do not change defaults or R18/R19 playable builds.
+if set -q DOOM_MEM_DIAG; and test "$DOOM_MEM_DIAG" = 1
+    set render_flags "$render_flags -DDOOM_MEM_DIAG"
+end
+if set -q DOOM_ZONE_KIB
+    switch "$DOOM_ZONE_KIB"
+        case 38 40 43
+            if not set -q DOOM_MEM_DIAG; or test "$DOOM_MEM_DIAG" != 1
+                echo 'DOOM_ZONE_KIB is only supported for DOOM_MEM_DIAG=1'
+                exit 1
+            end
+            set -l zone_bytes (math "$DOOM_ZONE_KIB * 1024")
+            set render_flags "$render_flags -DHEAP_SIZE=$zone_bytes"
+        case '*'
+            echo 'DOOM_ZONE_KIB must be 38, 40 or 43'
             exit 1
     end
 end
