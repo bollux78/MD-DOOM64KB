@@ -156,8 +156,7 @@ print("VERIFIED timedemo",name,len(b),"bytes; ROM end",hex(struct.unpack_from(">
 end
 
 # Ensure the compiler-option delta is precisely the one requested.
-python3 - "$dest" <<'PY'
-from pathlib import Path
+python3 -c 'from pathlib import Path
 import sys
 d = Path(sys.argv[1])
 a = (d / "flags-doom-md-r19-timedemo-control.txt").read_text().split()
@@ -170,9 +169,7 @@ assert "-DDOOM_R19_FLAT_DBRA" in b
 assert strip_ident(a) == strip_ident(b), (
     "unexpected compiler flag differences",
     sorted(set(a) - set(b)), sorted(set(b) - set(a)))
-print("PASS: control and optimized timedemo compiler flags differ only by flat DBRA")
-PY
-or exit 1
+print("PASS: control and optimized timedemo compiler flags differ only by flat DBRA")' "$dest"; or exit 1
 
 sha256sum res/e1m1.vgm > "$dest/e1m1-source-sha256.txt"; or exit 1
 printf '%s\n' \
