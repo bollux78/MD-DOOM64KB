@@ -103,6 +103,20 @@ end
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     set render_flags "$render_flags -DDOOM_CELL_LUT"
 end
+# R8 controlled fast-path variants (disabled for original baseline).
+if set -q DOOM_R8_LUT_UNROLL
+    switch "$DOOM_R8_LUT_UNROLL"
+        case 2 4
+            set render_flags "$render_flags -DDOOM_R8_LUT_UNROLL=$DOOM_R8_LUT_UNROLL"
+        case 0
+        case '*'
+            echo "Invalid DOOM_R8_LUT_UNROLL: $DOOM_R8_LUT_UNROLL (expected 0, 2 or 4)"
+            exit 1
+    end
+end
+if set -q DOOM_R8_SKIP_MASKED_RECIP; and test "$DOOM_R8_SKIP_MASKED_RECIP" = 1
+    set render_flags "$render_flags -DDOOM_R8_SKIP_MASKED_RECIP"
+end
 if set -q DOOM_FOLDED_TANGENT; and test "$DOOM_FOLDED_TANGENT" = 1
     set render_flags "$render_flags -DDOOM_FOLDED_TANGENT"
 end

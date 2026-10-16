@@ -2309,6 +2309,13 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #endif
 #endif
 
+#if defined(DOOM_R8_SKIP_MASKED_RECIP)
+        /* Masked-only segs need texturecolumn for later sprite-style drawing,
+           but do not draw a wall tier here: fracstep is not read by this loop.
+           Skip the expensive 32/32 reciprocal on these columns. */
+        if (midtexture || toptexture || bottomtexture)
+        {
+#endif
 #if defined(DOOM_FAST_DIVU) && (COLEXTRABITS == 7)
             /*
              * Exact identity: (0xffffffffu / scale) >> 7
@@ -2332,6 +2339,9 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             }
 #else
             dcvars.fracstep = FixedReciprocal((uint32_t)rw_scale) >> COLEXTRABITS;
+#endif
+#if defined(DOOM_R8_SKIP_MASKED_RECIP)
+        }
 #endif
         }
 

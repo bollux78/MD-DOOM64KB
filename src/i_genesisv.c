@@ -637,12 +637,47 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
         if (offset < (32u * 256u) && (offset & 255u) == 0u)
         {
             const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
+#if defined(DOOM_R8_LUT_UNROLL) && (DOOM_R8_LUT_UNROLL == 2 || DOOM_R8_LUT_UNROLL == 4)
+            /* Exact 16-bit frac stepping; no change to colour, texels or clipping.
+               Tests only the fast Color LUT path (the normal fall-back is untouched). */
+            while (count >= DOOM_R8_LUT_UNROLL)
+            {
+#if DOOM_R8_LUT_UNROLL >= 1
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+#endif
+#if DOOM_R8_LUT_UNROLL >= 2
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+#endif
+#if DOOM_R8_LUT_UNROLL >= 3
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+#endif
+#if DOOM_R8_LUT_UNROLL >= 4
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+#endif
+                count -= DOOM_R8_LUT_UNROLL;
+            }
+            while (count-- > 0)
+            {
+                *dest = cellmap[source[frac >> colbits]];
+                dest += VIEWWINDOWWIDTH;
+                frac += fracstep;
+            }
+#else
             do
             {
                 *dest = cellmap[source[frac >> colbits]];
                 dest += VIEWWINDOWWIDTH;
                 frac += fracstep;
             } while (--count);
+#endif
             return;
         }
     }
