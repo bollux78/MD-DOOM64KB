@@ -17,7 +17,9 @@ assert "Z_DiagSample(" in m and "Z_DiagSample(" in z
 assert "++steps > 4096u" in z
 assert "addr != expected" in z
 assert "block->prev != previous" in z
-assert "watermark_begin[0]" in m
+assert "I_MemDiagHeapCanaryOK()" in m
+assert "r19_heap_guard.before" in i and "r19_heap_guard.after" in i
+assert "watermark_begin" not in m
 assert "r19_memdiag.min_stack_gap" in v
 assert "r19_memdiag.min_zone_free" in v
 assert "DOOM_MEM_DIAG" in h and "DOOM_MEM_DIAG" in b
