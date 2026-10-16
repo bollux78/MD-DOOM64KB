@@ -183,6 +183,11 @@ static void D_Display (void)
         boolean viewactive = (!(automapmode & am_active) || (automapmode & am_overlay));
 
         // Now do the drawing
+#if defined(DOOM_R19_PIXEL4)
+        /* Reset the tilemap before M_Drawer adds its font overlay. */
+        extern void R19_PrepareFrame(void);
+        R19_PrepareFrame();
+#endif
         if (viewactive)
             R_RenderPlayerView (&_g_player);
 
