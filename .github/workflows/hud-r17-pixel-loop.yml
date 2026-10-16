@@ -1,0 +1,41 @@
+name: HUD R17 MC68000 pixel loop optimization
+on:
+  workflow_dispatch:
+  push:
+    branches: [fullscreen]
+    paths:
+      - '.github/workflows/hud-r17-pixel-loop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  r17-pixel-loop:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout R16 hand1-based HUD renderer
+        uses: actions/checkout@v4
+        with:
+          ref: hud
+      - name: Check 68000 toolchain
+        shell: bash
+        run: |
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+      - name: Verify exactness and build R17 four-ROM matrix
+        shell: bash
+        run: fish scripts/lab/build_r17_pixel_loop.fish
+      - name: Upload ROMs, flags and disassembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-hud-r17-pixel-loop-four-roms
+          path: |
+            dist/r17-pixel-loop/*.bin
+            dist/r17-pixel-loop/*.elf
+            dist/r17-pixel-loop/*.log
+            dist/r17-pixel-loop/*.txt
+          if-no-files-found: error
+          retention-days: 30
