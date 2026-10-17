@@ -28,7 +28,8 @@ Todos os nomes começam com `doom-md-r22c-` e terminam com `.bin`.
 
 | Sufixo | Finalidade |
 |---|---|
-| control | Controle 8×8 R21 V2c, sem as alterações do backend 4×4 |
+| control | Controle 8×8 R21 V2c de timedemo |
+| play-control | Controle 8×8 jogável, sem timedemo, com música |
 | p4-fixed | DEMO3 4×4, correções de VDP/texto, envio completo de tiles |
 | play-fixed | Mesma versão corrigida, jogável com menu e música |
 | solid | DEMO3, reutiliza os 16 tiles sólidos sem enviar seus padrões |
@@ -56,6 +57,6 @@ Se a corrupção continuar, informar o sufixo e se acontece na abertura, ao abri
 
 `test_r22_pixel4.py`: primitivas, colunas reais extraídas do backend, guardas e projeção; UBSan. `test_r22b_video.py`: executa o uploader e o escritor de texto extraídos do código de produção com portas VDP simuladas; percorre as 65536 combinações de quatro amostras nos dois bancos, verifica equivalência de imagem e preservação da fonte/mapas, zero upload de padrões em tela sólida, espera na abertura/menu, limites de caracteres e preservação da área FC00. A R22c acrescenta100ciclos de abrir/fechar menu preservando todo o mapa A/B e os glifos exibidos durante o cálculo do raster, usa Window no código de produção e verifica as máscaras reais de endereço do VDP/SDK. Três configurações (fix/solid/lut).
 
-CI: compila nove ROMs/ELFs, audita identificação/flags/limites, orçamento de descompressão da fonte no boot e espaço restante após openings. Inclui probe MC68000 de primitivas, seleção de tile sólido e LUT, para execução em harness CPU (não é uma ROM de jogo).
+CI: compila dez ROMs/ELFs, audita identificação/flags/limites, orçamento de descompressão da fonte no boot e espaço restante após openings. Inclui probe MC68000 de primitivas, seleção de tile sólido e LUT, para execução em harness CPU (não é uma ROM de jogo).
 
 Os testes host não emulam temporização nem o VDP real. A compilação e o orçamento de memória não equivalem a validação da demo/hardware. O ganho de FPS e a resolução da corrupção ainda dependem do teste das ROMs.

@@ -2,7 +2,7 @@
 import pathlib,json,hashlib,struct,importlib.util,sys
 r=pathlib.Path(__file__).resolve().parents[2];d=pathlib.Path(sys.argv[1])
 spec=importlib.util.spec_from_file_location('heap',r/'scripts/lab/r21_heap_model.py');h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
-names=['control','p4-fixed','play-fixed','solid','diag-solid','play-solid','solid-lut','play-lut','pattern-lut']
+names=['control','play-control','p4-fixed','play-fixed','solid','diag-solid','play-solid','solid-lut','play-lut','pattern-lut']
 names=sys.argv[2:] or names
 assert len(names)==len(set(names)) and set(names)<=set(['control','play-control','p4-fixed','play-fixed','solid','diag-solid','play-solid','solid-lut','play-lut','pattern-lut'])
 assert {p.stem for p in d.glob('*.bin')}=={'doom-md-r22c-'+n for n in names}

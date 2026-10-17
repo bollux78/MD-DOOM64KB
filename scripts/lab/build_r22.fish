@@ -11,7 +11,7 @@ cd "$root"; or exit 1
 set -l dest dist/r22c
 mkdir -p "$dest"; or exit 1
 
-set -l variants control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
+set -l variants control play-control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
 if test (count $argv) -gt 0
     set variants $argv
 end

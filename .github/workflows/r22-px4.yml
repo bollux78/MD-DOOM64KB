@@ -1,4 +1,4 @@
-name: R22c — Window overlay and solid tile lab (9 ROMs)
+name: R22c — Window overlay and solid tile lab (10 ROMs)
 
 on:
   push:
@@ -52,13 +52,13 @@ jobs:
           d=pathlib.Path('dist/r22c')
           (d/'toolchain.txt').write_text(subprocess.check_output([str(g/'bin/m68k-elf-gcc'),'--version'],text=True))
           (d/'commit.txt').write_text(os.environ['GITHUB_SHA']+'\n')
-          (d/'COMPLETE.txt').write_text('9 ROMs built and audited; runtime demo validation pending.\n')
+          (d/'COMPLETE.txt').write_text('10 ROMs built and audited; runtime demo validation pending.\n')
           PY2
       - name: Upload R22 ROMs and matching debugging evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r22c-pixel4-9-roms
+          name: doom-md-r22c-pixel4-10-roms
           path: dist/r22c/
           if-no-files-found: error
           retention-days: 90
