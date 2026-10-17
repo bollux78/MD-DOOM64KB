@@ -28,6 +28,7 @@
 #include "z_zone.h"
 #include "doomdef.h"
 #include "i_system.h"
+#include "r20_stackguard.h"
 
 
 //
@@ -83,6 +84,9 @@ typedef char assertMemblockSize[sizeof(memblock_t) <= PARAGRAPH_SIZE ? 1 : -1];
 
 static memblock_t __far* mainzone_sentinal;
 static segment_t   mainzone_rover_segment;
+#if defined(DOOM_R20_STACKGUARD)
+static uintptr_t r20_zone_start, r20_zone_end, r20_sentinel;
+#endif
 
 
 static segment_t pointerToSegment(const memblock_t __far* ptr)
@@ -132,6 +136,11 @@ void Z_Init (void)
 	// set the entire zone to one free block
 	memblock_t __far* block = (memblock_t __far*)mainzone;
 	mainzone_rover_segment = pointerToSegment(block);
+#if defined(DOOM_R20_STACKGUARD)
+    r20_zone_start = (uintptr_t)mainzone;
+    r20_zone_end = r20_zone_start + heapSize;
+    r20_sentinel = (uintptr_t)mainzone_sentinal;
+#endif
 
 	mainzone_sentinal->tag  = PU_STATIC;
 	mainzone_sentinal->user = (void __far*)mainzone;
@@ -461,3 +470,39 @@ void Z_CheckHeap (void)
             I_Error ("Z_CheckHeap: two consecutive free blocks\n");
     }
 }
+
+#if defined(DOOM_R20_STACKGUARD)
+void Z_R20Probe(uint16_t *total_free, uint16_t *largest_free, uint8_t *invalid)
+{
+    uint32_t total = 0, largest = 0;
+    *invalid = 0; *total_free = 0; *largest_free = 0;
+    /* Skip pre-Z_Init boot; never follow an unchecked sentinel pointer. */
+    if (!r20_zone_start) { *total_free = 65535; *largest_free = 65535; return; }
+    if ((uintptr_t)mainzone_sentinal != r20_sentinel ||
+        r20_sentinel < 0xE0FF0000u || r20_sentinel > 0xE1000000u - sizeof(memblock_t) ||
+        (r20_sentinel & (PARAGRAPH_SIZE - 1u)) ||
+        r20_zone_start < 0xE0FF0000u || r20_zone_end > 0xE1000000u ||
+        r20_zone_start >= r20_zone_end) { *invalid = 1; return; }
+    segment_t sentinel = pointerToSegment(mainzone_sentinal);
+    segment_t next = mainzone_sentinal->next, previous = sentinel;
+    uintptr_t expected = r20_zone_start;
+    uint16_t steps = 0;
+    while (next != sentinel) {
+        uintptr_t addr = (uintptr_t)segmentToPointer(next);
+        if (addr != expected || addr < r20_zone_start ||
+            addr > r20_zone_end - sizeof(memblock_t) || ++steps > 4096u) {
+            *invalid = 1; return;
+        }
+        const memblock_t *block = (const memblock_t*)addr;
+        uint32_t size = block->size;
+        if (size < PARAGRAPH_SIZE || (size & (PARAGRAPH_SIZE - 1u)) ||
+            size > r20_zone_end - addr || block->prev != previous) {
+            *invalid = 1; return;
+        }
+        if (!block->user) { total += size; if (size > largest) largest = size; }
+        expected = addr + size; previous = next; next = block->next;
+    }
+    if (expected != r20_zone_end || mainzone_sentinal->prev != previous) *invalid = 1;
+    *total_free = (uint16_t)total; *largest_free = (uint16_t)largest;
+}
+#endif

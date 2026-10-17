@@ -40,6 +40,11 @@
 #include "p_setup.h"
 
 #include "globdata.h"
+#include "r20_stackguard.h"
+#include "r20_counters.h"
+#if defined(DOOM_R20_SIGHT_ITERATIVE)
+#include "i_system.h"
+#endif
 
 
 typedef struct {
@@ -203,8 +208,62 @@ static boolean P_CrossSubsector(int16_t num)
 }
 
 
+#if defined(DOOM_R20_SIGHT_ITERATIVE)
+/*
+ * R20 S2: same traversal as the recursive version below, with an explicit
+ * stack of pending far-side children. P_CrossSubsector is called in exactly
+ * the same order (checked offline on the E1M1 BSP: 0 order differences in
+ * 10 000 random sight lines), so los slopes and the result are identical.
+ * Stack use drops from ~176 bytes per crossed partition to one fixed frame.
+ */
+#define R20_SIGHT_STACK 32          /* E1M1 BSP depth is 20 */
 static boolean P_CrossBSPNode(int16_t bspnum)
 {
+    R20_PROBE();
+    int16_t pending[R20_SIGHT_STACK];
+    uint8_t sp = 0;
+
+    for (;;)
+    {
+        while (!(bspnum & NF_SUBSECTOR))
+        {
+            const mapnode_t __far* bsp = nodes + bspnum;
+
+            divline_t dl;
+            dl.x = ((fixed_t)bsp->x << FRACBITS);
+            dl.y = ((fixed_t)bsp->y << FRACBITS);
+            dl.dx = ((fixed_t)bsp->dx << FRACBITS);
+            dl.dy = ((fixed_t)bsp->dy << FRACBITS);
+
+            int8_t side,side2;
+            side = P_DivlineSide(los.strace.x,los.strace.y,&dl)&1;
+            side2= P_DivlineSide(los.t2x, los.t2y, &dl);
+
+            if (side == side2)
+                bspnum = bsp->children[side]; // doesn't touch the other side
+            else
+            {
+                if (sp == R20_SIGHT_STACK)
+                    I_Error("P_CrossBSPNode: depth > %d", R20_SIGHT_STACK);
+                pending[sp++] = bsp->children[side^1];  // cross the ending side later
+                R20_MAX(R20C_SIGHT_DEPTH, sp);
+                bspnum = bsp->children[side];           // cross the starting side now
+            }
+        }
+
+        if (!P_CrossSubsector(bspnum == -1 ? 0 : bspnum & ~NF_SUBSECTOR))
+            return false;
+
+        if (sp == 0)
+            return true;
+
+        bspnum = pending[--sp];
+    }
+}
+#else
+static boolean P_CrossBSPNode(int16_t bspnum)
+{
+    R20_PROBE();
     while (!(bspnum & NF_SUBSECTOR))
     {
         const mapnode_t __far* bsp = nodes + bspnum;
@@ -231,6 +290,9 @@ static boolean P_CrossBSPNode(int16_t bspnum)
 }
 
 
+#endif
+
+
 static uint32_t linearAddress(const void __far* ptr)
 {
 #if defined _M_I86
@@ -254,6 +316,7 @@ static uint32_t linearAddress(const void __far* ptr)
 
 boolean P_CheckSight(mobj_t __far* t1, mobj_t __far* t2)
 {
+  R20_COUNT(R20C_SIGHT, 1);
   static uint32_t prevlat1;
   static uint32_t prevlat2;
   static boolean prevr;

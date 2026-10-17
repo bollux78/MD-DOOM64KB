@@ -21,6 +21,7 @@
 #endif
 
 #include "globdata.h"
+#include "r20_stackguard.h"
 #include "music.h"        // rescomp 生成: const u8 bgm_e1m1[]（res/music.res）
 
 
@@ -238,6 +239,9 @@ static void I_VBlankCallback(void)
 {
 	ticcount++;
 	_g_vblankCount++;
+#if defined(DOOM_R20_STACKGUARD)
+    R20_PROBE();
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     if (doom_profile_stage < 11) doom_profile_samples[doom_profile_stage]++;
 #endif
@@ -349,6 +353,9 @@ extern int R_SramCacheInit(void);
 int main(bool hardReset)
 {
 	(void)hardReset;
+#if defined(DOOM_R20_STACKGUARD)
+    R20_StackPaint();   /* first: SP is at its shallowest here */
+#endif
 
 #if defined(DOOM_SRAM_CACHE16)
     /* Verify odd-lane SRAM before entering Doom; never benchmark open bus. */

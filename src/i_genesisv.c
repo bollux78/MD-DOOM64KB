@@ -27,6 +27,8 @@
 
 #include "globdata.h"
 #include "gen_pal.h"
+#include "r20_stackguard.h"
+#include "r20_counters.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -75,8 +77,34 @@ extern const uint8_t *fullcolormap;
 #endif
 static uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
 
+#if defined(DOOM_R20_ROWTAB) || defined(DOOM_R20_FLAT_UNROLL)
+/* R20 R1: row index -> first cell of that row. Replaces yl*38 (MULS.W #38,
+ * ~46 cycles) by one indexed word read. Exact for yl in 0..27. */
+#if VDP_DISPLAY_ROWS > 28
+#error R20 row table covers 28 rows
+#endif
+static const uint16_t r20_rowofs[28] = {
+     0*VIEWWINDOWWIDTH,  1*VIEWWINDOWWIDTH,  2*VIEWWINDOWWIDTH,  3*VIEWWINDOWWIDTH,
+     4*VIEWWINDOWWIDTH,  5*VIEWWINDOWWIDTH,  6*VIEWWINDOWWIDTH,  7*VIEWWINDOWWIDTH,
+     8*VIEWWINDOWWIDTH,  9*VIEWWINDOWWIDTH, 10*VIEWWINDOWWIDTH, 11*VIEWWINDOWWIDTH,
+    12*VIEWWINDOWWIDTH, 13*VIEWWINDOWWIDTH, 14*VIEWWINDOWWIDTH, 15*VIEWWINDOWWIDTH,
+    16*VIEWWINDOWWIDTH, 17*VIEWWINDOWWIDTH, 18*VIEWWINDOWWIDTH, 19*VIEWWINDOWWIDTH,
+    20*VIEWWINDOWWIDTH, 21*VIEWWINDOWWIDTH, 22*VIEWWINDOWWIDTH, 23*VIEWWINDOWWIDTH,
+    24*VIEWWINDOWWIDTH, 25*VIEWWINDOWWIDTH, 26*VIEWWINDOWWIDTH, 27*VIEWWINDOWWIDTH };
+#define R20_DEST(x, yl) (&_s_screen[r20_rowofs[(uint16_t)(yl)] + (uint16_t)(x)])
+#else
+#define R20_DEST(x, yl) (&_s_screen[(yl) * VIEWWINDOWWIDTH + (x)])
+#endif
+
 // Doom 8bit 色 index -> VDP タイルマップ語
 static uint16_t colorcell[256];
+
+#if defined(DOOM_R20_COUNTERS)
+#if defined(DOOM_MEM_DIAG) || defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_CACHE_STATS)
+#error DOOM_R20_COUNTERS uses the result-screen rows of the other diagnostics
+#endif
+uint32_t r20_cnt[R20C_N];
+#endif
 
 static int16_t palettelumpnum;
 
@@ -281,6 +309,9 @@ void I_BenchmarkReset(void)
 #if defined(DOOM_ROUTINE_PROFILE)
     I_ProfileSampleReset();
 #endif
+#if defined(DOOM_R20_COUNTERS)
+    for (uint16_t i = 0; i < R20C_N; i++) r20_cnt[i] = 0;
+#endif
 #if defined(DOOM_PROFILE)
     prof_logic_vb = prof_render_vb = prof_vdp_vb = 0;
 #endif
@@ -335,6 +366,10 @@ static void bench_fixed(char *out, uint32_t n, uint8_t decimals)
 
 void I_BenchmarkShowResults(void)
 {
+#if defined(DOOM_R20_STACKGUARD)
+    R20_PROBE();
+    R20_DiagFreeze();
+#endif
     bench_active = false;
     uint32_t elapsed = _g_vblankCount - bench_start_vb;
     if (!elapsed) elapsed = 1;
@@ -440,8 +475,53 @@ void I_BenchmarkShowResults(void)
         VDP_drawText(buffer, 24, 24);
     }
     VDP_drawText("STATS ROM: FPS HAS OVERHEAD", 2, 26);
+#elif defined(DOOM_R20_COUNTERS)
+    {
+        /* Per presented frame, x10. Counting costs CPU: FPS is not a baseline. */
+        static const char *const names[R20C_N] = {
+            "TEX CALLS", "TEX CELLS", "FLAT CALLS", "FLAT CELLS",
+            "WALL 1PATCH", "WALL MULTI", "WALL COMPOSED", "TAN 16BIT",
+            "TAN 32BIT", "SEGS", "SIGHT CHECKS", "SIGHT DEPTH" };
+        uint32_t frames = bench_frames ? bench_frames : 1;
+        for (uint16_t n = 0; n < R20C_N; n++)
+        {
+            uint16_t x = n < 6 ? 1 : 21;
+            uint16_t y = 19 + (n < 6 ? n : n - 6);
+            VDP_drawText(names[n], x, y);
+            if (n == R20C_SIGHT_DEPTH)
+                bench_u32(buffer, r20_cnt[n]);              /* a maximum, not a rate */
+            else
+                bench_fixed(buffer, (r20_cnt[n] * 10u + frames / 2) / frames, 1);
+            VDP_drawText(buffer, x + 14, y);
+        }
+    }
 #else
     VDP_drawText("MIN/MAX: FULL 1S WINDOWS", 3, 23);
+#endif
+#if defined(DOOM_R20_STACKGUARD)
+    /* All data were frozen BEFORE VDP_init. Keep inside CRT-safe rows. */
+    for (uint16_t y = 5; y <= 24; y++)
+        VDP_drawText("                                      ", 1, y);
+    VDP_drawText("FRAMES", 3, 5); bench_u32(buffer, bench_frames); VDP_drawText(buffer, 25, 5);
+    VDP_drawText("TIME SEC", 3, 7); bench_fixed(buffer, seconds_x100, 2); VDP_drawText(buffer, 25, 7);
+    VDP_drawText("STACK PEAK / RESERVE", 3, 9);
+    bench_u32(buffer, r20_peak); VDP_drawText(buffer, 25, 9);
+    bench_u32(buffer, R20_StackReserveBytes()); VDP_drawText(buffer, 32, 9);
+    VDP_drawText("ERROR MASK / FIRST TIC", 3, 11);
+    bench_u32(buffer, r20_errors); VDP_drawText(buffer, 25, 11);
+    bench_u32(buffer, r20_first_error_tic); VDP_drawText(buffer, 30, 11);
+    VDP_drawText("SGDK MIN FREE / BLOCK", 3, 13);
+    bench_u32(buffer, r20_sgdk_free); VDP_drawText(buffer, 25, 13);
+    bench_u32(buffer, r20_sgdk_largest); VDP_drawText(buffer, 32, 13);
+    VDP_drawText("ZONE MIN FREE / BLOCK", 3, 15);
+    bench_u32(buffer, r20_zone_free); VDP_drawText(buffer, 25, 15);
+    bench_u32(buffer, r20_zone_largest); VDP_drawText(buffer, 32, 15);
+    VDP_drawText("MIN SP (HEX)", 3, 17);
+    intToHex(r20_min_sp, buffer, 8); VDP_drawText(buffer, 25, 17);
+    VDP_drawText("1=STACK 2=END 4=SGDK", 3, 19);
+    VDP_drawText("8=SP 16=ZONE; MASK ADDS", 3, 20);
+    VDP_drawText("PEAK SINCE MAIN; SATURATES", 3, 22);
+    VDP_drawText("DIAGNOSTIC FPS HAS OVERHEAD", 3, 23);
 #endif
     for (;;) SYS_doVBlankProcess();
 }
@@ -553,6 +633,21 @@ void I_FinishUpdate(void)
 	}
 
 	I_DrawDebugCounters();   // 右上に VBLANK/フレーム/FPS を重畳
+#if defined(DOOM_R20_STACKGUARD)
+    {
+        static uint8_t sample;
+        R20_PROBE();
+        if ((sample++ & 15u) == 0u) R20_DiagSample();
+        if (_g_gamestate == GS_LEVEL) {
+            for (uint16_t x = 0; x < VIEWWINDOWWIDTH; x++) hud_putc(x, 0, ' ');
+            hud_putc(0, 0, 'T'); hud_num(1, 0, (uint16_t)_g_gametic, 5);
+            hud_putc(7, 0, 'S'); hud_num(8, 0, r20_peak, 4);
+            hud_putc(13, 0, 'E'); hud_num(14, 0, r20_errors, 2);
+            hud_putc(17, 0, 'H'); hud_num(18, 0, r20_sgdk_free, 5);
+            hud_putc(24, 0, 'Z'); hud_num(25, 0, r20_zone_free, 5);
+        }
+    }
+#endif
 #if defined(DOOM_CLASSIC_TEXT_HUD)
     I_DrawClassicTextHUD();
 #endif
@@ -673,17 +768,28 @@ void I_FinishUpdate(void)
 #define COLEXTRABITS (8 - 1)
 #define COLBITS (8 + 1)
 
+/* R20 S4: keep the column writers out of line in every A/B variant, so that
+ * a change inside them cannot change LTO inlining in R_Subsector (measured
+ * with GCC 13: the R19 asm variant was inlined, the C variant was not). */
+#if defined(DOOM_R20_NOINLINE_COLUMNS)
+#define R20_COLFN __attribute__((noinline))
+#else
+#define R20_COLFN
+#endif
 
-void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
+
+R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 {
 	int16_t count = (dcvars->yh - dcvars->yl) + 1;
 	if (count <= 0)
 		return;
+    R20_COUNT(R20C_TEX_CALLS, 1);
+    R20_COUNT(R20C_TEX_CELLS, count);
 
 	const uint8_t *source   = dcvars->source;
 	const uint8_t *colormap = dcvars->colormap;
 
-	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
+	uint16_t *dest = R20_DEST(dcvars->x, dcvars->yl);
 
 	const uint16_t fracstep = dcvars->fracstep;
 #if defined(DOOM_R17_FRAC_MULU)
@@ -712,13 +818,81 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
      * The tile palette is constant across PLAYPAL flash changes; those
      * change CRAM only, so this mapping remains correct.
      */
+#if defined(DOOM_R20_CELLMAP_MEMO)
+    /*
+     * R20 R2: the colormap only changes per seg / per sprite, but the
+     * validation below ran for every column. Remember the last answer.
+     * NULL means "not a standard COLORMAP row": original C fallback.
+     * Valid because fullcolormap is set once in R_InitColormaps.
+     */
+    static const uint8_t  *r20_last_colormap;
+    static const uint16_t *r20_last_cellmap;
+    const uint16_t *cellmap;
+    if (colormap == r20_last_colormap)
+        cellmap = r20_last_cellmap;
+    else
+    {
+        cellmap = NULL;
+        if (colormap && fullcolormap)
+        {
+            const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
+            if (offset < (32u * 256u) && (offset & 255u) == 0u)
+                cellmap = doom_colormap_cells[offset >> 8];
+        }
+        r20_last_colormap = colormap;
+        r20_last_cellmap = cellmap;
+    }
+    if (cellmap)
+    {
+        {
+#else
     if (colormap && fullcolormap)
     {
         const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
         if (offset < (32u * 256u) && (offset & 255u) == 0u)
         {
             const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
-#if defined(DOOM_R17_PIXEL_DBRA)
+#endif
+#if defined(DOOM_R20_PIXEL_ADDX)
+            /*
+             * R20 P2: same contract as R17 (frac mod 65536, texel = frac>>9),
+             * with integer and fraction in two registers:
+             *   ip = frac>>9 (0..127), fl = frac<<7 (low 9 bits on top).
+             * ADD.W fl sets X exactly when the low 9 bits overflow; ADDX.W
+             * adds step>>9 plus that carry; AND keeps 7 bits (mod 128).
+             * Musashi: 70 cycles/cell vs 106 (R17); about +108 per call.
+             * Equivalence: 605 random/edge columns, 0 differences.
+             */
+            uint16_t n20 = (uint16_t)count - 1;
+            uint16_t ip = frac, fl = frac;
+            uint16_t si = fracstep, sl = fracstep;
+            uint16_t t20;
+            __asm__ volatile(
+                "lsl.w  #7,%[fl]\n\t"
+                "rol.w  #7,%[ip]\n\t"
+                "and.w  %[k],%[ip]\n\t"
+                "lsl.w  #7,%[sl]\n\t"
+                "rol.w  #7,%[si]\n\t"
+                "and.w  %[k],%[si]\n\t"
+                "1:\n\t"
+                "moveq  #0,%[t]\n\t"
+                "move.b (%[s],%[ip].w),%[t]\n\t"
+                "add.w  %[t],%[t]\n\t"
+                "move.w (%[m],%[t].w),(%[d])\n\t"
+                "lea    76(%[d]),%[d]\n\t"
+                "add.w  %[sl],%[fl]\n\t"
+                "addx.w %[si],%[ip]\n\t"
+                "and.w  %[k],%[ip]\n\t"
+                "dbra   %[n],1b"
+                : [d] "+&a" (dest),
+                  [fl] "+&d" (fl), [ip] "+&d" (ip),
+                  [sl] "+&d" (sl), [si] "+&d" (si),
+                  [n] "+&d" (n20), [t] "=&d" (t20)
+                : [s] "a" (source), [m] "a" (cellmap),
+                  [k] "d" ((uint16_t)127)
+                : "cc", "memory");
+            return;
+#elif defined(DOOM_R17_PIXEL_DBRA)
             /*
              * R17: exact MC68000 DBRA loop for the standard COLORMAP.
              * frac is 16-bit modulo 65536, texel index is frac>>9.
@@ -739,7 +913,12 @@ void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
                 "andi.w #255,%[i]\n\t"
                 "add.w %[i],%[i]\n\t"
                 "move.w (%[m],%[i].w),(%[d])\n\t"
+#if defined(DOOM_R20_LEA_STRIDE)
+                /* R20 P1: LEA d16(An),An (8 cycles) replaces ADDA.W #imm,An. */
+                "lea 76(%[d]),%[d]\n\t"
+#else
                 "adda.w #76,%[d]\n\t"
+#endif
                 "add.w %[step],%[f]\n\t"
                 "dbra %[n],1b"
                 : [d] "+&a" (dest),
@@ -828,16 +1007,61 @@ void R_DrawColumnWall(const draw_column_vars_t *dcvars)
 }
 
 
-void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
+R20_COLFN void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
 {
 	int16_t count = (dcvars->yh - dcvars->yl) + 1;
 	if (count <= 0)
 		return;
+    R20_COUNT(R20C_FLAT_CALLS, 1);
+    R20_COUNT(R20C_FLAT_CELLS, count);
 
 	uint16_t cell = colorcell[color];
-	uint16_t *dest = &_s_screen[dcvars->yl * VIEWWINDOWWIDTH + dcvars->x];
+	uint16_t *dest = R20_DEST(dcvars->x, dcvars->yl);
 
-#if defined(DOOM_UNROLL_COLUMNS)
+#if defined(DOOM_R20_FLAT_UNROLL)
+#if VIEWWINDOWWIDTH != 38
+#error R20 flat unroll uses the 76-byte row stride
+#endif
+    /*
+     * R20 R3: 22 MOVE.W Dn,d16(An) stores with a computed entry point,
+     * 12 cycles per cell instead of 32 and no loop counter. The pointer is
+     * biased by -76 so that no displacement is zero (the assembler would
+     * shrink a 0(An) store to (An) and break the 4-byte spacing).
+     * Rows are written bottom-up; a solid colour does not care.
+     * Equivalence: 400 random columns vs the C loop, 0 differences.
+     */
+    if (count <= 22)
+    {
+        int16_t off = (int16_t)(-4 * count);
+        __asm__ volatile(
+            "lea    -76(%[d]),%[d]\n\t"
+            "jmp    (2f,%%pc,%[o].w)\n\t"
+            "move.w %[c],1672(%[d])\n\t"  "move.w %[c],1596(%[d])\n\t"
+            "move.w %[c],1520(%[d])\n\t"  "move.w %[c],1444(%[d])\n\t"
+            "move.w %[c],1368(%[d])\n\t"  "move.w %[c],1292(%[d])\n\t"
+            "move.w %[c],1216(%[d])\n\t"  "move.w %[c],1140(%[d])\n\t"
+            "move.w %[c],1064(%[d])\n\t"  "move.w %[c],988(%[d])\n\t"
+            "move.w %[c],912(%[d])\n\t"   "move.w %[c],836(%[d])\n\t"
+            "move.w %[c],760(%[d])\n\t"   "move.w %[c],684(%[d])\n\t"
+            "move.w %[c],608(%[d])\n\t"   "move.w %[c],532(%[d])\n\t"
+            "move.w %[c],456(%[d])\n\t"   "move.w %[c],380(%[d])\n\t"
+            "move.w %[c],304(%[d])\n\t"   "move.w %[c],228(%[d])\n\t"
+            "move.w %[c],152(%[d])\n\t"   "move.w %[c],76(%[d])\n"
+            "2:"
+            : [d] "+&a" (dest)
+            : [c] "d" (cell), [o] "d" (off)
+            : "memory");
+        return;
+    }
+#endif
+
+#if defined(DOOM_R19_FLAT_DBRA)
+    uint16_t n19 = (uint16_t)count - 1;
+    __asm__ volatile (
+        "1:\n\tmove.w %[c],(%[d])\n\tadda.w #76,%[d]\n\tdbra %[n],1b"
+        : [d] "+&a" (dest), [n] "+&d" (n19)
+        : [c] "d" (cell) : "cc", "memory");
+#elif defined(DOOM_UNROLL_COLUMNS)
     /* Fixed-color spans: four writes with one loop branch. */
     while (count >= 4)
     {

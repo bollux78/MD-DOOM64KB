@@ -282,6 +282,21 @@ if set -q DOOM_SRAM_FASTCOPY; and test "$DOOM_SRAM_FASTCOPY" = 1
     set render_flags "$render_flags -DDOOM_SRAM_FASTCOPY"
 end
 
+if set -q DOOM_R19_FLAT_DBRA; and test "$DOOM_R19_FLAT_DBRA" = 1
+    set render_flags "$render_flags -DDOOM_R19_FLAT_DBRA"
+end
+# R20 review blocks: pass explicit, auditable -D flags (e.g. "-DDOOM_R20_LEA_STRIDE").
+# Each block is off unless named here; recorded in out/.render_options.
+if set -q DOOM_R20_DEFINES
+    for d in (string split ' ' -- "$DOOM_R20_DEFINES")
+        test -n "$d"; or continue
+        string match -qr -- '^-DDOOM_R20_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
+            echo "Invalid DOOM_R20_DEFINES entry: $d"
+            exit 1
+        end
+        set render_flags "$render_flags $d"
+    end
+end
 # Generate matching ROM header and on-screen timedemo title per build.
 # SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
 # No changes to shared SGDK files or boot code are required.

@@ -53,9 +53,11 @@
 #include "m_random.h"
 
 #include "globdata.h"
+#include "r20_stackguard.h"
 
 /* R12: generated, bit-exact wall reciprocal lookup in cartridge ROM.
    Compare ROM bus reads with DIVU.W in timedemo. */
+#include "r20_counters.h"
 #if defined(DOOM_R12_RECIP_LUT)
 #include "r12_recip_lut.h"
 #endif
@@ -644,6 +646,26 @@ static inline int16_t R15_Mul16x32Shift16S(int16_t a, int32_t b)
 #define R15_SETUP_PRODUCT(a, b) (((a) * (b)) >> FRACBITS)
 #endif
 
+
+#if defined(DOOM_R20_TAN_MULS)
+#if defined(DOOM_R15_TANMUL)
+#error DOOM_R20_TAN_MULS replaces DOOM_R15_TANMUL for the 16-bit tangent half
+#endif
+/*
+ * R20 M1: exact low 16 bits of ((int32)a * b) >> 16 for int16 a and uint16 b
+ * (finetangentTable_part_3 entries). MULS.W treats b >= 0x8000 as b - 65536,
+ * which shifts the product by -a<<16; adding a back is exact. One MULS.W
+ * (~70 cycles) instead of a __mulsi3 call (~250 cycles with the call).
+ * Checked over 65536/3 x 12 (a, b) pairs plus edges: 0 differences.
+ */
+static inline int16_t R20_TanMulU16(int16_t a, uint16_t b)
+{
+    int16_t hi = (int16_t)(((int32_t)a * (int16_t)b) >> 16);
+    if (b & 0x8000u)
+        hi += a;
+    return hi;
+}
+#endif
 
 #if defined __WATCOMC__
 //
@@ -2314,6 +2336,8 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 
 static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, int16_t texcolumn, draw_column_vars_t* dcvars)
 {
+    R20_COUNT(tex->overlapped ? R20C_WALL_COMPOSITE :
+              tex->patchcount == 1 ? R20C_WALL_SIMPLE : R20C_WALL_MULTI, 1);
     if (!tex->overlapped)
     {
         int16_t patch_num;
@@ -2333,6 +2357,55 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
         R_DrawColumnWall(dcvars);
     }
 }
+#endif
+
+#if defined(DOOM_R20_WALL_HOIST) && !defined FLAT_WALL
+/*
+ * R20 R4: for single-patch, non-overlapped textures, R_DrawSegTextureColumn
+ * repeats W_GetLumpByNum(patches[0].patch_num) for every column, behind a
+ * 4-argument call and a 10-register MOVEM. The patch is constant for the
+ * whole seg, so look it up once in R_StoreWallRange and keep the per-column
+ * work to "columnofs[texcolumn & widthmask]". Same formula as the
+ * patchcount == 1 path of R_GetColumn (no originx). Everything else falls
+ * back to R_DrawSegTextureColumn unchanged.
+ */
+typedef struct
+{
+    const patch_t __far* patch;   /* NULL: use R_DrawSegTextureColumn */
+    uint16_t widthmask;
+} r20_wallsrc_t;
+
+static r20_wallsrc_t r20_mid, r20_top, r20_bottom;
+
+static void R20_PrepareWallSource(r20_wallsrc_t* w, int16_t texture, const texture_t __far* tex)
+{
+    if (texture && tex && !tex->overlapped && tex->patchcount == 1)
+    {
+        w->patch = W_GetLumpByNum(tex->patches[0].patch_num);
+        w->widthmask = tex->widthmask;
+    }
+    else
+        w->patch = NULL;
+}
+
+static inline void R20_DrawWallColumn(const r20_wallsrc_t* w, const texture_t __far* tex,
+                                      int16_t texture, int16_t texcolumn,
+                                      draw_column_vars_t* dcvars)
+{
+    const patch_t __far* patch = w->patch;
+    if (patch)
+    {
+        const int16_t xc = texcolumn & w->widthmask;
+        R20_COUNT(R20C_WALL_SIMPLE, 1);
+        dcvars->source = (const byte __far*)patch + patch->columnofs[xc] + 3;
+        R7_VOID(6, R_DrawColumnWall(dcvars));
+    }
+    else
+        R_DrawSegTextureColumn(tex, texture, texcolumn, dcvars);
+}
+#define R20_WALLCOL(w, tex, texture, col, dc) R20_DrawWallColumn(&(w), (tex), (texture), (col), (dc))
+#else
+#define R20_WALLCOL(w, tex, texture, col, dc) R_DrawSegTextureColumn((tex), (texture), (col), (dc))
 #endif
 
 //
@@ -2448,15 +2521,24 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             else
                 texturecolumn -= delta;
 #else
+			R20_COUNT((ang >= 1024 && ang < 3072) ? R20C_TAN3 : R20C_TAN4, 1);
 			if (ang < 1024) {			//    0 <= ang < 1024
 				fixed_t tan = finetangentTable_part_4[1023 - ang];
 				texturecolumn += R15_TAN_PRODUCT(rw_distance, tan);
 			} else if (ang < 2048) {	// 1024 <= ang < 2048
+#if defined(DOOM_R20_TAN_MULS)
+				texturecolumn += R20_TanMulU16(rw_distance, finetangentTable_part_3[1023 - (ang - 1024)]);
+#else
 				fixed_t tan = finetangentTable_part_3[1023 - (ang - 1024)];
 				texturecolumn += R15_TAN_PRODUCT(rw_distance, tan);
+#endif
 			} else if (ang < 3072) {	// 2048 <= ang < 3072
+#if defined(DOOM_R20_TAN_MULS)
+				texturecolumn -= R20_TanMulU16(rw_distance, finetangentTable_part_3[ang - 2048]);
+#else
 				fixed_t tan = finetangentTable_part_3[ang - 2048];
 				texturecolumn -= R15_TAN_PRODUCT(rw_distance, tan);
+#endif
 			} else {					// 3072 <= ang < 4096
 				fixed_t tan = finetangentTable_part_4[ang - 3072];
 				texturecolumn -= R15_TAN_PRODUCT(rw_distance, tan);
@@ -2515,7 +2597,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             dcvars.texturemid = rw_midtexturemid;
             //
 
-            R_DrawSegTextureColumn(texmidtexture, midtexture, texturecolumn, &dcvars);
+            R20_WALLCOL(r20_mid, texmidtexture, midtexture, texturecolumn, &dcvars);
 
             cc_rwx = VIEWWINDOWHEIGHT;
             fc_rwx = -1;
@@ -2539,7 +2621,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                     dcvars.yh = mid;
                     dcvars.texturemid = rw_toptexturemid;
 
-                    R_DrawSegTextureColumn(textoptexture, toptexture, texturecolumn, &dcvars);
+                    R20_WALLCOL(r20_top, textoptexture, toptexture, texturecolumn, &dcvars);
 
                     cc_rwx = mid;
                 }
@@ -2568,7 +2650,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                     dcvars.yh = yh;
                     dcvars.texturemid = rw_bottomtexturemid;
 
-                    R_DrawSegTextureColumn(texbottomtexture, bottomtexture, texturecolumn, &dcvars);
+                    R20_WALLCOL(r20_bottom, texbottomtexture, bottomtexture, texturecolumn, &dcvars);
 
                     fc_rwx = mid;
                 }
@@ -2962,6 +3044,12 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
     }
 
     didsolidcol = false;
+    R20_COUNT(R20C_SEGS, 1);
+#if defined(DOOM_R20_WALL_HOIST) && !defined FLAT_WALL
+    R20_PrepareWallSource(&r20_mid, midtexture, texmidtexture);
+    R20_PrepareWallSource(&r20_top, toptexture, textoptexture);
+    R20_PrepareWallSource(&r20_bottom, bottomtexture, texbottomtexture);
+#endif
     R_RenderSegLoop(rw_x, segtextured, markfloor, markceiling);
 
     /* cph - if a column was made solid by this wall, we _must_ save full clipping info */
@@ -3353,7 +3441,9 @@ static boolean R_RenderBspSubsector(int16_t bspnum)
 //  traversing subtree recursively.
 // Just call with BSP root.
 
-#if defined PROFILING
+#if defined PROFILING || defined(DOOM_R20_BSP_ITERATIVE)
+/* R20 S3: the existing non-recursive traversal (same visit order) is also
+ * selectable on its own, to cap render-side stack use at a fixed frame. */
 //Non recursive version.
 //constant stack space used and easier to
 //performance profile.
@@ -3361,6 +3451,7 @@ static boolean R_RenderBspSubsector(int16_t bspnum)
 
 static void R_RenderBSPNode(int16_t bspnum)
 {
+    R20_PROBE();
     static int16_t stack_bsp[MAX_BSP_DEPTH];
     static int8_t stack_side[MAX_BSP_DEPTH];
     int16_t sp = 0;
@@ -3374,7 +3465,7 @@ static void R_RenderBSPNode(int16_t bspnum)
         while (!R_RenderBspSubsector(bspnum))
         {
             if (sp == MAX_BSP_DEPTH)
-                break;
+                I_Error("R20a BSP depth overflow");
 
             bsp = &nodes[bspnum];
             side = R_PointOnSide(viewx, viewy, bsp);
@@ -3423,6 +3514,7 @@ static void R_RenderBSPNode(int16_t bspnum)
 #else
 static void R_RenderBSPNode(int16_t bspnum)
 {
+    R20_PROBE();
 	if (R_RenderBspSubsector(bspnum))
 		return;
 
