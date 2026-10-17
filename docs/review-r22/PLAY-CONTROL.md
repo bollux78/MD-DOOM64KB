@@ -9,3 +9,5 @@ Objetivo: jogar E1M1 até a saída e verificar intermissão e carregamento de E1
 O erro anterior em4×4 foi `Z_Malloc: failed to allocate2028B`; os campos seguintes ficaram cortados. O teste deste controle ajuda a distinguir um limite comum do jogo de uma diferença introduzida pelo backend4×4. Completar a DEMO3 não garante espaço para todos os mapas nem valida a transição.
 
 O ZIP contém ROM, ELF correspondente, flags, log, SHA256SUMS, orçamento de heap SGDK, manifesto, versão da ferramenta e commit. A auditoria confere identidade, ausência de TIMEDEMO/PIXEL4, flags do controle8×8 e orçamento de boot/runtime. Ela não executa o jogo nem prova memória suficiente em E1M2.
+
+A função I_R21_TextScreen foi movida para fora do bloco TIMEDEMO no backend8×8: a tela de erro também precisa dela na ROM jogável. A implementação e a política de memória são as mesmas.

@@ -339,6 +339,29 @@ static void I_DrawDebugCounters(void)
 }
 
 
+/* Error screens are also required by playable builds without TIMEDEMO. */
+#if defined(DOOM_R21_NO_VDP_INIT) || defined(DOOM_R21_HEAP_PROBE)
+volatile uint16_t r21_heap_at_end_free, r21_heap_at_end_largest;
+void I_R21_ProbeHeap(void)
+{
+    r21_heap_at_end_free = MEM_getFree();
+    r21_heap_at_end_largest = MEM_getLargestFreeBlock();
+}
+#endif
+#if defined(DOOM_R21_NO_VDP_INIT)
+void I_R21_TextScreen(void)
+{
+    /* Keep the boot VDP setup (H40, 64x32 planes, font tiles, Doom CRAM).
+       Only stop pending DMA and blank both planes; DMA fill needs no heap. */
+    VDP_waitDMACompletion();
+    VDP_setHInterrupt(FALSE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_setTextPlane(BG_A);
+    VDP_setTextPriority(TRUE);
+}
+#endif
+
 #if defined(TIMEDEMO)
 /* Benchmark v2: displayed frames, wall-clock VBlanks and one-second FPS windows.
    VDP/Z80 clocks are unchanged even when the 68000 is overclocked. */
@@ -392,28 +415,6 @@ static void R21_HashFrame(uint32_t frame)
 #if ((VIEWWINDOWWIDTH * (VDP_DISPLAY_ROWS - 1)) & 1)
 #error R21 frame hash reads pairs of tile words
 #endif
-#endif
-
-#if defined(DOOM_R21_NO_VDP_INIT) || defined(DOOM_R21_HEAP_PROBE)
-volatile uint16_t r21_heap_at_end_free, r21_heap_at_end_largest;
-void I_R21_ProbeHeap(void)
-{
-    r21_heap_at_end_free = MEM_getFree();
-    r21_heap_at_end_largest = MEM_getLargestFreeBlock();
-}
-#endif
-#if defined(DOOM_R21_NO_VDP_INIT)
-void I_R21_TextScreen(void)
-{
-    /* Keep the boot VDP setup (H40, 64x32 planes, font tiles, Doom CRAM).
-       Only stop pending DMA and blank both planes; DMA fill needs no heap. */
-    VDP_waitDMACompletion();
-    VDP_setHInterrupt(FALSE);
-    VDP_clearPlane(BG_A, TRUE);
-    VDP_clearPlane(BG_B, TRUE);
-    VDP_setTextPlane(BG_A);
-    VDP_setTextPriority(TRUE);
-}
 #endif
 
 void I_BenchmarkReset(void)
