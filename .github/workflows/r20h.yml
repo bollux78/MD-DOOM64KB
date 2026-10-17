@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build-r20h:
@@ -35,6 +36,15 @@ jobs:
           Path('res/e1m1.vgm').write_bytes(raw)
           print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
           PY
+      - name: Restore the 36 already compiled ROMs from the prior run
+        uses: actions/download-artifact@v6
+        with:
+          name: doom-md-r20h-lab-40-roms
+          run-id: 39045298927
+          github-token: ${{ github.token }}
+          path: dist/r20h/
+      - name: Verify sealed source artifact file hashes
+        run: python3 scripts/lab/verify_r20h_reuse.py
       - name: Validate and build R20h diagnostic matrix
         shell: bash
         run: |
@@ -43,11 +53,12 @@ jobs:
           python3 scripts/lab/test_r20b_math.py
           python3 scripts/lab/test_r20d_sources.py
           python3 scripts/lab/build_r20g_evidence.py
-          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20h.fish
+          DOOM_R20H_REUSE=1 DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20h.fish
           cp -r dist/r20g/evidence dist/r20h/evidence
           cp docs/r20h-test.md dist/r20h/LEIA-ME.md
           cp docs/r20g-results.md dist/r20h/R20g-resultados.md
           cp scripts/lab/r20h_matrix.json dist/r20h/matrix.json
+          cp scripts/lab/r20h_reuse.json dist/r20h/reuse-SHA256.json
           python3 - <<'PY2'
           import os, pathlib, subprocess
           d=pathlib.Path('dist/r20h')

@@ -102,6 +102,11 @@ for v in $variants
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r20h-(string replace -a '+' '-' -- $v)
     set -gx DOOM_BUILD_ID $id
+    if set -q DOOM_R20H_REUSE; and test -f "$dest/.reuse-verified"; and test -s "$dest/$id.bin"
+        echo "REUSE VERIFIED: $id"
+        set built $built $id
+        continue
+    end
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
     rm -f res/music.rs res/music.d

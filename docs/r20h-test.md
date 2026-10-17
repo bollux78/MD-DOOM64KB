@@ -8,7 +8,7 @@ Base comum: R20f-all (S2/S3, P2, M1/M3, R2, HUD/FPS sob demanda, Flat DBRA, cach
 
 ## Nomes e opções
 
-`vc` significa **V3 + color em ROM**. `c` significa composição direta no cache; não confundir com color. Cada nome possui uma ROM diag-NOME com as mesmas opções mais diagnóstico.
+`vc` significa **V3 + color em ROM**. `vc-all` reúne R5 + cache + R6 + M2 sobre V3/color. `c` significa composição direta no cache; não confundir com color. Cada nome possui uma ROM diag-NOME com as mesmas opções mais diagnóstico.
 
 | Sufixo após doom-md-r20h- | Opções adicionais à base comum |
 |---|---|
@@ -30,7 +30,7 @@ Base comum: R20f-all (S2/S3, P2, M1/M3, R2, HUD/FPS sob demanda, Flat DBRA, cach
 | vc-r5-c-m2 | V3 + color + R5 + cache + M2 |
 | vc-r5-r6-m2 | V3 + color + R5 + R6 + M2 |
 | vc-c-r6-m2 | V3 + color + cache + R6 + M2 |
-| vc-r5-c-r6-m2 | V3 + color + R5 + cache + R6 + M2 |
+| vc-all | V3 + color + R5 + cache + R6 + M2 |
 | no-v3 | color + R5 + cache + R6 + M2 |
 
 As 16 ROMs vc cobrem todos os subconjuntos de R5/cache/R6/M2: nenhum, quatro isolados, seis pares, quatro trios e os quatro juntos. no-v3 contém color+R5+cache+R6+M2, para verificar a contribuição de V3 na combinação completa.
@@ -40,7 +40,7 @@ As 16 ROMs vc cobrem todos os subconjuntos de R5/cache/R6/M2: nenhum, quatro iso
 1. diag-control → control, depois diag-v3 → v3; conferir as referências da sessão.
 2. diag-vc → vc. Comparar vc com v3 verifica color na base com DMA em lote.
 3. Os quatro isolados vc-r5, vc-c, vc-r6 e vc-m2; sempre diag-NOME antes de NOME.
-4. Os seis pares, quatro trios e vc-r5-c-r6-m2; a tabela acima lista todos em ordem.
+4. Os seis pares, quatro trios e vc-all; a tabela acima lista todos em ordem.
 5. no-v3 e color são controles adicionais. Usar seus diagnósticos correspondentes.
 
 Guardar nome, máscara/tic, pico/reserva, heaps e SP do diagnóstico; tempo e FPS mínimo/médio/máximo da ROM de desempenho. Todas devem completar2134 frames. Diagnóstico tem overhead e não serve para classificar FPS. Passar uma demo não prova estabilidade em todos os mapas.

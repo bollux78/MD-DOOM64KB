@@ -208,7 +208,7 @@
     "TAN32",
     "STACKGUARD"
   ],
-  "vc-r5-c-r6-m2": [
+  "vc-all": [
     "DMA_BATCH",
     "COLOR_ROM",
     "REG_COLUMNS",
@@ -216,7 +216,7 @@
     "FLAT_INLINE",
     "TAN32"
   ],
-  "diag-vc-r5-c-r6-m2": [
+  "diag-vc-all": [
     "DMA_BATCH",
     "COLOR_ROM",
     "REG_COLUMNS",
