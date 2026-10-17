@@ -1,0 +1,243 @@
+{
+  "control": [],
+  "diag-control": [
+    "STACKGUARD"
+  ],
+  "color": [
+    "COLOR_ROM"
+  ],
+  "diag-color": [
+    "COLOR_ROM",
+    "STACKGUARD"
+  ],
+  "v3": [
+    "DMA_BATCH"
+  ],
+  "diag-v3": [
+    "DMA_BATCH",
+    "STACKGUARD"
+  ],
+  "vc": [
+    "DMA_BATCH",
+    "COLOR_ROM"
+  ],
+  "diag-vc": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "STACKGUARD"
+  ],
+  "vc-r5": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS"
+  ],
+  "diag-vc-r5": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "STACKGUARD"
+  ],
+  "vc-c": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT"
+  ],
+  "diag-vc-c": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "STACKGUARD"
+  ],
+  "vc-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "FLAT_INLINE"
+  ],
+  "diag-vc-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "FLAT_INLINE",
+    "STACKGUARD"
+  ],
+  "vc-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "TAN32"
+  ],
+  "diag-vc-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-r5-c": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT"
+  ],
+  "diag-vc-r5-c": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "STACKGUARD"
+  ],
+  "vc-r5-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "FLAT_INLINE"
+  ],
+  "diag-vc-r5-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "STACKGUARD"
+  ],
+  "vc-r5-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "TAN32"
+  ],
+  "diag-vc-r5-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-c-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "FLAT_INLINE"
+  ],
+  "diag-vc-c-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "STACKGUARD"
+  ],
+  "vc-c-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "TAN32"
+  ],
+  "diag-vc-c-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "FLAT_INLINE",
+    "TAN32"
+  ],
+  "diag-vc-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "FLAT_INLINE",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-r5-c-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE"
+  ],
+  "diag-vc-r5-c-r6": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "STACKGUARD"
+  ],
+  "vc-r5-c-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "TAN32"
+  ],
+  "diag-vc-r5-c-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-r5-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32"
+  ],
+  "diag-vc-r5-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-c-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32"
+  ],
+  "diag-vc-c-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "vc-r5-c-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32"
+  ],
+  "diag-vc-r5-c-r6-m2": [
+    "DMA_BATCH",
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "no-v3": [
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32"
+  ],
+  "diag-no-v3": [
+    "COLOR_ROM",
+    "REG_COLUMNS",
+    "CACHE_DIRECT",
+    "FLAT_INLINE",
+    "TAN32",
+    "STACKGUARD"
+  ]
+}

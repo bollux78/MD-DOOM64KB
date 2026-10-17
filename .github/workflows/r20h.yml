@@ -1,0 +1,65 @@
+name: R20h — V3 color render complete combinations
+
+on:
+  push:
+    branches:
+      - r20h
+  workflow_dispatch:
+
+concurrency:
+  group: r20h-lab
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-r20h:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R20h branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Validate and build R20h diagnostic matrix
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r20h.fish
+          python3 scripts/lab/test_r20a.py
+          python3 scripts/lab/test_r20b_math.py
+          python3 scripts/lab/test_r20d_sources.py
+          python3 scripts/lab/build_r20g_evidence.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20h.fish
+          cp -r dist/r20g/evidence dist/r20h/evidence
+          cp docs/r20h-test.md dist/r20h/LEIA-ME.md
+          cp docs/r20g-results.md dist/r20h/R20g-resultados.md
+          cp scripts/lab/r20h_matrix.json dist/r20h/matrix.json
+          python3 - <<'PY2'
+          import os, pathlib, subprocess
+          d=pathlib.Path('dist/r20h')
+          gdk=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
+          gcc=gdk/'bin/m68k-elf-gcc'
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(gcc),'--version'],text=True))
+          PY2
+      - name: Upload R20h ROMs and matching debugging evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r20h-lab-40-roms
+          path: dist/r20h/
+          if-no-files-found: error
+          retention-days: 90
