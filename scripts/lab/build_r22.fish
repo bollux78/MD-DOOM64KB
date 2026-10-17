@@ -8,7 +8,7 @@
 # Usage: fish scripts/lab/build_r21.fish [variant ...]
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r22d
+set -l dest dist/r22e
 mkdir -p "$dest"; or exit 1
 
 set -l variants control play-control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
@@ -16,7 +16,7 @@ if test (count $argv) -gt 0
     set variants $argv
 end
 for v in $variants
-    contains -- $v control play-control diag-transition diag-direct8 p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut; or begin
+    contains -- $v control play-control diag-transition diag-direct8 sram-perf sram-play sram-direct8 sram-transition sram-p4 sram-play-p4 p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut; or begin
         echo "Unknown R22c variant: $v"
         exit 2
     end
@@ -103,7 +103,7 @@ for v in $variants
     set -gx DOOM_R19_FLAT_DBRA 1
     set -gx DOOM_R16_WEAPON_LIFT 1
     set -l defs $control
-    if not contains -- $v control play-control diag-transition diag-direct8
+    if not contains -- $v control play-control diag-transition diag-direct8 sram-perf sram-play sram-direct8 sram-transition
         set -gx DOOM_R22_PIXEL4 1
         set -gx DOOM_CELL_LUT 0
         set -gx DOOM_R17_PIXEL_DBRA 0
@@ -111,29 +111,32 @@ for v in $variants
         set -gx DOOM_R16_WEAPON_LIFT 2
         set defs $pixel
     end
-    if contains -- $v solid diag-solid play-solid solid-lut play-lut pattern-lut
+    if contains -- $v solid diag-solid play-solid solid-lut play-lut pattern-lut sram-p4 sram-play-p4
         set defs $defs '-DDOOM_R22_SOLID_TILES'
     end
-    if contains -- $v solid-lut play-lut pattern-lut
+    if contains -- $v solid-lut play-lut pattern-lut sram-p4 sram-play-p4
         set defs $defs '-DDOOM_R22_PAIR_LUT'
     end
     if test "$v" = diag-solid
         set defs $defs '-DDOOM_R20_STACKGUARD' '-DDOOM_R21_STACK_PLAY'
     end
-    if contains -- $v play-control diag-transition diag-direct8 play-fixed play-solid play-lut pattern-lut
+    if contains -- $v play-control diag-transition diag-direct8 sram-play sram-direct8 sram-transition sram-play-p4 play-fixed play-solid play-lut pattern-lut
         set -gx DOOM_TIMEDEMO 0
     end
     if test "$v" = pattern-lut
         set defs $defs '-DDOOM_R22_PATTERN'
     end
-    if contains -- $v diag-transition diag-direct8
+    if contains -- $v diag-transition diag-direct8 sram-direct8 sram-transition
         set defs $defs '-DDOOM_R22_MAP_DIAG'
     end
-    if test "$v" = diag-direct8
+    if contains -- $v diag-direct8 sram-direct8
         set defs $defs '-DDOOM_R22_MAP8_DIRECT'
     end
+    if contains -- $v sram-perf sram-play sram-direct8 sram-transition sram-p4 sram-play-p4
+        set defs $defs '-DDOOM_R22_SRAM_BLOCKLINKS'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r22d-$v
+    set -l id doom-md-r22e-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out

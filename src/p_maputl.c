@@ -43,6 +43,7 @@
 #include "p_setup.h"
 
 #include "globdata.h"
+#include "r22_blocklinks.h"
 
 
 fixed_t _g_opentop;
@@ -327,8 +328,12 @@ void P_UnsetThingPosition(mobj_t __far* thing)
 
       mobj_t __far* bnext;
       mobj_t __far*__far* bprev = thing->bprev;
+#if defined(DOOM_R22_SRAM_BLOCKLINKS)
+      if(bprev){bnext=thing->bnext;R22_LinkStore(bprev,bnext);if(bnext)bnext->bprev=bprev;}
+#else
       if (bprev && (*bprev = bnext = thing->bnext))  // unlink from block map
         bnext->bprev = bprev;
+#endif
     }
 }
 
@@ -383,12 +388,21 @@ void P_SetThingPosition(mobj_t __far* thing)
         // killough 8/11/98: simpler scheme using pointer-to-pointer prev
         // pointers, allows head nodes to be treated like everything else
 
+#if defined(DOOM_R22_SRAM_BLOCKLINKS)
+        mobj_t **link=R22_BlockSlot((uint16_t)(blocky*_g_bmapwidth+blockx));
+        mobj_t *bnext=R22_LinkLoad(link);
+#else
         mobj_t __far*__far* link = &_g_blocklinks[blocky*_g_bmapwidth+blockx];
         mobj_t __far* bnext = *link;
+#endif
         if ((thing->bnext = bnext))
           bnext->bprev = &thing->bnext;
         thing->bprev = link;
+#if defined(DOOM_R22_SRAM_BLOCKLINKS)
+        R22_LinkStore(link,thing);
+#else
         *link = thing;
+#endif
       }
       else        // thing is off the map
         thing->bnext = NULL, thing->bprev = NULL;
@@ -460,7 +474,11 @@ boolean P_BlockThingsIterator(int16_t x, int16_t y, boolean func(mobj_t __far*))
 {
   mobj_t __far* mobj;
   if (0 <= x && x < _g_bmapwidth && 0 <= y && y < _g_bmapheight)
+#if defined(DOOM_R22_SRAM_BLOCKLINKS)
+    for (mobj = R22_BlockHead((uint16_t)(y*_g_bmapwidth+x)); mobj; mobj = mobj->bnext)
+#else
     for (mobj = _g_blocklinks[y*_g_bmapwidth+x]; mobj; mobj = mobj->bnext)
+#endif
       if (!func(mobj))
         return false;
   return true;

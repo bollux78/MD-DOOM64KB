@@ -35,6 +35,7 @@
  *-----------------------------------------------------------------------------*/
 
 #include "r22_mapdiag.h"
+#include "r22_blocklinks.h"
 #include <stdint.h>
 
 #include "d_player.h"
@@ -326,7 +327,12 @@ static void P_LoadBlockMap (int16_t lump)
 
 
     // clear out mobj chains - CPhipps - use calloc
+#if defined(DOOM_R22_SRAM_BLOCKLINKS)
+    R22_BlockInit((uint16_t)_g_bmapwidth,(uint16_t)_g_bmapheight);
+    _g_blocklinks=NULL; /* No contiguous RAM head array in this variant. */
+#else
     _g_blocklinks = Z_CallocLevel(_g_bmapwidth * _g_bmapheight * sizeof(*_g_blocklinks));
+#endif
 
     _g_blockmap = _g_blockmaplump+4;
 }

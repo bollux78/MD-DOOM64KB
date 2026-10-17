@@ -1,0 +1,65 @@
+name: R22e — SRAM blocklinks (8 ROMs)
+
+on:
+  push:
+    branches:
+      - r22e-sram
+  workflow_dispatch:
+
+concurrency:
+  group: r22e-sram
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-r22:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - name: Checkout isolated R22 branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Build paired 8x8 timedemo and playable controls
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r22.fish
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/test_r22_pixel4.py
+          python3 scripts/lab/test_r22b_video.py
+          python3 scripts/lab/test_r22d_mapdiag.py
+          python3 scripts/lab/test_r22e_sram.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r22.fish control play-control sram-perf sram-play sram-direct8 sram-transition sram-p4 sram-play-p4
+          cp docs/review-r22/SRAM-BLOCKLINKS.md dist/r22e/LEIA-ME.md
+          python3 - <<'PY2'
+          import pathlib,os,subprocess
+          g=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
+          d=pathlib.Path('dist/r22e')
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(g/'bin/m68k-elf-gcc'),'--version'],text=True))
+          (d/'commit.txt').write_text(os.environ['GITHUB_SHA']+'\n')
+          (d/'COMPLETE.txt').write_text('8 ROMs built and audited; E1M8 diagnostics require runtime tests.\n')
+          PY2
+      - name: Upload R22 ROMs and matching debugging evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r22e-sram-8-roms
+          path: dist/r22e/
+          if-no-files-found: error
+          retention-days: 90
