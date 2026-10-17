@@ -33,3 +33,6 @@
 
 # Generated ROM matrices and test evidence
 dist/
+
+# Generated alongside colormap_cells.h
+src/r20_colorcell.h

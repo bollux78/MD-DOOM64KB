@@ -1,5 +1,5 @@
 #!/usr/bin/env fish
-# R20g overnight lab: hardware-validated R2 baseline; 36 isolated/combined builds and diagnostic partners.
+# R20g lab: R20f-all baseline; 18 performance builds and 18 diagnostic partners.
 # Every ROM preserves S2 + DBRA + P2 + M1 + R2 and natural inlining.
 # HUD/FPS, M3 scale math, S3 iterative render BSP and R3 flat unroll are optional.
 # Usage: fish scripts/lab/build_r20g.fish
@@ -132,4 +132,4 @@ end
 python3 scripts/lab/r20g_flags.py "$dest"; or exit 1
 python3 scripts/lab/r20_layout_audit.py "$dest" $built; or exit 1
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
-echo "READY: $dest ("(count $built)" ROMs). Compare FPS only against doom-md-r20g-control. diag has overhead; control is the hardware-validated R20d R2 configuration."
+echo "READY: $dest ("(count $built)" ROMs). Compare FPS only against doom-md-r20g-control. diag has overhead; control uses R20f-all (184.90 s BlastEm), still pending hardware validation."
