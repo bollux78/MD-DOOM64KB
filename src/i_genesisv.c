@@ -29,6 +29,7 @@
 #include "gen_pal.h"
 #include "r20_stackguard.h"
 #include "r20_counters.h"
+#include "r20_dma.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -75,7 +76,11 @@ extern const uint8_t *fullcolormap;
 #else
 #define VDP_DISPLAY_ROWS VIEWWINDOWHEIGHT
 #endif
+#if defined(DOOM_R20_REG_COLUMNS) || defined(DOOM_R20_FLAT_INLINE)
+uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
+#else
 static uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
+#endif
 
 #if defined(DOOM_R20_ROWTAB) || defined(DOOM_R20_FLAT_UNROLL)
 /* R20 R1: row index -> first cell of that row. Replaces yl*38 (MULS.W #38,
@@ -99,7 +104,13 @@ static const uint16_t r20_rowofs[28] = {
 #endif
 
 // Doom 8bit 色 index -> VDP タイルマップ語
+#if defined(DOOM_R20_COLOR_ROM)
+#include "r20_colorcell.h"
+#elif defined(DOOM_R20_FLAT_INLINE)
+uint16_t colorcell[256];
+#else
 static uint16_t colorcell[256];
+#endif
 
 #if defined(DOOM_R20_COUNTERS)
 #if defined(DOOM_MEM_DIAG) || defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_CACHE_STATS)
@@ -122,6 +133,16 @@ static inline uint16_t cell_for_color(uint8_t doomcolor)
 
 // 真の黒セル（全パレット index 0 = 黒。テキスト背景・画面クリア用）
 #define BLACK_CELL  TILE_ATTR_FULL(0, 0, 0, 0, SOLID_TILE_INDEX + 0)
+
+#if defined(DOOM_R20_REG_COLUMNS)
+const uint16_t *R20_SelectCellMap(const uint8_t *map) {
+    if (map && fullcolormap) {
+        uintptr_t off=(uintptr_t)map-(uintptr_t)fullcolormap;
+        if(off<8192u && !(off&255u))return doom_colormap_cells[off>>8];
+    }
+    return NULL;
+}
+#endif
 
 // Doom テキスト色(0..15) -> テキストパレット(0..3): PAL0=白 / PAL1=赤 / PAL2=黄 / PAL3=灰
 // （i_neogev.c の colors[] の意図に合わせる: 4,12=赤 / 14=黄 / 7,8,9=灰 / 既定=白）
@@ -405,6 +426,7 @@ static void bench_fixed(char *out, uint32_t n, uint8_t decimals)
 
 void I_BenchmarkShowResults(void)
 {
+    R20_StopVideo();
 #if defined(DOOM_R20_STACKGUARD)
     R20_PROBE();
     R20_DiagFreeze();
@@ -627,6 +649,7 @@ static void I_BuildSolidTiles(void)
 
 void I_InitGraphicsHardwareSpecificCode(void)
 {
+    R20_StopVideo();
     R20_InvalidateVideo();
 	VDP_setScreenWidth320();
 	VDP_setPlaneSize(64, 32, TRUE);
@@ -634,8 +657,10 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	I_BuildSolidTiles();
 
 	// 256 色 -> セル語 LUT を構築
+#if !defined(DOOM_R20_COLOR_ROM)
 	for (uint16_t i = 0; i < 256; i++)
 		colorcell[i] = cell_for_color((uint8_t)i);
+#endif
 
 	I_ReloadPalette();
 	I_UploadNewPalette(0);
@@ -649,9 +674,92 @@ void I_InitGraphicsHardwareSpecificCode(void)
 
 void I_ShutdownGraphics(void)
 {
+    R20_StopVideo();
 	// Do nothing
 }
 
+
+#if (defined(DOOM_R20_DMA_BATCH) || defined(DOOM_R20_VBLANK_VIDEO)) && (!defined(DOOM_HUD_DMA_STATUS_ONLY) || defined(DOOM_R11_TOPBAR_DMA))
+#error R20g DMA requires status-only, full-width rows
+#endif
+/* R20g DMA experiments. V3 batches only RAM tilemap rows, on the fixed
+ * 64-wide BG_A set above. V2 snapshots 28 rows (2128 B, including HUD) so
+ * neither framebuffer nor HUD can be torn by an interrupt. Palette and
+ * tilemap ownership move together; main-loop VDP setup/results drain first.
+ * V2 deliberately uses SGDK DMA unless V3 is also enabled, for clean A/B. */
+#if defined(DOOM_R20_DMA_BATCH)
+static void R20_UploadRows(const uint16_t *src,uint16_t rows) {
+    uint16_t sr;
+    __asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr" : "=d"(sr) : : "cc","memory");
+    bool taken=Z80_getAndRequestBus(TRUE);
+    VDP_setAutoInc(2);
+    volatile uint16_t *ctrl=(volatile uint16_t *)VDP_CTRL_PORT;
+    uint16_t dest=VDP_getPlaneAddress(BG_A,0,0);
+    for(uint16_t y=0;y<rows;y++,src+=VIEWWINDOWWIDTH,dest+=128) {
+        uint32_t wordaddr=(uint32_t)src>>1;
+        *ctrl=0x9300|VIEWWINDOWWIDTH; *ctrl=0x9400;
+        *ctrl=0x9500|(wordaddr&255); *ctrl=0x9600|((wordaddr>>8)&255);
+        *ctrl=0x9700|((wordaddr>>16)&127);
+        volatile uint32_t command=VDP_DMA_VRAM_ADDR((uint32_t)dest);
+        volatile uint16_t *words=(volatile uint16_t *)&command;
+        *ctrl=words[0];
+        /* The triggering second word MUST be a memory operand, as in SGDK. */
+        __asm__ volatile("move.w %0,(%1)" : : "m"(words[1]),"a"(ctrl) : "cc","memory");
+    }
+    if(!taken) Z80_releaseBus();
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "cc","memory");
+}
+#else
+static void R20_UploadRows(const uint16_t *src,uint16_t rows) {
+    VDP_setTileMapDataRect(BG_A,src,0,0,VIEWWINDOWWIDTH,rows,VIEWWINDOWWIDTH,DMA);
+}
+#endif
+#if defined(DOOM_R20_VBLANK_VIDEO)
+static uint16_t r20_video_copy[VIEWWINDOWWIDTH*VDP_DISPLAY_ROWS];
+static volatile uint16_t r20_video_ready;
+static uint16_t r20_video_rows;
+static int8_t r20_video_palette=100, r20_next_palette=100;
+static uint32_t r20_video_queued_vb;
+void R20_VBlankVideo(void) {
+    if(!r20_video_ready) return;
+    /* NTSC raw V counter: start early enough to fit the transfer in blank.
+       Late callbacks leave the immutable pending snapshot for next VBlank. */
+    uint16_t line=(*(volatile uint16_t *)0xC00008)>>8;
+    if(line<224 || line>232) return;
+    R20_PROBE();
+    if(r20_video_palette!=100) I_UploadNewPalette(r20_video_palette);
+    R20_UploadRows(r20_video_copy,r20_video_rows);
+    __asm__ volatile("" : : : "memory");
+    r20_video_ready=0;
+}
+static void R20_WaitVideo(void) {
+    while(r20_video_ready) {
+        if(_g_vblankCount-r20_video_queued_vb>180)
+            I_Error("R20g DMA: VBlank timeout");
+    }
+}
+void R20_AbortVideo(void) {
+    uint16_t sr;
+    __asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr" : "=d"(sr) : : "cc","memory");
+    r20_video_ready=0; r20_next_palette=100;
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "cc","memory");
+}
+void R20_StopVideo(void) {
+    R20_WaitVideo();
+    r20_next_palette=100;
+}
+static void R20_Present(uint16_t rows) {
+    R20_WaitVideo();
+    _fmemcpy(r20_video_copy,_s_screen,rows*VIEWWINDOWWIDTH*sizeof(uint16_t));
+    r20_video_rows=rows;
+    r20_video_palette=r20_next_palette; r20_next_palette=100;
+    r20_video_queued_vb=_g_vblankCount;
+    __asm__ volatile("" : : : "memory");
+    r20_video_ready=1;
+}
+#elif defined(DOOM_R20_DMA_BATCH)
+static void R20_Present(uint16_t rows) { R20_UploadRows(_s_screen,rows); }
+#endif
 
 void I_FinishUpdate(void)
 {
@@ -668,7 +776,11 @@ void I_FinishUpdate(void)
 
 	if (newpal != NO_PALETTE_CHANGE)
 	{
+#if defined(DOOM_R20_VBLANK_VIDEO)
+        r20_next_palette=newpal;
+#else
 		I_UploadNewPalette(newpal);
+#endif
 		newpal = NO_PALETTE_CHANGE;
 	}
 
@@ -755,10 +867,14 @@ void I_FinishUpdate(void)
                                    VIEWWINDOWWIDTH, DMA);
         else
 #endif
+#if defined(DOOM_R20_VBLANK_VIDEO) || defined(DOOM_R20_DMA_BATCH)
+            R20_Present(changed ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT);
+#else
             VDP_setTileMapDataRect(BG_A, _s_screen, 0, 0,
                                    VIEWWINDOWWIDTH,
                                    changed ? VDP_DISPLAY_ROWS : VIEWWINDOWHEIGHT,
                                    VIEWWINDOWWIDTH, DMA);
+#endif
     }
 #elif defined(DOOM_HUD_DMA24)
     /* The 3D framebuffer has 24 rows (DMA). The status strip is
@@ -915,6 +1031,37 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
             uint16_t ip = frac, fl = frac;
             uint16_t si = fracstep, sl = fracstep;
             uint16_t t20;
+#if defined(DOOM_R20_PIXEL_UNROLL)
+            if (count <= 22) {
+                n20 = (uint16_t)(-22 * count);
+            __asm__ volatile(
+                "lsl.w  #7,%[fl]\n\t"
+                "rol.w  #7,%[ip]\n\t"
+                "and.w  %[k],%[ip]\n\t"
+                "lsl.w  #7,%[sl]\n\t"
+                "rol.w  #7,%[si]\n\t"
+                "and.w  %[k],%[si]\n\t"
+                "jmp (2f,%%pc,%[n].w)\n\t"
+                ".rept 22\n\t"
+                "moveq  #0,%[t]\n\t"
+                "move.b (%[s],%[ip].w),%[t]\n\t"
+                "add.w  %[t],%[t]\n\t"
+                "move.w (%[m],%[t].w),(%[d])\n\t"
+                "lea    76(%[d]),%[d]\n\t"
+                "add.w  %[sl],%[fl]\n\t"
+                "addx.w %[si],%[ip]\n\t"
+                "and.w  %[k],%[ip]\n\t"
+                ".endr\n2:"
+                : [d] "+&a" (dest),
+                  [fl] "+&d" (fl), [ip] "+&d" (ip),
+                  [sl] "+&d" (sl), [si] "+&d" (si),
+                  [n] "+&d" (n20), [t] "=&d" (t20)
+                : [s] "a" (source), [m] "a" (cellmap),
+                  [k] "d" ((uint16_t)127)
+                : "cc", "memory");
+            return;
+            }
+#endif
             __asm__ volatile(
                 "lsl.w  #7,%[fl]\n\t"
                 "rol.w  #7,%[ip]\n\t"

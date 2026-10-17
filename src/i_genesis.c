@@ -22,6 +22,7 @@
 
 #include "globdata.h"
 #include "r20_stackguard.h"
+#include "r20_dma.h"
 #include "music.h"        // rescomp 生成: const u8 bgm_e1m1[]（res/music.res）
 
 
@@ -239,6 +240,7 @@ static void I_VBlankCallback(void)
 {
 	ticcount++;
 	_g_vblankCount++;
+    R20_VBlankVideo();
 #if defined(DOOM_R20_STACKGUARD)
     R20_PROBE();
 #endif
@@ -326,6 +328,7 @@ void I_Error(const char *error, ...)
 	va_list argptr;
 	char buffer[80];
 
+    R20_AbortVideo();
 	I_Shutdown();
 
 	va_start(argptr, error);
@@ -357,6 +360,12 @@ int main(bool hardReset)
     R20_StackPaint();   /* first: SP is at its shallowest here */
 #endif
 
+#if defined(DOOM_R20_SGDK_HEAP)
+    DMA_initEx(DMA_QUEUE_SIZE_MIN, 0, DMA_BUFFER_SIZE_MIN);
+    void *r20_dma_test=DMA_allocateTemp(1);
+    if (!r20_dma_test) I_Error("R20g SGDK DMA buffer allocation");
+    DMA_releaseTemp(1);
+#endif
 #if defined(DOOM_SRAM_CACHE16)
     /* Verify odd-lane SRAM before entering Doom; never benchmark open bus. */
     if (!R_SramCacheInit())

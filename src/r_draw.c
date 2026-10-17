@@ -595,6 +595,9 @@ static uint32_t mulu(uint16_t a, uint16_t b) {
 		"mulu.w %1, %0"
 		: "+d" (result)
 		: "d" (b)
+#if defined(DOOM_R20_HYGIENE)
+        : "cc"
+#endif
 	);
 	return result;
 #endif
@@ -603,7 +606,7 @@ static uint32_t mulu(uint16_t a, uint16_t b) {
 /* R15: exact low-32-bit 16x32 signed product, then arithmetic >>16.
    The original wall expressions use a 32-bit product on 68000,
    NOT a widened 64-bit product. The helpers preserve wraparound. */
-#if defined(DOOM_R15_TANMUL) || defined(DOOM_R15_SETUPMUL)
+#if defined(DOOM_R15_TANMUL) || defined(DOOM_R15_SETUPMUL) || defined(DOOM_R20_TAN32)
 static inline int16_t R15_Mul16x32Shift16U(int16_t a, int32_t b)
 {
     const uint32_t ua = (uint16_t)a;
@@ -629,7 +632,9 @@ static inline int16_t R15_Mul16x32Shift16S(int16_t a, int32_t b)
 }
 #endif
 
-#if defined(DOOM_R15_TANMUL)
+#if defined(DOOM_R20_TAN32)
+#define R15_TAN_PRODUCT(a, b) R15_Mul16x32Shift16U((a), (b))
+#elif defined(DOOM_R15_TANMUL)
 #if DOOM_R15_TANMUL == 1
 #define R15_TAN_PRODUCT(a, b) R15_Mul16x32Shift16U((a), (b))
 #else
@@ -1352,6 +1357,10 @@ static void R_DrawVisSprite(const vissprite_t *vis)
 
 static void R_GetColumn(const texture_t __far* texture, int16_t texcolumn, int16_t* patch_num, int16_t* x_c)
 {
+#if defined(DOOM_R20_HYGIENE)
+    *patch_num = texture->patches[0].patch_num;
+    *x_c = 0;
+#endif
 	const uint8_t patchcount = texture->patchcount;
 
 	const int16_t xc = texcolumn & texture->widthmask;
@@ -2265,15 +2274,56 @@ static uint16_t FindColumnCacheItem(int16_t texture, int16_t column)
 }
 
 
-static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t __far* tex, int16_t texcolumn)
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+typedef struct { uint16_t hash, tag, mask; } r20_compsrc_t;
+static r20_compsrc_t r20_cm, r20_ct, r20_cb;
+#define r20_mid r20_cm
+#define r20_top r20_ct
+#define r20_bottom r20_cb
+static void R20_PrepareComposite(r20_compsrc_t *p, int16_t t, const texture_t *tex) {
+    p->hash = (uint16_t)t * 71u;
+    p->tag = (uint16_t)t << 8;
+    p->mask = (t && tex) ? tex->widthmask : 0;
+}
+static uint16_t R20_FindComposite(const r20_compsrc_t *p, uint16_t xc) {
+    uint16_t hash = ((xc >> 2) ^ p->hash) & (MAX_CACHE_ENTRIES-1);
+    uint16_t key=hash, tag=xc | p->tag;
+    for (uint16_t i=0;i<MAX_CACHE_TRIES;i++) {
+        if (!columnCacheEntries[key] || columnCacheEntries[key]==tag) return key;
+        key=(key+119)&(MAX_CACHE_ENTRIES-1);
+    }
+    return hash;
+}
+#endif
+static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t __far* tex, int16_t texcolumn
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+    , const r20_compsrc_t *prepared
+#endif
+    )
 {
 #if defined HIGH_DETAIL
-    const int16_t xc = texcolumn & tex->widthmask;
+    const int16_t xc = texcolumn &
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+        prepared->mask
 #else
-    const int16_t xc = (texcolumn & 0xfffc) & tex->widthmask;
+        tex->widthmask
+#endif
+;
+#else
+    const int16_t xc = (texcolumn & 0xfffc) &
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+        prepared->mask
+#else
+        tex->widthmask
+#endif
+;
 #endif
 
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+    uint16_t cachekey = R20_FindComposite(prepared, xc);
+#else
     uint16_t cachekey = FindColumnCacheItem(texture, xc);
+#endif
 
 #if defined(DOOM_SRAM_CACHE16)
     byte __far* colcache = tmpCache;
@@ -2281,8 +2331,13 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     byte __far* colcache = &columnCache[cachekey*128];
 #endif
     uint16_t cacheEntry = columnCacheEntries[cachekey];
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+    uint16_t wantedEntry=xc | prepared->tag;
+#else
+    uint16_t wantedEntry=CACHE_ENTRY(xc,texture);
+#endif
 
-    if (cacheEntry != CACHE_ENTRY(xc, texture))
+    if (cacheEntry != wantedEntry)
     {
 #if defined(DOOM_CACHE_STATS)
         doom_cache_misses++;
@@ -2290,7 +2345,11 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
             doom_cache_evictions++;
 #endif
 #if !defined(DOOM_SRAM_CACHE16)
+#if !defined(DOOM_R20_CACHE_DIRECT)
         static byte tmpCache[128];
+#else
+        byte *tmpCache = colcache;
+#endif
 #endif
 
         uint8_t i = 0;
@@ -2321,10 +2380,12 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 #if defined(DOOM_SRAM_CACHE16)
         SramCacheCopyTo(cachekey, tmpCache, (tex->height + 3) & ~3);
 #else
+#if !defined(DOOM_R20_CACHE_DIRECT)
         _fmemcpy(colcache, tmpCache, (tex->height + 3) & ~3);
 #endif
+#endif
 
-        columnCacheEntries[cachekey] = CACHE_ENTRY(xc, texture);
+        columnCacheEntries[cachekey] = wantedEntry;
     }
 #if defined(DOOM_CACHE_STATS)
     else
@@ -2334,7 +2395,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     /* Do not alter SRAM's 16-slot hash/replacement scheme. The RAM front
      * cache only eliminates SRAM reads for recent repeated accesses. */
 #if defined(DOOM_SRAM_HOT_SLOTS)
-    uint16_t entryKey = CACHE_ENTRY(xc, texture);
+    uint16_t entryKey = wantedEntry;
     uint16_t bytes = (tex->height + 3) & ~3;
     if (cacheEntry == entryKey)
     {
@@ -2344,7 +2405,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     }
     SramHotPut(cachekey, entryKey, tmpCache, bytes);
 #else
-    if (cacheEntry == CACHE_ENTRY(xc, texture))
+    if (cacheEntry == wantedEntry)
         SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
 #endif
 #endif
@@ -2352,7 +2413,26 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     return colcache;
 }
 
-static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, int16_t texcolumn, draw_column_vars_t* dcvars)
+#if defined(DOOM_R20_REG_COLUMNS)
+#include "r20_reg_columns.h"
+static const uint16_t *r20_wall_cellmap;
+static inline void R20_DrawRegWall(const draw_column_vars_t *v) {
+    int16_t n=v->yh-v->yl+1;
+    if (n<=0) return;
+    if (!r20_wall_cellmap) { R_DrawColumnWall(v); return; }
+    uint16_t frac=(v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep;
+    R20_COUNT(R20C_TEX_CALLS,1); R20_COUNT(R20C_TEX_CELLS,n);
+    R20_RegDraw(&_s_screen[v->yl*VIEWWINDOWWIDTH+v->x],v->source,r20_wall_cellmap,frac,v->fracstep,n);
+}
+#define R20_WALL_DRAW(v) R20_DrawRegWall(v)
+#else
+#define R20_WALL_DRAW(v) R_DrawColumnWall(v)
+#endif
+static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, int16_t texcolumn, draw_column_vars_t* dcvars
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+    , const r20_compsrc_t *prepared
+#endif
+    )
 {
     R20_COUNT(tex->overlapped ? R20C_WALL_COMPOSITE :
               tex->patchcount == 1 ? R20C_WALL_SIMPLE : R20C_WALL_MULTI, 1);
@@ -2367,16 +2447,23 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
         const column_t __far* column = (const column_t __far*) ((const byte __far*)patch + patch->columnofs[x_c]);
 
         dcvars->source = (const byte __far*)column + 3;
-        R7_VOID(6, R_DrawColumnWall(dcvars));
+        R7_VOID(6, R20_WALL_DRAW(dcvars));
     }
     else
     {
-        dcvars->source = R7_VALUE(7, R_ComposeColumn(texture, tex, texcolumn));
-        R_DrawColumnWall(dcvars);
+        dcvars->source = R7_VALUE(7, R_ComposeColumn(texture, tex, texcolumn
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+            , prepared
+#endif
+        ));
+        R20_WALL_DRAW(dcvars);
     }
 }
 #endif
 
+#if defined(DOOM_R20_WALL_HOIST) && defined(DOOM_R20_COMPOSITE_HOIST)
+#error Keep R4 (losing single-patch experiment) separate from R4b
+#endif
 #if defined(DOOM_R20_WALL_HOIST) && !defined FLAT_WALL
 /*
  * R20 R4: for single-patch, non-overlapped textures, R_DrawSegTextureColumn
@@ -2416,12 +2503,14 @@ static inline void R20_DrawWallColumn(const r20_wallsrc_t* w, const texture_t __
         const int16_t xc = texcolumn & w->widthmask;
         R20_COUNT(R20C_WALL_SIMPLE, 1);
         dcvars->source = (const byte __far*)patch + patch->columnofs[xc] + 3;
-        R7_VOID(6, R_DrawColumnWall(dcvars));
+        R7_VOID(6, R20_WALL_DRAW(dcvars));
     }
     else
         R_DrawSegTextureColumn(tex, texture, texcolumn, dcvars);
 }
 #define R20_WALLCOL(w, tex, texture, col, dc) R20_DrawWallColumn(&(w), (tex), (texture), (col), (dc))
+#elif defined(DOOM_R20_COMPOSITE_HOIST)
+#define R20_WALLCOL(w, tex, texture, col, dc) R_DrawSegTextureColumn((tex), (texture), (col), (dc), &(w))
 #else
 #define R20_WALLCOL(w, tex, texture, col, dc) R_DrawSegTextureColumn((tex), (texture), (col), (dc))
 #endif
@@ -2435,6 +2524,22 @@ static inline void R20_DrawWallColumn(const r20_wallsrc_t* w, const texture_t __
 // CALLED: CORE LOOPING ROUTINE.
 //
 
+#if defined(DOOM_R20_FLAT_INLINE)
+extern uint16_t _s_screen[];
+#if defined(DOOM_R20_COLOR_ROM)
+extern const uint16_t colorcell[];
+#else
+extern uint16_t colorcell[];
+#endif
+static inline __attribute__((always_inline)) void R20_SegFlat(uint16_t cell, int16_t x,int16_t top,int16_t bottom) {
+    int16_t n=bottom-top;
+    if(n<0)return;
+    uint16_t *dest=&_s_screen[top*VIEWWINDOWWIDTH+x];
+    R20_COUNT(R20C_FLAT_CALLS,1); R20_COUNT(R20C_FLAT_CELLS,n+1);
+    __asm__ volatile("1: move.w %2,(%0)\n\tadda.w #76,%0\n\tdbra %1,1b"
+        : "+&a"(dest),"+&d"(n) : "d"(cell) : "cc","memory");
+}
+#endif
 static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling)
 {
 #if defined(DOOM_ROUTINE_PROFILE)
@@ -2445,6 +2550,14 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     int16_t  texturecolumn = 0;   // shut up compiler warning
 
     dcvars.colormap = R_LoadColorMap(rw_lightlevel);
+#if defined(DOOM_R20_REG_COLUMNS)
+    extern const uint16_t *R20_SelectCellMap(const uint8_t *map);
+    r20_wall_cellmap=R20_SelectCellMap(dcvars.colormap);
+#endif
+#if defined(DOOM_R20_FLAT_INLINE)
+    uint16_t r20_floor_cell=colorcell[(uint8_t)floorplane_color];
+    uint16_t r20_ceiling_cell=colorcell[(uint8_t)ceilingplane_color];
+#endif
 
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
@@ -2479,7 +2592,13 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                 if (ceilingplane_color == -2)
                     R_DrawSky(&dcvars);
                 else
+                {
+#if defined(DOOM_R20_FLAT_INLINE)
+                    R20_SegFlat(r20_ceiling_cell,rw_x,top,bottom);
+#else
                     R_DrawColumnFlat(ceilingplane_color, &dcvars);
+#endif
+                }
 #else
                 ceilingplane->top[rw_x] = top;
                 ceilingplane->bottom[rw_x] = bottom;
@@ -2504,7 +2623,11 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #if defined FLAT_SPAN
                 dcvars.yl = top;
                 dcvars.yh = bottom;
+#if defined(DOOM_R20_FLAT_INLINE)
+                R20_SegFlat(r20_floor_cell,rw_x,top,bottom);
+#else
                 R_DrawColumnFlat(floorplane_color, &dcvars);
+#endif
 #else
                 floorplane->top[rw_x] = top;
                 floorplane->bottom[rw_x] = bottom;
@@ -3067,6 +3190,11 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
     R20_PrepareWallSource(&r20_mid, midtexture, texmidtexture);
     R20_PrepareWallSource(&r20_top, toptexture, textoptexture);
     R20_PrepareWallSource(&r20_bottom, bottomtexture, texbottomtexture);
+#endif
+#if defined(DOOM_R20_COMPOSITE_HOIST)
+    R20_PrepareComposite(&r20_cm, midtexture, texmidtexture);
+    R20_PrepareComposite(&r20_ct, toptexture, textoptexture);
+    R20_PrepareComposite(&r20_cb, bottomtexture, texbottomtexture);
 #endif
     R_RenderSegLoop(rw_x, segtextured, markfloor, markceiling);
 

@@ -53,7 +53,11 @@ spritedef_t __far* sprites;
 static int8_t maxframe;
 
 #define MAX_SPRITE_FRAMES 29
+#if defined(DOOM_R20_SPRTEMP_DYNAMIC)
+static spriteframe_t *sprtemp;
+#else
 static spriteframe_t sprtemp[MAX_SPRITE_FRAMES];
+#endif
 
 static int16_t firstspritelump;
 static int16_t numentries;
@@ -151,6 +155,9 @@ void R_InitSprites(void)
   if (!numentries || !*sprnames)
     return;
 
+#if defined(DOOM_R20_SPRTEMP_DYNAMIC)
+  sprtemp = Z_MallocStatic(MAX_SPRITE_FRAMES * sizeof(*sprtemp));
+#endif
   sprites = Z_MallocStatic(NUMSPRITES *sizeof(*sprites));
 
   _fmemset(sprites, 0, NUMSPRITES *sizeof(*sprites));
@@ -182,7 +189,7 @@ void R_InitSprites(void)
 
       if (j >= 0)
         {
-          memset(sprtemp, -1, sizeof(sprtemp));
+          memset(sprtemp, -1, MAX_SPRITE_FRAMES * sizeof(*sprtemp));
           maxframe = -1;
           do
             {
@@ -246,6 +253,10 @@ void R_InitSprites(void)
     }
 
   Z_Free(hash);           // free hash table
+#if defined(DOOM_R20_SPRTEMP_DYNAMIC)
+  Z_Free(sprtemp);
+  sprtemp = NULL;
+#endif
 }
 
 

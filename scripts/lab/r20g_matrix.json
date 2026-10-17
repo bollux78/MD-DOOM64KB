@@ -1,0 +1,183 @@
+{
+  "full": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL",
+    "VBLANK_VIDEO",
+    "DMA_BATCH"
+  ],
+  "diag-full": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL",
+    "VBLANK_VIDEO",
+    "DMA_BATCH",
+    "STACKGUARD"
+  ],
+  "control": [],
+  "diag-control": [
+    "STACKGUARD"
+  ],
+  "color": [
+    "COLOR_ROM"
+  ],
+  "diag-color": [
+    "COLOR_ROM",
+    "STACKGUARD"
+  ],
+  "sprites": [
+    "SPRTEMP_DYNAMIC"
+  ],
+  "diag-sprites": [
+    "SPRTEMP_DYNAMIC",
+    "STACKGUARD"
+  ],
+  "cache": [
+    "CACHE_DIRECT"
+  ],
+  "diag-cache": [
+    "CACHE_DIRECT",
+    "STACKGUARD"
+  ],
+  "ram": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT"
+  ],
+  "diag-ram": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "STACKGUARD"
+  ],
+  "r4b": [
+    "COMPOSITE_HOIST"
+  ],
+  "diag-r4b": [
+    "COMPOSITE_HOIST",
+    "STACKGUARD"
+  ],
+  "r5": [
+    "REG_COLUMNS"
+  ],
+  "diag-r5": [
+    "REG_COLUMNS",
+    "STACKGUARD"
+  ],
+  "r6": [
+    "FLAT_INLINE"
+  ],
+  "diag-r6": [
+    "FLAT_INLINE",
+    "STACKGUARD"
+  ],
+  "m2": [
+    "TAN32"
+  ],
+  "diag-m2": [
+    "TAN32",
+    "STACKGUARD"
+  ],
+  "p3": [
+    "PIXEL_UNROLL"
+  ],
+  "diag-p3": [
+    "PIXEL_UNROLL",
+    "STACKGUARD"
+  ],
+  "s5": [
+    "SGDK_HEAP"
+  ],
+  "diag-s5": [
+    "SGDK_HEAP",
+    "STACKGUARD"
+  ],
+  "m4": [
+    "HYGIENE"
+  ],
+  "diag-m4": [
+    "HYGIENE",
+    "STACKGUARD"
+  ],
+  "v3": [
+    "DMA_BATCH"
+  ],
+  "diag-v3": [
+    "DMA_BATCH",
+    "STACKGUARD"
+  ],
+  "ram-v2": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "VBLANK_VIDEO"
+  ],
+  "diag-ram-v2": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "VBLANK_VIDEO",
+    "STACKGUARD"
+  ],
+  "ram-v2-v3": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "VBLANK_VIDEO",
+    "DMA_BATCH"
+  ],
+  "diag-ram-v2-v3": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "VBLANK_VIDEO",
+    "DMA_BATCH",
+    "STACKGUARD"
+  ],
+  "render": [
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL"
+  ],
+  "diag-render": [
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL",
+    "STACKGUARD"
+  ],
+  "ram-render": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL"
+  ],
+  "diag-ram-render": [
+    "COLOR_ROM",
+    "SPRTEMP_DYNAMIC",
+    "CACHE_DIRECT",
+    "COMPOSITE_HOIST",
+    "REG_COLUMNS",
+    "FLAT_INLINE",
+    "TAN32",
+    "PIXEL_UNROLL",
+    "STACKGUARD"
+  ]
+}
