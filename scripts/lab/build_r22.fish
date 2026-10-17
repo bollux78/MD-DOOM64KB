@@ -12,6 +12,15 @@ set -l dest dist/r22c
 mkdir -p "$dest"; or exit 1
 
 set -l variants control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
+if test (count $argv) -gt 0
+    set variants $argv
+end
+for v in $variants
+    contains -- $v control play-control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut; or begin
+        echo "Unknown R22c variant: $v"
+        exit 2
+    end
+end
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
 python3 scripts/lab/test_r15_wallmul.py; or exit 1
 python3 scripts/lab/test_r16_crt_hud.py; or exit 1
@@ -94,7 +103,7 @@ for v in $variants
     set -gx DOOM_R19_FLAT_DBRA 1
     set -gx DOOM_R16_WEAPON_LIFT 1
     set -l defs $control
-    if test "$v" != control
+    if not contains -- $v control play-control
         set -gx DOOM_R22_PIXEL4 1
         set -gx DOOM_CELL_LUT 0
         set -gx DOOM_R17_PIXEL_DBRA 0
@@ -111,7 +120,7 @@ for v in $variants
     if test "$v" = diag-solid
         set defs $defs '-DDOOM_R20_STACKGUARD' '-DDOOM_R21_STACK_PLAY'
     end
-    if contains -- $v play-fixed play-solid play-lut pattern-lut
+    if contains -- $v play-control play-fixed play-solid play-lut pattern-lut
         set -gx DOOM_TIMEDEMO 0
     end
     if test "$v" = pattern-lut
@@ -133,6 +142,6 @@ for v in $variants
     cp out/.render_options "$dest/flags-$id.txt"; or exit 1
     set built $built $id
 end
-python3 scripts/lab/audit_r22.py "$dest"; or exit 1
+python3 scripts/lab/audit_r22.py "$dest" $variants; or exit 1
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
-echo "READY: R22c nine-ROM 4x4 lab, game/hardware tests pending"
+echo "READY: R22c selected ROMs, game/hardware tests pending"
