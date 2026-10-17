@@ -8,7 +8,7 @@
 # Usage: fish scripts/lab/build_r21.fish [variant ...]
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r22c
+set -l dest dist/r22d
 mkdir -p "$dest"; or exit 1
 
 set -l variants control play-control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
@@ -16,7 +16,7 @@ if test (count $argv) -gt 0
     set variants $argv
 end
 for v in $variants
-    contains -- $v control play-control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut; or begin
+    contains -- $v control play-control diag-transition diag-direct8 p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut; or begin
         echo "Unknown R22c variant: $v"
         exit 2
     end
@@ -103,7 +103,7 @@ for v in $variants
     set -gx DOOM_R19_FLAT_DBRA 1
     set -gx DOOM_R16_WEAPON_LIFT 1
     set -l defs $control
-    if not contains -- $v control play-control
+    if not contains -- $v control play-control diag-transition diag-direct8
         set -gx DOOM_R22_PIXEL4 1
         set -gx DOOM_CELL_LUT 0
         set -gx DOOM_R17_PIXEL_DBRA 0
@@ -120,14 +120,20 @@ for v in $variants
     if test "$v" = diag-solid
         set defs $defs '-DDOOM_R20_STACKGUARD' '-DDOOM_R21_STACK_PLAY'
     end
-    if contains -- $v play-control play-fixed play-solid play-lut pattern-lut
+    if contains -- $v play-control diag-transition diag-direct8 play-fixed play-solid play-lut pattern-lut
         set -gx DOOM_TIMEDEMO 0
     end
     if test "$v" = pattern-lut
         set defs $defs '-DDOOM_R22_PATTERN'
     end
+    if contains -- $v diag-transition diag-direct8
+        set defs $defs '-DDOOM_R22_MAP_DIAG'
+    end
+    if test "$v" = diag-direct8
+        set defs $defs '-DDOOM_R22_MAP8_DIRECT'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r22c-$v
+    set -l id doom-md-r22d-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out

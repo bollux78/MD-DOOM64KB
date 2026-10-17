@@ -29,6 +29,7 @@
 #include "doomdef.h"
 #include "i_system.h"
 #include "r20_stackguard.h"
+#include "r22_mapdiag.h"
 
 
 //
@@ -262,6 +263,19 @@ static uint32_t Z_GetTotalFreeMemory(void)
 }
 
 
+#if defined(DOOM_R22_MAP_DIAG)
+r22_map_entry r22_map_trace[16];
+uint16_t r22_map_head,r22_map_count,r22_map_current,r22_map_stage;
+uint16_t r22_map_request,r22_map_tag,r22_map_failed_stage;
+uint32_t r22_map_need;
+void R22_MapMark(uint16_t map,uint16_t stage){
+    r22_map_entry *e=&r22_map_trace[r22_map_head];
+    e->map=map;e->stage=stage;e->free=Z_GetTotalFreeMemory();e->largest=Z_GetLargestFreeBlockSize();
+    r22_map_head=(r22_map_head+1)&15;if(r22_map_count<16)r22_map_count++;
+    r22_map_current=map;r22_map_stage=stage;
+}
+#endif
+
 //
 // Z_TryMalloc
 // You can pass a NULL user if the tag is < PU_PURGELEVEL.
@@ -377,8 +391,18 @@ static void __far* Z_TryMalloc(uint16_t size, int8_t tag, void __far*__far* user
 
 static void __far* Z_Malloc(uint16_t size, int8_t tag, void __far*__far* user) {
 	void __far* ptr = Z_TryMalloc(size, tag, user);
-	if (!ptr)
-		I_Error ("Z_Malloc: failed to allocate %u B, max free block %li B, total free %li", size, Z_GetLargestFreeBlockSize(), Z_GetTotalFreeMemory());
+    if (!ptr){
+#if defined(DOOM_R22_MAP_DIAG)
+        r22_map_request=size;r22_map_tag=(uint16_t)tag;r22_map_failed_stage=r22_map_stage;
+        r22_map_need=(((uint32_t)size+PARAGRAPH_SIZE-1)&~(uint32_t)(PARAGRAPH_SIZE-1))+PARAGRAPH_SIZE;
+        R22_MapMark(r22_map_current,14);
+        I_Error("ZONE ALLOCATION FAILED");
+#else
+        /* Worst-case text fits the80-byte I_Error buffer, including NUL. */
+        I_Error("Z_Malloc\nREQ %u B\nMAX %lu B\nFREE %lu B",size,
+            (unsigned long)Z_GetLargestFreeBlockSize(),(unsigned long)Z_GetTotalFreeMemory());
+#endif
+    }
 	return ptr;
 }
 

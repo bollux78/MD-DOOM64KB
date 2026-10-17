@@ -24,6 +24,7 @@
 #include "r21_textscreen.h"
 #include "r20_stackguard.h"
 #include "r20_dma.h"
+#include "r22_mapdiag.h"
 #include "music.h"        // rescomp 生成: const u8 bgm_e1m1[]（res/music.res）
 
 
@@ -324,6 +325,23 @@ void I_Quit(void)
 }
 
 
+#if defined(DOOM_R22_MAP_DIAG)
+void R22_MapReport(void){
+    static const char *const names[]={"PRE-FREE","POSTFREE","THINGS","SECTORS","LINES","SEGS","BLOCKMAP","NODES","SIDES","REJECT","SUBSECT","GROUP","SPAWN","DONE","FAIL"};
+    char b[48];
+    VDP_drawText("MAP MEMORY DIAGNOSTIC",1,3);
+    sprintf(b,"MAP E1M%u STAGE %u",r22_map_current,r22_map_request?r22_map_failed_stage:r22_map_stage);VDP_drawText(b,1,4);
+    sprintf(b,"REQUEST %u NEED %lu TAG %u",r22_map_request,(unsigned long)r22_map_need,r22_map_tag);VDP_drawText(b,1,5);
+    VDP_drawText("MAP STAGE     FREE     MAX",1,7);
+    for(uint16_t i=0;i<r22_map_count;i++){
+        const r22_map_entry *e=&r22_map_trace[(r22_map_head+16-r22_map_count+i)&15];
+        sprintf(b,"%u %-8s %5lu %5lu",e->map,names[e->stage],(unsigned long)e->free,(unsigned long)e->largest);VDP_drawText(b,1,8+i);
+    }
+    VDP_drawText("FREE/MAX INCLUDE BLOCK HEADERS",1,25);
+    VDP_drawText("DIAG STOPS AFTER E1M8 LOAD",1,26);
+}
+#endif
+
 void I_Error(const char *error, ...)
 {
 	va_list argptr;
@@ -339,7 +357,23 @@ void I_Error(const char *error, ...)
 	R21_TEXT_SCREEN();   /* R21 F1: VDP_init() unless DOOM_R21_NO_VDP_INIT */
 	VDP_setTextPalette(PAL0);
 	PAL_setColor(15, 0x0EEE);
-	VDP_drawText(buffer, 1, 1);
+#if defined(DOOM_R22_MAP_DIAG)
+    if(r22_map_count){VDP_drawText(buffer,1,1);R22_MapReport();}
+    else
+#endif
+    {
+        /* Wrap long/error lines to38visible characters without allocations. */
+        char line[39];uint16_t y=1,n=0;
+        for(const char *p=buffer;;p++){
+            char c=*p;
+            if(c=='\n'||c==0||n==38){
+                line[n]=0;VDP_drawText(line,1,y++);n=0;
+                if(!c||y>=27)break;
+                if(c=='\n')continue;
+            }
+            line[n++]=c;
+        }
+    }
 
 	for (;;) { SYS_doVBlankProcess(); }
 }

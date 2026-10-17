@@ -872,7 +872,11 @@ void G_ReloadDefaults(void)
 static void G_DoNewGame (void)
 {
     G_ReloadDefaults();            // killough 3/1/98
+#if defined(DOOM_R22_MAP8_DIRECT)
+    G_InitNew (d_skill, 8);
+#else
     G_InitNew (d_skill, 1);
+#endif
     _g_gameaction = ga_nothing;
 
     //jff 4/26/98 wake up the status bar in case were coming out of a DM demo

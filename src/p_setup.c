@@ -34,6 +34,7 @@
  *
  *-----------------------------------------------------------------------------*/
 
+#include "r22_mapdiag.h"
 #include <stdint.h>
 
 #include "d_player.h"
@@ -475,7 +476,9 @@ void P_SetupLevel(int16_t map)
     // Make sure all sounds are stopped before Z_FreeTags.
     S_Start();
 
+    R22_MapMark(map,0);
     P_FreeLevelData();
+    R22_MapMark(map,1);
 
     P_InitThinkers();
 
@@ -487,16 +490,26 @@ void P_SetupLevel(int16_t map)
 
     lumpnum = W_GetNumForName(lumpname);
 
+    R22_MapMark(map,2);
     P_LoadThings    (lumpnum + ML_THINGS);
+    R22_MapMark(map,3);
     P_LoadSectors   (lumpnum + ML_SECTORS);
+    R22_MapMark(map,4);
     P_LoadLineDefs  (lumpnum + ML_LINEDEFS);
+    R22_MapMark(map,5);
     P_LoadSegs      (lumpnum + ML_SEGS);
+    R22_MapMark(map,6);
     P_LoadBlockMap  (lumpnum + ML_BLOCKMAP);
+    R22_MapMark(map,7);
     P_LoadNodes     (lumpnum + ML_NODES);
+    R22_MapMark(map,8);
     P_LoadSideDefs  (lumpnum + ML_SIDEDEFS);
+    R22_MapMark(map,9);
     P_LoadReject    (lumpnum + ML_REJECT);
+    R22_MapMark(map,10);
     P_LoadSubsectors(lumpnum + ML_SSECTORS);
 
+    R22_MapMark(map,11);
     P_GroupLines();
 
     // Note: you don't need to clear player queue slots
@@ -505,12 +518,16 @@ void P_SetupLevel(int16_t map)
     for (i = 0; i < MAXPLAYERS; i++)
         _g_player.mo = NULL;
 
+    R22_MapMark(map,12);
     P_LoadThings2(lumpnum + ML_THINGS);
 
     // set up world state
     P_SpawnSpecials();
 
-    P_MapEnd();
+    P_MapEnd();R22_MapMark(map,13);
+#if defined(DOOM_R22_MAP_DIAG)
+    if(map==8)I_Error("E1M8 LOADED OK - DIAG STOP");
+#endif
 }
 
 //

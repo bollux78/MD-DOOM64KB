@@ -537,7 +537,11 @@ static void D_DoomMainSetup(void)
     }
     else
     {
+#if defined(DOOM_R22_MAP8_DIRECT)
+        G_DeferedInitNew(sk_medium);
+#else
         D_StartTitle();                 // start up intro loop
+#endif
     }
 }
 
