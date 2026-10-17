@@ -2416,9 +2416,17 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
 #if defined(DOOM_R20_REG_COLUMNS)
 #include "r20_reg_columns.h"
 static const uint16_t *r20_wall_cellmap;
+static const uint8_t *r20_wall_colormap;
+extern const uint16_t *R20_SelectCellMap(const uint8_t *map);
 static inline void R20_DrawRegWall(const draw_column_vars_t *v) {
     int16_t n=v->yh-v->yl+1;
     if (n<=0) return;
+    /* Sky mutates dcvars->colormap in the original renderer. Keep that
+       behavior; only reuse the seg map while the actual pointer matches. */
+    if(v->colormap!=r20_wall_colormap) {
+        r20_wall_colormap=v->colormap;
+        r20_wall_cellmap=R20_SelectCellMap(v->colormap);
+    }
     if (!r20_wall_cellmap) { R_DrawColumnWall(v); return; }
     uint16_t frac=(v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep;
     R20_COUNT(R20C_TEX_CALLS,1); R20_COUNT(R20C_TEX_CELLS,n);
@@ -2552,6 +2560,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     dcvars.colormap = R_LoadColorMap(rw_lightlevel);
 #if defined(DOOM_R20_REG_COLUMNS)
     extern const uint16_t *R20_SelectCellMap(const uint8_t *map);
+    r20_wall_colormap=dcvars.colormap;
     r20_wall_cellmap=R20_SelectCellMap(dcvars.colormap);
 #endif
 #if defined(DOOM_R20_FLAT_INLINE)

@@ -97,3 +97,31 @@ for base in (0xff0000,0xe0ff0000,0xff8000,0xe0ff8000):
         reconstructed=((regs[4]&127)<<17)|((regs[3]&255)<<9)|((regs[2]&255)<<1)
         assert reconstructed==address&0xffffff
 print('PASS V3 source register lane/address contracts; actual VDP/bus timing still needs emulator/hardware',flush=True)
+# R5 must follow sky's mutation of dcvars.colormap, as the original writer does.
+code=r'''
+#include <stdint.h>
+#include <assert.h>
+#define VIEWWINDOWWIDTH 38
+#define R20_COUNT(i,n) ((void)0)
+static const int16_t CENTERY=11;
+static uint16_t _s_screen[38*28],mapa[256],mapb[256];
+static uint8_t ca[256],cb[256],source[128];
+static const uint16_t *r20_wall_cellmap;
+static const uint8_t *r20_wall_colormap;
+static const uint16_t *used;static unsigned selected,fallback;
+typedef struct {int16_t x,yl,yh;uint16_t fracstep;int32_t texturemid;const uint8_t *source,*colormap;} draw_column_vars_t;
+static const uint16_t *R20_SelectCellMap(const uint8_t *p){selected++;return p==ca?mapa:p==cb?mapb:0;}
+static void R_DrawColumnWall(const draw_column_vars_t *v){fallback++;}
+static void R20_RegDraw(uint16_t *d,const uint8_t *s,const uint16_t *m,uint16_t f,uint16_t step,uint16_t n){used=m;}
+'''+function(src,'static inline void R20_DrawRegWall(')+r'''
+int main(void){
+ draw_column_vars_t d={1,1,10,511,32768,source,ca};
+ r20_wall_colormap=ca;r20_wall_cellmap=R20_SelectCellMap(ca);
+ R20_DrawRegWall(&d);assert(used==mapa&&selected==1);
+ d.colormap=cb;R20_DrawRegWall(&d);assert(used==mapb&&selected==2);
+ R20_DrawRegWall(&d);assert(used==mapb&&selected==2);
+ d.colormap=0;R20_DrawRegWall(&d);assert(fallback==1&&selected==3);
+ d.yh=0;R20_DrawRegWall(&d);assert(fallback==1&&selected==3);return 0;
+}
+'''
+native(code);print('PASS R5 production wrapper: sky colormap mutation, cached reuse, fallback and empty span',flush=True)

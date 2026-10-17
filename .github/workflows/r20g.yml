@@ -6,6 +6,10 @@ on:
       - r20g
   workflow_dispatch:
 
+concurrency:
+  group: r20g-lab
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

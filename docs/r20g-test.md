@@ -12,7 +12,7 @@ Todas as ROMs R20g mantêm S2/S3 iterativos, P2, M1, M3, R2, HUD/FPS sob demanda
 | cache | S6: composição direto no slot de cache; -128 B e cópia removida no miss |
 | ram | color + sprites + cache |
 | r4b | Hash/tag/máscara de textura composta preparados por segmento/tier |
-| r5 | Coluna de parede com ABI privado em registradores; cellmap selecionado por seg; mascaradas/sprites mantêm caminho antigo |
+| r5 | Coluna de parede com ABI privado em registradores; cellmap selecionado por seg e atualizado se o céu mudar o colormap; mascaradas/sprites mantêm caminho antigo |
 | r6 | Flat DBRA integrado ao seg loop; cor convertida uma vez por seg; sem R3 |
 | m2 | Multiplicação decomposta apenas para tangentes de 32 bits; M1 continua no ramo de 16 |
 | p3 | ADD/ADDX desenrolado para até 22 células; P2 original no fallback |
@@ -46,6 +46,7 @@ S5 é isolada e não entra em full; sua mudança de alocações SGDK exige diagn
 ## Verificações automáticas
 
 - Cobertura real de todas as 6712 colunas compostas deste WAD, altura alinhada <=128. Build falha se outro WAD introduzir lacunas que tornem a composição direta diferente do buffer temporário.
+- Wrapper R5 verificado para mudança de colormap pelo céu, reutilização, fallback e coluna vazia.
 - Funções C reais de hash/cache comparadas em 507904 cenários de colisão.
 - Publicador/callback de V2 em harness de host: 1000 snapshots, IRQ tardia, extensão do HUD, mudança de paleta e cancelamento. VDP e interrupções simulados; não mede timing real.
 - Probe MC68000 compila os escritores P2/P3 reais, o kernel R5 com wrapper de registradores e o flat R6, compara colunas e regiões intocadas. Executado externamente em Musashi antes da entrega; arquivos .raw não são ROMs de jogo.
