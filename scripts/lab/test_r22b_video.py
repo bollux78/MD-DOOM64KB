@@ -33,7 +33,7 @@ code=r'''
 #define TILE_FONT_INDEX 1696
 static struct {uint8_t pixels[R22_FB_BYTES];} r22_fb;
 static uint16_t r22_map[38*21];
-static uint8_t r22_overlay_dirty;
+static uint8_t r22_overlay_dirty,r22_text_this_frame;
 static uint32_t addr,writes;
 static unsigned locked,pending,stops,window;
 static void VDP_setWindowHPos(unsigned right,unsigned pos){assert(locked && !pos);window=right;}
@@ -50,7 +50,7 @@ static void VDP_clearTileMap(unsigned plane,unsigned ind,unsigned n,unsigned wai
  assert(locked && !pending && plane==VDP_WINDOW && !ind && n==64*22 && wait);
  memset(vram+plane,0,n*2);
 }
-'''+fn('static inline uint32_t R22_Expand(')+'\n'+u+'\n'+t+'\n'+fn('static void R22_Text(')+'\n'+fn('static void R22_ClearOverlay(')+'\n'+fn('void R22_BeginFrame(')+r'''
+'''+fn('static inline uint32_t R22_Expand(')+'\n'+u+'\n'+t+'\n'+fn('static void R22_ClearOverlay(')+'\n'+fn('static void R22_Text(')+'\n'+fn('void R22_BeginFrame(')+'\n'+fn('static void R22_EndOverlay(')+'\n'+fn('void V_ClearViewWindow(')+r'''
 static uint16_t word(unsigned a){return (vram[a]<<8)|vram[a+1];}
 int main(void){
  for(unsigned p=0;p<256;p++)assert(r22_pair_lut[p]==R22_ExpandPair(p));
@@ -94,13 +94,18 @@ int main(void){
 #endif
  /* Title-only and menu frames both wait BEFORE touching the VDP. */
  pending=1;r22_overlay_dirty=0;stops=0;R22_BeginFrame();assert(!pending && stops==1);
- pending=1;r22_overlay_dirty=1;R22_BeginFrame();assert(!pending && !r22_overlay_dirty && !window);
+ pending=1;r22_overlay_dirty=1;window=1;R22_BeginFrame();assert(!pending && r22_overlay_dirty && window);
+ R22_EndOverlay();assert(!window && !r22_overlay_dirty);
  for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
  /* Real menu routing must affect Window only, never the shared A/B map. */
  for(unsigned cycle=0;cycle<100;cycle++){
   pending=1;R22_Text(3,2,"NEW GAME");assert(window && r22_overlay_dirty);
   for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
-  pending=1;R22_BeginFrame();assert(!window && !r22_overlay_dirty);
+  unsigned glyph=word(VDP_WINDOW+2*128+3*2);
+  pending=1;R22_BeginFrame();assert(window && r22_overlay_dirty && !r22_text_this_frame);
+  V_ClearViewWindow(); /* slow title/raster may now be computed; retain menu */
+  assert(window && word(VDP_WINDOW+2*128+3*2)==glyph);
+  R22_EndOverlay();assert(!window && !r22_overlay_dirty);
   for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
  }
  for(unsigned i=0xFC00;i<65536;i++)assert(vram[i]==0xa5);
@@ -111,7 +116,7 @@ int main(void){
  assert(word(pos+6)==0x8000+1696+'Z'-32);
  writes=0;R22_DrawText(VDP_WINDOW,"ABCDEFG",37,21);assert(writes==2);
  R22_DrawText(VDP_WINDOW,"BAD",38,0);R22_DrawText(VDP_WINDOW,"BAD",0,28);assert(writes==2);
- puts("PASS production uploader: all quadrants/both banks, solid reuse, LUT, title/menu VDP ownership and glyph bounds,100 Window menu cycles preserving A/B");
+ puts("PASS production uploader: all quadrants/both banks, solid reuse, LUT, title/menu VDP ownership and glyph bounds,100 Window menu cycles preserving A/B and displayed glyphs during raster work");
 }
 '''
 with tempfile.TemporaryDirectory() as d:

@@ -44,7 +44,7 @@ static volatile uint16_t r22_ready;
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
-static uint8_t r22_overlay_dirty;
+static uint8_t r22_overlay_dirty,r22_text_this_frame;
 #if defined(DOOM_R22_SOLID_TILES)
 /* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
 static uint16_t r22_map[38*21] __attribute__((aligned(2)));
@@ -193,6 +193,9 @@ static void R22_Text(int16_t x,int16_t y,const char *s){
        mirrors A at E000: transparent Window pixels reveal the same raster.
        Window rows24..31 contain SAT/HScroll at FC00, never text. */
     if(y>0){
+        /* Preserve the old menu throughout slow raster rendering. Clear it
+           only when the replacement text is actually ready to be drawn. */
+        if(!r22_text_this_frame){R22_ClearOverlay();r22_text_this_frame=1;}
         R20_StopVideo();uint16_t sr=R22_Lock();
         VDP_setWindowHPos(TRUE,0);VDP_setWindowVPos(FALSE,0);
         R22_Unlock(sr);r22_overlay_dirty=1;
@@ -206,12 +209,15 @@ void V_DrawString(int16_t x,int16_t y,uint8_t c,const char *s){(void)c;R22_Text(
 void V_DrawSTString(int16_t x,int16_t y,uint8_t c,const char *s){V_DrawString(x,y,c,s);}
 void V_ClearString(int16_t y,size_t n){for(uint16_t x=0;x<n&&x<38;x++)V_DrawCharacter(x,y,0,' ');}
 void R22_BeginFrame(void){
-    /* Even a title-only frame can have a pending flip. Do this BEFORE any
-       plane clear, menu text, or SDK VDP operation, not just at FinishUpdate. */
-    R20_StopVideo();
-    if(r22_overlay_dirty)R22_ClearOverlay();
+    /* Complete the old flip before VDP use, retaining the displayed menu
+       throughout title/raster work. Text replacement happens just-in-time. */
+    R20_StopVideo();r22_text_this_frame=0;
 }
-void V_ClearViewWindow(void){memset(r22_fb.pixels,0,R22_FB_BYTES);R22_ClearOverlay();}
+static void R22_EndOverlay(void){
+    if(r22_overlay_dirty && !r22_text_this_frame)R22_ClearOverlay();
+}
+void V_ClearViewWindow(void){memset(r22_fb.pixels,0,R22_FB_BYTES);}
+
 void V_DrawBackground(int16_t n){(void)n;V_ClearViewWindow();}
 void V_DrawRawFullScreen(int16_t n){
     const uint8_t *p=W_GetLumpByNum(n);V_ClearViewWindow();
@@ -239,7 +245,7 @@ static void R22_HUD(void){
 }
 void I_FinishUpdate(void){
     if(r22_fb.before!=R22_GUARD||r22_fb.after!=R22_GUARD)I_Error("PX4 framebuffer guard");
-    R20_StopVideo();
+    R20_StopVideo();R22_EndOverlay();
 #if defined(DOOM_R20_STACKGUARD)
     static uint8_t sample;R20_PROBE();if((sample++&15u)==0)R20_DiagSample();
 #endif
