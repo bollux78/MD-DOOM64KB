@@ -17,8 +17,8 @@ volatile uint16_t r20_errors;
 volatile uint32_t r20_first_error_tic, r20_min_sp;
 uint16_t r20_peak, r20_sgdk_free = 65535, r20_sgdk_largest = 65535;
 uint16_t r20_zone_free = 65535, r20_zone_largest = 65535;
-static uint8_t frozen;
-static uint32_t last_tic;
+static volatile uint8_t frozen;
+static volatile uint32_t last_tic;
 static void error(uint16_t bits, uint32_t tic)
 {
     if (!bits) return;

@@ -1,0 +1,56 @@
+name: R20b — S2 baseline and P2 M1 DEMO3 experiments
+
+on:
+  push:
+    branches:
+      - r20b
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-r20b:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R20b branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Validate and build R20b diagnostic matrix
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r20b.fish
+          python3 scripts/lab/test_r20a.py
+          python3 scripts/lab/test_r20b_math.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20b.fish
+          cp docs/r20b-test.md dist/r20b/LEIA-ME.md
+          cp docs/r20a-results.md dist/r20b/R20a-resultados.md
+          python3 - <<'PY2'
+          import os, pathlib, subprocess
+          d=pathlib.Path('dist/r20b')
+          gdk=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
+          gcc=gdk/'bin/m68k-elf-gcc'
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(gcc),'--version'],text=True))
+          PY2
+      - name: Upload R20b ROMs and matching debugging evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r20b-p2-m1
+          path: dist/r20b/
+          if-no-files-found: error
+          retention-days: 90

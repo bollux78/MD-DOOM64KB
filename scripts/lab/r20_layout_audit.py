@@ -16,7 +16,7 @@ if not nm.is_file():
     found = shutil.which("m68k-elf-nm")
     if not found: raise SystemExit("Missing m68k-elf-nm")
     nm = pathlib.Path(found)
-lines = ["Natural inlining in R20a. Sizes alone do not prove code identity."]
+lines = ["Check per-ROM noinline flags. Sizes alone do not prove code identity."]
 lines.append(subprocess.check_output([str(nm),"--version"],text=True).splitlines()[0])
 hot = ["R_Subsector", "R_DrawColumnSprite", "R_DrawColumnFlat", "R_RenderBSPNode",
        "P_CrossBSPNode", "P_CheckSight", "_bend", "__stack"]
