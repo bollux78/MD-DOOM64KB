@@ -16,6 +16,13 @@ void R20_DiagFreeze(void);
 uint16_t R20_StackReserveBytes(void);
 void Z_R20Probe(uint16_t*, uint16_t*, uint8_t*);
 #define R20_PROBE() R20_StackWatch((uint32_t)_g_gametic)
+#if defined(DOOM_R21_STACK_PLAY)
+/* R21 N7a: the R20 peak includes boot (W_Init, R_Init, level setup...).
+ * At DEMO3 start, keep that value and repaint the reserve below the live
+ * frame, so r20_peak afterwards is the gameplay-only peak. */
+extern uint16_t r21_boot_peak;
+void R21_StackRepaintForPlay(void);
+#endif
 #else
 #define R20_PROBE() ((void)0)
 #endif

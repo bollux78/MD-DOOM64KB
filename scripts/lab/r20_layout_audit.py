@@ -5,7 +5,7 @@ p = pathlib.Path(sys.argv[1]); ids = sys.argv[2:]
 if not ids: raise SystemExit("No builds to audit")
 def flags(i):
     return sorted(x for x in (p/f"flags-{i}.txt").read_text().split()
-                  if not x.startswith("-DDOOM_R20_") and x != "-DDOOM_R19_FLAT_DBRA"
+                  if not x.startswith(("-DDOOM_R20_", "-DDOOM_R21_")) and x != "-DDOOM_R19_FLAT_DBRA"
                   and not x.startswith("doom-md-"))
 base = flags(ids[0])
 for i in ids[1:]:

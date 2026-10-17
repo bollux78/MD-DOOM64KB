@@ -290,7 +290,8 @@ end
 if set -q DOOM_R20_DEFINES
     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
         test -n "$d"; or continue
-        string match -qr -- '^-DDOOM_R20_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
+        # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
+        string match -qr -- '^-DDOOM_R2[01]_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
             echo "Invalid DOOM_R20_DEFINES entry: $d"
             exit 1
         end

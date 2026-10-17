@@ -99,4 +99,22 @@ void R20_DiagFreeze(void)
     frozen = 1; /* must precede VDP_init/text/result loops */
 }
 uint16_t R20_StackReserveBytes(void) { return (uint16_t)STACK_SIZE; }
+#if defined(DOOM_R21_STACK_PLAY)
+uint16_t r21_boot_peak;
+void R21_StackRepaintForPlay(void)
+{
+    R20_DiagSample();               /* r20_peak = boot peak so far */
+    r21_boot_peak = r20_peak;
+    /* r20_min_sp remains the lifetime low-water mark; painted peak restarts below. */
+    uint32_t sp;
+    SYS_disableInts();
+    __asm__ volatile ("move.l %%sp,%0" : "=a" (sp));
+    volatile uint32_t *q = (volatile uint32_t*)MEMORY_HIGH;
+    uint32_t limit = (sp - 64u) & ~3u;
+    if (limit > TOP) limit = TOP;
+    while ((uint32_t)q < limit) *q++ = PAINT;
+    SYS_enableInts();
+    R20_DiagSample();               /* r20_peak restarts at the live depth */
+}
+#endif
 #endif

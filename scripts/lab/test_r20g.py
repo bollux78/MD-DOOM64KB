@@ -51,7 +51,9 @@ int main(void){uint32_t rng=20261017u;for(unsigned t=1;t<125;t++)for(unsigned x=
 '''
 native(code);print('PASS R4b compiled cache hashing: 507904 collision states',flush=True)
 # IRQ ownership test executes actual publisher/callback source with hardware mocks.
-v=(root/'src/i_genesisv.c').read_text();a=v.index('static uint16_t r20_video_copy');b=v.index('#elif defined(DOOM_R20_DMA_BATCH)',a);video=v[a:b]
+v=(root/'src/i_genesisv.c').read_text();a=v.index('static volatile uint16_t r20_video_ready;');b=v.index('#elif defined(DOOM_R20_DMA_BATCH)',a)
+# Mock storage independent of the static/heap allocation branch; execute the real ownership code.
+video='static uint16_t r20_video_copy[VIEWWINDOWWIDTH*VDP_DISPLAY_ROWS];\n'+v[a:b]
 video=video.replace('uint16_t line=(*(volatile uint16_t *)0xC00008)>>8;','uint16_t line=test_line;')
 a=video.index('void R20_AbortVideo(');e=video.index('void R20_StopVideo(',a)
 video=video[:a]+'void R20_AbortVideo(void){r20_video_ready=0;r20_next_palette=100;}\n'+video[e:]

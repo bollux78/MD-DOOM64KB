@@ -1,0 +1,76 @@
+name: R21 — N3 N4 stability and diagnostics (24 ROMs)
+
+on:
+  push:
+    branches:
+      - r21
+  workflow_dispatch:
+
+concurrency:
+  group: r21-lab
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-r21:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - name: Checkout isolated R21 branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Check source and build all R21 ROMs
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r21.fish
+          python3 scripts/lab/test_r20a.py
+          python3 scripts/lab/test_r20b_math.py
+          python3 scripts/lab/test_r20d_sources.py
+          python3 scripts/lab/test_r21.py
+          python3 scripts/lab/build_r20g_evidence.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r21.fish
+          cp -r dist/r20g/evidence dist/r21/evidence
+          cp docs/review-r21/LEIA-ME.md dist/r21/LEIA-ME.md
+          cp docs/review-r21/correcoes.md dist/r21/correcoes.md
+          cp scripts/lab/r21_matrix.json dist/r21/matrix.json
+          cp scripts/lab/r21_profile.py dist/r21/r21_profile.py
+          python3 - <<'PY2'
+          import os,pathlib,subprocess,hashlib,json
+          d=pathlib.Path('dist/r21')
+          gdk=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf'))).resolve()
+          gcc=gdk/'bin/m68k-elf-gcc'
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(gcc),'--version'],text=True))
+          lines=[]
+          for args in [['git','-C',str(gdk),'rev-parse','HEAD'],['git','-C',str(gdk),'describe','--always','--dirty']]:
+              p=subprocess.run(args,capture_output=True,text=True);lines.append(p.stdout.strip() or p.stderr.strip())
+          (d/'sdk-version.txt').write_text('\n'.join(lines)+'\n')
+          bins=sorted(d.glob('*.bin'))
+          assert len(bins)==24,len(bins)
+          (d/'manifest.json').write_text(json.dumps({'commit':os.environ['GITHUB_SHA'],'roms':[{'name':f.name,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'bytes':f.stat().st_size} for f in bins]},indent=2)+'\n')
+          (d/'COMPLETE.txt').write_text('24 ROMs built and audited. Game runtime validation pending.\n')
+          PY2
+      - name: Upload R21 ROMs and matching debugging evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r21-lab-24-roms
+          path: dist/r21/
+          if-no-files-found: error
+          retention-days: 90

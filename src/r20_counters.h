@@ -20,6 +20,8 @@ enum
     R20C_SEGS,           /* R_StoreWallRange reaching R_RenderSegLoop    */
     R20C_SIGHT,          /* P_CheckSight calls                           */
     R20C_SIGHT_DEPTH,    /* max pending far sides (needs R20 S2)         */
+    R20C_SEGCOLS,        /* R21: every R_RenderSegLoop column            */
+    R20C_TEX_SKIP,       /* R21: segtextured columns with no tier/masked */
     R20C_N
 };
 extern uint32_t r20_cnt[R20C_N];

@@ -2567,6 +2567,38 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     uint16_t r20_floor_cell=colorcell[(uint8_t)floorplane_color];
     uint16_t r20_ceiling_cell=colorcell[(uint8_t)ceilingplane_color];
 #endif
+#if defined(DOOM_R21_SEGLOOP_LOCALS)
+    /*
+     * R21 N3: the loop-carried wall state lives in file-scope statics, and
+     * the loop calls out-of-line functions, so GCC loads, adds and stores
+     * rw_scale/topfrac/bottomfrac (and re-reads rw_stopx) in memory for every
+     * column. Only R_StoreWallRange (before the loop), R_CheckOpenings
+     * (rw_stopx, before the loop) and this function touch these variables,
+     * so local copies are exact. They are written back after the loop.
+     */
+    fixed_t r21_scale = rw_scale;
+    const fixed_t r21_scalestep = rw_scalestep;
+    fixed_t r21_topfrac = topfrac;
+    const fixed_t r21_topstep = topstep;
+    fixed_t r21_bottomfrac = bottomfrac;
+    const fixed_t r21_bottomstep = bottomstep;
+    fixed_t r21_pixhigh = pixhigh;
+    const fixed_t r21_pixhighstep = pixhighstep;
+    fixed_t r21_pixlow = pixlow;
+    const fixed_t r21_pixlowstep = pixlowstep;
+    const int16_t r21_stopx = rw_stopx;
+#define rw_scale     r21_scale
+#define rw_scalestep r21_scalestep
+#define topfrac      r21_topfrac
+#define topstep      r21_topstep
+#define bottomfrac   r21_bottomfrac
+#define bottomstep   r21_bottomstep
+#define pixhigh      r21_pixhigh
+#define pixhighstep  r21_pixhighstep
+#define pixlow       r21_pixlow
+#define pixlowstep   r21_pixlowstep
+#define rw_stopx     r21_stopx
+#endif
 
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
@@ -2647,8 +2679,47 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             fc_rwx = top;
         }
 
+#if defined(DOOM_R21_LAZY_TEXCOL) || defined(DOOM_R20_COUNTERS)
+        /*
+         * R21 N4: texturecolumn (tangent product) and fracstep (reciprocal)
+         * are only read by the wall tiers drawn below and by the masked
+         * column store. Decide that with the same arithmetic the tier code
+         * uses, before any side effect (pixhigh/pixlow are stepped later):
+         *  - mid texture (one-sided) or masked texture: always needed;
+         *  - top tier: mid = min(pixhigh>>16, fc-1) is drawn iff mid >= yl;
+         *  - bottom tier (reached only if the top tier is not drawn): the
+         *    ceiling clip is yl-1 when there is a top texture or markceiling,
+         *    else unchanged; mid = max((pixlow+FRACUNIT-1)>>16, cc+1) is drawn
+         *    iff mid <= yh.
+         * Columns with no tier keep stale texturecolumn/fracstep, which no
+         * code reads in that column (R_DrawSky sets its own fracstep).
+         */
+        boolean r21_need_tex = midtexture || maskedtexture;
+        if (!r21_need_tex && toptexture)
+        {
+            int16_t mid = pixhigh>>FRACBITS;
+            if (mid >= fc_rwx)
+                mid = fc_rwx-1;
+            r21_need_tex = (mid >= yl);
+        }
+        if (!r21_need_tex && bottomtexture)
+        {
+            const int16_t cc = (toptexture || markceiling) ? yl-1 : cc_rwx;
+            int16_t mid = ((fixed_t)((uint32_t)pixlow + FRACUNIT - 1u)) >> FRACBITS;
+            if (mid <= cc)
+                mid = cc+1;
+            r21_need_tex = (mid <= yh);
+        }
+        R20_COUNT(R20C_SEGCOLS, 1);
+        if (segtextured && !r21_need_tex)
+            R20_COUNT(R20C_TEX_SKIP, 1);
+#endif
         // texturecolumn and lighting are independent of wall tiers
+#if defined(DOOM_R21_LAZY_TEXCOL)
+        if (segtextured && r21_need_tex)
+#else
         if (segtextured)
+#endif
         {
             // calculate texture offset
 #if !defined FLAT_WALL
@@ -2833,6 +2904,24 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
         floorclip[rw_x] = fc_rwx;
         ceilingclip[rw_x] = cc_rwx;
     }
+#if defined(DOOM_R21_SEGLOOP_LOCALS)
+#undef rw_scale
+#undef rw_scalestep
+#undef topfrac
+#undef topstep
+#undef bottomfrac
+#undef bottomstep
+#undef pixhigh
+#undef pixhighstep
+#undef pixlow
+#undef pixlowstep
+#undef rw_stopx
+    rw_scale = r21_scale;
+    topfrac = r21_topfrac;
+    bottomfrac = r21_bottomfrac;
+    pixhigh = r21_pixhigh;
+    pixlow = r21_pixlow;
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     doom_profile_stage = previous_stage;
 #endif

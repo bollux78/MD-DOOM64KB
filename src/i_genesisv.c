@@ -27,6 +27,8 @@
 
 #include "globdata.h"
 #include "gen_pal.h"
+#include "r21_textscreen.h"
+#include "r21_prof.h"
 #include "r20_stackguard.h"
 #include "r20_counters.h"
 #include "r20_dma.h"
@@ -353,6 +355,64 @@ void I_ProfileLogic(uint32_t elapsed) { prof_logic_vb += elapsed; }
 void I_ProfileRender(uint32_t elapsed) { prof_render_vb += elapsed; }
 #endif
 
+#if defined(DOOM_R21_FRAME_HASH)
+#if defined(DOOM_R20_STACKGUARD) || defined(DOOM_R20_COUNTERS) || defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_CACHE_STATS) || defined(DOOM_PROFILE) || defined(DOOM_R21_PROF)
+#error DOOM_R21_FRAME_HASH owns result rows 19..22; build it without other diagnostics
+#endif
+/*
+ * R21 N2: exact-equivalence oracle. Every DEMO3 frame, hash the tilemap that
+ * is about to be shown (rows 1..27: viewport + HUD; row 0 holds the FPS text,
+ * which legitimately differs between builds), then fold it into a running
+ * hash. An optimisation that claims to be exact must reproduce the control's
+ * checkpoints bit for bit. Cost ~31 k cycles/frame: FPS of this ROM is not a
+ * performance number.
+ */
+typedef uint32_t __attribute__((may_alias)) r21_u32a;
+static uint32_t r21_hash;
+static uint32_t r21_hash_at[8];
+static const uint16_t r21_hash_mark[7] = { 1, 10, 100, 500, 1000, 1500, 2000 };
+static void R21_HashFrame(uint32_t frame)
+{
+    const r21_u32a *p = (const r21_u32a *)&_s_screen[VIEWWINDOWWIDTH];
+    uint16_t n = (uint16_t)((VIEWWINDOWWIDTH * (VDP_DISPLAY_ROWS - 1)) / 2);
+    uint32_t h = 0x811C9DC5u;
+    do
+    {
+        h = ((h << 7) | (h >> 25)) + *p++;
+    } while (--n);
+    r21_hash = ((r21_hash << 3) | (r21_hash >> 29)) ^ h;
+    for (uint16_t i = 0; i < 7; i++)
+        if (frame == r21_hash_mark[i])
+            r21_hash_at[i] = r21_hash;
+    r21_hash_at[7] = r21_hash;
+}
+#if ((VIEWWINDOWWIDTH * (VDP_DISPLAY_ROWS - 1)) & 1)
+#error R21 frame hash reads pairs of tile words
+#endif
+#endif
+
+#if defined(DOOM_R21_NO_VDP_INIT) || defined(DOOM_R21_HEAP_PROBE)
+volatile uint16_t r21_heap_at_end_free, r21_heap_at_end_largest;
+void I_R21_ProbeHeap(void)
+{
+    r21_heap_at_end_free = MEM_getFree();
+    r21_heap_at_end_largest = MEM_getLargestFreeBlock();
+}
+#endif
+#if defined(DOOM_R21_NO_VDP_INIT)
+void I_R21_TextScreen(void)
+{
+    /* Keep the boot VDP setup (H40, 64x32 planes, font tiles, Doom CRAM).
+       Only stop pending DMA and blank both planes; DMA fill needs no heap. */
+    VDP_waitDMACompletion();
+    VDP_setHInterrupt(FALSE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_setTextPlane(BG_A);
+    VDP_setTextPriority(TRUE);
+}
+#endif
+
 void I_BenchmarkReset(void)
 {
     bench_start_vb = _g_vblankCount;
@@ -372,6 +432,22 @@ void I_BenchmarkReset(void)
 #if defined(DOOM_R20_COUNTERS)
     for (uint16_t i = 0; i < R20C_N; i++) r20_cnt[i] = 0;
 #endif
+#if defined(DOOM_R21_PROF)
+#if defined(DOOM_R20_STACKGUARD) || defined(DOOM_R20_COUNTERS) || defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_CACHE_STATS) || defined(DOOM_PROFILE)
+#error DOOM_R21_PROF owns result rows 19..22; build it without other diagnostics
+#endif
+    R21_ProfStart();
+#endif
+#if defined(DOOM_R21_STACK_PLAY)
+#if !defined(DOOM_R20_STACKGUARD)
+#error DOOM_R21_STACK_PLAY extends DOOM_R20_STACKGUARD
+#endif
+    R21_StackRepaintForPlay();
+#endif
+#if defined(DOOM_R21_FRAME_HASH)
+    r21_hash = 0;
+    for (uint16_t i = 0; i < 8; i++) r21_hash_at[i] = 0;
+#endif
 #if defined(DOOM_PROFILE)
     prof_logic_vb = prof_render_vb = prof_vdp_vb = 0;
 #endif
@@ -380,6 +456,9 @@ void I_BenchmarkReset(void)
 static void I_BenchmarkFrame(void)
 {
     if (!bench_active) return;
+#if defined(DOOM_R21_FRAME_HASH)
+    R21_HashFrame(bench_frames + 1);
+#endif
     bench_frames++;
     bench_window_frames++;
     uint32_t elapsed = _g_vblankCount - bench_window_vb;
@@ -438,7 +517,11 @@ void I_BenchmarkShowResults(void)
     uint32_t seconds_x100 = (elapsed * 100u + 30u) / 60u;
     char buffer[16];
 
-    VDP_init();
+#if defined(DOOM_R21_PROF)
+    R21_ProfStop(bench_frames);
+#endif
+    R21_PROBE_HEAP();
+    R21_TEXT_SCREEN();
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
 #if defined(DOOM_BUILD_VARIANT)
@@ -542,12 +625,14 @@ void I_BenchmarkShowResults(void)
         static const char *const names[R20C_N] = {
             "TEX CALLS", "TEX CELLS", "FLAT CALLS", "FLAT CELLS",
             "WALL 1PATCH", "WALL MULTI", "WALL COMPOSED", "TAN 16BIT",
-            "TAN 32BIT", "SEGS", "SIGHT CHECKS", "SIGHT DEPTH" };
+            "TAN 32BIT", "SEGS", "SIGHT CHECKS", "SIGHT DEPTH",
+            "SEG COLUMNS", "TEX SKIPPABLE" };
         uint32_t frames = bench_frames ? bench_frames : 1;
         for (uint16_t n = 0; n < R20C_N; n++)
         {
-            uint16_t x = n < 6 ? 1 : 21;
-            uint16_t y = 19 + (n < 6 ? n : n - 6);
+            /* R21: 7 + 7 rows (19..25); values right-aligned 6 chars. */
+            uint16_t x = n < 7 ? 1 : 20;
+            uint16_t y = 19 + (n < 7 ? n : n - 7);
             VDP_drawText(names[n], x, y);
             if (n == R20C_SIGHT_DEPTH)
                 bench_u32(buffer, r20_cnt[n]);              /* a maximum, not a rate */
@@ -558,6 +643,41 @@ void I_BenchmarkShowResults(void)
     }
 #else
     VDP_drawText("MIN/MAX: FULL 1S WINDOWS", 3, 23);
+#endif
+#if defined(DOOM_R21_NO_VDP_INIT) || defined(DOOM_R21_HEAP_PROBE)
+#define R21_SHOW_HEAP_AT_END() do { \
+        VDP_drawText("SGDK FREE / BLOCK AT END", 3, 18); \
+        bench_u32(buffer, r21_heap_at_end_free); VDP_drawText(buffer, 28, 18); \
+        bench_u32(buffer, r21_heap_at_end_largest); VDP_drawText(buffer, 34, 18); \
+    } while (0)
+#else
+#define R21_SHOW_HEAP_AT_END() ((void)0)
+#endif
+    R21_SHOW_HEAP_AT_END();
+#if defined(DOOM_R21_PROF)
+    VDP_drawText("PROFILE SAMPLES", 3, 19);
+    bench_u32(buffer, r21_prof_samples); VDP_drawText(buffer, 24, 19);
+    VDP_drawText("BAD FRAME / OUT RANGE", 3, 20);
+    bench_u32(buffer, r21_prof_bad); VDP_drawText(buffer, 25, 20);
+    bench_u32(buffer, r21_prof_out); VDP_drawText(buffer, 32, 20);
+    VDP_drawText(r21_prof_state == 3 ? "HISTOGRAM IN SRAM: QUIT EMU"
+               : r21_prof_state == 2 ? "PROFILER OFF: ROM ABOVE 2MB"
+                                     : "PROFILER NOT RUN", 3, 21);
+    VDP_drawText("PROFILE FPS HAS OVERHEAD", 3, 22);
+#endif
+#if defined(DOOM_R21_FRAME_HASH)
+    {
+        static const char *const r21_hash_label[8] = {
+            "H1", "H10", "H100", "H500", "H1000", "H1500", "H2000", "HEND" };
+        for (uint16_t i = 0; i < 8; i++)
+        {
+            uint16_t x = (i & 1) ? 21 : 2;
+            uint16_t y = 19 + (i >> 1);
+            VDP_drawText(r21_hash_label[i], x, y);
+            intToHex(r21_hash_at[i], buffer, 8);
+            VDP_drawText(buffer, x + 7, y);
+        }
+    }
 #endif
 #if defined(DOOM_R20_STACKGUARD)
     /* All data were frozen BEFORE VDP_init. Keep inside CRT-safe rows. */
@@ -581,8 +701,16 @@ void I_BenchmarkShowResults(void)
     intToHex(r20_min_sp, buffer, 8); VDP_drawText(buffer, 25, 17);
     VDP_drawText("1=STACK 2=END 4=SGDK", 3, 19);
     VDP_drawText("8=SP 16=ZONE; MASK ADDS", 3, 20);
+#if defined(DOOM_R21_STACK_PLAY)
+    VDP_drawText("BOOT PEAK / PLAY PEAK", 3, 21);
+    bench_u32(buffer, r21_boot_peak); VDP_drawText(buffer, 25, 21);
+    bench_u32(buffer, r20_peak); VDP_drawText(buffer, 32, 21);
+    VDP_drawText("ROW 9 PEAK = DEMO3 ONLY", 3, 22);
+#else
     VDP_drawText("PEAK SINCE MAIN; SATURATES", 3, 22);
+#endif
     VDP_drawText("DIAGNOSTIC FPS HAS OVERHEAD", 3, 23);
+    R21_SHOW_HEAP_AT_END();
 #endif
     for (;;) SYS_doVBlankProcess();
 }
@@ -649,6 +777,12 @@ static void I_BuildSolidTiles(void)
 
 void I_InitGraphicsHardwareSpecificCode(void)
 {
+#if defined(DOOM_R21_V2_HEAPBUF)
+    {
+        extern void I_R21_AllocVideoCopy(void);
+        I_R21_AllocVideoCopy();
+    }
+#endif
     R20_StopVideo();
     R20_InvalidateVideo();
 	VDP_setScreenWidth320();
@@ -669,6 +803,9 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	// 画面を黒で埋める
 	for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
 		_s_screen[i] = BLACK_CELL;
+#if defined(DOOM_R21_PROF)
+    R21_ProfInit();
+#endif
 }
 
 
@@ -715,7 +852,25 @@ static void R20_UploadRows(const uint16_t *src,uint16_t rows) {
 }
 #endif
 #if defined(DOOM_R20_VBLANK_VIDEO)
+#if defined(DOOM_R21_V2_HEAPBUF)
+#if !defined(DOOM_R21_NO_VDP_INIT)
+#error DOOM_R21_V2_HEAPBUF needs DOOM_R21_NO_VDP_INIT (no 3 KB font unpack after boot)
+#endif
+/* R21 V2c: a static 2128-byte snapshot shrinks the SGDK heap before boot;
+ * SGDK's internal_reset() then fails VDP_init()'s 3082-byte font unpack
+ * (MEM_init -> DMA_init -> VDP_init), i.e. the ROM stops before main().
+ * Allocate the snapshot from the SGDK heap after boot instead. */
+static uint16_t *r20_video_copy;
+void I_R21_AllocVideoCopy(void)
+{
+    if (!r20_video_copy)
+        r20_video_copy = MEM_alloc(VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * sizeof(uint16_t));
+    if (!r20_video_copy)
+        I_Error("R21 V2c: no SGDK heap for %u B", (unsigned)(VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * 2));
+}
+#else
 static uint16_t r20_video_copy[VIEWWINDOWWIDTH*VDP_DISPLAY_ROWS];
+#endif
 static volatile uint16_t r20_video_ready;
 static uint16_t r20_video_rows;
 static int8_t r20_video_palette=100, r20_next_palette=100;

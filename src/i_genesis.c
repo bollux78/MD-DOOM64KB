@@ -21,6 +21,7 @@
 #endif
 
 #include "globdata.h"
+#include "r21_textscreen.h"
 #include "r20_stackguard.h"
 #include "r20_dma.h"
 #include "music.h"        // rescomp 生成: const u8 bgm_e1m1[]（res/music.res）
@@ -335,7 +336,7 @@ void I_Error(const char *error, ...)
 	vsprintf(buffer, error, argptr);
 	va_end(argptr);
 
-	VDP_init();
+	R21_TEXT_SCREEN();   /* R21 F1: VDP_init() unless DOOM_R21_NO_VDP_INIT */
 	VDP_setTextPalette(PAL0);
 	PAL_setColor(15, 0x0EEE);
 	VDP_drawText(buffer, 1, 1);
@@ -361,7 +362,8 @@ int main(bool hardReset)
 #endif
 
 #if defined(DOOM_R20_SGDK_HEAP)
-    DMA_initEx(DMA_QUEUE_SIZE_MIN, 0, DMA_BUFFER_SIZE_MIN);
+    /* R21: SGDK uses 65535 for unlimited queue capacity; zero is a zero-byte limit. */
+    DMA_initEx(DMA_QUEUE_SIZE_MIN, (uint16_t)-1, DMA_BUFFER_SIZE_MIN);
     void *r20_dma_test=DMA_allocateTemp(1);
     if (!r20_dma_test) I_Error("R20g SGDK DMA buffer allocation");
     DMA_releaseTemp(1);

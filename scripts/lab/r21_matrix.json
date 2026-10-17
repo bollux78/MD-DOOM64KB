@@ -1,0 +1,104 @@
+{
+  "control": [],
+  "f1": [
+    "R21_NO_VDP_INIT"
+  ],
+  "n3": [
+    "R21_SEGLOOP_LOCALS"
+  ],
+  "n4": [
+    "R21_LAZY_TEXCOL"
+  ],
+  "n3-n4": [
+    "R21_SEGLOOP_LOCALS",
+    "R21_LAZY_TEXCOL"
+  ],
+  "v2c": [
+    "R20_VBLANK_VIDEO",
+    "R21_V2_HEAPBUF",
+    "R21_NO_VDP_INIT"
+  ],
+  "hash": [
+    "R21_FRAME_HASH"
+  ],
+  "hash-n3": [
+    "R21_FRAME_HASH",
+    "R21_SEGLOOP_LOCALS"
+  ],
+  "hash-n4": [
+    "R21_FRAME_HASH",
+    "R21_LAZY_TEXCOL"
+  ],
+  "hash-n3-n4": [
+    "R21_FRAME_HASH",
+    "R21_SEGLOOP_LOCALS",
+    "R21_LAZY_TEXCOL"
+  ],
+  "hash-v2c": [
+    "R21_FRAME_HASH",
+    "R20_VBLANK_VIDEO",
+    "R21_V2_HEAPBUF",
+    "R21_NO_VDP_INIT"
+  ],
+  "f1-s5": [
+    "R21_NO_VDP_INIT",
+    "R20_SGDK_HEAP"
+  ],
+  "probe-s5": [
+    "R21_HEAP_PROBE",
+    "R20_SGDK_HEAP"
+  ],
+  "v2-static": [
+    "R20_VBLANK_VIDEO",
+    "R21_NO_VDP_INIT"
+  ],
+  "diag-control": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY"
+  ],
+  "diag-n3-n4": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R21_SEGLOOP_LOCALS",
+    "R21_LAZY_TEXCOL"
+  ],
+  "diag-v2c": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R20_VBLANK_VIDEO",
+    "R21_V2_HEAPBUF",
+    "R21_NO_VDP_INIT"
+  ],
+  "cnt": [
+    "R20_COUNTERS"
+  ],
+  "prof": [
+    "R21_PROF"
+  ],
+  "prof-n3-n4": [
+    "R21_PROF",
+    "R21_SEGLOOP_LOCALS",
+    "R21_LAZY_TEXCOL"
+  ],
+  "diag-n3": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R21_SEGLOOP_LOCALS"
+  ],
+  "diag-n4": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R21_LAZY_TEXCOL"
+  ],
+  "diag-f1": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R21_NO_VDP_INIT"
+  ],
+  "diag-f1-s5": [
+    "R20_STACKGUARD",
+    "R21_STACK_PLAY",
+    "R21_NO_VDP_INIT",
+    "R20_SGDK_HEAP"
+  ]
+}
