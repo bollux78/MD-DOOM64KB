@@ -58,7 +58,7 @@ int main(void){
 with tempfile.TemporaryDirectory() as d:
  c=Path(d)/'test.c';c.write_text(code);e=Path(d)/'test'
  subprocess.run(['cc','-O2','-fsanitize=undefined','-fno-sanitize-recover=undefined','-iquote'+str(r/'src'),str(c),'-o',str(e)],check=True);subprocess.run([str(e)],check=True)
-# Ensure allVRAM regions/aliases are intentional and visible graphics/font don't overlap.
+# Ensure graphics/font and shared lower Window regions do not overlap and visible graphics/font don't overlap.
 banks=[(16*32,(16+836)*32),(852*32,(852+836)*32)];font=(1696*32,1792*32)
 assert banks[0][1]==banks[1][0] and banks[1][1]<=font[0] and font[1]==0xe000
 assert 0xf000+22*128<=0xfc00 and 0xfc00+640<=0x10000
@@ -68,4 +68,4 @@ assert 8100<xt[0]<8300 and -8300<(xt[-1]-65536)<-8100
 v=[int(x) for x in re.findall(r'\d+', (r/'src/r22_viewangletox.h').read_text())]
 assert len(v)==2032 and all(v[i]>=v[i+1] for i in range(len(v)-1))
 assert all(0<=x<=76 for x in v)
-print('PASS VRAM banks/font/maps/SAT/HScroll layout and independent76-column projection')
+print('PASS VRAM banks/font/shared Window/SAT/HScroll bounds and independent76-column projection')

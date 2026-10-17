@@ -8,7 +8,7 @@
 # Usage: fish scripts/lab/build_r21.fish [variant ...]
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r22b
+set -l dest dist/r22c
 mkdir -p "$dest"; or exit 1
 
 set -l variants control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
@@ -118,7 +118,7 @@ for v in $variants
         set defs $defs '-DDOOM_R22_PATTERN'
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r22b-$v
+    set -l id doom-md-r22c-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
@@ -135,4 +135,4 @@ for v in $variants
 end
 python3 scripts/lab/audit_r22.py "$dest"; or exit 1
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
-echo "READY: R22b nine-ROM 4x4 lab, game/hardware tests pending"
+echo "READY: R22c nine-ROM 4x4 lab, game/hardware tests pending"

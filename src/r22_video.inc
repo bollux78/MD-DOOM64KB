@@ -67,7 +67,8 @@ static void R22_ClearOverlay(void){
     R20_StopVideo();
     uint16_t sr=R22_Lock();
     /* Only rows0..21: never touch the aliased SAT/HScroll at FC00. */
-    VDP_clearTileMap(VDP_BG_B,0,64*22,TRUE);
+    VDP_clearTileMap(VDP_WINDOW,0,64*22,TRUE);
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setAutoInc(2);R22_Unlock(sr);r22_overlay_dirty=0;
 }
 static int8_t r22_newpal=100,r22_queued_pal=100;
@@ -89,7 +90,8 @@ void I_R21_TextScreen(void)
     VDP_waitDMACompletion();
     VDP_setHInterrupt(FALSE);
     VDP_clearPlane(BG_A, TRUE);
-    VDP_clearPlane(BG_B, TRUE);
+    VDP_clearPlane(WINDOW, TRUE);
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 }
@@ -187,10 +189,15 @@ static void R22_UploadBack(uint16_t bank){
 
 static void R22_Text(int16_t x,int16_t y,const char *s){
     if(x<0||x>=38||y<0||y>=22)return;
-    /* BG_B high-priority glyphs overlay the raster without a text RAM map.
-       BG_B rows24..31 are reserved for zeroedSAT/HScroll (sharedFC00 base), never text. */
-    if(y>0)r22_overlay_dirty=1;
-    R22_DrawText(y==0?VDP_BG_A:VDP_BG_B,s,(uint16_t)x,(uint16_t)y);
+    /* Window is independently addressable at F000. Plane B intentionally
+       mirrors A at E000: transparent Window pixels reveal the same raster.
+       Window rows24..31 contain SAT/HScroll at FC00, never text. */
+    if(y>0){
+        R20_StopVideo();uint16_t sr=R22_Lock();
+        VDP_setWindowHPos(TRUE,0);VDP_setWindowVPos(FALSE,0);
+        R22_Unlock(sr);r22_overlay_dirty=1;
+    }
+    R22_DrawText(y==0?VDP_BG_A:VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
 }
 void V_DrawCharacter(int16_t x,int16_t y,uint8_t c,char ch){(void)c;char b[2]={ch,0};if(ch==1||ch==2)b[0]='>';if((uint8_t)b[0]<32||(uint8_t)b[0]>127)b[0]=' ';R22_Text(x,y,b);}
 void V_DrawCharacterForeground(int16_t x,int16_t y,uint8_t c,char ch){V_DrawCharacter(x,y,c,ch);}
@@ -248,12 +255,13 @@ void I_InitGraphicsHardwareSpecificCode(void){
     R20_StopVideo();VDP_setScreenWidth320();VDP_setPlaneSize(64,32,FALSE);
     /* All map/table addresses>=E000, soSGDK relocates its96font tiles to
        D400..DFFF, above both graphics banks (endingD2FF). */
-    VDP_setBGBAddress(0xF000);VDP_setWindowAddress(0xF000);VDP_setSpriteListAddress(0xFC00);VDP_setHScrollTableAddress(0xFC00);VDP_setBGAAddress(0xE000);
+    VDP_setBGBAddress(0xE000);VDP_setWindowAddress(0xF000);VDP_setSpriteListAddress(0xFC00);VDP_setHScrollTableAddress(0xFC00);VDP_setBGAAddress(0xE000);
     VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
-    if(TILE_FONT_INDEX!=1696)I_Error("PX4 font layout %u",(unsigned)TILE_FONT_INDEX);
-    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);
+    if(TILE_FONT_INDEX!=1696 || VDP_BG_A!=0xE000 || VDP_BG_B!=0xE000 || VDP_WINDOW!=0xF000)
+        I_Error("PX4 VDP/font layout");
+    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(WINDOW,TRUE);
     VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,0);VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,0);
-    /* Explicit solid tiles also guarantee transparent tile0 for BG_B.
+    /* Explicit solid tiles also guarantee transparent tile0 for Window.
        Do not rely on the SDK's initial contents surviving font relocation. */
     uint16_t sr=R22_Lock();
     volatile uint32_t *data=(volatile uint32_t*)0xC00000,*ctrl=(volatile uint32_t*)0xC00004;

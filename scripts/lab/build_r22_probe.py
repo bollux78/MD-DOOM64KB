@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import os,subprocess
-r=Path(__file__).resolve().parents[2];e=r/'dist/r22b/evidence';e.mkdir(parents=True,exist_ok=True)
+r=Path(__file__).resolve().parents[2];e=r/'dist/r22c/evidence';e.mkdir(parents=True,exist_ok=True)
 # Reuse the existing CPU-harness boot/link contract; not a MegaDrive game.
 old=r/'scripts/lab/gen_r20g_probe.py'
 # The established generator produces boot and linker files without invoking GCC.

@@ -26,14 +26,18 @@ code=r'''
 #include "r22_pixel4.h"
 #include "r22_pair_lut.h"
 #define TRUE 1
+#define FALSE 0
 #define VDP_BG_A 0xE000
-#define VDP_BG_B 0xF000
+#define VDP_BG_B 0xE000
+#define VDP_WINDOW 0xF000
 #define TILE_FONT_INDEX 1696
 static struct {uint8_t pixels[R22_FB_BYTES];} r22_fb;
 static uint16_t r22_map[38*21];
 static uint8_t r22_overlay_dirty;
 static uint32_t addr,writes;
-static unsigned locked,pending,stops;
+static unsigned locked,pending,stops,window;
+static void VDP_setWindowHPos(unsigned right,unsigned pos){assert(locked && !pos);window=right;}
+static void VDP_setWindowVPos(unsigned down,unsigned pos){assert(locked && !down && !pos);}
 static uint8_t vram[65536];
 static void R20_StopVideo(void){assert(!locked);pending=0;stops++;}
 static uint16_t R22_Lock(void){assert(!locked && !pending);locked=1;return 0x2300;}
@@ -43,10 +47,10 @@ static void address(unsigned a){assert(locked && a<65536);addr=a;}
 static void write16(uint16_t x){assert(locked && addr+2<=65536);vram[addr++]=x>>8;vram[addr++]=x;writes+=2;}
 static void write32(uint32_t x){write16(x>>16);write16(x);}
 static void VDP_clearTileMap(unsigned plane,unsigned ind,unsigned n,unsigned wait){
- assert(locked && !pending && plane==VDP_BG_B && !ind && n==64*22 && wait);
+ assert(locked && !pending && plane==VDP_WINDOW && !ind && n==64*22 && wait);
  memset(vram+plane,0,n*2);
 }
-'''+fn('static inline uint32_t R22_Expand(')+'\n'+u+'\n'+t+'\n'+fn('static void R22_ClearOverlay(')+'\n'+fn('void R22_BeginFrame(')+r'''
+'''+fn('static inline uint32_t R22_Expand(')+'\n'+u+'\n'+t+'\n'+fn('static void R22_Text(')+'\n'+fn('static void R22_ClearOverlay(')+'\n'+fn('void R22_BeginFrame(')+r'''
 static uint16_t word(unsigned a){return (vram[a]<<8)|vram[a+1];}
 int main(void){
  for(unsigned p=0;p<256;p++)assert(r22_pair_lut[p]==R22_ExpandPair(p));
@@ -90,19 +94,40 @@ int main(void){
 #endif
  /* Title-only and menu frames both wait BEFORE touching the VDP. */
  pending=1;r22_overlay_dirty=0;stops=0;R22_BeginFrame();assert(!pending && stops==1);
- pending=1;r22_overlay_dirty=1;R22_BeginFrame();assert(!pending && !r22_overlay_dirty);
+ pending=1;r22_overlay_dirty=1;R22_BeginFrame();assert(!pending && !r22_overlay_dirty && !window);
+ for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
+ /* Real menu routing must affect Window only, never the shared A/B map. */
+ for(unsigned cycle=0;cycle<100;cycle++){
+  pending=1;R22_Text(3,2,"NEW GAME");assert(window && r22_overlay_dirty);
+  for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
+  pending=1;R22_BeginFrame();assert(!window && !r22_overlay_dirty);
+  for(unsigned i=VDP_BG_A;i<VDP_BG_A+4096;i++)assert(vram[i]==0xa5);
+ }
  for(unsigned i=0xFC00;i<65536;i++)assert(vram[i]==0xa5);
  const char text[]={'A',1,(char)255,'Z',0};pending=1;
- R22_DrawText(VDP_BG_B,text,2,3);unsigned pos=VDP_BG_B+3*128+4;
+ R22_DrawText(VDP_WINDOW,text,2,3);unsigned pos=VDP_WINDOW+3*128+4;
  assert(!pending && !locked && word(pos)==(0x8000+1696+'A'-32));
  assert(word(pos+2)==0x8000+1696 && word(pos+4)==0x8000+1696);
  assert(word(pos+6)==0x8000+1696+'Z'-32);
- writes=0;R22_DrawText(VDP_BG_B,"ABCDEFG",37,21);assert(writes==2);
- R22_DrawText(VDP_BG_B,"BAD",38,0);R22_DrawText(VDP_BG_B,"BAD",0,28);assert(writes==2);
- puts("PASS production uploader: all quadrants/both banks, solid reuse, LUT, title/menu VDP ownership and glyph bounds");
+ writes=0;R22_DrawText(VDP_WINDOW,"ABCDEFG",37,21);assert(writes==2);
+ R22_DrawText(VDP_WINDOW,"BAD",38,0);R22_DrawText(VDP_WINDOW,"BAD",0,28);assert(writes==2);
+ puts("PASS production uploader: all quadrants/both banks, solid reuse, LUT, title/menu VDP ownership and glyph bounds,100 Window menu cycles preserving A/B");
 }
 '''
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'t.c';p.write_text(code)
  for flags in [[],['-DDOOM_R22_SOLID_TILES'],['-DDOOM_R22_SOLID_TILES','-DDOOM_R22_PAIR_LUT']]:
   e=Path(d)/'t';subprocess.run(['cc','-O2','-fsanitize=undefined','-fno-sanitize-recover=undefined','-iquote'+str(r/'src'),*flags,str(p),'-o',str(e)],check=True);subprocess.run([str(e)],check=True)
+
+# Model the actual SDK/VDP address masks, not the requested addresses.
+setters={name:int(value,16) for name,value in re.findall(r'VDP_set(BGA|BGB|Window|SpriteList|HScrollTable)Address\((0x[0-9A-Fa-f]+)\)',s)}
+masks={'BGA':0xE000,'BGB':0xE000,'Window':0xF000,'SpriteList':0xFC00,'HScrollTable':0xFC00}
+effective={k:v&masks[k] for k,v in setters.items()}
+assert all(setters[k]==v for k,v in effective.items()),(setters,effective)
+assert effective['BGA']==effective['BGB']==0xE000
+assert effective['Window']==0xF000 and effective['Window']!=effective['BGA']
+assert effective['SpriteList']==effective['HScrollTable']==0xFC00
+assert 'y==0?VDP_BG_A:VDP_WINDOW' in fn('static void R22_Text(')
+assert 'VDP_clearTileMap(VDP_WINDOW,' in fn('static void R22_ClearOverlay(')
+assert not re.search(r'VDP_clearPlane\(BG_B',s)
+print('PASS effective VDP register masks: A/B mirror at E000; independent Window at F000; SAT/HScroll FC00')
