@@ -1,3 +1,4 @@
+#include "r22_textsize.h"
 /* Emacs style mode select   -*- C++ -*-
  *-----------------------------------------------------------------------------
  *
@@ -77,7 +78,7 @@ boolean    _g_message_dontfuckwithme;
 // Locally used constants, shortcuts.
 //
 
-#define HU_TITLEY (VIEWWINDOWHEIGHT - 1)
+#define HU_TITLEY (R22_TEXTHEIGHT - 1)
 
 #define HU_MSGY         0
 

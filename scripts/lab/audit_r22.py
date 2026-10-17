@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+import pathlib,json,hashlib,struct,importlib.util,sys
+r=pathlib.Path(__file__).resolve().parents[2];d=pathlib.Path(sys.argv[1])
+spec=importlib.util.spec_from_file_location('heap',r/'scripts/lab/r21_heap_model.py');h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
+names=['control','p4','diag-p4','play-p4','pattern-p4'];assert {p.stem for p in d.glob('*.bin')}=={'doom-md-r22-'+n for n in names}
+rows=[];manifest=[]
+for n in names:
+ stem='doom-md-r22-'+n;p=d/(stem+'.bin');b=p.read_bytes();f=set((d/('flags-'+stem+'.txt')).read_text().split());pix=n!='control'
+ assert b[0x120:0x150].decode().strip()==stem
+ assert 512<=len(b)<=0x200000 and struct.unpack_from('>I',b,0x1a4)[0]>=len(b)-1
+ assert '-DDOOM_R21_NO_VDP_INIT' in f and '-DDOOM_R20_VBLANK_VIDEO' in f
+ assert ('-DTIMEDEMO' in f)==(n in ['control','p4','diag-p4'])
+ assert ('-DDOOM_R20_STACKGUARD' in f)==(n=='diag-p4')
+ assert ('-DDOOM_R22_PATTERN' in f)==(n=='pattern-p4')
+ assert ('-DDOOM_R22_PIXEL4' in f)==pix
+ for flag in ['-DDOOM_R20_FLAT_INLINE','-DDOOM_R20_REG_COLUMNS','-DDOOM_R20_PIXEL_ADDX','-DDOOM_CELL_LUT']:
+  assert (flag in f)==(not pix),(n,flag)
+ assert ('-DVIEWWINDOWWIDTH=76' if pix else '-DVIEWWINDOWWIDTH=38') in f
+ assert ('-DVIEWWINDOWHEIGHT=44' if pix else '-DVIEWWINDOWHEIGHT=22') in f
+ elf=d/(stem+'.elf');assert elf.stat().st_size
+ m=h.model(h.bend(elf),alloc=2432 if pix else 2128,no_init=True)
+ assert not m['boot_fail'] and m['after']>=256,(n,m)
+ rows.append(f'{n}: '+json.dumps(m))
+ manifest.append(dict(name=p.name,bytes=len(b),sha256=hashlib.sha256(b).hexdigest(),pixel4=pix))
+(d/'heap-report.txt').write_text('\n'.join(rows)+'\n')
+(d/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+print('PASS R22 five ROMs, identities/flags, boot font budget and runtime openings/snapshot allocation')

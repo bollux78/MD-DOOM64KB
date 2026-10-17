@@ -1,3 +1,6 @@
+#if defined(DOOM_R22_PIXEL4)
+#include "r22_video.inc"
+#else
 /*-----------------------------------------------------------------------------
  *
  *  Sega Genesis / Mega Drive video code
@@ -1611,3 +1614,5 @@ void D_Wipe(void)
 	// TODO: 画面ワイプ。今は即時更新。
 	I_FinishUpdate();
 }
+
+#endif /* DOOM_R22_PIXEL4 */

@@ -151,6 +151,10 @@ static void D_Display (void)
     if (nodrawers)                    // for comparative timing / profiling
         return;
 
+#if defined(DOOM_R22_PIXEL4)
+    extern void R22_BeginFrame(void);
+    R22_BeginFrame();
+#endif
     // save the current screen if about to wipe
     boolean wipe = (_g_gamestate != wipegamestate);
 

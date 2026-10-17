@@ -1,3 +1,4 @@
+#include "r22_textsize.h"
 /*-----------------------------------------------------------------------------
  *
  *
@@ -117,61 +118,61 @@ static void ST_drawWidgets(void)
 {
 	// ammo
 	if (_g_fps_show)
-		STlib_drawFps(7, VIEWWINDOWHEIGHT - 2, 4, _g_fps_framerate);
+		STlib_drawFps(7, R22_TEXTHEIGHT - 2, 4, _g_fps_framerate);
 	else if (weaponinfo[_g_player.readyweapon].ammo != am_noammo)
-		STlib_drawNum(8, VIEWWINDOWHEIGHT - 2, 4, _g_player.ammo[weaponinfo[_g_player.readyweapon].ammo]);
+		STlib_drawNum(8, R22_TEXTHEIGHT - 2, 4, _g_player.ammo[weaponinfo[_g_player.readyweapon].ammo]);
 	else
-		V_DrawSTString(8, VIEWWINDOWHEIGHT - 2, 4, "   ");
+		V_DrawSTString(8, R22_TEXTHEIGHT - 2, 4, "   ");
 
 	for (int16_t i = 0; i < NUMAMMO; i++)
 	{
-		STlib_drawNum(VIEWWINDOWWIDTH - 8, VIEWWINDOWHEIGHT - 5 + i, 14, _g_player.ammo[i]);
-		STlib_drawNum(VIEWWINDOWWIDTH - 4, VIEWWINDOWHEIGHT - 5 + i, 14, _g_player.maxammo[i]);
+		STlib_drawNum(R22_TEXTWIDTH - 8, R22_TEXTHEIGHT - 5 + i, 14, _g_player.ammo[i]);
+		STlib_drawNum(R22_TEXTWIDTH - 4, R22_TEXTHEIGHT - 5 + i, 14, _g_player.maxammo[i]);
 	}
 
 	int16_t healthcolor = _g_player.health < 40 ? 12 : 4;
-	STlib_drawNum(8, VIEWWINDOWHEIGHT - 4, healthcolor, _g_player.health);
+	STlib_drawNum(8, R22_TEXTHEIGHT - 4, healthcolor, _g_player.health);
 
-	STlib_drawNum(8, VIEWWINDOWHEIGHT - 3, 4, _g_player.armorpoints);
+	STlib_drawNum(8, R22_TEXTHEIGHT - 3, 4, _g_player.armorpoints);
 
 	// keys
 	if (_g_player.cards[0])
-		V_DrawSTCharacter(8, VIEWWINDOWHEIGHT - 5, 9, 'B'); // Blue
+		V_DrawSTCharacter(8, R22_TEXTHEIGHT - 5, 9, 'B'); // Blue
 	else
-		V_DrawSTCharacter(8, VIEWWINDOWHEIGHT - 5, 7, '\xf9');
+		V_DrawSTCharacter(8, R22_TEXTHEIGHT - 5, 7, '\xf9');
 
 	if (_g_player.cards[1])
-		V_DrawSTCharacter(9, VIEWWINDOWHEIGHT - 5, 14, 'Y'); // Yellow
+		V_DrawSTCharacter(9, R22_TEXTHEIGHT - 5, 14, 'Y'); // Yellow
 	else
-		V_DrawSTCharacter(9, VIEWWINDOWHEIGHT - 5, 7, '\xf9');
+		V_DrawSTCharacter(9, R22_TEXTHEIGHT - 5, 7, '\xf9');
 
 	if (_g_player.cards[2])
-		V_DrawSTCharacter(10, VIEWWINDOWHEIGHT - 5, 12, 'R'); // Red
+		V_DrawSTCharacter(10, R22_TEXTHEIGHT - 5, 12, 'R'); // Red
 	else
-		V_DrawSTCharacter(10, VIEWWINDOWHEIGHT - 5, 7, '\xf9');
+		V_DrawSTCharacter(10, R22_TEXTHEIGHT - 5, 7, '\xf9');
 }
 
 
 static void ST_refreshBackground(void)
 {
-	V_DrawSTString(1, VIEWWINDOWHEIGHT - 5, 7, "Keys   ");
-	V_DrawSTString(1, VIEWWINDOWHEIGHT - 4, 7, "Health ");
-	V_DrawSTString(1, VIEWWINDOWHEIGHT - 3, 7, "Armor  ");
+	V_DrawSTString(1, R22_TEXTHEIGHT - 5, 7, "Keys   ");
+	V_DrawSTString(1, R22_TEXTHEIGHT - 4, 7, "Health ");
+	V_DrawSTString(1, R22_TEXTHEIGHT - 3, 7, "Armor  ");
 
 	if (_g_fps_show)
-		V_DrawSTString(1, VIEWWINDOWHEIGHT - 2, 7, "FPS     .");
+		V_DrawSTString(1, R22_TEXTHEIGHT - 2, 7, "FPS     .");
 	else
-		V_DrawSTString(1, VIEWWINDOWHEIGHT - 2, 7, "Ammo   ");
+		V_DrawSTString(1, R22_TEXTHEIGHT - 2, 7, "Ammo   ");
 
-	V_DrawSTString(VIEWWINDOWWIDTH - 13, VIEWWINDOWHEIGHT - 5, 7, "Bull ");
-	V_DrawSTString(VIEWWINDOWWIDTH - 13, VIEWWINDOWHEIGHT - 4, 7, "Shel ");
-	V_DrawSTString(VIEWWINDOWWIDTH - 13, VIEWWINDOWHEIGHT - 3, 7, "Rckt ");
-	V_DrawSTString(VIEWWINDOWWIDTH - 13, VIEWWINDOWHEIGHT - 2, 7, "Cell ");
+	V_DrawSTString(R22_TEXTWIDTH - 13, R22_TEXTHEIGHT - 5, 7, "Bull ");
+	V_DrawSTString(R22_TEXTWIDTH - 13, R22_TEXTHEIGHT - 4, 7, "Shel ");
+	V_DrawSTString(R22_TEXTWIDTH - 13, R22_TEXTHEIGHT - 3, 7, "Rckt ");
+	V_DrawSTString(R22_TEXTWIDTH - 13, R22_TEXTHEIGHT - 2, 7, "Cell ");
 
-	V_DrawSTCharacter(VIEWWINDOWWIDTH - 5, VIEWWINDOWHEIGHT - 5, 7, '/');
-	V_DrawSTCharacter(VIEWWINDOWWIDTH - 5, VIEWWINDOWHEIGHT - 4, 7, '/');
-	V_DrawSTCharacter(VIEWWINDOWWIDTH - 5, VIEWWINDOWHEIGHT - 3, 7, '/');
-	V_DrawSTCharacter(VIEWWINDOWWIDTH - 5, VIEWWINDOWHEIGHT - 2, 7, '/');
+	V_DrawSTCharacter(R22_TEXTWIDTH - 5, R22_TEXTHEIGHT - 5, 7, '/');
+	V_DrawSTCharacter(R22_TEXTWIDTH - 5, R22_TEXTHEIGHT - 4, 7, '/');
+	V_DrawSTCharacter(R22_TEXTWIDTH - 5, R22_TEXTHEIGHT - 3, 7, '/');
+	V_DrawSTCharacter(R22_TEXTWIDTH - 5, R22_TEXTHEIGHT - 2, 7, '/');
 }
 
 

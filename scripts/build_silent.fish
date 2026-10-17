@@ -291,12 +291,19 @@ if set -q DOOM_R20_DEFINES
     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
         test -n "$d"; or continue
         # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
-        string match -qr -- '^-DDOOM_R2[01]_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
+        string match -qr -- '^-DDOOM_R2[012]_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
             echo "Invalid DOOM_R20_DEFINES entry: $d"
             exit 1
         end
         set render_flags "$render_flags $d"
     end
+end
+# R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
+if set -q DOOM_R22_PIXEL4; and test "$DOOM_R22_PIXEL4" = 1
+    set render_flags (string replace -- '-DVIEWWINDOWWIDTH=38' '-DVIEWWINDOWWIDTH=76' "$render_flags")
+    set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=22' '-DVIEWWINDOWHEIGHT=44' "$render_flags")
+    set render_flags (string replace -- '-DMAPWIDTH=38' '-DMAPWIDTH=76' "$render_flags")
+    set render_flags "$render_flags -DDOOM_R22_PIXEL4"
 end
 # Generate matching ROM header and on-screen timedemo title per build.
 # SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.

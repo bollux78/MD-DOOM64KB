@@ -1,3 +1,4 @@
+#include "r22_textsize.h"
 /*-----------------------------------------------------------------------------
  *
  *
@@ -36,8 +37,8 @@
 void F_TextWrite(int32_t count)
 {
 	// draw some of the text onto the screen
-	int16_t         cx = (VIEWWINDOWWIDTH  - 32) / 2;
-	int16_t         cy = (VIEWWINDOWHEIGHT - 12) / 2;
+	int16_t         cx = (R22_TEXTWIDTH  - 32) / 2;
+	int16_t         cy = (R22_TEXTHEIGHT - 12) / 2;
 	const char* ch = E1TEXT;
 
 	for ( ; count ; count-- )
@@ -48,7 +49,7 @@ void F_TextWrite(int32_t count)
 			break;
 		if (c == '\n')
 		{
-			cx = (VIEWWINDOWWIDTH - 32) / 2;
+			cx = (R22_TEXTWIDTH - 32) / 2;
 			cy++;
 			continue;
 		}

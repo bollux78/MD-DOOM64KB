@@ -1,3 +1,4 @@
+#include "r22_textsize.h"
 /*-----------------------------------------------------------------------------
  *
  *
@@ -219,7 +220,7 @@ static const menu_t MainDef =
   main_end,       // number of menu items
   MainMenu,       // table that defines menu items
   M_DrawMainMenu, // drawing routine
-  (VIEWWINDOWWIDTH - 9) / 2,8,          // initial cursor position
+  (R22_TEXTWIDTH - 9) / 2,8,          // initial cursor position
   NULL,0,
 };
 
@@ -229,7 +230,7 @@ static const menu_t MainDef =
 
 static void M_DrawMainMenu(void)
 {
-	V_DrawString((VIEWWINDOWWIDTH - 4) / 2, 1, 14, "DOOM");
+	V_DrawString((R22_TEXTWIDTH - 4) / 2, 1, 14, "DOOM");
 }
 
 
@@ -261,7 +262,7 @@ static const menu_t NewDef =
   newg_end,       // # of menu items
   NewGameMenu,    // menuitem_t ->
   M_DrawNewGame,  // drawing routine ->
-  (VIEWWINDOWWIDTH - 21) / 2,8,          // x,y
+  (R22_TEXTWIDTH - 21) / 2,8,          // x,y
   &MainDef,0,
 };
 
@@ -272,8 +273,8 @@ static const menu_t NewDef =
 
 static void M_DrawNewGame(void)
 {
-	V_DrawString((VIEWWINDOWWIDTH -  8) / 2, 2, 12, "NEW GAME");
-	V_DrawString((VIEWWINDOWWIDTH - 19) / 2, 4, 12, "Choose Skill Level:");
+	V_DrawString((R22_TEXTWIDTH -  8) / 2, 2, 12, "NEW GAME");
+	V_DrawString((R22_TEXTWIDTH - 19) / 2, 4, 12, "Choose Skill Level:");
 }
 
 static void M_NewGame(int16_t choice)
@@ -344,7 +345,7 @@ static const menu_t LoadDef =
   load_end,
   LoadMenue,
   M_DrawLoad,
-  (VIEWWINDOWWIDTH - 5) / 2,4,
+  (R22_TEXTWIDTH - 5) / 2,4,
   &MainDef,2,
 };
 
@@ -356,7 +357,7 @@ static const menu_t LoadDef =
 
 static void M_DrawSaveLoad(const char* name)
 {
-	V_DrawString((VIEWWINDOWWIDTH - strlen(name)) / 2, 2, 12, name);
+	V_DrawString((R22_TEXTWIDTH - strlen(name)) / 2, 2, 12, name);
 
 	for (int16_t i = 0; i < load_end; i++)
 		M_WriteText(LoadDef.x, i + 4, _g_savegamestrings[i]);
@@ -421,7 +422,7 @@ static const menu_t SaveDef =
   load_end, // same number of slots as the Load Game screen
   SaveMenu,
   M_DrawSave,
-  (VIEWWINDOWWIDTH - 5) / 2,5,
+  (R22_TEXTWIDTH - 5) / 2,5,
   &MainDef,3,
 };
 
@@ -538,7 +539,7 @@ static const menu_t OptionsDef =
   opt_end,
   OptionsMenu,
   M_DrawOptions,
-  (VIEWWINDOWWIDTH - 12) / 2,4,
+  (R22_TEXTWIDTH - 12) / 2,4,
   &MainDef,1,
 };
 
@@ -550,7 +551,7 @@ static const char msgNames[2][4]  = {"Off","On"};
 
 static void M_DrawOptions(void)
 {
-	V_DrawString((VIEWWINDOWWIDTH - 7) / 2, 2, 12, "OPTIONS");
+	V_DrawString((R22_TEXTWIDTH - 7) / 2, 2, 12, "OPTIONS");
 
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * messages,  12, msgNames[showMessages]);
 
@@ -598,7 +599,7 @@ static const menu_t SoundDef =
   sound_end,
   SoundMenu,
   M_DrawSound,
-  (VIEWWINDOWWIDTH - 12) / 2,8,
+  (R22_TEXTWIDTH - 12) / 2,8,
   &OptionsDef,4,
 };
 
@@ -608,7 +609,7 @@ static const menu_t SoundDef =
 
 static void M_DrawSound(void)
 {
-	V_DrawString((VIEWWINDOWWIDTH - 12) / 2, 2, 12, "SOUND VOLUME");
+	V_DrawString((R22_TEXTWIDTH - 12) / 2, 2, 12, "SOUND VOLUME");
 
 	M_DrawThermo(SoundDef.x, SoundDef.y + LINEHEIGHT * (sfx_vol   + 1), 16, snd_SfxVolume);
 
@@ -987,7 +988,7 @@ void M_Drawer (void)
 		char __far* ms = Z_Strdup(messageString);
 		char __far* p = ms;
 
-		int16_t y = (VIEWWINDOWHEIGHT - M_StringHeight(messageString)) / 2;
+		int16_t y = (R22_TEXTHEIGHT - M_StringHeight(messageString)) / 2;
 		while (*p)
 		{
 			char __far* string = p;
@@ -995,7 +996,7 @@ void M_Drawer (void)
 			while ((c = *p) && *p != '\n')
 				p++;
 			*p = 0;
-			M_WriteText((VIEWWINDOWWIDTH - _fstrlen(string)) / 2, y, string);
+			M_WriteText((R22_TEXTWIDTH - _fstrlen(string)) / 2, y, string);
 			y += 1;
 			if ((*p = c))
 				p++;
