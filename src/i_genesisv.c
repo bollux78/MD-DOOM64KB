@@ -1033,6 +1033,7 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
             uint16_t t20;
 #if defined(DOOM_R20_PIXEL_UNROLL)
             if (count <= 22) {
+                void *end20;
                 n20 = (uint16_t)(-22 * count);
             __asm__ volatile(
                 "lsl.w  #7,%[fl]\n\t"
@@ -1041,7 +1042,8 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
                 "lsl.w  #7,%[sl]\n\t"
                 "rol.w  #7,%[si]\n\t"
                 "and.w  %[k],%[si]\n\t"
-                "jmp (2f,%%pc,%[n].w)\n\t"
+                "lea 2f(%%pc),%[end]\n\t"
+                "jmp (%[end],%[n].w)\n\t"
                 ".rept 22\n\t"
                 "moveq  #0,%[t]\n\t"
                 "move.b (%[s],%[ip].w),%[t]\n\t"
@@ -1052,7 +1054,7 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
                 "addx.w %[si],%[ip]\n\t"
                 "and.w  %[k],%[ip]\n\t"
                 ".endr\n2:"
-                : [d] "+&a" (dest),
+                : [end] "=&a" (end20), [d] "+&a" (dest),
                   [fl] "+&d" (fl), [ip] "+&d" (ip),
                   [sl] "+&d" (sl), [si] "+&d" (si),
                   [n] "+&d" (n20), [t] "=&d" (t20)
