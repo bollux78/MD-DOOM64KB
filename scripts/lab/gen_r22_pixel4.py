@@ -37,3 +37,5 @@ a=v[start:3073];(r/'src/r22_viewangletox.h').write_text(',\n'.join(','.join(map(
 maps=[[16+bank*836+i for i in range(836)] for bank in range(2)]
 (r/'src/r22_maps.h').write_text('/* Aligned to avoid the MD DMA128KiB source wrap within any row. */\nstatic const uint16_t r22_maps[2][836] __attribute__((aligned(4096)))={\n'+',\n'.join('{'+','.join(map(str,row))+'}' for row in maps)+'};\n')
 print('R22: palette16, framebuffer76x44/1672B, VRAM banks16..1687, 77 projection entries')
+
+(r/'src/r22_pair_lut.h').write_text('/* All256 packed pairs expanded to one8-pixel tile row. */\nstatic const uint32_t r22_pair_lut[256]={'+','.join(str(((p>>4)*0x11110000)|((p&15)*0x1111))+'u' for p in range(256))+'};\n')

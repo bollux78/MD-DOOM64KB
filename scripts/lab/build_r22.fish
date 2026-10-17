@@ -8,10 +8,10 @@
 # Usage: fish scripts/lab/build_r21.fish [variant ...]
 set -l root (realpath (dirname (status filename))/../..)
 cd "$root"; or exit 1
-set -l dest dist/r22
+set -l dest dist/r22b
 mkdir -p "$dest"; or exit 1
 
-set -l variants control p4 diag-p4 play-p4 pattern-p4
+set -l variants control p4-fixed play-fixed solid diag-solid play-solid solid-lut play-lut pattern-lut
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
 python3 scripts/lab/test_r15_wallmul.py; or exit 1
 python3 scripts/lab/test_r16_crt_hud.py; or exit 1
@@ -102,17 +102,23 @@ for v in $variants
         set -gx DOOM_R16_WEAPON_LIFT 2
         set defs $pixel
     end
-    switch $v
-        case diag-p4
-            set defs $defs '-DDOOM_R20_STACKGUARD' '-DDOOM_R21_STACK_PLAY'
-        case play-p4
-            set -gx DOOM_TIMEDEMO 0
-        case pattern-p4
-            set -gx DOOM_TIMEDEMO 0
-            set defs $defs '-DDOOM_R22_PATTERN'
+    if contains -- $v solid diag-solid play-solid solid-lut play-lut pattern-lut
+        set defs $defs '-DDOOM_R22_SOLID_TILES'
+    end
+    if contains -- $v solid-lut play-lut pattern-lut
+        set defs $defs '-DDOOM_R22_PAIR_LUT'
+    end
+    if test "$v" = diag-solid
+        set defs $defs '-DDOOM_R20_STACKGUARD' '-DDOOM_R21_STACK_PLAY'
+    end
+    if contains -- $v play-fixed play-solid play-lut pattern-lut
+        set -gx DOOM_TIMEDEMO 0
+    end
+    if test "$v" = pattern-lut
+        set defs $defs '-DDOOM_R22_PATTERN'
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r22-$v
+    set -l id doom-md-r22b-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
@@ -129,4 +135,4 @@ for v in $variants
 end
 python3 scripts/lab/audit_r22.py "$dest"; or exit 1
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
-echo "READY: R22 five-ROM 4x4 prototype, game/hardware tests pending"
+echo "READY: R22b nine-ROM 4x4 lab, game/hardware tests pending"

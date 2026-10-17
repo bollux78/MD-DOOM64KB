@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import os,subprocess
-r=Path(__file__).resolve().parents[2];e=r/'dist/r22/evidence';e.mkdir(parents=True,exist_ok=True)
+r=Path(__file__).resolve().parents[2];e=r/'dist/r22b/evidence';e.mkdir(parents=True,exist_ok=True)
 # Reuse the existing CPU-harness boot/link contract; not a MegaDrive game.
 old=r/'scripts/lab/gen_r20g_probe.py'
 # The established generator produces boot and linker files without invoking GCC.
@@ -10,12 +10,19 @@ for n in ['probe-boot.s','probe.ld']:(e/n).write_bytes((r/'dist/r20g/evidence'/n
 code=r'''
 #include <stdint.h>
 #include "r22_pixel4.h"
+#include "r22_pair_lut.h"
 static struct {uint32_t a;uint8_t fb[R22_FB_BYTES];uint32_t b;} mem;
 int main(void){
  uint32_t errors=0;*(volatile uint16_t*)0xA00000=0;
  for(uint16_t p=0;p<256;p++){
   uint32_t q=R22_ExpandPair((uint8_t)p);
+  if(q!=r22_pair_lut[p])errors++;
   for(uint16_t x=0;x<8;x++)if(((q>>(28-4*x))&15)!=(uint32_t)(x<4?p>>4:p&15))errors++;
+ }
+ for(uint32_t t=0;t<65536;t++){
+  uint8_t a=t>>8,b=t;uint16_t index=R22_TileIndex(a,b,1234);
+  uint16_t want=(a==b && a/16==a%16)?a%16:1234;
+  if(index!=want)errors++;
  }
  mem.a=mem.b=0x2244AA55;
  for(uint16_t y=0;y<R22_H;y++)for(uint16_t x=0;x<R22_W;x++)R22_Put(mem.fb,x,y,(uint8_t)((x+3*y)&15));

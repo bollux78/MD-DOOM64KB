@@ -1,4 +1,4 @@
-name: R22 — own packed4x4 renderer (5 ROMs)
+name: R22b — VDP ownership, solid tiles and pair LUT (9 ROMs)
 
 on:
   push:
@@ -42,22 +42,23 @@ jobs:
           fish -n scripts/lab/build_r22.fish
           python3 scripts/lab/gen_r22_pixel4.py
           python3 scripts/lab/test_r22_pixel4.py
+          python3 scripts/lab/test_r22b_video.py
           DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r22.fish
           python3 scripts/lab/build_r22_probe.py
-          cp docs/review-r22/LEIA-ME.md dist/r22/LEIA-ME.md
+          cp docs/review-r22/LEIA-ME-R22b.md dist/r22b/LEIA-ME.md
           python3 - <<'PY2'
           import pathlib,os,subprocess
           g=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
-          d=pathlib.Path('dist/r22')
+          d=pathlib.Path('dist/r22b')
           (d/'toolchain.txt').write_text(subprocess.check_output([str(g/'bin/m68k-elf-gcc'),'--version'],text=True))
           (d/'commit.txt').write_text(os.environ['GITHUB_SHA']+'\n')
-          (d/'COMPLETE.txt').write_text('5 ROMs built and audited; runtime demo validation pending.\n')
+          (d/'COMPLETE.txt').write_text('9 ROMs built and audited; runtime demo validation pending.\n')
           PY2
       - name: Upload R22 ROMs and matching debugging evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r22-pixel4-5-roms
-          path: dist/r22/
+          name: doom-md-r22b-pixel4-9-roms
+          path: dist/r22b/
           if-no-files-found: error
           retention-days: 90

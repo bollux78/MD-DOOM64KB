@@ -15,4 +15,8 @@ static inline void R22_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t c) {
 static inline uint32_t R22_ExpandPair(uint8_t p) {
     return ((uint32_t)(p>>4)*0x11110000u)|((uint32_t)(p&15)*0x1111u);
 }
+/* Four equal samples share one immutable solid pattern in VRAM0..15. */
+static inline uint16_t R22_TileIndex(uint8_t top,uint8_t bottom,uint16_t dynamic){
+    return (top==bottom && (top>>4)==(top&15))?(uint16_t)(top&15):dynamic;
+}
 #endif
