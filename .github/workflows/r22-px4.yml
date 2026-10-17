@@ -57,7 +57,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r22-px4-lab-24-roms
+          name: doom-md-r22-pixel4-5-roms
           path: dist/r22/
           if-no-files-found: error
           retention-days: 90

@@ -219,4 +219,3 @@ void I_InitGraphicsHardwareSpecificCode(void){
 #endif
 }
 void I_ShutdownGraphics(void){R20_StopVideo();}
-void I_InitGraphics(void){I_InitGraphicsHardwareSpecificCode();isGraphicsModeSet=true;}
