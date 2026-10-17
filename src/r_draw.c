@@ -53,6 +53,9 @@
 #include "m_random.h"
 
 #include "globdata.h"
+#if defined(DOOM_R20_SCALE_MATH)
+#include "r20_scale_math.h"
+#endif
 #include "r20_stackguard.h"
 
 /* R12: generated, bit-exact wall reciprocal lookup in cartridge ROM.
@@ -1834,13 +1837,28 @@ static fixed_t R_ScaleFromGlobalAngle(int16_t x)
   int16_t anglea = ANG90_16 + xtoviewangleTable[x];
   int16_t angleb = anglea + viewangle16 - rw_normalangle;
 
+#if defined(DOOM_R20_SCALE_MATH)
+  fixed_t den = R20_ScaleProduct(rw_distance, finesineapprox(anglea >> ANGLETOFINESHIFT_16));
+#else
   fixed_t den = rw_distance * finesineapprox(anglea >> ANGLETOFINESHIFT_16);
+#endif
 
 // proff 11/06/98: Changed for high-res
   fixed_t num = VIEWWINDOWHEIGHT * finesineapprox(angleb >> ANGLETOFINESHIFT_16);
 
+#if defined(DOOM_R20_SCALE_MATH)
+  if (den > (num >> 16)) {
+      /* Match FixedApproxDiv's unsigned big-denominator branch exactly. */
+      num = (uint32_t)den >= 0x100000u
+          ? FixedMul3216(num, (uint16_t)R20_ScaleReciprocal((uint32_t)den))
+          : FixedApproxDiv(num, den);
+      return num > 64*FRACUNIT ? 64*FRACUNIT : num < 256 ? 256 : num;
+  }
+  return 64*FRACUNIT;
+#else
   return den > num>>16 ? (num = FixedApproxDiv(num, den)) > 64*FRACUNIT ?
     64*FRACUNIT : num < 256 ? 256 : num : 64*FRACUNIT;
+#endif
 }
 
 

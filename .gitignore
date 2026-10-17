@@ -30,3 +30,6 @@
 *.lst
 *.bin
 .DS_Store
+
+# Generated ROM matrices and test evidence
+dist/

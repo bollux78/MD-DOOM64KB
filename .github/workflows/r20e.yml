@@ -1,0 +1,58 @@
+name: R20e — HUD FPS scale BSP and flat overnight lab
+
+on:
+  push:
+    branches:
+      - r20e
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-r20e:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R20e branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Validate and build R20e diagnostic matrix
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r20e.fish
+          python3 scripts/lab/test_r20a.py
+          python3 scripts/lab/test_r20b_math.py
+          python3 scripts/lab/test_r20d_sources.py
+          python3 scripts/lab/build_r20e_evidence.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20e.fish
+          cp docs/r20e-test.md dist/r20e/LEIA-ME.md
+          cp docs/r20d-results.md dist/r20e/R20d-validada.md
+          python3 - <<'PY2'
+          import os, pathlib, subprocess
+          d=pathlib.Path('dist/r20e')
+          gdk=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
+          gcc=gdk/'bin/m68k-elf-gcc'
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(gcc),'--version'],text=True))
+          PY2
+      - name: Upload R20e ROMs and matching debugging evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r20e-overnight-lab
+          path: dist/r20e/
+          if-no-files-found: error
+          retention-days: 90

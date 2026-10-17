@@ -91,6 +91,8 @@ static const uint16_t r20_rowofs[28] = {
     16*VIEWWINDOWWIDTH, 17*VIEWWINDOWWIDTH, 18*VIEWWINDOWWIDTH, 19*VIEWWINDOWWIDTH,
     20*VIEWWINDOWWIDTH, 21*VIEWWINDOWWIDTH, 22*VIEWWINDOWWIDTH, 23*VIEWWINDOWWIDTH,
     24*VIEWWINDOWWIDTH, 25*VIEWWINDOWWIDTH, 26*VIEWWINDOWWIDTH, 27*VIEWWINDOWWIDTH };
+#endif
+#if defined(DOOM_R20_ROWTAB)
 #define R20_DEST(x, yl) (&_s_screen[r20_rowofs[(uint16_t)(yl)] + (uint16_t)(x)])
 #else
 #define R20_DEST(x, yl) (&_s_screen[(yl) * VIEWWINDOWWIDTH + (x)])
@@ -147,6 +149,30 @@ static inline uint16_t font_cell(uint8_t color, char c)
 //
 
 extern volatile uint32_t _g_vblankCount;   // i_genesis.c（60Hz）
+
+#if defined(DOOM_R20_HUD_LAZY)
+static uint8_t r20_hud_dirty = 1;
+#endif
+#if defined(DOOM_R20_FPS_LAZY)
+static uint8_t r20_fps_dirty = 1;
+static uint16_t r20_last_fps_x100;
+#endif
+#if defined(DOOM_R20_HUD_LAZY) || defined(DOOM_R20_FPS_LAZY)
+static void R20_InvalidateVideo(void)
+{
+#if defined(DOOM_R20_HUD_LAZY)
+    r20_hud_dirty = 1;
+#endif
+#if defined(DOOM_R20_FPS_LAZY)
+    r20_fps_dirty = 1;
+#endif
+}
+#else
+#define R20_InvalidateVideo() ((void)0)
+#endif
+#if defined(DOOM_R20_HUD_LAZY) && !defined(DOOM_HUD_DMA_STATUS_ONLY)
+#error R20 lazy HUD requires the existing status-only DMA state
+#endif
 
 #define HUD_COL 15   // 白(PAL0 index15)
 
@@ -231,10 +257,16 @@ static void I_DrawDebugCounters(void)
     if (_g_gamestate != GS_LEVEL)
     {
         topbar_in_level = 0;
+#if defined(DOOM_R20_FPS_LAZY)
+        r20_fps_dirty = 1;
+#endif
         return;
     }
     if (!topbar_in_level)
     {
+#if defined(DOOM_R20_FPS_LAZY)
+        r20_fps_dirty = 1;
+#endif
         for (uint16_t i = 0; i < VIEWWINDOWWIDTH; i++)
             _s_screen[i] = BLACK_CELL;
 #if defined(DOOM_R11_LEFTCOL_CLIP)
@@ -249,6 +281,13 @@ static void I_DrawDebugCounters(void)
 #else
     if (_g_gamestate != GS_LEVEL)
         return;
+#endif
+
+#if defined(DOOM_R20_FPS_LAZY)
+    /* Measurement still advances every frame. Only formatting/stores skip. */
+    if (!r20_fps_dirty && r20_last_fps_x100 == fps_x100) return;
+    r20_last_fps_x100 = fps_x100;
+    r20_fps_dirty = 0;
 #endif
 
 	// 右上に "D.Dfps" / "DD.Dfps" を右詰め(col 37 右端)で表示。cols 31..37 を使用。
@@ -588,6 +627,7 @@ static void I_BuildSolidTiles(void)
 
 void I_InitGraphicsHardwareSpecificCode(void)
 {
+    R20_InvalidateVideo();
 	VDP_setScreenWidth320();
 	VDP_setPlaneSize(64, 32, TRUE);
 
@@ -648,7 +688,7 @@ void I_FinishUpdate(void)
         }
     }
 #endif
-#if defined(DOOM_CLASSIC_TEXT_HUD)
+#if defined(DOOM_CLASSIC_TEXT_HUD) && !defined(DOOM_R20_HUD_LAZY)
     I_DrawClassicTextHUD();
 #endif
 
@@ -671,7 +711,15 @@ void I_FinishUpdate(void)
         uint16_t bullets = level ? hud_saturate3(_g_player.ammo[am_clip]) : 0;
         uint8_t changed = !initialized || previousLevel != level
             || previousHealth != health || previousArmor != armor
-            || previousBullets != bullets;
+            || previousBullets != bullets
+#if defined(DOOM_R20_HUD_LAZY)
+            || r20_hud_dirty
+#endif
+            ;
+#if defined(DOOM_R20_HUD_LAZY)
+        if (changed) I_DrawClassicTextHUD();
+        r20_hud_dirty = 0;
+#endif
 
         previousHealth = health;
         previousArmor = armor;
@@ -1016,7 +1064,11 @@ R20_COLFN void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
     R20_COUNT(R20C_FLAT_CELLS, count);
 
 	uint16_t cell = colorcell[color];
+#if defined(DOOM_R20_FLAT_UNROLL)
+    uint16_t *dest = &_s_screen[r20_rowofs[(uint16_t)dcvars->yl] + (uint16_t)dcvars->x];
+#else
 	uint16_t *dest = R20_DEST(dcvars->x, dcvars->yl);
+#endif
 
 #if defined(DOOM_R20_FLAT_UNROLL)
 #if VIEWWINDOWWIDTH != 38
@@ -1050,7 +1102,7 @@ R20_COLFN void R_DrawColumnFlat(uint8_t color, const draw_column_vars_t *dcvars)
             "2:"
             : [d] "+&a" (dest)
             : [c] "d" (cell), [o] "d" (off)
-            : "memory");
+            : "cc", "memory");
         return;
     }
 #endif
@@ -1101,6 +1153,7 @@ void R_DrawFuzzColumn(const draw_column_vars_t *dcvars)
 
 void V_DrawRawFullScreen(int16_t num)
 {
+    R20_InvalidateVideo();
 	const uint8_t *lump = W_GetLumpByNum(num);
 
 	static const fixed_t DXI = ((fixed_t)SCREENWIDTH  << FRACBITS) / VIEWWINDOWWIDTH;
@@ -1123,6 +1176,7 @@ void V_DrawRawFullScreen(int16_t num)
 
 void V_DrawBackground(int16_t backgroundnum)
 {
+    R20_InvalidateVideo();
 	// メニュー/ヘルプ背景。チャンキー FB では黒で塗ってテキストを読みやすくする。
 	(void)backgroundnum;
 	for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
@@ -1132,6 +1186,7 @@ void V_DrawBackground(int16_t backgroundnum)
 
 void V_ClearViewWindow(void)
 {
+    R20_InvalidateVideo();
 	for (int i = 0; i < VIEWWINDOWWIDTH * VIEWWINDOWHEIGHT; i++)
 		_s_screen[i] = BLACK_CELL;
 }
@@ -1144,6 +1199,9 @@ void V_ClearViewWindow(void)
 
 void V_DrawCharacter(int16_t x, int16_t y, uint8_t color, char c)
 {
+#if defined(DOOM_R20_FPS_LAZY)
+    if (y == 0) r20_fps_dirty = 1;
+#endif
 	if ((uint16_t)x < VIEWWINDOWWIDTH && (uint16_t)y < VIEWWINDOWHEIGHT)
 		_s_screen[y * VIEWWINDOWWIDTH + x] = font_cell(color, c);
 }
@@ -1160,6 +1218,9 @@ void V_DrawCharacterForeground(int16_t x, int16_t y, uint8_t color, char c)
 
 void V_DrawString(int16_t x, int16_t y, uint8_t color, const char* s)
 {
+#if defined(DOOM_R20_FPS_LAZY)
+    if (y == 0) r20_fps_dirty = 1;
+#endif
 	if ((uint16_t)y >= VIEWWINDOWHEIGHT)
 		return;
 	while (*s)
@@ -1178,6 +1239,9 @@ void V_DrawSTString(int16_t x, int16_t y, uint8_t color, const char* s)
 
 void V_ClearString(int16_t y, size_t len)
 {
+#if defined(DOOM_R20_FPS_LAZY)
+    if (y == 0) r20_fps_dirty = 1;
+#endif
 	if ((uint16_t)y >= VIEWWINDOWHEIGHT)
 		return;
 	uint16_t *d = &_s_screen[y * VIEWWINDOWWIDTH];
