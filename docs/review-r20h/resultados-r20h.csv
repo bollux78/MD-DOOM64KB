@@ -1,0 +1,22 @@
+variant,platform,time_s,avg_fps,min_fps_1s,max_fps_1s,frames
+control,BlastEm,184.9,11.54,4.7,19.4,2134
+color,BlastEm,184.9,11.54,5,19,2134
+v3,BlastEm,180.32,11.83,4.9,20,2134
+vc,BlastEm,180.4,11.83,4.9,20,2134
+vc-r5,BlastEm,179.02,11.92,4.9,20,2134
+vc-c,BlastEm,179.63,11.88,5.2,20,2134
+vc-r6,BlastEm,179.6,11.88,4.9,20,2134
+vc-m2,BlastEm,179.97,11.86,5,19.7,2134
+vc-r5-c,BlastEm,178.47,11.96,4.8,19.7,2134
+vc-r5-r6,BlastEm,178.32,11.97,5,20.3,2134
+vc-r5-m2,BlastEm,178.7,11.94,4.9,20.7,2134
+vc-c-r6,BlastEm,178.9,11.93,4.9,19.7,2134
+vc-c-m2,BlastEm,179.25,11.91,4.9,19.7,2134
+vc-r6-m2,BlastEm,178.92,11.93,4.9,20,2134
+vc-r5-c-r6,BlastEm,177.63,12.01,5,20.3,2134
+vc-r5-c-m2,BlastEm,178.1,11.98,5,20.3,2134
+vc-r5-r6-m2,BlastEm,177.58,12.02,4.9,20.7,2134
+vc-c-r6-m2,BlastEm,178.23,11.97,5,20,2134
+vc-all,BlastEm,176.83,12.07,4.9,20.7,2134
+no-v3,BlastEm,181.28,11.77,5,19,2134
+vc-all,Mega Drive 7.67MHz,178.8,11.94,4.8,20.3,2134
