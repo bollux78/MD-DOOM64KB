@@ -1,0 +1,56 @@
+name: R20c — P2 M1 combo with natural inlining
+
+on:
+  push:
+    branches:
+      - r20c
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-r20c:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout isolated R20c branch
+        uses: actions/checkout@v6
+      - name: Restore uploaded E1M1 VGM and verify SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          raw = lzma.decompress(Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          sha = hashlib.sha256(raw).hexdigest()
+          expected = '64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          if sha != expected:
+              raise SystemExit(f'E1M1 SHA mismatch: {sha}')
+          Path('res').mkdir(exist_ok=True)
+          Path('res/e1m1.vgm').write_bytes(raw)
+          print(f'Validated user-provided E1M1 VGM: {len(raw)} bytes, sha256={sha}')
+          PY
+      - name: Validate and build R20c diagnostic matrix
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r20c.fish
+          python3 scripts/lab/test_r20a.py
+          python3 scripts/lab/test_r20b_math.py
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r20c.fish
+          cp docs/r20c-test.md dist/r20c/LEIA-ME.md
+          cp docs/r20b-results.md dist/r20c/R20b-resultados.md
+          python3 - <<'PY2'
+          import os, pathlib, subprocess
+          d=pathlib.Path('dist/r20c')
+          gdk=pathlib.Path(os.path.expanduser(os.environ.get('DOOM_MD_GDK','~/mars/m68k-elf')))
+          gcc=gdk/'bin/m68k-elf-gcc'
+          (d/'toolchain.txt').write_text(subprocess.check_output([str(gcc),'--version'],text=True))
+          PY2
+      - name: Upload R20c ROMs and matching debugging evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r20c-natural
+          path: dist/r20c/
+          if-no-files-found: error
+          retention-days: 90
