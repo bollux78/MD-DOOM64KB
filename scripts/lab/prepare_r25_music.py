@@ -44,6 +44,8 @@ def restore():
         raw=decode(packed);validate(raw)
         assert hashlib.sha256(raw).hexdigest()==t['sha256_vgm']
         (ROOT/'res'/('r25-'+t['name'].lower()+'.vgm')).write_bytes(raw)
+    if os.environ.get('DOOM_R27_SINGLE_TRACK')=='1':
+        return 'XGM bgm_e1m1 "r25-e1m1.vgm"\nXGM bgm_silent "silent.vgm"\n'
     lines=[f'XGM bgm_e1m{i} "r25-e1m{i}.vgm"' for i in range(1,10)]
     lines += ['XGM bgm_intro "r25-intro.vgm"','XGM bgm_inter "r25-inter.vgm"',
               'XGM bgm_victor "r25-end.vgm"','XGM bgm_silent "silent.vgm"']

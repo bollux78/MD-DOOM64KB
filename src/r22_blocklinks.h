@@ -14,7 +14,7 @@
 #ifndef R22_SRAM_ENABLE
 #define R22_SRAM_ENABLE() (*(volatile uint8_t*)0x00A130F1UL=1)
 #endif
-#if defined(DOOM_R25_MUSIC)
+#if defined(DOOM_R25_MUSIC) && !defined(DOOM_R27_SRAM_FIXED)
 #ifndef R22_SRAM_DISABLE
 #define R22_SRAM_DISABLE() (*(volatile uint8_t*)0x00A130F1UL=0)
 #endif

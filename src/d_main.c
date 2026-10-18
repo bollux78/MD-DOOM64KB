@@ -590,6 +590,20 @@ __attribute__((used,externally_visible)) void R23_ProbeMain(void){
 #if defined(DOOM_R24_EPISODE)
         R24_ValidateThings();
 #endif
+#if defined(DOOM_R27_RENDER_PROBE)
+        extern uint32_t R27_FrameHash(void);
+        _g_player.viewz=_g_player.mo->z+_g_player.viewheight;
+        for(uint16_t frame=0;frame<2;frame++){
+            _g_gametic++;
+            *(volatile uint16_t*)0xA00000=0;
+            R_RenderPlayerView(&_g_player);
+            *(volatile uint16_t*)0xA00002=0x7000+i*2+frame;
+            uint32_t hash=R27_FrameHash();
+            *(volatile uint16_t*)0xA00002=hash>>16;
+            *(volatile uint16_t*)0xA00002=hash;
+            _g_player.mo->angle+=ANG90;
+        }
+#endif
         if(1){
             mobj_t *effects[10];
             for(uint16_t j=0;j<10;j++)effects[j]=P_SpawnMobj(_g_player.mo->x,_g_player.mo->y,ONFLOORZ,MT_PUFF);

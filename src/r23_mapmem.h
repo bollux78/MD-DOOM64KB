@@ -3,6 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #if defined(DOOM_R23_MAPMEM)
+#if defined(DOOM_R27_GROUP_SIDE)
+void R27_ReadBlock(const void *p,uint16_t offset,uint16_t size,void *out);
+#endif
+#if defined(DOOM_R27_GROUP_LINE)
+uint16_t R27_OrFlags(void *p,uint16_t mask);
+#endif
 void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells);
 void *R23_NodeAlloc(void);
 void R23_NodeFree(void *p);

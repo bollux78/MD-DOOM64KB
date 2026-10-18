@@ -76,6 +76,23 @@ void R23_MapWrite(void *p,uint16_t offset,uint16_t size,uint32_t value){
 #endif
     uint32_t a=address(p,offset)+2UL*(size-1);while(size--){R22_SRAM_BYTE(a)=value;value>>=8;a-=2;}R25_SRAM_END();
 }
+#if defined(DOOM_R27_GROUP_SIDE)
+void R27_ReadBlock(const void *p,uint16_t offset,uint16_t size,void *out){
+    uint32_t a=address(p,offset);uint8_t *d=out;
+    R25_SRAM_BEGIN();
+    while(size--){*d++=R22_SRAM_BYTE(a);a+=2;}
+    R25_SRAM_END();
+}
+#endif
+#if defined(DOOM_R27_GROUP_LINE)
+uint16_t R27_OrFlags(void *p,uint16_t mask){
+    uint32_t a=address(p,offsetof(linedata_t,r_flags));
+    R25_SRAM_BEGIN();
+    uint16_t value=((uint16_t)R22_SRAM_BYTE(a)<<8)|R22_SRAM_BYTE(a+2);
+    value|=mask;R22_SRAM_BYTE(a)=value>>8;R22_SRAM_BYTE(a+2)=value;
+    R25_SRAM_END();return value;
+}
+#endif
 void *R23_NodeAlloc(void){
     if(node_free){msecnode_t *p=node_free;node_free=(msecnode_t*)(uintptr_t)R23_GET(p,m_tnext);return p;}
     if(node_used>=node_capacity)I_Error("SRAM CONTACT NODES FULL");

@@ -3039,6 +3039,18 @@ inline static int16_t CONSTFUNC Mod(uint8_t a, int16_t b)
 // A wall segment will be drawn
 //  between start and stop pixels (inclusive).
 //
+#if defined(DOOM_R27_GROUP_SIDE)
+#define R27_SIDE(p,f) ((p)->f)
+#else
+#define R27_SIDE(p,f) R23_GET(p,f)
+#endif
+#if defined(DOOM_R27_GROUP_LINE)
+#define R27_STORED_FLAGS(p) line_flags
+#define R27_SET_RENDER_FLAGS(p,v) R23_MapWrite((p),offsetof(linedata_t,r_validcount),4,((uint32_t)(uint16_t)_g_gametic<<16)|(uint16_t)(v))
+#else
+#define R27_STORED_FLAGS(p) R23_GET(p,r_flags)
+#define R27_SET_RENDER_FLAGS(p,v) R23_SET(p,r_flags,v)
+#endif
 static void R_StoreWallRange(const int16_t start, const int16_t stop)
 {
     // don't overflow and crash
@@ -3052,12 +3064,23 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
 
 
     side_t    __far* sidedef = &_g_sides[curline->sidenum];
+#if defined(DOOM_R27_GROUP_SIDE)
+    side_t side_snapshot;
+    R27_ReadBlock(sidedef,offsetof(side_t,textureoffset),
+        offsetof(side_t,midtexture)+sizeof(side_snapshot.midtexture)-offsetof(side_t,textureoffset),
+        (uint8_t*)&side_snapshot+offsetof(side_t,textureoffset));
+    sidedef=&side_snapshot;
+#endif
     const mapsidedef_t *mapsidedef = &_g_mapsides[curline->sidenum];	
     linedef = &_g_lines[curline->linenum];
     maplinedef = &_g_maplines[curline->linenum];
 
     // mark the segment as visible for auto map
+#if defined(DOOM_R27_GROUP_LINE)
+    const uint16_t line_flags=R27_OrFlags(linedef,ML_MAPPED);
+#else
     R23_SET(linedef,r_flags,R23_GET(linedef,r_flags) | (ML_MAPPED));
+#endif
 
     // calculate rw_distance for scale calculation
     rw_normalangle = curline->angle;
@@ -3134,7 +3157,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
     if (!backsector)
     {
         // single sided line
-        midtexture = R_GetTextureTranslation(R23_GET(sidedef,midtexture));
+        midtexture = R_GetTextureTranslation(R27_SIDE(sidedef,midtexture));
         texmidtexture = R_GetTexture(midtexture);
 
         // a single sided line is terminal, so it must mark ends
@@ -3142,7 +3165,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
 
         if (maplinedef->flags & ML_DONTPEGBOTTOM)
         {         // bottom of texture at bottom
-            fixed_t vtop = frontsector->floorheight + ((int32_t)textureheight[R23_GET(sidedef,midtexture)] << FRACBITS);
+            fixed_t vtop = frontsector->floorheight + ((int32_t)textureheight[R27_SIDE(sidedef,midtexture)] << FRACBITS);
             rw_midtexturemid = vtop - viewz;
         }
         else        // top of texture at top
@@ -3161,7 +3184,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
         ds_p->sprtopclip = ds_p->sprbottomclip = NULL;
         ds_p->silhouette = SIL_NONE;
 
-        if(R23_GET(linedef,r_flags) & RF_CLOSED)
+        if(R27_STORED_FLAGS(linedef) & RF_CLOSED)
         { /* cph - closed 2S line e.g. door */
             // cph - killough's (outdated) comment follows - this deals with both
             // "automap fixes", his and mine
@@ -3228,16 +3251,16 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
 
         if (worldhigh < worldtop)   // top texture
         {
-            toptexture = R_GetTextureTranslation(R23_GET(sidedef,toptexture));
+            toptexture = R_GetTextureTranslation(R27_SIDE(sidedef,toptexture));
             textoptexture = R_GetTexture(toptexture);
             rw_toptexturemid = maplinedef->flags & ML_DONTPEGTOP ? worldtop :
-                                                                        backsector->ceilingheight + ((int32_t)textureheight[R23_GET(sidedef,toptexture)] << FRACBITS) - viewz;
+                                                                        backsector->ceilingheight + ((int32_t)textureheight[R27_SIDE(sidedef,toptexture)] << FRACBITS) - viewz;
             rw_toptexturemid += ((int32_t)Mod(mapsidedef->rowoffset, textureheight[toptexture])) << FRACBITS;
         }
 
         if (worldlow > worldbottom) // bottom texture
         {
-            bottomtexture = R_GetTextureTranslation(R23_GET(sidedef,bottomtexture));
+            bottomtexture = R_GetTextureTranslation(R27_SIDE(sidedef,bottomtexture));
             texbottomtexture = R_GetTexture(bottomtexture);
             rw_bottomtexturemid = maplinedef->flags & ML_DONTPEGBOTTOM ? worldtop : worldlow;
 
@@ -3245,7 +3268,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
         }
 
         // allocate space for masked texture tables
-        if (R23_GET(sidedef,midtexture))    // masked midtexture
+        if (R27_SIDE(sidedef,midtexture))    // masked midtexture
         {
             maskedtexture = true;
             ds_p->maskedtexturecol = maskedtexturecol = lastopening - rw_x;
@@ -3259,7 +3282,7 @@ static void R_StoreWallRange(const int16_t start, const int16_t stop)
     if (segtextured)
     {
         rw_offset = R15_SETUP_PRODUCT(hyp, -finesineapprox(offsetangle >> ANGLETOFINESHIFT_16));
-        rw_offset += R23_GET(sidedef,textureoffset) + curline->offset;
+        rw_offset += R27_SIDE(sidedef,textureoffset) + curline->offset;
 
         rw_centerangle = ANG90_16 + viewangle16 - rw_normalangle;
 
@@ -3401,7 +3424,16 @@ static void R_RecalcLineFlags(void)
 {
     const side_t __far* side = &_g_sides[curline->sidenum];
 
+#if defined(DOOM_R27_GROUP_SIDE)
+    side_t side_snapshot;
+    R27_ReadBlock(side,offsetof(side_t,textureoffset),
+        offsetof(side_t,midtexture)+sizeof(side_snapshot.midtexture)-offsetof(side_t,textureoffset),
+        (uint8_t*)&side_snapshot+offsetof(side_t,textureoffset));
+    side=&side_snapshot;
+#endif
+#if !defined(DOOM_R27_GROUP_LINE)
     R23_SET(linedef,r_validcount,_g_gametic);
+#endif
 
     /* First decide if the line is closed, normal, or invisible */
     if (!(maplinedef->flags & ML_TWOSIDED)
@@ -3413,17 +3445,17 @@ static void R_RecalcLineFlags(void)
 
                 // preserve a kind of transparent door/lift special effect:
                 && (backsector->ceilingheight >= frontsector->ceilingheight ||
-                    R23_GET(side,toptexture))
+                    R27_SIDE(side,toptexture))
 
                 && (backsector->floorheight <= frontsector->floorheight ||
-                    R23_GET(side,bottomtexture))
+                    R27_SIDE(side,bottomtexture))
 
                 // properly render skies (consider door "open" if both ceilings are sky):
                 && (backsector->ceilingpic != skyflatnum ||
                     frontsector->ceilingpic!= skyflatnum)
                 )
             )
-        R23_SET(linedef,r_flags,(RF_CLOSED | (R23_GET(linedef,r_flags) & ML_MAPPED)));
+        R27_SET_RENDER_FLAGS(linedef,(RF_CLOSED | (R23_GET(linedef,r_flags) & ML_MAPPED)));
     else
     {
         // Reject empty lines used for triggers
@@ -3553,6 +3585,14 @@ static void R_AddLine(const seg_t __far* line)
     linedef = &_g_lines[curline->linenum];
     maplinedef = &_g_maplines[curline->linenum];
 
+#if defined(DOOM_R27_GROUP_LINE)
+    uint32_t render_info=R23_MapRead(linedef,offsetof(linedata_t,r_validcount),4);
+    if ((uint16_t)(render_info>>16)!=(uint16_t)_g_gametic){
+        R_RecalcLineFlags();render_info=(uint16_t)R23_GET(linedef,r_flags);
+    }
+    const uint16_t flags=(uint16_t)render_info;
+    if (!(flags & RF_IGNORE))R_ClipWallSegment(x1,x2,flags & RF_CLOSED);
+#else
     if (R23_GET(linedef,r_validcount) != (uint16_t)_g_gametic)
         R_RecalcLineFlags();
 
@@ -3560,6 +3600,7 @@ static void R_AddLine(const seg_t __far* line)
     {
         R_ClipWallSegment (x1, x2, R23_GET(linedef,r_flags) & RF_CLOSED);
     }
+#endif
 }
 
 //

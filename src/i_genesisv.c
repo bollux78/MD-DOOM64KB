@@ -87,6 +87,15 @@ uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
 static uint16_t _s_screen[VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS];
 #endif
 
+#if defined(DOOM_R27_RENDER_PROBE)
+uint32_t R27_FrameHash(void){
+    uint32_t h=2166136261UL;
+    const uint8_t *p=(const uint8_t*)_s_screen;
+    for(uint16_t i=0;i<sizeof(_s_screen);i++)h=(h^p[i])*16777619UL;
+    return h;
+}
+#endif
+
 #if defined(DOOM_R20_ROWTAB) || defined(DOOM_R20_FLAT_UNROLL)
 /* R20 R1: row index -> first cell of that row. Replaces yl*38 (MULS.W #38,
  * ~46 cycles) by one indexed word read. Exact for yl in 0..27. */
