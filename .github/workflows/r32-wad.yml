@@ -1,0 +1,85 @@
+name: R32 - WAD compression and active-map RAM feasibility
+on:
+  push:
+    branches: [r32-wad-lab]
+  workflow_dispatch:
+concurrency:
+  group: r32-wad-lab
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  analyze:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reconstruct exactly R31 native-aligned WAD
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist/r32
+          python3 scripts/lab/convert_r24_episode.py \
+            --payload assets/r24-episode.json \
+            --base scripts/doom64.wad \
+            --out dist/r32/converted-episode.wad \
+            --report dist/r32/maps-r24.json
+          cp dist/r32/converted-episode.wad scripts/doom64.wad
+          DOOM_R30_NATIVE=1 DOOM_WAD_DEDUP=1 DOOM_R25_MUSIC=1 \
+            python3 scripts/repack_wad.py
+          python3 - <<'PY'
+          from pathlib import Path
+          wad=Path('scripts/doom64_aligned.wad')
+          size=wad.stat().st_size
+          print('R31-equivalent WAD:',size,'bytes')
+          assert size==1481876, f'Mismatch: expected 1,481,876 got {size}'
+          PY
+      - name: Measure per-map compression and permanent-access constraints
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/lab/analyze_r32_wad.py
+          python3 scripts/lab/analyze_r32_wad.py \
+            scripts/doom64_aligned.wad --json dist/r32/ROM-GEOMETRY-COMPRESSION.json
+      - name: Publish limited technical report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p docs/review-r32 dist/r32
+          python3 - <<'PY'
+          import json,os,pathlib
+          source=pathlib.Path('dist/r32/ROM-GEOMETRY-COMPRESSION.json')
+          if source.is_file():
+              obj=json.loads(source.read_text())
+              summary=dict(run_id=os.environ['GITHUB_RUN_ID'],
+                  sha=os.environ['GITHUB_SHA'],
+                  wad_bytes=obj['wad_bytes'],
+                  theoretical_zlib_saved=obj['physical_unique_zlib_saved'],
+                  categories=obj['per_category'],
+                  maps={k:dict(geometry_bytes=v['geometry_bytes'],
+                    metadata_bytes=v['extra_metadata_bytes'],
+                    largest=v['largest_lump'],
+                    zlib_potential=v['geometry_zlib_potential']) for k,v in obj['maps'].items()},
+                  note=obj['limitations'])
+          else:
+              summary=dict(run_id=os.environ['GITHUB_RUN_ID'],
+                           error='WAD conversion or analysis did not complete')
+          pathlib.Path('docs/review-r32/CI-LAST-RESULT.json').write_text(
+              json.dumps(summary,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(summary,indent=2,ensure_ascii=False)[:8500])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r32/CI-LAST-RESULT.json
+          git commit -m 'R32 WAD analysis results [skip ci]' || true
+          git push origin HEAD:r32-wad-lab
+      - name: Upload WAD compression analysis only
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r32-wad-memory-lab
+          path: |
+            dist/r32/ROM-GEOMETRY-COMPRESSION.json
+            dist/r32/maps-r24.json
+          if-no-files-found: warn
+          retention-days: 90
