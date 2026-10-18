@@ -1,0 +1,115 @@
+name: R30 - Native H40 static scenes
+on:
+  push:
+    branches: [r30-native-static]
+  workflow_dispatch:
+concurrency:
+  group: r30-native
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Check scripts and original art inputs
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r30.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r30_native.py scripts/repack_wad.py scripts/lab/audit_r30.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+          python3 scripts/lab/gen_r30_native.py > /tmp/r30-pinned-convert.log
+          grep -q '"mode": "H40/320x224' /tmp/r30-pinned-convert.log
+          test -s src/r30_static_data.s
+          test -s src/r30_static_manifest.h
+          echo "R30 native art input and generators: OK"
+      - name: Compile isolated R30 variants
+        shell: bash
+        run: |
+          mkdir -p dist/r30
+          : > dist/r30/BUILD-RESULTS.txt
+          failed=0
+          for variant in control-play native-play native-perf; do
+            echo "=== BUILD $variant ==="
+            if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r30.fish "$variant"; then
+              echo "$variant OK" | tee -a dist/r30/BUILD-RESULTS.txt
+            else
+              echo "$variant FAILED" | tee -a dist/r30/BUILD-RESULTS.txt
+              failed=1
+            fi
+          done
+          cat dist/r30/BUILD-RESULTS.txt
+          exit "$failed"
+      - name: Validate ROM flags and paired sizes
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          p=Path('dist/r30')
+          out=[]
+          for b in sorted(p.glob('doom-md-r30-*.bin')):
+              flags=p/('flags-'+b.stem+'.txt')
+              opts=flags.read_text() if flags.exists() else ''
+              needed=['-DDOOM_R25_MUSIC','-DDOOM_R29_XGM2','-DDOOM_R29_MULTI']
+              if 'native' in b.stem: needed+=['-DDOOM_R30_NATIVE']
+              if 'control' in b.stem and '-DDOOM_R30_NATIVE' in opts:needed+=['-DDOOM_R30_NATIVE_ABSENT']
+              missing=[x for x in needed if x not in opts]
+              if missing:
+                  print('INVALID',b.name,missing)
+                  b.unlink();b.with_suffix('.elf').unlink(missing_ok=True)
+                  continue
+              out.append({'name':b.name,'bytes':b.stat().st_size,
+                          'fits_2mib':b.stat().st_size<=2097152,
+                          'sha256':hashlib.sha256(b.read_bytes()).hexdigest()})
+              print('VALID',out[-1])
+          (p/'ROM-SIZES.json').write_text(json.dumps(out,indent=2)+'\n')
+          PY
+      - name: Write run report to experimental branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p dist/r30 docs/review-r30
+          python3 - <<'PY'
+          import pathlib,json,os
+          p=pathlib.Path('dist/r30')
+          files=[dict(name=f.name,bytes=f.stat().st_size) for f in sorted(p.glob('doom-md-r30-*.bin'))]
+          results=(p/'BUILD-RESULTS.txt').read_text().splitlines() if (p/'BUILD-RESULTS.txt').exists() else []
+          logs={}
+          for f in p.glob('build-*.log'):
+              logs[f.name]=f.read_text(errors='replace').splitlines()[-30:]
+          report=dict(run_id=os.environ['GITHUB_RUN_ID'],source_sha=os.environ['GITHUB_SHA'],
+                      files=files,build_results=results,logs=logs)
+          pathlib.Path('docs/review-r30/CI-LAST-RESULT.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(dict(run_id=report['run_id'],files=files,results=results),indent=2))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r30/CI-LAST-RESULT.json
+          git commit -m "R30 CI results [skip ci]" || true
+          git push origin HEAD:r30-native-static
+      - name: Upload R30 ROMs, ELFs and compression audit together
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r30-native-screens
+          path: dist/r30/
+          if-no-files-found: warn
+          retention-days: 90
