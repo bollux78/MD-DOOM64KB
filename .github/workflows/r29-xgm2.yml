@@ -52,6 +52,31 @@ jobs:
           done
           cat dist/r29/BUILD-RESULTS.txt
           exit "$failed"
+      - name: Verify each ROM carried its intended renderer and audio flags
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('dist/r29')
+          for rom in sorted(p.glob('doom-md-r29-*.bin')):
+              stem=rom.stem
+              flags=p/('flags-'+stem+'.txt')
+              opts=flags.read_text() if flags.exists() else ''
+              required=['-DDOOM_R25_MUSIC','-DDOOM_R27_GROUP_SIDE'] if 'group-perf' in stem else ['-DDOOM_R25_MUSIC']
+              if 'xgm2-' in stem: required.append('-DDOOM_R29_XGM2')
+              if 'xgm2-multi' in stem: required.append('-DDOOM_R29_MULTI')
+              missing=[x for x in required if x not in opts]
+              if missing:
+                  print('INVALID FLAGS:',rom.name,missing,flush=True)
+                  rom.unlink()
+                  rom.with_suffix('.elf').unlink(missing_ok=True)
+                  flags.unlink(missing_ok=True)
+                  with (p/'BUILD-RESULTS.txt').open('a') as f:
+                      f.write(stem+' INVALID_FLAGS '+','.join(missing)+'\n')
+              else:
+                  print('FLAGS VERIFIED:',rom.name,flush=True)
+          PY
       - name: Record commit and compiler
         if: always()
         shell: bash
