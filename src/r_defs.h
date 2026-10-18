@@ -104,22 +104,29 @@ typedef struct
   struct msecnode_s __far* touching_thinglist;
 
 #if defined(DOOM_R23_MAPMEM)
-  const uint16_t *lines;
+  uint16_t sector_index;
 #else
   const struct line_s __far*__far*lines;
 #endif
 
   uint16_t validcount;        // if == validcount, already checked
+#if !defined(DOOM_R23_MAPMEM)
   int16_t linecount;
+#endif
 
   int16_t floorpic;
   int16_t ceilingpic;
 
   int16_t lightlevel;
   int16_t special;
-  int16_t oldspecial;      //jff 2/16/98 remembers if sector WAS secret (automap)
-
-  int16_t soundtraversed;    // 0 = untraversed, 1,2 = sndlines-1
+#if defined(DOOM_R23_MAPMEM)
+  int8_t oldspecial;
+  int8_t soundtraversed;
+#else
+  int16_t oldspecial;
+  int16_t soundtraversed;
+#endif
+  /* 0 = untraversed, 1,2 = sndlines-1 */
 
 } sector_t;
 

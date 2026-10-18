@@ -277,7 +277,7 @@ void P_TouchSpecialThing(mobj_t __far* special, mobj_t __far* toucher)
   sfxenum_t      sound;
   fixed_t  delta = special->z - toucher->z;
 
-  if (delta > toucher->height || delta < -8*FRACUNIT)
+  if (delta > MOBJ_HEIGHT(toucher) || delta < -8*FRACUNIT)
     return;        // out of reach
 
   sound = sfx_itemup;
@@ -517,7 +517,7 @@ static void P_KillMobj(mobj_t __far* source, mobj_t __far* target)
   target->flags &= ~MF_SHOOTABLE;
   target->flags &= ~MF_NOGRAVITY;
   target->flags |= MF_CORPSE|MF_DROPOFF;
-  target->height >>= 2;
+  MOBJ_SET_HEIGHT(target,MOBJ_HEIGHT(target)>>2);
 
 
   if (!((target->flags ^ MF_COUNTKILL) & MF_COUNTKILL))

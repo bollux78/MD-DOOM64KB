@@ -223,10 +223,10 @@ static boolean PTR_SlideTraverse (intercept_t* in)
 
   P_LineOpening (li);
 
-  if (_g_openrange < slidemo->height)
+  if (_g_openrange < MOBJ_HEIGHT(slidemo))
     goto isblocking;  // doesn't fit
 
-  if (_g_opentop - slidemo->z < slidemo->height)
+  if (_g_opentop - slidemo->z < MOBJ_HEIGHT(slidemo))
     goto isblocking;  // mobj is too high
 
   if (_g_openbottom - slidemo->z > 24*FRACUNIT )
@@ -278,14 +278,14 @@ static void P_SlideMove(mobj_t __far* mo)
       // trace along the three leading corners
 
       if (mo->momx > 0)
-  leadx = mo->x + mo->radius, trailx = mo->x - mo->radius;
+  leadx = mo->x + MOBJ_RADIUS(mo), trailx = mo->x - MOBJ_RADIUS(mo);
       else
-  leadx = mo->x - mo->radius, trailx = mo->x + mo->radius;
+  leadx = mo->x - MOBJ_RADIUS(mo), trailx = mo->x + MOBJ_RADIUS(mo);
 
       if (mo->momy > 0)
-  leady = mo->y + mo->radius, traily = mo->y - mo->radius;
+  leady = mo->y + MOBJ_RADIUS(mo), traily = mo->y - MOBJ_RADIUS(mo);
       else
-  leady = mo->y - mo->radius, traily = mo->y + mo->radius;
+  leady = mo->y - MOBJ_RADIUS(mo), traily = mo->y + MOBJ_RADIUS(mo);
 
       bestslidefrac = FRACUNIT+1;
 
@@ -613,14 +613,14 @@ static void P_ZMovement(mobj_t __far* mo)
         mo->momz -= GRAVITY;
       }
 
-  if (mo->z + mo->height > mo->ceilingz)
+  if (mo->z + MOBJ_HEIGHT(mo) > mo->ceilingz)
     {
     // hit the ceiling
 
     if (mo->momz > 0)
       mo->momz = 0;
 
-    mo->z = mo->ceilingz - mo->height;
+    mo->z = mo->ceilingz - MOBJ_HEIGHT(mo);
 
     if ( (mo->flags & MF_MISSILE) && !(mo->flags & MF_NOCLIP) )
       {
@@ -836,8 +836,8 @@ mobj_t __far* P_SpawnMobj(fixed_t x,fixed_t y,fixed_t z,mobjtype_t type)
     mobj->type = type;
     mobj->x = x;
     mobj->y = y;
-    mobj->radius = info->radius;
-    mobj->height = info->height;                                      // phares
+    MOBJ_SET_RADIUS(mobj,info->radius);
+    MOBJ_SET_HEIGHT(mobj,info->height);                                      // phares
     mobj->flags |= info->flags;
     mobj->health = info->spawnhealth;
 
@@ -865,7 +865,7 @@ mobj_t __far* P_SpawnMobj(fixed_t x,fixed_t y,fixed_t z,mobjtype_t type)
     mobj->ceilingz = SUBSECTOR_SECTOR(mobj->subsector)->ceilingheight;
 
     mobj->z = z == ONFLOORZ ? mobj->floorz : z == ONCEILINGZ ?
-                                  mobj->ceilingz - mobj->height : z;
+                                  mobj->ceilingz - MOBJ_HEIGHT(mobj) : z;
 
     mobj->thinker.function = P_ThinkerFunctionForType(type, mobj);
 

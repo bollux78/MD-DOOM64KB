@@ -120,6 +120,7 @@ mobj_t __far*      _g_thingPool;
 int16_t _g_thingPoolSize;
 #if defined(DOOM_R23_MAPMEM)
 degenmobj_t *r23_soundorgs;
+const uint16_t *r23_sector_offsets,*r23_sector_lines;
 #endif
 
 
@@ -216,6 +217,9 @@ static void P_LoadSectors (int16_t lump)
       ss->lightlevel = ms->lightlevel;
       ss->special    = ms->special;
       ss->oldspecial = ms->special;
+#if defined(DOOM_R23_MAPMEM)
+      ss->sector_index=i;
+#endif
 
       ss->thinglist = NULL;
       ss->touching_thinglist = NULL;
@@ -436,10 +440,7 @@ static void P_GroupLines (void)
     sprintf(name,"S%dSOUND",_g_gamemap);r23_soundorgs=(degenmobj_t*)W_GetLumpByName(name);
     sprintf(name,"S%dOFFS",_g_gamemap);
     const uint16_t *offsets=W_GetLumpByName(name);
-    for(i=0;i<_g_numsectors;i++){
-        _g_sectors[i].lines=indices+offsets[i];
-        _g_sectors[i].linecount=offsets[i+1]-offsets[i];
-    }
+    r23_sector_lines=indices;r23_sector_offsets=offsets;
 #else
     // count number of lines in each sector
     for (i=0,li=_g_maplines; i<_g_numlines; i++, li++)

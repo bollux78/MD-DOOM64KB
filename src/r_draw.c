@@ -911,12 +911,15 @@ subsector_t __far* R_PointInSubsector(fixed_t x, fixed_t y)
 	static fixed_t prevx;
 	static fixed_t prevy;
 	static subsector_t __far* prevr;
+    static const subsector_t *prevbase;
+    static int16_t prevmap=-1;
 
-	if (prevx == x && prevy == y)
+	if (prevr && prevbase==_g_subsectors && prevmap==_g_gamemap && prevx == x && prevy == y)
 		return prevr;
 
 	prevx = x;
 	prevy = y;
+    prevbase=_g_subsectors;prevmap=_g_gamemap;
 
 	int16_t nodenum = numnodes-1;
 

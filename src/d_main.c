@@ -570,6 +570,11 @@ __attribute__((used,externally_visible)) void R23_ProbeMain(void){
         if(i==3)_g_gameskill=sk_hard;
         _g_gamemap=maps[i];_g_player.playerstate=PST_REBORN;
         P_SetupLevel(maps[i]);
+        if(maps[i]==2){
+            mobj_t *effects[10];
+            for(uint16_t j=0;j<10;j++)effects[j]=P_SpawnMobj(_g_player.mo->x,_g_player.mo->y,ONFLOORZ,MT_PUFF);
+            for(uint16_t j=0;j<10;j++)P_RemoveMobj(effects[j]);
+        }
         Z_CheckHeap();
         *(volatile uint16_t*)0xA00002=maps[i];
         *(volatile uint16_t*)0xA00002=r22_map_trace[(r22_map_head+15)&15].free;

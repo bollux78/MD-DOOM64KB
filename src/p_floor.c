@@ -89,11 +89,11 @@ static boolean P_ThingHeightClip(mobj_t __far* thing)
 
   // don't adjust a floating monster unless forced to
 
-    if (thing->z+thing->height > thing->ceilingz)
-      thing->z = thing->ceilingz - thing->height;
+    if (thing->z+MOBJ_HEIGHT(thing) > thing->ceilingz)
+      thing->z = thing->ceilingz - MOBJ_HEIGHT(thing);
     }
 
-  return thing->ceilingz - thing->floorz >= thing->height;
+  return thing->ceilingz - thing->floorz >= MOBJ_HEIGHT(thing);
 }
 
 
@@ -128,8 +128,8 @@ static void PIT_ChangeSector(mobj_t __far* thing)
     P_SetMobjState (thing, S_GIBS);
 
     thing->flags &= ~MF_SOLID;
-    thing->height = 0;
-    thing->radius = 0;
+    MOBJ_SET_HEIGHT(thing,0);
+    MOBJ_SET_RADIUS(thing,0);
     return;
     }
 
@@ -434,12 +434,12 @@ fixed_t P_FindNextHighestFloor(sector_t __far* sec)
   sector_t __far* other;
   int16_t i;
 
-  for (i=0 ;i < sec->linecount ; i++)
+  for (i=0 ;i < SECTOR_LINECOUNT(sec) ; i++)
     if ((other = getNextSector(SECTOR_LINE(sec,i),sec)) &&
          other->floorheight > currentheight)
     {
       fixed_t height = other->floorheight;
-      while (++i < sec->linecount)
+      while (++i < SECTOR_LINECOUNT(sec))
         if ((other = getNextSector(SECTOR_LINE(sec,i),sec)) &&
             other->floorheight < height &&
             other->floorheight > currentheight)
@@ -629,7 +629,7 @@ boolean EV_BuildStairs(const line_t __far* line)
       int16_t i;
       ok = false;
 
-      for (i = 0;i < sec->linecount;i++)
+      for (i = 0;i < SECTOR_LINECOUNT(sec);i++)
       {          
         sector_t __far* tsec = LN_FRONTSECTOR((SECTOR_LINE(sec,i)));
         int16_t newsecnum;
@@ -719,7 +719,7 @@ boolean EV_DoDonut(const line_t __far* line)
       continue;                           //jff 5/7/98
 
     // find a two sided line around the pool whose other side isn't the pillar
-    for (i = 0;i < s2->linecount;i++)
+    for (i = 0;i < SECTOR_LINECOUNT(s2);i++)
     {
 
 

@@ -232,8 +232,12 @@ typedef struct mobj_s
     fixed_t             dropoffz;
 
     // For movement checking.
+#if defined(DOOM_R23_MAPMEM)
+    uint16_t radius_q8,height_q8;
+#else
     fixed_t             radius;
     fixed_t             height;
+#endif
 
     // Momentums, used to update position.
     fixed_t             momx;
@@ -279,6 +283,17 @@ typedef struct mobj_s
 
     // SEE WARNING ABOVE ABOUT POINTER FIELDS!!!
 } mobj_t;
+#if defined(DOOM_R23_MAPMEM)
+#define MOBJ_RADIUS(m) ((fixed_t)((m)->radius_q8)<<8)
+#define MOBJ_HEIGHT(m) ((fixed_t)((m)->height_q8)<<8)
+#define MOBJ_SET_RADIUS(m,v) ((m)->radius_q8=(uint16_t)((v)>>8))
+#define MOBJ_SET_HEIGHT(m,v) ((m)->height_q8=(uint16_t)((v)>>8))
+#else
+#define MOBJ_RADIUS(m) ((m)->radius)
+#define MOBJ_HEIGHT(m) ((m)->height)
+#define MOBJ_SET_RADIUS(m,v) ((m)->radius=(v))
+#define MOBJ_SET_HEIGHT(m,v) ((m)->height=(v))
+#endif
 
 // External declarations (fomerly in p_local.h) -- killough 5/2/98
 

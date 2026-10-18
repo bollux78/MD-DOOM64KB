@@ -139,7 +139,7 @@ static boolean PIT_StompThing(mobj_t __far* thing)
   if (!(thing->flags & MF_SHOOTABLE)) // Can't shoot it? Can't stomp it!
     return true;
 
-  blockdist = thing->radius + tmthing->radius;
+  blockdist = MOBJ_RADIUS(thing) + MOBJ_RADIUS(tmthing);
 
   if (D_abs(thing->x - tmx) >= blockdist || D_abs(thing->y - tmy) >= blockdist)
     return true; // didn't hit it
@@ -179,10 +179,10 @@ boolean P_TeleportMove(mobj_t __far* thing, fixed_t x, fixed_t y, boolean boss)
   tmx = x;
   tmy = y;
 
-  _g_tmbbox[BOXTOP]    = y + tmthing->radius;
-  _g_tmbbox[BOXBOTTOM] = y - tmthing->radius;
-  _g_tmbbox[BOXRIGHT]  = x + tmthing->radius;
-  _g_tmbbox[BOXLEFT]   = x - tmthing->radius;
+  _g_tmbbox[BOXTOP]    = y + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXBOTTOM] = y - MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXRIGHT]  = x + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXLEFT]   = x - MOBJ_RADIUS(tmthing);
 
   newsubsec = R_PointInSubsector (x,y);
   _g_ceilingline = NULL;
@@ -325,7 +325,7 @@ static boolean PIT_CheckThing(mobj_t __far* thing)
   if (!(thing->flags & (MF_SOLID|MF_SPECIAL|MF_SHOOTABLE)))
     return true;
 
-  blockdist = thing->radius + tmthing->radius;
+  blockdist = MOBJ_RADIUS(thing) + MOBJ_RADIUS(tmthing);
 
   if (D_abs(thing->x - tmx) >= blockdist || D_abs(thing->y - tmy) >= blockdist)
     return true; // didn't hit it
@@ -347,10 +347,10 @@ static boolean PIT_CheckThing(mobj_t __far* thing)
     {
       // see if it went over / under
 
-      if (tmthing->z > thing->z + thing->height)
+      if (tmthing->z > thing->z + MOBJ_HEIGHT(thing))
   return true;    // overhead
 
-      if (tmthing->z+tmthing->height < thing->z)
+      if (tmthing->z+MOBJ_HEIGHT(tmthing) < thing->z)
   return true;    // underneath
 
       if (tmthing->target && (tmthing->target->type == thing->type))
@@ -450,10 +450,10 @@ boolean P_CheckPosition(mobj_t __far* thing, fixed_t x, fixed_t y)
   tmx = x;
   tmy = y;
 
-  _g_tmbbox[BOXTOP] = y + tmthing->radius;
-  _g_tmbbox[BOXBOTTOM] = y - tmthing->radius;
-  _g_tmbbox[BOXRIGHT] = x + tmthing->radius;
-  _g_tmbbox[BOXLEFT] = x - tmthing->radius;
+  _g_tmbbox[BOXTOP] = y + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXBOTTOM] = y - MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXRIGHT] = x + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXLEFT] = x - MOBJ_RADIUS(tmthing);
 
   newsubsec = R_PointInSubsector (x,y);
   _g_ceilingline = NULL;
@@ -663,10 +663,10 @@ boolean P_TryMove(mobj_t __far* thing, fixed_t x, fixed_t y)
 
     if ( !(thing->flags & MF_NOCLIP) )
     {
-        if (_g_tmceilingz - _g_tmfloorz < thing->height)
+        if (_g_tmceilingz - _g_tmfloorz < MOBJ_HEIGHT(thing))
             return false;	// doesn't fit
 
-        if (_g_tmceilingz - thing->z < thing->height)
+        if (_g_tmceilingz - thing->z < MOBJ_HEIGHT(thing))
             return false;	// mobj must lower itself to fit
 
         if (_g_tmfloorz - thing->z > 24*FRACUNIT )
@@ -774,7 +774,7 @@ static boolean PTR_AimTraverse (intercept_t* in)
     // check angles to see if the thing can be aimed at
 
     dist = FixedMul (attackrange, in->frac);
-    thingtopslope = dist != 0 ? FixedApproxDiv(th->z + th->height - shootz, dist) : INT32_MAX;
+    thingtopslope = dist != 0 ? FixedApproxDiv(th->z + MOBJ_HEIGHT(th) - shootz, dist) : INT32_MAX;
 
     if (thingtopslope < bottomslope)
         return true;    // shot over the thing
@@ -930,7 +930,7 @@ static boolean PTR_ShootTraverse (intercept_t* in)
   // check angles to see if the thing can be aimed at
 
   dist = FixedMul (attackrange, in->frac);
-  thingtopslope = FixedApproxDiv (th->z+th->height - shootz , dist);
+  thingtopslope = FixedApproxDiv (th->z+MOBJ_HEIGHT(th) - shootz , dist);
 
   if (thingtopslope < aimslope)
     return true;  // shot over the thing
@@ -977,7 +977,7 @@ fixed_t P_AimLineAttack(mobj_t __far* t1, angle_t angle, fixed_t distance)
 
   x2 = t1->x + (distance>>FRACBITS)*finecosine(angle);
   y2 = t1->y + (distance>>FRACBITS)*finesine(  angle);
-  shootz = t1->z + (t1->height>>1) + 8*FRACUNIT;
+  shootz = t1->z + (MOBJ_HEIGHT(t1)>>1) + 8*FRACUNIT;
 
   // can't shoot outside view angles
 
@@ -1012,7 +1012,7 @@ void P_LineAttack(mobj_t __far* t1, angle_t angle, fixed_t distance, fixed_t slo
   la_damage = damage;
   x2 = t1->x + (distance>>FRACBITS)*finecosine(angle);
   y2 = t1->y + (distance>>FRACBITS)*finesine(  angle);
-  shootz = t1->z + (t1->height>>1) + 8*FRACUNIT;
+  shootz = t1->z + (MOBJ_HEIGHT(t1)>>1) + 8*FRACUNIT;
   attackrange = distance;
   aimslope = slope;
 
@@ -1136,7 +1136,7 @@ static boolean PIT_RadiusAttack (mobj_t __far* thing)
   dy = D_abs(thing->y - bombspot->y);
 
   dist = dx>dy ? dx : dy;
-  dist = (dist - thing->radius) >> FRACBITS;
+  dist = (dist - MOBJ_RADIUS(thing)) >> FRACBITS;
 
   if (dist < 0)
   dist = 0;
@@ -1398,10 +1398,10 @@ void P_CreateSecNodeList(mobj_t __far* thing)
   tmx = thing->x;
   tmy = thing->y;
 
-  _g_tmbbox[BOXTOP]    = thing->y + tmthing->radius;
-  _g_tmbbox[BOXBOTTOM] = thing->y - tmthing->radius;
-  _g_tmbbox[BOXRIGHT]  = thing->x + tmthing->radius;
-  _g_tmbbox[BOXLEFT]   = thing->x - tmthing->radius;
+  _g_tmbbox[BOXTOP]    = thing->y + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXBOTTOM] = thing->y - MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXRIGHT]  = thing->x + MOBJ_RADIUS(tmthing);
+  _g_tmbbox[BOXLEFT]   = thing->x - MOBJ_RADIUS(tmthing);
 
   validcount++; // used to make sure we only process a line once
 

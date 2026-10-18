@@ -564,17 +564,17 @@ static boolean PIT_AddThingIntercepts(mobj_t __far* thing)
   // check a corner to corner crossection for hit
   if ((_g_trace.dx ^ _g_trace.dy) > 0)
     {
-      x1 = thing->x - thing->radius;
-      y1 = thing->y + thing->radius;
-      x2 = thing->x + thing->radius;
-      y2 = thing->y - thing->radius;
+      x1 = thing->x - MOBJ_RADIUS(thing);
+      y1 = thing->y + MOBJ_RADIUS(thing);
+      x2 = thing->x + MOBJ_RADIUS(thing);
+      y2 = thing->y - MOBJ_RADIUS(thing);
     }
   else
     {
-      x1 = thing->x - thing->radius;
-      y1 = thing->y - thing->radius;
-      x2 = thing->x + thing->radius;
-      y2 = thing->y + thing->radius;
+      x1 = thing->x - MOBJ_RADIUS(thing);
+      y1 = thing->y - MOBJ_RADIUS(thing);
+      x2 = thing->x + MOBJ_RADIUS(thing);
+      y2 = thing->y + MOBJ_RADIUS(thing);
     }
 
   s1 = P_PointOnDivlineSide (x1, y1, &_g_trace);
