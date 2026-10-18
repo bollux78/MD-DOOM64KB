@@ -35,10 +35,23 @@ jobs:
           grep -q 'XGM2_loadDriver' ~/mars/m68k-elf/inc/snd/xgm2.h
           java -version
           echo 'R29 preflight OK: scripts, source audio and XGM2 API'
-      - name: Build R29 variants
+      - name: Compile all six variants independently (keep partial successes)
         shell: bash
         run: |
-          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r29.fish
+          failed=0
+          mkdir -p dist/r29
+          : > dist/r29/BUILD-RESULTS.txt
+          for variant in group-perf xgm2-low-fixed xgm2-low-group xgm2-single xgm2-multi xgm2-multi-play; do
+            echo "=== START $variant ==="
+            if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r29.fish "$variant"; then
+              echo "$variant OK" | tee -a dist/r29/BUILD-RESULTS.txt
+            else
+              echo "$variant FAILED" | tee -a dist/r29/BUILD-RESULTS.txt
+              failed=1
+            fi
+          done
+          cat dist/r29/BUILD-RESULTS.txt
+          exit "$failed"
       - name: Record commit and compiler
         if: always()
         shell: bash
@@ -56,12 +69,14 @@ jobs:
           records=[]
           for f in sorted(p.glob('doom-md-r29-*.bin')):
             records.append(dict(name=f.name,bytes=f.stat().st_size,fits_2mib=f.stat().st_size<=2097152))
+          summary=p/'BUILD-RESULTS.txt'
+          results=summary.read_text().splitlines() if summary.exists() else []
           logs={}
           for f in sorted(p.glob('build-*.log')):
             lines=f.read_text(errors='replace').splitlines()
             logs[f.name]=lines[-15:]
           status=dict(run_id=os.environ.get('GITHUB_RUN_ID'),sha=os.environ.get('GITHUB_SHA'),
-                      files=records,logs=logs)
+                      files=records,build_results=results,logs=logs)
           pathlib.Path('docs/review-r29/CI-LAST-RESULT.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n')
           print(json.dumps(status,indent=2,ensure_ascii=False)[:3500])
           PY
