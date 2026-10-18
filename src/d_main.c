@@ -563,7 +563,7 @@ void D_DoomMain(int argc, const char * const * argv)
 #if defined(DOOM_R23_CPU_PROBE)
 __attribute__((used,externally_visible)) void R23_ProbeMain(void){
     *(volatile uint16_t*)0xA00000=0;
-    Z_Init();W_Init();R_Init();P_Init();
+    Z_Init();W_Init();R_Init();P_Init();S_Init(8,8);
     _g_gameskill=sk_medium;
     const int16_t maps[]={1,2,8,2};
     for(uint16_t i=0;i<4;i++){

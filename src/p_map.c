@@ -1068,7 +1068,7 @@ static boolean PTR_NoWayTraverse(intercept_t* in)
    P_LineOpening(ld),                      // Find openings
    _g_openrange <= 0 ||                       // No opening
    _g_openbottom > usething->z+24*FRACUNIT || // Too high it blocks
-   _g_opentop < usething->z+usething->height  // Too low it blocks
+   _g_opentop < usething->z+MOBJ_HEIGHT(usething)  // Too low it blocks
   )
   );
   }

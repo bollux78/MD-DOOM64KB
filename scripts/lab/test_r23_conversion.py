@@ -13,3 +13,13 @@ for num in [1,2,8]:
   assert ix[offs[sec]:offs[sec+1]]==expected
 assert report['skill_counts']==[180,200,239]
 print('R23 conversion deterministic; all sector memberships independently checked; original E1M1/E1M8 preserved')
+
+# Compact actor dimensions preserve exact table values and corpse heights.
+import re
+values=re.findall(r'(\d+)\*FRACUNIT,\s*// (radius|height)',(r/'src/info.c').read_text())
+assert len(values)==98
+for value,field in values:
+ n=int(value);assert 0<=n<256
+ assert ((n*65536>>8)<<8)==n*65536
+ if field=='height':assert (((n*256)>>2)<<8)==(n*65536>>2)
+print('Q8 dimensions preserve all 98 actor table values and corpse quarters exactly')
