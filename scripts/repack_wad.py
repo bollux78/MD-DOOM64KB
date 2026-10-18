@@ -32,6 +32,14 @@ def main():
         sz   = struct.unpack_from('>H', b, e+4)[0]
         name = b[e+8:e+16]
         data = b[fp:fp+sz] if sz else b''
+        # The R30 display uses independently packed 320x224 tile pictures.
+        # Retain lump names/indices for Doom initialization, but do not
+        # duplicate the old 240x160 raw bitmaps in the cartridge.
+        if os.environ.get('DOOM_R30_NATIVE') == '1' and name.rstrip(b'\x00') in (
+                b'TITLEPIC', b'WIMAP0', b'HELP2'):
+            assert sz == 240*160, (name,sz)
+            data = b''
+            sz = 0
         lumps.append([name, sz, data])
 
     # 新 WAD を構築: ヘッダ(12) -> lump データ(4整列) -> ディレクトリ
