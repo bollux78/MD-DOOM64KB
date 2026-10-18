@@ -1,0 +1,494 @@
+{
+  "run_id": "39175689240",
+  "sha": "e03719e486790dc421afe0b1d97a9a3afc5d6df0",
+  "PCM-ALGORITHMS.json": {
+    "modes": {
+      "half": {
+        "total_bytes": {
+          "adpcm_4bit": 155582,
+          "bz2": 241882,
+          "deflate_raw": 242039,
+          "delta_zlib": 229680,
+          "lzma_xz": 224144,
+          "pcm_padded": 316416,
+          "pcm_unpadded": 310717,
+          "rle": 304382,
+          "zlib1": 310769,
+          "zlib9": 242351
+        },
+        "adpcm_snr_db": 18.01,
+        "biggest_sfx": {
+          "name": "barexp",
+          "bytes": 11264
+        }
+      },
+      "mixed": {
+        "total_bytes": {
+          "adpcm_4bit": 211803,
+          "bz2": 307116,
+          "deflate_raw": 323064,
+          "delta_zlib": 295184,
+          "lzma_xz": 292224,
+          "pcm_padded": 429056,
+          "pcm_unpadded": 423161,
+          "rle": 411265,
+          "zlib1": 413147,
+          "zlib9": 323376
+        },
+        "adpcm_snr_db": 19.52,
+        "biggest_sfx": {
+          "name": "barexp",
+          "bytes": 22528
+        }
+      },
+      "full": {
+        "total_bytes": {
+          "adpcm_4bit": 310936,
+          "bz2": 406633,
+          "deflate_raw": 457090,
+          "delta_zlib": 396519,
+          "lzma_xz": 404960,
+          "pcm_padded": 627456,
+          "pcm_unpadded": 621435,
+          "rle": 595439,
+          "zlib1": 585729,
+          "zlib9": 457402
+        },
+        "adpcm_snr_db": 21.28,
+        "biggest_sfx": {
+          "name": "barexp",
+          "bytes": 22528
+        }
+      }
+    }
+  },
+  "WAD-ALGORITHMS.json": {
+    "categories": {
+      "map_geometry": {
+        "raw": 711687,
+        "count": 81,
+        "comp_zlib1": 486444,
+        "comp_zlib9": 355487,
+        "comp_bz2": 360456,
+        "comp_rle": 689805,
+        "comp_delta_zlib9": 411590,
+        "zlib1_blocks_512": 536689,
+        "zlib1_blocks_1024": 517286,
+        "zlib1_blocks_2048": 504763,
+        "zlib1_blocks_4096": 496905
+      },
+      "shared_resource": {
+        "raw": 677274,
+        "count": 571,
+        "comp_zlib1": 493342,
+        "comp_zlib9": 367483,
+        "comp_bz2": 409358,
+        "comp_rle": 613734,
+        "zlib1_blocks_512": 524806,
+        "zlib1_blocks_1024": 509582,
+        "zlib1_blocks_2048": 499744,
+        "zlib1_blocks_4096": 495696,
+        "comp_delta_zlib9": 3105
+      },
+      "map_metadata": {
+        "raw": 78919,
+        "count": 90,
+        "comp_zlib1": 51087,
+        "comp_zlib9": 38698,
+        "comp_bz2": 41469,
+        "comp_rle": 76436,
+        "zlib1_blocks_512": 52719,
+        "zlib1_blocks_1024": 51786,
+        "zlib1_blocks_2048": 51219,
+        "zlib1_blocks_4096": 51096
+      }
+    },
+    "unique_lumps": 742,
+    "optimal_offline_upper_bound": 711941
+  },
+  "SONIC-FORMATS.json": {
+    "installed": {
+      "kosinski": false,
+      "saxman": false,
+      "comper": false,
+      "nemesis": false,
+      "enigma": false
+    },
+    "results": [
+      {
+        "name": "native_title_tiles",
+        "category": "tiles",
+        "raw_bytes": 33184,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "native_title_tilemap",
+        "category": "tilemap",
+        "raw_bytes": 2240,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_0_LINEDEFS_E1M6",
+        "category": "geometry",
+        "raw_bytes": 41912,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_1_SEGS_E1M6",
+        "category": "geometry",
+        "raw_bytes": 33516,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_2_LINEDEFS_E1M2",
+        "category": "geometry",
+        "raw_bytes": 32023,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_3_LINEDEFS_E1M3",
+        "category": "geometry",
+        "raw_bytes": 31806,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_4_LINEDEFS_E1M7",
+        "category": "geometry",
+        "raw_bytes": 29698,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_5_SEGS_E1M2",
+        "category": "geometry",
+        "raw_bytes": 26334,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_6_SEGS_E1M3",
+        "category": "geometry",
+        "raw_bytes": 26010,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_7_LINEDEFS_E1M4",
+        "category": "geometry",
+        "raw_bytes": 25730,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "geometry_8_LINEDEFS_E1M5",
+        "category": "geometry",
+        "raw_bytes": 25575,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_barexp",
+        "category": "audio",
+        "raw_bytes": 11264,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_sawful",
+        "category": "audio",
+        "raw_bytes": 11008,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_sawup",
+        "category": "audio",
+        "raw_bytes": 9984,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_bgsit2",
+        "category": "audio",
+        "raw_bytes": 9728,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_rlaunc",
+        "category": "audio",
+        "raw_bytes": 9472,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "pcm_half_telept",
+        "category": "audio",
+        "raw_bytes": 9472,
+        "codecs": {
+          "kosinski": {
+            "status": "not_installed"
+          },
+          "saxman": {
+            "status": "not_installed"
+          },
+          "comper": {
+            "status": "not_installed"
+          },
+          "nemesis": {
+            "status": "not_installed"
+          },
+          "enigma": {
+            "status": "not_installed"
+          }
+        }
+      }
+    ]
+  }
+}
