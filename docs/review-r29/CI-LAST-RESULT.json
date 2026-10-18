@@ -1,6 +1,39 @@
 {
-  "run_id": "39157581472",
-  "sha": "a8c2346196027ab0f852518a28a0429a78ce5971",
-  "files": [],
-  "logs": {}
+  "run_id": "39159351104",
+  "sha": "d0580b0d8308d6e5efc5ca259028b24b36f7a338",
+  "files": [
+    {
+      "name": "doom-md-r29-group-perf.bin",
+      "bytes": 3276800,
+      "fits_2mib": false
+    }
+  ],
+  "logs": {
+    "build-doom-md-r29-group-perf.log": [
+      "/home/dan/mars/m68k-elf/bin/m68k-elf-gcc -I. -Iinc -Ires -Iout/release -isystem/home/dan/mars/m68k-elf/inc -isystem/home/dan/mars/m68k-elf/out/release -Isrc -Icompat -std=gnu11 -DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=22 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT -DDOOM_CLASSIC_TEXT_HUD -DDOOM_R16_HUD_UP2 -DDOOM_R16_WEAPON_LIFT=1 -DDOOM_HUD_DMA_STATUS_ONLY -DTIMEDEMO -DDOOM_NO_VSYNC -DDOOM_FAST_DIVU -DDOOM_CELL_LUT -DDOOM_R17_PIXEL_DBRA -DDOOM_R11_LEFTCOL_CLIP -DDOOM_R11_TOPBAR_CLIP -DDOOM_R10_DIST_DIVU -DDOOM_R15_SETUPMUL=1 -DDOOM_R12_RECIP_LUT -DDOOM_R9_SLOPE_DIVU -DDOOM_R9_STEP_DIVS -DDOOM_CACHE_SLOTS=16 -DDOOM_R19_FLAT_DBRA -DDOOM_R20_SIGHT_ITERATIVE -DDOOM_R20_PIXEL_ADDX -DDOOM_R20_TAN_MULS -DDOOM_R20_CELLMAP_MEMO -DDOOM_R20_HUD_LAZY -DDOOM_R20_FPS_LAZY -DDOOM_R20_SCALE_MATH -DDOOM_R20_BSP_ITERATIVE -DDOOM_R20_DMA_BATCH -DDOOM_R20_COLOR_ROM -DDOOM_R20_REG_COLUMNS -DDOOM_R20_CACHE_DIRECT -DDOOM_R20_FLAT_INLINE -DDOOM_R20_TAN32 -DDOOM_R20_VBLANK_VIDEO -DDOOM_R21_V2_HEAPBUF -DDOOM_R21_NO_VDP_INIT -DDOOM_R22_SRAM_BLOCKLINKS -DDOOM_R26_FLOW -DDOOM_R23_MAPMEM -DDOOM_R24_EPISODE -DDOOM_R25_MUSIC -DDOOM_R27_GROUP_SIDE -DDOOM_R27_GROUP_LINE -DDOOM_R28_VIDEO_AUDIT -DDOOM_BUILD_VARIANT -DSGDK_GCC -m68000 -fdiagnostics-color=always -Wall -Wextra -Wno-shift-negative-value -Wno-main -Wno-unused-parameter -fno-builtin -ffunction-sections -fdata-sections -fms-extensions -B/home/dan/mars/m68k-elf/bin -O3 -fuse-linker-plugin -fno-web -fno-gcse -fno-tree-loop-ivcanon -fomit-frame-pointer -flto -flto=auto -ffat-lto-objects -c src/z_zone.c -o out/release/src/z_zone.o",
+      "echo \"out/release/res/music.o out/release/src/r20_reg_columns.o out/release/src/r21_prof_hint.o out/release/src/am_map.o out/release/src/d_items.o out/release/src/d_main.o out/release/src/f_finale.o out/release/src/f_libt.o out/release/src/g_game.o out/release/src/hu_text.o out/release/src/i_audio.o out/release/src/i_genesis.o out/release/src/i_genesisv.o out/release/src/info.o out/release/src/i_stubs.o out/release/src/m_cheat.o out/release/src/m_random.o out/release/src/m_text.o out/release/src/p_doors.o out/release/src/p_enemy2.o out/release/src/p_enemy.o out/release/src/p_floor.o out/release/src/p_inter.o out/release/src/p_lights.o out/release/src/p_map.o out/release/src/p_maputl.o out/release/src/p_mobj.o out/release/src/p_plats.o out/release/src/p_pspr.o out/release/src/p_setup.o out/release/src/p_sight.o out/release/src/p_spec.o out/release/src/p_switch.o out/release/src/p_telept.o out/release/src/p_tick.o out/release/src/p_user.o out/release/src/r20_stackguard.o out/release/src/r21_prof.o out/release/src/r22_blocklinks.o out/release/src/r23_mapmem.o out/release/src/r24_romthings.o out/release/src/r25_music.o out/release/src/r_data.o out/release/src/r_draw.o out/release/src/r_plane.o out/release/src/r_sky.o out/release/src/r_things.o out/release/src/sounds.o out/release/src/s_sound.o out/release/src/st_pal.o out/release/src/st_text.o out/release/src/tables.o out/release/src/wi_libt.o out/release/src/wi_stuff.o out/release/src/w_wad.o out/release/src/z_bmallo.o out/release/src/z_zone.o\" > out/release/cmd_",
+      "/home/dan/mars/m68k-elf/bin/m68k-elf-gcc -m68000 -B/home/dan/mars/m68k-elf/bin -n -T /home/dan/mars/m68k-elf/md.ld -nostdlib out/release/sega.o @out/release/cmd_ /home/dan/mars/m68k-elf/lib/libmd.a /home/dan/mars/m68k-elf/bin/../lib/gcc/m68k-elf/15.2.0/libgcc.a -lgcc -o out/release/rom.out -Wl,--gc-sections -flto -flto=auto -ffat-lto-objects",
+      "../../../../../../mars/m68k-elf/src/memory.c:16:12: warning: type of ‘_bend’ does not match original declaration [-Wlto-type-mismatch]",
+      "   16 | extern u32 _bend;",
+      "      |            ^",
+      "src/i_genesisv.c:922:21: note: type ‘u16’ should match type ‘u32’",
+      "  922 |     extern uint16_t _bend;",
+      "      |                     ^",
+      "src/i_genesisv.c:922:21: note: ‘_bend’ was previously declared here",
+      "src/i_genesisv.c:922:21: note: code may be misoptimized unless ‘-fno-strict-aliasing’ is used",
+      "/home/dan/mars/m68k-elf/bin/m68k-elf-nm --plugin=/home/dan/mars/m68k-elf/libexec/gcc/m68k-elf/15.2.0/liblto_plugin.so -n -l out/release/rom.out > out/release/symbol.txt",
+      "/home/dan/mars/m68k-elf/bin/m68k-elf-objcopy -O binary out/release/rom.out out/release/rom.bin",
+      "java -jar /home/dan/mars/m68k-elf/bin/sizebnd.jar out/release/rom.bin -sizealign 131072 -checksum",
+      "ROM created: /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/out/rom.bin"
+    ],
+    "build-doom-md-r29-xgm2-low-fixed.log": [
+      "repacked: 1597076 bytes, lumps=819, misaligned=0, infoofs=1583972",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_sfx.h  SFX=0 (silent)",
+      "Invalid DOOM_R20_DEFINES entry: -DDOOM_R29_XGM2"
+    ]
+  }
 }
