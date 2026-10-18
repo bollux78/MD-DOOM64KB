@@ -1005,8 +1005,136 @@ static void R20_Present(uint16_t rows) {
 static void R20_Present(uint16_t rows) { R20_UploadRows(_s_screen,rows); }
 #endif
 
+
+#if defined(DOOM_R30_NATIVE)
+/* R30: native H40 artwork lives on BG_B; the existing text/menu stays BG_A.
+   Tiles are packed individually with byte RLE, decoded into one 32B stack tile.
+   WAD raw-screen lumps are kept as directory entries but their pixel payloads
+   are omitted from the cartridge in native builds. */
+#include "r30_static_manifest.h"
+#define R30_PATTERN_BASE (SOLID_TILE_INDEX + 16)
+#if (R30_PATTERN_BASE + R30_TITLE_TILES >= 1536) || \
+    (R30_PATTERN_BASE + R30_INTER_TILES >= 1536) || \
+    (R30_PATTERN_BASE + R30_FINAL_TILES >= 1536)
+#error "R30 native artwork overlaps BG_A name table in VRAM"
+#endif
+extern const u8 r30_title_pack[], r30_inter_pack[], r30_final_pack[];
+extern const u16 r30_title_map[], r30_inter_map[], r30_final_map[];
+extern const u16 r30_title_pal[], r30_inter_pal[], r30_final_pal[];
+typedef struct {
+    const u8 *pack;
+    const u16 *map;
+    const u16 *pal;
+    u16 tiles;
+} R30Image;
+static const R30Image r30_images[3] = {
+    {r30_title_pack,r30_title_map,r30_title_pal,R30_TITLE_TILES},
+    {r30_inter_pack,r30_inter_map,r30_inter_pal,R30_INTER_TILES},
+    {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES}
+};
+static s16 r30_active = -1;
+
+static void R30_LoadNative(u16 which)
+{
+    const R30Image *image = &r30_images[which];
+    const u8 *p=image->pack;
+    u32 decoded[8];           /* one tile: 32 bytes, aligned for VDP_loadTileData */
+    u8 *dest=(u8 *)decoded;
+    u16 row[40];
+    R20_StopVideo();          /* finish pending gameplay video before replacing CRAM */
+    VDP_setEnable(FALSE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    for(u16 tile=0;tile<image->tiles;tile++)
+    {
+        u16 out=0;
+        u8 tag=*p++;
+        if(tag==0)
+            for(u16 i=0;i<32;i++)dest[out++]=*p++;
+        else
+        {
+            const u8 *end=p+tag;
+            while(p<end)
+            {
+                u8 ctrl=*p++;
+                u16 count=(ctrl&127)+1;
+                if(ctrl&128)
+                {
+                    u8 val=*p++;
+                    while(count--) { if(out<32)dest[out++]=val; }
+                }
+                else
+                    while(count--) { if(out<32)dest[out++]=*p; p++; }
+            }
+        }
+        if(out!=32)
+            I_Error("R30 compressed tile mismatch");
+        VDP_loadTileData(decoded,R30_PATTERN_BASE+tile,1,CPU);
+    }
+    for(u16 y=0;y<28;y++)
+    {
+        for(u16 x=0;x<40;x++)
+            row[x]=image->map[y*40+x]+R30_PATTERN_BASE;
+        VDP_setTileMapDataRect(BG_B,row,0,y,40,1,40,CPU);
+    }
+    PAL_setColors(0,image->pal,64,CPU);
+    newpal=NO_PALETTE_CHANGE;
+    VDP_setEnable(TRUE);
+    r30_active=(s16)which;
+}
+static bool R30_DrawNative(int16_t lump)
+{
+    static bool initialized=FALSE;
+    static s16 rawids[3];
+    if(!initialized)
+    {
+        rawids[0]=W_GetNumForName("TITLEPIC");
+        rawids[1]=W_GetNumForName("WIMAP0");
+        rawids[2]=W_GetNumForName("HELP2");
+        initialized=TRUE;
+    }
+    for(u16 i=0;i<3;i++)
+        if(lump==rawids[i])
+        {
+            if(r30_active!=(s16)i)R30_LoadNative(i);
+            /* Transparent BG_A index 0 exposes full native BG_B pixels.
+               M_Drawer/WI_Drawer still write SGDK font tiles to BG_A. */
+            for(u16 n=0;n<VIEWWINDOWWIDTH*VDP_DISPLAY_ROWS;n++)
+                _s_screen[n]=BLACK_CELL;
+            R20_InvalidateVideo();
+            return TRUE;
+        }
+    return FALSE;
+}
+static void R30_LeaveNative(void)
+{
+    if(r30_active<0)return;
+    R20_StopVideo();
+    VDP_clearPlane(BG_B,TRUE);
+    I_BuildSolidTiles();
+    I_UploadNewPalette(newpal==NO_PALETTE_CHANGE ? 0 : newpal);
+    newpal=NO_PALETTE_CHANGE;
+    r30_active=-1;
+    R20_InvalidateVideo();
+}
+#endif
+
 void I_FinishUpdate(void)
 {
+#if defined(DOOM_R30_NATIVE)
+    if(r30_active>=0 && _g_gamestate==GS_LEVEL)
+        R30_LeaveNative();
+    if(r30_active>=0)
+    {
+        /* Static picture was uploaded only on transition; update the overlay
+           without gameplay HUD, palette replacement or a new video snapshot. */
+        newpal=NO_PALETTE_CHANGE;
+        VDP_setTileMapDataRect(BG_A,_s_screen,0,0,
+                               VIEWWINDOWWIDTH,VDP_DISPLAY_ROWS,
+                               VIEWWINDOWWIDTH,DMA);
+        return;
+    }
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     doom_profile_stage = 5;
 #endif
@@ -1546,6 +1674,9 @@ void R_DrawFuzzColumn(const draw_column_vars_t *dcvars)
 
 void V_DrawRawFullScreen(int16_t num)
 {
+#if defined(DOOM_R30_NATIVE)
+    if(R30_DrawNative(num))return;
+#endif
     R20_InvalidateVideo();
 	const uint8_t *lump = W_GetLumpByNum(num);
 
