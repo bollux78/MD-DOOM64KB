@@ -1,0 +1,119 @@
+{
+  "returncode": 0,
+  "output": "region 0 tag 1 cycles 7140298\nregion 1 tag 24688 cycles 7140384\nregion 2 tag 22864 cycles 7140470\nregion 3 tag 2 cycles 18587184\nregion 4 tag 6768 cycles 18587270\nregion 5 tag 4944 cycles 18587356\nregion 6 tag 8 cycles 23502738\nregion 7 tag 24416 cycles 23502824\nregion 8 tag 22592 cycles 23502910\nregion 9 tag 2 cycles 35965774\nregion 10 tag 2320 cycles 35965860\nregion 11 tag 1824 cycles 35965946\nregion 12 tag 0 cycles 35965976\n",
+  "stderr": "",
+  "symbols": {
+    "r22_map_stage": 13,
+    "r22_map_current": 2,
+    "r22_map_request": 0,
+    "r22_map_failed_stage": 0,
+    "_g_numsectors": 200,
+    "_g_numlines": 1033,
+    "_g_thingPoolSize": 239,
+    "r22_map_head": 8,
+    "r22_map_count": 16,
+    "r22_map_trace": [
+      {
+        "map": 2,
+        "stage": 6,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 7,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 8,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 9,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 10,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 11,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 12,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 13,
+        "free": 2320,
+        "largest": 1824
+      },
+      {
+        "map": 8,
+        "stage": 12,
+        "free": 24800,
+        "largest": 22976
+      },
+      {
+        "map": 8,
+        "stage": 13,
+        "free": 24416,
+        "largest": 22592
+      },
+      {
+        "map": 2,
+        "stage": 0,
+        "free": 24416,
+        "largest": 22592
+      },
+      {
+        "map": 2,
+        "stage": 1,
+        "free": 39248,
+        "largest": 37424
+      },
+      {
+        "map": 2,
+        "stage": 2,
+        "free": 39248,
+        "largest": 37424
+      },
+      {
+        "map": 2,
+        "stage": 3,
+        "free": 11984,
+        "largest": 10160
+      },
+      {
+        "map": 2,
+        "stage": 4,
+        "free": 3568,
+        "largest": 1824
+      },
+      {
+        "map": 2,
+        "stage": 5,
+        "free": 3568,
+        "largest": 1824
+      }
+    ]
+  },
+  "source_commit": "c94dd2b90b97fb0be1df438858da2ef9de3aeb23",
+  "workflow_run": 39089624030,
+  "artifact_id": 12122710358,
+  "zip_sha256": "43014f892a71022012cd0a741bd2c5892cd44c9f6f2ad9f143bed2d11b9c7bb4",
+  "scope": "Musashi MC68000, full ELF ROM/RAM initialization, map loads 1/2/8 medium then 2 hard; ten simultaneous transient objects on each map2 load, removals and Z_CheckHeap; no VDP/audio hardware or gameplay validation"
+}
