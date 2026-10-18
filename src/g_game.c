@@ -606,9 +606,13 @@ static void G_DoCompleted (void)
     // wminfo.next is 0 biased, unlike gamemap
     if (secretexit)           // go to secret level
         _g_wminfo.next = 8;
-#if defined LOW_MEMORY
+#if defined LOW_MEMORY && !defined(DOOM_R23_MAPMEM)
     else if (_g_gamemap == 1)
         _g_wminfo.next = 7;
+#endif
+#if defined(DOOM_R23_MAPMEM)
+    else if (_g_gamemap == 2) // Only real maps 1,2,8 are available in this batch.
+        _g_wminfo.next = 0;
 #endif
     else if (_g_gamemap == 9) // returning from secret level
         _g_wminfo.next = 3;
@@ -872,7 +876,9 @@ void G_ReloadDefaults(void)
 static void G_DoNewGame (void)
 {
     G_ReloadDefaults();            // killough 3/1/98
-#if defined(DOOM_R22_MAP8_DIRECT)
+#if defined(DOOM_R23_MAP2_DIRECT)
+    G_InitNew(d_skill,2);
+#elif defined(DOOM_R22_MAP8_DIRECT)
     G_InitNew (d_skill, 8);
 #else
     G_InitNew (d_skill, 1);

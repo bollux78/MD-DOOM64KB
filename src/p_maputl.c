@@ -454,10 +454,10 @@ boolean P_BlockLinesIterator(int16_t x, int16_t y, boolean func(const line_t __f
         linedata_t __far* ld = &_g_lines[lineno];
         const line_t *mld = &_g_maplines[lineno];
 
-        if (ld->validcount == vcount)
+        if (R23_GET(ld,validcount) == vcount)
             continue;       // line has already been checked
 
-        ld->validcount = vcount;
+        R23_SET(ld,validcount,vcount);
 
         if (!func(mld))
             return false;

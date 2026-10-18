@@ -127,7 +127,7 @@ fixed_t P_FindLowestFloorSurrounding(sector_t __far* sec)
 
   for (i=0 ;i < sec->linecount ; i++)
   {
-    check = sec->lines[i];
+    check = SECTOR_LINE(sec,i);
     other = getNextSector(check,sec);
 
     if (!other)
@@ -155,7 +155,7 @@ fixed_t P_FindHighestFloorSurrounding(sector_t __far* sec)
 
   for (i=0 ;i < sec->linecount ; i++)
   {
-    check = sec->lines[i];
+    check = SECTOR_LINE(sec,i);
     other = getNextSector(check,sec);
 
     if (!other)
@@ -183,7 +183,7 @@ fixed_t P_FindLowestCeilingSurrounding(sector_t __far* sec)
 
   for (i=0 ;i < sec->linecount ; i++)
   {
-    check = sec->lines[i];
+    check = SECTOR_LINE(sec,i);
     other = getNextSector(check,sec);
 
     if (!other)
@@ -310,18 +310,15 @@ void P_UpdateSpecials (void)
                 switch(_g_buttonlist[i].where)
                 {
                     case top:
-                        _g_sides[_g_buttonlist[i].line->sidenum[0]].toptexture =
-                                _g_buttonlist[i].btexture;
+                        R23_SET(&_g_sides[_g_buttonlist[i].line->sidenum[0]],toptexture,_g_buttonlist[i].btexture);
                         break;
 
                     case middle:
-                        _g_sides[_g_buttonlist[i].line->sidenum[0]].midtexture =
-                                _g_buttonlist[i].btexture;
+                        R23_SET(&_g_sides[_g_buttonlist[i].line->sidenum[0]],midtexture,_g_buttonlist[i].btexture);
                         break;
 
                     case bottom:
-                        _g_sides[_g_buttonlist[i].line->sidenum[0]].bottomtexture =
-                                _g_buttonlist[i].btexture;
+                        R23_SET(&_g_sides[_g_buttonlist[i].line->sidenum[0]],bottomtexture,_g_buttonlist[i].btexture);
                         break;
                 }
 
@@ -425,13 +422,13 @@ void P_SpawnSpecials (void)
 
 typedef struct {
 	thinker_t thinker;				// Thinker structure for scrolling
-	int16_t __far* textureoffset;	// Affected textureoffset
+	side_t __far* side;	// Affected textureoffset
 } scroll_t;
 
 
 static void T_Scroll(scroll_t __far* s)
 {
-	(*s->textureoffset)++;
+	R23_SET(s->side,textureoffset,R23_GET(s->side,textureoffset)+1);
 }
 
 
@@ -447,7 +444,7 @@ static void Add_Scroller(int16_t affectee)
 {
 	scroll_t __far* s = Z_CallocLevSpec(sizeof *s);
 	s->thinker.function = T_Scroll;
-	s->textureoffset = &_g_sides[affectee].textureoffset;
+	s->side = &_g_sides[affectee];
 	P_AddThinker(&s->thinker);
 }
 

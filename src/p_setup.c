@@ -234,6 +234,12 @@ static void P_LoadNodes (int16_t lump)
 static void P_LoadThings(int16_t lump)
 {
 	_g_thingPoolSize = W_LumpLength(lump) / sizeof(mapthing_t);
+#if defined(DOOM_R23_MAPMEM)
+    const mapthing_t *things=W_GetLumpByNum(lump);
+    int16_t count=_g_thingPoolSize;_g_thingPoolSize=0;
+    int16_t bit=_g_gameskill<=sk_easy?1:_g_gameskill==sk_medium?2:4;
+    for(int16_t i=0;i<count;i++)if(things[i].type==1 || (things[i].options&bit))_g_thingPoolSize++;
+#endif
 	_g_thingPool     = Z_CallocLevel(_g_thingPoolSize * sizeof(mobj_t));
 
 	for (int16_t i = 0; i < _g_thingPoolSize; i++)
@@ -245,7 +251,7 @@ static void P_LoadThings2(int16_t lump)
 {
     const mapthing_t __far* data = W_GetLumpByNum(lump);
 
-    for (int16_t i = 0; i < _g_thingPoolSize; i++)
+    for (int16_t i = 0; i < W_LumpLength(lump)/sizeof(mapthing_t); i++)
     {
         const mapthing_t __far* mt = &data[i];
 
@@ -266,14 +272,18 @@ static void P_LoadLineDefs (int16_t lump)
 {
 	_g_numlines = W_LumpLength(lump) / sizeof(line_t);
 	_g_maplines = W_GetLumpByNum(lump);
-	_g_lines    = Z_MallocLevel(_g_numlines * sizeof(linedata_t), NULL);
+	#if defined(DOOM_R23_MAPMEM)
+    _g_lines=(linedata_t*)0x210000UL;
+#else
+    _g_lines    = Z_MallocLevel(_g_numlines * sizeof(linedata_t), NULL);
+#endif
 
 	for (int16_t i = 0; i < _g_numlines; i++)
 	{
-		_g_lines[i].validcount   = 0;
-		_g_lines[i].r_validcount = 0;
-		_g_lines[i].r_flags      = 0;
-		_g_lines[i].special      = _g_maplines[i].const_special;
+		R23_SET(&_g_lines[i],validcount,0);
+		R23_SET(&_g_lines[i],r_validcount,0);
+		R23_SET(&_g_lines[i],r_flags,0);
+		R23_SET(&_g_lines[i],special,_g_maplines[i].const_special);
 	}
 }
 
@@ -286,22 +296,26 @@ static void P_LoadSideDefs (int16_t lump)
 {
   numsides = W_LumpLength(lump) / sizeof(mapsidedef_t);
   _g_mapsides = W_GetLumpByNum(lump);
+  #if defined(DOOM_R23_MAPMEM)
+  _g_sides=(side_t*)0x220000UL;
+#else
   _g_sides = Z_CallocLevel(numsides * sizeof(side_t));
+#endif
 
     for (int16_t i = 0; i < numsides; i++)
     {
         const mapsidedef_t __far* msd = _g_mapsides + i;
         side_t __far* sd = _g_sides + i;
 
-        sd->textureoffset = msd->textureoffset;
-        sd->sector        = &_g_sectors[msd->sector];
-        sd->midtexture    = msd->midtexture;
-        sd->toptexture    = msd->toptexture;
-        sd->bottomtexture = msd->bottomtexture;
+        R23_SET(sd,textureoffset,msd->textureoffset);
+        R23_SET(sd,sector,&_g_sectors[msd->sector]);
+        R23_SET(sd,midtexture,msd->midtexture);
+        R23_SET(sd,toptexture,msd->toptexture);
+        R23_SET(sd,bottomtexture,msd->bottomtexture);
 
-        P_LoadTexture(sd->midtexture);
-        P_LoadTexture(sd->toptexture);
-        P_LoadTexture(sd->bottomtexture);
+        P_LoadTexture(R23_GET(sd,midtexture));
+        P_LoadTexture(R23_GET(sd,toptexture));
+        P_LoadTexture(R23_GET(sd,bottomtexture));
     }
 }
 
@@ -357,10 +371,12 @@ static void P_LoadReject(int16_t lump)
 // figgi 09/18/00 -- adapted for gl-nodes
 
 // cph - convenient sub-function
+#if !defined(DOOM_R23_MAPMEM)
 static void P_AddLineToSector(const line_t __far* li, sector_t __far* sector)
 {
   sector->lines[sector->linecount++] = li;
 }
+#endif
 
 static void M_ClearBox (fixed_t *box)
 {
@@ -397,13 +413,23 @@ static void P_GroupLines (void)
         {
             if(seg->sidenum != NO_INDEX)
             {
-                _g_subsectors[i].sector = _g_sides[seg->sidenum].sector;
+                _g_subsectors[i].sector = R23_GET(&_g_sides[seg->sidenum],sector);
                 break;
             }
             seg++;
         }
     }
 
+#if defined(DOOM_R23_MAPMEM)
+    char name[9];sprintf(name,"S%dLINES",_g_gamemap);
+    const uint16_t *indices=W_GetLumpByName(name);
+    sprintf(name,"S%dOFFS",_g_gamemap);
+    const uint16_t *offsets=W_GetLumpByName(name);
+    for(i=0;i<_g_numsectors;i++){
+        _g_sectors[i].lines=indices+offsets[i];
+        _g_sectors[i].linecount=offsets[i+1]-offsets[i];
+    }
+#else
     // count number of lines in each sector
     for (i=0,li=_g_maplines; i<_g_numlines; i++, li++)
     {
@@ -434,6 +460,7 @@ static void P_GroupLines (void)
             P_AddLineToSector(li, LN_BACKSECTOR(li));
     }
 
+#endif
     for (i=0, sector = _g_sectors; i<_g_numsectors; i++, sector++)
     {
         fixed_t bbox[4];
@@ -441,8 +468,8 @@ static void P_GroupLines (void)
 
         for(int16_t l = 0; l < sector->linecount; l++)
         {
-            M_AddToBox (bbox, (fixed_t)sector->lines[l]->v1.x<<FRACBITS, (fixed_t)sector->lines[l]->v1.y<<FRACBITS);
-            M_AddToBox (bbox, (fixed_t)sector->lines[l]->v2.x<<FRACBITS, (fixed_t)sector->lines[l]->v2.y<<FRACBITS);
+            M_AddToBox (bbox, (fixed_t)SECTOR_LINE(sector,l)->v1.x<<FRACBITS, (fixed_t)SECTOR_LINE(sector,l)->v1.y<<FRACBITS);
+            M_AddToBox (bbox, (fixed_t)SECTOR_LINE(sector,l)->v2.x<<FRACBITS, (fixed_t)SECTOR_LINE(sector,l)->v2.y<<FRACBITS);
         }
 
         sector->soundorg.x = bbox[BOXRIGHT]/2+bbox[BOXLEFT]/2;
@@ -480,7 +507,9 @@ void P_SetupLevel(int16_t map)
     _g_player.viewz = 1;
 
     // Make sure all sounds are stopped before Z_FreeTags.
+#if !defined(DOOM_R23_CPU_PROBE)
     S_Start();
+#endif
 
     R22_MapMark(map,0);
     P_FreeLevelData();
@@ -496,6 +525,9 @@ void P_SetupLevel(int16_t map)
 
     lumpnum = W_GetNumForName(lumpname);
 
+#if defined(DOOM_R23_MAPMEM)
+    R23_MapMemoryInit(W_LumpLength(lumpnum+ML_LINEDEFS)/sizeof(line_t),W_LumpLength(lumpnum+ML_SIDEDEFS)/sizeof(mapsidedef_t));
+#endif
     R22_MapMark(map,2);
     P_LoadThings    (lumpnum + ML_THINGS);
     R22_MapMark(map,3);
@@ -531,8 +563,8 @@ void P_SetupLevel(int16_t map)
     P_SpawnSpecials();
 
     P_MapEnd();R22_MapMark(map,13);
-#if defined(DOOM_R22_MAP_DIAG)
-    if(map==8)I_Error("E1M8 LOADED OK - DIAG STOP");
+#if defined(DOOM_R22_MAP_DIAG) && !defined(DOOM_R23_CPU_PROBE)
+    if(map==8 || map==2)I_Error("MAP LOADED OK - DIAG STOP");
 #endif
 }
 

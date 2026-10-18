@@ -101,7 +101,11 @@ typedef struct
   // thinglist is a subset of touching_thinglist
   struct msecnode_s __far* touching_thinglist;
 
+#if defined(DOOM_R23_MAPMEM)
+  const uint16_t *lines;
+#else
   const struct line_s __far*__far*lines;
+#endif
 
   uint16_t validcount;        // if == validcount, already checked
   int16_t linecount;
@@ -202,10 +206,13 @@ typedef PACKEDATTR_PRE struct line_s
 typedef char assertLineSize[sizeof(line_t) == 31 ? 1 : -1];
 
 
-#define LN_FRONTSECTOR(l) (_g_sides[(l)->sidenum[0]].sector)
-#define LN_BACKSECTOR(l) ((l)->sidenum[1] != NO_INDEX ? _g_sides[(l)->sidenum[1]].sector : NULL)
+#include "r23_mapmem.h"
 
-#define LN_SPECIAL(l) (_g_lines[(l)->lineno].special)
+#define LN_FRONTSECTOR(l) (R23_GET(&_g_sides[(l)->sidenum[0]],sector))
+#define LN_BACKSECTOR(l) ((l)->sidenum[1] != NO_INDEX ? R23_GET(&_g_sides[(l)->sidenum[1]],sector) : NULL)
+
+#define LN_SPECIAL(l) R23_GET(&_g_lines[(l)->lineno],special)
+#define LN_SET_SPECIAL(l,v) R23_SET(&_g_lines[(l)->lineno],special,v)
 
 
 // phares 3/14/98

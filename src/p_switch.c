@@ -179,13 +179,13 @@ void P_ChangeSwitchTexture(const line_t __far* line, boolean useAgain)
     int16_t   *texture, ttop, tmid, tbot;
     bwhere_e position;
 
-    ttop = _g_sides[line->sidenum[0]].toptexture;
-    tmid = _g_sides[line->sidenum[0]].midtexture;
-    tbot = _g_sides[line->sidenum[0]].bottomtexture;
+    ttop = R23_GET(&_g_sides[line->sidenum[0]],toptexture);
+    tmid = R23_GET(&_g_sides[line->sidenum[0]],midtexture);
+    tbot = R23_GET(&_g_sides[line->sidenum[0]],bottomtexture);
 
     /* don't zero line->special until after exit switch test */
     if (!useAgain)
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
 
     /* search for a texture to change */
     texture = NULL;
@@ -221,15 +221,15 @@ void P_ChangeSwitchTexture(const line_t __far* line, boolean useAgain)
     switch(position)
     {
         case top:
-            _g_sides[line->sidenum[0]].toptexture = *texture;
+            R23_SET(&_g_sides[line->sidenum[0]],toptexture,*texture);
             break;
 
         case middle:
-            _g_sides[line->sidenum[0]].midtexture = *texture;
+            R23_SET(&_g_sides[line->sidenum[0]],midtexture,*texture);
             break;
 
         case bottom:
-            _g_sides[line->sidenum[0]].bottomtexture = *texture;
+            R23_SET(&_g_sides[line->sidenum[0]],bottomtexture,*texture);
             break;
     }
 
@@ -306,7 +306,7 @@ static void EV_VerticalDoor(const line_t __far* line, mobj_t __far* thing)
   }
 
   // get the sector on the second side of activating linedef
-  sec = _g_sides[line->sidenum[1]].sector;
+  sec = R23_GET(&_g_sides[line->sidenum[1]],sector);
 
   door = sec->ceilingdata;
 
@@ -390,7 +390,7 @@ static void EV_VerticalDoor(const line_t __far* line, mobj_t __far* thing)
     case 33:
     case 34:
       door->type = dopen;
-      LN_SPECIAL(line) = 0;
+      LN_SET_SPECIAL(line,0);
       break;
 
     default:

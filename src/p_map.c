@@ -564,43 +564,43 @@ static void P_CrossSpecialLine(const line_t __far* line, int16_t side, mobj_t __
     case 2:
       // Open Door
       if (EV_DoDoor(line,dopen))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
     case 5:
       // Raise Floor
       if (EV_DoFloor(line->tag,raiseFloor))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
     case 8:
       // Build Stairs
       if (EV_BuildStairs(line))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
     case 16:
       // Close Door 30
       if (EV_DoDoor(line,close30ThenOpen))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
     case 22:
       // Raise floor to nearest height and change texture
       if (EV_DoPlat(line,raiseToNearestAndChange))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
     case 35:
       // Lights Very Dark
       EV_LightTurnOn(line,35);
-      LN_SPECIAL(line) = 0;
+      LN_SET_SPECIAL(line,0);
       break;
 
     case 36:
       // Lower Floor (TURBO)
       if (EV_DoFloor(line->tag,turboLower))
-        LN_SPECIAL(line) = 0;
+        LN_SET_SPECIAL(line,0);
       break;
 
       // Regular walk many retriggerable

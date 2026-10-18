@@ -122,10 +122,10 @@ static boolean P_CrossSubsector(int16_t num)
         divline_t divl;
 
         // allready checked other side?
-        if(line->validcount == validcount)
+        if(R23_GET(line,validcount) == validcount)
             continue;
 
-        line->validcount = validcount;
+        R23_SET(line,validcount,validcount);
 
         if ((fixed_t)mapline->bbox[BOXLEFT  ]<<FRACBITS > los.bbox[BOXRIGHT ] ||
             (fixed_t)mapline->bbox[BOXRIGHT ]<<FRACBITS < los.bbox[BOXLEFT  ] ||
