@@ -53,7 +53,20 @@ if set -q DOOM_R31_SFX_MODE
     if set -q DOOM_R31_SFX_REPORT
         set reportarg --report "$DOOM_R31_SFX_REPORT"
     end
-    python3 scripts/lab/gen_r31_sfx.py --mode "$mode" $reportarg; or exit 1
+    if set -q DOOM_R34_AUDIO_CODEC; and test "$DOOM_R34_AUDIO_CODEC" != raw
+        if test "$mode" != mixed
+            echo "R34 audio codec must use the R31 mixed soundtrack reference"
+            exit 1
+        end
+        if not set -q DOOM_R34_PCM_BUFFER
+            echo 'R34_PCM_BUFFER missing'
+            exit 1
+        end
+        python3 scripts/lab/gen_r34_audio.py --codec "$DOOM_R34_AUDIO_CODEC" \
+            --buffer "$DOOM_R34_PCM_BUFFER" $reportarg; or exit 1
+    else
+        python3 scripts/lab/gen_r31_sfx.py --mode "$mode" $reportarg; or exit 1
+    end
 else
     python3 scripts/gen_sfx.py --silent; or exit 1
 end
