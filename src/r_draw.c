@@ -3466,14 +3466,14 @@ static void R_RecalcLineFlags(void)
         // CPhipps - recode for speed, not certain if this is portable though
         if (backsector->ceilingheight != frontsector->ceilingheight
                 || backsector->floorheight != frontsector->floorheight
-                || R23_GET(side,midtexture)
+                || R27_SIDE(side,midtexture)
                 || backsector->ceilingpic != frontsector->ceilingpic
                 || backsector->floorpic != frontsector->floorpic
                 || backsector->lightlevel != frontsector->lightlevel)
         {
-            R23_SET(linedef,r_flags,(R23_GET(linedef,r_flags) & ML_MAPPED));
+            R27_SET_RENDER_FLAGS(linedef,(R23_GET(linedef,r_flags) & ML_MAPPED));
         } else
-            R23_SET(linedef,r_flags,(RF_IGNORE | (R23_GET(linedef,r_flags) & ML_MAPPED)));
+            R27_SET_RENDER_FLAGS(linedef,(RF_IGNORE | (R23_GET(linedef,r_flags) & ML_MAPPED)));
     }
 }
 
