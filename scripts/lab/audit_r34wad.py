@@ -41,7 +41,14 @@ for name in names:
              fps='UNTESTED',rom_sha256=hashlib.sha256(binbytes).hexdigest())
     print(row)
     rows.append(row)
-base=next(x for x in rows if x['name']=='ctl-play')
+base=next((x for x in rows if x['name']=='ctl-play'),None)
+if base is not None:
+    baseline_bytes=base['wad_bytes']
+else:
+    baseline_file=d/'wad-ctl-play.json'
+    # Per-variant CI builds audit as they go; the control was already compiled.
+    assert baseline_file.exists(),'Build control before experimental codecs'
+    baseline_bytes=json.loads(baseline_file.read_text())['packed_wad_bytes']
 for row in rows:
-    assert row['wad_bytes']<=base['wad_bytes']
+    assert row['wad_bytes']<=baseline_bytes
 (d/'R34W-AUDIT.json').write_text(json.dumps(rows,indent=2)+'\n')
