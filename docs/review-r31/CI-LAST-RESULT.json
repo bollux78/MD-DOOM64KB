@@ -1,0 +1,9 @@
+{
+  "run_id": "39170489434",
+  "sha": "dfd7507f151f798a725d577a6071d06fb516f94a",
+  "source": "MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\nPlace your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\nNo synthetic or silent SFX fallback is allowed for R31 PCM builds.\n",
+  "results": [],
+  "files": [],
+  "audio": {},
+  "logs": {}
+}
