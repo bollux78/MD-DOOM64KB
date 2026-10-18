@@ -150,19 +150,25 @@ void I_StartTic(void)
 // 各 SFX を XGM ドライバの PCM サンプル表へ登録（PCM id = 基点 + sfxenum）。
 // XGM ドライバのロード(= Z80 RAM リセット)後でないと表が消えるため、
 // DMX_Init と各 XGM_startPlay 直後の両方から呼ぶ。
+#if !defined(DOOM_R29_XGM2)
 static void DMX_RegisterPCM(void)
 {
 	for (uint16_t i = 1; i <= GENSFX_COUNT; i++)
 		XGM_setPCM(GENSFX_PCM_ID_BASE + i, gensfx[i].data, gensfx[i].len);
 }
+#endif
 
 void DMX_Init(void)
 {
 	// XGM ドライバを明示ロードしてから PCM を登録する。
 	// 遅延ロード任せだと、後続の XGM_startPlay がドライバをロードする際に
 	// Z80 RAM ごとリセットされ、先に登録した PCM サンプル表が消えて SFX が無音になる。
+#if defined(DOOM_R29_XGM2)
+	XGM2_loadDriver(TRUE);
+#else
 	XGM_loadDriver(TRUE);
 	DMX_RegisterPCM();
+#endif
 }
 
 void DMX_Init2(void)         { }
@@ -171,10 +177,17 @@ void DMX_Play(sfxenum_t id, int16_t channel)
 {
 	if (id <= sfx_None || id > GENSFX_COUNT)
 		return;
+#if defined(DOOM_R29_XGM2)
+	/* Music may use channel 1; only channels 2 and 3 available for SFX. */
+	SoundPCMChannel pcmch = (channel & 1) ? SOUND_PCM_CH3 : SOUND_PCM_CH2;
+	XGM2_playPCMEx(gensfx[id].data, gensfx[id].len, pcmch,
+	                 gensfx[id].prio, FALSE, FALSE);
+#else
 	// classic XGM は ch を CH1..CH4 で明示指定する(CH_AUTO は XGM2 専用で無効)。
 	// doom 論理ch(0..2)を PCM ch2..ch4 に対応させ最大3音同時(ch1は音楽用に温存)。
 	SoundPCMChannel pcmch = (SoundPCMChannel)(SOUND_PCM_CH2 + channel);
 	XGM_startPlayPCM(GENSFX_PCM_ID_BASE + id, gensfx[id].prio, pcmch);
+#endif
 }
 
 void DMX_Shutdown(void)      { }
@@ -188,28 +201,61 @@ void DMX_Shutdown(void)      { }
 //
 
 #if defined(DOOM_R25_MUSIC)
+#if defined(DOOM_R29_XGM2) && defined(DOOM_R29_MULTI)
+extern const u8 r25_track_indices[NUMMUSIC];
+#else
 extern const u8 *const r25_tracks[NUMMUSIC];
+#endif
 #endif
 void I_PlaySong(musicenum_t handle, boolean looping)
 {
 	(void)handle;
+#if defined(DOOM_R29_XGM2)
+	XGM2_setLoopNumber(looping ? -1 : 0);
+#else
 	XGM_setLoopNumber(looping ? -1 : 0);   // -1 = 無限ループ
+#endif
 #if defined SFXDEBUG
 	// SFXDEBUG: 無音VGM(bgm_silent)を XGM で再生する。FM/PSG は無音だが XGM ドライバは
 	// 正常に駆動される(PROCESS_XGM_TASK が立ち毎フレーム処理が回る)ので、PCM/SFX を
 	// 実条件のまま BGM 音から分離して検証できる。
+#if defined(DOOM_R29_XGM2) && defined(DOOM_R29_MULTI)
+	static bool sfxdebug_multi_loaded = FALSE;
+	if (!sfxdebug_multi_loaded) { XGM2_load(bgm_episode); sfxdebug_multi_loaded = TRUE; }
+	XGM2_playTrack(12);
+#elif defined(DOOM_R29_XGM2)
+	XGM2_play(bgm_silent);
+#else
 	XGM_startPlay(bgm_silent);
 	DMX_RegisterPCM();
+#endif
 #else
 #if defined(DOOM_R25_MUSIC)
+#if defined(DOOM_R29_XGM2) && defined(DOOM_R29_MULTI)
+    static bool episode_loaded = FALSE;
+    if (!episode_loaded) { XGM2_load(bgm_episode); episode_loaded = TRUE; }
+    XGM2_playTrack((handle>mus_None && handle<NUMMUSIC)?r25_track_indices[handle]:12);
+    XGM2_setLoopNumber(looping ? -1 : 0);
+#elif defined(DOOM_R29_XGM2)
+    const u8 *song=(handle>mus_None && handle<NUMMUSIC)?r25_tracks[handle]:bgm_silent;
+    XGM2_play(song);
+    XGM2_setLoopNumber(looping ? -1 : 0);
+#else
     const u8 *song=(handle>mus_None && handle<NUMMUSIC)?r25_tracks[handle]:bgm_silent;
     XGM_startPlay(song);
     XGM_setLoopNumber(looping ? -1 : 0);
+#endif
+#else
+#if defined(DOOM_R29_XGM2)
+	XGM2_play(bgm_e1m1);
 #else
 	XGM_startPlay(bgm_e1m1);               // VInt ISR が以降自動で XGM を 60Hz 前進させる
 #endif
+#endif
 	// XGM_startPlay がドライバを(再)ロードした場合に備え、PCM サンプル表を再登録する。
+#if !defined(DOOM_R29_XGM2)
 	DMX_RegisterPCM();
+#endif
 #endif
 }
 
@@ -217,7 +263,11 @@ void I_StopSong(musicenum_t handle)
 {
 	(void)handle;
 #if defined(DOOM_R25_MUSIC)
+#if defined(DOOM_R29_XGM2)
+    XGM2_stop();
+#else
     XGM_stopPlay();
+#endif
 #endif
 }
 
