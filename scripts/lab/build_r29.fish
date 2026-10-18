@@ -149,10 +149,10 @@ for v in $variants
     if contains -- $v low-fixed low-group low-play cpu-fixed cpu-lowgroup xgm2-low-fixed xgm2-low-group
         set defs $defs '-DDOOM_R27_SRAM_FIXED'
     end
-    if contains -- $v group-perf group-play low-group low-play cpu-group cpu-lowgroup xgm2-low-group xgm2-single xgm2-multi xgm2-multi-play xgm2-low-group xgm2-single xgm2-multi xgm2-multi-play
+    if contains -- $v group-perf group-play low-group low-play cpu-group cpu-lowgroup xgm2-low-group xgm2-single xgm2-multi xgm2-multi-play
         set defs $defs '-DDOOM_R27_GROUP_SIDE'
     end
-    if contains -- $v group-perf group-play low-group low-play cpu-group cpu-lowgroup
+    if contains -- $v group-perf group-play low-group low-play cpu-group cpu-lowgroup xgm2-low-group xgm2-single xgm2-multi xgm2-multi-play
         set defs $defs '-DDOOM_R27_GROUP_LINE'
     end
     if not contains -- $v cpu-base cpu-group cpu-fixed cpu-lowgroup
@@ -176,7 +176,8 @@ for v in $variants
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
     rm -f res/music.rs res/music.d
-    fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
     or begin
         tail -n 100 "$dest/build-$id.log"
         exit 1

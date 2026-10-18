@@ -298,6 +298,21 @@ if set -q DOOM_R20_DEFINES
         set render_flags "$render_flags $d"
     end
 end
+# R29 fail-closed audit: never publish a ROM whose compilation flags silently vanish.
+if set -q DOOM_BUILD_ID; and string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
+    if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
+        echo "ERROR: R29 custom flags missing (DOOM_R25_MUSIC), refusing mislabeled ROM"
+        echo "DOOM_R20_DEFINES from environment: $DOOM_R20_DEFINES"
+        exit 1
+    end
+    if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
+        if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
+            echo "ERROR: R29 XGM2 flags missing, refusing mislabeled ROM"
+            exit 1
+        end
+    end
+    echo "R29 FLAG AUDIT OK: $DOOM_BUILD_ID"
+end
 # R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
 if set -q DOOM_R22_PIXEL4; and test "$DOOM_R22_PIXEL4" = 1
     set render_flags (string replace -- '-DVIEWWINDOWWIDTH=38' '-DVIEWWINDOWWIDTH=76' "$render_flags")
