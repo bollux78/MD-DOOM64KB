@@ -1007,6 +1007,11 @@ static const byte __far* G_ReadDemoHeader(const byte __far* demo_p)
     skill = *demo_p++;
     demo_p++;
     map = *demo_p++;
+#if defined(DOOM_R26_FLOW) && defined(TIMEDEMO)
+    /* Legacy DEMO3 names E1M7, which was an exact E1M1 alias in the control
+       WAD. Both benchmark architectures now explicitly use that geometry. */
+    map = 1;
+#endif
     demo_p++;
     demo_p++;
     demo_p++;

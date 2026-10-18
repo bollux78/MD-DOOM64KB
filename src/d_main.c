@@ -369,6 +369,10 @@ static void D_UpdateFPS()
 //
 void D_PageTicker(void)
 {
+#if defined(DOOM_R26_FLOW) && defined(DOOM_R24_EPISODE)
+    /* Keep the title visible until Start opens the level selector. */
+    return;
+#endif
     if (--pagetic < 0)
         D_AdvanceDemo();
 }
@@ -543,7 +547,7 @@ static void D_DoomMainSetup(void)
         G_DeferedInitNew(sk_medium);
 #else
         D_StartTitle();                 // start up intro loop
-#if defined(DOOM_R24_EPISODE)
+#if defined(DOOM_R24_EPISODE) && !defined(DOOM_R26_FLOW)
         M_R24OpenLevels();
 #endif
 #endif

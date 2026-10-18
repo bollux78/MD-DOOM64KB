@@ -841,7 +841,12 @@ boolean M_Responder (event_t* ev)
     {
         if (ch == key_menu_escape)
         {
-            M_StartControlPanel ();
+#if defined(DOOM_R26_FLOW) && defined(DOOM_R24_EPISODE)
+            if (_g_gamestate == GS_DEMOSCREEN)
+                M_R24OpenLevels();
+            else
+#endif
+                M_StartControlPanel ();
             S_StartSound(NULL,sfx_swtchn);
             return true;
         }
