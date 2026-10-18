@@ -1,35 +1,18 @@
 {
-  "run_id": "39159554140",
-  "sha": "bddbb607fcc2ddfb4bdc2be138d26b61c88703e1",
-  "files": [
-    {
-      "name": "doom-md-r29-group-perf.bin",
-      "bytes": 3276800,
-      "fits_2mib": false
-    },
-    {
-      "name": "doom-md-r29-xgm2-low-fixed.bin",
-      "bytes": 2097152,
-      "fits_2mib": true
-    },
-    {
-      "name": "doom-md-r29-xgm2-low-group.bin",
-      "bytes": 2097152,
-      "fits_2mib": true
-    },
-    {
-      "name": "doom-md-r29-xgm2-single.bin",
-      "bytes": 2228224,
-      "fits_2mib": false
-    }
-  ],
+  "run_id": "39160042394",
+  "sha": "376e8d1ee4311ae0258990f5650905f167361dca",
+  "files": [],
   "build_results": [
     "group-perf OK",
     "xgm2-low-fixed OK",
     "xgm2-low-group OK",
     "xgm2-single OK",
     "xgm2-multi FAILED",
-    "xgm2-multi-play FAILED"
+    "xgm2-multi-play FAILED",
+    "doom-md-r29-group-perf INVALID_FLAGS -DDOOM_R25_MUSIC,-DDOOM_R27_GROUP_SIDE",
+    "doom-md-r29-xgm2-low-fixed INVALID_FLAGS -DDOOM_R25_MUSIC,-DDOOM_R29_XGM2",
+    "doom-md-r29-xgm2-low-group INVALID_FLAGS -DDOOM_R25_MUSIC,-DDOOM_R29_XGM2",
+    "doom-md-r29-xgm2-single INVALID_FLAGS -DDOOM_R25_MUSIC,-DDOOM_R29_XGM2"
   ],
   "logs": {
     "build-doom-md-r29-group-perf.log": [
