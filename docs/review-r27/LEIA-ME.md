@@ -39,3 +39,28 @@ idênticos nas variantes. Os diagnósticos internos de CPU geram quadros em
 18 carregamentos médio/difícil, permitindo comparar hashes e acessos ao mapper.
 Testes de CPU não substituem o timedemo e a inspeção no hardware.
 Anotar tempo, média, mínimo/máximo e qualquer diferença visual/sonora.
+
+## Resultado interno desta build
+
+Build das ROMs: 6ef1d1c959ee093be2fbb81b11faf9f54b458c6a.
+CI: https://github.com/bollux78/MD-DOOM64KB/actions/runs/39136756073
+
+Os 36 hashes de quadros (duas vistas em cada um dos 18 carregamentos)
+foram idênticos entre baseline, agrupamento combinado e SRAM fixa.
+Nenhum erro de heap ou acesso indevido à janela ROM/SRAM.
+
+| Diagnóstico CPU | Ciclos dos 36 renders | Escritas do mapper no teste inteiro |
+| --- | ---: | ---: |
+| Baseline | 23672760 | 468950 |
+| Agrupado | 23047024 | 465962 |
+| SRAM fixa | 23454728 | 36 |
+
+Agrupamento: 2.64% menos ciclos de render.
+SRAM fixa: 0.92% menos ciclos de render.
+Isso mede somente renderização nesses pontos, sem lógica do jogo, VDP ou Z80
+concorrentes. As contagens do mapper também incluem os carregamentos.
+Não converter estes percentuais em previsão de FPS do timedemo completo.
+A comparação low-window × low-fixed no hardware ainda é necessária.
+
+A variante fixa encerra o teste com SRAM habilitada; as outras restauram ROM,
+como esperado. Não houve aumento de memória da zona nos agrupamentos.
