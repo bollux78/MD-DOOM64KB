@@ -5,6 +5,7 @@
 #include "z_zone.h"
 #include "m_random.h"
 #include "p_inter.h"
+#include "d_main.h"
 #include "i_system.h"
 #include "r24_static_types.h"
 int16_t r24_start_map=1;
@@ -80,6 +81,9 @@ void R24_ValidateThings(void){
         mobj_t *thing=make(i);if(!thing)continue;
         if(R_PointInSubsector(thing->x,thing->y)!=thing->subsector)I_Error("ROM THING BSP MISMATCH");
         if(thing->flags&(MF_SOLID|MF_SHOOTABLE|MF_COUNTKILL))I_Error("ROM THING DYNAMIC FLAGS");
+    }
+    for(uint16_t i=0;i<count;i++){
+        mobj_t *thing=make(i);if(!thing)continue;
         if(mapthings[records[i].thing].type==2007){
             int16_t before=_g_player.ammo[am_clip];_g_player.ammo[am_clip]=0;thing->z=_g_player.mo->z;
             boolean audio=nosfxparm;nosfxparm=true;

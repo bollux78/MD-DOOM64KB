@@ -17,7 +17,9 @@ struct.pack_into('>II',memory,0,0xE0FFF5FC,symbols['R23_ProbeMain'][0]);a.out.mk
 r=subprocess.run([str(a.harness.resolve()),str(flat),str(dump)],capture_output=True,text=True);report=dict(returncode=r.returncode,output=r.stdout,stderr=r.stderr,symbols={})
 if dump.exists():
  data=dump.read_bytes()
- for name in ['r22_map_stage','r22_map_current','r22_map_request','r22_map_need','r22_map_failed_stage','_g_numsectors','_g_numlines','_g_thingPoolSize','r22_map_head','r22_map_count','r22_map_trace']:
+ for name in ['r24_cpu_error','r22_map_stage','r22_map_current','r22_map_request','r22_map_need','r22_map_failed_stage','_g_numsectors','_g_numlines','_g_thingPoolSize','r22_map_head','r22_map_count','r22_map_trace']:
   if name in symbols:
    addr,size=symbols[name];raw=data[addr&0xffffff:(addr&0xffffff)+size];report['symbols'][name]=int.from_bytes(raw,'big') if size<=4 else raw.hex()
+ if report['symbols'].get('r24_cpu_error'):
+  addr=report['symbols']['r24_cpu_error']&0xffffff;report['error']=data[addr:addr+160].split(b'\0',1)[0].decode(errors='replace')
 (a.out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));assert r.returncode==0 and 'tag 0 cycles' in r.stdout,'CPU loader did not complete all map loads'

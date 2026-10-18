@@ -346,10 +346,13 @@ void R22_MapReport(void){
 }
 #endif
 
+#if defined(DOOM_R23_CPU_PROBE)
+const char * volatile r24_cpu_error;
+#endif
 void I_Error(const char *error, ...)
 {
 #if defined(DOOM_R23_CPU_PROBE)
-    (void)error;
+    r24_cpu_error=error;
     *(volatile uint16_t*)0xA00002=100+r22_map_stage;
     *(volatile uint16_t*)0xA00002=r22_map_failed_stage;
     *(volatile uint16_t*)0xA00002=r22_map_request;
