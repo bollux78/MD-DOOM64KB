@@ -26,3 +26,14 @@ low-group combina SRAM fixa e agrupamentos de lado/linha; low-play é sua equiva
 Envie captura da tela completa, especialmente das quatro linhas de auditoria. Esperado DEMO3/E1M1, 2134 frames. Abertura e seletor mantidos.
 
 Arquivos cpu-* são verificações internas sem VDP e ficam fora do ZIP para teste humano. Não abrem imagem em BlastEm.
+
+A verificação isolada do código de máquina MEM_alloc da R27 confirmou 3456→1326 bytes na low-window e 3452→1322 na low-fixed, em heap inicializado com a fila DMA. Isso valida o alocador isolado, sem provar o estado do vídeo durante o timedemo. Veja R27-ALLOCATOR-CHECK.json.
+
+## Verificações concluídas
+
+CI: https://github.com/bollux78/MD-DOOM64KB/actions/runs/39153691175
+13 ROMs compiladas, nove destinadas ao teste humano. Mapas, DEMO3 e áudio E1M1 idênticos nas variantes correspondentes; código/músicas abaixo de 2 MiB e ROM inteira das fixed até 2 MiB.
+
+CPU: nove mapas, duas dificuldades e 36 frames por variante, todos com hashes idênticos entre base, group, fixed e lowgroup. Ciclos de render: 23672760 / 23047024 / 23454728 / 23045216. Não são uma previsão de FPS: o teste não simula VDP/áudio. A combinação é correta nesse teste, mas seu ganho adicional precisa do timedemo.
+
+Na R28, orçamento estático após snapshot: episode/low-window/group-perf 1310 bytes; low-fixed/low-group 1306 bytes. A auditoria ocupa 16 bytes extras em relação à R27. Esses números são previsão, a tela fornece a leitura real.

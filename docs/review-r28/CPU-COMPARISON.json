@@ -1,0 +1,762 @@
+{
+  "base": {
+    "frames": [
+      {
+        "index": 0,
+        "hash": 369006805,
+        "cycles": 1192322
+      },
+      {
+        "index": 1,
+        "hash": 323288400,
+        "cycles": 556522
+      },
+      {
+        "index": 2,
+        "hash": 111802465,
+        "cycles": 1724638
+      },
+      {
+        "index": 3,
+        "hash": 2405051225,
+        "cycles": 268672
+      },
+      {
+        "index": 4,
+        "hash": 425022616,
+        "cycles": 414006
+      },
+      {
+        "index": 5,
+        "hash": 3830307506,
+        "cycles": 343414
+      },
+      {
+        "index": 6,
+        "hash": 1806472138,
+        "cycles": 267616
+      },
+      {
+        "index": 7,
+        "hash": 3489335882,
+        "cycles": 204548
+      },
+      {
+        "index": 8,
+        "hash": 266440478,
+        "cycles": 671456
+      },
+      {
+        "index": 9,
+        "hash": 483252245,
+        "cycles": 404406
+      },
+      {
+        "index": 10,
+        "hash": 2490838541,
+        "cycles": 1276164
+      },
+      {
+        "index": 11,
+        "hash": 1668470612,
+        "cycles": 1191952
+      },
+      {
+        "index": 12,
+        "hash": 1546704681,
+        "cycles": 302038
+      },
+      {
+        "index": 13,
+        "hash": 156585747,
+        "cycles": 403318
+      },
+      {
+        "index": 14,
+        "hash": 3190493899,
+        "cycles": 609528
+      },
+      {
+        "index": 15,
+        "hash": 1036118294,
+        "cycles": 551454
+      },
+      {
+        "index": 16,
+        "hash": 2086821716,
+        "cycles": 871016
+      },
+      {
+        "index": 17,
+        "hash": 1032548613,
+        "cycles": 577742
+      },
+      {
+        "index": 18,
+        "hash": 369006805,
+        "cycles": 1176940
+      },
+      {
+        "index": 19,
+        "hash": 323288400,
+        "cycles": 564426
+      },
+      {
+        "index": 20,
+        "hash": 111802465,
+        "cycles": 1748596
+      },
+      {
+        "index": 21,
+        "hash": 2405051225,
+        "cycles": 281084
+      },
+      {
+        "index": 22,
+        "hash": 425022616,
+        "cycles": 414006
+      },
+      {
+        "index": 23,
+        "hash": 3830307506,
+        "cycles": 343414
+      },
+      {
+        "index": 24,
+        "hash": 1806472138,
+        "cycles": 267616
+      },
+      {
+        "index": 25,
+        "hash": 3489335882,
+        "cycles": 204548
+      },
+      {
+        "index": 26,
+        "hash": 266440478,
+        "cycles": 678830
+      },
+      {
+        "index": 27,
+        "hash": 483252245,
+        "cycles": 404468
+      },
+      {
+        "index": 28,
+        "hash": 2490838541,
+        "cycles": 1259890
+      },
+      {
+        "index": 29,
+        "hash": 1668470612,
+        "cycles": 1192470
+      },
+      {
+        "index": 30,
+        "hash": 668029889,
+        "cycles": 274990
+      },
+      {
+        "index": 31,
+        "hash": 156585747,
+        "cycles": 400824
+      },
+      {
+        "index": 32,
+        "hash": 3190493899,
+        "cycles": 609528
+      },
+      {
+        "index": 33,
+        "hash": 1036118294,
+        "cycles": 551454
+      },
+      {
+        "index": 34,
+        "hash": 2086821716,
+        "cycles": 891122
+      },
+      {
+        "index": 35,
+        "hash": 1032548613,
+        "cycles": 577742
+      }
+    ],
+    "frame_cycles": 23672760,
+    "mapper_switches": 468950,
+    "sram_reads": 145672,
+    "sram_writes": 400438,
+    "upper_rom_reads": 647421,
+    "final_mapper": 0
+  },
+  "group": {
+    "frames": [
+      {
+        "index": 0,
+        "hash": 369006805,
+        "cycles": 1147198
+      },
+      {
+        "index": 1,
+        "hash": 323288400,
+        "cycles": 540570
+      },
+      {
+        "index": 2,
+        "hash": 111802465,
+        "cycles": 1655826
+      },
+      {
+        "index": 3,
+        "hash": 2405051225,
+        "cycles": 265504
+      },
+      {
+        "index": 4,
+        "hash": 425022616,
+        "cycles": 402120
+      },
+      {
+        "index": 5,
+        "hash": 3830307506,
+        "cycles": 332550
+      },
+      {
+        "index": 6,
+        "hash": 1806472138,
+        "cycles": 259810
+      },
+      {
+        "index": 7,
+        "hash": 3489335882,
+        "cycles": 202646
+      },
+      {
+        "index": 8,
+        "hash": 266440478,
+        "cycles": 649082
+      },
+      {
+        "index": 9,
+        "hash": 483252245,
+        "cycles": 393864
+      },
+      {
+        "index": 10,
+        "hash": 2490838541,
+        "cycles": 1242032
+      },
+      {
+        "index": 11,
+        "hash": 1668470612,
+        "cycles": 1154690
+      },
+      {
+        "index": 12,
+        "hash": 1546704681,
+        "cycles": 296270
+      },
+      {
+        "index": 13,
+        "hash": 156585747,
+        "cycles": 392752
+      },
+      {
+        "index": 14,
+        "hash": 3190493899,
+        "cycles": 603438
+      },
+      {
+        "index": 15,
+        "hash": 1036118294,
+        "cycles": 547416
+      },
+      {
+        "index": 16,
+        "hash": 2086821716,
+        "cycles": 856338
+      },
+      {
+        "index": 17,
+        "hash": 1032548613,
+        "cycles": 575838
+      },
+      {
+        "index": 18,
+        "hash": 369006805,
+        "cycles": 1131816
+      },
+      {
+        "index": 19,
+        "hash": 323288400,
+        "cycles": 548474
+      },
+      {
+        "index": 20,
+        "hash": 111802465,
+        "cycles": 1679784
+      },
+      {
+        "index": 21,
+        "hash": 2405051225,
+        "cycles": 277916
+      },
+      {
+        "index": 22,
+        "hash": 425022616,
+        "cycles": 402120
+      },
+      {
+        "index": 23,
+        "hash": 3830307506,
+        "cycles": 332550
+      },
+      {
+        "index": 24,
+        "hash": 1806472138,
+        "cycles": 259810
+      },
+      {
+        "index": 25,
+        "hash": 3489335882,
+        "cycles": 202646
+      },
+      {
+        "index": 26,
+        "hash": 266440478,
+        "cycles": 656456
+      },
+      {
+        "index": 27,
+        "hash": 483252245,
+        "cycles": 393926
+      },
+      {
+        "index": 28,
+        "hash": 2490838541,
+        "cycles": 1225758
+      },
+      {
+        "index": 29,
+        "hash": 1668470612,
+        "cycles": 1155208
+      },
+      {
+        "index": 30,
+        "hash": 668029889,
+        "cycles": 269222
+      },
+      {
+        "index": 31,
+        "hash": 156585747,
+        "cycles": 390258
+      },
+      {
+        "index": 32,
+        "hash": 3190493899,
+        "cycles": 603438
+      },
+      {
+        "index": 33,
+        "hash": 1036118294,
+        "cycles": 547416
+      },
+      {
+        "index": 34,
+        "hash": 2086821716,
+        "cycles": 876444
+      },
+      {
+        "index": 35,
+        "hash": 1032548613,
+        "cycles": 575838
+      }
+    ],
+    "frame_cycles": 23047024,
+    "mapper_switches": 465962,
+    "sram_reads": 148268,
+    "sram_writes": 400438,
+    "upper_rom_reads": 649197,
+    "final_mapper": 0
+  },
+  "fixed": {
+    "frames": [
+      {
+        "index": 0,
+        "hash": 369006805,
+        "cycles": 1180372
+      },
+      {
+        "index": 1,
+        "hash": 323288400,
+        "cycles": 551192
+      },
+      {
+        "index": 2,
+        "hash": 111802465,
+        "cycles": 1703290
+      },
+      {
+        "index": 3,
+        "hash": 2405051225,
+        "cycles": 266974
+      },
+      {
+        "index": 4,
+        "hash": 425022616,
+        "cycles": 409632
+      },
+      {
+        "index": 5,
+        "hash": 3830307506,
+        "cycles": 338862
+      },
+      {
+        "index": 6,
+        "hash": 1806472138,
+        "cycles": 265516
+      },
+      {
+        "index": 7,
+        "hash": 3489335882,
+        "cycles": 203580
+      },
+      {
+        "index": 8,
+        "hash": 266440478,
+        "cycles": 663846
+      },
+      {
+        "index": 9,
+        "hash": 483252245,
+        "cycles": 400076
+      },
+      {
+        "index": 10,
+        "hash": 2490838541,
+        "cycles": 1262456
+      },
+      {
+        "index": 11,
+        "hash": 1668470612,
+        "cycles": 1179146
+      },
+      {
+        "index": 12,
+        "hash": 1546704681,
+        "cycles": 299718
+      },
+      {
+        "index": 13,
+        "hash": 156585747,
+        "cycles": 399172
+      },
+      {
+        "index": 14,
+        "hash": 3190493899,
+        "cycles": 607900
+      },
+      {
+        "index": 15,
+        "hash": 1036118294,
+        "cycles": 550196
+      },
+      {
+        "index": 16,
+        "hash": 2086821716,
+        "cycles": 862840
+      },
+      {
+        "index": 17,
+        "hash": 1032548613,
+        "cycles": 576586
+      },
+      {
+        "index": 18,
+        "hash": 369006805,
+        "cycles": 1165650
+      },
+      {
+        "index": 19,
+        "hash": 323288400,
+        "cycles": 559056
+      },
+      {
+        "index": 20,
+        "hash": 111802465,
+        "cycles": 1727128
+      },
+      {
+        "index": 21,
+        "hash": 2405051225,
+        "cycles": 279434
+      },
+      {
+        "index": 22,
+        "hash": 425022616,
+        "cycles": 409632
+      },
+      {
+        "index": 23,
+        "hash": 3830307506,
+        "cycles": 338862
+      },
+      {
+        "index": 24,
+        "hash": 1806472138,
+        "cycles": 265516
+      },
+      {
+        "index": 25,
+        "hash": 3489335882,
+        "cycles": 203580
+      },
+      {
+        "index": 26,
+        "hash": 266440478,
+        "cycles": 671180
+      },
+      {
+        "index": 27,
+        "hash": 483252245,
+        "cycles": 400138
+      },
+      {
+        "index": 28,
+        "hash": 2490838541,
+        "cycles": 1246598
+      },
+      {
+        "index": 29,
+        "hash": 1668470612,
+        "cycles": 1179644
+      },
+      {
+        "index": 30,
+        "hash": 668029889,
+        "cycles": 272602
+      },
+      {
+        "index": 31,
+        "hash": 156585747,
+        "cycles": 396698
+      },
+      {
+        "index": 32,
+        "hash": 3190493899,
+        "cycles": 607900
+      },
+      {
+        "index": 33,
+        "hash": 1036118294,
+        "cycles": 550196
+      },
+      {
+        "index": 34,
+        "hash": 2086821716,
+        "cycles": 882974
+      },
+      {
+        "index": 35,
+        "hash": 1032548613,
+        "cycles": 576586
+      }
+    ],
+    "frame_cycles": 23454728,
+    "mapper_switches": 36,
+    "sram_reads": 145672,
+    "sram_writes": 400438,
+    "upper_rom_reads": 0,
+    "final_mapper": 1
+  },
+  "lowgroup": {
+    "frames": [
+      {
+        "index": 0,
+        "hash": 369006805,
+        "cycles": 1150194
+      },
+      {
+        "index": 1,
+        "hash": 323288400,
+        "cycles": 540502
+      },
+      {
+        "index": 2,
+        "hash": 111802465,
+        "cycles": 1656160
+      },
+      {
+        "index": 3,
+        "hash": 2405051225,
+        "cycles": 265452
+      },
+      {
+        "index": 4,
+        "hash": 425022616,
+        "cycles": 402096
+      },
+      {
+        "index": 5,
+        "hash": 3830307506,
+        "cycles": 332112
+      },
+      {
+        "index": 6,
+        "hash": 1806472138,
+        "cycles": 260402
+      },
+      {
+        "index": 7,
+        "hash": 3489335882,
+        "cycles": 202892
+      },
+      {
+        "index": 8,
+        "hash": 266440478,
+        "cycles": 649248
+      },
+      {
+        "index": 9,
+        "hash": 483252245,
+        "cycles": 393508
+      },
+      {
+        "index": 10,
+        "hash": 2490838541,
+        "cycles": 1239808
+      },
+      {
+        "index": 11,
+        "hash": 1668470612,
+        "cycles": 1154476
+      },
+      {
+        "index": 12,
+        "hash": 1546704681,
+        "cycles": 296204
+      },
+      {
+        "index": 13,
+        "hash": 156585747,
+        "cycles": 392694
+      },
+      {
+        "index": 14,
+        "hash": 3190493899,
+        "cycles": 603798
+      },
+      {
+        "index": 15,
+        "hash": 1036118294,
+        "cycles": 547902
+      },
+      {
+        "index": 16,
+        "hash": 2086821716,
+        "cycles": 853250
+      },
+      {
+        "index": 17,
+        "hash": 1032548613,
+        "cycles": 575900
+      },
+      {
+        "index": 18,
+        "hash": 369006805,
+        "cycles": 1135472
+      },
+      {
+        "index": 19,
+        "hash": 323288400,
+        "cycles": 548366
+      },
+      {
+        "index": 20,
+        "hash": 111802465,
+        "cycles": 1679998
+      },
+      {
+        "index": 21,
+        "hash": 2405051225,
+        "cycles": 277912
+      },
+      {
+        "index": 22,
+        "hash": 425022616,
+        "cycles": 402096
+      },
+      {
+        "index": 23,
+        "hash": 3830307506,
+        "cycles": 332112
+      },
+      {
+        "index": 24,
+        "hash": 1806472138,
+        "cycles": 260402
+      },
+      {
+        "index": 25,
+        "hash": 3489335882,
+        "cycles": 202892
+      },
+      {
+        "index": 26,
+        "hash": 266440478,
+        "cycles": 656582
+      },
+      {
+        "index": 27,
+        "hash": 483252245,
+        "cycles": 393570
+      },
+      {
+        "index": 28,
+        "hash": 2490838541,
+        "cycles": 1223950
+      },
+      {
+        "index": 29,
+        "hash": 1668470612,
+        "cycles": 1154974
+      },
+      {
+        "index": 30,
+        "hash": 668029889,
+        "cycles": 269088
+      },
+      {
+        "index": 31,
+        "hash": 156585747,
+        "cycles": 390220
+      },
+      {
+        "index": 32,
+        "hash": 3190493899,
+        "cycles": 603798
+      },
+      {
+        "index": 33,
+        "hash": 1036118294,
+        "cycles": 547902
+      },
+      {
+        "index": 34,
+        "hash": 2086821716,
+        "cycles": 873384
+      },
+      {
+        "index": 35,
+        "hash": 1032548613,
+        "cycles": 575900
+      }
+    ],
+    "frame_cycles": 23045216,
+    "mapper_switches": 36,
+    "sram_reads": 148268,
+    "sram_writes": 400438,
+    "upper_rom_reads": 0,
+    "final_mapper": 1
+  }
+}

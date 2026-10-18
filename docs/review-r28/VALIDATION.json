@@ -1,0 +1,27 @@
+{
+  "commit": "ca94d6882f017f782df2a9dcb92cd66c44d7437d",
+  "workflow_run": 39153691175,
+  "artifact": 12146560833,
+  "ci": "success",
+  "host_audit_test": "production walker: valid and seven corrupt/inactive cases passed",
+  "cpu": {
+    "maps": 9,
+    "skills": [
+      "medium",
+      "hard"
+    ],
+    "frames_per_variant": 36,
+    "variants": 4,
+    "hashes_identical": true,
+    "cycles": {
+      "base": 23672760,
+      "group": 23047024,
+      "fixed": 23454728,
+      "lowgroup": 23045216
+    }
+  },
+  "limitations": [
+    "CPU harness does not simulate VDP, audio or wall-clock FPS",
+    "R27 heap discrepancy remains to be diagnosed during real timedemo with R28 counters"
+  ]
+}

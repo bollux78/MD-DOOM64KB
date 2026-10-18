@@ -1,0 +1,18 @@
+{
+  "low-window": {
+    "before": 3456,
+    "after": 1326,
+    "consumed": 2130,
+    "pointer": "0xe0ffe880",
+    "header": 2131,
+    "scope": "actual R27 MEM_alloc machine code; initialized SGDK heap with normal DMA allocation; isolated CPU, no VDP"
+  },
+  "low-fixed": {
+    "before": 3452,
+    "after": 1322,
+    "consumed": 2130,
+    "pointer": "0xe0ffe884",
+    "header": 2131,
+    "scope": "actual R27 MEM_alloc machine code; initialized SGDK heap with normal DMA allocation; isolated CPU, no VDP"
+  }
+}
