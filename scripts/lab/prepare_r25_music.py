@@ -44,6 +44,14 @@ def restore():
         raw=decode(packed);validate(raw)
         assert hashlib.sha256(raw).hexdigest()==t['sha256_vgm']
         (ROOT/'res'/('r25-'+t['name'].lower()+'.vgm')).write_bytes(raw)
+    if os.environ.get('DOOM_R29_XGM2')=='1':
+        if os.environ.get('DOOM_R27_SINGLE_TRACK')=='1':
+            return 'XGM2 bgm_e1m1 "r25-e1m1.vgm"\nXGM2 bgm_silent "silent.vgm"\n'
+        names=[f'r25-e1m{i}.vgm' for i in range(1,10)]+['r25-intro.vgm','r25-inter.vgm','r25-end.vgm','silent.vgm']
+        if os.environ.get('DOOM_R29_MULTI')=='1':
+            return 'XGM2 bgm_episode '+ ' '.join('"'+x+'"' for x in names)+'\n'
+        ids=['bgm_e1m'+str(i) for i in range(1,10)]+['bgm_intro','bgm_inter','bgm_victor','bgm_silent']
+        return ''.join('XGM2 '+ident+' "'+filename+'"\n' for ident,filename in zip(ids,names))
     if os.environ.get('DOOM_R27_SINGLE_TRACK')=='1':
         return 'XGM bgm_e1m1 "r25-e1m1.vgm"\nXGM bgm_silent "silent.vgm"\n'
     lines=[f'XGM bgm_e1m{i} "r25-e1m{i}.vgm"' for i in range(1,10)]
