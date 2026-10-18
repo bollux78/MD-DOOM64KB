@@ -8,7 +8,7 @@ import hashlib,json,sys
 from pathlib import Path
 dist=Path(sys.argv[1]);names=sys.argv[2:]
 expected={
-    'native-control-play':'none',
+    'control-play':'none',
     'bayer4-play':'bayer4',
     'bayer4-perf':'bayer4',
     'bayer8-play':'bayer8',

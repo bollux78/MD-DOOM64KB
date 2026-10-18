@@ -11,12 +11,12 @@ cd "$root"; or exit 1
 set -l dest dist/r30b
 mkdir -p "$dest"; or exit 1
 
-set -l variants native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
+set -l variants control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
 if test (count $argv) -gt 0
     set variants $argv
 end
 for v in $variants
-    contains -- $v native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf; or exit 2
+    contains -- $v control-play bayer4-play bayer4-perf bayer8-play bayer8-perf; or exit 2
 end
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
 python3 scripts/lab/test_r15_wallmul.py; or exit 1
@@ -122,7 +122,7 @@ for v in $variants
         set defs $pixel '-DDOOM_R22_SOLID_TILES' '-DDOOM_R22_PAIR_LUT'
     end
     set defs $defs '-DDOOM_R22_SRAM_BLOCKLINKS' '-DDOOM_R26_FLOW' 
-    if contains -- $v native-control-play bayer4-play bayer8-play
+    if contains -- $v control-play bayer4-play bayer8-play
         set -gx DOOM_TIMEDEMO 0
     end
     if not contains -- $v control play-control
@@ -146,10 +146,10 @@ for v in $variants
     if contains -- $v low-fixed low-group low-play cpu-fixed cpu-lowgroup xgm2-low-fixed xgm2-low-group
         set defs $defs '-DDOOM_R27_SRAM_FIXED'
     end
-    if contains -- $v native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
+    if contains -- $v control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
         set defs $defs '-DDOOM_R27_GROUP_SIDE'
     end
-    if contains -- $v native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
+    if contains -- $v control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
         set defs $defs '-DDOOM_R27_GROUP_LINE'
     end
     if not contains -- $v cpu-base cpu-group cpu-fixed cpu-lowgroup

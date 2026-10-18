@@ -49,7 +49,7 @@ jobs:
           mkdir -p dist/r30b
           : > dist/r30b/BUILD-RESULTS.txt
           failed=0
-          for variant in native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf; do
+          for variant in control-play bayer4-play bayer4-perf bayer8-play bayer8-perf; do
             echo "=== R30b $variant ==="
             if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r30b.fish "$variant"; then
               echo "$variant OK" | tee -a dist/r30b/BUILD-RESULTS.txt
@@ -65,7 +65,7 @@ jobs:
         run: |
           if test -f dist/r30b/doom-md-r30b-bayer8-perf.bin; then
             python3 scripts/lab/audit_r30b.py dist/r30b \
-              native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
+              control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
             sha256sum dist/r30b/*.bin > dist/r30b/SHA256SUMS
           fi
       - name: Publish R30b run report
