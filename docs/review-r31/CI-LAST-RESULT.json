@@ -1,9 +1,75 @@
 {
-  "run_id": "39170489434",
-  "sha": "dfd7507f151f798a725d577a6071d06fb516f94a",
-  "source": "MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\nPlace your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\nNo synthetic or silent SFX fallback is allowed for R31 PCM builds.\n",
-  "results": [],
+  "run_id": "39171398254",
+  "sha": "adc1c7e23b9ff2b049777c43e8f5a7b5a10460c1",
+  "source": "Genuine WAD source found: scripts/doom1.wad\nSHA256: 1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771\nBytes: 4196020\n",
+  "results": [
+    "ctl-play FAILED",
+    "h6-play FAILED",
+    "h6-perf FAILED",
+    "mix-play FAILED",
+    "mix-perf FAILED",
+    "h13-play FAILED"
+  ],
   "files": [],
   "audio": {},
-  "logs": {}
+  "logs": {
+    "build-doom-md-r31-ctl-play.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "Traceback (most recent call last):",
+      "  File \"/home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/scripts/lab/gen_r31_sfx.py\", line 141, in <module>",
+      "    main()",
+      "    ~~~~^^",
+      "  File \"/home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/scripts/lab/gen_r31_sfx.py\", line 107, in main",
+      "    with HEADER.open('w') as f:",
+      "         ~~~~~~~~~~~^^^^^",
+      "  File \"/usr/lib/python3.14/pathlib/__init__.py\", line 771, in open",
+      "    return io.open(self, mode, buffering, encoding, errors, newline)",
+      "           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+      "FileNotFoundError: [Errno 2] No such file or directory: '/home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/scripts/src/gen_sfx.h'"
+    ],
+    "build-doom-md-r31-h13-play.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "R31 genuine SFX unavailable: supply scripts/doom1.wad or install it in ~/Projetos/doom-assets/ on the runner"
+    ],
+    "build-doom-md-r31-h6-perf.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "R31 genuine SFX unavailable: supply scripts/doom1.wad or install it in ~/Projetos/doom-assets/ on the runner"
+    ],
+    "build-doom-md-r31-h6-play.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "R31 genuine SFX unavailable: supply scripts/doom1.wad or install it in ~/Projetos/doom-assets/ on the runner"
+    ],
+    "build-doom-md-r31-mix-perf.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "R31 genuine SFX unavailable: supply scripts/doom1.wad or install it in ~/Projetos/doom-assets/ on the runner"
+    ],
+    "build-doom-md-r31-mix-play.log": [
+      "repacked: 1481876 bytes, lumps=819, misaligned=0, infoofs=1468772",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/doom64ng.h",
+      "実効色数(distinct Genesis): 56 / 56",
+      "wrote /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/src/gen_pal.h  view slots: 55 / 56",
+      "Generated ROM-only colormap LUT: 32 x 256 x 2 = 16384 bytes; no 68000 RAM",
+      "R31 genuine SFX unavailable: supply scripts/doom1.wad or install it in ~/Projetos/doom-assets/ on the runner"
+    ]
+  }
 }
