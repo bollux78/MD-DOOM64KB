@@ -41,7 +41,7 @@ jobs:
         run: |
           fish -n scripts/lab/build_r28.fish
           python3 scripts/lab/test_r23_conversion.py
-          python3 scripts/lab/test_r28_group.py
+          python3 scripts/lab/test_r27_group.py
           python3 scripts/lab/test_r26_flow.py
           python3 scripts/lab/test_r25_music.py
           python3 scripts/lab/test_r25_window.py
@@ -62,7 +62,7 @@ jobs:
           d=pathlib.Path('dist/r28')
           (d/'toolchain.txt').write_text(subprocess.check_output([str(g/'bin/m68k-elf-gcc'),'--version'],text=True))
           (d/'commit.txt').write_text(os.environ['GITHUB_SHA']+'\n')
-          (d/'COMPLETE.txt').write_text('R26 ROMs built and audited; soundtrack playback and mapper require hardware validation.\n')
+          (d/'COMPLETE.txt').write_text('R28 ROMs built and audited; soundtrack playback and mapper require hardware validation.\n')
           PY2
       - name: Upload R22 ROMs and matching debugging evidence
         if: always()
