@@ -41,7 +41,22 @@ python3 scripts/genpal.py; or exit 1
 if set -q DOOM_CELL_LUT; and test "$DOOM_CELL_LUT" = 1
     python3 scripts/gen_colormap_cells.py; or exit 1
 end
-python3 scripts/gen_sfx.py --silent; or exit 1
+# R31: generate actual signed PCM only when the audio experiment asks for it.
+# Legacy/default paths retain the exact silent reference behavior.
+if set -q DOOM_R31_SFX_MODE
+    set -l mode "$DOOM_R31_SFX_MODE"
+    contains -- "$mode" silent half mixed full; or begin
+        echo "Unknown R31 SFX mode: $mode"
+        exit 1
+    end
+    set -l reportarg
+    if set -q DOOM_R31_SFX_REPORT
+        set reportarg --report "$DOOM_R31_SFX_REPORT"
+    end
+    python3 scripts/lab/gen_r31_sfx.py --mode "$mode" $reportarg; or exit 1
+else
+    python3 scripts/gen_sfx.py --silent; or exit 1
+end
 # Use SGDK boot files; disable the duplicate upstream boot and ROM header
 # only inside the Doom working tree.
 for f in src/boot/sega.s src/boot/rom_head.c
@@ -54,6 +69,10 @@ set -l render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -
 # Default 38x28 build remains unchanged.
 if set -q DOOM_CLASSIC_TEXT_HUD; and test "$DOOM_CLASSIC_TEXT_HUD" = 1
     set render_flags '-DFLAT_SPAN -DFLAT_NUKAGE1_COLOR=118 -DVIEWWINDOWWIDTH=38 -DVIEWWINDOWHEIGHT=24 -DMAPWIDTH=38 -DLOW_MEMORY -DSFX_SILENT -DDOOM_CLASSIC_TEXT_HUD'
+end
+# The explicit flag guarantees real PCM variants are not compiled as SFX_SILENT.
+if set -q DOOM_R31_SFX_MODE; and test "$DOOM_R31_SFX_MODE" != silent
+    set render_flags (string replace -- '-DSFX_SILENT' '-DDOOM_R31_SFX' "$render_flags")
 end
 # R16 CRT experiment: lift HUD by 2 tile rows and reproject the true 22-row
 # viewport instead of cropping the 24-row image (which clips the hand).
