@@ -147,6 +147,89 @@ void I_StartTic(void)
 
 #include "gen_sfx.h"
 
+#if defined(DOOM_R34_AUDIO)
+/* R34-AUDIO is deliberately isolated from WAD changes.
+   Two 256-aligned PCM buffers, one for each SFX DAC channel.
+   Large samples remain raw ROM PCM and never require RAM buffers. */
+#if defined(DOOM_R34_PCM_2048)
+#define R34_PCM_CAP 2048
+#else
+#define R34_PCM_CAP 4096
+#endif
+static uint8_t r34_pcm_buffer[2][R34_PCM_CAP] __attribute__((aligned(256)));
+static const uint16_t r34_ima_step[89]={
+    7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,
+    50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,
+    253,279,307,337,371,408,449,494,544,598,658,724,796,876,
+    963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,
+    2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,
+    7132,7845,8630,9493,10442,11487,12635,13899,15289,
+    16818,18500,20350,22385,24623,27086,29794,32767
+};
+static const int8_t r34_ima_delta_index[16]={
+    -1,-1,-1,-1,2,4,6,8,-1,-1,-1,-1,2,4,6,8
+};
+static bool R34_AudioDecode(const gensfx_t *sample, uint8_t *dest)
+{
+    const uint8_t *src=sample->data;
+    const uint16_t size=sample->packed_len;
+    const uint16_t expected=(uint16_t)sample->len;
+    if(expected>R34_PCM_CAP || !size || expected==0)return FALSE;
+    if(sample->codec==1) /* PackBits, bit-exact */
+    {
+        uint16_t in=0,out=0;
+        while(in<size)
+        {
+            const uint8_t tag=src[in++];
+            const uint16_t n=(tag&127u)+1u;
+            if(out+n>expected)return FALSE;
+            if(tag&128)
+            {
+                if(in>=size)return FALSE;
+                const uint8_t b=src[in++];
+                for(uint16_t j=0;j<n;j++)dest[out++]=b;
+            }
+            else
+            {
+                if(in+n>size)return FALSE;
+                for(uint16_t j=0;j<n;j++)dest[out++]=src[in++];
+            }
+        }
+        return out==expected;
+    }
+    if(sample->codec==2) /* 4bit IMA/DVI ADPCM */
+    {
+        if(size!=(expected+1u)/2u)return FALSE;
+        int32_t predictor=0;
+        int16_t index=0;
+        for(uint16_t i=0;i<expected;i++)
+        {
+            const uint8_t packed=src[i>>1];
+            const uint8_t code=(i&1u)?((packed>>4)&15u):(packed&15u);
+            const int32_t step=r34_ima_step[index];
+            int32_t change=step>>3;
+            if(code&4)change+=step;
+            if(code&2)change+=step>>1;
+            if(code&1)change+=step>>2;
+            predictor+=(code&8)?-change:change;
+            if(predictor>32767)predictor=32767;
+            else if(predictor< -32768)predictor=-32768;
+            index+=r34_ima_delta_index[code];
+            if(index<0)index=0;
+            else if(index>88)index=88;
+            int32_t out=(predictor+128)>>8;
+            if(out>127)out=127;
+            else if(out< -128)out=-128;
+            dest[i]=(uint8_t)(int8_t)out;
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
+
+
 // 各 SFX を XGM ドライバの PCM サンプル表へ登録（PCM id = 基点 + sfxenum）。
 // XGM ドライバのロード(= Z80 RAM リセット)後でないと表が消えるため、
 // DMX_Init と各 XGM_startPlay 直後の両方から呼ぶ。
@@ -180,7 +263,20 @@ void DMX_Play(sfxenum_t id, int16_t channel)
 #if defined(DOOM_R29_XGM2)
 	/* Music may use channel 1; only channels 2 and 3 available for SFX. */
 	SoundPCMChannel pcmch = (channel & 1) ? SOUND_PCM_CH3 : SOUND_PCM_CH2;
-	XGM2_playPCMEx(gensfx[id].data, gensfx[id].len, pcmch,
+	const u8 *pcmdata=gensfx[id].data;
+#if defined(DOOM_R34_AUDIO)
+	if(gensfx[id].codec)
+	{
+	    /* Explicitly stop the old sample before rewriting its channel buffer.
+	       This intentionally differs from XGM2 priority arbitration and is
+	       an audible preemption edge case to test on original hardware. */
+	    XGM2_stopPCM(pcmch);
+	    u8 *dest=r34_pcm_buffer[channel&1];
+	    if(!R34_AudioDecode(&gensfx[id],dest))return;
+	    pcmdata=dest;
+	}
+#endif
+	XGM2_playPCMEx(pcmdata, gensfx[id].len, pcmch,
 	                 gensfx[id].prio,
 #if defined(DOOM_R31_SFX)
 	                 gensfx[id].half_rate != 0,
