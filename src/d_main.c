@@ -65,6 +65,7 @@
 #include "am_map.h"
 #include "m_cheat.h"
 #include "globdata.h"
+#include "r24_romthings.h"
 #include "r22_mapdiag.h"
 
 static void D_DoAdvanceDemo(void);
@@ -542,6 +543,9 @@ static void D_DoomMainSetup(void)
         G_DeferedInitNew(sk_medium);
 #else
         D_StartTitle();                 // start up intro loop
+#if defined(DOOM_R24_EPISODE)
+        M_R24OpenLevels();
+#endif
 #endif
     }
 }
@@ -565,12 +569,24 @@ __attribute__((used,externally_visible)) void R23_ProbeMain(void){
     *(volatile uint16_t*)0xA00000=0;
     Z_Init();W_Init();R_Init();P_Init();S_Init(8,8);
     _g_gameskill=sk_medium;
-    const int16_t maps[]={1,2,8,2};
-    for(uint16_t i=0;i<4;i++){
+#if defined(DOOM_R24_EPISODE)
+    const int16_t maps[]={1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9};
+    uint16_t loads=18;
+#else
+    const int16_t maps[]={1,2,8,2};uint16_t loads=4;
+#endif
+    for(uint16_t i=0;i<loads;i++){
+#if defined(DOOM_R24_EPISODE)
+        if(i>=9)_g_gameskill=sk_hard;
+#else
         if(i==3)_g_gameskill=sk_hard;
+#endif
         _g_gamemap=maps[i];_g_player.playerstate=PST_REBORN;
         P_SetupLevel(maps[i]);
-        if(maps[i]==2){
+#if defined(DOOM_R24_EPISODE)
+        R24_ValidateThings();
+#endif
+        if(1){
             mobj_t *effects[10];
             for(uint16_t j=0;j<10;j++)effects[j]=P_SpawnMobj(_g_player.mo->x,_g_player.mo->y,ONFLOORZ,MT_PUFF);
             for(uint16_t j=0;j<10;j++)P_RemoveMobj(effects[j]);

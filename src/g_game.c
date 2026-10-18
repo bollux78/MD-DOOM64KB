@@ -73,6 +73,7 @@
 #include "i_system.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 
 
 static const byte __far* demobuffer;   /* cph - only used for playback */
@@ -610,7 +611,7 @@ static void G_DoCompleted (void)
     else if (_g_gamemap == 1)
         _g_wminfo.next = 7;
 #endif
-#if defined(DOOM_R23_MAPMEM)
+#if defined(DOOM_R23_MAPMEM) && !defined(DOOM_R24_EPISODE)
     else if (_g_gamemap == 2) // Only real maps 1,2,8 are available in this batch.
         _g_wminfo.next = 0;
 #endif
@@ -876,7 +877,9 @@ void G_ReloadDefaults(void)
 static void G_DoNewGame (void)
 {
     G_ReloadDefaults();            // killough 3/1/98
-#if defined(DOOM_R23_MAP2_DIRECT)
+#if defined(DOOM_R24_EPISODE)
+    G_InitNew(d_skill,r24_start_map);
+#elif defined(DOOM_R23_MAP2_DIRECT)
     G_InitNew(d_skill,2);
 #elif defined(DOOM_R22_MAP8_DIRECT)
     G_InitNew (d_skill, 8);

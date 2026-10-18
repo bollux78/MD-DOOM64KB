@@ -51,6 +51,7 @@
 #include "i_system.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 
 
 //
@@ -882,6 +883,9 @@ mobj_t __far* P_SpawnMobj(fixed_t x,fixed_t y,fixed_t z,mobjtype_t type)
 
 void P_RemoveMobj(mobj_t __far* mobj)
 {
+#if defined(DOOM_R24_EPISODE)
+  if(R24_RemoveRomThing(mobj))return;
+#endif
   P_UnsetThingPosition (mobj);
 
   // Delete all nodes on the current sector_list               phares 3/16/98

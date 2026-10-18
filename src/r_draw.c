@@ -53,6 +53,7 @@
 #include "m_random.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 #if defined(DOOM_R20_SCALE_MATH)
 #include "r20_scale_math.h"
 #endif
@@ -2066,6 +2067,9 @@ static void R_AddSprites(subsector_t __far* subsec, int16_t lightlevel)
 
   for (thing = sec->thinglist; thing; thing = thing->snext)
     R_ProjectSprite(thing, lightlevel);
+#if defined(DOOM_R24_EPISODE)
+  R24_ProjectSector(sec,lightlevel,R_ProjectSprite);
+#endif
 }
 
 

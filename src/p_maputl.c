@@ -43,6 +43,7 @@
 #include "p_setup.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 #include "r22_blocklinks.h"
 
 
@@ -481,6 +482,9 @@ boolean P_BlockThingsIterator(int16_t x, int16_t y, boolean func(mobj_t __far*))
 #endif
       if (!func(mobj))
         return false;
+#if defined(DOOM_R24_EPISODE)
+  if(!R24_BlockIterator(x,y,func))return false;
+#endif
   return true;
 }
 

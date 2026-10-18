@@ -54,6 +54,7 @@
 #include "v_video.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 
 
 //
@@ -250,7 +251,11 @@ static void P_LoadThings(int16_t lump)
     const mapthing_t *things=W_GetLumpByNum(lump);
     int16_t count=_g_thingPoolSize;_g_thingPoolSize=0;
     int16_t bit=_g_gameskill<=sk_easy?1:_g_gameskill==sk_medium?2:4;
-    for(int16_t i=0;i<count;i++)if(things[i].type==1 || (things[i].options&bit))_g_thingPoolSize++;
+    for(int16_t i=0;i<count;i++)if((things[i].type==1 || (things[i].options&bit))
+#if defined(DOOM_R24_EPISODE)
+       && !R24_IsRomThing(i)
+#endif
+       )_g_thingPoolSize++;
 #endif
 	_g_thingPool     = Z_CallocLevel(_g_thingPoolSize * sizeof(mobj_t));
 
@@ -268,6 +273,9 @@ static void P_LoadThings2(int16_t lump)
         const mapthing_t __far* mt = &data[i];
 
         // Do spawn all other stuff.
+#if defined(DOOM_R24_EPISODE)
+        if(R24_SpawnRomThing(i,mt))continue;
+#endif
         P_SpawnMapThing(mt);
     }
 }
@@ -542,6 +550,9 @@ void P_SetupLevel(int16_t map)
 #if defined(DOOM_R23_MAPMEM)
     const int16_t *bm=W_GetLumpByNum(lumpnum+ML_BLOCKMAP);
     R23_MapMemoryInit(W_LumpLength(lumpnum+ML_LINEDEFS)/sizeof(line_t),W_LumpLength(lumpnum+ML_SIDEDEFS)/sizeof(mapsidedef_t),(uint16_t)bm[2]*(uint16_t)bm[3]);
+#endif
+#if defined(DOOM_R24_EPISODE)
+    R24_InitThings(map,lumpnum+ML_THINGS);
 #endif
     R22_MapMark(map,2);
     P_LoadThings    (lumpnum + ML_THINGS);

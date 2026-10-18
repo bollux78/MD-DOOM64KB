@@ -52,6 +52,7 @@
 #include "i_vtext.h"
 
 #include "globdata.h"
+#include "r24_romthings.h"
 
 
 #define DISABLE_QUIT_DOOM
@@ -133,6 +134,9 @@ static const char skullName[2] = {'\x02', '\x01'};
 // PROTOTYPES
 //
 static void M_NewGame(int16_t choice);
+#if defined(DOOM_R24_EPISODE)
+static void M_SelectLevel(int16_t choice);
+#endif
 static void M_ChooseSkill(int16_t choice);
 static void M_LoadGame(int16_t choice);
 static void M_SaveGame(int16_t choice);
@@ -184,6 +188,9 @@ static void M_ClearMenus (void);
 enum
 {
   newgame = 0,
+#if defined(DOOM_R24_EPISODE)
+  selectlevel,
+#endif
   options,
 #if !defined DISABLE_SAVE_GAME
   loadgame,
@@ -205,6 +212,9 @@ enum
 static const menuitem_t MainMenu[]=
 {
   {1,"New Game",  M_NewGame},
+#if defined(DOOM_R24_EPISODE)
+  {1,"Select Level", M_SelectLevel},
+#endif
   {1,"Options",   M_Options},
 #if !defined DISABLE_SAVE_GAME
   {1,"Load game", M_LoadGame},
@@ -277,10 +287,26 @@ static void M_DrawNewGame(void)
 	V_DrawString((R22_TEXTWIDTH - 19) / 2, 4, 12, "Choose Skill Level:");
 }
 
+#if defined(DOOM_R24_EPISODE)
+static void M_ChooseLevel(int16_t choice){r24_start_map=choice+1;M_SetupNextMenu(&NewDef);itemOn=2;}
+static void M_DrawLevels(void){V_DrawString(10,2,12,"SELECT LEVEL");}
+static const menuitem_t LevelMenu[]={
+ {1,"E1M1 Hangar",M_ChooseLevel},{1,"E1M2 Nuclear Plant",M_ChooseLevel},
+ {1,"E1M3 Toxin Refinery",M_ChooseLevel},{1,"E1M4 Command Control",M_ChooseLevel},
+ {1,"E1M5 Phobos Lab",M_ChooseLevel},{1,"E1M6 Central Processing",M_ChooseLevel},
+ {1,"E1M7 Computer Station",M_ChooseLevel},{1,"E1M8 Phobos Anomaly",M_ChooseLevel},
+ {1,"E1M9 Military Base",M_ChooseLevel}};
+static const menu_t LevelDef={9,LevelMenu,M_DrawLevels,5,6,&MainDef,0};
+static void M_SelectLevel(int16_t choice){UNUSED(choice);M_SetupNextMenu(&LevelDef);itemOn=0;}
+void M_R24OpenLevels(void){M_StartControlPanel();M_SelectLevel(0);}
+#endif
+
 static void M_NewGame(int16_t choice)
 {
 	UNUSED(choice);
-
+#if defined(DOOM_R24_EPISODE)
+    r24_start_map=1;
+#endif
 	M_SetupNextMenu(&NewDef);
 	itemOn = 2; //Set hurt me plenty as default difficulty
 }
