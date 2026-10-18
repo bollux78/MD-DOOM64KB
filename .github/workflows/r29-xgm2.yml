@@ -24,13 +24,17 @@ jobs:
           assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
           pathlib.Path('res/e1m1.vgm').write_bytes(data)
           PY
-      - name: Check scripts and dependencies
+      - name: Preflight, pinned audio hashes and XGM2 support
         shell: bash
         run: |
           fish -n scripts/lab/build_r29.fish
           python3 scripts/lab/test_r25_music.py
           python3 scripts/lab/test_r27_group.py
           test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+          grep -q 'XGM2_loadDriver' ~/mars/m68k-elf/inc/snd/xgm2.h
+          java -version
+          echo 'R29 preflight OK: scripts, source audio and XGM2 API'
       - name: Build R29 variants
         shell: bash
         run: |
