@@ -1,4 +1,6 @@
 #if defined(DOOM_R25_MUSIC)
+#include <stddef.h>
+#include <stdint.h>
 #include <genesis.h>
 #include "sounds.h"
 #include "music.h"

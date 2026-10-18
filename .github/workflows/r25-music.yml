@@ -42,6 +42,7 @@ jobs:
           fish -n scripts/lab/build_r25.fish
           python3 scripts/lab/test_r23_conversion.py
           python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r25_window.py
           python3 scripts/lab/test_r24_episode.py
           python3 scripts/lab/test_r24_nodes.py
           python3 scripts/lab/test_r23_mapmem.py
