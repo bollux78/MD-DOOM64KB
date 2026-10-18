@@ -99,6 +99,7 @@ python3 scripts/lab/convert_r24_episode.py --payload assets/r24-episode.json --b
 set -l built
 for v in $variants
     set -gx DOOM_R22_PIXEL4 0
+    set -gx DOOM_WAD_DEDUP 0
     set -gx DOOM_TIMEDEMO 1
     set -gx DOOM_CELL_LUT 1
     set -gx DOOM_R17_PIXEL_DBRA 1
@@ -119,6 +120,7 @@ for v in $variants
     end
     if contains -- $v episode-perf episode-play episode-p4 cpu-probe
         set defs $defs '-DDOOM_R23_MAPMEM' '-DDOOM_R24_EPISODE'
+        set -gx DOOM_WAD_DEDUP 1
     end
     if contains -- $v direct-e1m2 diag-e1m2 direct-p4
         set defs $defs '-DDOOM_R23_MAP2_DIRECT'

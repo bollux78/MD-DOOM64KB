@@ -82,7 +82,8 @@ void R24_ValidateThings(void){
         if(thing->flags&(MF_SOLID|MF_SHOOTABLE|MF_COUNTKILL))I_Error("ROM THING DYNAMIC FLAGS");
         if(mapthings[records[i].thing].type==2007){
             int16_t before=_g_player.ammo[am_clip];_g_player.ammo[am_clip]=0;thing->z=_g_player.mo->z;
-            P_TouchSpecialThing(thing,_g_player.mo);
+            boolean audio=nosfxparm;nosfxparm=true;
+            P_TouchSpecialThing(thing,_g_player.mo);nosfxparm=audio;
             if(!dead(i) || !_g_player.ammo[am_clip])I_Error("ROM ITEM PICKUP FAILED");
             _g_player.ammo[am_clip]=before;
             return;

@@ -42,10 +42,16 @@ def main():
     out += struct.pack('>i', 0)   # infotableofs は後で埋める
 
     positions = []
+    shared = {}
+    dedup = os.environ.get("DOOM_WAD_DEDUP") == "1"
     for name, sz, data in lumps:
+        if dedup and data in shared:
+            positions.append(shared[data])
+            continue
         while len(out) % ALIGN != 0:
             out += b'\x00'
         positions.append(len(out) if sz else 0)
+        if dedup: shared[data] = positions[-1]
         out += data
 
     while len(out) % ALIGN != 0:
