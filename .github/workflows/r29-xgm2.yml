@@ -28,6 +28,7 @@ jobs:
         shell: bash
         run: |
           fish -n scripts/lab/build_r29.fish
+          fish -n scripts/build_silent.fish
           python3 scripts/lab/test_r25_music.py
           python3 scripts/lab/test_r27_group.py
           test -f ~/mars/m68k-elf/lib/libmd.a
