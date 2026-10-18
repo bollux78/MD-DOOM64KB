@@ -1,0 +1,108 @@
+name: R30b - Adaptive Bayer native screens
+on:
+  push:
+    branches: [r30b-bayer-adaptive]
+  workflow_dispatch:
+concurrency:
+  group: r30b-bayer-adaptive
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned soundtrack input
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Validate scripts and R29 XGM2 environment
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r30b.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r30_native.py scripts/lab/audit_r30b.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+          python3 scripts/lab/gen_r30_native.py --dither bayer4 > /tmp/r30b-generator-test.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/r30b-generator-test.json'))
+          assert j['adaptive_dither']=='bayer4'
+          for s in j['screens']:
+              print(s['key'],s['changed_pixels'],s['candidate_pixels'],s['packed_bytes'])
+              assert s['changed_pixels']>0 and s['candidate_pixels']>0
+          PY
+      - name: Build R30b controls and adaptive Bayer variants
+        shell: bash
+        run: |
+          mkdir -p dist/r30b
+          : > dist/r30b/BUILD-RESULTS.txt
+          failed=0
+          for variant in native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf; do
+            echo "=== R30b $variant ==="
+            if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r30b.fish "$variant"; then
+              echo "$variant OK" | tee -a dist/r30b/BUILD-RESULTS.txt
+            else
+              echo "$variant FAILED" | tee -a dist/r30b/BUILD-RESULTS.txt
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Compare graphics packing and ROM sizes
+        if: always()
+        shell: bash
+        run: |
+          if test -f dist/r30b/doom-md-r30b-bayer8-perf.bin; then
+            python3 scripts/lab/audit_r30b.py dist/r30b \
+              native-control-play bayer4-play bayer4-perf bayer8-play bayer8-perf
+            sha256sum dist/r30b/*.bin > dist/r30b/SHA256SUMS
+          fi
+      - name: Publish R30b run report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p docs/review-r30b dist/r30b
+          python3 - <<'PY'
+          import json,os,pathlib
+          d=pathlib.Path('dist/r30b')
+          files=[dict(name=f.name,bytes=f.stat().st_size) for f in sorted(d.glob('doom-md-r30b-*.bin'))]
+          results=(d/'BUILD-RESULTS.txt').read_text().splitlines() if (d/'BUILD-RESULTS.txt').exists() else []
+          art={}
+          for f in sorted(d.glob('art-*.json')):
+              try:
+                  o=json.loads(f.read_text())
+                  art[f.name]=dict(mode=o['adaptive_dither'],
+                      totals={s['key']:dict(packed=s['packed_bytes'],tiles=s['tiles'],
+                                         changed=s['changed_pixels']) for s in o['screens']})
+              except Exception as e:
+                  art[f.name]=dict(error=str(e))
+          logs={f.name:f.read_text(errors='replace').splitlines()[-25:] for f in sorted(d.glob('build-*.log'))}
+          report=dict(run_id=os.environ['GITHUB_RUN_ID'],source_sha=os.environ['GITHUB_SHA'],
+                      files=files,results=results,artwork=art,logs=logs)
+          pathlib.Path('docs/review-r30b/CI-LAST-RESULT.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(dict(run_id=report['run_id'],results=results,files=files,artwork=art),indent=2)[:7000])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r30b/CI-LAST-RESULT.json
+          git commit -m 'R30b CI results [skip ci]' || true
+          git push origin HEAD:r30b-bayer-adaptive
+      - name: Upload ROMs, ELFs, compression comparisons and logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r30b-bayer-adaptive
+          path: dist/r30b/
+          if-no-files-found: warn
+          retention-days: 90
