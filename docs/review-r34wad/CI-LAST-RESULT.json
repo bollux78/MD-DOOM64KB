@@ -1,14 +1,14 @@
 {
-  "run_id": "39177068941",
-  "sha": "82ecaed14a0577ef1f4ad1ee59b5c641024d0830",
+  "run_id": "39177607902",
+  "sha": "596e4da81f4bf79d24d959f0cd9c2a23bd20f441",
   "source": "Genuine WAD source found: scripts/doom1.wad\nSHA256: 1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771\nBytes: 4196020\n",
   "results": [
     "ctl-play OK",
-    "ctl-perf FAILED",
-    "r128-play FAILED",
-    "r128-perf FAILED",
-    "r256-play FAILED",
-    "r256-perf FAILED"
+    "ctl-perf OK",
+    "r128-play OK",
+    "r128-perf OK",
+    "r256-play OK",
+    "r256-perf OK"
   ],
   "files": [
     {
