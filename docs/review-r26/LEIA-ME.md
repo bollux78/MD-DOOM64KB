@@ -31,3 +31,18 @@ Use as duas ROMs R26 na comparação; não misture resultados de R25-perf.
 Inclui ELF, flags e relatórios. As músicas e a arquitetura SRAM da R25 são
 mantidas. Validar visualmente abertura/Start e comparar os timedemos no mesmo
 hardware a 7,67 MHz.
+
+## Validação da entrega
+
+Build c0e3eaeb1462c0cb374baaaac933f2ca11cdc764.
+CI: https://github.com/bollux78/MD-DOOM64KB/actions/runs/39133912270
+
+Passaram os testes do fluxo de abertura/Start e do leitor real de cabeçalho
+de demo em builds timedemo e jogável. A auditoria dos binários confirmou
+DEMO3 e todos os nove lumps de E1M1 idênticos entre control e perf.
+O diagnóstico MC68000 completou 18 carregamentos médio/difícil, sem erro
+de heap e com ROM/SRAM alternando corretamente. Não é validação visual
+do VDP nem reprodução completa do timedemo no hardware.
+
+ROMs do episódio: 3.276.800 bytes; controles: 1.835.008 bytes.
+Os seis hashes do artefato foram conferidos.
