@@ -1,0 +1,230 @@
+name: R34-AUDIO - Independent short PCM codec comparisons
+on:
+  push:
+    branches: [r34-audio-codecs]
+  workflow_dispatch:
+concurrency:
+  group: r34-audio-codecs
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned XGM2 soundtrack input
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Recover pinned shareware DOOM1.WAD (not committed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          expected_sha='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          size=4196020
+          candidates=[
+              ('ibiblio', 'https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad',False),
+              ('wad-archive', 'https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+              ('shareware-demo', 'https://aikernel.net/demo/doom/DOOM1.WAD',False)
+          ]
+          if target.is_file():
+              b=target.read_bytes()
+              if len(b)==size and hashlib.sha256(b).hexdigest()==expected_sha:
+                  print('Verified pinned shareware WAD already present:',target)
+                  raise SystemExit(0)
+          for name,url,compressed in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R31 build asset verifier/1.0'})
+                  with urllib.request.urlopen(req,timeout=70) as response:
+                      data=response.read(9000000)
+                  if compressed:data=gzip.decompress(data)
+                  sha=hashlib.sha256(data).hexdigest()
+                  if len(data)!=size or sha!=expected_sha:
+                      print(name,'unexpected content or checksum; rejecting',
+                            len(data),sha)
+                      continue
+                  target.write_bytes(data)
+                  print('Verified original shareware v1.9 from',name,
+                        'size',len(data),'SHA256',sha)
+                  break
+              except Exception as e:
+                  print('Shareware mirror unavailable:',name,str(e)[:200])
+          else:
+              print('Pinned Doom shareware download failed; original preflight will look for local source.')
+          PY
+      - name: Preflight - find authentic Doom DMX sounds on self-hosted runner
+        shell: bash
+        run: |
+          mkdir -p dist/r34audio
+          python3 - <<'PY'
+          import pathlib,os,struct,hashlib,sys
+          home=pathlib.Path.home()
+          candidates=[
+              pathlib.Path('scripts/doom1.wad'),
+              home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',
+              home/'Projetos/doom-assets/doom1.WAD',
+              home/'Jogos/doom1.wad',
+              home/'Games/doom1.wad',
+              home/'Downloads/doom1.wad'
+          ]
+          # No external network or repo commit for copyright-protected WAD.
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir():continue
+              root_depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-root_depth>4:
+                      subdirs[:]=[]
+                      continue
+                  subdirs[:]=[s for s in subdirs if not s.startswith('.')]
+                  for n in names:
+                      if n.lower()=='doom1.wad':
+                          candidates.append(pathlib.Path(directory)/n)
+          for f in candidates:
+              if not f.is_file():continue
+              try:
+                  with f.open('rb') as fd:
+                      h=fd.read(12)
+                      if len(h)!=12 or h[:4] not in (b'IWAD',b'PWAD'):continue
+                      count,offset=struct.unpack_from('<II',h,4)
+                      if not 100<count<10000:continue
+                      fd.seek(offset)
+                      directory=fd.read(count*16)
+                  sounds={directory[i+8:i+16].split(b'\0')[0]
+                          for i in range(0,len(directory),16)}
+                  if not {b'DSPISTOL',b'DSSHOTGN',b'DSOROPN'}.intersection(sounds):
+                      continue
+                  raw=f.read_bytes()
+                  dest=pathlib.Path('scripts/doom1.wad')
+                  if f.resolve()!=dest.resolve():dest.write_bytes(raw)
+                  sha=hashlib.sha256(raw).hexdigest()
+                  (pathlib.Path('dist/r34audio')/'SOURCE-STATUS.txt').write_text(
+                      f'Genuine WAD source found: {str(f)}\nSHA256: {sha}\nBytes: {len(raw)}\n')
+                  print('SFX input:',f,'bytes',len(raw),'SHA256',sha)
+                  sys.exit(0)
+              except (OSError,struct.error):continue
+          status=('MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\n'
+                  'Place your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\n'
+                  'No synthetic or silent SFX fallback is allowed for R31 PCM builds.\n')
+          pathlib.Path('dist/r34audio/SOURCE-STATUS.txt').write_text(status)
+          print(status,file=sys.stderr)
+          sys.exit(3)
+          PY
+      - name: Verify R31 generator and build scripts
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r34audio.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r31_sfx.py scripts/lab/gen_r30_native.py \
+            scripts/lab/audit_r34audio.py scripts/lab/gen_r34_audio.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          python3 - <<'PY'
+          import importlib.util,struct
+          spec=importlib.util.spec_from_file_location('sfx','scripts/lab/gen_r31_sfx.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          source=bytes((128+(i%20)) for i in range(11025))
+          lump=struct.pack('<HHI',3,11025,len(source))+source
+          low,*_=m.convert(lump,6650)
+          high,*_=m.convert(lump,13300)
+          assert len(low)%256==len(high)%256==0
+          assert len(low)<len(high)
+          assert len(m.SFX)==52
+          print('R31 rate conversion, alignment, SFX enum count: OK')
+          PY
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+      - name: Build 8 matched raw, ADPCM and PackBits PCM variants
+        shell: bash
+        run: |
+          mkdir -p dist/r34audio
+          : > dist/r34audio/BUILD-RESULTS.txt
+          failed=0
+          for variant in ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf; do
+            echo "=== R31 $variant ==="
+            if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r34audio.fish "$variant"; then
+              echo "$variant OK" | tee -a dist/r34audio/BUILD-RESULTS.txt
+            else
+              echo "$variant FAILED" | tee -a dist/r34audio/BUILD-RESULTS.txt
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Compare unpadded ROM and PCM codec bytes
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          dist=Path('dist/r34audio')
+          rows=[]
+          for rom in sorted(dist.glob('doom-md-r34a-*.bin')):
+              stem=rom.stem
+              v=stem.removeprefix('doom-md-r34a-')
+              doc=dist/('sfx-'+v+'.json')
+              audio=json.loads(doc.read_text()) if doc.is_file() else {}
+              unpad=dist/('payload-'+v+'.txt')
+              payload=int(unpad.read_text()) if unpad.is_file() else None
+              rows.append({'rom':rom.name,'bytes':rom.stat().st_size,
+                           'payload_bytes':payload,
+                           'need_to_cut_to_2MiB':max(0,payload-2097152) if payload else None,
+                           'pcm_bytes':audio.get('sum_pcm_bytes'),
+                           'pcm_count':audio.get('count'),
+                           'sha256':hashlib.sha256(rom.read_bytes()).hexdigest()})
+          (dist/'SIZES.json').write_text(json.dumps(rows,indent=2)+'\n')
+          for r in rows:print(r)
+          PY
+      - name: Publish R34-AUDIO real PCM compression diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p docs/review-r34audio dist/r34audio
+          python3 - <<'PY'
+          import json,os,pathlib
+          d=pathlib.Path('dist/r34audio')
+          files=[dict(name=f.name,bytes=f.stat().st_size) for f in sorted(d.glob('doom-md-r34a-*.bin'))]
+          results=(d/'BUILD-RESULTS.txt').read_text().splitlines() if (d/'BUILD-RESULTS.txt').exists() else []
+          audio={}
+          for f in sorted(d.glob('sfx-*.json')):
+              doc=json.loads(f.read_text())
+              audio[f.stem]=(dict(codec='raw',count=doc['count'],
+                                 original_bytes=doc['sum_pcm_bytes'],stored_bytes=doc['sum_pcm_bytes'])
+                                 if 'mode' in doc else dict(codec=doc['codec'],
+                                     count=doc['count'],compressed_count=doc['compressed_count'],
+                                     original_bytes=doc['raw_pcm_bytes'],
+                                     stored_bytes=doc['stored_pcm_bytes'],
+                                     buffer_bytes=doc['buffer_bytes']))
+          logs={f.name:f.read_text(errors='replace').splitlines()[-22:]
+                for f in sorted(d.glob('build-*.log'))}
+          source=(d/'SOURCE-STATUS.txt').read_text() if (d/'SOURCE-STATUS.txt').is_file() else 'not probed'
+          report=dict(run_id=os.environ['GITHUB_RUN_ID'],sha=os.environ['GITHUB_SHA'],
+                      source=source,results=results,files=files,audio=audio,logs=logs)
+          pathlib.Path('docs/review-r34audio/CI-LAST-RESULT.json').write_text(
+              json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(dict(run=report['run_id'],source=source,results=results,
+                                files=files,audio=audio),indent=2)[:8500])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r34audio/CI-LAST-RESULT.json
+          git commit -m 'R34-AUDIO CI results [skip ci]' || true
+          git push origin HEAD:r34-audio-codecs
+      - name: Upload matched audio codec ROMs and decoding audits
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r34a-xgm2-sfx
+          path: dist/r34audio/
+          if-no-files-found: warn
+          retention-days: 90
