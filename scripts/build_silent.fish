@@ -291,26 +291,28 @@ if set -q DOOM_R20_DEFINES
     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
         test -n "$d"; or continue
         # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
-        string match -qr -- '^-DDOOM_R2[0-9]_[A-Z0-9_]+(=[0-9]+)?; or begin
+        string match -qr -- '^-DDOOM_R2[0123456789]_[A-Z0-9_]+(=[0-9]+)?
             echo "Invalid DOOM_R20_DEFINES entry: $d"
             exit 1
         end
         set render_flags "$render_flags $d"
     end
 end
-# R29 fail-closed flag audit: never publish a mislabeled audio experiment.
-if set -q DOOM_BUILD_ID; and string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
-    if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
-        echo "ERROR: R29 missing episode music macro"
-        exit 1
-    end
-    if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
-        if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
-            echo "ERROR: R29 XGM2 macro missing"
+# R29: abort the build if experimental audio/renderer flags did not propagate.
+if set -q DOOM_BUILD_ID
+    if string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
+        if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
+            echo 'ERROR: R29 missing DOOM_R25_MUSIC; refusing mislabeled ROM'
             exit 1
         end
+        if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
+            if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
+                echo 'ERROR: R29 missing DOOM_R29_XGM2; refusing mislabeled ROM'
+                exit 1
+            end
+        end
+        echo "R29 flags confirmed: $DOOM_BUILD_ID"
     end
-    echo "R29 FLAGS OK: $DOOM_BUILD_ID"
 end
 # R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
 if set -q DOOM_R22_PIXEL4; and test "$DOOM_R22_PIXEL4" = 1
