@@ -16,7 +16,7 @@ to preserve speed and pitch. Data are 8-bit signed, aligned to 256B.
 """
 from pathlib import Path
 import argparse,collections,hashlib,json,struct
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 SOURCE=ROOT/'scripts/doom1.wad'
 HEADER=ROOT/'src/gen_sfx.h'
 FULL_RATE=13300
