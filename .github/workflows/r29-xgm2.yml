@@ -1,0 +1,52 @@
+name: R29 - XGM2 music experiments
+on:
+  push:
+    branches: [r29-xgm2]
+  workflow_dispatch:
+concurrency:
+  group: r29-xgm2
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore original pinned E1M1 VGM
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Check scripts and dependencies
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r29.fish
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          test -f ~/mars/m68k-elf/lib/libmd.a
+      - name: Build R29 variants
+        shell: bash
+        run: |
+          DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r29.fish
+      - name: Record commit and compiler
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p dist/r29
+          echo "$GITHUB_SHA" > dist/r29/commit.txt
+          ~/mars/m68k-elf/bin/m68k-elf-gcc --version > dist/r29/toolchain.txt
+      - name: Upload ROMs, matching ELF and logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r29-xgm2
+          path: dist/r29/
+          if-no-files-found: warn
+          retention-days: 90
