@@ -24,6 +24,44 @@ jobs:
           assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
           pathlib.Path('res/e1m1.vgm').write_bytes(data)
           PY
+      - name: Recover pinned shareware DOOM1.WAD (not committed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          expected_sha='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          size=4196020
+          candidates=[
+              ('ibiblio', 'https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad',False),
+              ('wad-archive', 'https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+              ('shareware-demo', 'https://aikernel.net/demo/doom/DOOM1.WAD',False)
+          ]
+          if target.is_file():
+              b=target.read_bytes()
+              if len(b)==size and hashlib.sha256(b).hexdigest()==expected_sha:
+                  print('Verified pinned shareware WAD already present:',target)
+                  raise SystemExit(0)
+          for name,url,compressed in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R31 build asset verifier/1.0'})
+                  with urllib.request.urlopen(req,timeout=70) as response:
+                      data=response.read(9000000)
+                  if compressed:data=gzip.decompress(data)
+                  sha=hashlib.sha256(data).hexdigest()
+                  if len(data)!=size or sha!=expected_sha:
+                      print(name,'unexpected content or checksum; rejecting',
+                            len(data),sha)
+                      continue
+                  target.write_bytes(data)
+                  print('Verified original shareware v1.9 from',name,
+                        'size',len(data),'SHA256',sha)
+                  break
+              except Exception as e:
+                  print('Shareware mirror unavailable:',name,str(e)[:200])
+          else:
+              print('Pinned Doom shareware download failed; original preflight will look for local source.')
+          PY
       - name: Preflight - find authentic Doom DMX sounds on self-hosted runner
         shell: bash
         run: |
