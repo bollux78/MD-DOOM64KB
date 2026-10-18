@@ -41,6 +41,14 @@
 #endif
 
 
+#if defined(DOOM_R28_VIDEO_AUDIT)
+/* Equal instrumentation in all video variants. Heap walks run outside timing. */
+static volatile uint16_t r28_allocs, r28_copies, r28_uploads;
+static uint16_t r28_before, r28_after, r28_raw_free, r28_errors;
+static uint16_t r28_ptr, r28_header;
+static void R28_VideoAudit(void);
+#endif
+
 extern const int16_t CENTERY;
 
 #if defined(DOOM_CACHE_STATS)
@@ -534,6 +542,9 @@ void I_BenchmarkShowResults(void)
     R21_ProfStop(bench_frames);
 #endif
     R21_PROBE_HEAP();
+#if defined(DOOM_R28_VIDEO_AUDIT)
+    R28_VideoAudit();
+#endif
     R21_TEXT_SCREEN();
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
@@ -667,6 +678,14 @@ void I_BenchmarkShowResults(void)
 #define R21_SHOW_HEAP_AT_END() ((void)0)
 #endif
     R21_SHOW_HEAP_AT_END();
+#if defined(DOOM_R28_VIDEO_AUDIT)
+#define R28_PAIR(label, a, b, row) do {     VDP_drawText(label, 3, row);     bench_u32(buffer, a); VDP_drawText(buffer, 27, row);     bench_u32(buffer, b); VDP_drawText(buffer, 34, row); } while (0)
+    R28_PAIR("BUF PTR16 / HEADER", r28_ptr, r28_header, 19);
+    R28_PAIR("FREE BEFORE / AFTER", r28_before, r28_after, 20);
+    R28_PAIR("COPIES / UPLOADS", r28_copies, r28_uploads, 21);
+    R28_PAIR("RAW FREE / ERRORS", r28_raw_free, r28_errors, 22);
+#undef R28_PAIR
+#endif
 #if defined(DOOM_R21_PROF)
     VDP_drawText("PROFILE SAMPLES", 3, 19);
     bench_u32(buffer, r21_prof_samples); VDP_drawText(buffer, 24, 19);
@@ -724,6 +743,14 @@ void I_BenchmarkShowResults(void)
 #endif
     VDP_drawText("DIAGNOSTIC FPS HAS OVERHEAD", 3, 23);
     R21_SHOW_HEAP_AT_END();
+#if defined(DOOM_R28_VIDEO_AUDIT)
+#define R28_PAIR(label, a, b, row) do {     VDP_drawText(label, 3, row);     bench_u32(buffer, a); VDP_drawText(buffer, 27, row);     bench_u32(buffer, b); VDP_drawText(buffer, 34, row); } while (0)
+    R28_PAIR("BUF PTR16 / HEADER", r28_ptr, r28_header, 19);
+    R28_PAIR("FREE BEFORE / AFTER", r28_before, r28_after, 20);
+    R28_PAIR("COPIES / UPLOADS", r28_copies, r28_uploads, 21);
+    R28_PAIR("RAW FREE / ERRORS", r28_raw_free, r28_errors, 22);
+#undef R28_PAIR
+#endif
 #endif
     for (;;) SYS_doVBlankProcess();
 }
@@ -876,11 +903,54 @@ static void R20_UploadRows(const uint16_t *src,uint16_t rows) {
 static uint16_t *r20_video_copy;
 void I_R21_AllocVideoCopy(void)
 {
-    if (!r20_video_copy)
+    if (!r20_video_copy) {
+#if defined(DOOM_R28_VIDEO_AUDIT)
+        r28_before = MEM_getFree();
+#endif
         r20_video_copy = MEM_alloc(VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * sizeof(uint16_t));
+#if defined(DOOM_R28_VIDEO_AUDIT)
+        r28_after = MEM_getFree();
+        r28_allocs++;
+#endif
+    }
     if (!r20_video_copy)
         I_Error("R21 V2c: no SGDK heap for %u B", (unsigned)(VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * 2));
+ }
+#if defined(DOOM_R28_VIDEO_AUDIT)
+static void R28_VideoAudit(void)
+{
+    extern uint16_t _bend;
+    uint32_t start = ((uint32_t)&_bend + 1u) & ~1u;
+    uint32_t p = start;
+    uint32_t buffer = (uint32_t)r20_video_copy;
+    uint16_t found = 0;
+    r28_ptr = (uint16_t)buffer;
+    r28_raw_free = 0;
+    r28_errors = 0;
+    /* Independent, volatile traversal of SGDK's size/used headers. Bound every
+       read to the actual allocator interval, including the zero sentinel. */
+    while (p <= 0xE0FFF5FEu) {
+        uint16_t h = *(volatile uint16_t *)p;
+        uint16_t size = h & 0xFFFEu;
+        if (!h) break;
+        if (size < 2 || p + size > 0xE0FFF5FEu) {
+            r28_errors |= 1; break;
+        }
+        if (!(h & 1)) r28_raw_free += size;
+        if (p + 2 == buffer) {
+            found = 1; r28_header = h;
+            if (h != (VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * 2 + 3))
+                r28_errors |= 2;
+        }
+        p += size;
+    }
+    if (!found) r28_errors |= 4;
+    if (r28_raw_free != r21_heap_at_end_free) r28_errors |= 8;
+    if (r28_allocs != 1 || r28_before - r28_after !=
+            VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS * 2 + 2) r28_errors |= 16;
+    if (!r28_copies || !r28_uploads) r28_errors |= 32;
 }
+#endif
 #else
 static uint16_t r20_video_copy[VIEWWINDOWWIDTH*VDP_DISPLAY_ROWS];
 #endif
@@ -897,6 +967,9 @@ void R20_VBlankVideo(void) {
     R20_PROBE();
     if(r20_video_palette!=100) I_UploadNewPalette(r20_video_palette);
     R20_UploadRows(r20_video_copy,r20_video_rows);
+#if defined(DOOM_R28_VIDEO_AUDIT)
+    r28_uploads++;
+#endif
     __asm__ volatile("" : : : "memory");
     r20_video_ready=0;
 }
@@ -919,6 +992,9 @@ void R20_StopVideo(void) {
 static void R20_Present(uint16_t rows) {
     R20_WaitVideo();
     _fmemcpy(r20_video_copy,_s_screen,rows*VIEWWINDOWWIDTH*sizeof(uint16_t));
+#if defined(DOOM_R28_VIDEO_AUDIT)
+    r28_copies++;
+#endif
     r20_video_rows=rows;
     r20_video_palette=r20_next_palette; r20_next_palette=100;
     r20_video_queued_vb=_g_vblankCount;
