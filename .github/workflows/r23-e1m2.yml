@@ -41,6 +41,7 @@ jobs:
         run: |
           fish -n scripts/lab/build_r23.fish
           python3 scripts/lab/test_r23_conversion.py
+          python3 scripts/lab/test_r23_mapmem.py
           python3 scripts/lab/gen_r22_pixel4.py
           python3 scripts/lab/test_r22_pixel4.py
           python3 scripts/lab/test_r22b_video.py

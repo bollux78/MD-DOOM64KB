@@ -393,8 +393,14 @@ void I_Error(const char *error, ...)
 extern int R_SramCacheInit(void);
 #endif
 
+#if defined(DOOM_R23_CPU_PROBE)
+extern void R23_ProbeMain(void);
+#endif
 int main(bool hardReset)
 {
+#if defined(DOOM_R23_CPU_PROBE)
+    R23_ProbeMain();
+#endif
 	(void)hardReset;
 #if defined(DOOM_R20_STACKGUARD)
     R20_StackPaint();   /* first: SP is at its shallowest here */
