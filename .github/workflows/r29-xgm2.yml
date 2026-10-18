@@ -7,7 +7,7 @@ concurrency:
   group: r29-xgm2
   cancel-in-progress: false
 permissions:
-  contents: read
+  contents: write
   actions: read
 jobs:
   build:
@@ -42,6 +42,30 @@ jobs:
           mkdir -p dist/r29
           echo "$GITHUB_SHA" > dist/r29/commit.txt
           ~/mars/m68k-elf/bin/m68k-elf-gcc --version > dist/r29/toolchain.txt
+      - name: Publish build report on experimental branch
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,os
+          p=pathlib.Path('dist/r29')
+          records=[]
+          for f in sorted(p.glob('doom-md-r29-*.bin')):
+            records.append(dict(name=f.name,bytes=f.stat().st_size,fits_2mib=f.stat().st_size<=2097152))
+          logs={}
+          for f in sorted(p.glob('build-*.log')):
+            lines=f.read_text(errors='replace').splitlines()
+            logs[f.name]=lines[-15:]
+          status=dict(run_id=os.environ.get('GITHUB_RUN_ID'),sha=os.environ.get('GITHUB_SHA'),
+                      files=records,logs=logs)
+          pathlib.Path('docs/review-r29/CI-LAST-RESULT.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(status,indent=2,ensure_ascii=False)[:3500])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r29/CI-LAST-RESULT.json
+          git commit -m "R29 report from self-hosted build [skip ci]" || true
+          git push origin HEAD:r29-xgm2
       - name: Upload ROMs, matching ELF and logs
         if: always()
         uses: actions/upload-artifact@v6
