@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as td:
     (p/'music.h').write_text(''.join(f'extern const unsigned char bgm_{n}[1];\n' for n in labels))
     (p/'dispatch.c').write_bytes((ROOT/'src/r25_music.c').read_bytes())
     source=(ROOT/'src/i_genesis.c').read_text()
-    play=source[source.index('#if defined(DOOM_R25_MUSIC)\nextern const u8 *const r25_tracks'):source.index('void I_SetMusicVolume')]
+    play=source[source.index('#if defined(DOOM_R25_MUSIC)\n#if defined(DOOM_R29_XGM2)'):source.index('void I_SetMusicVolume')]
     (p/'test.c').write_text('''#include <assert.h>
 #include "genesis.h"
 #include "sounds.h"
