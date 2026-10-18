@@ -1,0 +1,267 @@
+{
+  "returncode": 0,
+  "output": "region 0 tag 1 cycles 7276960\nregion 1 tag 31984 cycles 7277058\nregion 2 tag 30160 cycles 7277140\nregion 3 tag 2 cycles 18113028\nregion 4 tag 21216 cycles 18113126\nregion 5 tag 19392 cycles 18113208\nregion 6 tag 3 cycles 30106514\nregion 7 tag 16928 cycles 30106612\nregion 8 tag 15104 cycles 30106694\nregion 9 tag 4 cycles 39380460\nregion 10 tag 21984 cycles 39380558\nregion 11 tag 20160 cycles 39380640\nregion 12 tag 5 cycles 49964558\nregion 13 tag 18096 cycles 49964656\nregion 14 tag 16272 cycles 49964738\nregion 15 tag 6 cycles 65829390\nregion 16 tag 9664 cycles 65829488\nregion 17 tag 7840 cycles 65829570\nregion 18 tag 7 cycles 77792812\nregion 19 tag 16848 cycles 77792910\nregion 20 tag 15024 cycles 77792992\nregion 21 tag 8 cycles 83542284\nregion 22 tag 28256 cycles 83542382\nregion 23 tag 26432 cycles 83542464\nregion 24 tag 9 cycles 92596426\nregion 25 tag 20384 cycles 92596524\nregion 26 tag 18560 cycles 92596606\nregion 27 tag 1 cycles 98412888\nregion 28 tag 29376 cycles 98412986\nregion 29 tag 27552 cycles 98413068\nregion 30 tag 2 cycles 110311814\nregion 31 tag 16880 cycles 110311912\nregion 32 tag 15056 cycles 110311994\nregion 33 tag 3 cycles 124087780\nregion 34 tag 10656 cycles 124087878\nregion 35 tag 8832 cycles 124087960\nregion 36 tag 4 cycles 134189146\nregion 37 tag 18448 cycles 134189244\nregion 38 tag 16624 cycles 134189326\nregion 39 tag 5 cycles 146043974\nregion 40 tag 13536 cycles 146044072\nregion 41 tag 11712 cycles 146044154\nregion 42 tag 6 cycles 164170062\nregion 43 tag 2704 cycles 164170160\nregion 44 tag 1824 cycles 164170242\nregion 45 tag 7 cycles 178366716\nregion 46 tag 9328 cycles 178366814\nregion 47 tag 8016 cycles 178366896\nregion 48 tag 8 cycles 184664574\nregion 49 tag 26656 cycles 184664672\nregion 50 tag 24832 cycles 184664754\nregion 51 tag 9 cycles 194653136\nregion 52 tag 16848 cycles 194653234\nregion 53 tag 15024 cycles 194653316\nregion 54 tag 0 cycles 194653346\n",
+  "stderr": "",
+  "symbols": {
+    "r24_cpu_error": 0,
+    "r22_map_stage": 13,
+    "r22_map_current": 9,
+    "r22_map_request": 0,
+    "r22_map_failed_stage": 0,
+    "_g_numsectors": 147,
+    "_g_numlines": 653,
+    "_g_thingPoolSize": 137,
+    "r22_map_head": 12,
+    "r22_map_count": 16,
+    "r22_map_trace": [
+      {
+        "map": 9,
+        "stage": 2,
+        "free": 38880,
+        "largest": 37056
+      },
+      {
+        "map": 9,
+        "stage": 3,
+        "free": 23232,
+        "largest": 21408
+      },
+      {
+        "map": 9,
+        "stage": 4,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 5,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 6,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 7,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 8,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 9,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 10,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 11,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 12,
+        "free": 17040,
+        "largest": 15216
+      },
+      {
+        "map": 9,
+        "stage": 13,
+        "free": 16848,
+        "largest": 15024
+      },
+      {
+        "map": 8,
+        "stage": 12,
+        "free": 27040,
+        "largest": 25216
+      },
+      {
+        "map": 8,
+        "stage": 13,
+        "free": 26656,
+        "largest": 24832
+      },
+      {
+        "map": 9,
+        "stage": 0,
+        "free": 25216,
+        "largest": 23392
+      },
+      {
+        "map": 9,
+        "stage": 1,
+        "free": 39248,
+        "largest": 37424
+      }
+    ]
+  },
+  "loads": [
+    {
+      "map": "E1M1",
+      "skill": "medium",
+      "free_at_load_done": 31984,
+      "largest_at_load_done": 30160
+    },
+    {
+      "map": "E1M2",
+      "skill": "medium",
+      "free_at_load_done": 21216,
+      "largest_at_load_done": 19392
+    },
+    {
+      "map": "E1M3",
+      "skill": "medium",
+      "free_at_load_done": 16928,
+      "largest_at_load_done": 15104
+    },
+    {
+      "map": "E1M4",
+      "skill": "medium",
+      "free_at_load_done": 21984,
+      "largest_at_load_done": 20160
+    },
+    {
+      "map": "E1M5",
+      "skill": "medium",
+      "free_at_load_done": 18096,
+      "largest_at_load_done": 16272
+    },
+    {
+      "map": "E1M6",
+      "skill": "medium",
+      "free_at_load_done": 9664,
+      "largest_at_load_done": 7840
+    },
+    {
+      "map": "E1M7",
+      "skill": "medium",
+      "free_at_load_done": 16848,
+      "largest_at_load_done": 15024
+    },
+    {
+      "map": "E1M8",
+      "skill": "medium",
+      "free_at_load_done": 28256,
+      "largest_at_load_done": 26432
+    },
+    {
+      "map": "E1M9",
+      "skill": "medium",
+      "free_at_load_done": 20384,
+      "largest_at_load_done": 18560
+    },
+    {
+      "map": "E1M1",
+      "skill": "hard",
+      "free_at_load_done": 29376,
+      "largest_at_load_done": 27552
+    },
+    {
+      "map": "E1M2",
+      "skill": "hard",
+      "free_at_load_done": 16880,
+      "largest_at_load_done": 15056
+    },
+    {
+      "map": "E1M3",
+      "skill": "hard",
+      "free_at_load_done": 10656,
+      "largest_at_load_done": 8832
+    },
+    {
+      "map": "E1M4",
+      "skill": "hard",
+      "free_at_load_done": 18448,
+      "largest_at_load_done": 16624
+    },
+    {
+      "map": "E1M5",
+      "skill": "hard",
+      "free_at_load_done": 13536,
+      "largest_at_load_done": 11712
+    },
+    {
+      "map": "E1M6",
+      "skill": "hard",
+      "free_at_load_done": 2704,
+      "largest_at_load_done": 1824
+    },
+    {
+      "map": "E1M7",
+      "skill": "hard",
+      "free_at_load_done": 9328,
+      "largest_at_load_done": 8016
+    },
+    {
+      "map": "E1M8",
+      "skill": "hard",
+      "free_at_load_done": 26656,
+      "largest_at_load_done": 24832
+    },
+    {
+      "map": "E1M9",
+      "skill": "hard",
+      "free_at_load_done": 16848,
+      "largest_at_load_done": 15024
+    }
+  ],
+  "menu_validation": {
+    "menu_labels": [
+      "E1M1 Hangar",
+      "E1M2 Nuclear Plant",
+      "E1M3 Toxin Refinery",
+      "E1M4 Command Control",
+      "E1M5 Phobos Lab",
+      "E1M6 Central Processing",
+      "E1M7 Computer Station",
+      "E1M8 Phobos Anomaly",
+      "E1M9 Military Base"
+    ],
+    "callback_tags": [
+      1,
+      2,
+      2,
+      2,
+      3,
+      2,
+      4,
+      2,
+      5,
+      2,
+      6,
+      2,
+      7,
+      2,
+      8,
+      2,
+      9,
+      2,
+      0
+    ],
+    "selected_map": 9,
+    "pending_action": 2,
+    "menu_active": 0
+  },
+  "build_commit": "f57aff64425d534ff0fe6faf6f364763fc77f3f8",
+  "workflow_run": 39092359149,
+  "artifact_id": 12123093481,
+  "artifact_sha256": "52bb30c4082da72a369d15925f04c9853df440f42d9711bb2c14b0bd257060ae",
+  "scope": "MC68000 CPU only, full ELF sections loaded. Nine maps medium/hard, ten simultaneous transient allocations per load, removals and Z_CheckHeap; eligible ROM object BSP associations and real ammo pickup. Compiled level-menu callbacks for9 maps and normal skill verified. No VDP/audio hardware or full gameplay completion validation."
+}

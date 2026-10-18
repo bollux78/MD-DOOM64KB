@@ -25,3 +25,15 @@ SRAM permanece obrigatória. Música é a E1M1 já existente em todas as fases;
 não foram convertidas as outras músicas. Pisos/tetos mantêm cores planas.
 Esta leva requer teste visual e jogável de cada mapa, portas, chaves,
 coleta, teleportes, saída normal, secreta e final.
+
+Validação do build f57aff64425d534ff0fe6faf6f364763fc77f3f8:
+- CI concluiu; ROMs do episódio têm 2097152 bytes, dentro da janela de SRAM.
+- CPU MC68000: nove mapas em médio e difícil; dez alocações temporárias por
+  carga, remoção e verificação do heap; coleta real de munição da ROM passou.
+- Callbacks compilados do menu selecionam corretamente as nove fases e
+  a dificuldade média. Rótulos cabem nas38 colunas. A confirma.
+- Ainda falta sua validação visual/jogável, incluindo saídas e final.
+- Valores de memória no JSON são da marca DONE da carga, antes dos efeitos.
+
+Comece por doom-md-r24-episode-play.bin (8x8) ou episode-p4.bin (4x4).
+Os controles usam o WAD antigo e não têm o seletor do episódio completo.
