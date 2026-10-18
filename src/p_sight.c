@@ -58,6 +58,89 @@ typedef struct {
 
 static los_t los;
 
+#if defined(DOOM_R34_WAD_REJECT)
+/* R34-WAD: bit-exact REJECT lookup with a 128/256 byte 68k work-RAM
+   cache. WAD lumps not worth compressing stay raw, avoiding any change.
+   No decompression runs in the wall renderer; only AI line-of-sight calls
+   this reader. Do not share the buffer with the audio experiment. */
+#include "i_system.h"
+static byte r34_reject_cache[256];
+static const byte __far *r34_reject_cache_source;
+static uint16_t r34_reject_cache_block=65535;
+static uint16_t r34_be16(const byte __far *p)
+{
+    return ((uint16_t)p[0]<<8) | (uint16_t)p[1];
+}
+static byte R34_RejectByte(uint16_t index)
+{
+    const byte __far *src=_g_rejectmatrix;
+    if (src[0]!='R'||src[1]!='J'||src[2]!='6'||src[3]!='4')
+        return src[index];
+    const uint16_t length=r34_be16(src+4);
+    const uint16_t blocks=r34_be16(src+6);
+#if defined(DOOM_R34_REJECT_128)
+    const uint16_t blockSize=128;
+#else
+    const uint16_t blockSize=256;
+#endif
+    if(index>=length)
+        I_Error("R34 REJECT read past end");
+    const uint16_t block=index/blockSize;
+    if(block>=blocks)
+        I_Error("R34 REJECT bad block");
+    if(r34_reject_cache_source!=src || r34_reject_cache_block!=block)
+    {
+        const byte __far *table=src+8;
+        const byte __far *body=table+(blocks+1)*2;
+        const uint16_t begin=r34_be16(table+block*2);
+        const uint16_t end=r34_be16(table+(block+1)*2);
+        const byte __far *cursor=body+begin;
+        const byte __far *limit=body+end;
+        uint16_t expected=length-block*blockSize;
+        if(expected>blockSize)expected=blockSize;
+        if(end<=begin || cursor>=limit)
+            I_Error("R34 REJECT invalid offsets");
+        const byte mode=*cursor++;
+        if(mode==0)
+        {
+            if((uint16_t)(limit-cursor)!=expected)
+                I_Error("R34 REJECT invalid raw block");
+            for(uint16_t n=0;n<expected;n++) r34_reject_cache[n]=cursor[n];
+        }
+        else if(mode==1)
+        {
+            uint16_t out=0;
+            while(cursor<limit)
+            {
+                const byte tag=*cursor++;
+                const uint16_t n=(tag&127)+1;
+                if(out+n>expected)
+                    I_Error("R34 REJECT output overflow");
+                if(tag&128)
+                {
+                    if(cursor>=limit) I_Error("R34 REJECT truncated run");
+                    const byte val=*cursor++;
+                    for(uint16_t k=0;k<n;k++)r34_reject_cache[out++]=val;
+                }
+                else
+                {
+                    if((uint16_t)(limit-cursor)<n)
+                        I_Error("R34 REJECT truncated literal");
+                    for(uint16_t k=0;k<n;k++)r34_reject_cache[out++]=*cursor++;
+                }
+            }
+            if(out!=expected)I_Error("R34 REJECT size mismatch");
+        }
+        else I_Error("R34 REJECT unknown codec");
+        r34_reject_cache_source=src;
+        r34_reject_cache_block=block;
+    }
+    return r34_reject_cache[index%blockSize];
+}
+#endif
+
+
+
 
 //
 // P_DivlineSide
@@ -336,7 +419,11 @@ boolean P_CheckSight(mobj_t __far* t1, mobj_t __far* t2)
   //
   // Check in REJECT table.
 
-  if (_g_rejectmatrix[pnum>>3] & (1 << (pnum&7)))   // can't possibly be connected
+  #if defined(DOOM_R34_WAD_REJECT)
+  if (R34_RejectByte((uint16_t)pnum>>3) & (1 << (pnum&7)))
+#else
+  if (_g_rejectmatrix[pnum>>3] & (1 << (pnum&7)))
+#endif   // can't possibly be connected
   {
     prevr = false;
     return prevr;
