@@ -1,0 +1,114 @@
+{
+  "run_id": "39173026414",
+  "sha": "692fbd6e185c5e33a76ef9bdcc114e37762e506e",
+  "wad_bytes": 1481876,
+  "theoretical_zlib_saved": 706228,
+  "categories": {
+    "active_map_geometry": {
+      "lumps": 81,
+      "unique_bytes": 711687,
+      "unique_zlib_potential": 356200
+    },
+    "active_map_metadata": {
+      "lumps": 90,
+      "unique_bytes": 78919,
+      "unique_zlib_potential": 40237
+    },
+    "shared_asset": {
+      "lumps": 648,
+      "unique_bytes": 677274,
+      "unique_zlib_potential": 309791
+    }
+  },
+  "maps": {
+    "E1M1": {
+      "geometry_bytes": 44128,
+      "metadata_bytes": 5244,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 14725
+      },
+      "zlib_potential": 21705
+    },
+    "E1M2": {
+      "geometry_bytes": 98708,
+      "metadata_bytes": 10194,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 32023
+      },
+      "zlib_potential": 49896
+    },
+    "E1M3": {
+      "geometry_bytes": 94647,
+      "metadata_bytes": 9955,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 31806
+      },
+      "zlib_potential": 45559
+    },
+    "E1M4": {
+      "geometry_bytes": 74874,
+      "metadata_bytes": 7325,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 25730
+      },
+      "zlib_potential": 36183
+    },
+    "E1M5": {
+      "geometry_bytes": 76524,
+      "metadata_bytes": 7556,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 25575
+      },
+      "zlib_potential": 37228
+    },
+    "E1M6": {
+      "geometry_bytes": 130636,
+      "metadata_bytes": 14228,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 41912
+      },
+      "zlib_potential": 66849
+    },
+    "E1M7": {
+      "geometry_bytes": 90750,
+      "metadata_bytes": 9107,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 29698
+      },
+      "zlib_potential": 44198
+    },
+    "E1M8": {
+      "geometry_bytes": 38044,
+      "metadata_bytes": 8574,
+      "largest": {
+        "name": "SEGS",
+        "bytes": 10350
+      },
+      "zlib_potential": 21649
+    },
+    "E1M9": {
+      "geometry_bytes": 63376,
+      "metadata_bytes": 6736,
+      "largest": {
+        "name": "LINEDEFS",
+        "bytes": 20243
+      },
+      "zlib_potential": 32933
+    }
+  },
+  "note": [
+    "THEORETICAL zlib savings are offline entropy, not implemented 68000 compression.",
+    "W_GetLumpByNum returns ROM pointers and several map structures stay live for entire level.",
+    "64KiB work RAM is shared with Doom heap (about 45KiB) and engine state.",
+    "32KiB effective odd-lane SRAM is already allocated to dynamic map structures.",
+    "Any runtime codec must preserve random access to hot geometry without FPS regression.",
+    "Whole-level decompression cannot be assumed feasible; each map size is measured below."
+  ]
+}
