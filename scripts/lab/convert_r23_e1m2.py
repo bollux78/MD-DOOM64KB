@@ -62,7 +62,7 @@ def convert(payload,base):
  for v1,v2,angle,li,sd,offset in recs(m['SEGS'],'<6H'):
   ln=lines[li];s0=ln[5+sd];s1=ln[6-sd];assert sd in [0,1] and s0!=65535
   x1,y1=vertices[v1];x2,y2=vertices[v2];assert offset<32768
-  segout.append(struct.pack('>hhhhHHHHBB',x1,y1,x2,y2,offset,angle,side_index[s0],li,sides[s0][5],sides[s1][5] if s1!=65535 else 255))
+  segout.append(struct.pack('>hhhhHHHHBB',x1,y1,x2,y2,offset,(angle+16384)&65535,side_index[s0],li,sides[s0][5],sides[s1][5] if s1!=65535 else 255))
  out['SEGS']=b''.join(segout)
  for name in ['SSECTORS','NODES','BLOCKMAP']:
   words=recs(m[name],'<H');out[name]=b''.join(struct.pack('>H',x[0]) for x in words)
@@ -77,7 +77,7 @@ def convert(payload,base):
  assert len(out['LINEDEFS'])//31==1033 and len(out['SECTORS'])//12==200 and len(things)==242
  for i,ln in enumerate(lines):
   z=struct.unpack_from('>hhhhHhhHHhhhhhBbb',out['LINEDEFS'],i*31);assert z[:4]==(*vertices[ln[0]],*vertices[ln[1]]) and z[4]==i and z[-1]==ln[3]
- for a,b in zip(recs(out['SEGS'],'>hhhhHHHHBB'),recs(m['SEGS'],'<6H')):assert a[:4]==(*vertices[b[0]],*vertices[b[1]]) and a[4]==b[5] and a[5]==b[2] and a[7]==b[3]
+ for a,b in zip(recs(out['SEGS'],'>hhhhHHHHBB'),recs(m['SEGS'],'<6H')):assert a[:4]==(*vertices[b[0]],*vertices[b[1]]) and a[4]==b[5] and a[5]==((b[2]+16384)&65535) and a[7]==b[3]
  report=dict(map='E1M2',things=len(things),linedefs=len(lines),sidedefs=len(dedup),sectors=len(sectors),segs=len(segout),subsectors=len(out['SSECTORS'])//4,nodes=len(out['NODES'])//28,thing_types=dict(types),skill_counts=[sum(t[2]==1 or (t[4]&bit)!=0 for t in recs(out['THINGS'],'>hhhbb')) for bit in [1,2,4]],blockmap=list(struct.unpack_from('>4h',out['BLOCKMAP'])),lumps={k:dict(bytes=len(v),sha256=hashlib.sha256(v).hexdigest()) for k,v in out.items()})
  return out,report
 

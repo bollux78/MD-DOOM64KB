@@ -23,3 +23,15 @@ for value,field in values:
  assert ((n*65536>>8)<<8)==n*65536
  if field=='height':assert (((n*256)>>2)<<8)==(n*65536>>2)
 print('Q8 dimensions preserve all 98 actor table values and corpse quarters exactly')
+
+# The engine stores wall NORMAL angles; source Doom SEGS store tangent angles.
+import math
+segs=c.recs(c.map_at(w,'E1M2')['SEGS'],'>hhhhHHHHBB')
+for x,y,xx,yy,offset,normal,*rest in segs:
+ expected=round((math.atan2(yy-y,xx-x)+math.pi/2)*65536/math.tau)&65535
+ error=abs(((normal-expected+32768)&65535)-32768)
+ assert error<=512,(x,y,xx,yy,normal,expected)
+for dx,dy,expected in [(1,0,16384),(0,1,32768),(-1,0,49152),(0,-1,0)]:
+ tangent=round(math.atan2(dy,dx)*65536/math.tau)&65535
+ assert ((tangent+16384)&65535)==expected
+print('All 1463 E1M2 wall normals match geometry; four cardinal normal conventions verified')
