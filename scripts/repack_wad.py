@@ -76,7 +76,8 @@ def main():
     # doom64ng.h を生成（aligned(4)）
     with open(HOUT, "w") as f:
         f.write("// 自動生成 (scripts/repack_wad.py) — 68000 向けに 4 バイト整列した WAD を埋め込む。\n")
-        f.write("static const unsigned char __attribute__((aligned(4))) doom_iwad[%d] = {\n" % len(out))
+        section = ",section(\".rodata_binf\")" if os.environ.get("DOOM_R25_MUSIC") == "1" else ""
+        f.write("static const unsigned char __attribute__((aligned(4)%s)) doom_iwad[%d] = {\n" % (section,len(out)))
         for i in range(0, len(out), 20):
             chunk = out[i:i+20]
             f.write("".join("0x%02x," % x for x in chunk) + "\n")

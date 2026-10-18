@@ -183,10 +183,13 @@ void DMX_Shutdown(void)      { }
 
 //**************************************************************************************
 //
-// Music : SGDK XGM ドライバで BGM(E1M1) を再生する。
-// 対応マップは E1M1/E1M8 のみで、用意した曲は E1M1(at doom's gate)。どのレベルでも同曲を流す。
+// Music: R25 routes Doom music IDs to the matching Episode 1 / screen track.
+// Legacy builds retain their original single-track baseline.
 //
 
+#if defined(DOOM_R25_MUSIC)
+extern const u8 *const r25_tracks[NUMMUSIC];
+#endif
 void I_PlaySong(musicenum_t handle, boolean looping)
 {
 	(void)handle;
@@ -198,7 +201,13 @@ void I_PlaySong(musicenum_t handle, boolean looping)
 	XGM_startPlay(bgm_silent);
 	DMX_RegisterPCM();
 #else
+#if defined(DOOM_R25_MUSIC)
+    const u8 *song=(handle>mus_None && handle<NUMMUSIC)?r25_tracks[handle]:bgm_silent;
+    XGM_startPlay(song);
+    XGM_setLoopNumber(looping ? -1 : 0);
+#else
 	XGM_startPlay(bgm_e1m1);               // VInt ISR が以降自動で XGM を 60Hz 前進させる
+#endif
 	// XGM_startPlay がドライバを(再)ロードした場合に備え、PCM サンプル表を再登録する。
 	DMX_RegisterPCM();
 #endif
@@ -207,8 +216,9 @@ void I_PlaySong(musicenum_t handle, boolean looping)
 void I_StopSong(musicenum_t handle)
 {
 	(void)handle;
-	// XGM(クラシック)に安全な明示停止が無いため no-op。レベル開始時の I_PlaySong で
-	// 同曲が再スタートされる（このゲームの BGM は E1M1 の1曲のみ）。
+#if defined(DOOM_R25_MUSIC)
+    XGM_stopPlay();
+#endif
 }
 
 void I_SetMusicVolume(int16_t volume)

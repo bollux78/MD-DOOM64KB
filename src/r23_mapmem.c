@@ -2,6 +2,11 @@
 #include "r_defs.h"
 #include "r22_blocklinks.h"
 #include "i_system.h"
+/* Legacy host mocks omit the new window helpers. */
+#ifndef R25_SRAM_BEGIN
+#define R25_SRAM_BEGIN() ((void)0)
+#define R25_SRAM_END() ((void)0)
+#endif
 #if defined(DOOM_R23_MAPMEM)
 #if !defined(DOOM_R22_SRAM_BLOCKLINKS)
 #error R23 map memory requires SRAM blocklinks
@@ -30,6 +35,7 @@ void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells){
         for(uint16_t i=0;i<n;i++)if(R22_SRAM_BYTE(R22_SRAM_BASE+1+2UL*pos[i])!=(uint8_t)((pass?0x5A:0xA5)^i))ok=0;
     }
     for(uint16_t i=0;i<n;i++)R22_SRAM_BYTE(R22_SRAM_BASE+1+2UL*pos[i])=saved[i];
+    R25_SRAM_END();
     if(!ok)I_Error("SRAM MAP STATE UNAVAILABLE");
 }
 static uint32_t address(const void *p,uint16_t offset){
@@ -57,16 +63,18 @@ static void node_write(void *p,uint16_t off,uint32_t value){
 }
 #endif
 uint32_t R23_MapRead(const void *p,uint16_t offset,uint16_t size){
+    R25_SRAM_BEGIN();
 #if defined(DOOM_R24_EPISODE)
-    if((uintptr_t)p>=0x230000UL)return node_read(p,offset);
+    if((uintptr_t)p>=0x230000UL){uint32_t v=node_read(p,offset);R25_SRAM_END();return v;}
 #endif
-    uint32_t a=address(p,offset),v=0;while(size--){v=(v<<8)|R22_SRAM_BYTE(a);a+=2;}return v;
+    uint32_t a=address(p,offset),v=0;while(size--){v=(v<<8)|R22_SRAM_BYTE(a);a+=2;}R25_SRAM_END();return v;
 }
 void R23_MapWrite(void *p,uint16_t offset,uint16_t size,uint32_t value){
+    R25_SRAM_BEGIN();
 #if defined(DOOM_R24_EPISODE)
-    if((uintptr_t)p>=0x230000UL){node_write(p,offset,value);return;}
+    if((uintptr_t)p>=0x230000UL){node_write(p,offset,value);R25_SRAM_END();return;}
 #endif
-    uint32_t a=address(p,offset)+2UL*(size-1);while(size--){R22_SRAM_BYTE(a)=value;value>>=8;a-=2;}
+    uint32_t a=address(p,offset)+2UL*(size-1);while(size--){R22_SRAM_BYTE(a)=value;value>>=8;a-=2;}R25_SRAM_END();
 }
 void *R23_NodeAlloc(void){
     if(node_free){msecnode_t *p=node_free;node_free=(msecnode_t*)(uintptr_t)R23_GET(p,m_tnext);return p;}

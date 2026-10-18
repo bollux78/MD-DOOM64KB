@@ -18,6 +18,7 @@ void R22_BlockInit(uint16_t w,uint16_t h){
         for(uint16_t i=0;i<count;i++)if(R22_SRAM_BYTE(R22_SRAM_BASE+1+(uint32_t)pos[i]*2)!=(uint8_t)((pass?0x5A:0xA5)^i))ok=0;
     }
     for(uint16_t i=0;i<count;i++)R22_SRAM_BYTE(R22_SRAM_BASE+1+(uint32_t)pos[i]*2)=saved[i];
+    R25_SRAM_END();
     if(!ok)I_Error("SRAM ABSENT OR TOO SMALL");
     r22_block_cells=(uint16_t)cells;
     for(uint16_t i=0;i<r22_block_cells;i++)R22_SramWrite32(R22_SRAM_BASE+((uint32_t)i<<3),0);

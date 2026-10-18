@@ -14,6 +14,16 @@
 #ifndef R22_SRAM_ENABLE
 #define R22_SRAM_ENABLE() (*(volatile uint8_t*)0x00A130F1UL=1)
 #endif
+#if defined(DOOM_R25_MUSIC)
+#ifndef R22_SRAM_DISABLE
+#define R22_SRAM_DISABLE() (*(volatile uint8_t*)0x00A130F1UL=0)
+#endif
+#define R25_SRAM_BEGIN() do { __asm__ volatile("" ::: "memory"); R22_SRAM_ENABLE(); __asm__ volatile("" ::: "memory"); } while(0)
+#define R25_SRAM_END() do { __asm__ volatile("" ::: "memory"); R22_SRAM_DISABLE(); __asm__ volatile("" ::: "memory"); } while(0)
+#else
+#define R25_SRAM_BEGIN() ((void)0)
+#define R25_SRAM_END() ((void)0)
+#endif
 extern uint16_t r22_block_cells;
 void R22_BlockInit(uint16_t w,uint16_t h);
 /* Aligned tokens identify SRAM head slots. Never dereference these tokens
@@ -22,12 +32,16 @@ static inline mobj_t **R22_BlockSlot(uint16_t index){
     return (mobj_t**)(uintptr_t)(R22_SRAM_BASE+((uint32_t)index<<3));
 }
 static inline uint32_t R22_SramRead32(uint32_t a){
-    return ((uint32_t)R22_SRAM_BYTE(a+1)<<24)|((uint32_t)R22_SRAM_BYTE(a+3)<<16)|
+    R25_SRAM_BEGIN();
+    uint32_t value=((uint32_t)R22_SRAM_BYTE(a+1)<<24)|((uint32_t)R22_SRAM_BYTE(a+3)<<16)|
            ((uint32_t)R22_SRAM_BYTE(a+5)<<8)|R22_SRAM_BYTE(a+7);
+    R25_SRAM_END();return value;
 }
 static inline void R22_SramWrite32(uint32_t a,uint32_t v){
+    R25_SRAM_BEGIN();
     R22_SRAM_BYTE(a+1)=v>>24;R22_SRAM_BYTE(a+3)=v>>16;
     R22_SRAM_BYTE(a+5)=v>>8;R22_SRAM_BYTE(a+7)=v;
+    R25_SRAM_END();
 }
 static inline int R22_IsSramLink(mobj_t **p){
     return (uintptr_t)p>=R22_SRAM_BASE && (uintptr_t)p<R22_SRAM_BASE+R22_SRAM_CAPACITY*2u;

@@ -54,6 +54,9 @@
 
 #include "globdata.h"
 #include "r24_romthings.h"
+#if defined(DOOM_R25_MUSIC)
+#include "r22_blocklinks.h"
+#endif
 #if defined(DOOM_R20_SCALE_MATH)
 #include "r20_scale_math.h"
 #endif
@@ -2161,6 +2164,9 @@ static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
 #define DOOM_SRAM_FIRST 0x00200001UL
 #endif
 #define DOOM_SRAM_CONTROL 0x00A130F1UL
+#if defined(DOOM_R25_MUSIC) && (defined(DOOM_SRAM_FASTCOPY) || defined(DOOM_SRAM_HOT_SLOTS))
+#error R25 mapper window currently requires the standard C cache copy path
+#endif
 static byte tmpCache[128];
 #if defined(DOOM_SRAM_FASTCOPY)
 /* 68000 byte-lane copies. Explicit DBRA loop removes indexed-byte address
@@ -2201,14 +2207,26 @@ static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
 static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
 {
     volatile uint8_t* const dest = (volatile uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+#if defined(DOOM_R25_MUSIC)
+    R25_SRAM_BEGIN();
+#endif
     for (uint16_t i = 0; i < size; ++i)
         dest[(uint16_t)(i << 1)] = src[i];
+#if defined(DOOM_R25_MUSIC)
+    R25_SRAM_END();
+#endif
 }
 static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
 {
     volatile const uint8_t* const src = (volatile const uint8_t*)(DOOM_SRAM_FIRST + ((uint32_t)slot << 8));
+#if defined(DOOM_R25_MUSIC)
+    R25_SRAM_BEGIN();
+#endif
     for (uint16_t i = 0; i < size; ++i)
         dest[i] = src[(uint16_t)(i << 1)];
+#if defined(DOOM_R25_MUSIC)
+    R25_SRAM_END();
+#endif
 }
 #endif
 
@@ -2277,6 +2295,9 @@ int R_SramCacheInit(void)
         sramHotSlots[i] = 0xFF;
         sramHotAge[i] = (uint8_t)i;
     }
+#endif
+#if defined(DOOM_R25_MUSIC)
+    R25_SRAM_END();
 #endif
     return ok1 && ok2;
 }
