@@ -151,7 +151,7 @@ static void P_StartButton(const line_t __far* line, bwhere_e w, int16_t texture,
       _g_buttonlist[i].btimer = time;
       /* use sound origin of line itself - no need to compatibility-wrap
        * as the popout code gets it wrong whatever its value */
-      _g_buttonlist[i].soundorg = &LN_FRONTSECTOR(line)->soundorg;
+      _g_buttonlist[i].soundorg = SECTOR_SOUND(LN_FRONTSECTOR(line));
       return;
     }
 
@@ -233,7 +233,7 @@ void P_ChangeSwitchTexture(const line_t __far* line, boolean useAgain)
             break;
     }
 
-    S_StartSound2(&LN_FRONTSECTOR(line)->soundorg, sfx_swtchn);
+    S_StartSound2(SECTOR_SOUND(LN_FRONTSECTOR(line)), sfx_swtchn);
 
     if (useAgain)
         P_StartButton(line, position, switchlist[i], BUTTONTIME);
@@ -359,7 +359,7 @@ static void EV_VerticalDoor(const line_t __far* line, mobj_t __far* thing)
   }
 
   // emit proper sound
-  S_StartSound2(&sec->soundorg,sfx_doropn); // normal or locked door sound
+  S_StartSound2(SECTOR_SOUND(sec),sfx_doropn); // normal or locked door sound
 
   // new door thinker
   door = Z_CallocLevSpec(sizeof(*door));

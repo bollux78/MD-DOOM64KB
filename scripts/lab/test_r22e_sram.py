@@ -23,6 +23,7 @@ code=r'''
 #define MF_NOSECTOR 1
 #define MF_NOBLOCKMAP 2
 #define MAPBLOCKSHIFT 0
+#define SUBSECTOR_SECTOR(s) ((s)->sector)
 #define false 0
 #define true 1
 typedef int boolean;

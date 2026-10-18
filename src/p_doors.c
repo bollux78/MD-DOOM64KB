@@ -116,12 +116,12 @@ void T_VerticalDoor(vldoor_t __far* door)
         {
           case normal:
             door->direction = -1; // time to go back down
-            S_StartSound2(&door->sector->soundorg,sfx_dorcls);
+            S_StartSound2(SECTOR_SOUND(door->sector),sfx_dorcls);
             break;
 
           case close30ThenOpen:
             door->direction = 1;  // time to go back up
-            S_StartSound2(&door->sector->soundorg,sfx_doropn);
+            S_StartSound2(SECTOR_SOUND(door->sector),sfx_doropn);
             break;
 
           default:
@@ -173,7 +173,7 @@ void T_VerticalDoor(vldoor_t __far* door)
       {
         // other types bounce off the obstruction
         door->direction = 1;
-        S_StartSound2(&door->sector->soundorg,sfx_doropn);
+        S_StartSound2(SECTOR_SOUND(door->sector),sfx_doropn);
       }
       break;
 
@@ -268,7 +268,7 @@ boolean EV_DoDoor(const line_t __far* line, vldoor_e type)
       case close30ThenOpen:
         door->topheight = sec->ceilingheight;
         door->direction = -1;
-        S_StartSound2(&door->sector->soundorg,sfx_dorcls);
+        S_StartSound2(SECTOR_SOUND(door->sector),sfx_dorcls);
         break;
 
       case normal:
@@ -277,7 +277,7 @@ boolean EV_DoDoor(const line_t __far* line, vldoor_e type)
         door->topheight = P_FindLowestCeilingSurrounding(sec);
         door->topheight -= 4*FRACUNIT;
         if (door->topheight != sec->ceilingheight)
-          S_StartSound2(&door->sector->soundorg,sfx_doropn);
+          S_StartSound2(SECTOR_SOUND(door->sector),sfx_doropn);
         break;
 
       default:

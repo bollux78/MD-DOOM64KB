@@ -89,7 +89,9 @@ typedef struct
   fixed_t ceilingheight;
 
   mobj_t __far* soundtarget;   // thing that made a sound (or null)
+#if !defined(DOOM_R23_MAPMEM)
   degenmobj_t soundorg;  // origin for any sounds played by the sector
+#endif
   mobj_t __far* thinglist;     // list of mobjs in sector
 
 
@@ -120,6 +122,13 @@ typedef struct
   int16_t soundtraversed;    // 0 = untraversed, 1,2 = sndlines-1
 
 } sector_t;
+
+#if defined(DOOM_R23_MAPMEM)
+extern degenmobj_t *r23_soundorgs;
+#define SECTOR_SOUND(s) (&r23_soundorgs[(s)-_g_sectors])
+#else
+#define SECTOR_SOUND(s) (&(s)->soundorg)
+#endif
 
 typedef struct {
   int16_t floorheight;

@@ -105,6 +105,11 @@ def apply(payload,basebytes):
  for num in [1,2,8]:
   a,b=associations(map_at(base,f'E1M{num}'));base.extend([(f'S{num}LINES',a),(f'S{num}OFFS',b)])
   mm=map_at(base,f'E1M{num}');segs=recs(mm['SEGS'],'>hhhhHHHHBB');subs=recs(mm['SSECTORS'],'>hh');base.append((f'S{num}SUBS',bytes(segs[first][8] for count,first in subs)))
+  lines=recs(mm['LINEDEFS'],'>hhhhHhhHHhhhhhBbb');sides=recs(mm['SIDEDEFS'],'>hBbbbB');sounds=[]
+  for sec in range(len(mm['SECTORS'])//12):
+   own=[l for l in lines if sides[l[7]][-1]==sec or (l[8]!=65535 and sides[l[8]][-1]==sec)];xs=[v for l in own for v in (l[0],l[2])];ys=[v for l in own for v in (l[1],l[3])];assert own
+   sounds.append(struct.pack('>ii',(min(xs)+max(xs))*32768,(min(ys)+max(ys))*32768))
+  base.append((f'S{num}SOUND',b''.join(sounds)))
  out=write_wad(base);check=read_wad(out,True)
  for name in ['E1M1','E1M8']:assert map_at(check,name)==map_at(read_wad(basebytes,True),name)
  assert map_at(check,'E1M2')==new;report['converted_wad_sha256']=hashlib.sha256(out).hexdigest();report['wad_bytes']=len(out);return out,report

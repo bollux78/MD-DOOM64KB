@@ -83,7 +83,7 @@ void T_PlatRaise(plat_t __far* plat)
       if (plat->type == raiseToNearestAndChange)
       {
         if (!((int16_t)_g_leveltime&7))
-          S_StartSound2(&plat->sector->soundorg, sfx_stnmov);
+          S_StartSound2(SECTOR_SOUND(plat->sector), sfx_stnmov);
       }
 
       // if encountered an obstacle, and not a crush type, reverse direction
@@ -91,7 +91,7 @@ void T_PlatRaise(plat_t __far* plat)
       {
         plat->count = plat->wait;
         plat->status = down;
-        S_StartSound2(&plat->sector->soundorg, sfx_pstart);
+        S_StartSound2(SECTOR_SOUND(plat->sector), sfx_pstart);
       }
       else  // else handle reaching end of up stroke
       {
@@ -100,7 +100,7 @@ void T_PlatRaise(plat_t __far* plat)
           // not an instant toggle type, wait, make plat stop sound
           plat->count = plat->wait;
           plat->status = waiting;
-          S_StartSound2(&plat->sector->soundorg, sfx_pstop);
+          S_StartSound2(SECTOR_SOUND(plat->sector), sfx_pstop);
 
           // lift types and pure raise types are done at end of up stroke
           // only the perpetual type waits then goes back up
@@ -125,7 +125,7 @@ void T_PlatRaise(plat_t __far* plat)
         // not an instant toggle, start waiting, make plat stop sound
         plat->count = plat->wait;
         plat->status = waiting;
-        S_StartSound2(&plat->sector->soundorg,sfx_pstop);
+        S_StartSound2(SECTOR_SOUND(plat->sector),sfx_pstop);
 
         //jff 1/26/98 remove the plat if it bounced so it can be tried again
         //only affects plats that raise and bounce
@@ -151,7 +151,7 @@ void T_PlatRaise(plat_t __far* plat)
           plat->status = down;   // if at top, start down
 
         // make plat start sound
-        S_StartSound2(&plat->sector->soundorg,sfx_pstart);
+        S_StartSound2(SECTOR_SOUND(plat->sector),sfx_pstart);
       }
       break;
   }
@@ -216,7 +216,7 @@ boolean EV_DoPlat(const line_t __far* line, plattype_e type)
         //jff 3/14/98 clear old field as well
         sec->oldspecial = 0;
 
-        S_StartSound2(&sec->soundorg,sfx_stnmov);
+        S_StartSound2(SECTOR_SOUND(sec),sfx_stnmov);
         break;
 
       case downWaitUpStay:
@@ -229,7 +229,7 @@ boolean EV_DoPlat(const line_t __far* line, plattype_e type)
         plat->high = sec->floorheight;
         plat->wait = 35*PLATWAIT;
         plat->status = down;
-        S_StartSound2(&sec->soundorg,sfx_pstart);
+        S_StartSound2(SECTOR_SOUND(sec),sfx_pstart);
         break;
 
       default:

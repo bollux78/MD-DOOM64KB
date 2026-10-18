@@ -118,6 +118,9 @@ const byte __far* _g_rejectmatrix;
 
 mobj_t __far*      _g_thingPool;
 int16_t _g_thingPoolSize;
+#if defined(DOOM_R23_MAPMEM)
+degenmobj_t *r23_soundorgs;
+#endif
 
 
 // Lump order in a map WAD: each map needs a couple of lumps
@@ -430,6 +433,7 @@ static void P_GroupLines (void)
 #if defined(DOOM_R23_MAPMEM)
     char name[9];sprintf(name,"S%dLINES",_g_gamemap);
     const uint16_t *indices=W_GetLumpByName(name);
+    sprintf(name,"S%dSOUND",_g_gamemap);r23_soundorgs=(degenmobj_t*)W_GetLumpByName(name);
     sprintf(name,"S%dOFFS",_g_gamemap);
     const uint16_t *offsets=W_GetLumpByName(name);
     for(i=0;i<_g_numsectors;i++){
@@ -470,6 +474,7 @@ static void P_GroupLines (void)
 #endif
     for (i=0, sector = _g_sectors; i<_g_numsectors; i++, sector++)
     {
+#if !defined(DOOM_R23_MAPMEM)
         fixed_t bbox[4];
         M_ClearBox(bbox);
 
@@ -481,6 +486,7 @@ static void P_GroupLines (void)
 
         sector->soundorg.x = bbox[BOXRIGHT]/2+bbox[BOXLEFT]/2;
         sector->soundorg.y = bbox[BOXTOP]/2+bbox[BOXBOTTOM]/2;
+#endif
     }
 }
 

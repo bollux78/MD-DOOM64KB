@@ -65,6 +65,7 @@
 #include "am_map.h"
 #include "m_cheat.h"
 #include "globdata.h"
+#include "r22_mapdiag.h"
 
 static void D_DoAdvanceDemo(void);
 static void D_PageDrawer(void);
@@ -569,7 +570,10 @@ __attribute__((used,externally_visible)) void R23_ProbeMain(void){
         if(i==3)_g_gameskill=sk_hard;
         _g_gamemap=maps[i];_g_player.playerstate=PST_REBORN;
         P_SetupLevel(maps[i]);
+        Z_CheckHeap();
         *(volatile uint16_t*)0xA00002=maps[i];
+        *(volatile uint16_t*)0xA00002=r22_map_trace[(r22_map_head+15)&15].free;
+        *(volatile uint16_t*)0xA00002=r22_map_trace[(r22_map_head+15)&15].largest;
     }
     *(volatile uint16_t*)0xA00002=0;
     *(volatile uint16_t*)0xA00004=0;for(;;){}

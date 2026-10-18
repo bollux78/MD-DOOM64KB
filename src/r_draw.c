@@ -2132,11 +2132,11 @@ static uint16_t CACHE_ENTRY(int16_t column, int16_t texture)
 	return column | (texture << 8);
 }
 
-#if !defined(DOOM_SRAM_CACHE16)
+#if !defined(DOOM_SRAM_CACHE16) && !defined(DOOM_R23_MAPMEM)
 static byte __far columnCache[MAX_CACHE_ENTRIES*128];
 #endif
 static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
-#if defined(DOOM_SRAM_CACHE16)
+#if defined(DOOM_SRAM_CACHE16) || defined(DOOM_R23_MAPMEM)
 /*
  * Standard Mega Drive cartridge SRAM is an 8-bit device on the ODD data
  * lane: 0x200001, 0x200003, ... . It is NOT byte-contiguous in 68000
@@ -2148,7 +2148,11 @@ static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
 #if MAX_CACHE_ENTRIES != 16
 #error DOOM_SRAM_CACHE16 requires DOOM_CACHE_SLOTS=16
 #endif
+#if defined(DOOM_R23_MAPMEM)
+#define DOOM_SRAM_FIRST 0x0020F001UL
+#else
 #define DOOM_SRAM_FIRST 0x00200001UL
+#endif
 #define DOOM_SRAM_CONTROL 0x00A130F1UL
 static byte tmpCache[128];
 #if defined(DOOM_SRAM_FASTCOPY)
@@ -2245,7 +2249,7 @@ int R_SramCacheInit(void)
 {
     volatile uint8_t* const control = (volatile uint8_t*)DOOM_SRAM_CONTROL;
     volatile uint8_t* const first = (volatile uint8_t*)DOOM_SRAM_FIRST;
-    volatile uint8_t* const last = (volatile uint8_t*)0x00200FFFUL;
+    volatile uint8_t* const last = (volatile uint8_t*)(DOOM_SRAM_FIRST+4094UL);
     *control = 1; /* enable SRAM; writable, do not disable during demo */
     const uint8_t saved_first = *first;
     const uint8_t saved_last = *last;
@@ -2342,7 +2346,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     uint16_t cachekey = FindColumnCacheItem(texture, xc);
 #endif
 
-#if defined(DOOM_SRAM_CACHE16)
+#if defined(DOOM_SRAM_CACHE16) || defined(DOOM_R23_MAPMEM)
     byte __far* colcache = tmpCache;
 #else
     byte __far* colcache = &columnCache[cachekey*128];
@@ -2361,7 +2365,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         if (cacheEntry != 0)
             doom_cache_evictions++;
 #endif
-#if !defined(DOOM_SRAM_CACHE16)
+#if !defined(DOOM_SRAM_CACHE16) && !defined(DOOM_R23_MAPMEM)
 #if !defined(DOOM_R20_CACHE_DIRECT)
         static byte tmpCache[128];
 #else
@@ -2394,7 +2398,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
         } while(++i < patchcount);
 
         //Block copy will drop low 2 bits of len.
-#if defined(DOOM_SRAM_CACHE16)
+#if defined(DOOM_SRAM_CACHE16) || defined(DOOM_R23_MAPMEM)
         SramCacheCopyTo(cachekey, tmpCache, (tex->height + 3) & ~3);
 #else
 #if !defined(DOOM_R20_CACHE_DIRECT)
@@ -2408,7 +2412,7 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     else
         doom_cache_hits++;
 #endif
-#if defined(DOOM_SRAM_CACHE16)
+#if defined(DOOM_SRAM_CACHE16) || defined(DOOM_R23_MAPMEM)
     /* Do not alter SRAM's 16-slot hash/replacement scheme. The RAM front
      * cache only eliminates SRAM reads for recent repeated accesses. */
 #if defined(DOOM_SRAM_HOT_SLOTS)

@@ -278,7 +278,11 @@ static void I_ShutdownTimer(void)
 
 // 調整可能。リンク時 RAM 使用量を見て増減する。
 #ifndef HEAP_SIZE
+#if defined(DOOM_R23_MAPMEM)
+#define HEAP_SIZE (43 * 1024 + 2176) /* 1920 freed cache bytes + 256 SGDK margin. */
+#else
 #define HEAP_SIZE (43 * 1024)
+#endif
 #endif
 
 
@@ -347,6 +351,8 @@ void I_Error(const char *error, ...)
 #if defined(DOOM_R23_CPU_PROBE)
     (void)error;
     *(volatile uint16_t*)0xA00002=100+r22_map_stage;
+    *(volatile uint16_t*)0xA00002=r22_map_failed_stage;
+    *(volatile uint16_t*)0xA00002=r22_map_request;
     *(volatile uint16_t*)0xA00004=0;for(;;){}
 #endif
 	va_list argptr;

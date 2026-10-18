@@ -10,9 +10,9 @@ static uint16_t line_base,side_base,node_base,node_capacity,node_used;
 static msecnode_t *node_free;
 void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells){
     uint32_t end=(uint32_t)cells*4+(uint32_t)lines*sizeof(linedata_t)+(uint32_t)sides*sizeof(side_t);
-    if(end>32768UL)I_Error("SRAM MAP STATE TOO LARGE");
+    if(end>30720UL)I_Error("SRAM MAP STATE TOO LARGE");
     line_base=cells*4;side_base=line_base+lines*sizeof(linedata_t);node_base=(uint16_t)end;
-    node_capacity=(32768UL-end)/sizeof(msecnode_t);node_used=0;node_free=NULL;end=32768UL;
+    node_capacity=(30720UL-end)/sizeof(msecnode_t);node_used=0;node_free=NULL;end=32768UL;
     R22_SRAM_ENABLE();
     uint16_t pos[18],n=0;uint8_t saved[18];
     pos[n++]=0;for(uint32_t bit=1;bit<end;bit<<=1)pos[n++]=(uint16_t)bit;
