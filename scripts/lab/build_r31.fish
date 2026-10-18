@@ -201,9 +201,16 @@ for v in $variants
     cp out/rom.bin "$dest/$id.bin"; or exit 1
     cp out/release/rom.out "$dest/$id.elf"; or exit 1
     cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare exact distance to 2 MiB.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
     set built $built $id
 end
 cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+python3 scripts/lab/audit_r31_wad.py scripts/doom64_aligned.wad "$dest/WAD-COMPRESSIBILITY.json"; or exit 1
 python3 scripts/lab/audit_r31.py "$dest" $variants; or exit 1
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
 echo "READY: R31 XGM2 genuine Doom PCM lab, Bayer8 and complete music retained; sound quality and real hardware not yet tested"
