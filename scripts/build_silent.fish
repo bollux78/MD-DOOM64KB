@@ -291,27 +291,26 @@ if set -q DOOM_R20_DEFINES
     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
         test -n "$d"; or continue
         # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
-        string match -qr -- '^-DDOOM_R2[0123456789]_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
+        string match -qr -- '^-DDOOM_R2[0-9]_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
             echo "Invalid DOOM_R20_DEFINES entry: $d"
             exit 1
         end
         set render_flags "$render_flags $d"
     end
 end
-# R29: verify full episode and XGM2 defines reach the actual compiler flags.
+# R29 builds must carry their audio macros; reject mislabeled control/experiment ROMs.
 if set -q DOOM_BUILD_ID
     if string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
         if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
-            echo 'ERROR: R29 DOOM_R25_MUSIC lost'
+            echo 'R29 build refused: no DOOM_R25_MUSIC macro'
             exit 1
         end
         if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
             if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
-                echo 'ERROR: R29 DOOM_R29_XGM2 lost'
+                echo 'R29 build refused: no DOOM_R29_XGM2 macro'
                 exit 1
             end
         end
-        echo "R29 flags confirmed: $DOOM_BUILD_ID"
     end
 end
 # R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
