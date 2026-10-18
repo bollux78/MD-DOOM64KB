@@ -181,7 +181,13 @@ void DMX_Play(sfxenum_t id, int16_t channel)
 	/* Music may use channel 1; only channels 2 and 3 available for SFX. */
 	SoundPCMChannel pcmch = (channel & 1) ? SOUND_PCM_CH3 : SOUND_PCM_CH2;
 	XGM2_playPCMEx(gensfx[id].data, gensfx[id].len, pcmch,
-	                 gensfx[id].prio, FALSE, FALSE);
+	                 gensfx[id].prio,
+#if defined(DOOM_R31_SFX)
+	                 gensfx[id].half_rate != 0,
+#else
+	                 FALSE,
+#endif
+	                 FALSE);
 #else
 	// classic XGM は ch を CH1..CH4 で明示指定する(CH_AUTO は XGM2 専用で無効)。
 	// doom 論理ch(0..2)を PCM ch2..ch4 に対応させ最大3音同時(ch1は音楽用に温存)。
