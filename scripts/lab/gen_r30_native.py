@@ -5,7 +5,7 @@
 Run before the R30 build; generated .s/.h/.bin are intermediate build inputs.
 """
 from pathlib import Path
-import collections,hashlib,json,struct
+import argparse,collections,hashlib,json,struct
 ROOT=Path(__file__).resolve().parents[2]
 WAD=ROOT/'scripts/doom64.wad'
 NAMES=('TITLEPIC','WIMAP0','HELP2')
@@ -118,6 +118,133 @@ def image_quantize(tiles,rgbs):
         groups[idx]=min(range(4),key=lambda g:sum(n*lookup[g][i][0] for i,n in hist.items()))
     return pals,groups,lookup
 
+
+# R30b Adaptive Bayer: all processing happens offline in this generator.
+# The 68k renderer and packed graphics decoder are *unchanged* from R30.
+#
+# Unlike arbitrary RGB noise, Bayer selects a controlled mix of TWO colors
+# from the SAME Mega Drive 16-color palette, so no new colors or VRAM are used.
+# Bank and palette optimization is done before dithering; each 8x8 tile retains
+# its single valid CRAM palette bank.
+def bayer_matrix(size):
+    assert size in (4, 8)
+    mat=[[0]]
+    while len(mat)<size:
+        n=len(mat)
+        offsets=((0,2),(3,1))
+        mat=[[4*mat[y%n][x%n] + offsets[y//n][x//n]
+              for x in range(2*n)] for y in range(2*n)]
+    assert sorted(v for row in mat for v in row)==list(range(size*size))
+    return mat
+
+def image_raster(tiles):
+    # Pixel coordinates remain continuous across tile boundaries. Avoid
+    # restarting the Bayer pattern or edge detector at every tile.
+    w,h=320,224
+    raster=[-1]*(w*h)
+    for index,tile in enumerate(tiles):
+        x0=(index%40)*8;y0=(index//40)*8
+        for yy in range(8):
+            start=(y0+yy)*w+x0
+            raster[start:start+8]=tile[yy*8:yy*8+8]
+    return raster
+
+def adaptive_bayer_plan(pals,rgbs,lookup):
+    # Best two-color blend estimate for each source-color/palette combination.
+    # Reserve zero for transparent background and palette index 15 for font.
+    # Penalize high-contrast pairs: ordered dithering should not look like noise.
+    allplans=[]
+    for bank in range(4):
+        plans=[None]*256
+        for idx,src in enumerate(rgbs):
+            nearest_error,base=lookup[bank][idx]
+            if nearest_error<90:
+                continue
+            base_rgb=pals[bank][base-1]
+            choices=sorted(range(1,15),
+                           key=lambda p:(error(src,pals[bank][p-1]),p))[:7]
+            best=None;bestscore=nearest_error
+            for alt in choices:
+                if alt==base:continue
+                alt_rgb=pals[bank][alt-1]
+                dist=error(base_rgb,alt_rgb)
+                if not 1800<=dist<=72000:
+                    continue
+                delta=sum(w*(s-b)*(a-b) for w,s,b,a in
+                          zip((3,4,2),src,base_rgb,alt_rgb))
+                frac=max(0.0,min(1.0,delta/dist))
+                if not 0.12<=frac<=0.87:
+                    continue
+                mid=tuple(b+frac*(a-b) for b,a in zip(base_rgb,alt_rgb))
+                mixed_error=error(src,mid)
+                # Approximate variance penalty of a 2-color checker texture.
+                score=mixed_error + 0.055*dist*frac*(1-frac)
+                if score < bestscore:
+                    bestscore=score
+                    best=(alt,frac)
+            if best is not None and bestscore < nearest_error*0.73 \
+                    and nearest_error-bestscore>180:
+                plans[idx]=best
+        allplans.append(plans)
+    return allplans
+
+def adaptive_pixels(tiles,pals,groups,lookup,rgbs,mode):
+    """Yield 8x8 indexed tiles, retaining the R30 per-tile CRAM bank.
+
+    Dither strength attenuates near visible luminance discontinuities,
+    and is disabled when the palette already accurately represents a
+    source color. Matrix phase is in absolute 320x224 display coordinates.
+    """
+    if mode=='none':
+        return [[0 if src<0 else lookup[bank][src][1]
+                 for src in tile] for bank,tile in zip(groups,tiles)],0,0
+
+    size=int(mode[-1]);matrix=bayer_matrix(size);div=size*size
+    plans=adaptive_bayer_plan(pals,rgbs,lookup)
+    raster=image_raster(tiles);w=320;h=224
+    luminance=[(3*r+6*g+b)//10 for r,g,b in rgbs]
+    changed=0;eligible=0;out=[]
+    for tindex,(bank,tile) in enumerate(zip(groups,tiles)):
+        x0=(tindex%40)*8;y0=(tindex//40)*8
+        translated=[]
+        for q,src in enumerate(tile):
+            if src<0:
+                translated.append(0);continue
+            closest=lookup[bank][src][1]
+            pair=plans[bank][src]
+            if pair is None:
+                translated.append(closest);continue
+            eligible+=1
+            x=x0+(q%8);y=y0+(q//8);absolute=y*w+x
+            l=luminance[src]
+            grad=0
+            # Edge-aware suppression; the neighbors may lie in other 8x8 tiles.
+            for neighbor in (absolute-1 if x>0 else absolute,
+                             absolute+1 if x+1<w else absolute,
+                             absolute-w if y>0 else absolute,
+                             absolute+w if y+1<h else absolute):
+                other=raster[neighbor]
+                if other>=0:
+                    diff=abs(l-luminance[other])
+                    if diff>grad:grad=diff
+            # Preserve sharp text / silhouette contours. Apply full strength
+            # to smooth tonal regions, then fade to zero at abrupt transitions.
+            if grad>=63:
+                strength=0.0
+            elif grad<=22:
+                strength=0.90
+            else:
+                strength=0.90*(63-grad)/41
+            alt,frac=pair
+            threshold=(matrix[y%size][x%size]+0.5)/div
+            if strength>0 and threshold<frac*strength:
+                translated.append(alt)
+                changed+=1
+            else:
+                translated.append(closest)
+        out.append(translated)
+    return out,changed,eligible
+
 def pack_tile(tile):
     assert len(tile)==32
     out=bytearray();i=0
@@ -145,14 +272,17 @@ def decode_one(buf,pos):
     return bytes(out),pos
 
 def main():
+    parser=argparse.ArgumentParser(description="R30b optional offline adaptive Bayer dither")
+    parser.add_argument('--dither',choices=('none','bayer4','bayer8'),default='none')
+    args=parser.parse_args()
     d=lumps();pp=d['PLAYPAL'];rgbs=[wad_rgb(struct.unpack_from('>H',pp,i*2)[0]) for i in range(256)]
     results=[]
     for name,key in zip(NAMES,KEYS):
         src=d[name];tiles=tiles_for(src)
         pals,groups,lookup=image_quantize(tiles,rgbs)
+        quantized,changed,eligible=adaptive_pixels(tiles,pals,groups,lookup,rgbs,args.dither)
         unique={};blobs=[];maps=[]
-        for bank,tile in zip(groups,tiles):
-            pix=[0 if color<0 else lookup[bank][color][1] for color in tile]
+        for bank,pix in zip(groups,quantized):
             raw=bytes(pix[q]*16+pix[q+1] for q in range(0,64,2))
             if raw not in unique:
                 unique[raw]=len(unique);blobs.append(pack_tile(raw))
@@ -177,7 +307,9 @@ def main():
         results.append(dict(name=name,key=key,tiles=len(unique),
                  packed_bytes=len(packed),map_bytes=len(files['map']),
                  palette_bytes=len(files['pal']),raw_source_bytes=len(src),
-                 source_sha256=hashlib.sha256(src).hexdigest()))
+                 source_sha256=hashlib.sha256(src).hexdigest(),
+                 adaptive_dither=args.dither,changed_pixels=changed,
+                 candidate_pixels=eligible))
     header=['/* Generated by scripts/lab/gen_r30_native.py. */',
             '#ifndef R30_STATIC_MANIFEST_H','#define R30_STATIC_MANIFEST_H']
     header.extend(f'#define R30_{item["key"].upper()}_TILES {item["tiles"]}u' for item in results)
@@ -193,6 +325,7 @@ def main():
     (ROOT/'src/r30_static_data.s').write_text('\n'.join(asm)+'\n')
     report={'source_wad_sha256':hashlib.sha256(WAD.read_bytes()).hexdigest(),
             'mode':'H40/320x224, real 4bpp pixels, BG_B, 4x14-colour per-tile palette',
+            'adaptive_dither':args.dither,
             'screens':results}
     print(json.dumps(report,indent=2))
     (ROOT/'res/r30-native-report.json').write_text(json.dumps(report,indent=2)+'\n')
