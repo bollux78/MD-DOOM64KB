@@ -1,0 +1,174 @@
+name: R33 - Sonic vs SGDK compression lab (no ROM changes)
+on:
+  push:
+    branches: [r33-compression-study]
+  workflow_dispatch:
+concurrency:
+  group: r33-compression
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  benchmark:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - name: Preflight Python analyses
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist/r33
+          python3 -m py_compile scripts/lab/bench_r33_pcm.py scripts/lab/bench_r33_wad.py \
+            scripts/lab/bench_r33_sonic.py
+          python3 - <<'PY'
+          import importlib.util
+          for file in ('bench_r33_pcm.py','bench_r33_wad.py'):
+              spec=importlib.util.spec_from_file_location('testmod','scripts/lab/'+file)
+              module=importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              for raw in (b'',b'A',b'\x00'*256,bytes(range(256)),b'\xff\xff\x00\x00\x00A'*52):
+                  assert module.unrle(module.rle(raw))==raw if file.endswith('pcm.py') else module.inverse_rle(module.rle(raw))==raw
+          print('Lossless RLE smoke tests: OK')
+          PY
+      - name: Obtain checksum-verified public Doom shareware sound source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import urllib.request,gzip,hashlib
+          target=Path('scripts/doom1.wad')
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest()==expected:
+              print('Pinned shareware source already present')
+              raise SystemExit(0)
+          url='https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz'
+          request=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB reproducible research R33/1.0'})
+          with urllib.request.urlopen(request,timeout=165) as resp:
+              blob=resp.read(9000000)
+          uncompressed=gzip.decompress(blob)
+          actual=hashlib.sha256(uncompressed).hexdigest()
+          assert actual==expected and len(uncompressed)==4196020,(len(uncompressed),actual)
+          target.write_bytes(uncompressed)
+          print('Verified DOOM1.WAD shareware 1.9',len(uncompressed),actual)
+          PY
+      - name: Reconstruct identical R31 WAD and Bayer8 graphics
+        shell: bash
+        run: |
+          set -e
+          python3 scripts/lab/gen_r30_native.py --dither bayer8 > dist/r33/GFX-BASE.json
+          python3 scripts/lab/convert_r24_episode.py \
+            --payload assets/r24-episode.json \
+            --base scripts/doom64.wad \
+            --out dist/r33/episode-repacked.wad \
+            --report dist/r33/maps.json
+          cp dist/r33/episode-repacked.wad scripts/doom64.wad
+          DOOM_R30_NATIVE=1 DOOM_WAD_DEDUP=1 DOOM_R25_MUSIC=1 \
+             python3 scripts/repack_wad.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/doom64_aligned.wad').stat().st_size
+          assert s==1481876,s
+          print('R31-style aligned WAD',s)
+          PY
+      - name: Analyze 52 real PCM and byte-exact WAD compression
+        shell: bash
+        run: |
+          set -e
+          python3 scripts/lab/bench_r33_pcm.py
+          python3 scripts/lab/bench_r33_wad.py
+      - name: Prepare optional pinned Sonic mdcomp tools
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -u
+          if ! command -v cmake >/dev/null; then
+            echo "No cmake; report still includes main codec measurements"
+            exit 0
+          fi
+          toolroot="$RUNNER_TEMP/r33-mdcomp"
+          rm -rf "$toolroot"
+          if ! timeout 80 git clone -q --no-checkout --depth=1 \
+               https://github.com/flamewing/mdcomp.git "$toolroot"; then
+            echo "External codec clone unavailable; optional stage skipped"
+            exit 0
+          fi
+          if ! git -C "$toolroot" fetch --depth=1 origin \
+               72c6df405a75d322c5b3722da46c3abb864d3793; then
+            echo "Pinned revision unavailable; optional stage skipped"
+            exit 0
+          fi
+          git -C "$toolroot" checkout -q 72c6df405a75d322c5b3722da46c3abb864d3793
+          if ! timeout 85 cmake -S "$toolroot" -B "$toolroot/_build" \
+               -DCMAKE_BUILD_TYPE=Release > dist/r33/mdcomp-config.log 2>&1; then
+            echo "mdcomp needs optional dependencies: see log"
+            exit 0
+          fi
+          timeout 150 cmake --build "$toolroot/_build" --parallel 2 \
+              --target kosinskicmp saxmancmp compcmp nemesiscmp enigmacmp \
+              > dist/r33/mdcomp-build.log 2>&1 || true
+          find "$toolroot/_build" -type f \( -name kosinskicmp -o -name saxmancmp \) \
+            -print | head -8
+      - name: Measure actual Kosinski, Saxman, Comper, Nemesis and Enigma
+        shell: bash
+        run: |
+          set -e
+          toolroot="$RUNNER_TEMP/r33-mdcomp/_build"
+          if test -d "$toolroot"; then
+            found="$(find "$toolroot" -type f -name kosinskicmp -print -quit)"
+            if test -n "$found"; then
+              export DOOM_R33_MDCOMP_DIR="$(dirname "$found")"
+            fi
+          fi
+          python3 scripts/lab/bench_r33_sonic.py
+      - name: Publish compact reports on R33 branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p docs/review-r33 dist/r33
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path('dist/r33')
+          report=dict(run_id=os.environ['GITHUB_RUN_ID'],sha=os.environ['GITHUB_SHA'])
+          for filename in ('PCM-ALGORITHMS.json','WAD-ALGORITHMS.json','SONIC-FORMATS.json'):
+              f=p/filename
+              if not f.is_file():
+                  report[filename]=dict(status='NOT_GENERATED')
+                  continue
+              data=json.loads(f.read_text())
+              if filename=='PCM-ALGORITHMS.json':
+                  report[filename]=dict(
+                      modes={mode:dict(total_bytes=v['bytes'],adpcm_snr_db=v['adpcm_snr_db'],
+                            biggest_sfx=dict(name=v['max_sample']['sound'],
+                            bytes=v['max_sample']['pcm_aligned_bytes']))
+                            for mode,v in data['modes'].items()})
+              elif filename=='WAD-ALGORITHMS.json':
+                  report[filename]=dict(categories=data['categories'],
+                      unique_lumps=data['unique_lumps'],
+                      optimal_offline_upper_bound=data['per_object_best_theoretical_saved'])
+              else:
+                  report[filename]=dict(installed=data['installed'],results=data['results'])
+          dest=pathlib.Path('docs/review-r33/CI-LAST-RESULT.json')
+          dest.write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(report,ensure_ascii=False,indent=2)[:15000])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r33/CI-LAST-RESULT.json
+          git commit -m "R33: measured compression by data class [skip ci]" || true
+          git push origin HEAD:r33-compression-study
+      - name: Upload compression reports (no WAD or PCM sample binaries)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r33-compression-research
+          path: |
+            dist/r33/PCM-ALGORITHMS.json
+            dist/r33/WAD-ALGORITHMS.json
+            dist/r33/SONIC-FORMATS.json
+            dist/r33/GFX-BASE.json
+            dist/r33/mdcomp-config.log
+            dist/r33/mdcomp-build.log
+          if-no-files-found: warn
+          retention-days: 90
