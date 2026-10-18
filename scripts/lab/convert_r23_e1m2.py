@@ -104,6 +104,7 @@ def apply(payload,basebytes):
  base=read_wad(basebytes,True);new,report=convert(payload,base);i=next(i for i,x in enumerate(base) if x[0]=='E1M2');base[i+1:i+10]=[(k,new[k]) for k in TARGET_ORDER]
  for num in [1,2,8]:
   a,b=associations(map_at(base,f'E1M{num}'));base.extend([(f'S{num}LINES',a),(f'S{num}OFFS',b)])
+  mm=map_at(base,f'E1M{num}');segs=recs(mm['SEGS'],'>hhhhHHHHBB');subs=recs(mm['SSECTORS'],'>hh');base.append((f'S{num}SUBS',bytes(segs[first][8] for count,first in subs)))
  out=write_wad(base);check=read_wad(out,True)
  for name in ['E1M1','E1M8']:assert map_at(check,name)==map_at(read_wad(basebytes,True),name)
  assert map_at(check,'E1M2')==new;report['converted_wad_sha256']=hashlib.sha256(out).hexdigest();report['wad_bytes']=len(out);return out,report

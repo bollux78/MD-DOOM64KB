@@ -295,8 +295,17 @@ typedef char assertSegSize[sizeof(seg_t) == 18 ? 1 : -1];
 
 typedef struct subsector_s
 {
+#if defined(DOOM_R23_MAPMEM)
+  uint8_t sector_index;
+#else
   sector_t __far* sector;
+#endif
 } subsector_t;
+#if defined(DOOM_R23_MAPMEM)
+#define SUBSECTOR_SECTOR(s) (&_g_sectors[(s)->sector_index])
+#else
+#define SUBSECTOR_SECTOR(s) ((s)->sector)
+#endif
 
 typedef struct {
 	int16_t		numsegs;

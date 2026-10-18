@@ -412,7 +412,7 @@ static void P_RecursiveSound(sector_t __far* sec, int16_t soundblocks, mobj_t __
 static void P_NoiseAlert(mobj_t __far* emitter)
 {
   validcount++;
-  P_RecursiveSound(emitter->subsector->sector, 0, emitter);
+  P_RecursiveSound(SUBSECTOR_SECTOR(emitter->subsector), 0, emitter);
 }
 
 

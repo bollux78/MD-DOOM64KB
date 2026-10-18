@@ -175,16 +175,16 @@ static boolean P_CheckSector(sector_t __far* sector)
 
   // Mark all things invalid
 
-  for (n=sector->touching_thinglist; n; n=n->m_snext)
-    n->visited = false;
+  for (n=sector->touching_thinglist; n; n=R23_GET(n,m_snext))
+    R23_SET(n,visited,false);
 
   do
-    for (n=sector->touching_thinglist; n; n=n->m_snext)  // go through list
-      if (!n->visited)               // unprocessed thing found
+    for (n=sector->touching_thinglist; n; n=R23_GET(n,m_snext))  // go through list
+      if (!R23_GET(n,visited))               // unprocessed thing found
         {
-        n->visited  = true;          // mark thing as processed
-        if (!(n->m_thing->flags & MF_NOBLOCKMAP)) //jff 4/7/98 don't do these
-          PIT_ChangeSector(n->m_thing);    // process it
+        R23_SET(n,visited,true);          // mark thing as processed
+        if (!(R23_GET(n,m_thing)->flags & MF_NOBLOCKMAP)) //jff 4/7/98 don't do these
+          PIT_ChangeSector(R23_GET(n,m_thing));    // process it
         break;                 // exit and start over
         }
   while (n);  // repeat from scratch until all things left are marked valid

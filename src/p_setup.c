@@ -155,7 +155,12 @@ static void P_LoadSubsectors (int16_t lump)
 {
   numsubsectors = W_LumpLength (lump) / sizeof(mapsubsector_t);
   _g_mapsubsectors = W_GetLumpByNum(lump);
+#if defined(DOOM_R23_MAPMEM)
+  char name[9];sprintf(name,"S%dSUBS",_g_gamemap);
+  _g_subsectors=(subsector_t*)W_GetLumpByName(name);
+#else
   _g_subsectors = Z_CallocLevel(numsubsectors * sizeof(subsector_t));
+#endif
 }
 
 //
@@ -405,6 +410,7 @@ static void P_GroupLines (void)
     int16_t j;
 
     // figgi
+#if !defined(DOOM_R23_MAPMEM)
     for (i=0 ; i<numsubsectors ; i++)
     {
         const seg_t __far* seg = &_g_segs[_g_mapsubsectors[i].firstseg];
@@ -420,6 +426,7 @@ static void P_GroupLines (void)
         }
     }
 
+#endif
 #if defined(DOOM_R23_MAPMEM)
     char name[9];sprintf(name,"S%dLINES",_g_gamemap);
     const uint16_t *indices=W_GetLumpByName(name);
@@ -526,7 +533,8 @@ void P_SetupLevel(int16_t map)
     lumpnum = W_GetNumForName(lumpname);
 
 #if defined(DOOM_R23_MAPMEM)
-    R23_MapMemoryInit(W_LumpLength(lumpnum+ML_LINEDEFS)/sizeof(line_t),W_LumpLength(lumpnum+ML_SIDEDEFS)/sizeof(mapsidedef_t));
+    const int16_t *bm=W_GetLumpByNum(lumpnum+ML_BLOCKMAP);
+    R23_MapMemoryInit(W_LumpLength(lumpnum+ML_LINEDEFS)/sizeof(line_t),W_LumpLength(lumpnum+ML_SIDEDEFS)/sizeof(mapsidedef_t),(uint16_t)bm[2]*(uint16_t)bm[3]);
 #endif
     R22_MapMark(map,2);
     P_LoadThings    (lumpnum + ML_THINGS);

@@ -192,8 +192,8 @@ boolean P_TeleportMove(mobj_t __far* thing, fixed_t x, fixed_t y, boolean boss)
   // Any contacted lines the step closer together
   // will adjust them.
 
-  _g_tmfloorz = _g_tmdropoffz = newsubsec->sector->floorheight;
-  _g_tmceilingz = newsubsec->sector->ceilingheight;
+  _g_tmfloorz = _g_tmdropoffz = SUBSECTOR_SECTOR(newsubsec)->floorheight;
+  _g_tmceilingz = SUBSECTOR_SECTOR(newsubsec)->ceilingheight;
 
   validcount++;
   _g_numspechit = 0;
@@ -464,8 +464,8 @@ boolean P_CheckPosition(mobj_t __far* thing, fixed_t x, fixed_t y)
   // Any contacted lines the step closer together
   // will adjust them.
 
-  _g_tmfloorz = _g_tmdropoffz = newsubsec->sector->floorheight;
-  _g_tmceilingz = newsubsec->sector->ceilingheight;
+  _g_tmfloorz = _g_tmdropoffz = SUBSECTOR_SECTOR(newsubsec)->floorheight;
+  _g_tmceilingz = SUBSECTOR_SECTOR(newsubsec)->ceilingheight;
   validcount++;
   _g_numspechit = 0;
 
@@ -1200,14 +1200,22 @@ void P_SetSecnodeFirstpoolToNull(void)
 
 inline static msecnode_t __far* P_GetSecnode(void)
 {
+#if defined(DOOM_R23_MAPMEM)
+  return R23_NodeAlloc();
+#else
   return (msecnode_t __far*)Z_BMalloc(&secnodezone);
+#endif
 }
 
 // P_PutSecnode() returns a node to the freelist.
 
 inline static void P_PutSecnode(msecnode_t __far* node)
 {
+#if defined(DOOM_R23_MAPMEM)
+  R23_NodeFree(node);
+#else
   Z_BFree(&secnodezone, node);
+#endif
 }
 
 // phares 3/16/98
@@ -1224,12 +1232,12 @@ static void P_AddSecnode(sector_t __far* s, mobj_t __far* thing)
   node = _s_sector_list;
   while (node)
     {
-    if (node->m_sector == s)   // Already have a node for this sector?
+    if (R23_GET(node,m_sector) == s)   // Already have a node for this sector?
       {
-      node->m_thing = thing; // Yes. Setting m_thing says 'keep it'.
+      R23_SET(node,m_thing,thing); // Yes. Setting m_thing says 'keep it'.
       return;
       }
-    node = node->m_tnext;
+    node = R23_GET(node,m_tnext);
     }
 
   // Couldn't find an existing node for this sector. Add one at the head
@@ -1238,21 +1246,21 @@ static void P_AddSecnode(sector_t __far* s, mobj_t __far* thing)
   node = P_GetSecnode();
 
   // killough 4/4/98, 4/7/98: mark new nodes unvisited.
-  node->visited = false;
+  R23_SET(node,visited,false);
 
-  node->m_sector = s;       // sector
-  node->m_thing  = thing;     // mobj
-  node->m_tprev  = NULL;    // prev node on Thing thread
-  node->m_tnext  = _s_sector_list;  // next node on Thing thread
+  R23_SET(node,m_sector,s);       // sector
+  R23_SET(node,m_thing,thing);     // mobj
+  R23_SET(node,m_tprev,NULL);    // prev node on Thing thread
+  R23_SET(node,m_tnext,_s_sector_list);  // next node on Thing thread
   if (_s_sector_list)
-    _s_sector_list->m_tprev = node; // set back link on Thing
+    R23_SET(_s_sector_list,m_tprev,node); // set back link on Thing
 
   // Add new node at head of sector thread starting at s->touching_thinglist
 
-  node->m_sprev  = NULL;    // prev node on sector thread
-  node->m_snext  = s->touching_thinglist; // next node on sector thread
+  R23_SET(node,m_sprev,NULL);    // prev node on sector thread
+  R23_SET(node,m_snext,s->touching_thinglist); // next node on sector thread
   if (s->touching_thinglist)
-    node->m_snext->m_sprev = node;
+    R23_SET(R23_GET(node,m_snext),m_sprev,node);
   s->touching_thinglist = node;
   _s_sector_list = node;
   }
@@ -1275,24 +1283,24 @@ static msecnode_t __far* P_DelSecnode(msecnode_t __far* node)
     // Unlink from the Thing thread. The Thing thread begins at
     // sector_list and not from mobj_t->touching_sectorlist.
 
-    tp = node->m_tprev;
-    tn = node->m_tnext;
+    tp = R23_GET(node,m_tprev);
+    tn = R23_GET(node,m_tnext);
     if (tp)
-      tp->m_tnext = tn;
+      R23_SET(tp,m_tnext,tn);
     if (tn)
-      tn->m_tprev = tp;
+      R23_SET(tn,m_tprev,tp);
 
     // Unlink from the sector thread. This thread begins at
     // sector_t->touching_thinglist.
 
-    sp = node->m_sprev;
-    sn = node->m_snext;
+    sp = R23_GET(node,m_sprev);
+    sn = R23_GET(node,m_snext);
     if (sp)
-      sp->m_snext = sn;
+      R23_SET(sp,m_snext,sn);
     else
-      node->m_sector->touching_thinglist = sn;
+      R23_GET(node,m_sector)->touching_thinglist = sn;
     if (sn)
-      sn->m_sprev = sp;
+      R23_SET(sn,m_sprev,sp);
 
     // Return this node to the freelist
 
@@ -1381,8 +1389,8 @@ void P_CreateSecNodeList(mobj_t __far* thing)
   msecnode_t __far* node = _s_sector_list;
   while (node)
     {
-    node->m_thing = NULL;
-    node = node->m_tnext;
+    R23_SET(node,m_thing,NULL);
+    node = R23_GET(node,m_tnext);
     }
 
   tmthing = thing;
@@ -1408,7 +1416,7 @@ void P_CreateSecNodeList(mobj_t __far* thing)
 
   // Add the sector of the (x,y) point to sector_list.
 
-  P_AddSecnode(thing->subsector->sector,thing);
+  P_AddSecnode(SUBSECTOR_SECTOR(thing->subsector),thing);
 
   // Now delete any nodes that won't be used. These are the ones where
   // m_thing is still NULL.
@@ -1416,14 +1424,14 @@ void P_CreateSecNodeList(mobj_t __far* thing)
   node = _s_sector_list;
   while (node)
     {
-    if (node->m_thing == NULL)
+    if (R23_GET(node,m_thing) == NULL)
       {
       if (node == _s_sector_list)
-        _s_sector_list = node->m_tnext;
+        _s_sector_list = R23_GET(node,m_tnext);
       node = P_DelSecnode(node);
       }
     else
-      node = node->m_tnext;
+      node = R23_GET(node,m_tnext);
     }
 
   /* cph -
