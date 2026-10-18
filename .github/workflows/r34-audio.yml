@@ -150,7 +150,7 @@ jobs:
           mkdir -p dist/r34audio
           : > dist/r34audio/BUILD-RESULTS.txt
           failed=0
-          for variant in ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf; do
+          for variant in ctl-play ctl-perf a2-play a2-perf a3-play a3-perf r3-play r3-perf; do
             echo "=== R31 $variant ==="
             if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r34audio.fish "$variant"; then
               echo "$variant OK" | tee -a dist/r34audio/BUILD-RESULTS.txt

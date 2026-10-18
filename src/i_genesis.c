@@ -153,6 +153,8 @@ void I_StartTic(void)
    Large samples remain raw ROM PCM and never require RAM buffers. */
 #if defined(DOOM_R34_PCM_2048)
 #define R34_PCM_CAP 2048
+#elif defined(DOOM_R34_PCM_3072)
+#define R34_PCM_CAP 3072
 #else
 #define R34_PCM_CAP 4096
 #endif

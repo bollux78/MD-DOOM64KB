@@ -11,12 +11,12 @@ cd "$root"; or exit 1
 set -l dest dist/r34audio
 mkdir -p "$dest"; or exit 1
 
-set -l variants ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf
+set -l variants ctl-play ctl-perf a2-play a2-perf a3-play a3-perf r3-play r3-perf
 if test (count $argv) -gt 0
     set variants $argv
 end
 for v in $variants
-    contains -- $v ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf; or exit 2
+    contains -- $v ctl-play ctl-perf a2-play a2-perf a3-play a3-perf r3-play r3-perf; or exit 2
 end
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
 python3 scripts/lab/test_r15_wallmul.py; or exit 1
@@ -122,7 +122,7 @@ for v in $variants
         set defs $pixel '-DDOOM_R22_SOLID_TILES' '-DDOOM_R22_PAIR_LUT'
     end
     set defs $defs '-DDOOM_R22_SRAM_BLOCKLINKS' '-DDOOM_R26_FLOW' 
-    if contains -- $v ctl-play a2-play a4-play r4-play
+    if contains -- $v ctl-play a2-play a3-play r3-play
         set -gx DOOM_TIMEDEMO 0
     end
     if not contains -- $v control play-control
@@ -146,10 +146,10 @@ for v in $variants
     if contains -- $v low-fixed low-group low-play cpu-fixed cpu-lowgroup xgm2-low-fixed xgm2-low-group
         set defs $defs '-DDOOM_R27_SRAM_FIXED'
     end
-    if contains -- $v ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf
+    if contains -- $v ctl-play ctl-perf a2-play a2-perf a3-play a3-perf r3-play r3-perf
         set defs $defs '-DDOOM_R27_GROUP_SIDE'
     end
-    if contains -- $v ctl-play ctl-perf a2-play a2-perf a4-play a4-perf r4-play r4-perf
+    if contains -- $v ctl-play ctl-perf a2-play a2-perf a3-play a3-perf r3-play r3-perf
         set defs $defs '-DDOOM_R27_GROUP_LINE'
     end
     if not contains -- $v cpu-base cpu-group cpu-fixed cpu-lowgroup
@@ -161,13 +161,13 @@ for v in $variants
     # Only the storage format of short SFX and the decode buffer vary.
     set -gx DOOM_R31_SFX_MODE mixed
     set -gx DOOM_R34_AUDIO_CODEC raw
-    set -gx DOOM_R34_PCM_BUFFER 4096
+    set -gx DOOM_R34_PCM_BUFFER 3072
     if string match -q 'a2-*' -- "$v"
         set -gx DOOM_R34_AUDIO_CODEC adpcm
         set -gx DOOM_R34_PCM_BUFFER 2048
-    else if string match -q 'a4-*' -- "$v"
+    else if string match -q 'a3-*' -- "$v"
         set -gx DOOM_R34_AUDIO_CODEC adpcm
-    else if string match -q 'r4-*' -- "$v"
+    else if string match -q 'r3-*' -- "$v"
         set -gx DOOM_R34_AUDIO_CODEC rle
     end
     set -gx DOOM_R31_SFX_REPORT "$dest/sfx-$v.json"
@@ -195,6 +195,8 @@ for v in $variants
         set defs $defs '-DDOOM_R34_AUDIO'
         if test "$DOOM_R34_PCM_BUFFER" = 2048
             set defs $defs '-DDOOM_R34_PCM_2048'
+        else if test "$DOOM_R34_PCM_BUFFER" = 3072
+            set defs $defs '-DDOOM_R34_PCM_3072'
         end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)

@@ -5,8 +5,8 @@ from pathlib import Path
 d=Path(sys.argv[1]);names=sys.argv[2:]
 variants={'ctl-play':('raw',0),'ctl-perf':('raw',0),
           'a2-play':('adpcm',2048),'a2-perf':('adpcm',2048),
-          'a4-play':('adpcm',4096),'a4-perf':('adpcm',4096),
-          'r4-play':('rle',4096),'r4-perf':('rle',4096)}
+          'a3-play':('adpcm',3072),'a3-perf':('adpcm',3072),
+          'r3-play':('rle',3072),'r3-perf':('rle',3072)}
 out=[]
 for v in names:
     assert v in variants
@@ -24,6 +24,7 @@ for v in names:
     assert ('-DTIMEDEMO' in flags)==v.endswith('perf'),v
     assert ('-DDOOM_R34_AUDIO' in flags)==(codec!='raw'),v
     assert ('-DDOOM_R34_PCM_2048' in flags)==(buffer==2048),v
+    assert ('-DDOOM_R34_PCM_3072' in flags)==(buffer==3072),v
     snd=json.loads((d/('sfx-'+v+'.json')).read_text())
     art=json.loads((d/('art-'+v+'.json')).read_text())
     assert art['adaptive_dither']=='bayer8'

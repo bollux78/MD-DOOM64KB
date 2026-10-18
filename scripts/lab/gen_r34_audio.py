@@ -83,7 +83,7 @@ def adpcm_encode_and_decode(raw):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--codec',choices=('adpcm','rle'),required=True)
-    p.add_argument('--buffer',type=int,choices=(2048,4096),required=True)
+    p.add_argument('--buffer',type=int,choices=(2048,3072,4096),required=True)
     p.add_argument('--report',type=Path,required=True)
     args=p.parse_args()
     raw_wad,lumps=r31.read_wad(r31.SOURCE)
