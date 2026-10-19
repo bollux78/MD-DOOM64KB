@@ -54,6 +54,7 @@
 #include "globdata.h"
 #include "r24_romthings.h"
 #include "r39d_dither.h"
+#include "r39e_audio.h"
 
 
 #define DISABLE_QUIT_DOOM
@@ -150,6 +151,10 @@ static void M_ChangeMessages(int16_t choice);
 static void M_ChangeAlwaysRun(int16_t choice);
 #if defined(DOOM_R39D_DITHER_TOGGLE)
 static void M_ChangeDithering(int16_t choice);
+#endif
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+static void M_ChangeMusicToggle(int16_t choice);
+static void M_ChangeSfxToggle(int16_t choice);
 #endif
 static void M_ChangeGamma(int16_t choice);
 static void M_SfxVol(int16_t choice);
@@ -546,6 +551,10 @@ enum
 #if defined(DOOM_R39D_DITHER_TOGGLE)
   dithering,
 #endif
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+  music_toggle,
+  sfx_toggle,
+#endif
   gamma,
 #if !defined DISABLE_SOUND_OPTIONS
   soundvol,
@@ -563,6 +572,10 @@ static const menuitem_t OptionsMenu[]=
   {1,"Always Run:",  M_ChangeAlwaysRun},
 #if defined(DOOM_R39D_DITHER_TOGGLE)
   {1,"Dithering:",   M_ChangeDithering},
+#endif
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+  {1,"Music:",       M_ChangeMusicToggle},
+  {1,"SFX:",         M_ChangeSfxToggle},
 #endif
   {2,"Gamma Boost:", M_ChangeGamma},
 #if !defined DISABLE_SOUND_OPTIONS
@@ -594,6 +607,10 @@ static void M_DrawOptions(void)
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * alwaysrun, 12, msgNames[_g_alwaysRun]);
 #if defined(DOOM_R39D_DITHER_TOGGLE)
     V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering, 12, msgNames[R39D_DitherEnabled()]);
+#endif
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * music_toggle, 12, msgNames[R39E_MusicEnabled()]);
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * sfx_toggle, 12, msgNames[R39E_SfxEnabled()]);
 #endif
 
 	M_DrawThermo(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * gamma, 6, _g_gamma);
@@ -765,6 +782,19 @@ static void M_ChangeDithering(int16_t choice)
      * VDP, or gameplay state. It takes effect on the next 3D frame. */
     UNUSED(choice);
     R39D_SetDither(!R39D_DitherEnabled());
+}
+#endif
+
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+static void M_ChangeMusicToggle(int16_t choice)
+{
+    UNUSED(choice);
+    R39E_SetMusicEnabled(!R39E_MusicEnabled());
+}
+static void M_ChangeSfxToggle(int16_t choice)
+{
+    UNUSED(choice);
+    R39E_SetSfxEnabled(!R39E_SfxEnabled());
 }
 #endif
 
