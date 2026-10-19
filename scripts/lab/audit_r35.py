@@ -8,7 +8,7 @@ assert set(names)==expect,(names,expect)
 out=[]
 art_sources=[]
 for variant in names:
-    name='doom-md-r36-'+variant
+    name='doom-md-r36b-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
     assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
