@@ -1,10 +1,10 @@
-name: R35 - Linear 4MiB raw Bayer8, PCM + XGM2, 8x8/4x4
+name: R35 E1M1 - Profile build with existing routine instrumentation
 on:
   push:
-    branches: [r35-linear4m]
+    branches: [r35-e1m1-profile]
   workflow_dispatch:
 concurrency:
-  group: r35-linear4m
+  group: r35-e1m1-profile
   cancel-in-progress: true
 permissions:
   contents: write
@@ -145,6 +145,8 @@ jobs:
           test -f ~/mars/m68k-elf/lib/libmd.a
           test -f ~/mars/m68k-elf/inc/snd/xgm2.h
       - name: Build four R35 linear 4MiB variants
+        env:
+          DOOM_E1M1_PROFILE: '1'
         shell: bash
         run: |
           mkdir -p dist/r35
@@ -204,12 +206,12 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/review-r35/CI-LAST-RESULT.json
           git commit -m 'R35 self-hosted CI results [skip ci]' || true
-          git push origin HEAD:r35-linear4m
+          git push origin HEAD:r35-e1m1-profile
       - name: Upload 4 ROMs and build diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r35-linear4m-raw-bayer8
+          name: doom-md-r35-e1m1-routine-profile
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
