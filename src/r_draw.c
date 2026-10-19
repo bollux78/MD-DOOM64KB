@@ -3496,6 +3496,26 @@ static void R_RecalcLineFlags(void)
 
 static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 {
+#if defined(DOOM_R39A_CLIPSCAN)
+    /* R39a: one forward pointer walk across the half-open [first,last)
+     * screen interval.  No memchr calls or re-scans of already tested
+     * columns.  Retain exact old visible-run boundaries and drawing order.
+     * Deliberately keep original path in the A/B control binary. */
+    byte *scan = solidcol + first;
+    byte *const end = solidcol + last;
+    while (scan < end)
+    {
+        while (scan < end && *scan) ++scan;
+        if (scan == end) break;
+        byte *const begin = scan;
+        while (scan < end && !*scan) ++scan;
+        const int16_t x1 = (int16_t)(begin - solidcol);
+        const int16_t x2 = (int16_t)(scan - solidcol);
+        R37_HIT(R37_WALL_RANGES);
+        R7_VOID(8, R_StoreWallRange(x1, x2 - 1));
+        if (solid) memset(begin, 1, (size_t)(scan - begin));
+    }
+#else
     byte *p;
     while (first < last)
     {
@@ -3525,6 +3545,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
             first = to;
         }
     }
+#endif
 }
 
 //
