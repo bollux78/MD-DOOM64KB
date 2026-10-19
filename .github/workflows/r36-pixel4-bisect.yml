@@ -1,4 +1,4 @@
-name: R36 Pixel4 runtime bisect (diagnostic)
+name: R36 Pixel4 original datapath without fifth-bit RAM (test mode 5)
 on:
   push:
     branches: [r36-pixel4-bisect]
@@ -52,7 +52,7 @@ jobs:
         run: |
           set -e
           mkdir -p dist/r36-bisect
-          for mode in 4 1 2 3; do
+          for mode in 5; do
             echo "=== R36 DIAG MODE $mode ==="
             DOOM_R36_DIAG_MODE="$mode" DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"               fish scripts/lab/build_r35_linear.fish pixel4-perf > "dist/r36-bisect/build-mode-$mode.log" 2>&1               || { tail -n 75 "dist/r36-bisect/build-mode-$mode.log"; exit 1; }
             cp dist/r35/doom-md-r36-pixel4-perf.bin "dist/r36-bisect/r36-mode-$mode-perf.bin"
@@ -70,7 +70,7 @@ jobs:
               blastem=next((str(p) for p in paths if p.is_file() and os.access(p,os.X_OK)),None)
           if not blastem: raise SystemExit('BlastEm not found: runtime checks cannot run')
           output=[]
-          for mode in (4,1,2,3):
+          for mode in (5,):
               path=root/f'r36-mode-{mode}-perf.bin'
               cmd=[blastem,'-b','300',str(path)]
               env=os.environ.copy();env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
