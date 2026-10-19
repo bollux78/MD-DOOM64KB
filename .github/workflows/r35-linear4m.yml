@@ -1,6 +1,8 @@
 name: R36 - Pixel4 32-color dithering (manual)
 # Manual-only until runner is switched on and user explicitly starts testing.
 on:
+  push:
+    branches: [r36-pixel4-dither]
   workflow_dispatch:
 concurrency:
   group: r36-pixel4-dither
