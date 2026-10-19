@@ -70,4 +70,37 @@ codes, chosen, report = mod.choose_colors(original, solids)
 assert len(codes) == 256 and len(chosen) == 16
 assert len(set(chosen)) == 16
 assert report["checker_doom_colors"] >= 20
+# R36b: the 418-byte high plane aliases the *tail* of the pending tilemap.
+# The renderer writes map entries forward as it reads samples forward, and
+# 4 spare map words (=8B) ensure no future high-plane byte is overwritten.
+MAP_BYTES = 38 * 21 * 2 + 8
+HIGH_BYTES = (WIDTH * HEIGHT + 7) // 8
+HIGH_BASE = MAP_BYTES - HIGH_BYTES
+assert MAP_BYTES == 1604 and HIGH_BYTES == 418 and HIGH_BASE == 1186
+shared = bytearray(MAP_BYTES)
+shared[HIGH_BASE:HIGH_BASE + HIGH_BYTES] = high
+worst_gap = MAP_BYTES
+for y in range(1, 22):
+    for x in range(38):
+        top_bit = (2 * y) * WIDTH + 2 * x
+        bottom_bit = top_bit + WIDTH
+        top = (shared[HIGH_BASE + (top_bit >> 3)] >> (top_bit & 7)) & 3
+        bot = (shared[HIGH_BASE + (bottom_bit >> 3)] >> (bottom_bit & 7)) & 3
+        assert top == ((high[top_bit >> 3] >> (top_bit & 7)) & 3)
+        assert bot == ((high[bottom_bit >> 3] >> (bottom_bit & 7)) & 3)
+        map_word = (y - 1) * 38 + x
+        map_offset = 2 * map_word
+        # The actual DMA map uses dynamic tiles in the two VRAM banks.
+        tile = 16 + (map_word % 836)
+        shared[map_offset:map_offset + 2] = tile.to_bytes(2, 'big')
+        if (y, x) != (21, 37):
+            next_top = 2 * y * WIDTH + 2 * (x + 1) if x < 37 else 2 * (y + 1) * WIDTH
+            unread_byte = HIGH_BASE + (next_top >> 3)
+            worst_gap = min(worst_gap, unread_byte - (map_offset + 1))
+            assert map_offset + 1 < unread_byte, (y, x, map_offset, unread_byte)
+assert worst_gap == 1, worst_gap
+for tile in range(38 * 21):
+    assert int.from_bytes(shared[tile * 2:tile * 2 + 2], 'big') == 16 + tile % 836
+print("PASS R36b: in-place fifth-bit plane overlaps pending map safely; 8B RAM budget, minimum 1B gap")
+
 print("PASS R36: all 1024 checker rows, 3344 samples, 418B high plane, 16 selected blends")
