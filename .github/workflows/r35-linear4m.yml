@@ -175,6 +175,36 @@ jobs:
               z.write(d/'SHA256SUMS','SHA256SUMS')
           print('Single ROM archive:',(d/'R35-FOUR-ROMS.zip').stat().st_size,'bytes')
           PY
+      - name: Publish CI status for independent review
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p docs/review-r35 dist/r35
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,os
+          d=Path('dist/r35')
+          a=d/'R35-AUDIT.json'
+          report={
+              'run_id':os.environ.get('GITHUB_RUN_ID'),
+              'sha':os.environ.get('GITHUB_SHA'),
+              'build_results':(d/'BUILD-RESULTS.txt').read_text().splitlines()
+                  if (d/'BUILD-RESULTS.txt').is_file() else [],
+              'audit':json.loads(a.read_text()) if a.is_file() else None,
+              'roms':[{'name':p.name,'bytes':p.stat().st_size}
+                      for p in sorted(d.glob('doom-md-r35-*.bin'))],
+              'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
+                      for p in sorted(d.glob('build-doom-md-r35-*.log'))}
+          }
+          Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
+              json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(report,indent=2,ensure_ascii=False)[-9000:])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/review-r35/CI-LAST-RESULT.json
+          git commit -m 'R35 self-hosted CI results [skip ci]' || true
+          git push origin HEAD:r35-linear4m
       - name: Upload 4 ROMs and build diagnostics
         if: always()
         uses: actions/upload-artifact@v6
