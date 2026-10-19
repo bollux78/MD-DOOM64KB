@@ -1,9 +1,10 @@
-name: R36 - Pixel4 32-color dithering (manual)
-# Manual-only until runner is switched on and user explicitly starts testing.
+name: R36b - Pixel4 checker LUT IRQ stabilization
 on:
+  push:
+    branches: [r36-pixel4-stable]
   workflow_dispatch:
 concurrency:
-  group: r36-pixel4-dither
+  group: r36-pixel4-stable
   cancel-in-progress: true
 permissions:
   contents: write
@@ -172,8 +173,8 @@ jobs:
           from pathlib import Path
           import zipfile
           d=Path('dist/r35')
-          with zipfile.ZipFile(d/'R36-P4D-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r36-*.bin')):
+          with zipfile.ZipFile(d/'R36B-P4D-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(d.glob('doom-md-r36b-*.bin')):
                   z.write(p,p.name)
               z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
               for variant in ('cell-play','cell-perf'):
@@ -181,7 +182,40 @@ jobs:
               for variant in ('pixel4-play','pixel4-perf'):
                   z.write(d/f'r36-dither-{variant}.json',f'r36-dither-{variant}.json')
               z.write(d/'SHA256SUMS','SHA256SUMS')
-          print('Single ROM archive:',(d/'R36-P4D-FOUR-ROMS.zip').stat().st_size,'bytes')
+          print('Single ROM archive:',(d/'R36B-P4D-FOUR-ROMS.zip').stat().st_size,'bytes')
+          PY
+      - name: Headless BlastEm runtime regression gate (300 frames, 20s hard limit)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,time,shutil
+          out=pathlib.Path('dist/r35').resolve()
+          blastem=shutil.which('blastem')
+          if not blastem:
+              paths=list((pathlib.Path.home()/'Projetos').glob('**/blastem'))
+              blastem=next((str(p) for p in paths if p.is_file() and os.access(p,os.X_OK)),None)
+          if not blastem: raise SystemExit('BlastEm not installed: refusing untested Pixel4 release')
+          results=[]
+          for variant in ('cell-perf','pixel4-perf','pixel4-play'):
+              rom=out/f'doom-md-r36b-{variant}.bin'
+              start=time.monotonic()
+              env=os.environ.copy();env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
+              try:
+                  p=subprocess.run([blastem,'-b','300',str(rom)],cwd=str(out),env=env,
+                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                        text=True,errors='replace',timeout=20)
+                  status='PASS' if p.returncode==0 else 'NONZERO'
+                  tail=p.stdout[-1600:]
+              except subprocess.TimeoutExpired:
+                  status='HARD_TIMEOUT'
+                  tail=''
+              result={'variant':variant,'status':status,
+                      'elapsed_seconds':round(time.monotonic()-start,2),
+                      'log_tail':tail}
+              results.append(result);print(json.dumps(result))
+          (out/'BLASTEM-RUNTIME.json').write_text(json.dumps(results,indent=2)+'\n')
+          if any(r['status']!='PASS' for r in results):
+              raise SystemExit('R36b runtime regression: at least one ROM failed the headless BlastEm test')
           PY
       - name: Publish CI status for independent review
         if: always()
@@ -200,9 +234,9 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r36-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r36b-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r36-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r36b-*.log'))}
           }
           Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
@@ -212,12 +246,12 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/review-r35/CI-LAST-RESULT.json
           git commit -m 'R35 self-hosted CI results [skip ci]' || true
-          git push origin HEAD:r36-pixel4-dither
+          git push origin HEAD:r36-pixel4-stable
       - name: Upload 4 ROMs and build diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r36-pixel4-dither-preflight
+          name: doom-md-r36b-pixel4-stabilization
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
