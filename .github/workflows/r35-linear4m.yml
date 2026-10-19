@@ -1,8 +1,10 @@
-name: R36b - Pixel4 checker LUT IRQ stabilization
+name: R36c - Pixel4 cell-matched grey flats and selective checker
 on:
+  push:
+    branches: [r36c-pixel4-hybrid]
   workflow_dispatch:
 concurrency:
-  group: r36-pixel4-stable
+  group: r36c-pixel4-hybrid
   cancel-in-progress: true
 permissions:
   contents: write
@@ -148,6 +150,7 @@ jobs:
         env:
           DOOM_R35D_CHECKER: '1'
           DOOM_R36_PIXEL4_DITHER: '1'
+          DOOM_R36C_HYBRID: '1'
         shell: bash
         run: |
           mkdir -p dist/r35
@@ -171,8 +174,8 @@ jobs:
           from pathlib import Path
           import zipfile
           d=Path('dist/r35')
-          with zipfile.ZipFile(d/'R36B-P4D-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r36b-*.bin')):
+          with zipfile.ZipFile(d/'R36C-P4D-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(d.glob('doom-md-r36c-*.bin')):
                   z.write(p,p.name)
               z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
               for variant in ('cell-play','cell-perf'):
@@ -180,9 +183,9 @@ jobs:
               for variant in ('pixel4-play','pixel4-perf'):
                   z.write(d/f'r36-dither-{variant}.json',f'r36-dither-{variant}.json')
               z.write(d/'SHA256SUMS','SHA256SUMS')
-          print('Single ROM archive:',(d/'R36B-P4D-FOUR-ROMS.zip').stat().st_size,'bytes')
+          print('Single ROM archive:',(d/'R36C-P4D-FOUR-ROMS.zip').stat().st_size,'bytes')
           PY
-      - name: Headless BlastEm runtime regression gate (300 frames, 20s hard limit)
+      - name: BlastEm runtime gate, 300 frames, 20s hard timeout
         shell: bash
         run: |
           python3 - <<'PY'
@@ -195,7 +198,7 @@ jobs:
           if not blastem: raise SystemExit('BlastEm not installed: refusing untested Pixel4 release')
           results=[]
           for variant in ('cell-perf','pixel4-perf','pixel4-play'):
-              rom=out/f'doom-md-r36b-{variant}.bin'
+              rom=out/f'doom-md-r36c-{variant}.bin'
               start=time.monotonic()
               env=os.environ.copy();env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
               try:
@@ -213,7 +216,7 @@ jobs:
               results.append(result);print(json.dumps(result))
           (out/'BLASTEM-RUNTIME.json').write_text(json.dumps(results,indent=2)+'\n')
           if any(r['status']!='PASS' for r in results):
-              raise SystemExit('R36b runtime regression: at least one ROM failed the headless BlastEm test')
+              raise SystemExit('R36c runtime regression: at least one ROM failed the headless BlastEm test')
           PY
       - name: Publish CI status for independent review
         if: always()
@@ -232,9 +235,9 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r36b-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r36c-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r36b-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r36c-*.log'))}
           }
           Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
@@ -244,12 +247,12 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/review-r35/CI-LAST-RESULT.json
           git commit -m 'R35 self-hosted CI results [skip ci]' || true
-          git push origin HEAD:r36-pixel4-stable
+          git push origin HEAD:r36c-pixel4-hybrid
       - name: Upload 4 ROMs and build diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r36b-pixel4-stabilization
+          name: doom-md-r36c-pixel4-stabilization
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
