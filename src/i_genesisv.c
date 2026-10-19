@@ -812,6 +812,18 @@ static void I_BuildSolidTiles(void)
 			tile[j] = row;
 		VDP_loadTileData(tile, SOLID_TILE_INDEX + i, 1, CPU);
 	}
+#if defined(DOOM_R35D_CHECKER)
+    /* 105 unordered 50/50 pairs, shared by all four CRAM banks. */
+    uint16_t index = 16;
+    for (uint16_t a = 0; a < 15; ++a)
+        for (uint16_t b = a + 1; b < 15; ++b)
+        {
+            const uint32_t even = a * 0x10101010UL + b * 0x01010101UL;
+            const uint32_t odd  = b * 0x10101010UL + a * 0x01010101UL;
+            for (uint16_t y = 0; y < 8; ++y) tile[y] = (y & 1) ? odd : even;
+            VDP_loadTileData(tile, SOLID_TILE_INDEX + index++, 1, CPU);
+        }
+#endif
 }
 
 
