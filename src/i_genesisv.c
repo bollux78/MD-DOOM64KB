@@ -1045,6 +1045,13 @@ static void R30_LoadNative(u16 which)
     VDP_setEnable(FALSE);
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
+#if defined(DOOM_R35_ART_RAW)
+    /* R35 deliberately stores each Bayer8 native tile as 32 original bytes:
+       no RLE decoder, no extra CPU work beyond VDP upload. */
+    for(u16 tile=0;tile<image->tiles;tile++)
+        VDP_loadTileData((const u32 *)(const void *)(image->pack+32UL*tile),
+                         R30_PATTERN_BASE+tile,1,CPU);
+#else
     for(u16 tile=0;tile<image->tiles;tile++)
     {
         u16 out=0;
@@ -1071,6 +1078,7 @@ static void R30_LoadNative(u16 which)
             I_Error("R30 compressed tile mismatch");
         VDP_loadTileData(decoded,R30_PATTERN_BASE+tile,1,CPU);
     }
+#endif
     for(u16 y=0;y<28;y++)
     {
         for(u16 x=0;x<40;x++)
