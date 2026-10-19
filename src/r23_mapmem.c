@@ -2,6 +2,9 @@
 #include "r_defs.h"
 #include "r22_blocklinks.h"
 #include "i_system.h"
+#if defined(DOOM_R39C_MOVEP_MAP)
+#include "r39c_movep.h"
+#endif
 /* Legacy host mocks omit the new window helpers. */
 #ifndef R25_SRAM_BEGIN
 #define R25_SRAM_BEGIN() ((void)0)
@@ -35,6 +38,23 @@ void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells){
         for(uint16_t i=0;i<n;i++)if(R22_SRAM_BYTE(R22_SRAM_BASE+1+2UL*pos[i])!=(uint8_t)((pass?0x5A:0xA5)^i))ok=0;
     }
     for(uint16_t i=0;i<n;i++)R22_SRAM_BYTE(R22_SRAM_BASE+1+2UL*pos[i])=saved[i];
+#if defined(DOOM_R39C_MOVEP_MAP)
+    /* Verify MOVEP lane order with both MOVEP->byte and byte->MOVEP
+     * accesses. Run while SRAM is already enabled; restore every byte. */
+    {
+        const uint32_t a=R22_SRAM_BASE+1u;
+        uint8_t old[4];
+        for(uint16_t i=0;i<4;i++) old[i]=R22_SRAM_BYTE(a+2u*i);
+        R39C_MovepWrite32(a,0x12345678UL);
+        if(R39C_MovepRead32(a)!=0x12345678UL ||
+           R22_SRAM_BYTE(a)!=0x12u || R22_SRAM_BYTE(a+2)!=0x34u ||
+           R22_SRAM_BYTE(a+4)!=0x56u || R22_SRAM_BYTE(a+6)!=0x78u)ok=0;
+        R22_SRAM_BYTE(a)=0x9Au;R22_SRAM_BYTE(a+2)=0xBCu;
+        R22_SRAM_BYTE(a+4)=0xDEu;R22_SRAM_BYTE(a+6)=0xF0u;
+        if(R39C_MovepRead32(a)!=0x9ABCDEF0UL)ok=0;
+        for(uint16_t i=0;i<4;i++)R22_SRAM_BYTE(a+2u*i)=old[i];
+    }
+#endif
     R25_SRAM_END();
     if(!ok)I_Error("SRAM MAP STATE UNAVAILABLE");
 }
@@ -67,12 +87,23 @@ uint32_t R23_MapRead(const void *p,uint16_t offset,uint16_t size){
 #if defined(DOOM_R24_EPISODE)
     if((uintptr_t)p>=0x230000UL){uint32_t v=node_read(p,offset);R25_SRAM_END();return v;}
 #endif
-    uint32_t a=address(p,offset),v=0;while(size--){v=(v<<8)|R22_SRAM_BYTE(a);a+=2;}R25_SRAM_END();return v;
+    uint32_t a=address(p,offset),v=0;
+#if defined(DOOM_R39C_MOVEP_MAP)
+    if(size==4u) v=R39C_MovepRead32(a);
+    else if(size==2u) v=R39C_MovepRead16(a);
+    else
+#endif
+    while(size--){v=(v<<8)|R22_SRAM_BYTE(a);a+=2;}
+    R25_SRAM_END();return v;
 }
 void R23_MapWrite(void *p,uint16_t offset,uint16_t size,uint32_t value){
     R25_SRAM_BEGIN();
 #if defined(DOOM_R24_EPISODE)
     if((uintptr_t)p>=0x230000UL){node_write(p,offset,value);R25_SRAM_END();return;}
+#endif
+#if defined(DOOM_R39C_MOVEP_MAP)
+    if(size==4u){R39C_MovepWrite32(address(p,offset),value);R25_SRAM_END();return;}
+    if(size==2u){R39C_MovepWrite16(address(p,offset),(uint16_t)value);R25_SRAM_END();return;}
 #endif
     uint32_t a=address(p,offset)+2UL*(size-1);while(size--){R22_SRAM_BYTE(a)=value;value>>=8;a-=2;}R25_SRAM_END();
 }
@@ -80,6 +111,19 @@ void R23_MapWrite(void *p,uint16_t offset,uint16_t size,uint32_t value){
 void R27_ReadBlock(const void *p,uint16_t offset,uint16_t size,void *out){
     uint32_t a=address(p,offset);uint8_t *d=out;
     R25_SRAM_BEGIN();
+#if defined(DOOM_R39C_MOVEP_MAP)
+    while(size>=4u){
+        uint32_t v=R39C_MovepRead32(a);
+        d[0]=(uint8_t)(v>>24);d[1]=(uint8_t)(v>>16);
+        d[2]=(uint8_t)(v>>8);d[3]=(uint8_t)v;
+        d+=4;a+=8;size-=4;
+    }
+    if(size>=2u){
+        uint16_t v=R39C_MovepRead16(a);
+        d[0]=(uint8_t)(v>>8);d[1]=(uint8_t)v;
+        d+=2;a+=4;size-=2;
+    }
+#endif
     while(size--){*d++=R22_SRAM_BYTE(a);a+=2;}
     R25_SRAM_END();
 }
@@ -88,8 +132,13 @@ void R27_ReadBlock(const void *p,uint16_t offset,uint16_t size,void *out){
 uint16_t R27_OrFlags(void *p,uint16_t mask){
     uint32_t a=address(p,offsetof(linedata_t,r_flags));
     R25_SRAM_BEGIN();
+#if defined(DOOM_R39C_MOVEP_MAP)
+    uint16_t value=R39C_MovepRead16(a);
+    value|=mask;R39C_MovepWrite16(a,value);
+#else
     uint16_t value=((uint16_t)R22_SRAM_BYTE(a)<<8)|R22_SRAM_BYTE(a+2);
     value|=mask;R22_SRAM_BYTE(a)=value>>8;R22_SRAM_BYTE(a+2)=value;
+#endif
     R25_SRAM_END();return value;
 }
 #endif
