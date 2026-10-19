@@ -214,6 +214,14 @@ for v in $variants
                 exit 2
         end
     end
+    if set -q DOOM_R39D_DITHER_TOGGLE; and test "$DOOM_R39D_DITHER_TOGGLE" = 1
+        if contains -- $v cell-play cell-perf
+            set defs $defs '-DDOOM_R39D_DITHER_TOGGLE'
+        else
+            echo 'R39d runtime dither toggle supports 8x8 cell variants only'
+            exit 2
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -224,6 +232,15 @@ for v in $variants
     end
     if set -q DOOM_R39C_VARIANT
         set id doom-md-r39c-$DOOM_R39C_VARIANT-$v
+    end
+    if set -q DOOM_R39D_BUILD
+        switch "$DOOM_R39D_BUILD"
+            case control toggle
+                set id doom-md-r39d-$DOOM_R39D_BUILD-$v
+            case '*'
+                echo "Unknown R39d build $DOOM_R39D_BUILD"
+                exit 2
+        end
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
