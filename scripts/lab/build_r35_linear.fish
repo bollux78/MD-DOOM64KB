@@ -198,7 +198,7 @@ for v in $variants
     cp out/release/rom.out "$dest/$id.elf"; or exit 1
     cp out/.render_options "$dest/flags-$id.txt"; or exit 1
     # The ELF's raw loadable image is the real occupied ROM content, unlike
-    # sizebnd's 128 KiB-rounded .bin. Compare exact distance to 2 MiB.
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
     set -l rawout "$dest/_payload-$v.tmp"
     "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
     stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
@@ -206,6 +206,11 @@ for v in $variants
     set built $built $id
 end
 cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
-python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
 sha256sum $dest/*.bin > "$dest/SHA256SUMS"
 echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
