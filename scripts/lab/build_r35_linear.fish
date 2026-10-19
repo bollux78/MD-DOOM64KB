@@ -147,13 +147,13 @@ for v in $variants
     if contains -- $v low-fixed low-group low-play cpu-fixed cpu-lowgroup xgm2-low-fixed xgm2-low-group
         set defs $defs '-DDOOM_R27_SRAM_FIXED'
     end
-    if contains -- $v cell-play cell-perf pixel4-play pixel4-perf
+    if contains -- $v cell-play cell-perf cell-profperf pixel4-play pixel4-perf
         set defs $defs '-DDOOM_R27_GROUP_SIDE'
     end
-    if contains -- $v cell-play cell-perf pixel4-play pixel4-perf
+    if contains -- $v cell-play cell-perf cell-profperf pixel4-play pixel4-perf
         set defs $defs '-DDOOM_R27_GROUP_LINE'
     end
-    if not contains -- $v cpu-base cpu-group cpu-fixed cpu-lowgroup
+    if not contains -- $v cpu-base cpu-group cpu-fixed cpu-lowgroup cell-profperf
         set defs $defs '-DDOOM_R28_VIDEO_AUDIT'
     end
     # Identical visual assets for every variant: user's preferred adaptive Bayer 8x8.
@@ -182,7 +182,7 @@ for v in $variants
         set defs $defs '-DDOOM_R31_SFX'
     end
     set defs $defs '-DDOOM_R35_ART_RAW'
-    if set -q DOOM_R35D_CHECKER; and test "$DOOM_R35D_CHECKER" = 1; and contains -- $v cell-play cell-perf
+    if set -q DOOM_R35D_CHECKER; and test "$DOOM_R35D_CHECKER" = 1; and contains -- $v cell-play cell-perf cell-profperf
         set defs $defs '-DDOOM_R35D_CHECKER'
         set -gx DOOM_R35D_REPORT "$dest/dither-$v.json"
     else
@@ -192,10 +192,18 @@ for v in $variants
         # Only live gameplay is instrumented. The timedemo remains clean.
         set defs $defs '-DDOOM_R37_BSP_PROFILE'
     end
+    if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-profperf
+        # Independent of old DOOM_ROUTINE_PROFILE env, which forces TIMEDEMO.
+        # DOOM_R7_PROFILE enables the already-tested nested stage boundaries.
+        set defs $defs '-DDOOM_R38_TIME_PROFILE' '-DDOOM_R7_PROFILE'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
         set id doom-md-r37-$v
+    end
+    if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-perf cell-profperf
+        set id doom-md-r38-$v
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
