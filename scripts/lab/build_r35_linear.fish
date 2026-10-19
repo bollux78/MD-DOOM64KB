@@ -17,7 +17,7 @@ if test (count $argv) -gt 0
     set variants $argv
 end
 for v in $variants
-    contains -- $v cell-play cell-perf pixel4-play pixel4-perf; or exit 2
+    contains -- $v cell-play cell-perf cell-profperf pixel4-play pixel4-perf; or exit 2
 end
 python3 scripts/lab/test_r12_recip_lut.py; or exit 1
 python3 scripts/lab/test_r15_wallmul.py; or exit 1
