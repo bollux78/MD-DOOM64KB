@@ -48,11 +48,24 @@ void *R22_Alloc(uint16_t n) { return MEM_alloc(n); }
 static struct {
     uint32_t before;
     uint8_t pixels[R22_FB_BYTES];
-#if defined(DOOM_R36_PIXEL4_DITHER)
-    uint8_t high[(R22_W * R22_H + 7) / 8]; /* fifth bit, 418B, inside guard */
-#endif
     uint32_t after;
 } r22_fb;
+#if defined(DOOM_R22_SOLID_TILES)
+/* The 16-bit map is consumed only after R22_UploadBack publishes it.
+   During rendering the map tail is free: use its trailing bytes as the
+   418-byte fifth-bit plane. Four spare map words give 8 bytes of
+   protection against overlap in the final six upload tiles. */
+#if defined(DOOM_R36_PIXEL4_DITHER)
+#define R36_HIGH_BYTES ((R22_W * R22_H + 7) / 8)
+#define R36_MAP_SPARE_WORDS 4
+static uint16_t r22_map[38*21 + R36_MAP_SPARE_WORDS] __attribute__((aligned(2)));
+static inline uint8_t *R36_HighPlane(void) {
+    return ((uint8_t*)(void*)r22_map) + sizeof(r22_map) - R36_HIGH_BYTES;
+}
+#else
+static uint16_t r22_map[38*21] __attribute__((aligned(2)));
+#endif
+#endif
 #if defined(DOOM_R36_PIXEL4_DITHER)
 /* Keep R22's 4-bit nibble plane and add one bit per independent 4x4 sample.
    Code 0..15 is solid; code 16..31 expands to a two-color 2x2 checker.
@@ -62,7 +75,7 @@ static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
     R22_Put(p,x,y,code);
     uint16_t bit=(uint16_t)(y*R22_W+x);
     uint8_t mask=(uint8_t)(1u<<(bit&7));
-    uint8_t *dst=&r22_fb.high[bit>>3];
+    uint8_t *dst=&R36_HighPlane()[bit>>3];
     *dst=(uint8_t)((*dst & (uint8_t)~mask) | ((code&16u)?mask:0u));
 }
 #define R22_Put R36_Put
@@ -73,10 +86,6 @@ static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
 static uint8_t r22_overlay_dirty,r22_text_this_frame;
-#if defined(DOOM_R22_SOLID_TILES)
-/* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
-static uint16_t r22_map[38*21] __attribute__((aligned(2)));
-#endif
 static inline uint16_t R22_Lock(void){uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");return sr;}
 static inline void R22_Unlock(uint16_t sr){__asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");}
 /* SDK text helpers use a 256-byte stack array. Write bounded glyphs directly,
@@ -209,10 +218,11 @@ static void R22_UploadBack(uint16_t bank){
 #if defined(DOOM_R36_PIXEL4_DITHER)
         /* Both horizontally adjacent sample bits reside in the same byte.
            R22_W is even, so no crossing at an 8-bit bitplane boundary. */
+        const uint8_t *high=R36_HighPlane();
         uint16_t pos=(uint16_t)((2*y)*R22_W+2*x);
-        uint8_t ha=(uint8_t)((r22_fb.high[pos>>3]>>(pos&7))&3u);
+        uint8_t ha=(uint8_t)((high[pos>>3]>>(pos&7))&3u);
         pos=(uint16_t)(pos+R22_W);
-        uint8_t hb=(uint8_t)((r22_fb.high[pos>>3]>>(pos&7))&3u);
+        uint8_t hb=(uint8_t)((high[pos>>3]>>(pos&7))&3u);
 #endif
 #if defined(DOOM_R22_SOLID_TILES)
 #if defined(DOOM_R36_PIXEL4_DITHER)
@@ -287,7 +297,10 @@ static void R22_EndOverlay(void){
 void V_ClearViewWindow(void){
     memset(r22_fb.pixels,0,R22_FB_BYTES);
 #if defined(DOOM_R36_PIXEL4_DITHER)
-    memset(r22_fb.high,0,sizeof(r22_fb.high));
+    /* The fifth bit lives in the future DMA map; never overwrite it while
+       the VBlank callback may still be uploading the previous frame. */
+    R20_StopVideo();
+    memset(R36_HighPlane(),0,R36_HIGH_BYTES);
 #endif
 }
 
