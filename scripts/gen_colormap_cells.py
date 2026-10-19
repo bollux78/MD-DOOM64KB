@@ -67,7 +67,7 @@ def checker_slots():
             bank,a,b,display = c
             err = genpal.dist2(rgb, display)
             contrast = genpal.dist2(palette[bank*16+a], palette[bank*16+b])
-            return err + (0.075*contrast if a != b else 0)
+            return err  # R35d strong 50/50 mixing: select closest displayed RGB
         bank,a,b,_ = min(choices, key=score)
         tile = a if a == b else 16 + sum(14-k for k in range(a)) + (b-a-1)
         selected.append((bank,tile))
@@ -78,6 +78,33 @@ def main():
     slots = read_slots(PALETTE)
     checker = os.environ.get('DOOM_R35D_CHECKER') == '1'
     lookup = checker_slots() if checker else None
+    if checker:
+        from collections import Counter
+        import json
+        selected = [t >= 16 for bank,t in lookup]
+        checker_colormap = sum(selected[i] for i in colors[:32*256])
+        checker_count = sum(selected)
+        pairs_used = len({(bank,t) for bank,t in lookup if t >= 16})
+        report = {
+            "mode": "r35d-checker-strong",
+            "checker_colors": checker_count,
+            "total_colors": 256,
+            "checker_colormap_cells": checker_colormap,
+            "total_colormap_cells": 8192,
+            "unique_checker_tiles": pairs_used,
+            "checker_per_shade": [sum(selected[i] for i in colors[shade*256:(shade+1)*256]) for shade in range(32)],
+            "checker_tile_min": 16,
+            "checker_tile_max": 120,
+            "solid_tile_min": 0,
+            "solid_tile_max": 15,
+            "palettes": 4,
+        }
+        print("R35D CHECKER AUDIT: " + json.dumps(report, sort_keys=True))
+        target = os.environ.get("DOOM_R35D_REPORT")
+        if target:
+            Path(target).write_text(json.dumps(report, indent=2) + "\n")
+        if checker_count < 140 or checker_colormap < 4500 or pairs_used < 60:
+            raise RuntimeError("R35d: dithering LUT ineffective; rejecting ROM")
     cells = ['/* Generated exact colorcell mapping; SGDK indices resolved by C. */',
              'const uint16_t colorcell[256] = {']
     for i,slot in enumerate(slots):
