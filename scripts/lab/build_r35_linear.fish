@@ -197,6 +197,13 @@ for v in $variants
         # DOOM_R7_PROFILE enables the already-tested nested stage boundaries.
         set defs $defs '-DDOOM_R38_TIME_PROFILE'
     end
+    # R39a AB experiment: opt-in clip scanner. Control remains byte-for-byte
+    # equivalent in compiled options to R38 cell-perf except ROM title.
+    if set -q DOOM_R39A_BUILD
+        if test "$DOOM_R39A_BUILD" = alt
+            set defs $defs '-DDOOM_R39A_CLIPSCAN'
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -204,6 +211,13 @@ for v in $variants
     end
     if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-perf cell-profperf
         set id doom-md-r38-$v
+    end
+    if set -q DOOM_R39A_BUILD
+        if test "$DOOM_R39A_BUILD" = alt
+            set id doom-md-r39a-alt-$v
+        else if test "$DOOM_R39A_BUILD" = control
+            set id doom-md-r39a-control-$v
+        end
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
