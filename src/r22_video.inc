@@ -316,7 +316,7 @@ static void R22_HUD(void){
         R22_DrawText(VDP_BG_A,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(VDP_BG_A,"ARMOR",13,23);R22_Num3(19,23,a);
         R22_DrawText(VDP_BG_A,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
 #if defined(DOOM_R36_PIXEL4_DITHER)
-        R22_DrawText(VDP_BG_A,"R36 P4D - 32 COLORS",1,25);
+        R22_DrawText(VDP_BG_A,"R36B P4D 32 COLORS",1,25);
 #else
         R22_DrawText(VDP_BG_A,"DOOM PX4 - 76x44",1,25);
 #endif
