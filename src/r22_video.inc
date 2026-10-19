@@ -125,6 +125,10 @@ void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){if(p<0)p=0;if(p>13)p=13;PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);}
 
+#if defined(DOOM_R35_ART_RAW)
+#include "r35_native4.inc"
+#endif
+
 /* Main and ISR share ownership of the back bank only at this publication. */
 void R20_VBlankVideo(void){
     if(!r22_ready)return;
@@ -188,6 +192,13 @@ static void R22_UploadBack(uint16_t bank){
 }
 
 static void R22_Text(int16_t x,int16_t y,const char *s){
+#if defined(DOOM_R35_ART_RAW)
+    if(r35_native_active>=0){
+        if(x<0||x>=38||y<0||y>=28)return;
+        R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
+        return;
+    }
+#endif
     if(x<0||x>=38||y<0||y>=22)return;
     /* Window is independently addressable at F000. Plane B intentionally
        mirrors A at E000: transparent Window pixels reveal the same raster.
@@ -220,6 +231,10 @@ void V_ClearViewWindow(void){memset(r22_fb.pixels,0,R22_FB_BYTES);}
 
 void V_DrawBackground(int16_t n){(void)n;V_ClearViewWindow();}
 void V_DrawRawFullScreen(int16_t n){
+#if defined(DOOM_R35_ART_RAW)
+    if(R35_DrawNative4(n))return;
+    if(r35_native_active>=0)R35_LeaveNative4();
+#endif
     const uint8_t *p=W_GetLumpByNum(n);V_ClearViewWindow();
     for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,r22_color[p[(y*SCREENHEIGHT/44)*SCREENWIDTH+x*SCREENWIDTH/76]]);
 }
@@ -244,6 +259,12 @@ static void R22_HUD(void){
     uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,31,0);frames=0;vb=_g_vblankCount;}
 }
 void I_FinishUpdate(void){
+#if defined(DOOM_R35_ART_RAW)
+    if(r35_native_active>=0){
+        if(_g_gamestate!=GS_LEVEL)return; /* Native picture remains in VRAM. */
+        R35_LeaveNative4(); /* Gameplay uses the original p4 pipeline. */
+    }
+#endif
     if(r22_fb.before!=R22_GUARD||r22_fb.after!=R22_GUARD)I_Error("PX4 framebuffer guard");
     R20_StopVideo();R22_EndOverlay();
 #if defined(DOOM_R20_STACKGUARD)
