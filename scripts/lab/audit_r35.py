@@ -8,7 +8,7 @@ assert set(names)==expect,(names,expect)
 out=[]
 art_sources=[]
 for variant in names:
-    name='doom-md-r36b-'+variant
+    name='doom-md-r36c-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
     assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
@@ -32,8 +32,16 @@ for variant in names:
         assert r36['virtual_colors']==32 and r36['checker_pairs']==16,(name,r36)
         assert r36['extra_bitplane_bytes']==418 and r36['lut_rom_bytes']==8192,(name,r36)
         assert r36['checker_doom_colors']>=20,(name,r36)
+        assert '-DDOOM_R36C_HYBRID' in flags,(name,'missing selective solid flats')
+        assert r36.get('flat_reference')=='R35d-cell-E1M1-sector0',(name,r36.get('flat_reference'))
+        assert r36.get('e1m1_floor_solid_rgb')==[36,36,36],(name,r36.get('e1m1_floor_solid_rgb'))
+        assert r36.get('e1m1_ceiling_solid_rgb')==[73,73,73],(name,r36.get('e1m1_ceiling_solid_rgb'))
+        assert r36.get('floor_ceiling_checkerboard') is False,name
+        assert r36.get('wall_sprite_checkerboard') is True,name
+        assert r36.get('leftmost_tile_column')=='forced-black',name
     if is_cell:
         assert '-DDOOM_R36_PIXEL4_DITHER' not in flags,name
+        assert '-DDOOM_R36C_HYBRID' not in flags,name
         assert not (p/('r36-dither-'+variant+'.json')).exists(),name
     assert '-DDOOM_R35_ART_RAW' in flags,name
     assert '-DDOOM_R30_NATIVE' in flags,name
@@ -69,4 +77,4 @@ for variant in names:
 assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
 (p/'R35-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
 for v in out: print(json.dumps(v))
-print('R36 audit PASSED: 8x8 R35d reference plus 32-color 4x4 dither, both flagged and audited; trimmed ROMs, raw Bayer8, 52 PCM, XGM2')
+print('R36c audit PASSED: 8x8 cell reference; Pixel4 grey E1M1 floor 36/36/36 and ceiling 73/73/73; no flat dither, walls/sprites 32-color dither, left tile black; trimmed ROMs, raw Bayer8, 52 PCM, XGM2')
