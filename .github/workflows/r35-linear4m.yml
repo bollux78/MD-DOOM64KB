@@ -1,10 +1,10 @@
-name: R35d - strong checkerboard 8x8 validated
+name: R37 - E1M1 live BSP profiling on R35d 8x8
 on:
   push:
-    branches: [r35d-checker]
+    branches: [r37-bsp-lab]
   workflow_dispatch:
 concurrency:
-  group: r35d-checker
+  group: r37-bsp-lab
   cancel-in-progress: true
 permissions:
   contents: write
@@ -144,16 +144,17 @@ jobs:
           PY
           test -f ~/mars/m68k-elf/lib/libmd.a
           test -f ~/mars/m68k-elf/inc/snd/xgm2.h
-      - name: Build four R35 linear 4MiB variants
+      - name: Build R37 live play and clean timedemo control
         env:
           DOOM_R35D_CHECKER: '1'
+          DOOM_R37_BSP_PROFILE: '1'
         shell: bash
         run: |
           mkdir -p dist/r35
           : > dist/r35/BUILD-RESULTS.txt
           failed=0
-          for variant in cell-play cell-perf pixel4-play pixel4-perf; do
-            echo "=== R35 $variant ==="
+          for variant in cell-play cell-perf; do
+            echo "=== R37 $variant ==="
             if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"; then
               echo "$variant OK" | tee -a dist/r35/BUILD-RESULTS.txt
             else
@@ -165,30 +166,65 @@ jobs:
       - name: Confirm exact ROM and assets; make single ZIP
         shell: bash
         run: |
-          python3 scripts/lab/audit_r35.py dist/r35 cell-play cell-perf pixel4-play pixel4-perf
+          python3 scripts/lab/audit_r35.py dist/r35 cell-play cell-perf
           python3 - <<'PY'
           from pathlib import Path
           import zipfile
           d=Path('dist/r35')
-          with zipfile.ZipFile(d/'R35D-STRONG-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r35d-*.bin')):
+          with zipfile.ZipFile(d/'R37-BSP-LIVE-2ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(d.glob('doom-md-r37-*.bin')):
                   z.write(p,p.name)
-              z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
+              z.write(d/'R37-AUDIT.json','R37-AUDIT.json')
               for variant in ('cell-play','cell-perf'):
                   z.write(d/f'dither-{variant}.json',f'dither-{variant}.json')
               z.write(d/'SHA256SUMS','SHA256SUMS')
-          print('Single ROM archive:',(d/'R35D-STRONG-FOUR-ROMS.zip').stat().st_size,'bytes')
+              z.write('docs/review-r37/README.md','README-R37.md')
+          print('Single ROM archive:',(d/'R37-BSP-LIVE-2ROMS.zip').stat().st_size,'bytes')
+          PY
+      - name: BlastEm headless startup smoke gate for both ROMs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil, subprocess, json, time
+          out=pathlib.Path('dist/r35').resolve()
+          blastem=shutil.which('blastem')
+          if not blastem:
+              blastem=next((str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem')
+                            if p.is_file() and os.access(p,os.X_OK)),None)
+          if not blastem:raise SystemExit('BlastEm missing; cannot validate live profiler runtime')
+          report=[]
+          for mode in ('cell-play','cell-perf'):
+              rom=out/f'doom-md-r37-{mode}.bin'
+              env=os.environ.copy()
+              env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
+              start=time.monotonic()
+              try:
+                  p=subprocess.run([blastem,'-b','300',str(rom)],cwd=str(out),env=env,
+                         stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                         text=True,errors='replace',timeout=20)
+                  status='PASS' if p.returncode==0 else 'FAIL_NONZERO'
+                  tail=p.stdout[-1000:]
+              except subprocess.TimeoutExpired:
+                  status='HARD_TIMEOUT'
+                  tail=''
+              report.append({'variant':mode,'result':status,
+                             'elapsed_seconds':round(time.monotonic()-start,2),
+                             'tail':tail})
+              print(json.dumps(report[-1],ensure_ascii=False))
+          (out/'BLASTEM-RUNTIME.json').write_text(json.dumps(report,indent=2)+'\n')
+          if any(item['result']!='PASS' for item in report):
+              raise SystemExit('R37 runtime smoke failure')
           PY
       - name: Publish CI status for independent review
         if: always()
         shell: bash
         run: |
-          mkdir -p docs/review-r35 dist/r35
+          mkdir -p docs/review-r37 dist/r35
           python3 - <<'PY'
           from pathlib import Path
           import json,os
           d=Path('dist/r35')
-          a=d/'R35-AUDIT.json'
+          a=d/'R37-AUDIT.json'
           report={
               'run_id':os.environ.get('GITHUB_RUN_ID'),
               'sha':os.environ.get('GITHUB_SHA'),
@@ -196,24 +232,24 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r35d-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r37-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r35d-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r37-*.log'))}
           }
-          Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
+          Path('docs/review-r37/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
           print(json.dumps(report,indent=2,ensure_ascii=False)[-9000:])
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/review-r35/CI-LAST-RESULT.json
+          git add docs/review-r37/CI-LAST-RESULT.json
           git commit -m 'R35 self-hosted CI results [skip ci]' || true
-          git push origin HEAD:r35d-checker
-      - name: Upload 4 ROMs and build diagnostics
+          git push origin HEAD:r37-bsp-lab
+      - name: Upload R37 live profiler and clean control
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r35d-strong-validated
+          name: doom-md-r37-bsp-live
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
