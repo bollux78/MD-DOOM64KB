@@ -189,7 +189,7 @@ for v in $variants
         set -e DOOM_R35D_REPORT
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r35d-checker-$v
+    set -l id doom-md-r35d-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
