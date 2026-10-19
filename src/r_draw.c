@@ -3862,6 +3862,9 @@ static void R_RenderBSPNode(int16_t bspnum)
             bspnum = stack_bsp[sp];
 
             bsp = &nodes[bspnum];
+#if defined(DOOM_R35_LIVE_PROFILE)
+            ++r35_live_bbox;
+#endif
         }
 
         bspnum = bsp->children[side];
