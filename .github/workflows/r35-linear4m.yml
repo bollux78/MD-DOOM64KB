@@ -1,7 +1,5 @@
 name: R36b - Pixel4 checker LUT IRQ stabilization
 on:
-  push:
-    branches: [r36-pixel4-stable]
   workflow_dispatch:
 concurrency:
   group: r36-pixel4-stable
