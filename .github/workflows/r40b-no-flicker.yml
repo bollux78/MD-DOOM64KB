@@ -150,7 +150,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           src=Path("src/r22_video.inc").read_text()
-          n=src[src.index("static void R40B_DrawNativeText"):src.index("void V_DrawCharacter(",src.index("static void R40B_DrawNativeText"))]
+          n=src[src.index("static void R40B_DrawNativeText"):src.index("static int8_t r22_newpal")]
           assert 'R22_ClearOverlay();' not in n, "No whole-WINDOW clear in native redraw"
           assert 'r40b_native_seen[index>>3]' in n, "Missing touched glyph bitset"
           assert 'r40b_native_glyph[index]!=ch' in n, "Missing glyph-change test"
