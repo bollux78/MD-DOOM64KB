@@ -3,12 +3,12 @@
 from pathlib import Path
 import hashlib, json, sys, struct
 p=Path(sys.argv[1]);names=sys.argv[2:]
-expect={'cell-play','cell-perf','pixel4-play','pixel4-perf'}
+expect={'cell-play','cell-perf'}
 assert set(names)==expect,(names,expect)
 out=[]
 art_sources=[]
 for variant in names:
-    name='doom-md-r35d-'+variant
+    name='doom-md-r37-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
     assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
@@ -16,7 +16,9 @@ for variant in names:
     assert struct.unpack_from('>II',data,0x1A0)==(0,len(data)-1),name
     flags=(p/('flags-'+name+'.txt')).read_text()
     is_cell=variant.startswith('cell')
-    assert ('-DDOOM_R35D_CHECKER' in flags)==is_cell,(name,'checker flag mismatch')
+    assert '-DDOOM_R35D_CHECKER' in flags,(name,'checker flag required')
+    assert ('-DDOOM_R37_BSP_PROFILE' in flags)==variant.endswith('play'),(name,'live counters only in play')
+    assert ('-DDOOM_R20_COUNTERS' not in flags and '-DDOOM_ROUTINE_PROFILE' not in flags),name
     if is_cell:
         detail=json.loads((p/('dither-'+variant+'.json')).read_text())
         assert detail['mode']=='r35d-checker-strong',detail
@@ -57,6 +59,6 @@ for variant in names:
                     art_raw_bytes=sum(t['packed_bytes'] for t in art['screens']),
                     sha256=hashlib.sha256(data).hexdigest()))
 assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
-(p/'R35-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
+(p/'R37-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
 for v in out: print(json.dumps(v))
-print('R35d audit PASSED: strong 8x8 checker LUT with >=4500 COLORMAP entries; pixel4 controls unchanged; trimmed linear ROMs, raw Bayer8, 52 PCM SFX, XGM2')
+print('R37 audit PASSED: 8x8 strong checker; playable live BSP profiler plus clean timedemo; trimmed ROM, raw Bayer8, 52 PCM SFX, XGM2')
