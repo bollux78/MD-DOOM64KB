@@ -2610,6 +2610,15 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     draw_column_vars_t dcvars;
     int16_t  texturecolumn = 0;   // shut up compiler warning
 
+#if defined(DOOM_R39B_AGGRESSIVE_TEX4)
+    /* Aggressive 8x8 mode: one horizontal texture coordinate and vertical
+     * reciprocal for four adjacent screen columns (32 output pixels).
+     * Texture pixels can jump/stretch; wall edges and occlusion stay intact.
+     * Each R_RenderSegLoop starts with a fresh valid sample, and the stored
+     * reciprocal is restored after any sky drawing that may modify dcvars. */
+    const int16_t r39b_startx = rw_x;
+    uint16_t r39b_cached_fracstep = 0;
+#endif
     dcvars.colormap = R_LoadColorMap(rw_lightlevel);
 #if defined(DOOM_R20_REG_COLUMNS)
     extern const uint16_t *R20_SelectCellMap(const uint8_t *map);
@@ -2774,7 +2783,12 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             R20_COUNT(R20C_TEX_SKIP, 1);
 #endif
         // texturecolumn and lighting are independent of wall tiers
-#if defined(DOOM_R21_LAZY_TEXCOL)
+#if defined(DOOM_R39B_AGGRESSIVE_TEX4)
+        /* Sample at the first strip, then at absolute 4-column boundaries.
+         * No perspective/tangent/reciprocal calculation on intervening strips.
+         * Other wall-clip and floor/ceiling logic still executes each strip. */
+        if (segtextured && (rw_x == r39b_startx || !(rw_x & 3)))
+#elif defined(DOOM_R21_LAZY_TEXCOL)
         if (segtextured && r21_need_tex)
 #else
         if (segtextured)
@@ -2866,7 +2880,18 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #if defined(DOOM_R8_SKIP_MASKED_RECIP)
         }
 #endif
+#if defined(DOOM_R39B_AGGRESSIVE_TEX4)
+            r39b_cached_fracstep = dcvars.fracstep;
+#endif
         }
+#if defined(DOOM_R39B_AGGRESSIVE_TEX4)
+        else if (segtextured)
+        {
+            /* Sky processing can overwrite dcvars.fracstep between strips.
+             * Restore the cached WALL step before any wall-column call. */
+            dcvars.fracstep = r39b_cached_fracstep;
+        }
+#endif
 
         // draw the wall tiers
         if (midtexture)
