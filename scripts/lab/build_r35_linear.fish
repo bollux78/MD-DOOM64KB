@@ -188,8 +188,15 @@ for v in $variants
     else
         set -e DOOM_R35D_REPORT
     end
+    if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and test "$v" = cell-play
+        # Only live gameplay is instrumented. The timedemo remains clean.
+        set defs $defs '-DDOOM_R37_BSP_PROFILE'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
+    if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
+        set id doom-md-r37-$v
+    end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
