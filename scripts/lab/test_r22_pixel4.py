@@ -21,6 +21,9 @@ static unsigned _g_gamestate=0;
 #define GS_LEVEL 1
 static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;
 static uint8_t r22_color[256];
+/* The standalone R22 host harness exercises the legacy no-dither mapper.
+   R36c's selective texture LUT uses this alias only inside the full ROM. */
+#define R36_TEXTURE_COLOR r22_color
 typedef struct {int16_t x,yl,yh;uint16_t fracstep;int32_t texturemid;const uint8_t *source,*colormap;} draw_column_vars_t;
 '''+fn('static inline void R22_Plot(')+'\n'+fn('void R_DrawColumnSprite(')+'\n'+fn('void R_DrawColumnFlat(')+'''
 static uint32_t rng=20261017;
