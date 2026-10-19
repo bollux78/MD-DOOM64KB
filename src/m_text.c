@@ -53,6 +53,7 @@
 
 #include "globdata.h"
 #include "r24_romthings.h"
+#include "r39d_dither.h"
 
 
 #define DISABLE_QUIT_DOOM
@@ -147,6 +148,9 @@ static void M_QuitDOOM(int16_t choice);
 
 static void M_ChangeMessages(int16_t choice);
 static void M_ChangeAlwaysRun(int16_t choice);
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+static void M_ChangeDithering(int16_t choice);
+#endif
 static void M_ChangeGamma(int16_t choice);
 static void M_SfxVol(int16_t choice);
 static void M_MusicVol(int16_t choice);
@@ -539,6 +543,9 @@ enum
   endgame,
   messages,
   alwaysrun,
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+  dithering,
+#endif
   gamma,
 #if !defined DISABLE_SOUND_OPTIONS
   soundvol,
@@ -554,6 +561,9 @@ static const menuitem_t OptionsMenu[]=
   {1,"End Game",     M_EndGame},
   {1,"Messages:",    M_ChangeMessages},
   {1,"Always Run:",  M_ChangeAlwaysRun},
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+  {2,"Dithering:",   M_ChangeDithering},
+#endif
   {2,"Gamma Boost:", M_ChangeGamma},
 #if !defined DISABLE_SOUND_OPTIONS
   {1,"Sound Volume", M_Sound}
@@ -582,6 +592,9 @@ static void M_DrawOptions(void)
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * messages,  12, msgNames[showMessages]);
 
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * alwaysrun, 12, msgNames[_g_alwaysRun]);
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering, 12, msgNames[R39D_DitherEnabled()]);
+#endif
 
 	M_DrawThermo(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * gamma, 6, _g_gamma);
 }
@@ -744,6 +757,15 @@ static void M_ChangeAlwaysRun(int16_t choice)
 
     G_SaveSettings();
 }
+
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+static void M_ChangeDithering(int16_t choice)
+{
+    /* A confirms and right enables; left disables.  Swap ROM LUTs only,
+     * with no VDP reload or level restart required. */
+    R39D_SetDither(choice != 0);
+}
+#endif
 
 static void M_ChangeGamma(int16_t choice)
 {
