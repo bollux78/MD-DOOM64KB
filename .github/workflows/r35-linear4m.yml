@@ -1,4 +1,4 @@
-name: R35d - checkerboard 8x8 experiment
+name: R35d - strong checkerboard 8x8 validated
 on:
   push:
     branches: [r35d-checker]
@@ -170,12 +170,14 @@ jobs:
           from pathlib import Path
           import zipfile
           d=Path('dist/r35')
-          with zipfile.ZipFile(d/'R35-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r35-*.bin')):
+          with zipfile.ZipFile(d/'R35D-STRONG-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(d.glob('doom-md-r35d-checker-*.bin')):
                   z.write(p,p.name)
               z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
+              for variant in ('cell-play','cell-perf'):
+                  z.write(d/f'dither-{variant}.json',f'dither-{variant}.json')
               z.write(d/'SHA256SUMS','SHA256SUMS')
-          print('Single ROM archive:',(d/'R35-FOUR-ROMS.zip').stat().st_size,'bytes')
+          print('Single ROM archive:',(d/'R35D-STRONG-FOUR-ROMS.zip').stat().st_size,'bytes')
           PY
       - name: Publish CI status for independent review
         if: always()
@@ -194,9 +196,9 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r35-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r35d-checker-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r35-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r35d-checker-*.log'))}
           }
           Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
@@ -211,7 +213,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r35d-checker-experimental
+          name: doom-md-r35d-strong-validated
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
