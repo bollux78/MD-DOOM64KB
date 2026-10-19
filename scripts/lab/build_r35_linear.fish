@@ -197,6 +197,23 @@ for v in $variants
         # DOOM_R7_PROFILE enables the already-tested nested stage boundaries.
         set defs $defs '-DDOOM_R38_TIME_PROFILE'
     end
+    # R39c independent SRAM optimizations.  Exactly one experiment per ROM.
+    if set -q DOOM_R39C_VARIANT
+        switch "$DOOM_R39C_VARIANT"
+            case mcache
+                set defs $defs '-DDOOM_R39C_MOVEP_CACHE'
+            case mmap
+                set defs $defs '-DDOOM_R39C_MOVEP_MAP'
+            case mall
+                set defs $defs '-DDOOM_R39C_MOVEP_CACHE' '-DDOOM_R39C_MOVEP_MAP'
+            case reuse
+                set defs $defs '-DDOOM_R39C_REUSE_CACHE'
+            case control
+            case '*'
+                echo "Unknown R39c experiment: $DOOM_R39C_VARIANT"
+                exit 2
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -204,6 +221,9 @@ for v in $variants
     end
     if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-perf cell-profperf
         set id doom-md-r38-$v
+    end
+    if set -q DOOM_R39C_VARIANT
+        set id doom-md-r39c-$DOOM_R39C_VARIANT-$v
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
