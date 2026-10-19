@@ -184,7 +184,7 @@ for v in $variants
     end
     set defs $defs '-DDOOM_R35_ART_RAW'
     if set -q DOOM_E1M1_PROFILE; and test "$DOOM_E1M1_PROFILE" = 1; and test "$v" = cell-play
-        set defs $defs '-DDOOM_R20_COUNTERS'
+        set defs $defs '-DDOOM_R35_LIVE_PROFILE'
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35-$v
