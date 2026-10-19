@@ -2648,7 +2648,9 @@ static inline void R20_DrawWallColumn(const r20_wallsrc_t* w, const texture_t __
 
 #if defined(DOOM_R20_FLAT_INLINE)
 extern uint16_t _s_screen[];
-#if defined(DOOM_R20_COLOR_ROM)
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+extern const uint16_t *colorcell;
+#elif defined(DOOM_R20_COLOR_ROM)
 extern const uint16_t colorcell[];
 #else
 extern uint16_t colorcell[];
