@@ -1,0 +1,43 @@
+name: R35 - EverDrive-MD V2 SSF2 and SRAM hardware probe
+on:
+  push:
+    branches: [r35-ssf-probe]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate isolated R35 build inputs
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_ssf.fish
+          python3 -m py_compile tools/r35-ssf-probe/patch_rom.py
+          test -s tools/r35-ssf-probe/main.c
+          test -f ~/mars/m68k-elf/makefile.gen
+      - name: Assemble standalone SSF2/SRAM hardware probe
+        shell: bash
+        run: |
+          fish scripts/lab/build_r35_ssf.fish
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p=Path('dist/r35/doom-md-r35-ssf-probe.bin')
+          b=p.read_bytes()
+          assert len(b)==5*1024*1024
+          assert b[0x100:0x110]==b'SEGA SSF        '
+          assert struct.unpack_from('>II',b,0x1A0)==(0,0x4FFFFF)
+          assert all(b[k]==v for k,v in [(0x80000,0x11),(0x200001,0x22),(0x280001,0x33),(0x400000,0x88),(0x480000,0x99)])
+          print('Probe ROM format, SSF header, banks, and canaries: OK')
+          PY
+      - name: Upload 5MiB hardware probe
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r35-ssf-hardware-probe
+          path: dist/r35/
+          if-no-files-found: warn
+          retention-days: 45
