@@ -3,12 +3,12 @@
 from pathlib import Path
 import hashlib, json, sys, struct
 p=Path(sys.argv[1]);names=sys.argv[2:]
-expect={'cell-play','cell-perf'}
+expect={'cell-play','cell-perf','cell-profperf'}
 assert set(names)==expect,(names,expect)
 out=[]
 art_sources=[]
 for variant in names:
-    name='doom-md-r37-'+variant
+    name='doom-md-r38-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
     assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
@@ -17,7 +17,11 @@ for variant in names:
     flags=(p/('flags-'+name+'.txt')).read_text()
     is_cell=variant.startswith('cell')
     assert '-DDOOM_R35D_CHECKER' in flags,(name,'checker flag required')
-    assert ('-DDOOM_R37_BSP_PROFILE' in flags)==variant.endswith('play'),(name,'live counters only in play')
+    measured=variant in ('cell-play','cell-profperf')
+    assert ('-DDOOM_R38_TIME_PROFILE' in flags)==measured,(name,'R38 exclusive time profiler')
+    assert ('-DDOOM_R7_PROFILE' in flags)==measured,(name,'R7 nested stage markers required')
+    assert '-DDOOM_R37_BSP_PROFILE' not in flags,(name,'R37 counters add sampling bias')
+    assert ('-DDOOM_R28_VIDEO_AUDIT' in flags)!=(variant=='cell-profperf'),(name,'timedemo result rows must be free')
     assert ('-DDOOM_R20_COUNTERS' not in flags and '-DDOOM_ROUTINE_PROFILE' not in flags),name
     if is_cell:
         detail=json.loads((p/('dither-'+variant+'.json')).read_text())
@@ -51,6 +55,8 @@ for variant in names:
     assert raw<=len(data) and len(data)-raw<0x20000,(name,raw)
     out.append(dict(name=name,renderer=('4x4' if variant.startswith('pixel4') else '8x8'),
                     timedemo=variant.endswith('perf'),rom_bytes=len(data),
+                    time_profiled=measured,
+                    sampling_window=('full DEMO3' if variant=='cell-profperf' else ('600 NTSC VBlanks; camera-stationary' if measured else 'none')),
                     checkerboard=is_cell,
                     checker_colors=detail['checker_colors'] if is_cell else 0,
                     checker_colormap_cells=detail['checker_colormap_cells'] if is_cell else 0,
@@ -59,6 +65,6 @@ for variant in names:
                     art_raw_bytes=sum(t['packed_bytes'] for t in art['screens']),
                     sha256=hashlib.sha256(data).hexdigest()))
 assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
-(p/'R37-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
+(p/'R38-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
 for v in out: print(json.dumps(v))
-print('R37 audit PASSED: 8x8 strong checker; playable live BSP profiler plus clean timedemo; trimmed ROM, raw Bayer8, 52 PCM SFX, XGM2')
+print('R38 audit PASSED: playable R7 11-stage VBlank profiler, clean DEMO3 control, full-DEMO3 stage sampler; 8x8 strong checker, trimmed ROM, 52 PCM, XGM2')
