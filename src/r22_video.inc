@@ -88,6 +88,9 @@ static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
 #define R36_TEXTURE_COLOR r22_color
 #endif
 #endif
+#ifndef R36_TEXTURE_COLOR
+#define R36_TEXTURE_COLOR r22_color
+#endif
 static volatile uint16_t r22_ready;
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
