@@ -121,6 +121,11 @@ for v in $variants
         set -gx DOOM_R19_FLAT_DBRA 0
         set -gx DOOM_R16_WEAPON_LIFT 2
         set defs $pixel '-DDOOM_R22_SOLID_TILES' '-DDOOM_R22_PAIR_LUT'
+        if set -q DOOM_R36_PIXEL4_DITHER; and test "$DOOM_R36_PIXEL4_DITHER" = 1
+            # Offline only: all 32 colors and the 2x2 checker rows are ROM LUTs.
+            python3 scripts/lab/gen_r36_pixel4_dither.py --report "$dest/r36-dither-$v.json"; or exit 1
+            set defs $defs '-DDOOM_R36_PIXEL4_DITHER'
+        end
     end
     set defs $defs '-DDOOM_R22_SRAM_BLOCKLINKS' '-DDOOM_R26_FLOW' 
     if contains -- $v cell-play pixel4-play
@@ -190,6 +195,9 @@ for v in $variants
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
+    if set -q DOOM_R36_PIXEL4_DITHER; and test "$DOOM_R36_PIXEL4_DITHER" = 1
+        set id doom-md-r36-$v
+    end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
