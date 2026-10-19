@@ -196,7 +196,7 @@ for v in $variants
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R36_PIXEL4_DITHER; and test "$DOOM_R36_PIXEL4_DITHER" = 1
-        set id doom-md-r36-$v
+        set id doom-md-r36b-$v
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
