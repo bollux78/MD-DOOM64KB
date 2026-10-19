@@ -287,6 +287,14 @@ for v in $variants
             exit 2
         end
     end
+    if set -q DOOM_R40B_BUILD; and test "$DOOM_R40B_BUILD" = 1
+        if contains -- $v pixel4-play pixel4-perf
+            set id doom-md-r40b-$v
+        else
+            echo 'R40b is a pixel4 title/intermission WINDOW change only'
+            exit 2
+        end
+    end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
