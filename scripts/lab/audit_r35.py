@@ -8,13 +8,24 @@ assert set(names)==expect,(names,expect)
 out=[]
 art_sources=[]
 for variant in names:
-    name='doom-md-r35-'+variant
+    name='doom-md-r35d-checker-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
     assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
     assert data[0x100:0x110]==b'SEGA MEGA DRIVE ',name
     assert struct.unpack_from('>II',data,0x1A0)==(0,len(data)-1),name
     flags=(p/('flags-'+name+'.txt')).read_text()
+    is_cell=variant.startswith('cell')
+    assert ('-DDOOM_R35D_CHECKER' in flags)==is_cell,(name,'checker flag mismatch')
+    if is_cell:
+        detail=json.loads((p/('dither-'+variant+'.json')).read_text())
+        assert detail['mode']=='r35d-checker-strong',detail
+        assert detail['checker_colors']>=140,(name,detail['checker_colors'])
+        assert detail['checker_colormap_cells']>=4500,(name,detail['checker_colormap_cells'])
+        assert detail['unique_checker_tiles']>=60,(name,detail['unique_checker_tiles'])
+        assert detail['checker_tile_max']==120,detail
+    else:
+        assert not (p/('dither-'+variant+'.json')).exists(),name
     assert '-DDOOM_R35_ART_RAW' in flags,name
     assert '-DDOOM_R30_NATIVE' in flags,name
     assert '-DDOOM_R29_XGM2' in flags,name
@@ -38,6 +49,9 @@ for variant in names:
     assert raw<=len(data) and len(data)-raw<0x20000,(name,raw)
     out.append(dict(name=name,renderer=('4x4' if variant.startswith('pixel4') else '8x8'),
                     timedemo=variant.endswith('perf'),rom_bytes=len(data),
+                    checkerboard=is_cell,
+                    checker_colors=detail['checker_colors'] if is_cell else 0,
+                    checker_colormap_cells=detail['checker_colormap_cells'] if is_cell else 0,
                     elf_payload_bytes=raw,free_bytes=len(data)-raw,
                     pcm_count=52,pcm_bytes=sfx.get('sum_pcm_bytes'),
                     art_raw_bytes=sum(t['packed_bytes'] for t in art['screens']),
@@ -45,4 +59,4 @@ for variant in names:
 assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
 (p/'R35-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
 for v in out: print(json.dumps(v))
-print('R35 audit PASSED: linear ROM <=4MiB trimmed to 128KiB boundary, byte-raw Bayer8, uncompressed PCM, shared XGM2, 4x4 and 8x8')
+print('R35d audit PASSED: strong 8x8 checker LUT with >=4500 COLORMAP entries; pixel4 controls unchanged; trimmed linear ROMs, raw Bayer8, 52 PCM SFX, XGM2')
