@@ -54,6 +54,7 @@
 #include "globdata.h"
 #include "r24_romthings.h"
 #include "r39d_dither.h"
+#include "r39f_dither.h"
 #include "r39e_audio.h"
 
 
@@ -596,6 +597,9 @@ static const menu_t OptionsDef =
 // M_Options
 //
 static const char msgNames[2][4]  = {"Off","On"};
+#if defined(DOOM_R39F_DITHER3)
+static const char r39f_mode_names[3][9] = {"Off","Checker","Vertical"};
+#endif
 
 
 static void M_DrawOptions(void)
@@ -606,7 +610,13 @@ static void M_DrawOptions(void)
 
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * alwaysrun, 12, msgNames[_g_alwaysRun]);
 #if defined(DOOM_R39D_DITHER_TOGGLE)
-    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering, 12, msgNames[R39D_DitherEnabled()]);
+#if defined(DOOM_R39F_DITHER3)
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering,
+                 12, r39f_mode_names[R39F_DitherMode()]);
+#else
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering,
+                 12, msgNames[R39D_DitherEnabled()]);
+#endif
 #endif
 #if defined(DOOM_R39E_AUDIO_TOGGLES)
     V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * music_toggle, 12, msgNames[R39E_MusicEnabled()]);
@@ -778,10 +788,16 @@ static void M_ChangeAlwaysRun(int16_t choice)
 #if defined(DOOM_R39D_DITHER_TOGGLE)
 static void M_ChangeDithering(int16_t choice)
 {
-    /* A toggles OFF/ON; swap ROM lookup tables without touching CRAM,
-     * VDP, or gameplay state. It takes effect on the next 3D frame. */
     UNUSED(choice);
+#if defined(DOOM_R39F_DITHER3)
+    /* Same A/Enter behavior as existing R39d Options item.  Three ROM
+     * LUT sets are selected without touching CRAM or the level state. */
+    uint16_t mode = R39F_DitherMode() + 1;
+    if (mode > R39F_VERTICAL) mode = R39F_SOLID;
+    R39F_SetDitherMode(mode);
+#else
     R39D_SetDither(!R39D_DitherEnabled());
+#endif
 }
 #endif
 
