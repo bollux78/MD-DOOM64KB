@@ -279,6 +279,14 @@ for v in $variants
                 exit 2
         end
     end
+    if set -q DOOM_R40A_BUILD; and test "$DOOM_R40A_BUILD" = 1
+        if contains -- $v pixel4-play pixel4-perf
+            set id doom-md-r40a-$v
+        else
+            echo 'R40a fixes the pixel4 native picture overlay only'
+            exit 2
+        end
+    end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
