@@ -242,6 +242,28 @@ static void hud_label(int16_t x, int16_t y, const char* text)
     while (*text && x < VIEWWINDOWWIDTH)
         _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(HUD_COL, *text++);
 }
+#if defined(DOOM_R35_LIVE_PROFILE)
+extern volatile uint16_t r35_live_nodes, r35_live_bbox, r35_live_rejected;
+extern volatile uint16_t r35_live_subsectors, r35_live_segs, r35_live_columns;
+static void R35_DrawLiveProfile(void)
+{
+    if (_g_gamestate != GS_LEVEL) return;
+    /* Two diagnostic rows replace the bottom title and safety-margin row.
+       These are tilemap characters, not a pixel overlay. */
+    const int16_t y = VIEWWINDOWHEIGHT + 3;
+    const int16_t z = VIEWWINDOWHEIGHT + 4;
+    const char *labels[] = {"N", "B", "X", "S", "G", "C"};
+    const uint16_t values[] = {r35_live_nodes, r35_live_bbox, r35_live_rejected,
+                                r35_live_subsectors, r35_live_segs, r35_live_columns};
+    for (int16_t x=0; x<VIEWWINDOWWIDTH; ++x) { hud_putc(x,y,' '); hud_putc(x,z,' '); }
+    for (int16_t i=0;i<3;i++) {
+        int16_t x=i*12;
+        hud_putc(x,y,labels[i][0]); hud_num(x+2,y,values[i],5);
+        hud_putc(x,z,labels[i+3][0]); hud_num(x+2,z,values[i+3],5);
+    }
+}
+#endif
+
 static uint16_t hud_saturate3(int32_t value)
 {
     if (value < 0) return 0;
@@ -1210,6 +1232,9 @@ void I_FinishUpdate(void)
             ;
 #if defined(DOOM_R20_HUD_LAZY)
         if (changed) I_DrawClassicTextHUD();
+#if defined(DOOM_R35_LIVE_PROFILE)
+        R35_DrawLiveProfile();
+#endif
         r20_hud_dirty = 0;
 #endif
 
