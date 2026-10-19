@@ -1,7 +1,5 @@
 name: R37 - E1M1 live BSP profiling on R35d 8x8
 on:
-  push:
-    branches: [r37-bsp-lab]
   workflow_dispatch:
 concurrency:
   group: r37-bsp-lab
