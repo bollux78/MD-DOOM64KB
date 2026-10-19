@@ -125,6 +125,9 @@ for v in $variants
             # Offline only: all 32 colors and the 2x2 checker rows are ROM LUTs.
             python3 scripts/lab/gen_r36_pixel4_dither.py --report "$dest/r36-dither-$v.json"; or exit 1
             set defs $defs '-DDOOM_R36_PIXEL4_DITHER'
+            if set -q DOOM_R36C_HYBRID; and test "$DOOM_R36C_HYBRID" = 1
+                set defs $defs '-DDOOM_R36C_HYBRID'
+            end
         end
     end
     set defs $defs '-DDOOM_R22_SRAM_BLOCKLINKS' '-DDOOM_R26_FLOW' 
@@ -197,6 +200,9 @@ for v in $variants
     set -l id doom-md-r35d-$v
     if set -q DOOM_R36_PIXEL4_DITHER; and test "$DOOM_R36_PIXEL4_DITHER" = 1
         set id doom-md-r36b-$v
+        if set -q DOOM_R36C_HYBRID; and test "$DOOM_R36C_HYBRID" = 1
+            set id doom-md-r36c-$v
+        end
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
