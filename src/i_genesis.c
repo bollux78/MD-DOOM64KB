@@ -21,6 +21,10 @@
 #endif
 
 #include "globdata.h"
+#include "r39e_audio.h"
+#if defined(DOOM_R39E_AUDIO_TOGGLES) && !defined(DOOM_R29_XGM2)
+#error R39e independent music/PCM toggles require XGM2
+#endif
 #include "r21_textscreen.h"
 #include "r20_stackguard.h"
 #include "r20_dma.h"
@@ -158,6 +162,40 @@ static void DMX_RegisterPCM(void)
 }
 #endif
 
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+/* Audio toggles do not modify Doom's music state or demo timing.
+ * Music pause/resume affects only the XGM2 song, not PCM SFX channels.
+ * OFF/ON survives music track and level changes, but resets on boot. */
+static uint16_t r39e_music_enabled = 1;
+static uint16_t r39e_sfx_enabled = 1;
+static uint16_t r39e_song_active;
+
+uint16_t R39E_MusicEnabled(void) { return r39e_music_enabled; }
+uint16_t R39E_SfxEnabled(void) { return r39e_sfx_enabled; }
+
+void R39E_SetMusicEnabled(uint16_t enabled)
+{
+    enabled = enabled != 0;
+    if (enabled == r39e_music_enabled) return;
+    r39e_music_enabled = enabled;
+    if (!r39e_song_active) return;
+    if (enabled) XGM2_resume();
+    else XGM2_pause();
+}
+void R39E_SetSfxEnabled(uint16_t enabled)
+{
+    enabled = enabled != 0;
+    if (enabled == r39e_sfx_enabled) return;
+    r39e_sfx_enabled = enabled;
+    if (!enabled) {
+        /* Stop already-playing Doom effects immediately. Channel 1 remains
+         * reserved for soundtrack PCM; it must not be interrupted here. */
+        XGM2_stopPCM(SOUND_PCM_CH2);
+        XGM2_stopPCM(SOUND_PCM_CH3);
+    }
+}
+#endif
+
 void DMX_Init(void)
 {
 	// XGM ドライバを明示ロードしてから PCM を登録する。
@@ -177,6 +215,9 @@ void DMX_Play(sfxenum_t id, int16_t channel)
 {
 	if (id <= sfx_None || id > GENSFX_COUNT)
 		return;
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+    if (!r39e_sfx_enabled) return;
+#endif
 #if defined(DOOM_R29_XGM2)
 	/* Music may use channel 1; only channels 2 and 3 available for SFX. */
 	SoundPCMChannel pcmch = (channel & 1) ? SOUND_PCM_CH3 : SOUND_PCM_CH2;
@@ -263,11 +304,19 @@ void I_PlaySong(musicenum_t handle, boolean looping)
 	DMX_RegisterPCM();
 #endif
 #endif
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+    /* Even after title/level transitions, Music OFF must remain muted. */
+    r39e_song_active = 1;
+    if (!r39e_music_enabled) XGM2_pause();
+#endif
 }
 
 void I_StopSong(musicenum_t handle)
 {
 	(void)handle;
+#if defined(DOOM_R39E_AUDIO_TOGGLES)
+    r39e_song_active = 0;
+#endif
 #if defined(DOOM_R25_MUSIC)
 #if defined(DOOM_R29_XGM2)
     XGM2_stop();
