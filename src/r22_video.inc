@@ -45,24 +45,27 @@ static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
 static uint8_t r22_overlay_dirty,r22_text_this_frame;
-/* R40b: Native-title/intermission WINDOW cells are not cleared on each
- * frame. Two 105-byte occupancy bitmaps let us erase only stale positions
- * after the new glyphs have been written. Avoid the earlier 836-byte
- * glyph cache: WRAM/SGDK heap is tight in this port. */
+/* R40b: No additional WRAM.  The 38x21 4x4 VDP tilemap is used only
+ * during raster gameplay, never while a native 320x224 static picture is
+ * active.  Reuse its first 210 bytes as two 105-byte occupancy masks to
+ * retain and prune WINDOW glyphs without a per-frame clear.
+ * R35_LeaveNative4 invalidates these masks BEFORE gameplay rebuilds map. */
 #define R40B_TEXT_W 38
 #define R40B_TEXT_H 22
 #define R40B_TEXT_N (R40B_TEXT_W*R40B_TEXT_H)
-static uint8_t r40b_native_prev[(R40B_TEXT_N+7)/8];
-static uint8_t r40b_native_seen[(R40B_TEXT_N+7)/8];
-static void R40B_ResetNativeText(void)
-{
-    memset(r40b_native_prev,0,sizeof(r40b_native_prev));
-    memset(r40b_native_seen,0,sizeof(r40b_native_seen));
-}
-#if defined(DOOM_R22_SOLID_TILES)
+#define R40B_OCC_BYTES ((R40B_TEXT_N+7)/8)
+#if !defined(DOOM_R22_SOLID_TILES)
+#error R40b native text reuses r22_map and requires SOLID_TILES
+#endif
 /* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
 static uint16_t r22_map[38*21] __attribute__((aligned(2)));
-#endif
+#define r40b_native_prev ((uint8_t*)(void*)r22_map)
+#define r40b_native_seen (((uint8_t*)(void*)r22_map)+R40B_OCC_BYTES)
+static void R40B_ResetNativeText(void)
+{
+    memset(r40b_native_prev,0,R40B_OCC_BYTES);
+    memset(r40b_native_seen,0,R40B_OCC_BYTES);
+}
 static inline uint16_t R22_Lock(void){uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");return sr;}
 static inline void R22_Unlock(uint16_t sr){__asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");}
 /* SDK text helpers use a 256-byte stack array. Write bounded glyphs directly,
@@ -116,7 +119,7 @@ static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
 static void R40B_PruneNativeText(void)
 {
     uint16_t stale=0;
-    for(uint16_t i=0;i<sizeof(r40b_native_prev);i++){
+    for(uint16_t i=0;i<R40B_OCC_BYTES;i++){
         if(r40b_native_prev[i] & (uint8_t)~r40b_native_seen[i]){
             stale=1;break;
         }
@@ -142,7 +145,7 @@ static void R40B_PruneNativeText(void)
         }
         R22_Unlock(sr);
     }
-    memcpy(r40b_native_prev,r40b_native_seen,sizeof(r40b_native_prev));
+    memcpy(r40b_native_prev,r40b_native_seen,R40B_OCC_BYTES);
 }
 
 static int8_t r22_newpal=100,r22_queued_pal=100;
@@ -298,7 +301,7 @@ void R22_BeginFrame(void){
     R20_StopVideo();r22_text_this_frame=0;
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0)
-        memset(r40b_native_seen,0,sizeof(r40b_native_seen));
+        memset(r40b_native_seen,0,R40B_OCC_BYTES);
 #endif
 }
 static void R22_EndOverlay(void){
