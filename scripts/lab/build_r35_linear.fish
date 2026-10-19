@@ -126,7 +126,7 @@ for v in $variants
             python3 scripts/lab/gen_r36_pixel4_dither.py --report "$dest/r36-dither-$v.json"; or exit 1
             set defs $defs '-DDOOM_R36_PIXEL4_DITHER'
             if set -q DOOM_R36_DIAG_MODE
-                contains -- "$DOOM_R36_DIAG_MODE" 1 2 3 4; or exit 2
+                contains -- "$DOOM_R36_DIAG_MODE" 1 2 3 4 5; or exit 2
                 set defs $defs "-DDOOM_R36_DIAG_MODE=$DOOM_R36_DIAG_MODE"
             end
         end
