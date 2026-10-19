@@ -48,7 +48,7 @@ void *R22_Alloc(uint16_t n) { return MEM_alloc(n); }
 static struct {
     uint32_t before;
     uint8_t pixels[R22_FB_BYTES];
-#if defined(DOOM_R36_PIXEL4_DITHER)
+#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 5
     uint8_t high[(R22_W * R22_H + 7) / 8]; /* fifth bit, 418B, inside guard */
 #endif
     uint32_t after;
@@ -61,7 +61,7 @@ static struct {
    Code 0..15 is solid; code 16..31 expands to a two-color 2x2 checker.
    Importantly, all writes (walls, floors, sprites, static fallback) use
    the same helper, and V_ClearViewWindow clears both synchronized planes. */
-#if DOOM_R36_DIAG_MODE != 4
+#if DOOM_R36_DIAG_MODE != 4 && DOOM_R36_DIAG_MODE != 5
 static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
     R22_Put(p,x,y,code);
 #if DOOM_R36_DIAG_MODE != 2
@@ -73,7 +73,7 @@ static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
 }
 #define R22_Put R36_Put
 #endif
-#if DOOM_R36_DIAG_MODE != 1 && DOOM_R36_DIAG_MODE != 4
+#if DOOM_R36_DIAG_MODE != 1 && DOOM_R36_DIAG_MODE != 4 && DOOM_R36_DIAG_MODE != 5
 #define r22_color r36_color
 #endif
 #endif
@@ -215,7 +215,7 @@ static void R22_UploadBack(uint16_t bank){
 #endif
     for(uint16_t y=1;y<22;y++)for(uint16_t x=0;x<38;x++,tile++){
         uint8_t a=r22_fb.pixels[(2*y)*38+x],b=r22_fb.pixels[(2*y+1)*38+x];
-#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 4
+#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 4 && DOOM_R36_DIAG_MODE != 5
         /* Both horizontally adjacent sample bits reside in the same byte.
            R22_W is even, so no crossing at an 8-bit bitplane boundary. */
         uint16_t pos=(uint16_t)((2*y)*R22_W+2*x);
@@ -224,7 +224,7 @@ static void R22_UploadBack(uint16_t bank){
         uint8_t hb=(uint8_t)((r22_fb.high[pos>>3]>>(pos&7))&3u);
 #endif
 #if defined(DOOM_R22_SOLID_TILES)
-#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 4
+#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 4 && DOOM_R36_DIAG_MODE != 5
         uint16_t index=(ha|hb)?tile:R22_TileIndex(a,b,tile);
 #else
         uint16_t index=R22_TileIndex(a,b,tile);
@@ -234,7 +234,7 @@ static void R22_UploadBack(uint16_t bank){
 #endif
         uint16_t sr=R22_Lock();
         VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(tile*32u);
-#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 3 && DOOM_R36_DIAG_MODE != 4
+#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 3 && DOOM_R36_DIAG_MODE != 4 && DOOM_R36_DIAG_MODE != 5
         uint16_t ai=(uint16_t)(((uint16_t)ha<<8)|a);
         uint16_t bi=(uint16_t)(((uint16_t)hb<<8)|b);
         uint32_t te=r36_row_even[ai],to=r36_row_odd[ai];
@@ -288,7 +288,7 @@ static void R22_EndOverlay(void){
 }
 void V_ClearViewWindow(void){
     memset(r22_fb.pixels,0,R22_FB_BYTES);
-#if defined(DOOM_R36_PIXEL4_DITHER)
+#if defined(DOOM_R36_PIXEL4_DITHER) && DOOM_R36_DIAG_MODE != 5
     memset(r22_fb.high,0,sizeof(r22_fb.high));
 #endif
 }
