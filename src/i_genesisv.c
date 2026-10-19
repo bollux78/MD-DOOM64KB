@@ -1561,10 +1561,10 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
         const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
         if (offset < (32u * 256u) && (offset & 255u) == 0u)
         {
-            const uint16_t *#if defined(DOOM_R39D_DITHER_TOGGLE)
-                cellmap = r39d_active_colormap[offset >> 8];
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+            const uint16_t *cellmap = r39d_active_colormap[offset >> 8];
 #else
-                cellmap = doom_colormap_cells[offset >> 8];
+            const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
 #endif
 #endif
 #if defined(DOOM_R20_PIXEL_ADDX)
