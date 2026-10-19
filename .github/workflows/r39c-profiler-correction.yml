@@ -1,0 +1,206 @@
+name: R39p - Correct multipatch profiler attribution
+on:
+  push:
+    branches: [r39c-profiler-correction]
+  workflow_dispatch:
+concurrency:
+  group: r39c-profiler-correction
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned XGM2 soundtrack input
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Recover pinned shareware DOOM1.WAD (not committed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          expected_sha='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          size=4196020
+          candidates=[
+              ('ibiblio', 'https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad',False),
+              ('wad-archive', 'https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+              ('shareware-demo', 'https://aikernel.net/demo/doom/DOOM1.WAD',False)
+          ]
+          if target.is_file():
+              b=target.read_bytes()
+              if len(b)==size and hashlib.sha256(b).hexdigest()==expected_sha:
+                  print('Verified pinned shareware WAD already present:',target)
+                  raise SystemExit(0)
+          for name,url,compressed in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R31 build asset verifier/1.0'})
+                  with urllib.request.urlopen(req,timeout=70) as response:
+                      data=response.read(9000000)
+                  if compressed:data=gzip.decompress(data)
+                  sha=hashlib.sha256(data).hexdigest()
+                  if len(data)!=size or sha!=expected_sha:
+                      print(name,'unexpected content or checksum; rejecting',
+                            len(data),sha)
+                      continue
+                  target.write_bytes(data)
+                  print('Verified original shareware v1.9 from',name,
+                        'size',len(data),'SHA256',sha)
+                  break
+              except Exception as e:
+                  print('Shareware mirror unavailable:',name,str(e)[:200])
+          else:
+              print('Pinned Doom shareware download failed; original preflight will look for local source.')
+          PY
+      - name: Preflight - find authentic Doom DMX sounds on self-hosted runner
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          python3 - <<'PY'
+          import pathlib,os,struct,hashlib,sys
+          home=pathlib.Path.home()
+          candidates=[
+              pathlib.Path('scripts/doom1.wad'),
+              home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',
+              home/'Projetos/doom-assets/doom1.WAD',
+              home/'Jogos/doom1.wad',
+              home/'Games/doom1.wad',
+              home/'Downloads/doom1.wad'
+          ]
+          # No external network or repo commit for copyright-protected WAD.
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir():continue
+              root_depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-root_depth>4:
+                      subdirs[:]=[]
+                      continue
+                  subdirs[:]=[s for s in subdirs if not s.startswith('.')]
+                  for n in names:
+                      if n.lower()=='doom1.wad':
+                          candidates.append(pathlib.Path(directory)/n)
+          for f in candidates:
+              if not f.is_file():continue
+              try:
+                  with f.open('rb') as fd:
+                      h=fd.read(12)
+                      if len(h)!=12 or h[:4] not in (b'IWAD',b'PWAD'):continue
+                      count,offset=struct.unpack_from('<II',h,4)
+                      if not 100<count<10000:continue
+                      fd.seek(offset)
+                      directory=fd.read(count*16)
+                  sounds={directory[i+8:i+16].split(b'\0')[0]
+                          for i in range(0,len(directory),16)}
+                  if not {b'DSPISTOL',b'DSSHOTGN',b'DSOROPN'}.intersection(sounds):
+                      continue
+                  raw=f.read_bytes()
+                  dest=pathlib.Path('scripts/doom1.wad')
+                  if f.resolve()!=dest.resolve():dest.write_bytes(raw)
+                  sha=hashlib.sha256(raw).hexdigest()
+                  (pathlib.Path('dist/r35')/'SOURCE-STATUS.txt').write_text(
+                      f'Genuine WAD source found: {str(f)}\nSHA256: {sha}\nBytes: {len(raw)}\n')
+                  print('SFX input:',f,'bytes',len(raw),'SHA256',sha)
+                  sys.exit(0)
+              except (OSError,struct.error):continue
+          status=('MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\n'
+                  'Place your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\n'
+                  'No synthetic or silent SFX fallback is allowed for R31 PCM builds.\n')
+          pathlib.Path('dist/r35/SOURCE-STATUS.txt').write_text(status)
+          print(status,file=sys.stderr)
+          sys.exit(3)
+          PY
+      - name: Verify R31 generator and build scripts
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_linear.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r31_sfx.py scripts/lab/gen_r30_native.py \
+            scripts/lab/finish_r35_rom.py scripts/lab/audit_r35.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          python3 - <<'PY'
+          import importlib.util,struct
+          spec=importlib.util.spec_from_file_location('sfx','scripts/lab/gen_r31_sfx.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          source=bytes((128+(i%20)) for i in range(11025))
+          lump=struct.pack('<HHI',3,11025,len(source))+source
+          low,*_=m.convert(lump,6650)
+          high,*_=m.convert(lump,13300)
+          assert len(low)%256==len(high)%256==0
+          assert len(low)<len(high)
+          assert len(m.SFX)==52
+          print('R31 rate conversion, alignment, SFX enum count: OK')
+          PY
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+      - name: Build corrected time-profile 8x8 ROMs
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          for variant in cell-play cell-perf cell-profperf; do
+            echo "=== R39p corrected $variant ==="
+            env DOOM_R35D_CHECKER=1 DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=1 DOOM_R39P_PROFILE_FIX=1 DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"
+            test -s "dist/r35/doom-md-r39p-$variant.bin"
+          done
+      - name: Audit corrected profiler and produce ZIP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib,struct,hashlib,json,zipfile
+          d=pathlib.Path('dist/r35')
+          manifest=[]
+          for variant in ('cell-play','cell-perf','cell-profperf'):
+              stem='doom-md-r39p-'+variant
+              b=(d/(stem+'.bin')).read_bytes()
+              fs=set((d/('flags-'+stem+'.txt')).read_text().split())
+              assert 0<len(b)<=4*1024*1024 and len(b)%0x20000==0
+              assert b[0x100:0x110]==b'SEGA MEGA DRIVE '
+              assert struct.unpack_from('>II',b,0x1a0)==(0,len(b)-1)
+              prof=variant in ('cell-play','cell-profperf')
+              assert ('-DDOOM_R39P_PROFILE_FIX' in fs)==prof
+              assert ('-DDOOM_R38_TIME_PROFILE' in fs)==prof
+              assert ('-DTIMEDEMO' in fs)==(variant!='cell-play')
+              for flag in ('-DDOOM_R35D_CHECKER','-DDOOM_R31_SFX','-DDOOM_R29_XGM2','-DDOOM_R35_ART_RAW'):
+                  assert flag in fs,(stem,flag)
+              manifest.append(dict(name=stem,bytes=len(b),sha256=hashlib.sha256(b).hexdigest(),profile_corrected=prof))
+          (d/'R39P-MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          with zipfile.ZipFile(d/'R39P-CORRECTED-PROFILER-3ROMS.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
+              for item in manifest:z.write(d/(item['name']+'.bin'),item['name']+'.bin')
+              z.write(d/'R39P-MANIFEST.json','R39P-MANIFEST.json')
+          print(json.dumps(manifest,indent=2))
+          PY
+      - name: BlastEm headless boot smoke
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess
+          blastem=shutil.which('blastem') or next((str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          assert blastem,'BlastEm missing'
+          d=pathlib.Path('dist/r35').resolve()
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          for variant in ('cell-play','cell-perf','cell-profperf'):
+              stem='doom-md-r39p-'+variant
+              p=subprocess.run([blastem,'-b','300',str(d/(stem+'.bin'))],cwd=str(d),env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=25)
+              print(stem,p.returncode,p.stdout[-300:])
+              assert p.returncode==0,stem
+          PY
+      - name: Upload corrected profiler binaries
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r39p-profiler-correction
+          path: dist/r35/
+          if-no-files-found: warn
+          retention-days: 90
