@@ -7,6 +7,8 @@ Uses exactly the same genpal_cell[] mapping as the existing rendering path.
 from pathlib import Path
 import re
 import struct
+import os
+import genpal
 
 ROOT = Path(__file__).resolve().parent.parent
 WAD = ROOT / "scripts" / "doom64_aligned.wad"
@@ -42,13 +44,45 @@ def read_slots(palette):
         raise ValueError("Unexpected genpal_cell layout")
     return slots
 
+def checker_slots():
+    source = PALETTE.read_text(encoding="utf-8")
+    block = re.search(r"genpal_cram\[GENPAL_NSUB\]\[64\]\s*=\s*\{\s*\{([^}]*)\}", source, re.S)
+    if not block:
+        raise ValueError("Missing CRAM bank 0")
+    words = [int(x, 16) for x in re.findall(r"0x[0-9a-fA-F]+", block.group(1))]
+    if len(words) != 64:
+        raise ValueError("Expected 64 CRAM entries")
+    palette = [genpal.gen_to_rgb(w) for w in words]
+    original = genpal.decode_subpal(genpal.load_playpal(), 0)
+    choices = []
+    for bank in range(4):
+        for a in range(15):
+            choices.append((bank, a, a, palette[bank*16+a]))
+            for b in range(a+1, 15):
+                rgb = tuple((palette[bank*16+a][i]+palette[bank*16+b][i])/2 for i in range(3))
+                choices.append((bank, a, b, rgb))
+    selected = []
+    for rgb in original:
+        def score(c):
+            bank,a,b,display = c
+            err = genpal.dist2(rgb, display)
+            contrast = genpal.dist2(palette[bank*16+a], palette[bank*16+b])
+            return err + (0.075*contrast if a != b else 0)
+        bank,a,b,_ = min(choices, key=score)
+        tile = a if a == b else 16 + sum(14-k for k in range(a)) + (b-a-1)
+        selected.append((bank,tile))
+    return selected
+
 def main():
     colors = read_colormap(WAD)
     slots = read_slots(PALETTE)
+    checker = os.environ.get('DOOM_R35D_CHECKER') == '1'
+    lookup = checker_slots() if checker else None
     cells = ['/* Generated exact colorcell mapping; SGDK indices resolved by C. */',
              'const uint16_t colorcell[256] = {']
-    for slot in slots:
-        cells.append(f'TILE_ATTR_FULL({slot // 14},0,0,0,SOLID_TILE_INDEX + {1 + slot % 14}),')
+    for i,slot in enumerate(slots):
+        pal,tile = lookup[i] if checker else (slot//14, 1+slot%14)
+        cells.append(f'TILE_ATTR_FULL({pal},0,0,0,SOLID_TILE_INDEX + {tile}),')
     cells.append('};')
     (ROOT / 'src/r20_colorcell.h').write_text('\n'.join(cells)+'\n')
 
@@ -62,8 +96,7 @@ def main():
         row = []
         for source in colors[shade * 256:(shade + 1) * 256]:
             slot = slots[source]
-            palette = slot // 14
-            index = 1 + slot % 14
+            palette,index = lookup[source] if checker else (slot // 14, 1 + slot % 14)
             row.append(f"TILE_ATTR_FULL({palette}, 0, 0, 0, SOLID_TILE_INDEX + {index})")
         lines.append("  {")
         for offset in range(0, 256, 8):
