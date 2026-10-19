@@ -268,7 +268,11 @@ static void I_DrawClassicTextHUD(void)
     hud_num(19, hud_values_row, hud_saturate3(_g_player.armorpoints), 3);
     hud_label(24, hud_values_row, "BULLETS");
     hud_num(32, hud_values_row, hud_saturate3(_g_player.ammo[am_clip]), 3);
+#if defined(DOOM_R35D_CHECKER)
+    hud_label(1, hud_title_row, "R35D 8X8 CHECKER");
+#else
     hud_label(1, hud_title_row, "DOOM - MEGA DRIVE");
+#endif
 }
 #endif
 
@@ -324,6 +328,14 @@ static void I_DrawDebugCounters(void)
 #else
     if (_g_gamestate != GS_LEVEL)
         return;
+#endif
+
+#if defined(DOOM_R35D_CHECKER)
+    /* Hardware-visible ROM identification and a 50/50 test swatch.
+       Tile 29 is the checker for PAL0 colors 0 and 14; tile 14 is solid. */
+    _s_screen[20] = TILE_ATTR_FULL(0,0,0,0,SOLID_TILE_INDEX + 29);
+    _s_screen[21] = TILE_ATTR_FULL(0,0,0,0,SOLID_TILE_INDEX + 14);
+    hud_putc(23,0,'D'); hud_putc(24,0,'3'); hud_putc(25,0,'5');
 #endif
 
 #if defined(DOOM_R20_FPS_LAZY)
