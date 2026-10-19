@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Reject accidental codec, non-Bayer8 art, >4MiB, missing soundtrack or invalid variants."""
+from pathlib import Path
+import hashlib, json, sys, struct
+p=Path(sys.argv[1]);names=sys.argv[2:]
+expect={'cell-play','cell-perf','pixel4-play','pixel4-perf'}
+assert set(names)==expect,(names,expect)
+out=[]
+art_sources=[]
+for variant in names:
+    name='doom-md-r35-'+variant
+    rom=p/(name+'.bin')
+    data=rom.read_bytes()
+    assert len(data)==4*1024*1024,(name,len(data))
+    assert data[0x100:0x110]==b'SEGA MEGA DRIVE ',name
+    assert struct.unpack_from('>II',data,0x1A0)==(0,0x3FFFFF),name
+    flags=(p/('flags-'+name+'.txt')).read_text()
+    assert '-DDOOM_R35_ART_RAW' in flags,name
+    assert '-DDOOM_R30_NATIVE' in flags,name
+    assert '-DDOOM_R29_XGM2' in flags,name
+    assert '-DDOOM_R29_MULTI' in flags,name
+    assert '-DDOOM_R31_SFX' in flags,name
+    assert '-DDOOM_R25_MUSIC' in flags,name
+    assert ('-DDOOM_R22_PIXEL4' in flags)==variant.startswith('pixel4'),(name,flags)
+    assert ('-DTIMEDEMO' in flags)==variant.endswith('perf'),(name,flags)
+    # Important: no R34 ADPCM, PackBits, or REJECT compression flags.
+    assert '-DDOOM_R34_AUDIO' not in flags and '-DDOOM_R34_WAD' not in flags
+    art=json.loads((p/('art-'+variant+'.json')).read_text())
+    assert art['adaptive_dither']=='bayer8'
+    assert art['storage']=='raw'
+    assert len(art['screens'])==3
+    for t in art['screens']:
+        assert t['storage']=='raw' and t['packed_bytes']==t['tiles']*32,(name,t)
+    art_sources.append([(t['source_sha256'],t['packed_bytes'],t['tiles'],t['changed_pixels']) for t in art['screens']])
+    sfx=json.loads((p/('sfx-'+variant+'.json')).read_text())
+    assert sfx['mode']=='mixed' and sfx['count']==52,(name,sfx.get('mode'),sfx.get('count'))
+    raw=int((p/('payload-'+variant+'.txt')).read_text().strip())
+    assert raw<=4*1024*1024,(name,raw)
+    out.append(dict(name=name,renderer=('4x4' if variant.startswith('pixel4') else '8x8'),
+                    timedemo=variant.endswith('perf'),rom_bytes=len(data),
+                    elf_payload_bytes=raw,free_bytes=4*1024*1024-raw,
+                    pcm_count=52,pcm_bytes=sfx.get('sum_pcm_bytes'),
+                    art_raw_bytes=sum(t['packed_bytes'] for t in art['screens']),
+                    sha256=hashlib.sha256(data).hexdigest()))
+assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
+(p/'R35-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
+for v in out: print(json.dumps(v))
+print('R35 audit PASSED: linear 4MiB, byte-raw Bayer8, uncompressed PCM, shared XGM2, 4x4 and 8x8')
