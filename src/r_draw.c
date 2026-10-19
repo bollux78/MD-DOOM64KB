@@ -2517,7 +2517,14 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
             , prepared
 #endif
         ));
+#if defined(DOOM_R39P_PROFILE_FIX)
+        /* R38 correction: drawing a composed multipatch column is WALL
+         * DRAW stage 6, not the enclosing column-loop stage 3.  Leave the
+         * expensive R_ComposeColumn itself in stage 7 (X). */
+        R7_VOID(6, R20_WALL_DRAW(dcvars));
+#else
         R20_WALL_DRAW(dcvars);
+#endif
     }
 }
 #endif
