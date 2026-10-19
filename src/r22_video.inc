@@ -68,6 +68,10 @@ static void R22_ClearOverlay(void){
     uint16_t sr=R22_Lock();
     /* Only rows0..21: never touch the aliased SAT/HScroll at FC00. */
     VDP_clearTileMap(VDP_WINDOW,0,64*22,TRUE);
+    /* R40a: menu/intermission glyphs are written directly after this clear.
+     * A pending DMA fill could otherwise overwrite freshly drawn characters.
+     * Wait for the fill before subsequent CPU VRAM writes. */
+    VDP_waitDMACompletion();
     VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setAutoInc(2);R22_Unlock(sr);r22_overlay_dirty=0;
 }
