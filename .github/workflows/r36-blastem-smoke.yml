@@ -1,0 +1,105 @@
+name: R36 Pixel4 BlastEm runtime isolation
+on:
+  push:
+    branches: [r36-pixel4-isolate]
+  workflow_dispatch:
+concurrency:
+  group: r36-pixel4-isolate
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Locate BlastEm without changing user installation
+        shell: bash
+        run: |
+          mkdir -p dist/r36-smoke
+          BINARY="$(command -v blastem || true)"
+          if [[ -z "$BINARY" ]]; then
+            for p in "$HOME"/Projetos/blastem/blastem "$HOME"/blastem/blastem "$HOME"/Jogos/blastem/blastem; do
+              [[ -x "$p" ]] && { BINARY="$p"; break; }
+            done
+          fi
+          if [[ -z "$BINARY" ]]; then
+            BINARY="$(find "$HOME/Projetos" "$HOME/Jogos" -maxdepth 5 -type f -name blastem -executable -print -quit 2>/dev/null || true)"
+          fi
+          printf 'BlastEm binary: %s\n' "$BINARY" | tee dist/r36-smoke/BLASTEM-LOCATION.txt
+          echo "BLASTEM_BINARY=$BINARY" >> "$GITHUB_ENV"
+      - name: Download exact audited ROMs (R35d control and R36)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import io, os, pathlib, urllib.request, zipfile
+          out=pathlib.Path('dist/r36-smoke')
+          for label, artifact in [('r35d',12162896043),('r36',12182002778)]:
+              url=f'https://api.github.com/repos/bollux78/MD-DOOM64KB/actions/artifacts/{artifact}/zip'
+              req=urllib.request.Request(url,headers={
+                'Authorization':f'Bearer {os.environ["GH_TOKEN"]}',
+                'Accept':'application/vnd.github+json',
+                'User-Agent':'R36-Pixel4-Emulator-Regression'})
+              with urllib.request.urlopen(req,timeout=75) as response:
+                  data=response.read()
+              with zipfile.ZipFile(io.BytesIO(data)) as z:
+                  wanted=[p for p in z.namelist() if p.endswith((
+                      'pixel4-perf.bin','pixel4-play.bin','cell-perf.bin'))]
+                  if len(wanted)!=3:raise ValueError((label,wanted))
+                  for name in wanted:
+                      path=out/f'{label}-{pathlib.Path(name).name}'
+                      path.write_bytes(z.read(name))
+                      print('Downloaded',path,'bytes',path.stat().st_size)
+          PY
+      - name: Run pinned ROMs in headless BlastEm with hard timeout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, time
+          out=pathlib.Path('dist/r36-smoke')
+          binary=os.environ.get('BLASTEM_BINARY','')
+          scenarios=[
+            ('r35d-control-perf','r35d-doom-md-r35d-pixel4-perf.bin',300),
+            ('r36-cell-perf','r36-doom-md-r36-cell-perf.bin',300),
+            ('r36-pixel4-perf','r36-doom-md-r36-pixel4-perf.bin',300),
+            ('r36-pixel4-play','r36-doom-md-r36-pixel4-play.bin',300),
+          ]
+          results=[]
+          for label,filename,nframes in scenarios:
+              info={'label':label,'rom':filename,'emulated_frames_requested':nframes}
+              if not binary:
+                  info['status']='SKIP: BlastEm executable not found'
+                  results.append(info)
+                  continue
+              cmd=[binary,'-b',str(nframes),str(out/filename)]
+              env=os.environ.copy()
+              env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
+              begin=time.monotonic()
+              try:
+                  p=subprocess.run(cmd,cwd=str(out.resolve()),env=env,
+                    stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                    text=True,errors='replace',timeout=55)
+                  info['exit_code']=p.returncode
+                  info['status']='EXIT_0' if p.returncode==0 else 'FAILED_NONZERO'
+                  info['log_tail']=p.stdout[-2200:]
+              except subprocess.TimeoutExpired as exc:
+                  info['status']='HARD_TIMEOUT'
+                  info['log_tail']=str(exc.stdout or b'')[-2200:]
+              info['elapsed_seconds']=round(time.monotonic()-begin,2)
+              results.append(info)
+              print(json.dumps(info,ensure_ascii=False))
+          (out/'BLASTEM-SMOKE.json').write_text(json.dumps(results,indent=2)+'\n')
+          PY
+      - name: Upload diagnostic results (never claim gameplay passed without it)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r36-blastem-runtime-diagnostics
+          path: |
+            dist/r36-smoke/BLASTEM-SMOKE.json
+            dist/r36-smoke/BLASTEM-LOCATION.txt
+          retention-days: 30
