@@ -7,7 +7,8 @@ When static native R35 art (TITLEPIC, WIMAP0, HELP2) is showing, `R22_Text` wrot
 
 ## Fix
 - When native art is active, clear WINDOW exactly once, immediately before fresh menu text of the frame. Preserve native Bayer8 picture on BG_A.
-- Re-enable WINDOW when menu is drawn after the clear; mark the overlay as dirty.
+- Wait for WINDOW DMA clear completion before direct glyph writes, preventing asynchronous VRAM DMA from erasing fresh text.
+- Re-enable WINDOW when menu or intermission text is drawn after the clear; mark the overlay as dirty.
 - On a native-image frame without menu text, clear and hide the previous WINDOW overlay before returning, without reuploading the picture.
 - Restrict text writing on the WINDOW to rows 0–21 to avoid the aliased SAT/HScroll address region beginning at 0xFC00.
 - No change to native artwork, palettes, 3D renderer or SRAM/XGM2 paths; no intended FPS change.
@@ -15,7 +16,7 @@ When static native R35 art (TITLEPIC, WIMAP0, HELP2) is showing, `R22_Text` wrot
 ## Tests
 1. `doom-md-r40a-pixel4-play.bin`: while TITLEPIC is on-screen, open Start -> Options, change Dithering? Not present in native pixel4. Instead change Music and SFX repeatedly, move menu cursor up/down 10+ times and navigate to/from main menu. Check **no old cursors, slider dots or On/Off remnants**.
 2. Close menu over TITLEPIC: the picture should remain clean, without lingering menu text.
-3. Repeat on intermission/native artwork, if reachable.
+3. **Required:** finish E1M1, observe the WIMAP0 intermission stats and next-level transition through all stages (counting kills/items/secrets, then next-level state). Verify numbers are replaced, not overprinted. E1M2 must still load normally.
 4. Start E1M1: menu over black game background should behave as in R40, with sound options working. Return from menu, move camera, fire weapon; no corruption.
 5. `doom-md-r40a-pixel4-perf.bin`: DEMO3 2134 frames, compare against R40-fast-pixel4-perf: 3.01 FPS, 708.37 seconds (stock 7.67 MHz).
 6. Color observation: the legacy R22 font writer maps all menu text to palette 0. This change intentionally fixes ghosting first; it does not change native static picture palette entries to force red/yellow font colors.
