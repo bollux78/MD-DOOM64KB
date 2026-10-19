@@ -182,11 +182,14 @@ for v in $variants
         set defs $defs '-DDOOM_R31_SFX'
     end
     set defs $defs '-DDOOM_R35_ART_RAW'
-    if set -q DOOM_R35D_CHECKER; and test "$DOOM_R35D_CHECKER" = 1
+    if set -q DOOM_R35D_CHECKER; and test "$DOOM_R35D_CHECKER" = 1; and contains -- $v cell-play cell-perf
         set defs $defs '-DDOOM_R35D_CHECKER'
+        set -gx DOOM_R35D_REPORT "$dest/dither-$v.json"
+    else
+        set -e DOOM_R35D_REPORT
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
-    set -l id doom-md-r35-$v
+    set -l id doom-md-r35d-checker-$v
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
