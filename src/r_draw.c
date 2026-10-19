@@ -65,6 +65,7 @@
 /* R12: generated, bit-exact wall reciprocal lookup in cartridge ROM.
    Compare ROM bus reads with DIVU.W in timedemo. */
 #include "r20_counters.h"
+#include "r37_profile.h"
 #if defined(DOOM_R12_RECIP_LUT)
 #include "r12_recip_lut.h"
 #endif
@@ -506,6 +507,9 @@ angle_t  viewangle;
 static angle16_t viewangle16;
 
 static byte solidcol[VIEWWINDOWWIDTH];
+#if defined(DOOM_R37_BSP_PROFILE)
+volatile uint16_t r37_counts[R37_COUNTER_COUNT];
+#endif
 
 static const seg_t     __far* curline;
 static linedata_t    __far* linedef;
@@ -2651,6 +2655,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
+        R37_HIT(R37_COLUMNS); /* every wall-strip loop iteration */
         // mark floor / ceiling areas
 
         int16_t yh = bottomfrac>>FRACBITS;
@@ -2680,9 +2685,13 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                 dcvars.yl = top;
                 dcvars.yh = bottom;
                 if (ceilingplane_color == -2)
+                {
+                    R37_HIT(R37_SKY);
                     R_DrawSky(&dcvars);
+                }
                 else
                 {
+                    R37_HIT(R37_FLATS);
 #if defined(DOOM_R20_FLAT_INLINE)
                     R20_SegFlat(r20_ceiling_cell,rw_x,top,bottom);
 #else
@@ -2713,6 +2722,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #if defined FLAT_SPAN
                 dcvars.yl = top;
                 dcvars.yh = bottom;
+                R37_HIT(R37_FLATS);
 #if defined(DOOM_R20_FLAT_INLINE)
                 R20_SegFlat(r20_floor_cell,rw_x,top,bottom);
 #else
@@ -3504,6 +3514,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
             else
                 to = p - solidcol;
 
+            R37_HIT(R37_WALL_RANGES);
             R7_VOID(8, R_StoreWallRange(first, to-1));
 
             if (solid)
@@ -3537,8 +3548,10 @@ static void R_AddLine(const seg_t __far* line)
     angle16_t span = angle1 - angle2;
 
     // Back side, i.e. backface culling
-    if (span >= ANG180_16)
+    if (span >= ANG180_16) {
+        R37_HIT(R37_SEG_EARLY); /* rear face */
         return;
+    }
 
     // Global angle needed by segcalc.
     rw_angle1 = angle1;
@@ -3551,8 +3564,10 @@ static void R_AddLine(const seg_t __far* line)
         tspan -= 2 * clipangle;
 
         // Totally off the left edge?
-        if (tspan >= span)
+        if (tspan >= span) {
+            R37_HIT(R37_SEG_EARLY); /* outside left clip */
             return;
+        }
 
         angle1 = clipangle;
     }
@@ -3563,8 +3578,10 @@ static void R_AddLine(const seg_t __far* line)
         tspan -= 2 * clipangle;
 
         // Totally off the left edge?
-        if (tspan >= span)
+        if (tspan >= span) {
+            R37_HIT(R37_SEG_EARLY); /* outside right clip */
             return;
+        }
         angle2 = -clipangle;
     }
 
@@ -3576,8 +3593,10 @@ static void R_AddLine(const seg_t __far* line)
     uint8_t x2 = viewangletox((angle16_t)(angle2 + ANG90_16) >> ANGLETOFINESHIFT_16);
 
     // Does not cross a pixel?
-    if (x1 >= x2)       // killough 1/31/98 -- change == to >= for robustness
+    if (x1 >= x2) {     // killough 1/31/98 -- change == to >= for robustness
+        R37_HIT(R37_SEG_EARLY); /* projects to zero columns */
         return;
+    }
 
     backsector = line->backsectornum != NO_INDEX8 ? &_g_sectors[line->backsectornum] : NULL;
 
@@ -3612,6 +3631,7 @@ static void R_AddLine(const seg_t __far* line)
 
 static void R_Subsector(int16_t num)
 {
+    R37_HIT(R37_SUBSECTORS);
     int16_t         count;
     const seg_t       __far* line;
     subsector_t __far* sub;
@@ -3666,6 +3686,7 @@ static void R_Subsector(int16_t num)
     R_AddSprites(sub, frontsector->lightlevel);
     while (count--)
     {
+        R37_HIT(R37_SEGS);
         R7_VOID(9, R_AddLine(line));
         line++;
         curline = NULL; /* cph 2001/11/18 - must clear curline now we're done with it, so R_LoadColorMap doesn't try using it for other things */
@@ -3697,6 +3718,7 @@ static const byte checkcoord[12][4] =
 
 static boolean R_CheckBBox(const int16_t __far* bspcoord)
 {
+    R37_HIT(R37_BBOX);
     // Find the corners of the box
     // that define the edges from current viewpoint.
     int16_t boxpos = (viewx <= ((fixed_t)bspcoord[BOXLEFT]<<FRACBITS) ? 0 : viewx < ((fixed_t)bspcoord[BOXRIGHT]<<FRACBITS) ? 1 : 2) +
@@ -3723,8 +3745,12 @@ static boolean R_CheckBBox(const int16_t __far* bspcoord)
             angle2 = INT16_MIN;
     }
 
-    if ((int16_t)angle2 >=  (int16_t)clipangle) return false; // Both off left edge
-    if ((int16_t)angle1 <= -(int16_t)clipangle) return false; // Both off right edge
+    if ((int16_t)angle2 >=  (int16_t)clipangle) {
+        R37_HIT(R37_BBOX_FOV); return false;
+    } // Both off left edge
+    if ((int16_t)angle1 <= -(int16_t)clipangle) {
+        R37_HIT(R37_BBOX_FOV); return false;
+    } // Both off right edge
     if ((int16_t)angle1 >=  (int16_t)clipangle) angle1 =  clipangle; // Clip at left edge
     if ((int16_t)angle2 <= -(int16_t)clipangle) angle2 = -clipangle; // Clip at right edge
 
@@ -3737,10 +3763,15 @@ static boolean R_CheckBBox(const int16_t __far* bspcoord)
     //    const cliprange_t *start;
 
     // Does not cross a pixel.
-    if (sx1 == sx2)
+    if (sx1 == sx2) {
+        R37_HIT(R37_BBOX_FOV);
         return false;
+    }
 
-    if (!memchr(solidcol+sx1, 0, sx2-sx1)) return false;
+    if (!memchr(solidcol+sx1, 0, sx2-sx1)) {
+        R37_HIT(R37_BBOX_OCCLUDED);
+        return false;
+    }
     // All columns it covers are already solidly covered
 
 
@@ -3801,6 +3832,7 @@ static void R_RenderBSPNode(int16_t bspnum)
             if (sp == MAX_BSP_DEPTH)
                 I_Error("R20a BSP depth overflow");
 
+            R37_HIT(R37_NODES);
             bsp = &nodes[bspnum];
             side = R_PointOnSide(viewx, viewy, bsp);
 
@@ -3919,6 +3951,10 @@ static void R_SetupFrame (player_t *player)
 //
 void R_RenderPlayerView (player_t* player)
 {
+#if defined(DOOM_R37_BSP_PROFILE)
+    for (uint16_t i=0; i<R37_COUNTER_COUNT; ++i)
+        r37_counts[i]=0;
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     doom_profile_stage = 1;
 #endif
