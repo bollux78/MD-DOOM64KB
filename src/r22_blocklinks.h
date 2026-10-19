@@ -3,6 +3,9 @@
 #if defined(DOOM_R22_SRAM_BLOCKLINKS)
 #include <stdint.h>
 #include "globdata.h"
+#if defined(DOOM_R39C_MOVEP_MAP)
+#include "r39c_movep.h"
+#endif
 #if defined(DOOM_SRAM_CACHE16)
 #error SRAM blocklinks and legacy SRAM texture cache share cartridge storage
 #endif
@@ -33,14 +36,22 @@ static inline mobj_t **R22_BlockSlot(uint16_t index){
 }
 static inline uint32_t R22_SramRead32(uint32_t a){
     R25_SRAM_BEGIN();
+#if defined(DOOM_R39C_MOVEP_MAP)
+    uint32_t value=R39C_MovepRead32(a+1);
+#else
     uint32_t value=((uint32_t)R22_SRAM_BYTE(a+1)<<24)|((uint32_t)R22_SRAM_BYTE(a+3)<<16)|
            ((uint32_t)R22_SRAM_BYTE(a+5)<<8)|R22_SRAM_BYTE(a+7);
+#endif
     R25_SRAM_END();return value;
 }
 static inline void R22_SramWrite32(uint32_t a,uint32_t v){
     R25_SRAM_BEGIN();
+#if defined(DOOM_R39C_MOVEP_MAP)
+    R39C_MovepWrite32(a+1,v);
+#else
     R22_SRAM_BYTE(a+1)=v>>24;R22_SRAM_BYTE(a+3)=v>>16;
     R22_SRAM_BYTE(a+5)=v>>8;R22_SRAM_BYTE(a+7)=v;
+#endif
     R25_SRAM_END();
 }
 static inline int R22_IsSramLink(mobj_t **p){
