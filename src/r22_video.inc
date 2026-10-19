@@ -194,7 +194,24 @@ static void R22_UploadBack(uint16_t bank){
 static void R22_Text(int16_t x,int16_t y,const char *s){
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0){
-        if(x<0||x>=38||y<0||y>=28)return;
+        /* R40a: Native 320x224 picture stays in BG_A, with the menu on
+         * WINDOW. Unlike the raster path, this path used to skip the
+         * per-frame overlay reset: old menu cursors and On/Off labels
+         * consequently remained in VRAM forever. Reset only once, just
+         * before the new text is ready, to avoid an empty-menu flicker.
+         * WINDOW rows 22..31 overlap SAT/HScroll at FC00, so never write
+         * into them. */
+        if(x<0||x>=38||y<0||y>=22)return;
+        if(!r22_text_this_frame){
+            R22_ClearOverlay();
+            r22_text_this_frame=1;
+        }
+        R20_StopVideo();
+        uint16_t sr=R22_Lock();
+        VDP_setWindowHPos(TRUE,0);
+        VDP_setWindowVPos(FALSE,0);
+        R22_Unlock(sr);
+        r22_overlay_dirty=1;
         R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
         return;
     }
@@ -261,7 +278,13 @@ static void R22_HUD(void){
 void I_FinishUpdate(void){
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0){
-        if(_g_gamestate!=GS_LEVEL)return; /* Native picture remains in VRAM. */
+        if(_g_gamestate!=GS_LEVEL){
+            /* R40a: This branch skips regular pixel4 presentation, but
+             * must still retire the previous WINDOW overlay on frames
+             * without a menu (for example, after Start closes it). */
+            R22_EndOverlay();
+            return; /* Native picture remains in VRAM. */
+        }
         R35_LeaveNative4(); /* Gameplay uses the original p4 pipeline. */
     }
 #endif
