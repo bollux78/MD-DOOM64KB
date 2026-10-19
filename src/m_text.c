@@ -562,7 +562,7 @@ static const menuitem_t OptionsMenu[]=
   {1,"Messages:",    M_ChangeMessages},
   {1,"Always Run:",  M_ChangeAlwaysRun},
 #if defined(DOOM_R39D_DITHER_TOGGLE)
-  {2,"Dithering:",   M_ChangeDithering},
+  {1,"Dithering:",   M_ChangeDithering},
 #endif
   {2,"Gamma Boost:", M_ChangeGamma},
 #if !defined DISABLE_SOUND_OPTIONS
@@ -761,9 +761,10 @@ static void M_ChangeAlwaysRun(int16_t choice)
 #if defined(DOOM_R39D_DITHER_TOGGLE)
 static void M_ChangeDithering(int16_t choice)
 {
-    /* A confirms and right enables; left disables.  Swap ROM LUTs only,
-     * with no VDP reload or level restart required. */
-    R39D_SetDither(choice != 0);
+    /* A toggles OFF/ON; swap ROM lookup tables without touching CRAM,
+     * VDP, or gameplay state. It takes effect on the next 3D frame. */
+    UNUSED(choice);
+    R39D_SetDither(!R39D_DitherEnabled());
 }
 #endif
 
