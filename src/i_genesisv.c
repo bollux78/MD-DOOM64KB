@@ -35,6 +35,7 @@
 #include "r20_stackguard.h"
 #include "r20_counters.h"
 #include "r20_dma.h"
+#include "r37_profile.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -242,6 +243,29 @@ static void hud_label(int16_t x, int16_t y, const char* text)
     while (*text && x < VIEWWINDOWWIDTH)
         _s_screen[y * VIEWWINDOWWIDTH + x++] = font_cell(HUD_COL, *text++);
 }
+#if defined(DOOM_R37_BSP_PROFILE)
+/* 3 rows of 4 profiler values while preserving HEALTH/ARMOR/AMMO.
+ * N nodes, B bbox tests, V bbox outside FOV, O bbox fully occluded
+ * S subsectors, G segs tested, E early culled, W visible wall ranges
+ * C wall loop columns, F floor/ceiling spans, T textured calls, K sky
+ *
+ * This diagnostic-only HUD forces status DMA each frame, so its FPS should
+ * not be compared directly against the clean timedemo.
+ */
+static void R37_DrawProfileHUD(void)
+{
+    if (_g_gamestate != GS_LEVEL) return;
+    static const char labels[]="NBVOSGEWCFTK";
+    static const uint8_t rowoffsets[3]={0,2,3};
+    for (uint16_t i=0; i<R37_COUNTER_COUNT; ++i) {
+        const int16_t x=(int16_t)(1u+9u*(i&3u));
+        const int16_t y=(int16_t)(VIEWWINDOWHEIGHT+rowoffsets[i>>2]);
+        hud_putc(x,y,labels[i]);
+        hud_num(x+2,y,r37_counts[i],4);
+    }
+}
+#endif
+
 static uint16_t hud_saturate3(int32_t value)
 {
     if (value < 0) return 0;
@@ -1232,8 +1256,15 @@ void I_FinishUpdate(void)
             || r20_hud_dirty
 #endif
             ;
+#if defined(DOOM_R37_BSP_PROFILE)
+        /* Diagnostic counters must reach VRAM even with constant player HUD. */
+        if (level) changed=1;
+#endif
 #if defined(DOOM_R20_HUD_LAZY)
         if (changed) I_DrawClassicTextHUD();
+#if defined(DOOM_R37_BSP_PROFILE)
+        R37_DrawProfileHUD();
+#endif
         r20_hud_dirty = 0;
 #endif
 
@@ -1351,6 +1382,7 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
 	int16_t count = (dcvars->yh - dcvars->yl) + 1;
 	if (count <= 0)
 		return;
+    R37_HIT(R37_TEXTURES);
     R20_COUNT(R20C_TEX_CALLS, 1);
     R20_COUNT(R20C_TEX_CELLS, count);
 
