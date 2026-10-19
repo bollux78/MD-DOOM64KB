@@ -23,6 +23,12 @@
 #if defined(DOOM_R22_PAIR_LUT)
 #include "r22_pair_lut.h"
 #endif
+#if defined(DOOM_R36_PIXEL4_DITHER)
+#include "r36_pixel4_dither.h"
+#if !defined(DOOM_R22_SOLID_TILES)
+#error R36 requires the R22 solid tile path for its shared palette layout
+#endif
+#endif
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
 #endif
@@ -39,7 +45,29 @@ extern const int16_t CENTERY;
 extern volatile uint32_t _g_vblankCount;
 extern void R22_InitOpenings(void);
 void *R22_Alloc(uint16_t n) { return MEM_alloc(n); }
-static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;
+static struct {
+    uint32_t before;
+    uint8_t pixels[R22_FB_BYTES];
+#if defined(DOOM_R36_PIXEL4_DITHER)
+    uint8_t high[(R22_W * R22_H + 7) / 8]; /* fifth bit, 418B, inside guard */
+#endif
+    uint32_t after;
+} r22_fb;
+#if defined(DOOM_R36_PIXEL4_DITHER)
+/* Keep R22's 4-bit nibble plane and add one bit per independent 4x4 sample.
+   Code 0..15 is solid; code 16..31 expands to a two-color 2x2 checker.
+   Importantly, all writes (walls, floors, sprites, static fallback) use
+   the same helper, and V_ClearViewWindow clears both synchronized planes. */
+static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
+    R22_Put(p,x,y,code);
+    uint16_t bit=(uint16_t)(y*R22_W+x);
+    uint8_t mask=(uint8_t)(1u<<(bit&7));
+    uint8_t *dst=&r22_fb.high[bit>>3];
+    *dst=(uint8_t)((*dst & (uint8_t)~mask) | ((code&16u)?mask:0u));
+}
+#define R22_Put R36_Put
+#define r22_color r36_color
+#endif
 static volatile uint16_t r22_ready;
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
@@ -178,15 +206,37 @@ static void R22_UploadBack(uint16_t bank){
 #endif
     for(uint16_t y=1;y<22;y++)for(uint16_t x=0;x<38;x++,tile++){
         uint8_t a=r22_fb.pixels[(2*y)*38+x],b=r22_fb.pixels[(2*y+1)*38+x];
+#if defined(DOOM_R36_PIXEL4_DITHER)
+        /* Both horizontally adjacent sample bits reside in the same byte.
+           R22_W is even, so no crossing at an 8-bit bitplane boundary. */
+        uint16_t pos=(uint16_t)((2*y)*R22_W+2*x);
+        uint8_t ha=(uint8_t)((r22_fb.high[pos>>3]>>(pos&7))&3u);
+        pos=(uint16_t)(pos+R22_W);
+        uint8_t hb=(uint8_t)((r22_fb.high[pos>>3]>>(pos&7))&3u);
+#endif
 #if defined(DOOM_R22_SOLID_TILES)
-        uint16_t index=R22_TileIndex(a,b,tile);*map++=index;
+#if defined(DOOM_R36_PIXEL4_DITHER)
+        uint16_t index=(ha|hb)?tile:R22_TileIndex(a,b,tile);
+#else
+        uint16_t index=R22_TileIndex(a,b,tile);
+#endif
+        *map++=index;
         if(index<16)continue;
 #endif
-        uint32_t top=R22_Expand(a),bottom=R22_Expand(b);
         uint16_t sr=R22_Lock();
         VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(tile*32u);
+#if defined(DOOM_R36_PIXEL4_DITHER)
+        uint16_t ai=(uint16_t)(((uint16_t)ha<<8)|a);
+        uint16_t bi=(uint16_t)(((uint16_t)hb<<8)|b);
+        uint32_t te=r36_row_even[ai],to=r36_row_odd[ai];
+        uint32_t be=r36_row_even[bi],bo=r36_row_odd[bi];
+        *data=te;*data=to;*data=te;*data=to;
+        *data=be;*data=bo;*data=be;*data=bo;
+#else
+        uint32_t top=R22_Expand(a),bottom=R22_Expand(b);
         *data=top;*data=top;*data=top;*data=top;
         *data=bottom;*data=bottom;*data=bottom;*data=bottom;
+#endif
         R22_Unlock(sr);
     }
 }
@@ -227,7 +277,12 @@ void R22_BeginFrame(void){
 static void R22_EndOverlay(void){
     if(r22_overlay_dirty && !r22_text_this_frame)R22_ClearOverlay();
 }
-void V_ClearViewWindow(void){memset(r22_fb.pixels,0,R22_FB_BYTES);}
+void V_ClearViewWindow(void){
+    memset(r22_fb.pixels,0,R22_FB_BYTES);
+#if defined(DOOM_R36_PIXEL4_DITHER)
+    memset(r22_fb.high,0,sizeof(r22_fb.high));
+#endif
+}
 
 void V_DrawBackground(int16_t n){(void)n;V_ClearViewWindow();}
 void V_DrawRawFullScreen(int16_t n){
@@ -253,7 +308,11 @@ static void R22_HUD(void){
     if(h!=health||a!=armor||b!=ammo){
         R22_DrawText(VDP_BG_A,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(VDP_BG_A,"ARMOR",13,23);R22_Num3(19,23,a);
         R22_DrawText(VDP_BG_A,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
+#if defined(DOOM_R36_PIXEL4_DITHER)
+        R22_DrawText(VDP_BG_A,"R36 P4D - 32 COLORS",1,25);
+#else
         R22_DrawText(VDP_BG_A,"DOOM PX4 - 76x44",1,25);
+#endif
     }
     static uint32_t vb;static uint16_t frames;frames++;
     uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,31,0);frames=0;vb=_g_vblankCount;}
@@ -296,7 +355,7 @@ void I_InitGraphicsHardwareSpecificCode(void){
     for(uint16_t c=0;c<16;c++){uint32_t row=(uint32_t)c*0x11111111u;for(uint16_t y=0;y<8;y++)*data=row;}
     R22_Unlock(sr);
     R22_InitOpenings();R22_Palette(0);r22_newpal=100;
-    r22_fb.before=r22_fb.after=R22_GUARD;memset(r22_fb.pixels,0,R22_FB_BYTES);
+    r22_fb.before=r22_fb.after=R22_GUARD;V_ClearViewWindow();
     r22_front=0;r22_ready=0;
 #if defined(DOOM_R22_PATTERN)
     for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,(uint8_t)((x+y)&15));
