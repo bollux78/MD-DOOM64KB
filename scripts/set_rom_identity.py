@@ -29,7 +29,7 @@ def main() -> None:
 
     display = identity
     # Normal linear 4 MiB Mega Drive mapping, no SSF / bank switching.
-    rom_end = '0x003FFFFF' if identity.startswith(('doom-md-r35-', 'doom-md-r35d-', 'doom-md-r36-', 'doom-md-r36b-')) else '0x001FFFFF'
+    rom_end = '0x003FFFFF' if identity.startswith(('doom-md-r35-', 'doom-md-r35d-', 'doom-md-r36-', 'doom-md-r36b-', 'doom-md-r36c-')) else '0x001FFFFF'
     title = identity  # Keep case identical to the ROM filename and demo screen
     note = "DOOM MD 68000 RENDERER BENCHMARK"
 
