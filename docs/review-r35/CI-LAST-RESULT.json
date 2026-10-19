@@ -1,13 +1,62 @@
 {
-  "run_id": "39182861170",
-  "sha": "9a89004594fbbd3854ae18a4642d13f93e928665",
+  "run_id": "39183193561",
+  "sha": "231dccb3234856551d491b20443c91dfab324660",
   "build_results": [
-    "cell-play FAILED",
-    "cell-perf FAILED",
-    "pixel4-play FAILED",
-    "pixel4-perf FAILED"
+    "cell-play OK",
+    "cell-perf OK",
+    "pixel4-play OK",
+    "pixel4-perf OK"
   ],
-  "audit": null,
+  "audit": [
+    {
+      "name": "doom-md-r35-cell-play",
+      "renderer": "8x8",
+      "timedemo": false,
+      "rom_bytes": 4194304,
+      "elf_payload_bytes": 2633036,
+      "free_bytes": 1561268,
+      "pcm_count": 52,
+      "pcm_bytes": 429056,
+      "art_raw_bytes": 98848,
+      "sha256": "dd2d6cd0eb5898e3be56096ec1c010163d4d57e460e3e248d57a820245acdca5"
+    },
+    {
+      "name": "doom-md-r35-cell-perf",
+      "renderer": "8x8",
+      "timedemo": true,
+      "rom_bytes": 4194304,
+      "elf_payload_bytes": 2636108,
+      "free_bytes": 1558196,
+      "pcm_count": 52,
+      "pcm_bytes": 429056,
+      "art_raw_bytes": 98848,
+      "sha256": "ea5967248bad303873aaf5c3d8cd21d0b867bfc8c2bb76984b87c1c592c22345"
+    },
+    {
+      "name": "doom-md-r35-pixel4-play",
+      "renderer": "4x4",
+      "timedemo": false,
+      "rom_bytes": 4194304,
+      "elf_payload_bytes": 2620392,
+      "free_bytes": 1573912,
+      "pcm_count": 52,
+      "pcm_bytes": 429056,
+      "art_raw_bytes": 98848,
+      "sha256": "e8455d9b5f9e07ace613e18f153dda6674a11437abb9a288968478f699f41f36"
+    },
+    {
+      "name": "doom-md-r35-pixel4-perf",
+      "renderer": "4x4",
+      "timedemo": true,
+      "rom_bytes": 4194304,
+      "elf_payload_bytes": 2623464,
+      "free_bytes": 1570840,
+      "pcm_count": 52,
+      "pcm_bytes": 429056,
+      "art_raw_bytes": 98848,
+      "sha256": "2bf2c9364473918b202b0297432651f7c5a55bad4ff3fa094ae681f60587776b"
+    }
+  ],
   "roms": [
     {
       "name": "doom-md-r35-cell-perf.bin",
