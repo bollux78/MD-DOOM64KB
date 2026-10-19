@@ -11,9 +11,9 @@ for variant in names:
     name='doom-md-r35-'+variant
     rom=p/(name+'.bin')
     data=rom.read_bytes()
-    assert len(data)==4*1024*1024,(name,len(data))
+    assert len(data)<=4*1024*1024 and len(data)%0x20000==0,(name,len(data))
     assert data[0x100:0x110]==b'SEGA MEGA DRIVE ',name
-    assert struct.unpack_from('>II',data,0x1A0)==(0,0x3FFFFF),name
+    assert struct.unpack_from('>II',data,0x1A0)==(0,len(data)-1),name
     flags=(p/('flags-'+name+'.txt')).read_text()
     assert '-DDOOM_R35_ART_RAW' in flags,name
     assert '-DDOOM_R30_NATIVE' in flags,name
@@ -35,14 +35,14 @@ for variant in names:
     sfx=json.loads((p/('sfx-'+variant+'.json')).read_text())
     assert sfx['mode']=='mixed' and sfx['count']==52,(name,sfx.get('mode'),sfx.get('count'))
     raw=int((p/('payload-'+variant+'.txt')).read_text().strip())
-    assert raw<=4*1024*1024,(name,raw)
+    assert raw<=len(data) and len(data)-raw<0x20000,(name,raw)
     out.append(dict(name=name,renderer=('4x4' if variant.startswith('pixel4') else '8x8'),
                     timedemo=variant.endswith('perf'),rom_bytes=len(data),
-                    elf_payload_bytes=raw,free_bytes=4*1024*1024-raw,
+                    elf_payload_bytes=raw,free_bytes=len(data)-raw,
                     pcm_count=52,pcm_bytes=sfx.get('sum_pcm_bytes'),
                     art_raw_bytes=sum(t['packed_bytes'] for t in art['screens']),
                     sha256=hashlib.sha256(data).hexdigest()))
 assert all(x==art_sources[0] for x in art_sources),(art_sources,'Native Bayer8 screens not identical across ROMs')
 (p/'R35-AUDIT.json').write_text(json.dumps(out,indent=2)+'\n')
 for v in out: print(json.dumps(v))
-print('R35 audit PASSED: linear 4MiB, byte-raw Bayer8, uncompressed PCM, shared XGM2, 4x4 and 8x8')
+print('R35 audit PASSED: linear ROM <=4MiB trimmed to 128KiB boundary, byte-raw Bayer8, uncompressed PCM, shared XGM2, 4x4 and 8x8')
