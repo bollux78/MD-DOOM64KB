@@ -152,8 +152,10 @@ jobs:
           src=Path("src/r22_video.inc").read_text()
           n=src[src.index("static void R40B_DrawNativeText"):src.index("static int8_t r22_newpal")]
           assert 'R22_ClearOverlay();' not in n, "No whole-WINDOW clear in native redraw"
-          assert 'r40b_native_seen[index>>3]' in n, "Missing touched glyph bitset"
-          assert 'r40b_native_glyph[index]!=ch' in n, "Missing glyph-change test"
+          assert 'r40b_native_seen[i>>3]' in n, "Missing per-frame occupancy"
+          assert 'r40b_native_prev[i>>3]' in n, "Missing previous-frame occupancy"
+          assert 'memcpy(r40b_native_prev,r40b_native_seen' in n, "Occupancy must advance each frame"
+          assert 'r40b_native_glyph' not in src, "Prior large glyph cache must not consume WRAM"
           assert 'R40B_PruneNativeText();' in src, "Missing stale-only text pruning"
           assert 'R40B_ResetNativeText();' in Path("src/r35_native4.inc").read_text(), "Native backgrounds must invalidate glyph cache"
           assert 'VDP_WINDOW+y*128u+x*2u' in n and '*data=0' in n, "Clearing must use transparent tile only"
