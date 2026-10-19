@@ -36,6 +36,7 @@
 #include "r20_counters.h"
 #include "r20_dma.h"
 #include "r37_profile.h"
+#include "r39d_dither.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -66,6 +67,13 @@ extern void R_CacheStatsReset(void);
 /* 32 x 256 tilemap words in ROM; built from WAD COLORMAP and genpal_cell. */
 #include "colormap_cells.h"
 extern const uint8_t *fullcolormap;
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+#if !defined(DOOM_R20_COLOR_ROM) || !defined(DOOM_R35D_CHECKER)
+#error R39d dual LUTs require ROM color map and checkerboard tile set
+#endif
+static const uint16_t (*r39d_active_colormap)[256] = doom_colormap_cells;
+static uint16_t r39d_dither_enabled=1;
+#endif
 #endif
 
 // チャンキー FB。各要素は完成済み VDP タイルマップ語。
@@ -143,6 +151,26 @@ uint32_t r20_cnt[R20C_N];
 #endif
 
 static int16_t palettelumpnum;
+#if defined(DOOM_R39D_DITHER_TOGGLE) && defined(DOOM_R20_CELLMAP_MEMO)
+static const uint8_t *r39d_last_colormap;
+static const uint16_t *r39d_last_cellmap;
+#endif
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+uint16_t R39D_DitherEnabled(void) { return r39d_dither_enabled; }
+void R39D_SetDither(uint16_t enabled)
+{
+    enabled = enabled != 0;
+    if (r39d_dither_enabled == enabled) return;
+    r39d_dither_enabled = enabled;
+    r39d_active_colormap = enabled ? doom_colormap_cells : r39d_colormap_cells_solid;
+    colorcell = enabled ? r39d_colorcell_checker : r39d_colorcell_solid;
+#if defined(DOOM_R20_CELLMAP_MEMO)
+    r39d_last_colormap = NULL;
+    r39d_last_cellmap = NULL;
+#endif
+}
+#endif
+
 
 
 // ビュー slot(0..55) -> セル語。各パレットの index 1..14 がビュー色（0=黒, 15=テキスト色は予約）。
@@ -161,7 +189,12 @@ static inline uint16_t cell_for_color(uint8_t doomcolor)
 const uint16_t *R20_SelectCellMap(const uint8_t *map) {
     if (map && fullcolormap) {
         uintptr_t off=(uintptr_t)map-(uintptr_t)fullcolormap;
-        if(off<8192u && !(off&255u))return doom_colormap_cells[off>>8];
+        if(off<8192u && !(off&255u))
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+            return r39d_active_colormap[off>>8];
+#else
+            return doom_colormap_cells[off>>8];
+#endif
     }
     return NULL;
 }
@@ -1489,8 +1522,13 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
      * NULL means "not a standard COLORMAP row": original C fallback.
      * Valid because fullcolormap is set once in R_InitColormaps.
      */
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+    const uint8_t *r20_last_colormap = r39d_last_colormap;
+    const uint16_t *r20_last_cellmap = r39d_last_cellmap;
+#else
     static const uint8_t  *r20_last_colormap;
     static const uint16_t *r20_last_cellmap;
+#endif
     const uint16_t *cellmap;
     if (colormap == r20_last_colormap)
         cellmap = r20_last_cellmap;
@@ -1501,10 +1539,18 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
         {
             const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
             if (offset < (32u * 256u) && (offset & 255u) == 0u)
+                #if defined(DOOM_R39D_DITHER_TOGGLE)
+                cellmap = r39d_active_colormap[offset >> 8];
+#else
                 cellmap = doom_colormap_cells[offset >> 8];
+#endif
         }
         r20_last_colormap = colormap;
         r20_last_cellmap = cellmap;
+#if defined(DOOM_R39D_DITHER_TOGGLE)
+        r39d_last_colormap = colormap;
+        r39d_last_cellmap = cellmap;
+#endif
     }
     if (cellmap)
     {
@@ -1515,7 +1561,11 @@ R20_COLFN void R_DrawColumnSprite(const draw_column_vars_t *dcvars)
         const uintptr_t offset = (uintptr_t)colormap - (uintptr_t)fullcolormap;
         if (offset < (32u * 256u) && (offset & 255u) == 0u)
         {
-            const uint16_t *cellmap = doom_colormap_cells[offset >> 8];
+            const uint16_t *#if defined(DOOM_R39D_DITHER_TOGGLE)
+                cellmap = r39d_active_colormap[offset >> 8];
+#else
+                cellmap = doom_colormap_cells[offset >> 8];
+#endif
 #endif
 #if defined(DOOM_R20_PIXEL_ADDX)
             /*
