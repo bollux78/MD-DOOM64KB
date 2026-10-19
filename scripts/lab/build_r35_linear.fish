@@ -182,6 +182,9 @@ for v in $variants
         set defs $defs '-DDOOM_R31_SFX'
     end
     set defs $defs '-DDOOM_R35_ART_RAW'
+    if set -q DOOM_R35D_CHECKER; and test "$DOOM_R35D_CHECKER" = 1
+        set defs $defs '-DDOOM_R35D_CHECKER'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35-$v
     set -gx DOOM_BUILD_ID $id
