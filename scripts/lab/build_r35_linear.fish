@@ -223,10 +223,10 @@ for v in $variants
         end
     end
     if set -q DOOM_R39E_AUDIO_TOGGLES; and test "$DOOM_R39E_AUDIO_TOGGLES" = 1
-        if contains -- $v cell-play cell-perf
+        if contains -- $v cell-play cell-perf pixel4-play pixel4-perf
             set defs $defs '-DDOOM_R39E_AUDIO_TOGGLES'
         else
-            echo 'R39e audio toggles support 8x8 cell variants only'
+            echo 'R39e audio toggles support playable/timedemo renderers only'
             exit 2
         end
     end
@@ -256,6 +256,26 @@ for v in $variants
                 set id doom-md-r39e-$DOOM_R39E_BUILD-$v
             case '*'
                 echo "Unknown R39e build $DOOM_R39E_BUILD"
+                exit 2
+        end
+    end
+    if set -q DOOM_R40_STAGE1
+        switch "$DOOM_R40_STAGE1"
+            case base fast
+                if string match -q 'pixel4-*' -- "$v"
+                    set id doom-md-r40-$DOOM_R40_STAGE1-$v
+                else if string match -q 'cell-*' -- "$v"
+                    if test "$DOOM_R40_STAGE1" != fast
+                        echo 'R40 stage1 cell renderer uses only fast (R39e) build'
+                        exit 2
+                    end
+                    set id doom-md-r40-$v
+                else
+                    echo 'R40 stage1 only supports cell and pixel4 play/perf'
+                    exit 2
+                end
+            case '*'
+                echo "Unknown R40 Stage1 variant $DOOM_R40_STAGE1"
                 exit 2
         end
     end
