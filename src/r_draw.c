@@ -2171,7 +2171,15 @@ static uint16_t columnCacheEntries[MAX_CACHE_ENTRIES];
 #if defined(DOOM_R25_MUSIC) && (defined(DOOM_SRAM_FASTCOPY) || defined(DOOM_SRAM_HOT_SLOTS))
 #error R25 mapper window currently requires the standard C cache copy path
 #endif
+#if defined(DOOM_R39C_MOVEP_CACHE)
+static byte tmpCache[128] __attribute__((aligned(2)));
+#else
 static byte tmpCache[128];
+#endif
+#if defined(DOOM_R39C_REUSE_CACHE)
+static uint16_t r39c_tmpEntry;
+static uint8_t r39c_tmpValid;
+#endif
 #if defined(DOOM_SRAM_FASTCOPY)
 /* 68000 byte-lane copies. Explicit DBRA loop removes indexed-byte address
  * arithmetic from C, but still performs one SRAM byte access per iteration. */
@@ -2214,8 +2222,28 @@ static void SramCacheCopyTo(uint16_t slot, const byte* src, uint16_t size)
 #if defined(DOOM_R25_MUSIC)
     R25_SRAM_BEGIN();
 #endif
+#if defined(DOOM_R39C_MOVEP_CACHE)
+    /* Four odd-lane SRAM bytes per MOVEP.L, contiguous source in WRAM.
+     * tmpCache is word-aligned.  Retain scalar tail for arbitrary sizes. */
+    uint16_t words=(uint16_t)(size>>2);
+    if(words) {
+        volatile uint8_t* to=dest;
+        const byte* from=src;
+        uint16_t count=words-1;
+        __asm__ volatile(
+            "1: move.l (%1)+,%%d0\n\t"
+            "movep.l %%d0,0(%0)\n\t"
+            "addq.l #8,%0\n\t"
+            "dbra %2,1b"
+            : "+a"(to),"+a"(from),"+d"(count)
+            : : "d0","cc","memory");
+    }
+    for(uint16_t i=(uint16_t)(words<<2);i<size;i++)
+        dest[(uint16_t)(i<<1)]=src[i];
+#else
     for (uint16_t i = 0; i < size; ++i)
         dest[(uint16_t)(i << 1)] = src[i];
+#endif
 #if defined(DOOM_R25_MUSIC)
     R25_SRAM_END();
 #endif
@@ -2226,8 +2254,26 @@ static void SramCacheCopyFrom(uint16_t slot, byte* dest, uint16_t size)
 #if defined(DOOM_R25_MUSIC)
     R25_SRAM_BEGIN();
 #endif
+#if defined(DOOM_R39C_MOVEP_CACHE)
+    uint16_t words=(uint16_t)(size>>2);
+    if(words) {
+        const volatile uint8_t* from=src;
+        byte* to=dest;
+        uint16_t count=words-1;
+        __asm__ volatile(
+            "1: movep.l 0(%1),%%d0\n\t"
+            "move.l %%d0,(%0)+\n\t"
+            "addq.l #8,%1\n\t"
+            "dbra %2,1b"
+            : "+a"(to),"+a"(from),"+d"(count)
+            : : "d0","cc","memory");
+    }
+    for(uint16_t i=(uint16_t)(words<<2);i<size;i++)
+        dest[i]=src[(uint16_t)(i<<1)];
+#else
     for (uint16_t i = 0; i < size; ++i)
         dest[i] = src[(uint16_t)(i << 1)];
+#endif
 #if defined(DOOM_R25_MUSIC)
     R25_SRAM_END();
 #endif
@@ -2292,6 +2338,9 @@ int R_SramCacheInit(void)
     *last = saved_last;
     for (uint16_t i = 0; i < 16; ++i)
         columnCacheEntries[i] = 0;
+#if defined(DOOM_R39C_REUSE_CACHE)
+    r39c_tmpValid=0;
+#endif
 #if defined(DOOM_SRAM_HOT_SLOTS)
     for (uint16_t i = 0; i < DOOM_SRAM_HOT_SLOTS; ++i)
     {
@@ -2459,7 +2508,19 @@ static const byte __far* R_ComposeColumn(const int16_t texture, const texture_t 
     SramHotPut(cachekey, entryKey, tmpCache, bytes);
 #else
     if (cacheEntry == wantedEntry)
-        SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
+    {
+#if defined(DOOM_R39C_REUSE_CACHE)
+        /* Single WRAM buffer retains the last composite column, even if
+         * a separate SRAM cache slot contains the same texture+column. */
+        if (!r39c_tmpValid || r39c_tmpEntry != wantedEntry)
+#endif
+            SramCacheCopyFrom(cachekey, tmpCache, (tex->height + 3) & ~3);
+    }
+#endif
+#if defined(DOOM_R39C_REUSE_CACHE)
+    /* A cache miss has already composed directly into tmpCache. */
+    r39c_tmpEntry=wantedEntry;
+    r39c_tmpValid=1;
 #endif
 #endif
 
