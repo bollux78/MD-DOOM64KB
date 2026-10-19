@@ -2759,6 +2759,9 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                 mid = cc+1;
             r21_need_tex = (mid <= yh);
         }
+#if defined(DOOM_R35_LIVE_PROFILE)
+        ++r35_live_columns;
+#endif
         R20_COUNT(R20C_SEGCOLS, 1);
         if (segtextured && !r21_need_tex)
             R20_COUNT(R20C_TEX_SKIP, 1);
@@ -3610,8 +3613,15 @@ static void R_AddLine(const seg_t __far* line)
 // Draw one or more line segments.
 //
 
+#if defined(DOOM_R35_LIVE_PROFILE)
+volatile uint16_t r35_live_nodes, r35_live_bbox, r35_live_rejected;
+volatile uint16_t r35_live_subsectors, r35_live_segs, r35_live_columns;
+#endif
 static void R_Subsector(int16_t num)
 {
+#if defined(DOOM_R35_LIVE_PROFILE)
+    ++r35_live_subsectors;
+#endif
     int16_t         count;
     const seg_t       __far* line;
     subsector_t __far* sub;
@@ -3666,6 +3676,9 @@ static void R_Subsector(int16_t num)
     R_AddSprites(sub, frontsector->lightlevel);
     while (count--)
     {
+#if defined(DOOM_R35_LIVE_PROFILE)
+        ++r35_live_segs;
+#endif
         R7_VOID(9, R_AddLine(line));
         line++;
         curline = NULL; /* cph 2001/11/18 - must clear curline now we're done with it, so R_LoadColorMap doesn't try using it for other things */
@@ -3801,6 +3814,9 @@ static void R_RenderBSPNode(int16_t bspnum)
             if (sp == MAX_BSP_DEPTH)
                 I_Error("R20a BSP depth overflow");
 
+#if defined(DOOM_R35_LIVE_PROFILE)
+            ++r35_live_nodes;
+#endif
             bsp = &nodes[bspnum];
             side = R_PointOnSide(viewx, viewy, bsp);
 
@@ -3826,8 +3842,14 @@ static void R_RenderBSPNode(int16_t bspnum)
         // Possibly divide back space.
         //Walk back up the tree until we find
         //a node that has a visible backspace.
+#if defined(DOOM_R35_LIVE_PROFILE)
+        ++r35_live_bbox;
+#endif
         while (!R7_VALUE(10, R_CheckBBox(bsp->bbox[side])))
         {
+#if defined(DOOM_R35_LIVE_PROFILE)
+            ++r35_live_rejected;
+#endif
             if (sp == 0)
             {
                 //back at root node and not visible. All done!
@@ -3919,6 +3941,10 @@ static void R_SetupFrame (player_t *player)
 //
 void R_RenderPlayerView (player_t* player)
 {
+#if defined(DOOM_R35_LIVE_PROFILE)
+    r35_live_nodes = r35_live_bbox = r35_live_rejected = 0;
+    r35_live_subsectors = r35_live_segs = r35_live_columns = 0;
+#endif
 #if defined(DOOM_ROUTINE_PROFILE)
     doom_profile_stage = 1;
 #endif
