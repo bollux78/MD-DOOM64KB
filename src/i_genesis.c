@@ -303,6 +303,50 @@ void I_ProfileSampleReset(void)
 }
 #endif
 
+#if defined(DOOM_R38_TIME_PROFILE)
+/* Observe which routine was interrupted by each 60 Hz VBlank, rather than
+ * inferring time from geometry counts. This is a statistical wall-time
+ * estimate; it does not resolve individual CPU cycles. Only 48 B of data.
+ * Live gameplay freezes the 10-second (600-sample) window until a camera
+ * turn or player movement. Timedemo accumulates the full DEMO3. */
+volatile uint16_t doom_profile_stage;
+volatile uint32_t doom_profile_samples[11];
+volatile uint32_t r38_sample_total;
+static volatile uint16_t r38_active;
+
+void R38_ResetSamples(void)
+{
+    uint16_t saved;
+    __asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr"
+                     : "=d"(saved) : : "cc","memory");
+    r38_active = 0;
+    for (uint16_t i=0; i<11; ++i) doom_profile_samples[i] = 0;
+    r38_sample_total = 0;
+    doom_profile_stage = 0;
+    __asm__ volatile("move.w %0,%%sr" : : "d"(saved) : "cc","memory");
+}
+
+void R38_BeginView(int32_t x, int32_t y, uint32_t angle)
+{
+#if !defined(TIMEDEMO)
+    static uint8_t have_view;
+    static int32_t last_x, last_y;
+    static uint32_t last_angle;
+    if (!have_view || last_x != x || last_y != y || last_angle != angle)
+    {
+        have_view = 1;
+        last_x = x;
+        last_y = y;
+        last_angle = angle;
+        R38_ResetSamples();
+    }
+#else
+    (void)x; (void)y; (void)angle;
+#endif
+    r38_active = 1;
+}
+#endif
+
 
 static void I_VBlankCallback(void)
 {
@@ -314,6 +358,22 @@ static void I_VBlankCallback(void)
 #endif
 #if defined(DOOM_ROUTINE_PROFILE)
     if (doom_profile_stage < 11) doom_profile_samples[doom_profile_stage]++;
+#elif defined(DOOM_R38_TIME_PROFILE)
+    if (r38_active)
+    {
+#if !defined(TIMEDEMO)
+        /* 600 VBlanks = 10 seconds at NTSC 60Hz; freeze until next turn. */
+        if (r38_sample_total < 600u)
+#endif
+        {
+            uint16_t stage = doom_profile_stage;
+            if (stage < 11u)
+            {
+                ++doom_profile_samples[stage];
+                ++r38_sample_total;
+            }
+        }
+    }
 #endif
 }
 
