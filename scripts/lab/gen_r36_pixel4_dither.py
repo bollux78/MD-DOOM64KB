@@ -124,6 +124,26 @@ def main():
     original = genpal.decode_subpal(genpal.load_playpal(), 0)
     solids = palette_rgb()
     color_map, pairs, report = choose_colors(original, solids)
+    if __import__("os").environ.get("DOOM_R36C_HYBRID") == "1":
+        palette_source = PALETTE.read_text(encoding="utf-8")
+        found = re.search(r"r22_color\[256\]\s*=\s*\{([^}]*)\}", palette_source, re.S)
+        if not found:
+            raise RuntimeError("R36c missing solid-color plane quantizer")
+        flat_lut = [int(v) for v in re.findall(r"\b\d+\b", found.group(1))]
+        if len(flat_lut) != 256:
+            raise RuntimeError("R36c expected 256 solid-color references")
+        floor_slot, ceil_slot = flat_lut[107], flat_lut[106]
+        floor_rgb, ceil_rgb = solids[floor_slot], solids[ceil_slot]
+        if floor_slot != 1 or ceil_slot != 3 or tuple(floor_rgb) != (36,36,36) or tuple(ceil_rgb) != (73,73,73):
+            raise RuntimeError(f"E1M1 mismatched cell reference: floor {floor_slot}:{floor_rgb}, ceiling {ceil_slot}:{ceil_rgb}")
+        report["flat_reference"] = "R35d-cell-E1M1-sector0"
+        report["e1m1_floor_doom_index"] = 107
+        report["e1m1_floor_solid_rgb"] = list(floor_rgb)
+        report["e1m1_ceiling_doom_index"] = 106
+        report["e1m1_ceiling_solid_rgb"] = list(ceil_rgb)
+        report["floor_ceiling_checkerboard"] = False
+        report["wall_sprite_checkerboard"] = True
+        report["leftmost_tile_column"] = "forced-black"
     even, odd = make_row_tables(pairs)
     def numbers(nums, per_line=8):
         return "\n".join(
