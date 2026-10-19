@@ -3,7 +3,7 @@
 Based on R40a `r40a-pixel4-menu-overlay`, with R39c dual MOVEP, R39e independent Music/SFX, native R22 76x44 4x4 renderer, and R35 Bayer8 screens. R40a fixed ghosting but cleared the WINDOW each frame, causing noticeable text blink.
 
 ## Change
-`src/r22_video.inc` now holds an 836-byte previous-glyph cache and 105-byte drawn-this-frame bitset in 68000 WRAM, **only for native static screen overlays**. Each text string writes to WINDOW VRAM only for characters whose ASCII glyph changed. When the frame is ready, obsolete glyph positions receive the transparent tile index 0, revealing the original artwork. Unchanged characters remain visible throughout the frame. The same lifecycle covers Options cursor, ON/OFF labels, and intermission/level transition count strings.
+`src/r22_video.inc` now holds two 105-byte occupancy bitsets (210 bytes total) in 68000 WRAM, **only for native static screen overlays**. Each text string is written again without clearing WINDOW first, so persistent characters never disappear between updates. When the frame is ready, obsolete glyph positions receive the transparent tile index 0, revealing the original artwork. Previously drawn characters remain visible throughout the frame; only disappeared text cells are made transparent. The same lifecycle covers Options cursor, ON/OFF labels, and intermission/level transition count strings.
 
 When an R35 native picture is first shown or replaced, `src/r35_native4.inc` invalidates the cache because WINDOW VRAM has been cleared; closing the menu still clears/hides the WINDOW once. No full WINDOW clear is performed between ordinary text frames. WINDOW writes stop before row 22 to protect 0xFC00's SAT/HScroll.
 
@@ -15,3 +15,6 @@ When an R35 native picture is first shown or replaced, `src/r35_native4.inc` inv
 - Audio controls must work on/off while in PLAY; original 4x4 resolution and geometry unchanged.
 
 There is no automated pixel-exact menu input replay in this build. Headless BlastEm smoke does not prove that dynamic text flicker is fixed; check manually.
+
+## Initialization smoke issue
+The first attempted implementation used a 941-byte glyph cache and hung in the headless 300-frame BlastEm smoke (timeout). The revised implementation reduced WRAM use to two 105-byte bitsets; this is a diagnostic mitigation, not a confirmed root-cause attribution. Test the revised ROM and do not use the failed first build.
