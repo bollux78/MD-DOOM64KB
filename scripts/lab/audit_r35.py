@@ -19,7 +19,7 @@ for variant in names:
     assert '-DDOOM_R35D_CHECKER' in flags,(name,'checker flag required')
     measured=variant in ('cell-play','cell-profperf')
     assert ('-DDOOM_R38_TIME_PROFILE' in flags)==measured,(name,'R38 exclusive time profiler')
-    assert ('-DDOOM_R7_PROFILE' in flags)==measured,(name,'R7 nested stage markers required')
+    assert '-DDOOM_R7_PROFILE' not in flags,(name,'nested R7 guards selected by R38 without legacy single-digit define')
     assert '-DDOOM_R37_BSP_PROFILE' not in flags,(name,'R37 counters add sampling bias')
     assert ('-DDOOM_R28_VIDEO_AUDIT' in flags)!=(variant=='cell-profperf'),(name,'timedemo result rows must be free')
     assert ('-DDOOM_R20_COUNTERS' not in flags and '-DDOOM_ROUTINE_PROFILE' not in flags),name
