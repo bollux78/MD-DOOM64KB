@@ -250,8 +250,8 @@ static void R35_DrawLiveProfile(void)
     if (_g_gamestate != GS_LEVEL) return;
     /* Two diagnostic rows replace the bottom title and safety-margin row.
        These are tilemap characters, not a pixel overlay. */
-    const int16_t y = VIEWWINDOWHEIGHT + 3;
-    const int16_t z = VIEWWINDOWHEIGHT + 4;
+    const int16_t y = VIEWWINDOWHEIGHT + 2;
+    const int16_t z = VIEWWINDOWHEIGHT + 3;
     const char *labels[] = {"N", "B", "X", "S", "G", "C"};
     const uint16_t values[] = {r35_live_nodes, r35_live_bbox, r35_live_rejected,
                                 r35_live_subsectors, r35_live_segs, r35_live_columns};
@@ -1230,6 +1230,11 @@ void I_FinishUpdate(void)
             || r20_hud_dirty
 #endif
             ;
+#if defined(DOOM_R35_LIVE_PROFILE)
+        /* This diagnostic changes the bottom two rows every frame.
+           Force HUD rows into DMA even when health, armor and ammo stay fixed. */
+        if (level) changed = 1;
+#endif
 #if defined(DOOM_R20_HUD_LAZY)
         if (changed) I_DrawClassicTextHUD();
 #if defined(DOOM_R35_LIVE_PROFILE)
