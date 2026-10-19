@@ -197,6 +197,13 @@ for v in $variants
         # DOOM_R7_PROFILE enables the already-tested nested stage boundaries.
         set defs $defs '-DDOOM_R38_TIME_PROFILE'
     end
+    # R39b: deliberate lossy wall-texture approximation for 8x8 only.
+    # Control omits the define and remains the R38 clean timedemo renderer.
+    if set -q DOOM_R39B_BUILD; and test "$DOOM_R39B_BUILD" = fast
+        if contains -- $v cell-play cell-perf
+            set defs $defs '-DDOOM_R39B_AGGRESSIVE_TEX4'
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -204,6 +211,13 @@ for v in $variants
     end
     if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-perf cell-profperf
         set id doom-md-r38-$v
+    end
+    if set -q DOOM_R39B_BUILD
+        if test "$DOOM_R39B_BUILD" = fast
+            set id doom-md-r39b-fast-$v
+        else if test "$DOOM_R39B_BUILD" = control
+            set id doom-md-r39b-control-$v
+        end
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
