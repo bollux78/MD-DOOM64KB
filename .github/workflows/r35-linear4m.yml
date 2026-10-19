@@ -1,7 +1,5 @@
 name: R36c - Pixel4 cell-matched grey flats and selective checker
 on:
-  push:
-    branches: [r36c-pixel4-hybrid]
   workflow_dispatch:
 concurrency:
   group: r36c-pixel4-hybrid
