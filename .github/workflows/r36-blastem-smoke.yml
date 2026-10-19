@@ -78,7 +78,7 @@ jobs:
                   info['status']='SKIP: BlastEm executable not found'
                   results.append(info)
                   continue
-              cmd=[binary,'-b',str(nframes),str(out/filename)]
+              cmd=[binary,'-b',str(nframes),str((out/filename).resolve())]
               env=os.environ.copy()
               env.update({'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
               begin=time.monotonic()
