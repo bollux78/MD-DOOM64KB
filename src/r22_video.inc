@@ -223,17 +223,24 @@ static void R22_UploadBack(uint16_t bank){
         *map++=index;
         if(index<16)continue;
 #endif
-        uint16_t sr=R22_Lock();
-        VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(tile*32u);
+        /* R36b: fetch ROM LUT words with VBlank interrupts ENABLED.
+           Previously four ROM reads happened after masking SR; this enlarged
+           every VDP critical section and could starve the narrow VBlank
+           callback window used by the Pixel4 double-buffer flip. */
 #if defined(DOOM_R36_PIXEL4_DITHER)
         uint16_t ai=(uint16_t)(((uint16_t)ha<<8)|a);
         uint16_t bi=(uint16_t)(((uint16_t)hb<<8)|b);
         uint32_t te=r36_row_even[ai],to=r36_row_odd[ai];
         uint32_t be=r36_row_even[bi],bo=r36_row_odd[bi];
+#else
+        uint32_t top=R22_Expand(a),bottom=R22_Expand(b);
+#endif
+        uint16_t sr=R22_Lock();
+        VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(tile*32u);
+#if defined(DOOM_R36_PIXEL4_DITHER)
         *data=te;*data=to;*data=te;*data=to;
         *data=be;*data=bo;*data=be;*data=bo;
 #else
-        uint32_t top=R22_Expand(a),bottom=R22_Expand(b);
         *data=top;*data=top;*data=top;*data=top;
         *data=bottom;*data=bottom;*data=bottom;*data=bottom;
 #endif
