@@ -59,6 +59,16 @@ void I_InitGraphics(void);
 
 void I_FinishUpdate(void);
 
+/* R38 uses the dormant R7 stage breakdown during PLAY as well as TIMEDEMO.
+ * Do not use DOOM_ROUTINE_PROFILE for R38: legacy build_silent.fish forces
+ * TIMEDEMO when that old switch is set. */
+#if defined(DOOM_R38_TIME_PROFILE)
+extern volatile uint16_t doom_profile_stage;
+extern volatile uint32_t doom_profile_samples[11];
+extern volatile uint32_t r38_sample_total;
+void R38_ResetSamples(void);
+void R38_BeginView(int32_t x, int32_t y, uint32_t angle);
+#endif
 #if defined(TIMEDEMO)
 void I_BenchmarkReset(void);
 #if defined(DOOM_ROUTINE_PROFILE)
