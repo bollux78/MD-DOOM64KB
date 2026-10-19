@@ -1,10 +1,9 @@
-name: R35d - strong checkerboard 8x8 validated
+name: R36 - Pixel4 32-color dithering (manual)
+# Manual-only until runner is switched on and user explicitly starts testing.
 on:
-  push:
-    branches: [r35d-checker]
   workflow_dispatch:
 concurrency:
-  group: r35d-checker
+  group: r36-pixel4-dither
   cancel-in-progress: true
 permissions:
   contents: write
@@ -126,7 +125,9 @@ jobs:
           fish -n scripts/lab/build_r35_linear.fish
           fish -n scripts/build_silent.fish
           python3 -m py_compile scripts/lab/gen_r31_sfx.py scripts/lab/gen_r30_native.py \
-            scripts/lab/finish_r35_rom.py scripts/lab/audit_r35.py
+            scripts/lab/finish_r35_rom.py scripts/lab/audit_r35.py \
+            scripts/lab/gen_r36_pixel4_dither.py scripts/lab/test_r36_pixel4_dither.py
+          python3 scripts/lab/test_r36_pixel4_dither.py
           python3 scripts/lab/test_r25_music.py
           python3 scripts/lab/test_r27_group.py
           python3 - <<'PY'
@@ -144,16 +145,17 @@ jobs:
           PY
           test -f ~/mars/m68k-elf/lib/libmd.a
           test -f ~/mars/m68k-elf/inc/snd/xgm2.h
-      - name: Build four R35 linear 4MiB variants
+      - name: Build 8x8 R35d reference and experimental Pixel4 play/perf
         env:
           DOOM_R35D_CHECKER: '1'
+          DOOM_R36_PIXEL4_DITHER: '1'
         shell: bash
         run: |
           mkdir -p dist/r35
           : > dist/r35/BUILD-RESULTS.txt
           failed=0
           for variant in cell-play cell-perf pixel4-play pixel4-perf; do
-            echo "=== R35 $variant ==="
+            echo "=== R36 $variant ==="
             if DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"; then
               echo "$variant OK" | tee -a dist/r35/BUILD-RESULTS.txt
             else
@@ -170,14 +172,16 @@ jobs:
           from pathlib import Path
           import zipfile
           d=Path('dist/r35')
-          with zipfile.ZipFile(d/'R35D-STRONG-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r35d-*.bin')):
+          with zipfile.ZipFile(d/'R36-P4D-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(d.glob('doom-md-r36-*.bin')):
                   z.write(p,p.name)
               z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
               for variant in ('cell-play','cell-perf'):
                   z.write(d/f'dither-{variant}.json',f'dither-{variant}.json')
+              for variant in ('pixel4-play','pixel4-perf'):
+                  z.write(d/f'r36-dither-{variant}.json',f'r36-dither-{variant}.json')
               z.write(d/'SHA256SUMS','SHA256SUMS')
-          print('Single ROM archive:',(d/'R35D-STRONG-FOUR-ROMS.zip').stat().st_size,'bytes')
+          print('Single ROM archive:',(d/'R36-P4D-FOUR-ROMS.zip').stat().st_size,'bytes')
           PY
       - name: Publish CI status for independent review
         if: always()
@@ -196,9 +200,9 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r35d-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r36-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r35d-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r36-*.log'))}
           }
           Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
@@ -208,12 +212,12 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/review-r35/CI-LAST-RESULT.json
           git commit -m 'R35 self-hosted CI results [skip ci]' || true
-          git push origin HEAD:r35d-checker
+          git push origin HEAD:r36-pixel4-dither
       - name: Upload 4 ROMs and build diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r35d-strong-validated
+          name: doom-md-r36-pixel4-dither-preflight
           path: dist/r35/
           if-no-files-found: warn
           retention-days: 90
