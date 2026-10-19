@@ -171,7 +171,7 @@ jobs:
           import zipfile
           d=Path('dist/r35')
           with zipfile.ZipFile(d/'R35D-STRONG-FOUR-ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-              for p in sorted(d.glob('doom-md-r35d-checker-*.bin')):
+              for p in sorted(d.glob('doom-md-r35d-*.bin')):
                   z.write(p,p.name)
               z.write(d/'R35-AUDIT.json','R35-AUDIT.json')
               for variant in ('cell-play','cell-perf'):
@@ -196,9 +196,9 @@ jobs:
                   if (d/'BUILD-RESULTS.txt').is_file() else [],
               'audit':json.loads(a.read_text()) if a.is_file() else None,
               'roms':[{'name':p.name,'bytes':p.stat().st_size}
-                      for p in sorted(d.glob('doom-md-r35d-checker-*.bin'))],
+                      for p in sorted(d.glob('doom-md-r35d-*.bin'))],
               'logs':{p.name:p.read_text(errors='replace').splitlines()[-35:]
-                      for p in sorted(d.glob('build-doom-md-r35d-checker-*.log'))}
+                      for p in sorted(d.glob('build-doom-md-r35d-*.log'))}
           }
           Path('docs/review-r35/CI-LAST-RESULT.json').write_text(
               json.dumps(report,indent=2,ensure_ascii=False)+'\n')
