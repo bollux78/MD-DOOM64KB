@@ -175,7 +175,7 @@ jobs:
               assert '-DDOOM_R37_BSP_PROFILE' not in flags,name
               assert ('-DTIMEDEMO' in flags)==name.endswith('cell-perf'),name
               assert '-DDOOM_R31_SFX' in flags and '-DDOOM_R29_XGM2' in flags,name
-              assert json.loads((d/('dither-'+name.split('cell-')[-1]+'.json')).read_text())['mode']=='r35d-checker-strong'
+              assert json.loads((d/('dither-'+name.split('doom-md-r39a-')[-1]+'.json')).read_text())['mode']=='r35d-checker-strong'
               manifest.append(dict(file=p.name,bytes=len(b),sha256=hashlib.sha256(b).hexdigest(),clipscan=enabled))
           (d/'R39A-MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
           with zipfile.ZipFile(d/'R39A-CLIPSCAN-AB-3ROMS.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
