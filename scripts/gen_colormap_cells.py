@@ -128,7 +128,7 @@ def main():
             pal,tile = lookup[i] if checker else solid_pairs[i]
             cells.append(f'TILE_ATTR_FULL({pal},0,0,0,SOLID_TILE_INDEX + {tile}),')
         cells.append('};')
-    (ROOT / 'src/r20_colorcell.h').write_text('\\n'.join(cells)+'\\n')
+    (ROOT / 'src/r20_colorcell.h').write_text('\n'.join(cells)+'\n')
 
     def make_colormap_rows(pairs):
         rows = []
@@ -156,7 +156,7 @@ def main():
         lines += make_colormap_rows(solid_pairs)
         lines.append("};")
     lines += ["#endif", ""]
-    OUT.write_text('\\n'.join(lines), encoding="utf-8")
+    OUT.write_text('\n'.join(lines), encoding="utf-8")
     print(f"Generated ROM-only colormap LUT: {32768 if runtime else 16384} bytes; no extra 68000 RAM")
 
 if __name__ == "__main__":
