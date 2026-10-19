@@ -50,6 +50,7 @@ static void R35_LeaveNative4(void)
     r22_queued_pal=100;
     r22_overlay_dirty=0;
     r22_text_this_frame=0;
+    R40B_ResetNativeText();
     r22_front=0;
     r22_ready=0;
     r35_native_active=-1;
@@ -91,6 +92,7 @@ static bool R35_DrawNative4(int16_t lump)
         r22_newpal=100;
         r22_queued_pal=100;
         r22_overlay_dirty=0;
+        R40B_ResetNativeText(); /* WINDOW is newly blank, so invalidate glyph shadow. */
         r35_native_active=(int16_t)i;
         VDP_setEnable(TRUE);
         return TRUE;
