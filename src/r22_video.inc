@@ -45,22 +45,20 @@ static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
 static uint8_t r22_overlay_dirty,r22_text_this_frame;
-/* R40b: Retain the native-title/intermission WINDOW glyphs across frames.
- * R40a cleared and redrew the entire WINDOW every frame, causing visible
- * flashing. Only a changed glyph or an obsolete glyph should touch VRAM.
- * 836 bytes previous glyphs + 105 bytes occupancy bitset in WRAM.
- * Zero marks a transparent WINDOW cell; text glyphs are ASCII 32..127. */
+/* R40b: Native-title/intermission WINDOW cells are not cleared on each
+ * frame. Two 105-byte occupancy bitmaps let us erase only stale positions
+ * after the new glyphs have been written. Avoid the earlier 836-byte
+ * glyph cache: WRAM/SGDK heap is tight in this port. */
 #define R40B_TEXT_W 38
 #define R40B_TEXT_H 22
 #define R40B_TEXT_N (R40B_TEXT_W*R40B_TEXT_H)
-static uint8_t r40b_native_glyph[R40B_TEXT_N];
+static uint8_t r40b_native_prev[(R40B_TEXT_N+7)/8];
 static uint8_t r40b_native_seen[(R40B_TEXT_N+7)/8];
 static void R40B_ResetNativeText(void)
 {
-    memset(r40b_native_glyph,0,sizeof(r40b_native_glyph));
+    memset(r40b_native_prev,0,sizeof(r40b_native_prev));
     memset(r40b_native_seen,0,sizeof(r40b_native_seen));
 }
-
 #if defined(DOOM_R22_SOLID_TILES)
 /* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
 static uint16_t r22_map[38*21] __attribute__((aligned(2)));
@@ -91,13 +89,13 @@ static void R22_ClearOverlay(void){
     VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setAutoInc(2);R22_Unlock(sr);r22_overlay_dirty=0;
 }
-/* Direct SRAM-independent glyph writer for the unchanged R35 native
- * 320x224 picture. No full WINDOW clear on successive static frames. */
+/* R40b: Write current text without blanking the WINDOW first, tracking
+ * the positions occupied this frame. Repeated glyph writes do not cause
+ * visible blinking; a transparent tile is written only for retired glyphs. */
 static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
 {
     if(x<0||x>=R40B_TEXT_W||y<0||y>=R40B_TEXT_H)return;
     if(!r22_text_this_frame){
-        /* This is a register change only: do NOT clear WINDOW. */
         R20_StopVideo();
         uint16_t sr=R22_Lock();
         VDP_setWindowHPos(TRUE,0);
@@ -106,66 +104,45 @@ static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
         r22_text_this_frame=1;
     }
     r22_overlay_dirty=1;
-    const uint16_t base=(uint16_t)y*R40B_TEXT_W;
-    char run[R40B_TEXT_W+1];
-    uint16_t run_start=0,run_size=0;
-    while(*s && x<R40B_TEXT_W){
-        uint8_t ch=(uint8_t)*s++;
-        if(ch<32||ch>127)ch=' ';
-        uint16_t index=(uint16_t)(base+x);
-        r40b_native_seen[index>>3]|=(uint8_t)(1u<<(index&7));
-        if(r40b_native_glyph[index]!=ch){
-            if(!run_size)run_start=(uint16_t)x;
-            run[run_size++]=(char)ch;
-            r40b_native_glyph[index]=ch;
-        } else if(run_size){
-            run[run_size]=0;
-            R22_DrawText(VDP_WINDOW,run,run_start,(uint16_t)y);
-            run_size=0;
-        }
-        ++x;
+    int16_t col=x;
+    const char *scan=s;
+    while(*scan && col<R40B_TEXT_W){
+        uint16_t i=(uint16_t)(y*R40B_TEXT_W+col);
+        r40b_native_seen[i>>3]|=(uint8_t)(1u<<(i&7));
+        scan++; col++;
     }
-    if(run_size){
-        run[run_size]=0;
-        R22_DrawText(VDP_WINDOW,run,run_start,(uint16_t)y);
-    }
+    R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
 }
-
-/* One scan after all menu/intermission text for this frame.
- * Erase only cells not drawn again; the unchanged cells remain visible
- * throughout, eliminating full-screen flicker. Preserve the 0xFC00 SAT
- * and HScroll alias by limiting access to WINDOW rows 0..21. */
 static void R40B_PruneNativeText(void)
 {
-    uint16_t have_stale=0;
-    for(uint16_t i=0;i<R40B_TEXT_N;i++){
-        if(r40b_native_glyph[i] &&
-            !(r40b_native_seen[i>>3]&(1u<<(i&7)))){
-            have_stale=1;
-            break;
+    uint16_t stale=0;
+    for(uint16_t i=0;i<sizeof(r40b_native_prev);i++){
+        if(r40b_native_prev[i] & (uint8_t)~r40b_native_seen[i]){
+            stale=1;break;
         }
     }
-    if(!have_stale)return;
-    R20_StopVideo();
-    uint16_t sr=R22_Lock();
-    volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
-    volatile uint16_t *data=(volatile uint16_t*)0xC00000;
-    VDP_setAutoInc(2);
-    for(uint16_t y=0;y<R40B_TEXT_H;y++){
-        uint16_t run=0;
-        for(uint16_t x=0;x<R40B_TEXT_W;x++){
-            uint16_t i=(uint16_t)(y*R40B_TEXT_W+x);
-            if(r40b_native_glyph[i] &&
-               !(r40b_native_seen[i>>3]&(1u<<(i&7)))){
-                if(!run)
-                    *ctrl=VDP_WRITE_VRAM_ADDR(VDP_WINDOW+y*128u+x*2u);
-                *data=0; /* transparent tile reveals original native art */
-                r40b_native_glyph[i]=0;
-                run=1;
-            }else run=0;
+    if(stale){
+        R20_StopVideo();
+        uint16_t sr=R22_Lock();
+        volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
+        volatile uint16_t *data=(volatile uint16_t*)0xC00000;
+        VDP_setAutoInc(2);
+        for(uint16_t y=0;y<R40B_TEXT_H;y++){
+            uint16_t run=0;
+            for(uint16_t x=0;x<R40B_TEXT_W;x++){
+                uint16_t i=(uint16_t)(y*R40B_TEXT_W+x);
+                uint8_t bit=(uint8_t)(1u<<(i&7));
+                if((r40b_native_prev[i>>3]&bit) &&
+                   !(r40b_native_seen[i>>3]&bit)){
+                    if(!run)*ctrl=VDP_WRITE_VRAM_ADDR(VDP_WINDOW+y*128u+x*2u);
+                    *data=0; /* Transparent WINDOW cell shows native art. */
+                    run=1;
+                }else run=0;
+            }
         }
+        R22_Unlock(sr);
     }
-    R22_Unlock(sr);
+    memcpy(r40b_native_prev,r40b_native_seen,sizeof(r40b_native_prev));
 }
 
 static int8_t r22_newpal=100,r22_queued_pal=100;
