@@ -79,7 +79,14 @@ static inline void R36_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t code) {
     *dst=(uint8_t)((*dst & (uint8_t)~mask) | ((code&16u)?mask:0u));
 }
 #define R22_Put R36_Put
+#if defined(DOOM_R36C_HYBRID)
+    /* Pixel4 hybrid: keep original 16-color PLAYPAL quantizer for plane flats.
+       Texture/sprite colors still use the R36 32-color checker LUT. */
+#define R36_TEXTURE_COLOR r36_color
+#else
 #define r22_color r36_color
+#define R36_TEXTURE_COLOR r22_color
+#endif
 #endif
 static volatile uint16_t r22_ready;
 static volatile uint16_t r22_front;
@@ -149,12 +156,15 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     for(int16_t y=v->yl;y<=v->yh;y++) {
         uint8_t c=v->source[frac>>9];
         if(v->colormap)c=v->colormap[c];
-        R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
+        R22_Plot(v->x,y,R36_TEXTURE_COLOR[c]);frac+=v->fracstep;
     }
 }
 void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+    /* Both floor and ceiling are R_GetPlaneColor() outputs.
+       R36c deliberately maps them to legacy solid colors 0..15.
+       Walls and sprites keep 32 virtual mixed shades. */
     c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
 }
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
@@ -225,6 +235,11 @@ static void R22_UploadBack(uint16_t bank){
         uint8_t hb=(uint8_t)((high[pos>>3]>>(pos&7))&3u);
 #endif
 #if defined(DOOM_R22_SOLID_TILES)
+#if defined(DOOM_R36C_HYBRID)
+        /* Fixed black 8px left safety border: prevents dirty/aliased tile
+           fragments from flickering at the very first viewport column. */
+        if(x==0) { *map++=0; continue; }
+#endif
 #if defined(DOOM_R36_PIXEL4_DITHER)
         uint16_t index=(ha|hb)?tile:R22_TileIndex(a,b,tile);
 #else
@@ -311,11 +326,11 @@ void V_DrawRawFullScreen(int16_t n){
     if(r35_native_active>=0)R35_LeaveNative4();
 #endif
     const uint8_t *p=W_GetLumpByNum(n);V_ClearViewWindow();
-    for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,r22_color[p[(y*SCREENHEIGHT/44)*SCREENWIDTH+x*SCREENWIDTH/76]]);
+    for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,R36_TEXTURE_COLOR[p[(y*SCREENHEIGHT/44)*SCREENWIDTH+x*SCREENWIDTH/76]]);
 }
 void V_InitDrawLine(void){}void V_ShutdownDrawLine(void){}
 void V_DrawLine(int16_t x,int16_t y,int16_t xx,int16_t yy,uint8_t c){
-    int16_t dx=abs(xx-x),sx=x<xx?1:-1,dy=-abs(yy-y),sy=y<yy?1:-1,e=dx+dy;c=r22_color[c];
+    int16_t dx=abs(xx-x),sx=x<xx?1:-1,dy=-abs(yy-y),sy=y<yy?1:-1,e=dx+dy;c=R36_TEXTURE_COLOR[c];
     for(;;){R22_Plot(x,y,c);if(x==xx&&y==yy)break;int16_t e2=2*e;if(e2>=dy){e+=dy;x+=sx;}if(e2<=dx){e+=dx;y+=sy;}}
 }
 void I_InitScreenPage(void){V_ClearViewWindow();}void I_InitScreenPages(void){V_ClearViewWindow();}
@@ -329,7 +344,11 @@ static void R22_HUD(void){
         R22_DrawText(VDP_BG_A,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(VDP_BG_A,"ARMOR",13,23);R22_Num3(19,23,a);
         R22_DrawText(VDP_BG_A,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
 #if defined(DOOM_R36_PIXEL4_DITHER)
+        #if defined(DOOM_R36C_HYBRID)
+        R22_DrawText(VDP_BG_A,"R36C FLATS SOLID",1,25);
+#else
         R22_DrawText(VDP_BG_A,"R36B P4D 32 COLORS",1,25);
+#endif
 #else
         R22_DrawText(VDP_BG_A,"DOOM PX4 - 76x44",1,25);
 #endif
