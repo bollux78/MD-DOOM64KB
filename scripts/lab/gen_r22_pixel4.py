@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Own R22 four-pixel projection, palette and VRAM map constants."""
 from pathlib import Path
-import math,runpy
+import math,runpy,os
 r=Path(__file__).resolve().parents[2]
 g=runpy.run_path(str(r/'scripts/genpal.py'))
 pp=g['load_playpal']();rgb=g['decode_subpal'](pp,0)
@@ -15,11 +15,32 @@ for b in boxes:
  mean=tuple(sum(rgb[i][c] for i in b)//len(b) for c in range(3));reps.append(min(b,key=lambda i:g['dist2'](rgb[i],mean)))
 reps.sort(key=lambda i:sum(rgb[i]))
 words=[0]+[g['gen_color'](rgb[i]) for i in reps]+[0xeee]
+hybrid=os.environ.get('DOOM_R36C_HYBRID')=='1'
+if hybrid:
+ # E1M1 sector 0: floor color 107 and ceiling 106 (from converted
+ # Doom64KB SECTORS), corresponding to the neutral 36/73 Genesis shades
+ # displayed by R35d cell. Legacy R22 had a redundant black in slot 1
+ # and dark red in slot 3; its nearest RGB quantizer consequently sent
+ # floor to maroon (slot4) and ceiling to olive (slot6).
+ # Keep the remaining 14 slots unchanged to preserve texture chroma.
+ words[1]=g['gen_color'](rgb[107])   # 0x0222 => RGB (36,36,36)
+ words[3]=g['gen_color'](rgb[105])   # 0x0444 => RGB (73,73,73)
 prgb=list(map(g['gen_to_rgb'],words))
 lookup=[min(range(16),key=lambda j:g['dist2'](rgb[i],prgb[j])) for i in range(256)]
 cram=[]
 for sub in range(14):
- colors=g['decode_subpal'](pp,sub);cram.append([0]+[g['gen_color'](colors[i]) for i in reps]+[0xeee])
+ colors=g['decode_subpal'](pp,sub)
+ row=[0]+[g['gen_color'](colors[i]) for i in reps]+[0xeee]
+ if hybrid:
+  # Reapply each PLAYPAL flash/damage subpalette at the same two slots.
+  row[1]=g['gen_color'](colors[107])
+  row[3]=g['gen_color'](colors[105])
+ cram.append(row)
+if hybrid:
+ assert lookup[107]==1 and lookup[106]==3,(lookup[107],lookup[106])
+ assert prgb[lookup[107]]==(36,36,36),prgb[lookup[107]]
+ assert prgb[lookup[106]]==(73,73,73),prgb[lookup[106]]
+ print('R36C E1M1 reference: floor #107 => PAL0[1] RGB(36,36,36); ceiling #106 => PAL0[3] RGB(73,73,73)')
 (r/'src/r22_palette.h').write_text('/* Generated from Doom PLAYPAL: 14 representative colors + black/white. */\nstatic const uint8_t r22_color[256]={'+','.join(map(str,lookup))+'};\nstatic const uint16_t r22_cram[14][16]={\n'+',\n'.join('{'+','.join(map(str,row))+'}' for row in cram)+'};\n')
 w=76;cx=w//2;v=[];raw=[]
 for i in range(4096):
