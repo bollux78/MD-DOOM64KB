@@ -1,6 +1,6 @@
 {
-  "run_id": "39183193561",
-  "sha": "231dccb3234856551d491b20443c91dfab324660",
+  "run_id": "39191857196",
+  "sha": "1fc1b27a39d03367d86f6aa99c24fed7ac310399",
   "build_results": [
     "cell-play OK",
     "cell-perf OK",
@@ -12,67 +12,67 @@
       "name": "doom-md-r35-cell-play",
       "renderer": "8x8",
       "timedemo": false,
-      "rom_bytes": 4194304,
+      "rom_bytes": 2752512,
       "elf_payload_bytes": 2633036,
-      "free_bytes": 1561268,
+      "free_bytes": 119476,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "dd2d6cd0eb5898e3be56096ec1c010163d4d57e460e3e248d57a820245acdca5"
+      "sha256": "66b7e01f450934a5adc50b92266380d0a365a060cff2575d2edf0788485fc05a"
     },
     {
       "name": "doom-md-r35-cell-perf",
       "renderer": "8x8",
       "timedemo": true,
-      "rom_bytes": 4194304,
+      "rom_bytes": 2752512,
       "elf_payload_bytes": 2636108,
-      "free_bytes": 1558196,
+      "free_bytes": 116404,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "ea5967248bad303873aaf5c3d8cd21d0b867bfc8c2bb76984b87c1c592c22345"
+      "sha256": "472354c8b44610a5d040403b350913edae19c36131a4589ec0e00c5e4c5021ac"
     },
     {
       "name": "doom-md-r35-pixel4-play",
       "renderer": "4x4",
       "timedemo": false,
-      "rom_bytes": 4194304,
+      "rom_bytes": 2621440,
       "elf_payload_bytes": 2620392,
-      "free_bytes": 1573912,
+      "free_bytes": 1048,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "e8455d9b5f9e07ace613e18f153dda6674a11437abb9a288968478f699f41f36"
+      "sha256": "4fc1546357aeee82448d8dc8fd33f0eb71d1ea39f49da5c65043cc3ab5ac9f82"
     },
     {
       "name": "doom-md-r35-pixel4-perf",
       "renderer": "4x4",
       "timedemo": true,
-      "rom_bytes": 4194304,
+      "rom_bytes": 2752512,
       "elf_payload_bytes": 2623464,
-      "free_bytes": 1570840,
+      "free_bytes": 129048,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "2bf2c9364473918b202b0297432651f7c5a55bad4ff3fa094ae681f60587776b"
+      "sha256": "f23edb81dc51c204fa2297dd797b7ee048db8bca87e9bf7e2cfbb2e1fa27db40"
     }
   ],
   "roms": [
     {
       "name": "doom-md-r35-cell-perf.bin",
-      "bytes": 4194304
+      "bytes": 2752512
     },
     {
       "name": "doom-md-r35-cell-play.bin",
-      "bytes": 4194304
+      "bytes": 2752512
     },
     {
       "name": "doom-md-r35-pixel4-perf.bin",
-      "bytes": 4194304
+      "bytes": 2752512
     },
     {
       "name": "doom-md-r35-pixel4-play.bin",
-      "bytes": 4194304
+      "bytes": 2621440
     }
   ],
   "logs": {
