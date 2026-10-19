@@ -70,7 +70,7 @@
 #include "r12_recip_lut.h"
 #endif
 
-#if defined(DOOM_R7_PROFILE)
+#if defined(DOOM_R7_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
 #define R7_VOID(stage, expr) do { uint16_t old = doom_profile_stage; doom_profile_stage = stage; expr; doom_profile_stage = old; } while (0)
 #define R7_VALUE(stage, expr) (__extension__ ({ uint16_t old = doom_profile_stage; doom_profile_stage = stage; __typeof__(expr) result = (expr); doom_profile_stage = old; result; }))
 #else
