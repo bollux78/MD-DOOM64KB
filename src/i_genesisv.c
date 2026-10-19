@@ -266,6 +266,33 @@ static void R37_DrawProfileHUD(void)
 }
 #endif
 
+#if defined(DOOM_R38_TIME_PROFILE)
+/* One percent-decimal per ISR-sampled stage. Readable 38x28 CRT overlay:
+ * bottom row +0 = L P B C, +1 = original HEALTH/ARMOR/BULLETS,
+ * +2 = M D W X, +3 = R A O Q. Q is samples collected (max 600).
+ * 10 second sampling window resets after any player turn/movement.
+ * Measured percentages are statistical shares, not CPU cycles. */
+static void R38_DrawTimeHUD(void)
+{
+    if (_g_gamestate != GS_LEVEL) return;
+    static const char labels[]="LPBCMDWXRAO";
+    static const uint8_t rowoffsets[3]={0,2,3};
+    uint32_t total = r38_sample_total;
+    for (uint16_t i=0; i<11; ++i) {
+        const int16_t x=(int16_t)(1+9*(i&3u));
+        const int16_t y=(int16_t)(VIEWWINDOWHEIGHT+rowoffsets[i>>2]);
+        uint32_t part=doom_profile_samples[i];
+        uint16_t permille=(uint16_t)(total ? (part*1000u+total/2u)/total : 0);
+        hud_putc(x,y,labels[i]);
+        hud_num(x+2,y,permille/10u,3);
+        hud_putc(x+5,y,'.');
+        hud_putc(x+6,y,(char)('0'+permille%10u));
+    }
+    hud_putc(28,VIEWWINDOWHEIGHT+3,'Q');
+    hud_num(30,VIEWWINDOWHEIGHT+3,(uint16_t)total,4);
+}
+#endif
+
 static uint16_t hud_saturate3(int32_t value)
 {
     if (value < 0) return 0;
@@ -292,7 +319,9 @@ static void I_DrawClassicTextHUD(void)
     hud_num(19, hud_values_row, hud_saturate3(_g_player.armorpoints), 3);
     hud_label(24, hud_values_row, "BULLETS");
     hud_num(32, hud_values_row, hud_saturate3(_g_player.ammo[am_clip]), 3);
-#if defined(DOOM_R35D_CHECKER)
+#if defined(DOOM_R38_TIME_PROFILE)
+    /* Replaced by profiler values when live telemetry is drawn. */
+#elif defined(DOOM_R35D_CHECKER)
     hud_label(1, hud_title_row, "R35D 8X8 CHECKER");
 #else
     hud_label(1, hud_title_row, "DOOM - MEGA DRIVE");
@@ -485,6 +514,8 @@ void I_BenchmarkReset(void)
 #endif
 #if defined(DOOM_ROUTINE_PROFILE)
     I_ProfileSampleReset();
+#elif defined(DOOM_R38_TIME_PROFILE)
+    R38_ResetSamples();
 #endif
 #if defined(DOOM_R20_COUNTERS)
     for (uint16_t i = 0; i < R20C_N; i++) r20_cnt[i] = 0;
@@ -616,7 +647,27 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_R38_TIME_PROFILE)
+    {
+        /* Exclusive percentages of 60Hz interrupt-stage observations over
+         * the entire DEMO3. VDP DMA in interrupt time itself is excluded. */
+        static const char *const names[11] = {
+            "LOGIC/OTHER", "SETUP", "BSP OTHER", "COL LOOP REST",
+            "MASKED/SPR", "PRESENT/WAIT", "WALL DRAW", "COMPOSE COL",
+            "STORE RANGE", "ADD LINE", "CHECK BBOX"
+        };
+        const uint32_t total=r38_sample_total ? r38_sample_total : 1u;
+        for (uint16_t n=0; n<11; ++n)
+        {
+            const uint16_t x=n<6 ? 0 : 20;
+            const uint16_t y=(uint16_t)(20+(n<6 ? n : n-6));
+            VDP_drawText(names[n],x,y);
+            uint32_t permille=(doom_profile_samples[n]*1000u+total/2u)/total;
+            bench_fixed(buffer,permille,1);
+            VDP_drawText(buffer,x+13,y);
+        }
+    }
+#elif defined(DOOM_ROUTINE_PROFILE)
     {
 #if defined(DOOM_R7_PROFILE)
         const char *names[11] = { "OTHER/LOGIC", "SETUP", "BSP OTHER", "SEG LOOP REST", "MASKED/SPR", "VDP/DMA", "DRAW WALL", "COMPOSE COL", "STORE RANGE", "ADD LINE", "CHECK BBOX" };
@@ -1191,7 +1242,7 @@ void I_FinishUpdate(void)
         return;
     }
 #endif
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 5;
 #endif
 #if defined(DOOM_PROFILE)
@@ -1260,11 +1311,24 @@ void I_FinishUpdate(void)
         /* Diagnostic counters must reach VRAM even with constant player HUD. */
         if (level) changed=1;
 #endif
-#if defined(DOOM_R20_HUD_LAZY)
-        if (changed) I_DrawClassicTextHUD();
-#if defined(DOOM_R37_BSP_PROFILE)
-        R37_DrawProfileHUD();
+#if defined(DOOM_R38_TIME_PROFILE)
+        static uint32_t last_time_sample = 0xffffffffu;
+        uint32_t current_samples=r38_sample_total;
+        if (level && (last_time_sample == 0xffffffffu ||
+                      current_samples < last_time_sample ||
+                      current_samples >= last_time_sample + 60u))
+            changed=1; /* update only once/sec, not every game frame */
 #endif
+#if defined(DOOM_R20_HUD_LAZY)
+        if (changed) {
+            I_DrawClassicTextHUD();
+#if defined(DOOM_R38_TIME_PROFILE)
+            R38_DrawTimeHUD();
+            last_time_sample=current_samples;
+#elif defined(DOOM_R37_BSP_PROFILE)
+            R37_DrawProfileHUD();
+#endif
+        }
         r20_hud_dirty = 0;
 #endif
 
@@ -1350,7 +1414,7 @@ void I_FinishUpdate(void)
 #if defined(DOOM_PROFILE)
     prof_vdp_vb += _g_vblankCount - start_vb;
 #endif
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 0;
 #endif
 #if defined(TIMEDEMO)
