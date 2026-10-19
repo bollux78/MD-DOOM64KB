@@ -1,6 +1,6 @@
 {
-  "run_id": "39251034957",
-  "sha": "dce143df1b64dc601d1b7016a6a0016af5312978",
+  "run_id": "39252107275",
+  "sha": "66df04cf2747cf1537e38bf946d5cc1c91f1136a",
   "build_results": [
     "cell-play OK",
     "cell-perf OK",
@@ -49,12 +49,12 @@
       "checker_colors": 107,
       "checker_mode": "4x4 two-color checker",
       "checker_colormap_cells": 0,
-      "elf_payload_bytes": 2629864,
-      "free_bytes": 122648,
+      "elf_payload_bytes": 2630376,
+      "free_bytes": 122136,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "24c4e27ad25b6f91cdc9010a5c9cc44c5013d1cf59d807fc3628635cf79bf0a0"
+      "sha256": "a26c834de5c0f52038c240d240292c23c489eed65cf32cf67eab4e5366b4c5c6"
     },
     {
       "name": "doom-md-r36b-pixel4-perf",
@@ -65,12 +65,12 @@
       "checker_colors": 107,
       "checker_mode": "4x4 two-color checker",
       "checker_colormap_cells": 0,
-      "elf_payload_bytes": 2632936,
-      "free_bytes": 119576,
+      "elf_payload_bytes": 2631912,
+      "free_bytes": 120600,
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "35dfdf77bf35a0b3f1e79a5b95c7760938cdd3f5d57e2ccb029fa5ff0df6bf49"
+      "sha256": "3527f012f03b8efd002c2050b8ed274408908f18b030dc74ee5476b716cb071a"
     }
   ],
   "roms": [
