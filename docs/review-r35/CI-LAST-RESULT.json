@@ -1,6 +1,6 @@
 {
-  "run_id": "39242347093",
-  "sha": "550967e32388cb47a3a200b9c1ff261f1425445e",
+  "run_id": "39251034957",
+  "sha": "dce143df1b64dc601d1b7016a6a0016af5312978",
   "build_results": [
     "cell-play OK",
     "cell-perf OK",
@@ -9,7 +9,7 @@
   ],
   "audit": [
     {
-      "name": "doom-md-r36-cell-play",
+      "name": "doom-md-r36b-cell-play",
       "renderer": "8x8",
       "timedemo": false,
       "rom_bytes": 2752512,
@@ -22,10 +22,10 @@
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "4511e746bf8e20fd556762f27e563d8e38fa4880c9ee9e77c574b5208a9a48da"
+      "sha256": "df54c842b47bfce207471f2af650738fa499494448543e58383867bfff30c4ad"
     },
     {
-      "name": "doom-md-r36-cell-perf",
+      "name": "doom-md-r36b-cell-perf",
       "renderer": "8x8",
       "timedemo": true,
       "rom_bytes": 2752512,
@@ -38,10 +38,10 @@
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "abb9bea3780eb1bb207133bfec1cd5f0b954b75335dda7af3aa280efcfdec64c"
+      "sha256": "5dea2e4e89262c1c29d422489e526c78aa86e51f1b7c179a8c0e3ec7d1c0c7cb"
     },
     {
-      "name": "doom-md-r36-pixel4-play",
+      "name": "doom-md-r36b-pixel4-play",
       "renderer": "4x4",
       "timedemo": false,
       "rom_bytes": 2752512,
@@ -54,10 +54,10 @@
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "f2b63bd1aeefe2ae8f1548a0b34238d70ede4254a078d53c6afea30fac579140"
+      "sha256": "24c4e27ad25b6f91cdc9010a5c9cc44c5013d1cf59d807fc3628635cf79bf0a0"
     },
     {
-      "name": "doom-md-r36-pixel4-perf",
+      "name": "doom-md-r36b-pixel4-perf",
       "renderer": "4x4",
       "timedemo": true,
       "rom_bytes": 2752512,
@@ -70,29 +70,29 @@
       "pcm_count": 52,
       "pcm_bytes": 429056,
       "art_raw_bytes": 98848,
-      "sha256": "04f1096b512c068b06809438e5130f0a40ed0ae1e1fa032cfa45b6f61707cb10"
+      "sha256": "35dfdf77bf35a0b3f1e79a5b95c7760938cdd3f5d57e2ccb029fa5ff0df6bf49"
     }
   ],
   "roms": [
     {
-      "name": "doom-md-r36-cell-perf.bin",
+      "name": "doom-md-r36b-cell-perf.bin",
       "bytes": 2752512
     },
     {
-      "name": "doom-md-r36-cell-play.bin",
+      "name": "doom-md-r36b-cell-play.bin",
       "bytes": 2752512
     },
     {
-      "name": "doom-md-r36-pixel4-perf.bin",
+      "name": "doom-md-r36b-pixel4-perf.bin",
       "bytes": 2752512
     },
     {
-      "name": "doom-md-r36-pixel4-play.bin",
+      "name": "doom-md-r36b-pixel4-play.bin",
       "bytes": 2752512
     }
   ],
   "logs": {
-    "build-doom-md-r36-cell-perf.log": [
+    "build-doom-md-r36b-cell-perf.log": [
       "  482 |     angle_t angle = R_PointToAngle2(listener->x, listener->y, source->x, source->y);",
       "\u001b[01m\u001b[Ksrc/s_sound.c:\u001b[m\u001b[K In function ‘\u001b[01m\u001b[KS_StartSound2\u001b[m\u001b[K’:",
       "\u001b[01m\u001b[Ksrc/s_sound.c:263:13:\u001b[m\u001b[K \u001b[01;36m\u001b[Knote: \u001b[m\u001b[Kobject ‘\u001b[01m\u001b[Kfm.0\u001b[m\u001b[K’ of size 20",
@@ -129,7 +129,7 @@
       "java -jar /home/dan/mars/m68k-elf/bin/sizebnd.jar out/release/rom.bin -sizealign 131072 -checksum",
       "ROM created: /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/out/rom.bin"
     ],
-    "build-doom-md-r36-cell-play.log": [
+    "build-doom-md-r36b-cell-play.log": [
       "\u001b[01m\u001b[Ksrc/s_sound.c:\u001b[m\u001b[K In function ‘\u001b[01m\u001b[KS_StartSound2\u001b[m\u001b[K’:",
       "\u001b[01m\u001b[Ksrc/s_sound.c:263:13:\u001b[m\u001b[K \u001b[01;36m\u001b[Knote: \u001b[m\u001b[Kobject ‘\u001b[01m\u001b[Kfm.0\u001b[m\u001b[K’ of size 20",
       "  263 |     } __far \u001b[01;36m\u001b[Kfm\u001b[m\u001b[K;",
@@ -166,7 +166,7 @@
       "java -jar /home/dan/mars/m68k-elf/bin/sizebnd.jar out/release/rom.bin -sizealign 131072 -checksum",
       "ROM created: /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/out/rom.bin"
     ],
-    "build-doom-md-r36-pixel4-perf.log": [
+    "build-doom-md-r36b-pixel4-perf.log": [
       "\u001b[01m\u001b[Ksrc/s_sound.c:\u001b[m\u001b[K In function ‘\u001b[01m\u001b[KS_StartSound2\u001b[m\u001b[K’:",
       "\u001b[01m\u001b[Ksrc/s_sound.c:263:13:\u001b[m\u001b[K \u001b[01;36m\u001b[Knote: \u001b[m\u001b[Kobject ‘\u001b[01m\u001b[Kfm.0\u001b[m\u001b[K’ of size 20",
       "  263 |     } __far \u001b[01;36m\u001b[Kfm\u001b[m\u001b[K;",
@@ -203,7 +203,7 @@
       "java -jar /home/dan/mars/m68k-elf/bin/sizebnd.jar out/release/rom.bin -sizealign 131072 -checksum",
       "ROM created: /home/dan/Projetos/github-runner/actions-runner/_work/MD-DOOM64KB/MD-DOOM64KB/out/rom.bin"
     ],
-    "build-doom-md-r36-pixel4-play.log": [
+    "build-doom-md-r36b-pixel4-play.log": [
       "\u001b[01m\u001b[Ksrc/s_sound.c:\u001b[m\u001b[K In function ‘\u001b[01m\u001b[KS_StartSound2\u001b[m\u001b[K’:",
       "\u001b[01m\u001b[Ksrc/s_sound.c:263:13:\u001b[m\u001b[K \u001b[01;36m\u001b[Knote: \u001b[m\u001b[Kobject ‘\u001b[01m\u001b[Kfm.0\u001b[m\u001b[K’ of size 20",
       "  263 |     } __far \u001b[01;36m\u001b[Kfm\u001b[m\u001b[K;",
