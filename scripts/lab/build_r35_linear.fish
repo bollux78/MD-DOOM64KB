@@ -195,7 +195,7 @@ for v in $variants
     if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-profperf
         # Independent of old DOOM_ROUTINE_PROFILE env, which forces TIMEDEMO.
         # DOOM_R7_PROFILE enables the already-tested nested stage boundaries.
-        set defs $defs '-DDOOM_R38_TIME_PROFILE' '-DDOOM_R7_PROFILE'
+        set defs $defs '-DDOOM_R38_TIME_PROFILE'
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
