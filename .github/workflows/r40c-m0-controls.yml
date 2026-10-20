@@ -1,0 +1,250 @@
+name: R40c M0 - Merge approved R39f and R40b controls
+on:
+  push:
+    branches: [r40c-dual-runtime]
+  workflow_dispatch:
+concurrency:
+  group: r40c-m0
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned XGM2 soundtrack input
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Recover pinned shareware DOOM1.WAD (not committed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          expected_sha='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          size=4196020
+          candidates=[
+              ('ibiblio', 'https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad',False),
+              ('wad-archive', 'https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+              ('shareware-demo', 'https://aikernel.net/demo/doom/DOOM1.WAD',False)
+          ]
+          if target.is_file():
+              b=target.read_bytes()
+              if len(b)==size and hashlib.sha256(b).hexdigest()==expected_sha:
+                  print('Verified pinned shareware WAD already present:',target)
+                  raise SystemExit(0)
+          for name,url,compressed in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R31 build asset verifier/1.0'})
+                  with urllib.request.urlopen(req,timeout=70) as response:
+                      data=response.read(9000000)
+                  if compressed:data=gzip.decompress(data)
+                  sha=hashlib.sha256(data).hexdigest()
+                  if len(data)!=size or sha!=expected_sha:
+                      print(name,'unexpected content or checksum; rejecting',
+                            len(data),sha)
+                      continue
+                  target.write_bytes(data)
+                  print('Verified original shareware v1.9 from',name,
+                        'size',len(data),'SHA256',sha)
+                  break
+              except Exception as e:
+                  print('Shareware mirror unavailable:',name,str(e)[:200])
+          else:
+              print('Pinned Doom shareware download failed; original preflight will look for local source.')
+          PY
+      - name: Preflight - find authentic Doom DMX sounds on self-hosted runner
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          python3 - <<'PY'
+          import pathlib,os,struct,hashlib,sys
+          home=pathlib.Path.home()
+          candidates=[
+              pathlib.Path('scripts/doom1.wad'),
+              home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',
+              home/'Projetos/doom-assets/doom1.WAD',
+              home/'Jogos/doom1.wad',
+              home/'Games/doom1.wad',
+              home/'Downloads/doom1.wad'
+          ]
+          # No external network or repo commit for copyright-protected WAD.
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir():continue
+              root_depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-root_depth>4:
+                      subdirs[:]=[]
+                      continue
+                  subdirs[:]=[s for s in subdirs if not s.startswith('.')]
+                  for n in names:
+                      if n.lower()=='doom1.wad':
+                          candidates.append(pathlib.Path(directory)/n)
+          for f in candidates:
+              if not f.is_file():continue
+              try:
+                  with f.open('rb') as fd:
+                      h=fd.read(12)
+                      if len(h)!=12 or h[:4] not in (b'IWAD',b'PWAD'):continue
+                      count,offset=struct.unpack_from('<II',h,4)
+                      if not 100<count<10000:continue
+                      fd.seek(offset)
+                      directory=fd.read(count*16)
+                  sounds={directory[i+8:i+16].split(b'\0')[0]
+                          for i in range(0,len(directory),16)}
+                  if not {b'DSPISTOL',b'DSSHOTGN',b'DSOROPN'}.intersection(sounds):
+                      continue
+                  raw=f.read_bytes()
+                  dest=pathlib.Path('scripts/doom1.wad')
+                  if f.resolve()!=dest.resolve():dest.write_bytes(raw)
+                  sha=hashlib.sha256(raw).hexdigest()
+                  (pathlib.Path('dist/r35')/'SOURCE-STATUS.txt').write_text(
+                      f'Genuine WAD source found: {str(f)}\nSHA256: {sha}\nBytes: {len(raw)}\n')
+                  print('SFX input:',f,'bytes',len(raw),'SHA256',sha)
+                  sys.exit(0)
+              except (OSError,struct.error):continue
+          status=('MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\n'
+                  'Place your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\n'
+                  'No synthetic or silent SFX fallback is allowed for R31 PCM builds.\n')
+          pathlib.Path('dist/r35/SOURCE-STATUS.txt').write_text(status)
+          print(status,file=sys.stderr)
+          sys.exit(3)
+          PY
+      - name: Verify R31 generator and build scripts
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_linear.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r31_sfx.py scripts/lab/gen_r30_native.py \
+            scripts/lab/finish_r35_rom.py scripts/lab/audit_r35.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          python3 - <<'PY'
+          import importlib.util,struct
+          spec=importlib.util.spec_from_file_location('sfx','scripts/lab/gen_r31_sfx.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          source=bytes((128+(i%20)) for i in range(11025))
+          lump=struct.pack('<HHI',3,11025,len(source))+source
+          low,*_=m.convert(lump,6650)
+          high,*_=m.convert(lump,13300)
+          assert len(low)%256==len(high)%256==0
+          assert len(low)<len(high)
+          assert len(m.SFX)==52
+          print('R31 rate conversion, alignment, SFX enum count: OK')
+          PY
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+      - name: Check source integration and fish syntax
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 -m py_compile scripts/gen_colormap_cells.py scripts/lab/test_r39f_vertical.py scripts/set_rom_identity.py
+          python3 - <<'PY'
+          from pathlib import Path
+          v=Path('src/i_genesisv.c').read_text()
+          r=Path('src/r22_video.inc').read_text()
+          n=Path('src/r35_native4.inc').read_text()
+          m=Path('src/m_text.c').read_text()
+          build=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert 'r39f_colormap_cells_vertical' in v and 'index = 121;' in v
+          assert 'r39f_colorcell_vertical' in v
+          assert 'r39f_mode_names[3][9]' in m
+          assert 'R39F_SetDitherMode(mode);' in m
+          assert 'r40b_native_seen' in r and 'r40b_native_prev' in r
+          assert 'R40B_PruneNativeText();' in r and 'R40B_ResetNativeText();' in n
+          assert 'DOOM_R39F_DITHER3' in build and 'DOOM_R40B_BUILD' in build
+          assert 'DOOM_R40C_M0' in build
+          assert 'doom-md-r39f-' in Path('scripts/set_rom_identity.py').read_text()
+          assert 'doom-md-r40c-' in Path('scripts/set_rom_identity.py').read_text()
+          assert 'DOOM_R22_PIXEL4' in Path('src/i_genesisv.c').read_text().splitlines()[0]
+          print('M0: both approved sources integrated with separate compile-time backends')
+          PY
+      - name: Build five independently comparable control ROMs
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          # R39f legacy checker control validates bit-exact original color tables
+          env DOOM_R35D_CHECKER=1 DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE=1 DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R39F_DITHER3=0 DOOM_R39F_BUILD=control DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish cell-perf
+          cp src/colormap_cells.h dist/r35/colormap-r40c-control.h
+          cp src/r20_colorcell.h dist/r35/colorcell-r40c-control.h
+          # Four R40c M0 controls; NOT yet one ROM with runtime mode switching.
+          for mode in cell-perf cell-play pixel4-perf pixel4-play; do
+            if [[ "$mode" == cell-* ]]; then dither=1; tri=1; else dither=0; tri=0; fi
+            echo "=== R40c M0 $mode (dither $tri) ==="
+            env DOOM_R35D_CHECKER="$dither" DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE="$dither" DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R39F_DITHER3="$tri" DOOM_R40_STAGE1=fast DOOM_R40C_M0=1 DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$mode"
+            test -s "dist/r35/doom-md-r40c-$mode.bin"
+            if [[ "$tri" == 1 ]]; then
+              cp src/colormap_cells.h dist/r35/colormap-r40c-$mode.h
+              cp src/r20_colorcell.h dist/r35/colorcell-r40c-$mode.h
+            fi
+          done
+      - name: Validate 8x8 LUT baseline, pixel4 features, headers and real payload size
+        shell: bash
+        run: |
+          python3 scripts/lab/test_r39f_vertical.py \
+             dist/r35/colormap-r40c-control.h dist/r35/colorcell-r40c-control.h \
+             dist/r35/colormap-r40c-cell-perf.h dist/r35/colorcell-r40c-cell-perf.h
+          python3 - <<'PY'
+          import pathlib,struct,hashlib,json,zipfile
+          d=pathlib.Path('dist/r35')
+          stems=['doom-md-r39f-control-cell-perf']+[f'doom-md-r40c-{mode}' for mode in ['cell-perf','cell-play','pixel4-perf','pixel4-play']]
+          info=[]
+          for stem in stems:
+              rom=d/(stem+'.bin')
+              data=rom.read_bytes()
+              fs=set((d/('flags-'+stem+'.txt')).read_text().split())
+              assert len(data)>0 and len(data)<=4*1024*1024 and len(data)%0x20000==0,(stem,len(data))
+              assert data[0x100:0x110]==b'SEGA MEGA DRIVE '
+              assert struct.unpack_from('>II',data,0x1a0)==(0,len(data)-1),stem
+              assert {'-DDOOM_R39C_MOVEP_CACHE','-DDOOM_R39C_MOVEP_MAP','-DDOOM_R39E_AUDIO_TOGGLES','-DDOOM_R29_XGM2','-DDOOM_R31_SFX'} <= fs,stem
+              pixel4='pixel4-' in stem
+              tri=stem.startswith('doom-md-r40c-cell-')
+              assert ('-DDOOM_R22_PIXEL4' in fs)==pixel4,stem
+              assert ('-DDOOM_R39F_DITHER3' in fs)==tri,stem
+              assert ('-DDOOM_R39D_DITHER_TOGGLE' in fs)==(not pixel4),stem
+              assert ('-DTIMEDEMO' in fs)==stem.endswith('perf'),stem
+              if pixel4:
+                  assert {'-DVIEWWINDOWWIDTH=76','-DVIEWWINDOWHEIGHT=44','-DDOOM_R22_SOLID_TILES'}<=fs,stem
+                  assert '-DDOOM_R20_REG_COLUMNS' not in fs,stem
+              else:
+                  assert {'-DVIEWWINDOWWIDTH=38','-DVIEWWINDOWHEIGHT=22','-DDOOM_R20_REG_COLUMNS'}<=fs,stem
+              info.append(dict(rom=stem,bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),mode='4x4' if pixel4 else '8x8',tri_dither=tri,ready_for_runtime_switch=False))
+          (d/'R40C-M0-MANIFEST.json').write_text(json.dumps(info,indent=2)+'\n')
+          with zipfile.ZipFile(d/'R40C-M0-5ROM-CONTROLS.zip','w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for item in info:z.write(d/(item['rom']+'.bin'),item['rom']+'.bin')
+              z.write(d/'R40C-M0-MANIFEST.json','R40C-M0-MANIFEST.json')
+              z.write('docs/review-r40c/README.md','README-R40C.md')
+          print(json.dumps(info,indent=2))
+          PY
+      - name: BlastEm headless 300-frame smoke all five ROMs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess
+          blastem=shutil.which('blastem') or next((str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          assert blastem,'BlastEm unavailable on runner'
+          d=pathlib.Path('dist/r35').resolve()
+          env=os.environ.copy();env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          for stem in ['doom-md-r39f-control-cell-perf','doom-md-r40c-cell-perf','doom-md-r40c-cell-play','doom-md-r40c-pixel4-perf','doom-md-r40c-pixel4-play']:
+              p=subprocess.run([blastem,'-b','300',str(d/(stem+'.bin'))],cwd=d,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=45)
+              print(stem,p.returncode,p.stdout[-200:],flush=True)
+              assert p.returncode==0,stem
+          PY
+      - name: Upload R40c M0 8x8 and 4x4 controls
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r40c-m0-controls
+          path: dist/r35/
+          retention-days: 90
+          if-no-files-found: warn
