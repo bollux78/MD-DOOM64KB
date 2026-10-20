@@ -522,7 +522,7 @@ for v in $variants
         if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
                 if set -q DOOM_R46_M3C_DIRECT_REGS; and test "$DOOM_R46_M3C_DIRECT_REGS" = 1
-                    set id doom-md-r46-m3c-r4b-safe-perf
+                    set id doom-md-r46-r4b-safe-perf
                 else
                     set id doom-md-r46-m3c-r3-safe-perf
                 end
@@ -532,7 +532,7 @@ for v in $variants
         else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
                 if set -q DOOM_R46_M3C_DIRECT_REGS; and test "$DOOM_R46_M3C_DIRECT_REGS" = 1
-                    set id doom-md-r46-m3c-r4b-stress-perf
+                    set id doom-md-r46-r4b-stress-perf
                 else
                     set id doom-md-r46-m3c-r3-stress-perf
                 end
