@@ -108,10 +108,19 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "VRAM layout overlap");
     m3c_expect(VDP_getBGAAddress()==0xE000u,"unexpected BG_A base");
     m3c_expect(VDP_getBGBAddress()==0xC000u,"unexpected BG_B base");
+    /* Bank1 (0x6F40..0xD2FF) also intersects the 64x32 H40
+     * WINDOW tilemap at D000..D2FF. Mirror its address to E000
+     * alongside BG_A/B. Never clear the entire D000 Window on restore:
+     * the 8x8 SGDK font starts at D400. */
+    m3c_expect(VDP_getWindowAddress()==0xD000u,
+               "unexpected WINDOW base");
     VDP_setEnable(FALSE);
     VDP_setAutoInc(2);
     VDP_setBGBAddress(0xE000u);
-    m3c_expect(VDP_getBGBAddress()==0xE000u,"BG_B diagnostic mirror");
+    VDP_setWindowAddress(0xE000u);
+    m3c_expect(VDP_getBGBAddress()==0xE000u &&
+               VDP_getWindowAddress()==0xE000u,
+               "BG_B / WINDOW diagnostic mirror");
     VDP_setTextPlane(BG_A);
     VDP_clearPlane(BG_A,TRUE);
     VDP_waitDMACompletion();
@@ -127,15 +136,28 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "pixel4 owner unavailable");
 
     uint8_t *pixels=(uint8_t *)(void*)backing;
-    for(uint16_t phase=0;phase<4;phase++){
+#if defined(DOOM_R46_M3C_STRESS)
+    /* Stress experimental variant: repeat 4-color phases three times. */
+    const uint16_t phases=12;
+#else
+    const uint16_t phases=4;
+#endif
+    for(uint16_t phase=0;phase<phases;phase++){
         const uint16_t bank=(uint16_t)(phase&1u);
         m3c_expect(R46_M3C_StageBank(&banks,bank),"stage hidden bank");
         m3c_expect(R46_M3C_BankWritable(&banks,bank),"visible bank hazard");
-        m3c_expect(R46_M3C_MakePattern(pixels,1672,phase),
+        m3c_expect(R46_M3C_MakePattern(pixels,1672,(uint16_t)(phase&3u)),
                    "phase pattern generation");
         /* Only the NOT currently visible bank receives tile patterns.
          * Starting phase 0 runs with display off; subsequent hidden-bank
          * uploads can run with the prior bank still visible. */
+#if defined(DOOM_R46_M3C_SAFE_BLANK)
+        /* Control experiment: keep the screen blank throughout the
+         * large CPU tile upload, not only the 21-row map replacement.
+         * This isolates display contention / timing as possible causes. */
+        VDP_setEnable(FALSE);
+        VDP_waitDMACompletion();
+#endif
         m3c_upload_hidden_bank(&owner,&banks,pixels,bank);
         m3c_swap_map_while_blanked(&owner,&banks,pixels,bank);
         for(uint16_t frame=0;frame<45;frame++)SYS_doVBlankProcess();
@@ -149,13 +171,18 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "drain pixel4 DMA");
     m3c_expect(R46_M3_AckQuiesce(&owner,R46_M3_IRQ_DISABLED),
                "retire pixel4 display");
-    VDP_clearPlane(BG_A,TRUE); /* Clear 4x4 BG_A map at E000. */
+    VDP_clearPlane(BG_A,TRUE); /* Clear pixel4 BG_A at E000. */
     VDP_waitDMACompletion();
+    VDP_setWindowAddress(0xD000u); /* Restore inactive H40 Window. */
+    /* Clear only the 6 damaged 64-word Window rows at D000..D2FF.
+     * DO NOT clear all 32 rows: D400..DFFF contains SGDK font. */
+    VDP_clearTileMapRect(WINDOW,0,0,64,6);
     VDP_setBGBAddress(0xC000u); /* Restore original BG_B base. */
     VDP_clearPlane(BG_B,TRUE); /* Bank1 overwrote BG_B names at C000. */
     VDP_waitDMACompletion();
     m3c_expect(VDP_getBGAAddress()==0xE000u &&
-               VDP_getBGBAddress()==0xC000u,
+               VDP_getBGBAddress()==0xC000u &&
+               VDP_getWindowAddress()==0xD000u,
                "original BG_A/B addresses not restored");
     reload_cell_tiles();
     VDP_waitDMACompletion();
@@ -171,7 +198,11 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
     m3c_expect(R46_M3_MayWrite(&owner,R46_M3_CELL),
                "cell mode not restored");
     VDP_setAutoInc(2);
+    /* Explicitly drain SGDK queued DMA + actual hardware DMA before
+     * allowing the normal R39f video producer to resume. Palette restore
+     * is performed by an immediate CPU callback in the R2 diagnostic. */
     SYS_doVBlankProcess();
+    VDP_waitDMACompletion();
     VDP_setEnable(TRUE);
 }
 #endif
