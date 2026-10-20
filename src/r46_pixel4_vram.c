@@ -72,6 +72,14 @@ void R46_P4_PatternRows(uint16_t column,uint16_t row,uint32_t output[8])
         output[y+4]=lower;
     }
 }
+static const r46_p4_vram_ops_t r46_p4_vram_ops = {
+    R46_P4_TileAt,R46_P4_MapRow,R46_P4_PatternRows
+};
+__attribute__((noinline))
+const r46_p4_vram_ops_t *R46_P4_VramOps(void)
+{
+    return &r46_p4_vram_ops;
+}
 __attribute__((noinline))
 uint16_t R46_P4_VramValidate(void)
 {
@@ -80,7 +88,9 @@ uint16_t R46_P4_VramValidate(void)
     const uint16_t bank0first=(uint16_t)(R46_P4_SOLID_TILES+R46_P4_ROW_BASE);
     const uint16_t bank1first=(uint16_t)(bank0first+R46_P4_BANK_TILES);
     const uint16_t bank1last=(uint16_t)(bank1first+R46_P4_MAP_WORDS-1u);
-    return (uint16_t)(R46_P4_MAP_WORDS==798u &&
+    const r46_p4_vram_ops_t *ops=R46_P4_VramOps();
+    return (uint16_t)(ops && ops->tile_at && ops->map_row && ops->pattern_rows &&
+                      R46_P4_MAP_WORDS==798u &&
                       R46_P4_ROWS*2u+2u==R22_H &&
                       R46_P4_COLUMNS*2u==R22_W &&
                       bank0first==54u && bank1first==890u &&
