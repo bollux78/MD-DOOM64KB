@@ -33,7 +33,17 @@
 #endif
 static void m3c_expect(uint16_t ok,const char *message)
 {
+#if defined(DOOM_R46_M3C_DIRECT_REGS)
+    /* Diagnostic errors must not remain invisible behind display-off.
+     * Fail visibly and leave R39f control build completely unchanged. */
+    if(!ok) {
+        VDP_setEnable(TRUE);
+        PAL_setColor(0,0x00Eu);
+        I_Error("R46 M3C R4B: %s",message);
+    }
+#else
     if(!ok)I_Error("R46 M3C: %s",message);
+#endif
 }
 static void m3c_upload_hidden_bank(r46_m3_owner_t *owner,
     r46_m3c_bank_t *stage,uint8_t *pixels,uint16_t bank)
@@ -116,11 +126,26 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "unexpected WINDOW base");
     VDP_setEnable(FALSE);
     VDP_setAutoInc(2);
+#if defined(DOOM_R46_M3C_DIRECT_REGS)
+    /* Isolated experiment: keep SGDK cached maps_addr at C000.
+     * BG_B 0xE000: VDP register 4 = 0x07.
+     * Window 0xE000 H40: register 3 = 0x38.
+     * This avoids SGDK implicit font reload/MEM_pack during remap. */
+    volatile uint16_t *const vdp_ctrl=(volatile uint16_t*)VDP_CTRL_PORT;
+    m3c_expect(VDP_MAPS_START==0xC000u && TILE_FONT_INDEX==1440u,
+               "unexpected SGDK font/map base before raw remap");
+    *vdp_ctrl=0x8407u;
+    *vdp_ctrl=0x8338u;
+    m3c_expect(VDP_getBGBAddress()==0xC000u &&
+               VDP_getWindowAddress()==0xD000u,
+               "SGDK address cache changed by raw register writes");
+#else
     VDP_setBGBAddress(0xE000u);
     VDP_setWindowAddress(0xE000u);
     m3c_expect(VDP_getBGBAddress()==0xE000u &&
                VDP_getWindowAddress()==0xE000u,
                "BG_B / WINDOW diagnostic mirror");
+#endif
     VDP_setTextPlane(BG_A);
     VDP_clearPlane(BG_A,TRUE);
     VDP_waitDMACompletion();
@@ -182,11 +207,20 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "retire pixel4 display");
     VDP_clearPlane(BG_A,TRUE); /* Clear pixel4 BG_A at E000. */
     VDP_waitDMACompletion();
+#if defined(DOOM_R46_M3C_DIRECT_REGS)
+    /* Restore the SAME safe ordering as the approved R3:
+     * Window D000, clear damaged six rows, then BG_B C000.
+     * Direct register writes avoid SGDK's implicit font heap updates. */
+    *vdp_ctrl=0x8334u;
+    VDP_clearTileMapRect(WINDOW,0,0,64,6);
+    *vdp_ctrl=0x8406u;
+#else
     VDP_setWindowAddress(0xD000u); /* Restore inactive H40 Window. */
     /* Clear only the 6 damaged 64-word Window rows at D000..D2FF.
      * DO NOT clear all 32 rows: D400..DFFF contains SGDK font. */
     VDP_clearTileMapRect(WINDOW,0,0,64,6);
     VDP_setBGBAddress(0xC000u); /* Restore original BG_B base. */
+#endif
     VDP_clearPlane(BG_B,TRUE); /* Bank1 overwrote BG_B names at C000. */
     VDP_waitDMACompletion();
     m3c_expect(VDP_getBGAAddress()==0xE000u &&
