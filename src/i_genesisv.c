@@ -40,6 +40,9 @@
 #include "r39f_dither.h"
 #if defined(DOOM_R46_M1)
 #include "r46_pixel4_secondary.h"
+#if defined(DOOM_R46_M1B)
+#include "r46_pixel4_vram.h"
+#endif
 #endif
 
 #if defined(DOOM_BUILD_VARIANT)
@@ -1011,6 +1014,11 @@ void I_InitGraphicsHardwareSpecificCode(void)
      * Validate its function table without drawing into the active 8x8
      * tilemap; real VDP/frame geometry switching is a later milestone. */
     if(!R46_P4_Validate()) I_Error("R46 native backend contract");
+#if defined(DOOM_R46_M1B)
+    /* This validates constant VRAM bank boundaries only: no VDP writes
+     * and no reads from the still-active 8x8 frame buffer. */
+    if(!R46_P4_VramValidate()) I_Error("R46 native VRAM bank contract");
+#endif
 #endif
 #if defined(DOOM_R21_V2_HEAPBUF)
     {
