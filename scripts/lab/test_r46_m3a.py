@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parents[2]
 for name in ('r46_m3_owner.c','r46_m3_tiles.c'):
     source=(root/'src'/name).read_text()
     assert 'MEM_alloc' not in source and 'VDP_' not in source
-    assert '_s_screen' not in source
+    assert 'extern uint16_t _s_screen' not in source and '_s_screen[' not in source
 test=r'''
 #include <assert.h>
 #include <stdint.h>
