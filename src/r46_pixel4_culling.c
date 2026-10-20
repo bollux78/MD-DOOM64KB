@@ -9,7 +9,7 @@
 #if !defined(DOOM_R46_M2B) || !defined(DOOM_R46_M2A) || defined(DOOM_R22_PIXEL4)
 #error R46 M2C needs the co-linked native 76x44 geometry alongside active R39f cell
 #endif
-_Static_assert(R46_P4_COLS==76 && R46_P4_ROWS==44,"R46 native geometry drift");
+_Static_assert(R46_P4_COLS==76 && R46_P4_SAMPLE_ROWS==44,"R46 native geometry drift");
 _Static_assert(R46_P4_SPRITE_FRACTION_BITS==7,"R46 sprite COLEXTRABITS drift");
 
 /* Identical overlap test to R_CheckPlane: if no used top[x] appears in
@@ -75,6 +75,6 @@ uint16_t R46_P4_CullingValidate(void)
     const r46_p4_culling_ops_t *o=R46_P4_CullingOps();
     return (uint16_t)(o&&o->plane_can_extend&&o->bsp_any_open&&
         o->sprite_bounds&&o->sprite_depth&&R46_P4_COLS==76&&
-        R46_P4_ROWS==44&&R46_P4_CENTER_X==38&&R46_P4_CENTER_Y==22);
+        R46_P4_SAMPLE_ROWS==44&&R46_P4_CENTER_X==38&&R46_P4_CENTER_Y==22);
 }
 #endif
