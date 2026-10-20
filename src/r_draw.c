@@ -2578,7 +2578,10 @@ static void R_DrawSegTextureColumn(const texture_t __far* tex, int16_t texture, 
             , prepared
 #endif
         ));
-        R20_WALL_DRAW(dcvars);
+        /* P4 profile attribution: multipatch composition is bucket 7;
+         * the subsequent actual wall write belongs to bucket 6, as in
+         * the non-overlapped case. R7_VOID is inert in clean builds. */
+        R7_VOID(6, R20_WALL_DRAW(dcvars));
     }
 }
 #endif
