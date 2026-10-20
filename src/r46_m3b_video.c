@@ -27,6 +27,7 @@ static void m3b_expect(uint16_t success,const char *reason)
 {
     if(!success)I_Error("R46 M3B: %s",reason);
 }
+__attribute__((noinline))
 void R46_M3B_ShowVideoTest(uint16_t *backing,
                            void (*reload_cell_tiles)(void),
                            void (*restore_cell_palette)(void))
