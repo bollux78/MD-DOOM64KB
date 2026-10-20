@@ -338,6 +338,12 @@ for v in $variants
             exit 2
         end
         set defs $defs '-DDOOM_R46_M3C_DIAG'
+        if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
+            set defs $defs '-DDOOM_R46_M3C_SAFE_BLANK'
+        end
+        if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
+            set defs $defs '-DDOOM_R46_M3C_STRESS'
+        end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
@@ -503,7 +509,13 @@ for v in $variants
         set id doom-md-r46-m3b-video-perf
     end
     if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
-        set id doom-md-r46-m3c-video-perf
+        if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
+            set id doom-md-r46-m3c-r2-safe-perf
+        else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
+            set id doom-md-r46-m3c-r2-stress-perf
+        else
+            set id doom-md-r46-m3c-video-perf
+        end
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
