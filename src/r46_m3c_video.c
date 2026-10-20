@@ -1,8 +1,9 @@
 /* R46 M3C: 4-phase real VDP dual-pattern-bank diagnostic.
  * Two pattern banks (54..851 and 890..1687) are displayed in alternation.
- * BANK 1 OVERLAPS THE OLD BG_A NAME TABLE AT 0xC000: the diagnostic
- * MUST relocate BG_A to 0xE000 before uploading bank 1, and restore
- * 0xC000 plus 8x8 cell patterns before returning to gameplay.
+ * BANK 1 OVERLAPS BG_B AT 0xC000 (NOT BG_A). In the established SGDK
+ * 64x32 layout BG_A is already at 0xE000, so it MUST stay there.
+ * Redirect BG_B to the same E000 map for the diagnostic, then restore
+ * BG_B to C000 and clear it before handing control back to R39f.
  *
  * Genesis H40 64x32 BG_A maps require 0x2000 alignment, so 0xE000 is
  * the only available map during dual-bank test; no atomic two-map flip
@@ -97,20 +98,25 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "retire cell video ISR writer");
     m3c_expect(!R46_M3_MayWrite(&owner,R46_M3_CELL),
                "old cell owner still active");
-    /* 1688 patterns * 32 = 0xD300; below the SGDK font at 0xD400.
-     * Old BG_A at 0xC000 IS overlapped by bank 1. Temporarily put
-     * 64x32 BG_A (4 KiB) at E000..EFFF, which no dynamic tile touches. */
+    /* 1688 patterns * 32 = 0xD300, below the SGDK font at 0xD400.
+     * SGDK 64x32 keeps A at E000 and B at C000, unlike the old
+     * assumption that triggered 'unexpected BG_A base' at boot.
+     * Bank1 destroys C000 (BG_B), never the E000 BG_A map.
+     * While testing, mirror BG_B onto BG_A's map so the scrolling
+     * background cannot display corrupted bank1 pattern data as names. */
     m3c_expect(1688u*32u<=0xD400u && 0xE000u>1688u*32u,
                "VRAM layout overlap");
-    m3c_expect(VDP_getBGAAddress()==0xC000u,"unexpected BG_A base");
+    m3c_expect(VDP_getBGAAddress()==0xE000u,"unexpected BG_A base");
+    m3c_expect(VDP_getBGBAddress()==0xC000u,"unexpected BG_B base");
     VDP_setEnable(FALSE);
     VDP_setAutoInc(2);
-    VDP_setBGAAddress(0xE000u);
+    VDP_setBGBAddress(0xE000u);
+    m3c_expect(VDP_getBGBAddress()==0xE000u,"BG_B diagnostic mirror");
     VDP_setTextPlane(BG_A);
     VDP_clearPlane(BG_A,TRUE);
     VDP_waitDMACompletion();
     m3c_expect(R46_M3_AckReconfigure(&owner,R46_M3_VRAM_READY),
-               "relocate BG_A");
+               "safe BG_A/B diagnostic maps");
     PAL_setColors(0,r22_cram[0],16,CPU);
     m3c_expect(R46_M3_AckReconfigure(&owner,R46_M3_CRAM_READY),
                "pixel4 diagnostic palette");
@@ -143,11 +149,14 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "drain pixel4 DMA");
     m3c_expect(R46_M3_AckQuiesce(&owner,R46_M3_IRQ_DISABLED),
                "retire pixel4 display");
-    VDP_clearPlane(BG_A,TRUE); /* Clear relocated BG_A / BG_B E000. */
+    VDP_clearPlane(BG_A,TRUE); /* Clear 4x4 BG_A map at E000. */
     VDP_waitDMACompletion();
-    VDP_setBGAAddress(0xC000u);
-    VDP_clearPlane(BG_A,TRUE); /* BANK 1 destroyed the old C000 map. */
+    VDP_setBGBAddress(0xC000u); /* Restore original BG_B base. */
+    VDP_clearPlane(BG_B,TRUE); /* Bank1 overwrote BG_B names at C000. */
     VDP_waitDMACompletion();
+    m3c_expect(VDP_getBGAAddress()==0xE000u &&
+               VDP_getBGBAddress()==0xC000u,
+               "original BG_A/B addresses not restored");
     reload_cell_tiles();
     VDP_waitDMACompletion();
     m3c_expect(R46_M3_AckReconfigure(&owner,R46_M3_VRAM_READY),
