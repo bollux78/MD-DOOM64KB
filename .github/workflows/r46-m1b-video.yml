@@ -1,7 +1,8 @@
 name: R46 M1B - Native 4x4 VRAM preparation with shared buffer
 on:
-  # Manually trigger AFTER the user approves compilation.
-  # The pre-existing r46-m1b-video-prep branch stays untouched.
+  # Re-enabled after explicit user approval, runner online.
+  push:
+    branches: [r46-m1b-reviewed-manual]
   workflow_dispatch:
 concurrency:
   group: r46-m1b-reviewed-manual
