@@ -62,8 +62,13 @@
 #include "r46_m3_owner.h"
 #include "r46_m3_tiles.h"
 #include "r46_m3b_pattern.h"
+#include "r46_m3c_bank.h"
+#include "r46_m3c_pattern.h"
 #if defined(DOOM_R46_M3B_DIAG)
 #include "r46_m3b_video.h"
+#endif
+#if defined(DOOM_R46_M3C_DIAG)
+#include "r46_m3c_video.h"
 #endif
 #endif
 #endif
@@ -1033,7 +1038,7 @@ static void I_BuildSolidTiles(void)
 }
 
 
-#if defined(DOOM_R46_M3B_DIAG)
+#if defined(DOOM_R46_M3B_DIAG) || defined(DOOM_R46_M3C_DIAG)
 static void R46_M3B_RestorePalette(void)
 {
     I_UploadNewPalette(0);
@@ -1075,6 +1080,8 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_M3_OwnerValidate()) I_Error("R46 M3A owner protocol contract");
     if(!R46_M3_TilesValidate()) I_Error("R46 M3A packed tile map contract");
     if(!R46_M3B_PatternValidate()) I_Error("R46 M3B test pattern contract");
+    if(!R46_M3C_BankValidate()) I_Error("R46 M3C staged banks contract");
+    if(!R46_M3C_PatternValidate()) I_Error("R46 M3C animation source contract");
 #endif
 #endif
 #endif
@@ -1105,10 +1112,14 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	// 画面を黒で埋める
 	for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
 		_s_screen[i] = BLACK_CELL;
-#if defined(DOOM_R46_M3B_DIAG)
-    /* Diagnostic-only 4x4 VDP round-trip. No gameplay renderer switch.
-     * Both restored callbacks are already used by the original 8x8 init. */
+#if defined(DOOM_R46_M3C_DIAG)
+    /* Dual-bank video-only exercise; 8x8 resumes after four timed phases. */
+    R46_M3C_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
+#elif defined(DOOM_R46_M3B_DIAG)
+    /* Original single-bank diagnostic preserved as independent control. */
     R46_M3B_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
+#endif
+#if defined(DOOM_R46_M3B_DIAG) || defined(DOOM_R46_M3C_DIAG)
     for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
         _s_screen[i]=BLACK_CELL;
     R20_InvalidateVideo();
