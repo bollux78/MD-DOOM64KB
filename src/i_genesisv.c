@@ -54,6 +54,8 @@
 #include "r46_pixel4_sprite_world.h"
 #include "r46_pixel4_sprite_occlusion.h"
 #include "r46_pixel4_sprite_runs.h"
+#include "r46_pixel4_sprite_order.h"
+#include "r46_pixel4_sprite_mask.h"
 #endif
 #endif
 #endif
@@ -1049,6 +1051,8 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_WorldSpriteValidate()) I_Error("R46 P4 world sprite contract");
     if(!R46_P4_SpriteOcclusionValidate()) I_Error("R46 P4 sprite occlusion contract");
     if(!R46_P4_SpriteRunsValidate()) I_Error("R46 P4 sprite runs contract");
+    if(!R46_P4_SpriteOrderValidate()) I_Error("R46 P4 sprite order contract");
+    if(!R46_P4_SpriteMaskValidate()) I_Error("R46 P4 sprite mask contract");
 #endif
 #endif
 #endif
