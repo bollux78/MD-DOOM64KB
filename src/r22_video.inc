@@ -184,6 +184,7 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     if(_g_gamestate==GS_LEVEL && (x<2 || y<2))return;
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
+#if defined(DOOM_R41_P4_PROFILE)
 static void R22_DrawTexturedColumn(const draw_column_vars_t *v) {
     int16_t n=v->yh-v->yl+1;if(n<=0)return;
     uint16_t frac=(uint16_t)((v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep);
@@ -220,6 +221,22 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     doom_profile_stage=old;
 #endif
 }
+#else
+void R_DrawColumnSprite(const draw_column_vars_t *v) {
+    int16_t n=v->yh-v->yl+1;if(n<=0)return;
+    uint16_t frac=(uint16_t)((v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep);
+    for(int16_t y=v->yl;y<=v->yh;y++) {
+        uint8_t c=v->source[frac>>9];
+        if(v->colormap)c=v->colormap[c];
+        R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
+    }
+}
+void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
+void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
+void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+    c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
+}
+#endif
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
 void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
