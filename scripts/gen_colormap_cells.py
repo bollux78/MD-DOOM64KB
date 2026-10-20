@@ -78,6 +78,9 @@ def main():
     slots = read_slots(PALETTE)
     checker = os.environ.get('DOOM_R35D_CHECKER') == '1'
     runtime = os.environ.get('DOOM_R39D_DITHER_TOGGLE') == '1'
+    vertical = os.environ.get('DOOM_R39F_DITHER3') == '1'
+    if vertical and not runtime:
+        raise RuntimeError("R39f requires R39d ROM runtime lookup selection")
     if runtime and not checker:
         raise RuntimeError("R39d runtime toggle requires R35d checker tables")
     lookup = checker_slots() if checker else None
@@ -117,9 +120,25 @@ def main():
         return cells
 
     solid_pairs = [(slot // 14, 1 + slot % 14) for slot in slots]
+    # R39f keeps precisely the original R35d 50/50 pair selection. Every
+    # checker pair tile 16..120 has a corresponding vertical-stripe tile
+    # 121..225 in the same palette bank; solid pair choices are unchanged.
+    # Thus color matching/CRAM stay identical between Checker and Vertical.
+    vertical_pairs = [
+        (bank, tile + 105 if tile >= 16 else tile) for bank, tile in lookup
+    ] if vertical else None
+    if vertical:
+        assert all(
+            vertical_pairs[i][0] == lookup[i][0] and
+            (vertical_pairs[i][1] - lookup[i][1]) == (105 if lookup[i][1] >= 16 else 0)
+            for i in range(256)
+        )
+        print("R39f VERTICAL AUDIT: 105 stripe tiles 121..225, same 50/50 pairs")
     if runtime:
         cells = emit_colorcell('r39d_colorcell_checker', lookup)
         cells += emit_colorcell('r39d_colorcell_solid', solid_pairs)
+        if vertical:
+            cells += emit_colorcell('r39f_colorcell_vertical', vertical_pairs)
         cells.append('const uint16_t *colorcell = r39d_colorcell_checker;')
     else:
         cells = ['/* Generated exact colorcell mapping; SGDK indices resolved by C. */',
@@ -155,9 +174,14 @@ def main():
         lines.append("static const uint16_t r39d_colormap_cells_solid[32][256] = {")
         lines += make_colormap_rows(solid_pairs)
         lines.append("};")
+        if vertical:
+            lines.append("static const uint16_t r39f_colormap_cells_vertical[32][256] = {")
+            lines += make_colormap_rows(vertical_pairs)
+            lines.append("};")
     lines += ["#endif", ""]
     OUT.write_text('\n'.join(lines), encoding="utf-8")
-    print(f"Generated ROM-only colormap LUT: {32768 if runtime else 16384} bytes; no extra 68000 RAM")
+    total = 49152 if vertical else (32768 if runtime else 16384)
+    print(f"Generated ROM-only colormap LUT: {total} bytes; no extra 68000 RAM")
 
 if __name__ == "__main__":
     main()
