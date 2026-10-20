@@ -103,9 +103,16 @@ int main(void){
             uint16_t fracstep=0xBEEFu;
             uint32_t v=values[k];
             uint16_t actual=R46_P4_SpriteDepth(v,&scale,&fracstep);
-            assert(actual==1);
-            assert(scale==(44UL*65536UL)/(v>>16));
-            assert(fracstep==v/(44UL<<7));
+            /* R_ProjectSprite rejects tz > MAXZ = 1280 * FRACUNIT,
+             * including fractional values beyond the last whole unit. */
+            if(v>(1280UL<<16)){
+                assert(actual==0);
+                assert(scale==0xDEADBEEFUL && fracstep==0xBEEFu);
+            }else{
+                assert(actual==1);
+                assert(scale==(44UL*65536UL)/(v>>16));
+                assert(fracstep==v/(44UL<<7));
+            }
         }
     }
     uint32_t scale=0xDEADBEEF;uint16_t step=0xABCD;
