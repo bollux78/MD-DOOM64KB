@@ -164,7 +164,7 @@ jobs:
           assert 'R46_P4_PlaneCanExtend' in src and 'R46_P4_BSPAnyOpen' in src
           assert 'R46_P4_SpriteBounds' in src and 'R46_P4_SpriteDepth' in src
           assert 'R46_P4_CullingValidate()' in entry and 'R46_P4_VerticalValidate()' in entry
-          assert 'R46_P4_COLS = 76' in iface and 'R46_P4_ROWS = 44' in iface
+          assert 'R46_P4_COLS = 76' in iface and 'R46_P4_SAMPLE_ROWS = 44' in iface
           assert 'R46_P4_ClipColumn' in parent
           assert 'MEM_alloc' not in src and 'VDP_' not in src and 'Z_Malloc' not in src
           assert 'WI_TEXT_WIDTH 38' in Path('src/wi_libt.c').read_text()
