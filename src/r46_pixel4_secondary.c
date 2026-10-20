@@ -13,7 +13,6 @@
 #if defined(DOOM_R46_M1)
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 #include "r46_pixel4_secondary.h"
 #include "r22_pixel4.h"
 #include "r22_palette.h"
@@ -52,7 +51,8 @@ static inline void R46_P4_Plot(int16_t x,int16_t y,uint8_t color)
  * exclusively owns the shared tilemap/packed frame buffer. */
 static void R46_P4_Clear(void)
 {
-    memset(R46_P4_Pixels(),0,R22_FB_BYTES);
+    uint8_t *pixels=R46_P4_Pixels();
+    for(uint16_t i=0;i<R22_FB_BYTES;i++)pixels[i]=0;
 }
 
 static void R46_P4_Sprite(const draw_column_vars_t *v)
