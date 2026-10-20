@@ -18,6 +18,7 @@
 #include "r21_prof.h"
 #include "r20_counters.h"
 #include "r22_pixel4.h"
+#include "r41_p4_profile.h"
 #include "r22_palette.h"
 #include "r22_maps.h"
 #if defined(DOOM_R22_PAIR_LUT)
@@ -183,7 +184,7 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     if(_g_gamestate==GS_LEVEL && (x<2 || y<2))return;
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
-void R_DrawColumnSprite(const draw_column_vars_t *v) {
+static void R22_DrawTexturedColumn(const draw_column_vars_t *v) {
     int16_t n=v->yh-v->yl+1;if(n<=0)return;
     uint16_t frac=(uint16_t)((v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep);
     for(int16_t y=v->yl;y<=v->yh;y++) {
@@ -192,10 +193,32 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
         R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
     }
 }
-void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
+void R_DrawColumnSprite(const draw_column_vars_t *v) {
+#if defined(DOOM_R41_P4_PROFILE)
+    uint16_t old=doom_profile_stage;doom_profile_stage=12;
+#endif
+    R22_DrawTexturedColumn(v);
+#if defined(DOOM_R41_P4_PROFILE)
+    doom_profile_stage=old;
+#endif
+}
+void R_DrawColumnWall(const draw_column_vars_t *v){
+#if defined(DOOM_R41_P4_PROFILE)
+    uint16_t old=doom_profile_stage;doom_profile_stage=6;
+    R22_DrawTexturedColumn(v);doom_profile_stage=old;
+#else
+    R_DrawColumnSprite(v);
+#endif
+}
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+#if defined(DOOM_R41_P4_PROFILE)
+    uint16_t old=doom_profile_stage;doom_profile_stage=11;
+#endif
     c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
+#if defined(DOOM_R41_P4_PROFILE)
+    doom_profile_stage=old;
+#endif
 }
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
 void I_SetPalette(int8_t p){r22_newpal=p;}
@@ -363,14 +386,28 @@ void I_FinishUpdate(void){
     }
 #endif
     if(r22_fb.before!=R22_GUARD||r22_fb.after!=R22_GUARD)I_Error("PX4 framebuffer guard");
+#if defined(DOOM_R41_P4_PROFILE)
+    uint16_t prev_stage=doom_profile_stage;
+    doom_profile_stage=5; /* VDP/frame synchronization. */
+#endif
     R20_StopVideo();R22_EndOverlay();
 #if defined(DOOM_R20_STACKGUARD)
     static uint8_t sample;R20_PROBE();if((sample++&15u)==0)R20_DiagSample();
 #endif
-    uint16_t back=r22_front^1;R22_UploadBack(back);
+    uint16_t back=r22_front^1;
+#if defined(DOOM_R41_P4_PROFILE)
+    doom_profile_stage=13; /* Pixel4 packed framebuffer -> VDP transfer. */
+#endif
+    R22_UploadBack(back);
+#if defined(DOOM_R41_P4_PROFILE)
+    doom_profile_stage=5;
+#endif
     if(_g_gamestate==GS_LEVEL)R22_HUD();
     r22_next_bank=back;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
     __asm__ volatile("":::"memory");r22_ready=1;
+#if defined(DOOM_R41_P4_PROFILE)
+    doom_profile_stage=prev_stage;
+#endif
 #if defined(TIMEDEMO)
     I_BenchmarkFrame();
 #endif
