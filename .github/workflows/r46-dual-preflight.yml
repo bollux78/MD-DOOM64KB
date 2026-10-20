@@ -1,0 +1,41 @@
+name: R46 M1 - Dual backend dependency preflight
+on:
+  push:
+    branches: [r46-dual-m1-engine]
+  workflow_dispatch:
+concurrency:
+  group: r46-dual-m1
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify dual engine compatibility inventory
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/lab/audit_r46_dual_contract.py
+          python3 scripts/lab/audit_r46_dual_contract.py --out r46-m1-preflight.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          j=json.loads(Path('r46-m1-preflight.json').read_text())
+          assert all(j['checks'].values())
+          assert j['modes']['cell8']['samples']==836
+          assert j['modes']['pixel4']['samples']==3344
+          assert j['modes']['pixel4']['framebuffer_bytes']==1672
+          assert j['modes']['pixel4']['antiflicker_alias_bytes']==210
+          assert j['milestone'].startswith('R46/M1 preflight')
+          assert any('compile-time' in v for v in j['critical_boundaries'])
+          print('R46 M1 dependency inventory passed; runtime dual is NOT implemented')
+          PY
+      - name: Upload R46 M1 dependency contract
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r46-dual-preflight
+          path: r46-m1-preflight.json
+          retention-days: 60
+          if-no-files-found: error
