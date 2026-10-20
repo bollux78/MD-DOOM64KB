@@ -333,6 +333,17 @@ for v in $variants
             exit 2
         end
     end
+    if set -q DOOM_R40CI_INTERMISSION; and test "$DOOM_R40CI_INTERMISSION" = 1
+        if not contains -- $v pixel4-play pixel4-perf
+            echo 'R40ci text layout fix requires native pixel4'
+            exit 2
+        end
+        if test "$v" = pixel4-play
+            set id doom-md-r40ci-p4play
+        else
+            set id doom-md-r40ci-p4perf
+        end
+    end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
     rm -rf out
