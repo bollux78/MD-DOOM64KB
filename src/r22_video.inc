@@ -192,7 +192,73 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
         R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
     }
 }
+/* R42 Q2: packed-4bpp wall-only specialization. This remains independent
+ * of the R20 8x8 tile-word assembly kernels. Preserve the original sprite,
+ * fuzz, and flat paths, where overdrawing an existing pixel is essential.
+ *
+ * Clip x/y once instead of calling R22_Plot for each drawn texel. The
+ * 16-bit texture accumulator is advanced for skipped top rows to maintain
+ * exact original sampling. Even x owns the high nibble; odd x owns low.
+ * Both variants read-modify-write to preserve the neighbor pixel. */
+#if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
+static void R42_DrawPackedWall(const draw_column_vars_t *v)
+{
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W) return;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    if(x<border) return;
+    int16_t first=y0;
+    if(first<border) first=border;
+    if(y1>=R22_H) y1=R22_H-1;
+    if(first>y1) return;
+    uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
+    f=(uint16_t)(f+(uint16_t)((first-y0)*v->fracstep));
+    const uint16_t step=v->fracstep;
+    const uint8_t *source=v->source, *colormap=v->colormap;
+    uint8_t *dst=r22_fb.pixels+(uint16_t)first*R22_PITCH+((uint16_t)x>>1);
+    int16_t remaining=(int16_t)(y1-first+1);
+    if(x&1){
+        do {
+            uint8_t ci=source[f>>9];
+            if(colormap)ci=colormap[ci];
+            uint8_t c=(uint8_t)(r22_color[ci]&15);
+#if defined(DOOM_R42_WALL_ASM)
+            __asm__ volatile(
+                "move.b (%[ptr]),%%d0\n\t"
+                "andi.b #0xf0,%%d0\n\t"
+                "or.b %[col],%%d0\n\t"
+                "move.b %%d0,(%[ptr])"
+                :: [ptr] "a" (dst), [col] "d" (c)
+                : "d0","cc","memory");
+#else
+            *dst=(uint8_t)((*dst&0xf0u)|c);
+#endif
+            dst+=R22_PITCH; f=(uint16_t)(f+step);
+        }while(--remaining);
+    }else{
+        do {
+            uint8_t ci=source[f>>9];
+            if(colormap)ci=colormap[ci];
+            uint8_t c=(uint8_t)((r22_color[ci]&15)<<4);
+#if defined(DOOM_R42_WALL_ASM)
+            __asm__ volatile(
+                "move.b (%[ptr]),%%d0\n\t"
+                "andi.b #0x0f,%%d0\n\t"
+                "or.b %[col],%%d0\n\t"
+                "move.b %%d0,(%[ptr])"
+                :: [ptr] "a" (dst), [col] "d" (c)
+                : "d0","cc","memory");
+#else
+            *dst=(uint8_t)((*dst&0x0fu)|c);
+#endif
+            dst+=R22_PITCH; f=(uint16_t)(f+step);
+        }while(--remaining);
+    }
+}
+void R_DrawColumnWall(const draw_column_vars_t *v){R42_DrawPackedWall(v);}
+#else
 void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
+#endif
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
