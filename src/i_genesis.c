@@ -397,6 +397,24 @@ void R38_BeginView(int32_t x, int32_t y, uint32_t angle)
 #endif
 
 
+#if defined(DOOM_R41_P4_PROFILE)
+#include "r41_p4_profile.h"
+/* 16-bit per-bucket counts: DEMO3 at ~3 fps lasts ~42k VBlanks,
+ * remaining below 65535 while using only 32 B sample storage. */
+volatile uint16_t doom_profile_stage;
+volatile uint16_t r41_p4_samples[R41_P4_STAGES];
+volatile uint16_t r41_p4_total;
+static volatile uint16_t r41_p4_active;
+void R41_P4Reset(void)
+{
+    r41_p4_active = 0;
+    for (uint16_t i=0;i<R41_P4_STAGES;i++) r41_p4_samples[i]=0;
+    r41_p4_total = 0;
+    doom_profile_stage = 0;
+}
+void R41_P4Start(void) { r41_p4_active=1; }
+#endif
+
 static void I_VBlankCallback(void)
 {
 	ticcount++;
@@ -407,6 +425,18 @@ static void I_VBlankCallback(void)
 #endif
 #if defined(DOOM_ROUTINE_PROFILE)
     if (doom_profile_stage < 11) doom_profile_samples[doom_profile_stage]++;
+#elif defined(DOOM_R41_P4_PROFILE)
+    /* Sampling after presentation ISR; upload periods that mask IRQs may
+     * be underestimated, and this intentionally is not a cycle counter. */
+    if (r41_p4_active && r41_p4_total < 65000u)
+    {
+        uint16_t current = doom_profile_stage;
+        if (current < R41_P4_STAGES)
+        {
+            ++r41_p4_samples[current];
+            ++r41_p4_total;
+        }
+    }
 #elif defined(DOOM_R38_TIME_PROFILE)
     if (r38_active)
     {
