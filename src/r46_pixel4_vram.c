@@ -72,8 +72,22 @@ void R46_P4_PatternRows(uint16_t column,uint16_t row,uint32_t output[8])
         output[y+4]=lower;
     }
 }
+/* Q3 preparation: avoid both pattern expansion and future VDP writes
+ * for immutable one-color tiles.  A nonzero return is the dynamic tile
+ * index, not a byte count; the caller can defer the VDP address command
+ * until AFTER this returns a dynamic index.  No IRQ/VDP access here. */
+uint16_t R46_P4_PackIfDynamic(uint16_t bank,uint16_t column,uint16_t row,
+                              uint32_t output[8])
+{
+    if(!output)return 0;
+    const uint16_t tile=R46_P4_TileAt(bank,column,row);
+    if(tile<R46_P4_SOLID_TILES)return 0;
+    R46_P4_PatternRows(column,row,output);
+    return tile;
+}
 static const r46_p4_vram_ops_t r46_p4_vram_ops = {
-    R46_P4_TileAt,R46_P4_MapRow,R46_P4_PatternRows
+    R46_P4_TileAt,R46_P4_MapRow,R46_P4_PatternRows,
+    R46_P4_PackIfDynamic
 };
 __attribute__((noinline))
 const r46_p4_vram_ops_t *R46_P4_VramOps(void)
@@ -89,7 +103,7 @@ uint16_t R46_P4_VramValidate(void)
     const uint16_t bank1first=(uint16_t)(bank0first+R46_P4_BANK_TILES);
     const uint16_t bank1last=(uint16_t)(bank1first+R46_P4_MAP_WORDS-1u);
     const r46_p4_vram_ops_t *ops=R46_P4_VramOps();
-    return (uint16_t)(ops && ops->tile_at && ops->map_row && ops->pattern_rows &&
+    return (uint16_t)(ops && ops->tile_at && ops->map_row && ops->pattern_rows && ops->pack_if_dynamic &&
                       R46_P4_MAP_WORDS==798u &&
                       R46_P4_ROWS*2u+2u==R22_H &&
                       R46_P4_COLUMNS*2u==R22_W &&
