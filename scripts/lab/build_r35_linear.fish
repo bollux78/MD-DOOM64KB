@@ -354,6 +354,14 @@ for v in $variants
             end
             set defs $defs '-DDOOM_R46_M3C_LATE_BUFFER'
         end
+        if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+            if not set -q DOOM_R46_M3C_LATE_BUFFER; or test "$DOOM_R46_M3C_LATE_BUFFER" != 1
+                echo 'R6A oracle must use stable R5 deferred-video-heap diagnostic'
+                exit 2
+            end
+            # Layout-only contract. Does NOT change tile indices/SGDK ABI/VDP.
+            set defs $defs '-DDOOM_R46_M6A_LAYOUT'
+        end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
@@ -522,7 +530,11 @@ for v in $variants
         if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
                 if set -q DOOM_R46_M3C_LATE_BUFFER; and test "$DOOM_R46_M3C_LATE_BUFFER" = 1
-                    set id doom-md-r46-r5-late-safe
+                    if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+                        set id doom-md-r46-r6a-audit-safe
+                    else
+                        set id doom-md-r46-r5-late-safe
+                    end
                 else
                     set id doom-md-r46-m3c-r3-safe-perf
                 end
@@ -532,7 +544,11 @@ for v in $variants
         else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
                 if set -q DOOM_R46_M3C_LATE_BUFFER; and test "$DOOM_R46_M3C_LATE_BUFFER" = 1
-                    set id doom-md-r46-r5-late-stress
+                    if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+                        set id doom-md-r46-r6a-audit-stress
+                    else
+                        set id doom-md-r46-r5-late-stress
+                    end
                 else
                     set id doom-md-r46-m3c-r3-stress-perf
                 end
