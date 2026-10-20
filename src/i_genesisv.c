@@ -1024,7 +1024,6 @@ void I_InitGraphicsHardwareSpecificCode(void)
 #endif
 #if defined(DOOM_R46_M2A)
     if(!R46_P4_ProjectionValidate()) I_Error("R46 P4 projection ROM contract");
-#if defined(DOOM_R46_M1B)
 #endif
 #endif
 #if defined(DOOM_R21_V2_HEAPBUF)
