@@ -34,6 +34,6 @@ assert video.count('0x8338u')==1
 assert 'VDP_MAPS_START==0xC000u && TILE_FONT_INDEX==1440u' in video
 assert 'VDP_loadDefaultFont(CPU)' in video
 assert 'DOOM_R46_M3C_DIRECT_REGS' in build
-assert 'doom-md-r46-m3c-r4b-safe-perf' in build
-assert 'doom-md-r46-m3c-r4b-stress-perf' in build
+assert 'doom-md-r46-r4b-safe-perf' in build
+assert 'doom-md-r46-r4b-stress-perf' in build
 print('R46 M3C R4B PASS: original R3 restore sequence untouched; direct registers isolated')
