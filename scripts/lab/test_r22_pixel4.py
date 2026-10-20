@@ -4,6 +4,17 @@ from pathlib import Path
 import re,subprocess,tempfile,json
 r=Path(__file__).resolve().parents[2]
 s=(r/'src/r22_video.inc').read_text()
+# R41 Q1 adds separately gated instrumented wrappers. The long-standing
+# native-C oracle deliberately extracts the original, non-instrumented
+# Sprite/Flat implementation, preserving its 4096 randomized cases.
+anchor='#if defined(DOOM_R41_P4_PROFILE)\\nstatic void R22_DrawTexturedColumn'
+# The anchor above is a Python string with a literal newline.
+anchor=anchor.replace('\\n','\n')
+if anchor in s:
+    start=s.index(anchor)
+    orig=s.index('#else\nvoid R_DrawColumnSprite(',start)
+    stop=s.index('#endif\nvoid I_ReloadPalette',orig)
+    s=s[:start]+s[orig+len('#else\n'):stop]+s[stop+len('#endif\n'):]
 def fn(name):
  a=s.index(name);a=s.rfind('\n',0,a)+1;b=s.index('{',a);d=0
  for i in range(b,len(s)):
