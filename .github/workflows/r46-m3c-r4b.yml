@@ -212,8 +212,8 @@ jobs:
               dual=1; diag=1; font=1; profile=m2c
               if [[ "$mode" == r4bstress ]]; then safe=0; stress=1; else safe=1; stress=0; fi
               if [[ "$mode" == r3safe ]]; then direct=0; stem=doom-md-r46-m3c-r3-safe-perf
-              elif [[ "$mode" == r4bsafe ]]; then direct=1; stem=doom-md-r46-m3c-r4b-safe-perf
-              else direct=1; stem=doom-md-r46-m3c-r4b-stress-perf; fi
+              elif [[ "$mode" == r4bsafe ]]; then direct=1; stem=doom-md-r46-r4b-safe-perf
+              else direct=1; stem=doom-md-r46-r4b-stress-perf; fi
             fi
             echo "=== R46 M3C R4B $mode ==="
             env DOOM_R35D_CHECKER=1 DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE=1 DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R39F_DITHER3=1 DOOM_R40_STAGE1=fast DOOM_R46_M1="$dual" DOOM_R46_M1B="$dual" DOOM_R46_M2A="$dual" DOOM_R46_M2B="$dual" DOOM_R46_M2C="$dual" DOOM_R46_M3B_DIAG=0 DOOM_R46_M3C_DIAG="$diag" DOOM_R46_M3C_SAFE_BLANK="$safe" DOOM_R46_M3C_STRESS="$stress" DOOM_R46_M3C_FONT_RESTORE="$font" DOOM_R46_M3C_DIRECT_REGS="$direct" DOOM_R46_BUILD="$profile" DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish cell-perf
@@ -245,8 +245,8 @@ jobs:
           d=Path('dist/r35')
           defs=[('primary','doom-md-r46-primary-perf'),
                 ('r3safe','doom-md-r46-m3c-r3-safe-perf'),
-                ('r4bsafe','doom-md-r46-m3c-r4b-safe-perf'),
-                ('r4bstress','doom-md-r46-m3c-r4b-stress-perf')]
+                ('r4bsafe','doom-md-r46-r4b-safe-perf'),
+                ('r4bstress','doom-md-r46-r4b-stress-perf')]
           expected={
               'primary':'290677102bfb5a00b2a03f1150ba84204f903c51726ce78859a254128ac64c79',
               'r3safe':'c6a397b19324feee32a1ec00d780daa8ed1088810459f0a13ed5d50e5090834f'
@@ -297,7 +297,7 @@ jobs:
           d=Path('dist/r35').resolve()
           env=os.environ.copy();env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
           for stem in ('doom-md-r46-primary-perf','doom-md-r46-m3c-r3-safe-perf',
-                       'doom-md-r46-m3c-r4b-safe-perf','doom-md-r46-m3c-r4b-stress-perf'):
+                       'doom-md-r46-r4b-safe-perf','doom-md-r46-r4b-stress-perf'):
               frames='1150' if 'stress-perf' in stem else '550' if 'safe-perf' in stem else '300'
               p=subprocess.run([exe,'-b',frames,str(d/(stem+'.bin'))],cwd=d,
                 env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=65)
