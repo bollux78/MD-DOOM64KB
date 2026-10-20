@@ -88,8 +88,7 @@ int main(void){
         }
         assert(!memcmp(copy,pixels,sizeof(copy)));
     }
-    puts("R46 M1B PASS: 40 frames, 63840 map indices, 510720 4x4 pattern rows,"
-         " two banks, Q3 skip-solid dynamic pack and no buffer modifications");
+    /* test is intentionally libc-agnostic under the SGDK include path */
     return 0;
 }
 '''
@@ -103,3 +102,4 @@ with tempfile.TemporaryDirectory(prefix='r46-m1b-') as tmp:
              '-I'+str(root/'src'),str(src),str(file),'-o',str(exe)]
     subprocess.run(command,check=True)
     subprocess.run([str(exe)],check=True)
+    print("R46 M1B PASS: 40 frames, two banks, Q3 skip-solid pack, no buffer modifications")
