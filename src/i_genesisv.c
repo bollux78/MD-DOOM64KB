@@ -59,6 +59,8 @@
 #include "r46_pixel4_pipeline.h"
 #include "r46_pixel4_raster.h"
 #include "r46_pixel4_composite.h"
+#include "r46_m3_owner.h"
+#include "r46_m3_tiles.h"
 #endif
 #endif
 #endif
@@ -1059,6 +1061,8 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_PipelineValidate()) I_Error("R46 P4 integrated geometry contract");
     if(!R46_P4_RasterValidate()) I_Error("R46 P4 packed raster contract");
     if(!R46_P4_CompositeValidate()) I_Error("R46 P4 preview composition contract");
+    if(!R46_M3_OwnerValidate()) I_Error("R46 M3A owner protocol contract");
+    if(!R46_M3_TilesValidate()) I_Error("R46 M3A packed tile map contract");
 #endif
 #endif
 #endif
