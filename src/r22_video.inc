@@ -18,7 +18,11 @@
 #include "r21_prof.h"
 #include "r20_counters.h"
 #include "r22_pixel4.h"
+#if defined(DOOM_R43_GRAY_CRT)
+#include "r43_gray_palette.h" /* 4x4 CRAM/LUT only; Bayer8 still unchanged. */
+#else
 #include "r22_palette.h"
+#endif
 #include "r22_maps.h"
 #if defined(DOOM_R22_PAIR_LUT)
 #include "r22_pair_lut.h"
