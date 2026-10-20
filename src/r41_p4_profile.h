@@ -12,5 +12,6 @@ extern volatile uint16_t r41_p4_samples[R41_P4_STAGES];
 extern volatile uint16_t r41_p4_total;
 void R41_P4Reset(void);
 void R41_P4Start(void);
+void R41_P4Stop(void);
 #endif
 #endif
