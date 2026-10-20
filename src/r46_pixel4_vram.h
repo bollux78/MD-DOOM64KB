@@ -19,12 +19,18 @@ enum {
 };
 
 #if defined(DOOM_R46_M1B)
+typedef struct {
+    uint16_t (*tile_at)(uint16_t bank,uint16_t column,uint16_t row);
+    uint16_t (*map_row)(uint16_t bank,uint16_t row,uint16_t output[R46_P4_COLUMNS]);
+    void (*pattern_rows)(uint16_t column,uint16_t row,uint32_t output[8]);
+} r46_p4_vram_ops_t;
 /* All functions read framebuffer as if pixel4 owned the existing _s_screen.
  * They MUST NOT be called during active 8x8 rendering. The sole exception
  * is R46_P4_VramValidate(), which uses metadata and constants only. */
 uint16_t R46_P4_TileAt(uint16_t bank,uint16_t column,uint16_t row);
 uint16_t R46_P4_MapRow(uint16_t bank,uint16_t row,uint16_t output[R46_P4_COLUMNS]);
 void R46_P4_PatternRows(uint16_t column,uint16_t row,uint32_t output[8]);
+const r46_p4_vram_ops_t *R46_P4_VramOps(void);
 uint16_t R46_P4_VramValidate(void);
 #endif
 #endif
