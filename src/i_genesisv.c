@@ -1044,6 +1044,14 @@ static void R46_M3B_RestorePalette(void)
     I_UploadNewPalette(0);
 }
 #endif
+#if defined(DOOM_R46_M3C_DIAG)
+/* SGDK DMA palettes can be queued beyond VDP_waitDMACompletion.
+ * For the M3C return handoff make this restoration synchronous. */
+static void R46_M3C_RestorePaletteCPU(void)
+{
+    PAL_setColors(0,genpal_cram[0],64,CPU);
+}
+#endif
 
 void I_InitGraphicsHardwareSpecificCode(void)
 {
@@ -1114,7 +1122,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
 		_s_screen[i] = BLACK_CELL;
 #if defined(DOOM_R46_M3C_DIAG)
     /* Dual-bank video-only exercise; 8x8 resumes after four timed phases. */
-    R46_M3C_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
+    R46_M3C_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3C_RestorePaletteCPU);
 #elif defined(DOOM_R46_M3B_DIAG)
     /* Original single-bank diagnostic preserved as independent control. */
     R46_M3B_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
