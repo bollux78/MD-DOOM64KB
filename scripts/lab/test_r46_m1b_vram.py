@@ -44,6 +44,12 @@ int main(void){
     assert(R46_P4_MapRow(0,0,map)==0);
     assert(R46_P4_MapRow(2,1,map)==0);
     assert(R46_P4_MapRow(0,1,0)==0);
+    uint32_t untouched[8]={0xA55A5AA5UL};
+    assert(R46_P4_PackIfDynamic(2,0,1,untouched)==0);
+    assert(R46_P4_PackIfDynamic(0,38,1,untouched)==0);
+    assert(R46_P4_PackIfDynamic(0,0,0,untouched)==0);
+    assert(R46_P4_PackIfDynamic(0,0,1,0)==0);
+    assert(untouched[0]==0xA55A5AA5UL);
     uint8_t *pixels=(uint8_t *)(void *)_s_screen;
     for(unsigned pass=0;pass<40;pass++){
         for(unsigned i=0;i<sizeof(_s_screen);i++)
@@ -63,7 +69,16 @@ int main(void){
                     uint16_t index=baseline_tile(top,bottom,bank,x,row);
                     assert(map[x]==index);
                     assert(R46_P4_TileAt(bank,x,row)==index);
+                    uint32_t packed[8];
+                    for(unsigned y=0;y<8;y++)packed[y]=0xA55A5AA5UL;
+                    uint16_t produced=R46_P4_PackIfDynamic(bank,x,row,packed);
+                    assert(produced==(index>=16 ? index : 0));
+                    if(index<16){
+                        for(unsigned y=0;y<8;y++)assert(packed[y]==0xA55A5AA5UL);
+                    }
                     R46_P4_PatternRows(x,row,pattern);
+                    if(index>=16)
+                        assert(!memcmp(packed,pattern,sizeof(packed)));
                     for(unsigned y=0;y<4;y++){
                         assert(pattern[y]==baseline_row(top));
                         assert(pattern[y+4]==baseline_row(bottom));
@@ -74,7 +89,7 @@ int main(void){
         assert(!memcmp(copy,pixels,sizeof(copy)));
     }
     puts("R46 M1B PASS: 40 frames, 63840 map indices, 510720 4x4 pattern rows,"
-         " two banks, gray/solid/dynamic tiles and no buffer modifications");
+         " two banks, Q3 skip-solid dynamic pack and no buffer modifications");
     return 0;
 }
 '''
