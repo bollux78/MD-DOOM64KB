@@ -116,11 +116,35 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "unexpected WINDOW base");
     VDP_setEnable(FALSE);
     VDP_setAutoInc(2);
+#if defined(DOOM_R46_M3C_DIRECT_REGS)
+    /* M3C R4: hardware-only remap. SGDK's VDP_set*Address routines
+     * update maps_addr, decompress a new font and MEM_pack() multiple
+     * times. This happened AFTER allocating the R20 heap DMA buffer
+     * and left its header invalid (R28 ERRORS=2). Keep the SGDK
+     * cached map addresses and TILE_FONT_INDEX at the ORIGINAL
+     * C000/B400 values and privately mirror unused planes by
+     * writing their hardware VDP registers while the display is off.
+     * Reg4 BG_B base E000 => 0x8407.
+     * Reg3 H40 Window base E000 => 0x8338.
+     * All SGDK accesses to the visible map use BG_A E000 and are
+     * unaffected. These register writes MUST be restored before
+     * any subsequent SGDK Window/BG_B operation.
+     */
+    volatile uint16_t *const vdp_ctrl=(volatile uint16_t*)VDP_CTRL_PORT;
+    *vdp_ctrl=(uint16_t)0x8407u;
+    *vdp_ctrl=(uint16_t)0x8338u;
+    m3c_expect(VDP_MAPS_START==0xC000u &&
+               TILE_FONT_INDEX==1440u &&
+               VDP_getBGBAddress()==0xC000u &&
+               VDP_getWindowAddress()==0xD000u,
+               "SGDK cached original VRAM layout changed");
+#else
     VDP_setBGBAddress(0xE000u);
     VDP_setWindowAddress(0xE000u);
     m3c_expect(VDP_getBGBAddress()==0xE000u &&
                VDP_getWindowAddress()==0xE000u,
                "BG_B / WINDOW diagnostic mirror");
+#endif
     VDP_setTextPlane(BG_A);
     VDP_clearPlane(BG_A,TRUE);
     VDP_waitDMACompletion();
@@ -182,11 +206,18 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "retire pixel4 display");
     VDP_clearPlane(BG_A,TRUE); /* Clear pixel4 BG_A at E000. */
     VDP_waitDMACompletion();
+#if defined(DOOM_R46_M3C_DIRECT_REGS)
+    /* Restore BOTH physical VDP registers before asking SGDK to touch
+     * the Window or BG_B. No SGDK caches were ever changed. */
+    *vdp_ctrl=(uint16_t)0x8334u; /* reg3: H40 Window D000 */
+    *vdp_ctrl=(uint16_t)0x8406u; /* reg4: BG_B C000 */
+#else
     VDP_setWindowAddress(0xD000u); /* Restore inactive H40 Window. */
-    /* Clear only the 6 damaged 64-word Window rows at D000..D2FF.
-     * DO NOT clear all 32 rows: D400..DFFF contains SGDK font. */
-    VDP_clearTileMapRect(WINDOW,0,0,64,6);
     VDP_setBGBAddress(0xC000u); /* Restore original BG_B base. */
+#endif
+    /* Clear only the 6 damaged Window rows D000..D2FF: never erase
+     * the font or unrelated VRAM. */
+    VDP_clearTileMapRect(WINDOW,0,0,64,6);
     VDP_clearPlane(BG_B,TRUE); /* Bank1 overwrote BG_B names at C000. */
     VDP_waitDMACompletion();
     m3c_expect(VDP_getBGAAddress()==0xE000u &&
