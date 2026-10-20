@@ -27,7 +27,7 @@ required=(
     'reload_cell_tiles();','restore_cell_palette();'
 )
 for token in required: assert token in video,token
-assert 'for(uint16_t phase=0;phase<4;phase++)' in video
+assert 'for(uint16_t phase=0;phase<phases;phase++)' in video
 assert 'for(uint16_t frame=0;frame<45;frame++)' in video
 assert video.index('VDP_setBGBAddress(0xE000u);')<video.index('m3c_upload_hidden_bank(&owner')
 assert video.index('VDP_setBGBAddress(0xC000u);')<video.index('reload_cell_tiles();')
