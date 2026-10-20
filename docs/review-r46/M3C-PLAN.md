@@ -29,17 +29,25 @@ The actual diagnostic (`r46_m3c_video.c`) uploads patterns into the
 two physical VRAM banks, alternates bank0 / bank1 / bank0 / bank1,
 displays each for 45 VBlanks, and returns to the normal R39f startup.
 
-**Crucial VRAM fact discovered at M3C:** bank1 dynamic tiles
-890..1687 occupy VRAM 0x6F40..0xD2FF, overlapping the normal BG_A
-64x32 name table at 0xC000. Hence:
-- During pixel4 the BG_A tilemap is relocated to **0xE000..0xEFFF**;
-  BG_B is unused. This region is above bank1 graphics, above the
-  SGDK font, and below the SAT/hscroll table region.
-- At the end BG_A E000 is cleared, the original base C000 restored,
-  old map cleared, 8x8 dither/stripe patterns reloaded, old CRAM
-  restored, and the original renderer framebuffer reinitialized.
-- If hardware uses a non-C000 original A map, the diagnostic rejects
-  the unsupported layout rather than silently overwrite it.
+**Corrected SGDK VRAM layout (after M3C's first user test):**
+bank1 dynamic tiles 890..1687 occupy VRAM 0x6F40..0xD2FF and
+overlap **BG_B at 0xC000**, NOT BG_A. The project's 64x32 SGDK layout
+already has **BG_A at 0xE000..0xEFFF**. M3C initially aborted with
+"Unexpected BG_A base" because it assumed the inverse placement.
+
+- Keep BG_A at **0xE000** throughout the diagnostic, and explicitly
+  require its original address. Redirect **BG_B** from C000 to E000
+  temporarily so it cannot interpret the bank1 patterns as tilemap
+  entries; both planes point to the same valid diagnostic name table.
+- While the display is disabled, restore **BG_B to C000**, clear its
+  overwritten names, clear BG_A at E000, rebuild the original 8x8
+  dither/stripe patterns and restore original CRAM before resuming.
+- If SGDK has unexpectedly moved BG_A or BG_B away from E000/C000,
+  abort instead of risking an unseen overlap.
+
+M3C's first five-ROM CI passed compilation and smoke tests, but the
+user correctly observed a runtime failure at boot. The updated build
+adds host checks for both plane addresses and their restoration.
 
 **Important limitation: this is NOT seamless zero-blanking VBlank
 page flipping.** H40 BG_A map origins are 0x2000 aligned, and we
@@ -61,7 +69,7 @@ blocking boot tests before DEMO3 starts. Do not infer continuous
 
 - Host C test: 4 phases x 798 tiles, all dynamic, exact 76x44 nibble
   layout, memory guards, stage/visible-bank exclusion and map commit
-  checks; source audit for VRAM relocation, masking and restoration.
+  checks; source audit for BG_B mirroring, both plane addresses, mask and restoration.
 - GitHub CI: build 5 ROMs, check LTO symbols and feature flags,
   audit BSS control <= baseline and diagnostic <= baseline+16 bytes,
   header/size/hash, 300/480 frame BlastEm smoke.
