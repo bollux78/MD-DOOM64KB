@@ -16,7 +16,7 @@ enum {
 };
 #if defined(DOOM_R46_M2A)
 /* Fine-angle argument is 0..4095, same as original viewangletox.
- * x (0..75) yields signed angle in 16-bit units.
+ * x (0..76 inclusive) yields signed edge/column angle in 16-bit units.
  * No per-column runtime 8x8/4x4 conditionals are introduced. */
 uint8_t R46_P4_ViewAngleToX(uint16_t fine_angle);
 int16_t R46_P4_XToViewAngle(uint16_t x);
