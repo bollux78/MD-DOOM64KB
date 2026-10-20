@@ -45,8 +45,14 @@ typedef struct {
 } r46_p4_sprite_camera_ops_t;
 static const r46_p4_sprite_camera_ops_t sprite_ops={R46_P4_ProjectSpriteRect};
 __attribute__((noinline))
+static const r46_p4_sprite_camera_ops_t *R46_P4_SpriteCameraOps(void)
+{
+    return &sprite_ops;
+}
+__attribute__((noinline))
 uint16_t R46_P4_SpriteCameraValidate(void)
 {
-    return (uint16_t)(sprite_ops.project!=0 && sizeof(r46_p4_sprite_rect_t)==10);
+    const r46_p4_sprite_camera_ops_t *ops=R46_P4_SpriteCameraOps();
+    return (uint16_t)(ops && ops->project && sizeof(r46_p4_sprite_rect_t)==10);
 }
 #endif
