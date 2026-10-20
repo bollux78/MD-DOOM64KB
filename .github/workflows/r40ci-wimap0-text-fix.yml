@@ -1,0 +1,223 @@
+name: R40ci - Fix pixel4 intermission WIMAP0 typography
+on:
+  push:
+    branches: [r40c-m0-intermission-fix]
+  workflow_dispatch:
+concurrency:
+  group: r40c-m0-intermission-fix
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore pinned XGM2 soundtrack input
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+      - name: Recover pinned shareware DOOM1.WAD (not committed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          expected_sha='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          size=4196020
+          candidates=[
+              ('ibiblio', 'https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad',False),
+              ('wad-archive', 'https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+              ('shareware-demo', 'https://aikernel.net/demo/doom/DOOM1.WAD',False)
+          ]
+          if target.is_file():
+              b=target.read_bytes()
+              if len(b)==size and hashlib.sha256(b).hexdigest()==expected_sha:
+                  print('Verified pinned shareware WAD already present:',target)
+                  raise SystemExit(0)
+          for name,url,compressed in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R31 build asset verifier/1.0'})
+                  with urllib.request.urlopen(req,timeout=70) as response:
+                      data=response.read(9000000)
+                  if compressed:data=gzip.decompress(data)
+                  sha=hashlib.sha256(data).hexdigest()
+                  if len(data)!=size or sha!=expected_sha:
+                      print(name,'unexpected content or checksum; rejecting',
+                            len(data),sha)
+                      continue
+                  target.write_bytes(data)
+                  print('Verified original shareware v1.9 from',name,
+                        'size',len(data),'SHA256',sha)
+                  break
+              except Exception as e:
+                  print('Shareware mirror unavailable:',name,str(e)[:200])
+          else:
+              print('Pinned Doom shareware download failed; original preflight will look for local source.')
+          PY
+      - name: Preflight - find authentic Doom DMX sounds on self-hosted runner
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          python3 - <<'PY'
+          import pathlib,os,struct,hashlib,sys
+          home=pathlib.Path.home()
+          candidates=[
+              pathlib.Path('scripts/doom1.wad'),
+              home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',
+              home/'Projetos/doom-assets/doom1.WAD',
+              home/'Jogos/doom1.wad',
+              home/'Games/doom1.wad',
+              home/'Downloads/doom1.wad'
+          ]
+          # No external network or repo commit for copyright-protected WAD.
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir():continue
+              root_depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-root_depth>4:
+                      subdirs[:]=[]
+                      continue
+                  subdirs[:]=[s for s in subdirs if not s.startswith('.')]
+                  for n in names:
+                      if n.lower()=='doom1.wad':
+                          candidates.append(pathlib.Path(directory)/n)
+          for f in candidates:
+              if not f.is_file():continue
+              try:
+                  with f.open('rb') as fd:
+                      h=fd.read(12)
+                      if len(h)!=12 or h[:4] not in (b'IWAD',b'PWAD'):continue
+                      count,offset=struct.unpack_from('<II',h,4)
+                      if not 100<count<10000:continue
+                      fd.seek(offset)
+                      directory=fd.read(count*16)
+                  sounds={directory[i+8:i+16].split(b'\0')[0]
+                          for i in range(0,len(directory),16)}
+                  if not {b'DSPISTOL',b'DSSHOTGN',b'DSOROPN'}.intersection(sounds):
+                      continue
+                  raw=f.read_bytes()
+                  dest=pathlib.Path('scripts/doom1.wad')
+                  if f.resolve()!=dest.resolve():dest.write_bytes(raw)
+                  sha=hashlib.sha256(raw).hexdigest()
+                  (pathlib.Path('dist/r35')/'SOURCE-STATUS.txt').write_text(
+                      f'Genuine WAD source found: {str(f)}\nSHA256: {sha}\nBytes: {len(raw)}\n')
+                  print('SFX input:',f,'bytes',len(raw),'SHA256',sha)
+                  sys.exit(0)
+              except (OSError,struct.error):continue
+          status=('MISSING: authentic scripts/doom1.wad (DS* lumps) not found on runner.\n'
+                  'Place your own doom1.wad in ~/Projetos/doom-assets/doom1.wad\n'
+                  'No synthetic or silent SFX fallback is allowed for R31 PCM builds.\n')
+          pathlib.Path('dist/r35/SOURCE-STATUS.txt').write_text(status)
+          print(status,file=sys.stderr)
+          sys.exit(3)
+          PY
+      - name: Verify R31 generator and build scripts
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_linear.fish
+          fish -n scripts/build_silent.fish
+          python3 -m py_compile scripts/lab/gen_r31_sfx.py scripts/lab/gen_r30_native.py \
+            scripts/lab/finish_r35_rom.py scripts/lab/audit_r35.py
+          python3 scripts/lab/test_r25_music.py
+          python3 scripts/lab/test_r27_group.py
+          python3 - <<'PY'
+          import importlib.util,struct
+          spec=importlib.util.spec_from_file_location('sfx','scripts/lab/gen_r31_sfx.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          source=bytes((128+(i%20)) for i in range(11025))
+          lump=struct.pack('<HHI',3,11025,len(source))+source
+          low,*_=m.convert(lump,6650)
+          high,*_=m.convert(lump,13300)
+          assert len(low)%256==len(high)%256==0
+          assert len(low)<len(high)
+          assert len(m.SFX)==52
+          print('R31 rate conversion, alignment, SFX enum count: OK')
+          PY
+          test -f ~/mars/m68k-elf/lib/libmd.a
+          test -f ~/mars/m68k-elf/inc/snd/xgm2.h
+      - name: Regression audit of 38x22 WIMAP0 glyph text layout
+        shell: bash
+        run: |
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r44_intermission_layout.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/wi_libt.c').read_text()
+          assert '#define WI_TEXT_WIDTH 38' in s
+          assert '#define WI_TEXT_HEIGHT 22' in s
+          assert 'WI_TEXT_WIDTH VIEWWINDOWWIDTH' in s
+          assert 'WI_TEXT_HEIGHT VIEWWINDOWHEIGHT' in s
+          for section in ['WI_drawLF','WI_drawEL','WI_drawStats','lnodes']:
+              assert section in s
+          print('PASS WIMAP0 layout: width and height in 8x8 glyph cells')
+          PY
+      - name: Compile R40ci repaired pixel4 PLAY and PERF
+        shell: bash
+        run: |
+          mkdir -p dist/r35
+          for variant in pixel4-play pixel4-perf; do
+            echo "=== R40ci WIMAP0 fix $variant ==="
+            env DOOM_R35D_CHECKER=0 DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R40_STAGE1=fast DOOM_R40CI_INTERMISSION=1 DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"
+            if [[ "$variant" == pixel4-play ]]; then stem=doom-md-r40ci-p4play; else stem=doom-md-r40ci-p4perf; fi
+            test -s "dist/r35/$stem.bin"
+          done
+      - name: Audit ROM flags, header, file length and create ZIP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib,hashlib,json,struct,zipfile
+          d=pathlib.Path('dist/r35')
+          base='doom-md-r40ci'
+          entries=[]
+          for suffix in ('p4play','p4perf'):
+              stem=f'{base}-{suffix}'
+              raw=(d/(stem+'.bin')).read_bytes()
+              flags=set((d/('flags-'+stem+'.txt')).read_text().split())
+              assert 0<len(raw)<=4*1024*1024 and len(raw)%0x20000==0,(stem,len(raw))
+              assert raw[0x100:0x110]==b'SEGA MEGA DRIVE ',stem
+              assert struct.unpack_from('>II',raw,0x1a0)==(0,len(raw)-1),stem
+              must={'-DDOOM_R22_PIXEL4','-DVIEWWINDOWWIDTH=76','-DVIEWWINDOWHEIGHT=44','-DDOOM_R39C_MOVEP_CACHE','-DDOOM_R39C_MOVEP_MAP','-DDOOM_R39E_AUDIO_TOGGLES','-DDOOM_R30_NATIVE','-DDOOM_R35_ART_RAW','-DDOOM_R31_SFX','-DDOOM_R29_XGM2'}
+              assert must<=flags,(stem,must-flags)
+              assert '-DDOOM_R20_REG_COLUMNS' not in flags and '-DDOOM_R20_FLAT_INLINE' not in flags
+              assert '-DDOOM_R42_WALL_ASM' in flags if spec.code=='asm' else "assert '-DDOOM_R42_WALL_ASM' not in flags"
+              assert ('-DTIMEDEMO' in flags)==(suffix=='p4perf'),stem
+              entries.append({'rom':stem+'.bin','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'backend':'pixel4 native 76x44','text_grid':'38x22','verified_in_game':False})
+          (d/'R40ci-WIMAP0-INTERMISSION-MANIFEST.json').write_text(json.dumps(entries,indent=2)+'\n')
+          with zipfile.ZipFile(d/'R40ci-WIMAP0-FIX-2ROMS.zip','w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for e in entries:z.write(d/e['rom'],e['rom'])
+              z.write(d/'R40ci-WIMAP0-INTERMISSION-MANIFEST.json','MANIFEST.json')
+              z.write('docs/review-r44/README.md','README-WIMAP0.md')
+          print(json.dumps(entries,indent=2))
+          PY
+      - name: Boot repaired pixel4 ROMs 300 frames in BlastEm
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess
+          exe=shutil.which('blastem') or next((str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm missing'
+          d=pathlib.Path('dist/r35').resolve()
+          env=os.environ.copy();env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          for suffix in ('p4play','p4perf'):
+              stem='doom-md-r40ci-'+suffix
+              p=subprocess.run([exe,'-b','300',str(d/(stem+'.bin'))],cwd=d,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=45)
+              print(stem,p.returncode,p.stdout[-200:],flush=True)
+              assert p.returncode==0,stem
+          PY
+      - name: Upload R40ci WIMAP0 fixed ROMs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r40ci-wimap0-textfix
+          path: dist/r35/
+          retention-days: 90
+          if-no-files-found: warn
