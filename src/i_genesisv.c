@@ -37,6 +37,7 @@
 #include "r20_dma.h"
 #include "r37_profile.h"
 #include "r39d_dither.h"
+#include "r39f_dither.h"
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -72,7 +73,11 @@ extern const uint8_t *fullcolormap;
 #error R39d dual LUTs require ROM color map and checkerboard tile set
 #endif
 static const uint16_t (*r39d_active_colormap)[256] = doom_colormap_cells;
+#if defined(DOOM_R39F_DITHER3)
+static uint16_t r39f_dither_mode=R39F_CHECKER;
+#else
 static uint16_t r39d_dither_enabled=1;
+#endif
 #endif
 #endif
 
@@ -156,6 +161,40 @@ static const uint8_t *r39d_last_colormap;
 static const uint16_t *r39d_last_cellmap;
 #endif
 #if defined(DOOM_R39D_DITHER_TOGGLE)
+#if defined(DOOM_R39F_DITHER3)
+uint16_t R39F_DitherMode(void) { return r39f_dither_mode; }
+void R39F_SetDitherMode(uint16_t mode)
+{
+    if (mode > R39F_VERTICAL) return;
+    if (r39f_dither_mode == mode) return;
+    r39f_dither_mode = mode;
+    switch (mode) {
+    case R39F_SOLID:
+        r39d_active_colormap = r39d_colormap_cells_solid;
+        colorcell = r39d_colorcell_solid;
+        break;
+    case R39F_VERTICAL:
+        r39d_active_colormap = r39f_colormap_cells_vertical;
+        colorcell = r39f_colorcell_vertical;
+        break;
+    default:
+        r39d_active_colormap = doom_colormap_cells;
+        colorcell = r39d_colorcell_checker;
+        break;
+    }
+#if defined(DOOM_R20_CELLMAP_MEMO)
+    /* A column may have the same shade but a different tile per pattern. */
+    r39d_last_colormap = NULL;
+    r39d_last_cellmap = NULL;
+#endif
+}
+/* Keep the R39d API valid for callers built with its older feature flag. */
+uint16_t R39D_DitherEnabled(void) { return r39f_dither_mode != R39F_SOLID; }
+void R39D_SetDither(uint16_t enabled)
+{
+    R39F_SetDitherMode(enabled ? R39F_CHECKER : R39F_SOLID);
+}
+#else
 uint16_t R39D_DitherEnabled(void) { return r39d_dither_enabled; }
 void R39D_SetDither(uint16_t enabled)
 {
@@ -169,6 +208,7 @@ void R39D_SetDither(uint16_t enabled)
     r39d_last_cellmap = NULL;
 #endif
 }
+#endif
 #endif
 
 
@@ -943,6 +983,20 @@ static void I_BuildSolidTiles(void)
             for (uint16_t y = 0; y < 8; ++y) tile[y] = (y & 1) ? odd : even;
             VDP_loadTileData(tile, SOLID_TILE_INDEX + index++, 1, CPU);
         }
+#if defined(DOOM_R39F_DITHER3)
+    /* A second 105-tile bank retains exactly the same CRAM pairs as
+     * checker 16..120, but repeats the horizontal ABAB pattern on every
+     * scanline.  The checker bank is untouched for bit-exact comparison. */
+    index = 121;
+    for (uint16_t a = 0; a < 15; ++a)
+        for (uint16_t b = a + 1; b < 15; ++b)
+        {
+            const uint32_t stripes =
+                a * 0x10101010UL + b * 0x01010101UL;
+            for (uint16_t y = 0; y < 8; ++y) tile[y] = stripes;
+            VDP_loadTileData(tile, SOLID_TILE_INDEX + index++, 1, CPU);
+        }
+#endif
 #endif
 }
 
