@@ -1094,8 +1094,12 @@ void I_InitGraphicsHardwareSpecificCode(void)
 #endif
 #endif
 #endif
-#if defined(DOOM_R21_V2_HEAPBUF)
+#if defined(DOOM_R46_M3C_LATE_BUFFER) && (!defined(DOOM_R46_M3C_DIAG) || !defined(DOOM_R21_V2_HEAPBUF))
+#error R46 R5 delayed heap lifetime requires the M3C-only R21 heap snapshot build
+#endif
+#if defined(DOOM_R21_V2_HEAPBUF) && !defined(DOOM_R46_M3C_LATE_BUFFER)
     {
+        /* All pre-R5 controls preserve the same allocation lifetime. */
         extern void I_R21_AllocVideoCopy(void);
         I_R21_AllocVideoCopy();
     }
@@ -1126,6 +1130,15 @@ void I_InitGraphicsHardwareSpecificCode(void)
 #elif defined(DOOM_R46_M3B_DIAG)
     /* Original single-bank diagnostic preserved as independent control. */
     R46_M3B_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
+#endif
+#if defined(DOOM_R46_M3C_LATE_BUFFER)
+    /* R5 heap-pressure isolation: allocate R20's 2128-byte queued VBlank
+     * snapshot only AFTER the dual-bank diagnostic finished all SGDK
+     * plane-address changes, decompressed/reloaded font, restored 8x8 and
+     * drained VDP DMA. Before this call R20_video_ready is zero and the
+     * VBlank callback cannot access the null, not-yet-allocated snapshot.
+     * This is a diagnostic-only boot change, not a runtime 4x4 switch. */
+    I_R21_AllocVideoCopy();
 #endif
 #if defined(DOOM_R46_M3B_DIAG) || defined(DOOM_R46_M3C_DIAG)
     for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
