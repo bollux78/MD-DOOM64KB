@@ -48,7 +48,8 @@ required=(
 for text in required:assert text in s,text
 assert s.index('VDP_setWindowAddress(0xE000u);') < s.index('m3c_upload_hidden_bank(&owner')
 assert s.index('VDP_setWindowAddress(0xD000u);') < s.index('reload_cell_tiles();')
-assert s.index('VDP_clearTileMapRect(WINDOW,0,0,64,6);') < s.index('VDP_setBGBAddress(0xC000u);')
+assert s.index('VDP_setWindowAddress(0xD000u);') < s.index('VDP_clearTileMapRect(WINDOW,0,0,64,6);')
+assert s.index('VDP_clearTileMapRect(WINDOW,0,0,64,6);') < s.index('reload_cell_tiles();')
 assert s.index('VDP_setBGBAddress(0xC000u);') < s.index('reload_cell_tiles();')
 assert 'VDP_clearPlane(WINDOW' not in s
 assert 'VDP_setBGAAddress(' not in s
