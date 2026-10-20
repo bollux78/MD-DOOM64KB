@@ -324,6 +324,21 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R46_M3B_DIAG'
     end
+    if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
+        if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+            echo 'M3C diagnostic requires the native 4x4 helper build'
+            exit 2
+        end
+        if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+            echo 'M3B and M3C video tests are mutually exclusive'
+            exit 2
+        end
+        if test "$v" != cell-perf
+            echo 'M3C boot diagnostic only builds cell-perf'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M3C_DIAG'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -486,6 +501,9 @@ for v in $variants
     end
     if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
         set id doom-md-r46-m3b-video-perf
+    end
+    if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
+        set id doom-md-r46-m3c-video-perf
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
