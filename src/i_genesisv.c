@@ -56,6 +56,7 @@
 #include "r46_pixel4_sprite_runs.h"
 #include "r46_pixel4_sprite_order.h"
 #include "r46_pixel4_sprite_mask.h"
+#include "r46_pixel4_pipeline.h"
 #endif
 #endif
 #endif
@@ -1053,6 +1054,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_SpriteRunsValidate()) I_Error("R46 P4 sprite runs contract");
     if(!R46_P4_SpriteOrderValidate()) I_Error("R46 P4 sprite order contract");
     if(!R46_P4_SpriteMaskValidate()) I_Error("R46 P4 sprite mask contract");
+    if(!R46_P4_PipelineValidate()) I_Error("R46 P4 integrated geometry contract");
 #endif
 #endif
 #endif
