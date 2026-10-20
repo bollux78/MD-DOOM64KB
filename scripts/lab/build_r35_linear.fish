@@ -269,6 +269,17 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R46_M1'
     end
+    if set -q DOOM_R46_M1B; and test "$DOOM_R46_M1B" = 1
+        if not set -q DOOM_R46_M1; or test "$DOOM_R46_M1" != 1
+            echo 'R46 M1B requires the dual-linked M1A backend'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M1B prepares pixel4 VRAM alongside 8x8 cell'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M1B'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -390,7 +401,13 @@ for v in $variants
     end
     if set -q DOOM_R46_BUILD
         switch "$DOOM_R46_BUILD"
-            case primary m1
+            case primary m1 m1b
+                if test "$DOOM_R46_BUILD" = m1b
+                    if not set -q DOOM_R46_M1B; or test "$DOOM_R46_M1B" != 1
+                        echo 'R46 m1b ID requires M1B feature'
+                        exit 2
+                    end
+                end
                 if not contains -- $v cell-perf cell-play
                     echo 'R46 primary/M1 must be 8x8 cell'
                     exit 2
