@@ -69,6 +69,9 @@
 #endif
 #if defined(DOOM_R46_M3C_DIAG)
 #include "r46_m3c_video.h"
+#if defined(DOOM_R46_M6A_LAYOUT)
+#include "r46_m6a_layout.h"
+#endif
 #endif
 #endif
 #endif
@@ -1090,6 +1093,12 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_M3B_PatternValidate()) I_Error("R46 M3B test pattern contract");
     if(!R46_M3C_BankValidate()) I_Error("R46 M3C staged banks contract");
     if(!R46_M3C_PatternValidate()) I_Error("R46 M3C animation source contract");
+#if defined(DOOM_R46_M6A_LAYOUT)
+    /* R6A: contract audit only. The library still has LEGACY font layout!
+     * Never write the proposed bank indices to VRAM or change SGDK maps
+     * until R6B has a matching isolated libmd.a and generated LUT. */
+    if(!R46_M6A_LayoutValidate()) I_Error("R46 M6A fixed font layout oracle");
+#endif
 #endif
 #endif
 #endif
