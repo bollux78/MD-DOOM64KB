@@ -46,6 +46,9 @@
 #include "r46_pixel4_projection.h"
 #if defined(DOOM_R46_M2B)
 #include "r46_pixel4_vertical.h"
+#if defined(DOOM_R46_M2C)
+#include "r46_pixel4_culling.h"
+#endif
 #endif
 #endif
 #endif
@@ -1031,6 +1034,10 @@ void I_InitGraphicsHardwareSpecificCode(void)
     /* Metadata validation only; the 76-column clipping buffers are not
      * allocated and the currently active R39f frame is untouched. */
     if(!R46_P4_VerticalValidate()) I_Error("R46 P4 vertical clip contract");
+#if defined(DOOM_R46_M2C)
+    /* Metadata-only boot check; never reads active 8x8 clip/plane buffers. */
+    if(!R46_P4_CullingValidate()) I_Error("R46 P4 culling contract");
+#endif
 #endif
 #endif
 #endif
