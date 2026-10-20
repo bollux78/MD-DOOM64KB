@@ -61,6 +61,10 @@
 #include "r46_pixel4_composite.h"
 #include "r46_m3_owner.h"
 #include "r46_m3_tiles.h"
+#include "r46_m3b_pattern.h"
+#if defined(DOOM_R46_M3B_DIAG)
+#include "r46_m3b_video.h"
+#endif
 #endif
 #endif
 #endif
@@ -1029,6 +1033,13 @@ static void I_BuildSolidTiles(void)
 }
 
 
+#if defined(DOOM_R46_M3B_DIAG)
+static void R46_M3B_RestorePalette(void)
+{
+    I_UploadNewPalette(0);
+}
+#endif
+
 void I_InitGraphicsHardwareSpecificCode(void)
 {
 #if defined(DOOM_R46_M1)
@@ -1063,6 +1074,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_CompositeValidate()) I_Error("R46 P4 preview composition contract");
     if(!R46_M3_OwnerValidate()) I_Error("R46 M3A owner protocol contract");
     if(!R46_M3_TilesValidate()) I_Error("R46 M3A packed tile map contract");
+    if(!R46_M3B_PatternValidate()) I_Error("R46 M3B test pattern contract");
 #endif
 #endif
 #endif
@@ -1093,6 +1105,15 @@ void I_InitGraphicsHardwareSpecificCode(void)
 	// 画面を黒で埋める
 	for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
 		_s_screen[i] = BLACK_CELL;
+#if defined(DOOM_R46_M3B_DIAG)
+    /* Diagnostic-only 4x4 VDP round-trip. No gameplay renderer switch.
+     * Both restored callbacks are already used by the original 8x8 init. */
+    R46_M3B_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
+    for (int i = 0; i < VIEWWINDOWWIDTH * VDP_DISPLAY_ROWS; i++)
+        _s_screen[i]=BLACK_CELL;
+    R20_InvalidateVideo();
+    newpal=NO_PALETTE_CHANGE;
+#endif
 #if defined(DOOM_R21_PROF)
     R21_ProfInit();
 #endif
