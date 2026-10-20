@@ -313,6 +313,17 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R46_M2C'
     end
+    if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+        if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+            echo 'M3B video boot test requires R46 M2C'
+            exit 2
+        end
+        if test "$v" != cell-perf
+            echo 'M3B diagnostic only builds timedemo cell-perf'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M3B_DIAG'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -472,6 +483,9 @@ for v in $variants
                 echo 'Invalid R46 build profile'
                 exit 2
         end
+    end
+    if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+        set id doom-md-r46-m3b-video-perf
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
