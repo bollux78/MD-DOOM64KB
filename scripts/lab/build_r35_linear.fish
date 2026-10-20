@@ -25,6 +25,7 @@ python3 scripts/lab/test_r16_crt_hud.py; or exit 1
 python3 scripts/lab/test_r17_pixel_loop.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 python3 scripts/lab/gen_r22_pixel4.py; or exit 1
+python3 scripts/lab/gen_r43_gray.py; or exit 1
 python3 scripts/lab/test_r22_pixel4.py; or exit 1
 
 # Same proven R18 renderer flags as build_r19_timedemo.fish.
@@ -245,6 +246,18 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R39F_DITHER3'
     end
+    if set -q DOOM_R42_WALL_ASM; and test "$DOOM_R42_WALL_ASM" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R42 ASM wall kernel requires native pixel4'; exit 2
+        end
+        set defs $defs '-DDOOM_R42_WALL_ASM'
+    end
+    if set -q DOOM_R43_GRAY_CRT; and test "$DOOM_R43_GRAY_CRT" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R43 grayscale requires native pixel4'; exit 2
+        end
+        set defs $defs '-DDOOM_R43_GRAY_CRT'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -331,6 +344,37 @@ for v in $variants
         else
             echo 'R40c M0 controls support only cell/pixel4 play/perf'
             exit 2
+        end
+    end
+    if set -q DOOM_R45_VARIANT
+        switch "$DOOM_R45_VARIANT"
+            case cell
+                if not contains -- $v cell-perf cell-play
+                    echo 'R45 cell variant needs 8x8 renderer'; exit 2
+                end
+                if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+                    echo 'R45 cell requires R39f dither3'; exit 2
+                end
+                set id doom-md-r45-$v
+            case asm gray
+                if not contains -- $v pixel4-perf pixel4-play
+                    echo 'R45 pixel4 variants require pixel4 renderer'; exit 2
+                end
+                if not set -q DOOM_R42_WALL_ASM; or test "$DOOM_R42_WALL_ASM" != 1
+                    echo 'R45 pixel4 variants require R42 ASM'; exit 2
+                end
+                if test "$DOOM_R45_VARIANT" = gray
+                    if not set -q DOOM_R43_GRAY_CRT; or test "$DOOM_R43_GRAY_CRT" != 1
+                        echo 'R45 gray requires R43 gray palette'; exit 2
+                    end
+                end
+                if test "$v" = pixel4-perf
+                    set id doom-md-r45-$DOOM_R45_VARIANT-p4perf
+                else
+                    set id doom-md-r45-$DOOM_R45_VARIANT-p4play
+                end
+            case '*'
+                echo 'Unknown R45 variant'; exit 2
         end
     end
     set -gx DOOM_BUILD_ID $id
