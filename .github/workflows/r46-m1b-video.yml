@@ -149,8 +149,9 @@ jobs:
         run: |
           fish -n scripts/lab/build_r35_linear.fish
           fish -n scripts/build_silent.fish
-          python3 -m py_compile scripts/lab/audit_r46_dual_contract.py scripts/lab/test_r46_m1b_vram.py
+          python3 -m py_compile scripts/lab/audit_r46_dual_contract.py scripts/lab/audit_r46_unified_vdp.py scripts/lab/test_r46_m1b_vram.py
           python3 scripts/lab/audit_r46_dual_contract.py --out r46-m1b-dependency-contract.json
+          python3 scripts/lab/audit_r46_unified_vdp.py --out dist/r35/R46-M1B-VRAM-CONTRACT.json
           python3 scripts/lab/test_r42_wall.py
           python3 scripts/lab/test_r44_intermission_layout.py
           python3 scripts/lab/test_r46_m1b_vram.py
@@ -163,6 +164,9 @@ jobs:
           assert 'R46_P4_Wall' in core and 'R46_P4_VramOps' in vram
           assert 'R46_P4_VramValidate()' in main
           assert 'R46_P4_MapRow' in vram and 'R46_P4_PatternRows' in vram
+          assert 'R46_P4_PackIfDynamic' in vram
+          wall=Path('src/r_draw.c').read_text()
+          assert 'R7_VOID(6, R20_WALL_DRAW(dcvars));' in wall
           assert 'VDP_' not in vram and 'PAL_' not in vram
           assert 'R46_P4_MapRow' in Path('src/r46_pixel4_vram.h').read_text()
           assert 'WI_TEXT_WIDTH 38' in Path('src/wi_libt.c').read_text()
@@ -194,7 +198,7 @@ jobs:
           assert '_s_screen' in syms
           required=('R46_P4_Ops','R46_P4_Wall','R46_P4_VramOps',
                     'R46_P4_TileAt','R46_P4_MapRow','R46_P4_PatternRows',
-                    'R46_P4_VramValidate')
+                    'R46_P4_VramValidate','R46_P4_PackIfDynamic')
           if profile=='m1b':
               for sym in required:assert sym in syms,(profile,sym)
           else:
@@ -237,11 +241,13 @@ jobs:
               return dict(text=int(arr[0]),data=int(arr[1]),bss=int(arr[2]))
           control=size('primary')
           mixed=size('m1b')
-          assert mixed['bss']<=control['bss']+64,(control,mixed,'unexpected new WRAM buffer')
+          assert mixed['bss']<=control['bss'],(control,mixed,'zero-BSS-growth gate: review MD RAM risk')
           manifest=dict(roms=rows,control_size=control,m1b_size=mixed,
                         bss_delta=mixed['bss']-control['bss'],
                         shared_8x8_buffer_bytes=2128,pixel4_framebuffer_bytes=1672,
                         pixel4_map_row_stack_bytes=76,
+                        q3_skip_solid_before_vdp_command=True,
+                        unified_layout_is_not_enabled=True,
                         bank0_first_dynamic_tile=54,bank1_first_dynamic_tile=890,
                         bank1_last_dynamic_tile=1687,font_first_tile=1696,
                         stage='M1B prepared and co-linked; no real runtime resolution switch')
@@ -249,6 +255,7 @@ jobs:
           with zipfile.ZipFile(d/'R46-M1B-VIDEO-3ROMS.zip','w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
               for ent in rows:z.write(d/ent['rom'],ent['rom'])
               z.write(d/'R46-M1B-MANIFEST.json','R46-M1B-MANIFEST.json')
+              z.write(d/'R46-M1B-VRAM-CONTRACT.json','R46-M1B-VRAM-CONTRACT.json')
               z.write('docs/review-r46/M1B-TOMORROW.md','README-R46-M1B.md')
           print(json.dumps(manifest,indent=2))
           PY
