@@ -42,6 +42,9 @@
 #include "r46_pixel4_secondary.h"
 #if defined(DOOM_R46_M1B)
 #include "r46_pixel4_vram.h"
+#if defined(DOOM_R46_M2A)
+#include "r46_pixel4_projection.h"
+#endif
 #endif
 #endif
 
@@ -1018,6 +1021,10 @@ void I_InitGraphicsHardwareSpecificCode(void)
     /* This validates constant VRAM bank boundaries only: no VDP writes
      * and no reads from the still-active 8x8 frame buffer. */
     if(!R46_P4_VramValidate()) I_Error("R46 native VRAM bank contract");
+#endif
+#if defined(DOOM_R46_M2A)
+    if(!R46_P4_ProjectionValidate()) I_Error("R46 P4 projection ROM contract");
+#if defined(DOOM_R46_M1B)
 #endif
 #endif
 #if defined(DOOM_R21_V2_HEAPBUF)
