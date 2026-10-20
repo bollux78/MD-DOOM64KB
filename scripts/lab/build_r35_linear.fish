@@ -230,6 +230,13 @@ for v in $variants
             exit 2
         end
     end
+    if set -q DOOM_R41_P4_PROFILE; and test "$DOOM_R41_P4_PROFILE" = 1
+        if test "$v" != pixel4-perf
+            echo 'R41 profiler is only supported in pixel4-perf'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R41_P4_PROFILE'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -293,6 +300,19 @@ for v in $variants
         else
             echo 'R40b is a pixel4 title/intermission WINDOW change only'
             exit 2
+        end
+    end
+    if set -q DOOM_R41_BUILD
+        switch "$DOOM_R41_BUILD"
+            case control profile
+                if test "$v" != pixel4-perf
+                    echo 'R41 Q1 only builds pixel4-perf'
+                    exit 2
+                end
+                set id doom-md-r41-$DOOM_R41_BUILD-p4perf
+            case '*'
+                echo 'Unknown R41 variant'
+                exit 2
         end
     end
     set -gx DOOM_BUILD_ID $id
