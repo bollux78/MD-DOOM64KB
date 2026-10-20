@@ -25,6 +25,7 @@ python3 scripts/lab/test_r16_crt_hud.py; or exit 1
 python3 scripts/lab/test_r17_pixel_loop.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 python3 scripts/lab/gen_r22_pixel4.py; or exit 1
+python3 scripts/lab/gen_r43_gray.py; or exit 1
 python3 scripts/lab/test_r22_pixel4.py; or exit 1
 
 # Same proven R18 renderer flags as build_r19_timedemo.fish.
@@ -246,6 +247,13 @@ for v in $variants
                 exit 2
         end
     end
+    if set -q DOOM_R43_GRAY_CRT; and test "$DOOM_R43_GRAY_CRT" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R43 gray palette requires pixel4'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R43_GRAY_CRT'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -316,6 +324,29 @@ for v in $variants
             set id doom-md-r42-$DOOM_R42_WALL_VARIANT-p4perf
         else
             set id doom-md-r42-$DOOM_R42_WALL_VARIANT-p4play
+        end
+    end
+    if set -q DOOM_R43_BUILD
+        switch "$DOOM_R43_BUILD"
+            case control gray
+                if not contains -- $v pixel4-perf pixel4-play
+                    echo 'R43 requires native pixel4'
+                    exit 2
+                end
+                if test "$DOOM_R43_BUILD" = gray
+                    if not set -q DOOM_R43_GRAY_CRT; or test "$DOOM_R43_GRAY_CRT" != 1
+                        echo 'R43 gray build requires gray palette flag'
+                        exit 2
+                    end
+                end
+                if test "$v" = pixel4-perf
+                    set id doom-md-r43-$DOOM_R43_BUILD-p4perf
+                else
+                    set id doom-md-r43-$DOOM_R43_BUILD-p4play
+                end
+            case '*'
+                echo 'Invalid R43 build mode'
+                exit 2
         end
     end
     set -gx DOOM_BUILD_ID $id
