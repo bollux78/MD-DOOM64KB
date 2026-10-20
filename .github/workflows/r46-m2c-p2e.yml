@@ -1,7 +1,5 @@
 name: R46 M2C P2E - Sprite post clipping
 on:
-  push:
-    branches: [r46-m2c-p2e-sprite-occlusion]
   workflow_dispatch:
 concurrency:
   group: r46-m2c-p2e-sprite-occlusion
