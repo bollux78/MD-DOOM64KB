@@ -61,7 +61,7 @@ int main(void){
                 assert(R46_M3_PackOwned(&o,pixels,1672,bank,x,y,packed)==index);
                 for(unsigned i=0;i<8;i++){
                     unsigned p0=packed[i]>>28;
-                    unsigned p1=(packed[i]>>24)&15u;
+                    unsigned p1=(packed[i]>>12)&15u;
                     assert((p0^p1)==1u);
                 }
                 tiles++;
