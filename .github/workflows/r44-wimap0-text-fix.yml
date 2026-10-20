@@ -188,7 +188,7 @@ jobs:
               must={'-DDOOM_R22_PIXEL4','-DVIEWWINDOWWIDTH=76','-DVIEWWINDOWHEIGHT=44','-DDOOM_R39C_MOVEP_CACHE','-DDOOM_R39C_MOVEP_MAP','-DDOOM_R39E_AUDIO_TOGGLES','-DDOOM_R30_NATIVE','-DDOOM_R35_ART_RAW','-DDOOM_R31_SFX','-DDOOM_R29_XGM2'}
               assert must<=flags,(stem,must-flags)
               assert '-DDOOM_R20_REG_COLUMNS' not in flags and '-DDOOM_R20_FLAT_INLINE' not in flags
-              assert '-DDOOM_R42_WALL_ASM' in flags if spec.code=='asm' else "assert '-DDOOM_R42_WALL_ASM' not in flags"
+              assert '-DDOOM_R42_WALL_ASM' in flags, stem
               assert ('-DTIMEDEMO' in flags)==(suffix=='p4perf'),stem
               entries.append({'rom':stem+'.bin','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'backend':'pixel4 native 76x44','text_grid':'38x22','verified_in_game':False})
           (d/'R44-WIMAP0-INTERMISSION-MANIFEST.json').write_text(json.dumps(entries,indent=2)+'\n')
