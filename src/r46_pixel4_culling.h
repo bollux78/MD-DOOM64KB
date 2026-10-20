@@ -7,7 +7,7 @@
 #include <stdint.h>
 enum {
     R46_P4_COLS = 76,
-    R46_P4_ROWS = 44,
+    R46_P4_SAMPLE_ROWS = 44,
     R46_P4_CENTER_X = 38,
     R46_P4_CENTER_Y = 22,
     R46_P4_SPRITE_FRACTION_BITS = 7,
