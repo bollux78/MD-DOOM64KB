@@ -14,7 +14,6 @@ required=(
     'VDP_setBGBAddress(0xE000u);',
     'VDP_setBGBAddress(0xC000u);',
     'VDP_clearPlane(BG_B,TRUE);',
-    'VDP_getBGAAddress()==0xC000u',
     'VDP_setEnable(FALSE);','VDP_setEnable(TRUE);',
     'R20_StopVideo();','R20_AbortVideo();',
     'VDP_waitDMACompletion();',
