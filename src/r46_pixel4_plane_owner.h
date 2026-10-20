@@ -22,6 +22,13 @@ uint16_t R46_P4_PlaneSetColumn(r46_p4_plane_window_t *plane,
  * Return number of emitted runs (or 0 for no open runs/invalid inputs). */
 uint16_t R46_P4_BSPOpenRuns(const uint8_t solid[76],
         uint16_t first,uint16_t stop,r46_p4_range_emit_t emit,void *ctx);
+typedef struct {
+    void (*init)(r46_p4_plane_window_t *);
+    uint16_t (*join)(r46_p4_plane_window_t *,int16_t,int16_t);
+    uint16_t (*set_column)(r46_p4_plane_window_t *,uint16_t,uint8_t,uint8_t);
+    uint16_t (*bsp_runs)(const uint8_t *,uint16_t,uint16_t,r46_p4_range_emit_t,void *);
+} r46_p4_plane_owner_ops_t;
+const r46_p4_plane_owner_ops_t *R46_P4_PlaneOwnerOps(void);
 uint16_t R46_P4_PlaneOwnerValidate(void);
 #endif
 #endif
