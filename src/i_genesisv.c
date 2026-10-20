@@ -1132,6 +1132,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     R46_M3B_ShowVideoTest(_s_screen,I_BuildSolidTiles,R46_M3B_RestorePalette);
 #endif
 #if defined(DOOM_R46_M3C_LATE_BUFFER)
+    extern void I_R21_AllocVideoCopy(void);
     /* R5 heap-pressure isolation: allocate R20's 2128-byte queued VBlank
      * snapshot only AFTER the dual-bank diagnostic finished all SGDK
      * plane-address changes, decompressed/reloaded font, restored 8x8 and
