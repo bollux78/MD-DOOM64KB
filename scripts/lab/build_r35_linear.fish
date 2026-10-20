@@ -230,6 +230,21 @@ for v in $variants
             exit 2
         end
     end
+    if set -q DOOM_R39F_DITHER3; and test "$DOOM_R39F_DITHER3" = 1
+        if not contains -- $v cell-play cell-perf
+            echo 'R39f tri-state dithering supports 8x8 cell variants only'
+            exit 2
+        end
+        if not set -q DOOM_R39D_DITHER_TOGGLE; or test "$DOOM_R39D_DITHER_TOGGLE" != 1
+            echo 'R39f requires DOOM_R39D_DITHER_TOGGLE=1'
+            exit 2
+        end
+        if not set -q DOOM_R35D_CHECKER; or test "$DOOM_R35D_CHECKER" != 1
+            echo 'R39f requires the original R35d checker tiles'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R39F_DITHER3'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -256,6 +271,21 @@ for v in $variants
                 set id doom-md-r39e-$DOOM_R39E_BUILD-$v
             case '*'
                 echo "Unknown R39e build $DOOM_R39E_BUILD"
+                exit 2
+        end
+    end
+    if set -q DOOM_R39F_BUILD
+        switch "$DOOM_R39F_BUILD"
+            case control dither3
+                if test "$DOOM_R39F_BUILD" = dither3
+                    if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+                        echo 'R39f dither3 build requires DOOM_R39F_DITHER3=1'
+                        exit 2
+                    end
+                end
+                set id doom-md-r39f-$DOOM_R39F_BUILD-$v
+            case '*'
+                echo "Unknown R39f build $DOOM_R39F_BUILD"
                 exit 2
         end
     end
@@ -292,6 +322,14 @@ for v in $variants
             set id doom-md-r40b-$v
         else
             echo 'R40b is a pixel4 title/intermission WINDOW change only'
+            exit 2
+        end
+    end
+    if set -q DOOM_R40C_M0; and test "$DOOM_R40C_M0" = 1
+        if contains -- $v cell-play cell-perf pixel4-play pixel4-perf
+            set id doom-md-r40c-$v
+        else
+            echo 'R40c M0 controls support only cell/pixel4 play/perf'
             exit 2
         end
     end
