@@ -11,6 +11,8 @@
  * 64x32 address, so BANK0 ends well before 0xC000 and cannot overwrite it.
  */
 #if defined(DOOM_R46_M3B_DIAG)
+#include <stddef.h>
+#include <stdint.h>
 #include <genesis.h>
 #include "i_system.h"
 #include "r20_dma.h"
