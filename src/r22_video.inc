@@ -212,7 +212,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     if(y1>=R22_H) y1=R22_H-1;
     if(first>y1) return;
     uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
-    f=(uint16_t)(f+(uint16_t)((first-y0)*v->fracstep));
+    f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
     const uint8_t *source=v->source, *colormap=v->colormap;
     uint8_t *dst=r22_fb.pixels+(uint16_t)first*R22_PITCH+((uint16_t)x>>1);
