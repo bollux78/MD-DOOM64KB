@@ -347,6 +347,13 @@ for v in $variants
         if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
             set defs $defs '-DDOOM_R46_M3C_FONT_RESTORE'
         end
+        if set -q DOOM_R46_M3C_DIRECT_REGS; and test "$DOOM_R46_M3C_DIRECT_REGS" = 1
+            if not set -q DOOM_R46_M3C_FONT_RESTORE; or test "$DOOM_R46_M3C_FONT_RESTORE" != 1
+                echo 'R4B direct regs requires explicit font restoration'
+                exit 2
+            end
+            set defs $defs '-DDOOM_R46_M3C_DIRECT_REGS'
+        end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
@@ -514,13 +521,21 @@ for v in $variants
     if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
         if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
-                set id doom-md-r46-m3c-r3-safe-perf
+                if set -q DOOM_R46_M3C_DIRECT_REGS; and test "$DOOM_R46_M3C_DIRECT_REGS" = 1
+                    set id doom-md-r46-m3c-r4b-safe-perf
+                else
+                    set id doom-md-r46-m3c-r3-safe-perf
+                end
             else
                 set id doom-md-r46-m3c-r2-safe-perf
             end
         else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
             if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
-                set id doom-md-r46-m3c-r3-stress-perf
+                if set -q DOOM_R46_M3C_DIRECT_REGS; and test "$DOOM_R46_M3C_DIRECT_REGS" = 1
+                    set id doom-md-r46-m3c-r4b-stress-perf
+                else
+                    set id doom-md-r46-m3c-r3-stress-perf
+                end
             else
                 set id doom-md-r46-m3c-r2-stress-perf
             end
