@@ -50,7 +50,6 @@ uint16_t R46_P4_MakeSpans(uint8_t starts[44],uint16_t x,
 __attribute__((noinline))
 uint16_t R46_P4_SpansValidate(void)
 {
-    return R46_P4_SPAN_COLS==76 && R46_P4_SPAN_ROWS==44 &&
-        R46_P4_SpansClear && R46_P4_MakeSpans && R46_P4_MarkSolid;
+    return (uint16_t)(R46_P4_SPAN_COLS==76 && R46_P4_SPAN_ROWS==44);
 }
 #endif
