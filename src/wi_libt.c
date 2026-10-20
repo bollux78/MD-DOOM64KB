@@ -29,6 +29,19 @@
 #include "i_vtext.h"
 #include "wi_lib.h"
 
+/* Intermission text uses 8x8 glyph cells, even when the 3D renderer
+ * samples 76x44 native 4x4 pixels. Its WINDOW plane shows 38x22 safe
+ * characters; the 76x44 VIEWWINDOW* constants are for rendering only.
+ * The 8x8 renderer retains exactly its previous text coordinates. */
+#if defined(DOOM_R22_PIXEL4)
+#define WI_TEXT_WIDTH 38
+#define WI_TEXT_HEIGHT 22
+#else
+#define WI_TEXT_WIDTH VIEWWINDOWWIDTH
+#define WI_TEXT_HEIGHT VIEWWINDOWHEIGHT
+#endif
+
+
 
 //
 // Builtin map names.
@@ -57,10 +70,10 @@ void WI_drawLF(int16_t map)
 {
 	int16_t x;
 
-	x = (VIEWWINDOWWIDTH - strlen(mapnames[map])) / 2;
+	x = (WI_TEXT_WIDTH - strlen(mapnames[map])) / 2;
 	V_DrawString(x, 0, 15, mapnames[map]);
 
-	x = (VIEWWINDOWWIDTH - 8) / 2;
+	x = (WI_TEXT_WIDTH - 8) / 2;
 	V_DrawString(x, 1, 12, "FINISHED");
 }
 
@@ -75,10 +88,10 @@ void WI_drawEL(int16_t map)
 {
 	int16_t x;
 
-	x = (VIEWWINDOWWIDTH - 8) / 2;
+	x = (WI_TEXT_WIDTH - 8) / 2;
 	V_DrawString(x, 0, 12, "ENTERING");
 
-	x = (VIEWWINDOWWIDTH - strlen(mapnames[map])) / 2;
+	x = (WI_TEXT_WIDTH - strlen(mapnames[map])) / 2;
 	V_DrawString(x, 1, 15, mapnames[map]);
 }
 
@@ -138,24 +151,24 @@ int16_t WI_drawNum(int16_t x, int16_t y, int16_t n, int16_t digits)
 //
 void WI_drawStats(int16_t cnt_kills, int16_t cnt_items, int16_t cnt_secret, int32_t cnt_time, int32_t cnt_total_time, int16_t cnt_par)
 {
-	V_DrawString((VIEWWINDOWWIDTH - 12) / 2, 4, 12, "Kills");
-	WI_drawPercent((VIEWWINDOWWIDTH - 12) / 2 + 10, 4, cnt_kills);
+	V_DrawString((WI_TEXT_WIDTH - 12) / 2, 4, 12, "Kills");
+	WI_drawPercent((WI_TEXT_WIDTH - 12) / 2 + 10, 4, cnt_kills);
 
-	V_DrawString((VIEWWINDOWWIDTH - 12) / 2, 5, 12, "Items");
-	WI_drawPercent((VIEWWINDOWWIDTH - 12) / 2 + 10, 5, cnt_items);
+	V_DrawString((WI_TEXT_WIDTH - 12) / 2, 5, 12, "Items");
+	WI_drawPercent((WI_TEXT_WIDTH - 12) / 2 + 10, 5, cnt_items);
 
-	V_DrawString((VIEWWINDOWWIDTH - 12) / 2, 6, 12, "Secret");
-	WI_drawPercent((VIEWWINDOWWIDTH - 12) / 2 + 10, 6, cnt_secret);
+	V_DrawString((WI_TEXT_WIDTH - 12) / 2, 6, 12, "Secret");
+	WI_drawPercent((WI_TEXT_WIDTH - 12) / 2 + 10, 6, cnt_secret);
 
 	// Put the times on the screen
-	V_DrawString(1, VIEWWINDOWHEIGHT - 3, 12, "Time");
-	WI_drawTime(15, VIEWWINDOWHEIGHT - 3, cnt_time);
+	V_DrawString(1, WI_TEXT_HEIGHT - 3, 12, "Time");
+	WI_drawTime(15, WI_TEXT_HEIGHT - 3, cnt_time);
 
-	V_DrawString(1, VIEWWINDOWHEIGHT - 2, 12, "Total");
-	WI_drawTime(15, VIEWWINDOWHEIGHT - 2, cnt_total_time);
+	V_DrawString(1, WI_TEXT_HEIGHT - 2, 12, "Total");
+	WI_drawTime(15, WI_TEXT_HEIGHT - 2, cnt_total_time);
 
-	V_DrawString(VIEWWINDOWWIDTH - 13, VIEWWINDOWHEIGHT - 3, 12, "Par");
-	WI_drawTime(VIEWWINDOWWIDTH - 1, VIEWWINDOWHEIGHT - 3, cnt_par);
+	V_DrawString(WI_TEXT_WIDTH - 13, WI_TEXT_HEIGHT - 3, 12, "Par");
+	WI_drawTime(WI_TEXT_WIDTH - 1, WI_TEXT_HEIGHT - 3, cnt_par);
 }
 
 
@@ -169,15 +182,15 @@ typedef struct
 
 static const point_t lnodes[NUMMAPS] =
 {
-	{185 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA, 164 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 1
-	{148 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA, 143 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 2
-	{ 69 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA, 122 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 3
-	{209 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA, 102 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 4
-	{116 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA,  89 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 5
-	{166 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA,  55 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 6
-	{ 71 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA,  56 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 7
-	{135 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA,  29 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}, // location of level 8
-	{ 71 * VIEWWINDOWWIDTH / SCREENWIDTH_VGA,  24 * VIEWWINDOWHEIGHT / SCREENHEIGHT_VGA}  // location of level 9
+	{185 * WI_TEXT_WIDTH / SCREENWIDTH_VGA, 164 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 1
+	{148 * WI_TEXT_WIDTH / SCREENWIDTH_VGA, 143 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 2
+	{ 69 * WI_TEXT_WIDTH / SCREENWIDTH_VGA, 122 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 3
+	{209 * WI_TEXT_WIDTH / SCREENWIDTH_VGA, 102 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 4
+	{116 * WI_TEXT_WIDTH / SCREENWIDTH_VGA,  89 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 5
+	{166 * WI_TEXT_WIDTH / SCREENWIDTH_VGA,  55 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 6
+	{ 71 * WI_TEXT_WIDTH / SCREENWIDTH_VGA,  56 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 7
+	{135 * WI_TEXT_WIDTH / SCREENWIDTH_VGA,  29 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}, // location of level 8
+	{ 71 * WI_TEXT_WIDTH / SCREENWIDTH_VGA,  24 * WI_TEXT_HEIGHT / SCREENHEIGHT_VGA}  // location of level 9
 };
 
 
