@@ -17,10 +17,10 @@ uint16_t R46_P4_EmitMaskedPosts(uint16_t x,
     uint16_t y=(uint16_t)sprite->y1,stop=(uint16_t)sprite->y2;
     uint16_t runs=0;
     while(y<=stop){
-        while(y<=stop && (occluded_rows & (UINT64_C(1)<<y)))y++;
+        while(y<=stop && (occluded_rows & (((uint64_t)1)<<y)))y++;
         if(y>stop)break;
         const uint16_t first=y;
-        while(y<=stop && !(occluded_rows & (UINT64_C(1)<<y)))y++;
+        while(y<=stop && !(occluded_rows & (((uint64_t)1)<<y)))y++;
         emit(x,first,(uint16_t)(y-1),ctx);
         runs++;
     }
