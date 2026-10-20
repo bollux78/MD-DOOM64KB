@@ -187,7 +187,9 @@ jobs:
               print("Current files under out:",[str(x) for x in out.rglob('*') if x.is_file()][:90])
               raise RuntimeError("ELF image missing; cannot validate linked secondary symbols")
           elf=max(choices,key=lambda x:x.stat().st_mtime)
-          name='m68k-elf-nm'
+          name=str(pathlib.Path.home()/'mars/m68k-elf/bin/m68k-elf-nm')
+          size_tool=str(pathlib.Path.home()/'mars/m68k-elf/bin/m68k-elf-size')
+          assert pathlib.Path(name).is_file() and pathlib.Path(size_tool).is_file()
           result=subprocess.run([name,str(elf)],capture_output=True,text=True,check=True)
           symbols=result.stdout
           assert '_s_screen' in symbols, 'R20 global tilemap missing'
@@ -198,7 +200,7 @@ jobs:
               assert 'R46_P4_Ops' not in symbols, 'Control contains unexpected secondary'
           outpath=pathlib.Path('dist/r35')/f'R46-{p}-nm.txt'
           outpath.write_text(symbols)
-          size=subprocess.run(['m68k-elf-size',str(elf)],capture_output=True,text=True,check=True).stdout
+          size=subprocess.run([size_tool,str(elf)],capture_output=True,text=True,check=True).stdout
           (pathlib.Path('dist/r35')/f'R46-{p}-size.txt').write_text(size)
           print(p,str(elf),size)
           PY
