@@ -52,6 +52,7 @@
 #include "r46_pixel4_plane_owner.h"
 #include "r46_pixel4_sprite_camera.h"
 #include "r46_pixel4_sprite_world.h"
+#include "r46_pixel4_sprite_occlusion.h"
 #endif
 #endif
 #endif
@@ -1045,6 +1046,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_PlaneOwnerValidate()) I_Error("R46 P4 plane owner contract");
     if(!R46_P4_SpriteCameraValidate()) I_Error("R46 P4 sprite camera contract");
     if(!R46_P4_WorldSpriteValidate()) I_Error("R46 P4 world sprite contract");
+    if(!R46_P4_SpriteOcclusionValidate()) I_Error("R46 P4 sprite occlusion contract");
 #endif
 #endif
 #endif
