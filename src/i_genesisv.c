@@ -51,6 +51,7 @@
 #include "r46_pixel4_spans.h"
 #include "r46_pixel4_plane_owner.h"
 #include "r46_pixel4_sprite_camera.h"
+#include "r46_pixel4_sprite_world.h"
 #endif
 #endif
 #endif
@@ -1043,6 +1044,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_SpansValidate()) I_Error("R46 P4 span contract");
     if(!R46_P4_PlaneOwnerValidate()) I_Error("R46 P4 plane owner contract");
     if(!R46_P4_SpriteCameraValidate()) I_Error("R46 P4 sprite camera contract");
+    if(!R46_P4_WorldSpriteValidate()) I_Error("R46 P4 world sprite contract");
 #endif
 #endif
 #endif
