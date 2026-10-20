@@ -230,6 +230,22 @@ for v in $variants
             exit 2
         end
     end
+    if set -q DOOM_R42_WALL_VARIANT
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R42 Q2 variants require native pixel4'
+            exit 2
+        end
+        switch "$DOOM_R42_WALL_VARIANT"
+            case control
+            case hoist
+                set defs $defs '-DDOOM_R42_WALL_HOIST'
+            case asm
+                set defs $defs '-DDOOM_R42_WALL_ASM'
+            case '*'
+                echo "Invalid Q2 wall variant: $DOOM_R42_WALL_VARIANT"
+                exit 2
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -293,6 +309,13 @@ for v in $variants
         else
             echo 'R40b is a pixel4 title/intermission WINDOW change only'
             exit 2
+        end
+    end
+    if set -q DOOM_R42_WALL_VARIANT
+        if test "$v" = pixel4-perf
+            set id doom-md-r42-$DOOM_R42_WALL_VARIANT-p4perf
+        else
+            set id doom-md-r42-$DOOM_R42_WALL_VARIANT-p4play
         end
     end
     set -gx DOOM_BUILD_ID $id
