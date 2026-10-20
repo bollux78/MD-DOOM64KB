@@ -49,6 +49,7 @@
 #if defined(DOOM_R46_M2C)
 #include "r46_pixel4_culling.h"
 #include "r46_pixel4_spans.h"
+#include "r46_pixel4_plane_owner.h"
 #endif
 #endif
 #endif
@@ -1039,6 +1040,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     /* Metadata-only boot check; never reads active 8x8 clip/plane buffers. */
     if(!R46_P4_CullingValidate()) I_Error("R46 P4 culling contract");
     if(!R46_P4_SpansValidate()) I_Error("R46 P4 span contract");
+    if(!R46_P4_PlaneOwnerValidate()) I_Error("R46 P4 plane owner contract");
 #endif
 #endif
 #endif
