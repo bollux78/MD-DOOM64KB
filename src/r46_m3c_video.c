@@ -163,6 +163,15 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
         for(uint16_t frame=0;frame<45;frame++)SYS_doVBlankProcess();
     }
 
+    /* The native bank1 spans tile index 928..1687, INCLUDING the
+     * ORIGINAL SGDK glyph atlas when maps_addr=C000:
+     * TILE_FONT_INDEX = (C000/32)-96 = 1440 (B400..BFFF).
+     * Mirroring BG_B/Window changes maps_addr and SGDK attempts
+     * automatic glyph reloads at transient locations. The R3 opt-in
+     * proves whether an EXPLICIT post-restoration font reload repairs
+     * the corrupted DEMO3 text that persists in both R2 variants.
+     * Never assume that the font lives at D400 (index 1696).
+     */
     /* Restore the R39f framebuffer owner and all overwritten VRAM. */
     m3c_expect(R46_M3_Request(&owner,R46_M3_CELL),"request 8x8");
     VDP_setEnable(FALSE);
@@ -190,6 +199,18 @@ void R46_M3C_ShowVideoTest(uint16_t *backing,
                "restore original cell patterns and BG_A");
     restore_cell_palette();
     VDP_waitDMACompletion();
+#if defined(DOOM_R46_M3C_FONT_RESTORE)
+    /* Both plane names and the Window were already restored here.
+     * SGDK's dynamic TILE_FONT_INDEX must now point to the ORIGINAL
+     * B400 glyph atlas. Re-upload ALL 96 glyphs explicitly only in
+     * the R3 diagnostic, checking the allocation/decode return code. */
+    m3c_expect(VDP_MAPS_START==0xC000u &&
+               TILE_FONT_INDEX==1440u,
+               "original SGDK font base not restored");
+    m3c_expect(VDP_loadDefaultFont(CPU),
+               "default font decompress/reload failed");
+    VDP_waitDMACompletion();
+#endif
     m3c_expect(R46_M3_AckReconfigure(&owner,R46_M3_CRAM_READY),
                "restore cell palette");
     m3c_expect(R46_M3_AckReconfigure(&owner,R46_M3_MAP_READY),
