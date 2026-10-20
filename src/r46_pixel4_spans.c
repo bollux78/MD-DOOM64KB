@@ -29,7 +29,7 @@ uint16_t R46_P4_MakeSpans(uint8_t starts[44],uint16_t x,
     uint16_t t1,uint16_t b1,uint16_t t2,uint16_t b2,
     r46_p4_span_emit_t emit,void *ctx)
 {
-    if(!starts||!emit||x>76||t1>44||t2>44||b1>44||b2>44)return 0;
+    if(!starts||!emit||x>76||t1>44||t2>44||b1>=44||b2>=44)return 0;
     /* Doom uses top=0xff, bottom=0 for the empty boundary.
      * Normalize that sentinel into an empty interval [44,0]. */
     uint16_t emitted=0;
