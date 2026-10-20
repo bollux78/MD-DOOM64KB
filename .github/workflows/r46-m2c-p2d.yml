@@ -1,5 +1,7 @@
 name: R46 M2C P2D - World sprite geometry (manual only)
 on:
+  push:
+    branches: [r46-m2c-p2d-world-sprites]
   workflow_dispatch:
 concurrency:
   group: r46-m2c-p2d-world-sprites
