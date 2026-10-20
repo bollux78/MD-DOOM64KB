@@ -45,7 +45,7 @@ typedef struct {
 } r46_p4_sprite_camera_ops_t;
 static const r46_p4_sprite_camera_ops_t sprite_ops={R46_P4_ProjectSpriteRect};
 __attribute__((noinline))
-static const r46_p4_sprite_camera_ops_t *R46_P4_SpriteCameraOps(void)
+const r46_p4_sprite_camera_ops_t *R46_P4_SpriteCameraOps(void)
 {
     return &sprite_ops;
 }
