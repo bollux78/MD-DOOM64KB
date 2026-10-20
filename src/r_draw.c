@@ -66,11 +66,12 @@
    Compare ROM bus reads with DIVU.W in timedemo. */
 #include "r20_counters.h"
 #include "r37_profile.h"
+#include "r41_p4_profile.h"
 #if defined(DOOM_R12_RECIP_LUT)
 #include "r12_recip_lut.h"
 #endif
 
-#if defined(DOOM_R7_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_R7_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
 #define R7_VOID(stage, expr) do { uint16_t old = doom_profile_stage; doom_profile_stage = stage; expr; doom_profile_stage = old; } while (0)
 #define R7_VALUE(stage, expr) (__extension__ ({ uint16_t old = doom_profile_stage; doom_profile_stage = stage; __typeof__(expr) result = (expr); doom_profile_stage = old; result; }))
 #else
@@ -2666,7 +2667,7 @@ static inline __attribute__((always_inline)) void R20_SegFlat(uint16_t cell, int
 #endif
 static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling)
 {
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     uint16_t previous_stage = doom_profile_stage;
     doom_profile_stage = 3;
 #endif
@@ -3044,7 +3045,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     pixhigh = r21_pixhigh;
     pixlow = r21_pixlow;
 #endif
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     doom_profile_stage = previous_stage;
 #endif
 }
@@ -4021,7 +4022,7 @@ void R_RenderPlayerView (player_t* player)
     for (uint16_t i=0; i<R37_COUNTER_COUNT; ++i)
         r37_counts[i]=0;
 #endif
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     doom_profile_stage = 1;
 #endif
     R_SetupFrame (player);
@@ -4039,7 +4040,7 @@ void R_RenderPlayerView (player_t* player)
     R_ClearSprites ();
 
     // The head node is the last node output.
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     doom_profile_stage = 2;
 #endif
     R_RenderBSPNode (numnodes-1);
@@ -4050,11 +4051,11 @@ void R_RenderPlayerView (player_t* player)
     R_DrawPlanes ();
 #endif
 
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     doom_profile_stage = 4;
 #endif
     R_DrawMasked ();
-#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
+#if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE) || defined(DOOM_R41_P4_PROFILE)
     doom_profile_stage = 0;
 #endif
 }
