@@ -18,7 +18,13 @@
 #include "r21_prof.h"
 #include "r20_counters.h"
 #include "r22_pixel4.h"
+#if defined(DOOM_R43_GRAY_CRT)
+/* 4x4 CRT color correction: neutral PLAYPAL tones gain true grays.
+ * Bayer8 native images continue to use their original palettes. */
+#include "r43_gray_palette.h"
+#else
 #include "r22_palette.h"
+#endif
 #include "r22_maps.h"
 #if defined(DOOM_R22_PAIR_LUT)
 #include "r22_pair_lut.h"
