@@ -302,6 +302,17 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R46_M2B'
     end
+    if set -q DOOM_R46_M2C; and test "$DOOM_R46_M2C" = 1
+        if not set -q DOOM_R46_M2B; or test "$DOOM_R46_M2B" != 1
+            echo 'R46 M2C requires native vertical M2B geometry'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M2C retains primary 8x8 until full geometry dispatcher'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M2C'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -423,7 +434,13 @@ for v in $variants
     end
     if set -q DOOM_R46_BUILD
         switch "$DOOM_R46_BUILD"
-            case primary m1 m1b m2a m2b
+            case primary m1 m1b m2a m2b m2c
+                if test "$DOOM_R46_BUILD" = m2c
+                    if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+                        echo 'R46 m2c profile requires M2C feature flag'
+                        exit 2
+                    end
+                end
                 if test "$DOOM_R46_BUILD" = m2b
                     if not set -q DOOM_R46_M2B; or test "$DOOM_R46_M2B" != 1
                         echo 'R46 m2b profile requires M2B flag'
