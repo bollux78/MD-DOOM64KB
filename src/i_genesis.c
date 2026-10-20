@@ -413,6 +413,7 @@ void R41_P4Reset(void)
     doom_profile_stage = 0;
 }
 void R41_P4Start(void) { r41_p4_active=1; }
+void R41_P4Stop(void) { r41_p4_active=0; }
 #endif
 
 static void I_VBlankCallback(void)
