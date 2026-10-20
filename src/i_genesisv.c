@@ -57,6 +57,8 @@
 #include "r46_pixel4_sprite_order.h"
 #include "r46_pixel4_sprite_mask.h"
 #include "r46_pixel4_pipeline.h"
+#include "r46_pixel4_raster.h"
+#include "r46_pixel4_composite.h"
 #endif
 #endif
 #endif
@@ -1055,6 +1057,8 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_SpriteOrderValidate()) I_Error("R46 P4 sprite order contract");
     if(!R46_P4_SpriteMaskValidate()) I_Error("R46 P4 sprite mask contract");
     if(!R46_P4_PipelineValidate()) I_Error("R46 P4 integrated geometry contract");
+    if(!R46_P4_RasterValidate()) I_Error("R46 P4 packed raster contract");
+    if(!R46_P4_CompositeValidate()) I_Error("R46 P4 preview composition contract");
 #endif
 #endif
 #endif
