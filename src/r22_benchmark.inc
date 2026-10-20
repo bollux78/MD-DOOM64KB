@@ -92,6 +92,10 @@ void I_BenchmarkReset(void)
 #if defined(DOOM_PROFILE)
     prof_logic_vb = prof_render_vb = prof_vdp_vb = 0;
 #endif
+#if defined(DOOM_R41_P4_PROFILE)
+    R41_P4Reset();
+    R41_P4Start();
+#endif
 }
 
 static void I_BenchmarkFrame(void)
@@ -146,6 +150,9 @@ static void bench_fixed(char *out, uint32_t n, uint8_t decimals)
 
 void I_BenchmarkShowResults(void)
 {
+#if defined(DOOM_R41_P4_PROFILE)
+    R41_P4Stop(); /* no results-page samples */
+#endif
     R20_StopVideo();
 #if defined(DOOM_R20_STACKGUARD)
     R20_PROBE();
@@ -197,7 +204,29 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_R41_P4_PROFILE)
+    {
+        /* VBlank stage samples, NOT CPU cycles. DMA/IRQ-masked pixel4
+         * uploads may be under-counted; use a separate upload benchmark
+         * before attributing exact percentage to VDP. */
+        static const char *const nm[R41_P4_STAGES] = {
+            "OTHER/LOGIC", "FRAME SETUP", "BSP OTHER", "COLUMN OTHER",
+            "MASKED", "VDP WAIT", "WALL DRAW", "MULTIPATCH",
+            "STORE RANGE", "ADD LINE", "CHECK BBOX", "FLAT DRAW",
+            "SPRITE/FUZZ", "VRAM UPLOAD"
+        };
+        uint32_t total = r41_p4_total ? r41_p4_total : 1u;
+        for(uint16_t i=0;i<R41_P4_STAGES;i++){
+            uint16_t col=(i<7?1:21);
+            uint16_t row=19+(i<7?i:i-7);
+            VDP_drawText(nm[i],col,row);
+            uint32_t percent_x10 = ((uint32_t)r41_p4_samples[i]*1000u+total/2u)/total;
+            bench_fixed(buffer,percent_x10,1);
+            VDP_drawText(buffer,col+13,row);
+        }
+        VDP_drawText("ISR SAMPLES, NOT CPU CYCLES",3,26);
+    }
+#elif defined(DOOM_ROUTINE_PROFILE)
     {
 #if defined(DOOM_R7_PROFILE)
         const char *names[11] = { "OTHER/LOGIC", "SETUP", "BSP OTHER", "SEG LOOP REST", "MASKED/SPR", "VDP/DMA", "DRAW WALL", "COMPOSE COL", "STORE RANGE", "ADD LINE", "CHECK BBOX" };
