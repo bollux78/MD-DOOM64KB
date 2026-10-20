@@ -1,8 +1,8 @@
 /* R46 M2C/P2I: caller-owned packed 4bpp raster target, 76x44.
  * This is a testable software target, not _s_screen ownership or VDP.
  */
-#ifndef R46_P4_RASTER_H
-#define R46_P4_RASTER_H
+#ifndef R46_PIXEL4_RASTER_HEADER_INCLUDED
+#define R46_PIXEL4_RASTER_HEADER_INCLUDED
 #include <stdint.h>
 enum {
     R46_P4_RASTER_W=76,
