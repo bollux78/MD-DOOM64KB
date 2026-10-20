@@ -38,6 +38,9 @@
 #include "r37_profile.h"
 #include "r39d_dither.h"
 #include "r39f_dither.h"
+#if defined(DOOM_R46_M1)
+#include "r46_pixel4_secondary.h"
+#endif
 
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
@@ -1003,6 +1006,12 @@ static void I_BuildSolidTiles(void)
 
 void I_InitGraphicsHardwareSpecificCode(void)
 {
+#if defined(DOOM_R46_M1)
+    /* The secondary 4x4 ASM backend has been linked and shares _s_screen.
+     * Validate its function table without drawing into the active 8x8
+     * tilemap; real VDP/frame geometry switching is a later milestone. */
+    if(!R46_P4_Validate()) I_Error("R46 native backend contract");
+#endif
 #if defined(DOOM_R21_V2_HEAPBUF)
     {
         extern void I_R21_AllocVideoCopy(void);
