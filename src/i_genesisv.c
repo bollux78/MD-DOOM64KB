@@ -53,6 +53,7 @@
 #include "r46_pixel4_sprite_camera.h"
 #include "r46_pixel4_sprite_world.h"
 #include "r46_pixel4_sprite_occlusion.h"
+#include "r46_pixel4_sprite_runs.h"
 #endif
 #endif
 #endif
@@ -1047,6 +1048,7 @@ void I_InitGraphicsHardwareSpecificCode(void)
     if(!R46_P4_SpriteCameraValidate()) I_Error("R46 P4 sprite camera contract");
     if(!R46_P4_WorldSpriteValidate()) I_Error("R46 P4 world sprite contract");
     if(!R46_P4_SpriteOcclusionValidate()) I_Error("R46 P4 sprite occlusion contract");
+    if(!R46_P4_SpriteRunsValidate()) I_Error("R46 P4 sprite runs contract");
 #endif
 #endif
 #endif
