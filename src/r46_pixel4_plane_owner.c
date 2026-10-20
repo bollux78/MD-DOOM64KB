@@ -51,11 +51,21 @@ uint16_t R46_P4_BSPOpenRuns(const uint8_t solid[76],
     }
     return n;
 }
+static const r46_p4_plane_owner_ops_t r46_p4_plane_owner_ops = {
+    R46_P4_PlaneInit,R46_P4_PlaneJoin,R46_P4_PlaneSetColumn,R46_P4_BSPOpenRuns
+};
+__attribute__((noinline))
+const r46_p4_plane_owner_ops_t *R46_P4_PlaneOwnerOps(void)
+{
+    return &r46_p4_plane_owner_ops;
+}
 __attribute__((noinline))
 uint16_t R46_P4_PlaneOwnerValidate(void)
 {
     /* Only geometry metadata; no scratch or framebuffer is accessed. */
-    return (uint16_t)(R46_P4_PLANE_WIDTH==76 && R46_P4_PLANE_HEIGHT==44 &&
-       sizeof(r46_p4_plane_window_t)==160);
+    const r46_p4_plane_owner_ops_t *o=R46_P4_PlaneOwnerOps();
+    return (uint16_t)(o && o->init && o->join && o->set_column && o->bsp_runs &&
+        R46_P4_PLANE_WIDTH==76 && R46_P4_PLANE_HEIGHT==44 &&
+        sizeof(r46_p4_plane_window_t)==160);
 }
 #endif
