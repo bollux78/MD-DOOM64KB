@@ -9,8 +9,11 @@ import tempfile,subprocess
 root=Path(__file__).resolve().parents[2]
 video=(root/'src/r46_m3c_video.c').read_text()
 required=(
-    'VDP_setBGAAddress(0xE000u);',
-    'VDP_setBGAAddress(0xC000u);',
+    'VDP_getBGAAddress()==0xE000u',
+    'VDP_getBGBAddress()==0xC000u',
+    'VDP_setBGBAddress(0xE000u);',
+    'VDP_setBGBAddress(0xC000u);',
+    'VDP_clearPlane(BG_B,TRUE);',
     'VDP_getBGAAddress()==0xC000u',
     'VDP_setEnable(FALSE);','VDP_setEnable(TRUE);',
     'R20_StopVideo();','R20_AbortVideo();',
@@ -27,10 +30,12 @@ required=(
 for token in required: assert token in video,token
 assert 'for(uint16_t phase=0;phase<4;phase++)' in video
 assert 'for(uint16_t frame=0;frame<45;frame++)' in video
-assert video.index('VDP_setBGAAddress(0xE000u);')<video.index('m3c_upload_hidden_bank(&owner')
-assert video.index('VDP_setBGAAddress(0xC000u);')<video.index('reload_cell_tiles();')
+assert video.index('VDP_setBGBAddress(0xE000u);')<video.index('m3c_upload_hidden_bank(&owner')
+assert video.index('VDP_setBGBAddress(0xC000u);')<video.index('reload_cell_tiles();')
 assert 'static uint8_t ' not in video and 'MEM_alloc' not in video
 assert '0xC000' in video and '0xD400' in video and '0xE000' in video
+assert 'VDP_setBGAAddress(0xC000u)' not in video
+assert 'VDP_setBGAAddress(0xE000u)' not in video
 assert 'VDP_setEnable(FALSE);' in video[video.index('static void m3c_swap_map_while_blanked'):video.index('R46_M3C_MapRowWritten')]
 assert 'VDP_setEnable(TRUE);' in video[video.index('R46_M3C_CommitBank(stage,1)'):video.index('__attribute__((noinline))')]
 source=r'''
