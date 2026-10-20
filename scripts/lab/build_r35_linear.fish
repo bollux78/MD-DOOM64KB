@@ -258,6 +258,17 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R43_GRAY_CRT'
     end
+    if set -q DOOM_R46_M1; and test "$DOOM_R46_M1" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M1 requires primary R39f cell backend'
+            exit 2
+        end
+        if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+            echo 'R46 M1 requires full R39f tri-dither'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M1'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -375,6 +386,23 @@ for v in $variants
                 end
             case '*'
                 echo 'Unknown R45 variant'; exit 2
+        end
+    end
+    if set -q DOOM_R46_BUILD
+        switch "$DOOM_R46_BUILD"
+            case primary m1
+                if not contains -- $v cell-perf cell-play
+                    echo 'R46 primary/M1 must be 8x8 cell'
+                    exit 2
+                end
+                if test "$v" = cell-perf
+                    set id doom-md-r46-$DOOM_R46_BUILD-perf
+                else
+                    set id doom-md-r46-$DOOM_R46_BUILD-play
+                end
+            case '*'
+                echo 'Invalid R46 build profile'
+                exit 2
         end
     end
     set -gx DOOM_BUILD_ID $id
