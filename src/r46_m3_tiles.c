@@ -8,9 +8,9 @@
 #if !defined(DOOM_R46_M2B) || !defined(DOOM_R46_M1B) || defined(DOOM_R22_PIXEL4)
 #error M3A tiles need M1B/M2B native coexistence beside R39f
 #endif
-_Static_assert(R46_M3_TILES_COLUMNS==R46_P4_COLUMNS &&
-               R46_M3_TILES_ROWS==R46_P4_ROWS &&
-               R46_M3_TILES_PER_BANK==R46_P4_BANK_TILES &&
+_Static_assert((int)R46_M3_TILES_COLUMNS==(int)R46_P4_COLUMNS &&
+               (int)R46_M3_TILES_ROWS==(int)R46_P4_ROWS &&
+               (int)R46_M3_TILES_PER_BANK==(int)R46_P4_BANK_TILES &&
                R46_P4_FONT_FIRST_TILE==1696,
                "M3A tile bank layout drift");
 static uint16_t valid_tile(const uint8_t *packed,uint16_t capacity,
