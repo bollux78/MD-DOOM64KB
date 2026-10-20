@@ -344,6 +344,9 @@ for v in $variants
         if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
             set defs $defs '-DDOOM_R46_M3C_STRESS'
         end
+        if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+            set defs $defs '-DDOOM_R46_M3C_FONT_RESTORE'
+        end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
@@ -510,9 +513,17 @@ for v in $variants
     end
     if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
         if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
-            set id doom-md-r46-m3c-r2-safe-perf
+            if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+                set id doom-md-r46-m3c-r3-safe-perf
+            else
+                set id doom-md-r46-m3c-r2-safe-perf
+            end
         else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
-            set id doom-md-r46-m3c-r2-stress-perf
+            if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+                set id doom-md-r46-m3c-r3-stress-perf
+            else
+                set id doom-md-r46-m3c-r2-stress-perf
+            end
         else
             set id doom-md-r46-m3c-video-perf
         end
