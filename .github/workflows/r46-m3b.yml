@@ -263,7 +263,9 @@ jobs:
           mixed=size('m2c')
           assert mixed['bss']<=control['bss'],(control,mixed,'unexpected permanent native arrays')
           video=size('video')
-          assert video['bss']<=control['bss'],(control,video,'unexpected persistent diagnostic framebuffer')
+          # Diagnostic-only SGDK VDP helper bookkeeping may add up to 8 B.
+          # Never permit another 1672 B framebuffer or 1596 B tilemap.
+          assert video['bss']<=control['bss']+8,(control,video,'unexpected persistent diagnostic framebuffer')
           rows=[]
           for mode,suffix in [('primary','perf'),('m2c','perf'),('m2c','play'),('video','perf')]: 
               stem='doom-md-r46-m3b-video-perf' if mode=='video' else f'doom-md-r46-{mode}-{suffix}'
@@ -281,6 +283,7 @@ jobs:
                   active_geometry='8x8 R39f',native_76column_helpers_linked=mode in ('m2c','video'),
                   runtime_toggle=False))
           audit=dict(roms=rows,primary=control,m2c=mixed,video=video,
+              video_bss_delta=video['bss']-control['bss'],
               bss_delta=mixed['bss']-control['bss'],
               native_visplane_solidcol_buffers_allocated=0,
               native_bsp_sprite_functions='caller_owned_76_columns',
