@@ -69,7 +69,7 @@ extern volatile uint32_t r38_sample_total;
 void R38_ResetSamples(void);
 void R38_BeginView(int32_t x, int32_t y, uint32_t angle);
 #endif
-#if defined(TIMEDEMO)
+#if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
 void I_BenchmarkReset(void);
 #if defined(DOOM_ROUTINE_PROFILE)
 extern volatile uint16_t doom_profile_stage;
@@ -81,7 +81,12 @@ extern volatile uint32_t _g_vblankCount;
 void I_ProfileLogic(uint32_t elapsed);
 void I_ProfileRender(uint32_t elapsed);
 #endif
+#if defined(DOOM_R50_PLAY_BENCH)
+/* PLAY benchmark is interactive and returns to gameplay/menu state. */
+void I_BenchmarkShowResults(void);
+#else
 _Noreturn void I_BenchmarkShowResults(void);
+#endif
 #endif
 
 void I_ReloadPalette(void);
