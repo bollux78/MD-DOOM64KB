@@ -350,6 +350,21 @@ for v in $variants
                 echo 'Unknown R49 ColorMix ratio'; exit 2
         end
     end
+    if set -q DOOM_R50_PLAY_BENCH; and test "$DOOM_R50_PLAY_BENCH" = 1
+        if test "$v" != pixel4-play
+            echo 'R50 menu benchmark is pixel4 PLAY only'; exit 2
+        end
+        if not set -q DOOM_R48_PAIR_V; or test "$DOOM_R48_PAIR_V" != 1
+            echo 'R50 PLAY benchmark requires Pair-V'; exit 2
+        end
+        set defs $defs '-DDOOM_R50_PLAY_BENCH'
+    end
+    if set -q DOOM_R50_MENU_FREEZE; and test "$DOOM_R50_MENU_FREEZE" = 1
+        if test "$v" != pixel4-play
+            echo 'R50 menu freeze is pixel4 PLAY only'; exit 2
+        end
+        set defs $defs '-DDOOM_R50_MENU_FREEZE'
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
@@ -699,6 +714,12 @@ for v in $variants
             echo 'Invalid R49 build id'; exit 2
         end
         set id doom-md-r49-$DOOM_R49_BUILD
+    end
+    if set -q DOOM_R50_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R50_BUILD"
+            echo 'Invalid R50 build id'; exit 2
+        end
+        set id doom-md-r50-$DOOM_R50_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
