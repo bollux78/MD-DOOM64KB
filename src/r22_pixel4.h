@@ -12,7 +12,15 @@
 #define R22_FB_BYTES (R22_PITCH * R22_H)
 #define R22_PAIR_TILE_BASE 256
 static inline uint8_t *R22_PixelByte(uint8_t *p,uint16_t x,uint16_t y) {
+#if defined(DOOM_R48_PAIR_V)
+    /* V: 22 physical rows, each [38 A words][38 B words].
+     * High nibble = upper 4px; low nibble = lower 4px.
+     * Plane selection is x parity. Same exact 3344-byte buffer. */
+    return p+(uint16_t)(y>>1)*152u+(uint16_t)(x&1u)*76u+
+           (uint16_t)(x>>1)*2u+1u;
+#else
     return p+y*R22_PITCH+((x>>1)<<1)+1;
+#endif
 }
 static inline const uint16_t *R22_PairRow(const uint8_t *p,uint16_t y) {
     return (const uint16_t *)(const void *)(p+y*R22_PITCH);
@@ -28,7 +36,11 @@ static inline uint8_t *R22_PixelByte(uint8_t *p,uint16_t x,uint16_t y) {
 /* 2 independent horizontal samples per byte. */
 static inline void R22_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t c) {
     uint8_t *d=R22_PixelByte(p,x,y); c&=15;
-    *d=(x&1)?(uint8_t)((*d&240)|c):(uint8_t)((*d&15)|(c<<4));
+#if defined(DOOM_R48_PAIR_V)
+    *d=(y&1u)?(uint8_t)((*d&240)|c):(uint8_t)((*d&15)|(c<<4));
+#else
+    *d=(x&1u)?(uint8_t)((*d&240)|c):(uint8_t)((*d&15)|(c<<4));
+#endif
 }
 static inline uint32_t R22_ExpandPair(uint8_t p) {
     return ((uint32_t)(p>>4)*0x11110000u)|((uint32_t)(p&15)*0x1111u);
