@@ -45,6 +45,9 @@
 #include "globdata.h"
 #include "r24_romthings.h"
 #include "r22_blocklinks.h"
+#if defined(DOOM_R47_MUL_LOGIC)
+#include "r47_mul.h"
+#endif
 
 
 fixed_t _g_opentop;
@@ -88,7 +91,12 @@ int16_t PUREFUNC P_PointOnLineSide(fixed_t x, fixed_t y, const line_t __far* lin
     !line->dx ? x <= (fixed_t)line->v1.x<<FRACBITS ? line->dy > 0 : line->dy < 0 :
     !line->dy ? y <= (fixed_t)line->v1.y<<FRACBITS ? line->dx < 0 : line->dx > 0 :
     //FixedMul(y-((fixed_t)line->v1.y<<FRACBITS), line->dx>>FRACBITS) >= FixedMul(line->dy>>FRACBITS, x-((fixed_t)line->v1.x<<FRACBITS));
+#if defined(DOOM_R47_MUL_LOGIC)
+    R47_Mul32x16((y - ((fixed_t)line->v1.y<<FRACBITS)) >> 8,line->dx) >=
+    R47_Mul32x16((x - ((fixed_t)line->v1.x<<FRACBITS)) >> 8,line->dy);
+#else
     ((y - ((fixed_t)line->v1.y<<FRACBITS) >> 8)) * line->dx >= line->dy * ((x - ((fixed_t)line->v1.x<<FRACBITS)) >> 8);
+#endif
 }
 
 //
@@ -137,7 +145,12 @@ static int16_t PUREFUNC P_PointOnDivlineSide(fixed_t x, fixed_t y, const divline
     !line->dy ? y <= line->y ? line->dx < 0 : line->dx > 0 :
     (line->dy^line->dx^(x -= line->x)^(y -= line->y)) < 0 ? (line->dy^x) < 0 :
     //FixedMul(y>>8, line->dx>>8) >= FixedMul(line->dy>>8, x>>8);
+#if defined(DOOM_R47_MUL_LOGIC)
+    R47_Mul32x16(y >> 8,(int16_t)(line->dx >> 16)) >=
+    R47_Mul32x16(x >> 8,(int16_t)(line->dy >> 16));
+#else
     (y >> 8) * (line->dx >> 16) >= (line->dy >> 16) * (x >> 8);
+#endif
 }
 
 //
@@ -211,8 +224,13 @@ static inline fixed_t CONSTFUNC FixedDiv(fixed_t a, fixed_t b)
 
 static fixed_t PUREFUNC P_InterceptVector3(const divline_t *v2, const divline_t *v1)
 {
+#if defined(DOOM_R47_MUL_LOGIC)
+	fixed_t a = R47_Mul32x16((v1->x - v2->x) >> 8,(int16_t)(v1->dy >> FRACBITS));
+	fixed_t b = R47_Mul32x16((v2->y - v1->y) >> 8,(int16_t)(v1->dx >> FRACBITS));
+#else
 	fixed_t a = (v1->dy >> FRACBITS) * ((v1->x - v2->x) >> 8);
 	fixed_t b = (v1->dx >> FRACBITS) * ((v2->y - v1->y) >> 8);
+#endif
 	fixed_t c = FixedMul(v2->dx, v1->dy >> 8);
 	fixed_t d = FixedMul(v2->dy, v1->dx >> 8);
 
