@@ -3,7 +3,6 @@ on:
   push:
     branches: [r47b-rtl-ym7101-busbench]
     paths:
-      - 'scripts/lab/r47b_ym7101_vblank_tb.sv'
       - '.github/workflows/r47b-rtl-vblank.yml'
   workflow_dispatch:
 permissions:
