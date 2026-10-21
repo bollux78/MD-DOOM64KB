@@ -1,0 +1,69 @@
+name: R47B-RTL - external VRAM DRAM write-strobe observation
+on:
+  push:
+    branches: [r47b-rtl-ym7101-busbench]
+    paths:
+      - 'scripts/lab/r47b_ym7101_vram_strobe_tb.sv'
+      - '.github/workflows/r47b-rtl-vram-strobe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: r47b-rtl-vram-strobe
+  cancel-in-progress: true
+jobs:
+  ym7101-vram-strobe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Icarus on disposable hosted runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y iverilog
+      - name: Fetch two pinned RTL files and verify Git blob SHA-1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r47b-rtl
+          python3 - <<'PY'
+          import hashlib, pathlib, urllib.request
+          revision='becbdee78c48e6eb536871cd03c869f43d7afa4d'
+          manifest={'ym7101.v':'0862948114ddb7abec87e46fdbb16d4fa2172804',
+                    'ym_lib.v':'26fce976757bda2612e7ec0effcc93868660e108'}
+          for file,expected in manifest.items():
+              source=f'https://raw.githubusercontent.com/MiSTer-devel/MegaDrive_MiSTer/{revision}/rtl/nuked-md/{file}'
+              raw=urllib.request.urlopen(source,timeout=45).read(500000)
+              actual=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              assert actual==expected,(file,actual)
+              pathlib.Path('dist/r47b-rtl',file).write_bytes(raw)
+              print(f'PINNED RTL VERIFIED {file} gitblob={actual} bytes={len(raw)}')
+          PY
+      - name: Elaborate complete YM7101 port map against real RTL
+        shell: bash
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s r47b_ym7101_vram_strobe \
+            -o dist/r47b-rtl/ym7101-vram-strobe.vvp \
+            scripts/lab/r47b_ym7101_vram_strobe_tb.sv \
+            dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v
+      - name: Run RTL stimulus and retain waveform
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180s vvp dist/r47b-rtl/ym7101-vram-strobe.vvp | tee dist/r47b-rtl/simulation.log
+          grep -F 'PASS: DMA request and VRAM external strobes observed' dist/r47b-rtl/simulation.log
+          test -s dist/r47b-rtl/r47b_ym7101_vram_strobe.vcd
+      - name: Preserve reports and waveforms (not upstream RTL license copy)
+        if: always()
+        shell: bash
+        run: |
+          rm -f dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v dist/r47b-rtl/ym7101-vram-strobe.vvp
+      - name: Upload YM7101 RTL VCD and simulation logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47b-rtl-vram-strobe
+          path: dist/r47b-rtl/
+          retention-days: 30
+          if-no-files-found: warn
