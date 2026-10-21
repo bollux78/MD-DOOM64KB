@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: r47b-rtl-ym7101-busbench
+  group: r47b-rtl-bus-probe
   cancel-in-progress: true
 jobs:
   ym7101-bus:
