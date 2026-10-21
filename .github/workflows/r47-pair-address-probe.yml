@@ -43,6 +43,7 @@ jobs:
       - name: Run 68K address logging on good and Pair-no-upload
         shell: bash
         run: |
+          set +e
           set -u
           mkdir -p trace
           run_one() {
@@ -65,6 +66,46 @@ jobs:
           run_one pd-goodfs
           run_one pd-noup
           run_one pd-cur
+          exit 0
+
+      - name: Force BlastEm machine-freeze to fatal and capture reason
+        shell: bash
+        run: |
+          set +e
+          mkdir -p trace freeze-home/.config/blastem
+          src="$HOME/.config/blastem/blastem.cfg"
+          if [[ -f "$src" ]]; then
+            cp "$src" freeze-home/.config/blastem/blastem.cfg
+          else
+            cfg="$(dirname "$BLASTEM")/default.cfg"
+            test -f "$cfg" && cp "$cfg" freeze-home/.config/blastem/blastem.cfg
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('freeze-home/.config/blastem/blastem.cfg')
+          s=p.read_text(errors='replace') if p.exists() else 'version 13\nui {\n}\n'
+          if re.search(r'(?m)^\\s*machine_freeze_action\\s+\\S+',s):
+              s=re.sub(r'(?m)^(\\s*machine_freeze_action\\s+)\\S+',r'\\1fatal',s)
+          else:
+              m=re.search(r'(?m)^\\s*ui\\s*\\{',s)
+              if m:
+                  pos=m.end()
+                  s=s[:pos]+'\n\tmachine_freeze_action fatal'+s[pos:]
+              else:
+                  s+='\nui {\n\tmachine_freeze_action fatal\n}\n'
+          p.parent.mkdir(parents=True,exist_ok=True)
+          p.write_text(s)
+          print('machine_freeze setting:',[x for x in s.splitlines() if 'machine_freeze_action' in x])
+          PY
+          for id in pd-noup pd-cur pd-cpu; do
+            echo "==== fatal freeze probe $id ===="
+            HOME="$PWD/freeze-home" SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+              timeout -k 1s 12s "$BLASTEM" -b 800 "$PWD/diag/doom-md-r47-$id.bin" \
+              >"trace/$id-fatal.stdout" 2>&1
+            echo "$?" >"trace/$id-fatal.rc"
+            cat "trace/$id-fatal.stdout"
+          done
           exit 0
 
       - name: Symbolicate address-log tails
