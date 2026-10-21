@@ -1008,9 +1008,12 @@ static const byte __far* G_ReadDemoHeader(const byte __far* demo_p)
     demo_p++;
     map = *demo_p++;
 #if defined(DOOM_R26_FLOW) && defined(TIMEDEMO)
-    /* Legacy DEMO3 names E1M7, which was an exact E1M1 alias in the control
-       WAD. Both benchmark architectures now explicitly use that geometry. */
+    /* PERF uses original E1M1 geometry for recorded DEMO3. */
     map = 1;
+#elif defined(DOOM_R26_FLOW) && defined(DOOM_R50_PLAY_BENCH)
+    /* Match PERF's E1M1 geometry for on-demand MENU benchmark only.
+     * Preserve normal demo playback when not benchmarking. */
+    if (_g_timingdemo) map = 1;
 #endif
     demo_p++;
     demo_p++;
@@ -1083,7 +1086,7 @@ static void G_DoPlayDemo(void)
     _g_demoplayback = true;
 
     starttime = I_GetTime();
-#if defined(TIMEDEMO)
+#if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
     if (_g_timingdemo) I_BenchmarkReset();
 #endif
 }
@@ -1100,8 +1103,17 @@ void G_CheckDemoStatus (void)
         // killough -- added fps information and made it work for longer demos:
         uint32_t realtics = endtime - starttime;
         uint32_t resultfps = TICRATE * 1000L * _g_gametic / realtics;
-#if defined(TIMEDEMO)
+#if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
         I_BenchmarkShowResults(); /* Counts presented frames, not gametics. */
+#if defined(DOOM_R50_PLAY_BENCH)
+        if(D_R50_IsMenuBenchmark()){
+            /* Interactive results have returned on Start. Resume the
+             * title/menu without leaving benchmark flags or demo state. */
+            G_ReloadDefaults();
+            D_R50_BenchmarkFinish();
+            return;
+        }
+#endif
 #else
         I_Error ("Timed %lu gametics in %lu realtics = %lu.%.3lu frames per second",
                  (uint32_t) _g_gametic,realtics,
