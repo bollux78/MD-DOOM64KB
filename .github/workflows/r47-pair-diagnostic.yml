@@ -124,22 +124,22 @@ jobs:
           }
 
           # Known-good non-pair control from the user's benchmark family.
-          p4 pairdiag-good-flatspr DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=pairdiag-good-flatspr
+          p4 pd-goodfs DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=pd-goodfs
 
           # Exact failing architecture, unchanged: reproducer/control.
-          p4 pairdiag-current DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=pairdiag-current
+          p4 pd-cur DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=pd-cur
 
           # P0: same Pair renderer/BSS/VRAM init, but zero per-frame map uploads.
-          p4 pairdiag-noupload DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_NO_UPLOAD=1 DOOM_R47_BUILD=pairdiag-noupload
+          p4 pd-noup DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_NO_UPLOAD=1 DOOM_R47_BUILD=pd-noup
 
           # P1: manual DMA only to Plane A. If it works, B/second transfer is implicated.
-          p4 pairdiag-aonly DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_A_ONLY=1 DOOM_R47_BUILD=pairdiag-aonly
+          p4 pd-a DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_A_ONLY=1 DOOM_R47_BUILD=pd-a
 
           # P2: both planes copied by CPU, no VDP memory DMA for Pair maps.
-          p4 pairdiag-cpucopy DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_CPU_COPY=1 DOOM_R47_BUILD=pairdiag-cpucopy
+          p4 pd-cpu DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_CPU_COPY=1 DOOM_R47_BUILD=pd-cpu
 
           # P3: both planes use SGDK's DMA_doDma, including its bank-boundary handling.
-          p4 pairdiag-sgdkdma DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_SGDK_DMA=1 DOOM_R47_BUILD=pairdiag-sgdkdma
+          p4 pd-sdk DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_SGDK_DMA=1 DOOM_R47_BUILD=pd-sdk
 
       - name: Compare ELF RAM layout
         shell: bash
@@ -175,7 +175,7 @@ jobs:
               out.append('BlastEm not found on runner; smoke skipped')
           else:
               env=os.environ.copy(); env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-              ids=['pairdiag-good-flatspr','pairdiag-current','pairdiag-noupload','pairdiag-aonly','pairdiag-cpucopy','pairdiag-sgdkdma']
+              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk']
               for ident in ids:
                   rom=d/f'doom-md-r47-{ident}.bin'
                   t=time.monotonic()
@@ -202,12 +202,12 @@ jobs:
           flat/sprite/flat+sprite without Pair complete DEMO3.
 
           Test in this order:
-          1. pairdiag-noupload  - Pair memory/init/render path, but no per-frame map transfer.
-          2. pairdiag-aonly     - original manual DMA, Plane A only.
-          3. pairdiag-cpucopy   - both Pair planes, CPU VRAM copy instead of VDP memory DMA.
-          4. pairdiag-sgdkdma   - both Pair planes through SGDK DMA_doDma.
-          5. pairdiag-current   - exact original failing Pair transfer, reproducer.
-          6. pairdiag-good-flatspr - non-Pair known-good control.
+          1. pd-noup  - Pair memory/init/render path, but no per-frame map transfer.
+          2. pd-a     - original manual DMA, Plane A only.
+          3. pd-cpu   - both Pair planes, CPU VRAM copy instead of VDP memory DMA.
+          4. pd-sdk   - both Pair planes through SGDK DMA_doDma.
+          5. pd-cur   - exact original failing Pair transfer, reproducer.
+          6. pd-goodfs - non-Pair known-good control.
 
           Interpretation:
           - noupload hangs: fault precedes Pair map DMA (WRAM/init/renderer/transition).
