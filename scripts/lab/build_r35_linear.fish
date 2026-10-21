@@ -288,6 +288,27 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_PLANE_PAIR'
     end
+    if set -q DOOM_R48_PAIR_V; and test "$DOOM_R48_PAIR_V" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R48 Pair-V requires pixel4'; exit 2
+        end
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R48 Pair-V requires R47 Plane-Pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R48_PAIR_V'
+    end
+    if set -q DOOM_R48_V_FAST; and test "$DOOM_R48_V_FAST" = 1
+        if not set -q DOOM_R48_PAIR_V; or test "$DOOM_R48_PAIR_V" != 1
+            echo 'R48 Pair-V fast kernels require Pair-V'; exit 2
+        end
+        set defs $defs '-DDOOM_R48_V_FAST'
+    end
+    if set -q DOOM_R48_V_DITHER50; and test "$DOOM_R48_V_DITHER50" = 1
+        if not set -q DOOM_R48_PAIR_V; or test "$DOOM_R48_PAIR_V" != 1
+            echo 'R48 50/50 prototype requires Pair-V'; exit 2
+        end
+        set defs $defs '-DDOOM_R48_V_DITHER50'
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
