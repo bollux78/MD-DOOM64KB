@@ -1,0 +1,29 @@
+name: Publish DOOM-MD Development Monitor
+on:
+  push:
+    branches: [doom-md-development-monitor]
+    paths:
+      - 'docs/monitor/**'
+      - '.github/workflows/publish-development-monitor.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: github-pages-monitor
+  cancel-in-progress: true
+jobs:
+  publish:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/monitor
+      - id: deployment
+        uses: actions/deploy-pages@v4
