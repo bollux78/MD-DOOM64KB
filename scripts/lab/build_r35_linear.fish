@@ -309,6 +309,14 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R48_V_DITHER50'
     end
+    for ratio in DOOM_R48_V_DITHER75A DOOM_R48_V_DITHER75B
+        if set -q $ratio; and test "$ratio" = 1
+            if not set -q DOOM_R48_PAIR_V; or test "$DOOM_R48_PAIR_V" != 1
+                echo "R48 $ratio requires Pair-V"; exit 2
+            end
+            set defs $defs "-D$ratio"
+        end
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
