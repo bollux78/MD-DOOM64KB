@@ -18,6 +18,7 @@ on:
       - 'src/d_main.c'
       - 'src/d_main.h'
       - 'src/g_game.c'
+      - 'src/i_system.h'
       - 'src/m_text.c'
   workflow_dispatch:
 
