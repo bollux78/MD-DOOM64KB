@@ -39,6 +39,12 @@
 #if defined(DOOM_R21_FRAME_HASH) || defined(DOOM_R20_REG_COLUMNS) || defined(DOOM_R20_FLAT_INLINE)
 #error Tile-word kernels and the old tilemap hash are incompatible with packed4bpp
 #endif
+#if (defined(DOOM_R47_PAIR_NO_UPLOAD) || defined(DOOM_R47_PAIR_A_ONLY) || defined(DOOM_R47_PAIR_CPU_COPY) || defined(DOOM_R47_PAIR_SGDK_DMA)) && !defined(DOOM_R47_PLANE_PAIR)
+#error R47 pair diagnostics require DOOM_R47_PLANE_PAIR
+#endif
+#if defined(DOOM_R47_PAIR_CPU_COPY) && defined(DOOM_R47_PAIR_SGDK_DMA)
+#error Select only one R47 pair transfer diagnostic
+#endif
 extern const int16_t CENTERY;
 extern volatile uint32_t _g_vblankCount;
 extern void R22_InitOpenings(void);
@@ -375,13 +381,25 @@ void R20_VBlankVideo(void){
     bool bus=Z80_getAndRequestBus(TRUE);VDP_setAutoInc(2);
     volatile uint16_t *ctrl=(volatile uint16_t*)0xC00004;
 #if defined(DOOM_R47_PLANE_PAIR)
+#if defined(DOOM_R47_PAIR_NO_UPLOAD)
+    /* Diagnostic P0: keep the pair renderer and memory layout, but issue no
+     * gameplay name-table transfer. If this still hangs, the fault is before
+     * the per-frame pair DMA path (init/WRAM/renderer/transition). */
+    (void)ctrl;
+#else
     /* Each sample row already is 38 VDP tile words (0x0100 | color-pair).
      * A receives even rows; B receives odd rows and is vertically shifted
-     * by -4 pixels. No dynamic pattern upload is required. */
+     * by -4 pixels. Diagnostic modes below deliberately change only the
+     * transfer mechanism/second plane, not the renderer memory format. */
     const uint16_t *srca=R22_PairRow(r22_fb.pixels,2);
     const uint16_t *srcb=R22_PairRow(r22_fb.pixels,3);
     uint16_t dsta=VDP_BG_A+128,dstb=VDP_BG_B+128;
     for(uint16_t y=1;y<22;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){
+#if defined(DOOM_R47_PAIR_CPU_COPY)
+        DMA_doCPUCopy(DMA_VRAM,(void *)srca,dsta,38,2);
+#elif defined(DOOM_R47_PAIR_SGDK_DMA)
+        DMA_doDma(DMA_VRAM,(void *)srca,dsta,38,2);
+#else
         uint32_t a=((uint32_t)(uintptr_t)srca)>>1;
         *ctrl=0x9300|38;*ctrl=0x9400;
         *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
@@ -389,16 +407,26 @@ void R20_VBlankVideo(void){
         volatile uint16_t *words=(volatile uint16_t*)&command;
         *ctrl=words[0];
         __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
+#endif
+#if !defined(DOOM_R47_PAIR_A_ONLY)
         if(!r22_overlay_dirty){
-            a=((uint32_t)(uintptr_t)srcb)>>1;
+#if defined(DOOM_R47_PAIR_CPU_COPY)
+            DMA_doCPUCopy(DMA_VRAM,(void *)srcb,dstb,38,2);
+#elif defined(DOOM_R47_PAIR_SGDK_DMA)
+            DMA_doDma(DMA_VRAM,(void *)srcb,dstb,38,2);
+#else
+            uint32_t a=((uint32_t)(uintptr_t)srcb)>>1;
             *ctrl=0x9300|38;*ctrl=0x9400;
             *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
-            command=VDP_DMA_VRAM_ADDR(dstb);
-            words=(volatile uint16_t*)&command;
+            volatile uint32_t command=VDP_DMA_VRAM_ADDR(dstb);
+            volatile uint16_t *words=(volatile uint16_t*)&command;
             *ctrl=words[0];
             __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
+#endif
         }
+#endif
     }
+#endif
 #else
     #if defined(DOOM_R22_SOLID_TILES)
     const uint16_t *src=r22_map;
