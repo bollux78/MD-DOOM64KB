@@ -30,6 +30,9 @@
 #if defined(DOOM_R49_COLORMIX) && (!defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST))
 #error R49 ColorMix requires Pair-V Fast
 #endif
+#if defined(DOOM_R49_COLORMIX) && (R22_PAIR_TILE_BASE + 1024 >= 1440)
+#error R49 ColorMix pattern tiles overlap SGDK font
+#endif
 #if defined(DOOM_R49_COLORMIX)
 #if defined(DOOM_R49_MIX_75A)
 #define r49_mix_a r49_mix_a_75a
@@ -657,6 +660,31 @@ static void R47_LoadPairTiles(void)
         tile[4]=tile[5]=tile[6]=tile[7]=0;
 #endif
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
+#if defined(DOOM_R49_COLORMIX)
+        /* Four pattern banks encode the independent "eligible" bits from
+         * top/bottom nibble writes. Banks 1/2 intentionally reproduce PAL0
+         * exactly; only both flags true (bank3) changes palette and pixels.
+         * All banks fit under the font tile at 1440, no added WRAM. */
+        for(uint16_t bank=1;bank<4;bank++){
+            if(bank==3){
+                uint8_t au=r49_mix_a[hi],bu=r49_mix_b[hi];
+                uint8_t al=r49_mix_a[lo],bl=r49_mix_b[lo];
+#if defined(DOOM_R49_MIX_75A)
+                uint32_t u=(uint32_t)au*0x11100000u+(uint32_t)bu*0x00010000u;
+                uint32_t l=(uint32_t)al*0x11100000u+(uint32_t)bl*0x00010000u;
+#elif defined(DOOM_R49_MIX_75B)
+                uint32_t u=(uint32_t)au*0x10000000u+(uint32_t)bu*0x01110000u;
+                uint32_t l=(uint32_t)al*0x10000000u+(uint32_t)bl*0x01110000u;
+#else
+                uint32_t u=(uint32_t)au*0x11000000u+(uint32_t)bu*0x00110000u;
+                uint32_t l=(uint32_t)al*0x11000000u+(uint32_t)bl*0x00110000u;
+#endif
+                tile[0]=tile[1]=tile[2]=tile[3]=u;
+                tile[4]=tile[5]=tile[6]=tile[7]=l;
+            }
+            VDP_loadTileData(tile,(uint16_t)(R22_PAIR_TILE_BASE+bank*256u+p),1,CPU);
+        }
+#endif
     }
 }
 static void R47_ClearPairBuffer(void)
