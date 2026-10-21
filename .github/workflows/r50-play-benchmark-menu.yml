@@ -122,6 +122,19 @@ jobs:
           python3 scripts/lab/test_r49_colormix.py | tee dist/r50-menu/PREFLIGHT-color-oracle.txt
           cp src/r49_colormix_report.json dist/r50-menu/PREFLIGHT-color-report.json
 
+      - name: Assert all ROM ids fit Sega header
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          suffixes=['vf-ctrl-play','vf-bench-play','vf-freeze-play','vf-bf-play',
+                    'cm50l-bench-play','vf-ctrl-perf','cm50l-ctrl-perf']
+          full=['doom-md-r50-'+s for s in suffixes]
+          assert len(full)==7 and len(set(full))==7
+          assert all(len(s)<=30 for s in full),[(s,len(s)) for s in full]
+          print('ROM id length/uniqueness PASS')
+          PY
+
       - name: Build R50 PLAY/PERF controls and benchmark-menu variants
         shell: bash
         run: |
@@ -152,7 +165,7 @@ jobs:
           p4 play vf-ctrl-play 0 0 0 0
           p4 play vf-bench-play 0 0 1 0
           p4 play vf-freeze-play 0 0 0 1
-          p4 play vf-bench-freeze-play 0 0 1 1
+          p4 play vf-bf-play 0 0 1 1
           # Check optional PAL1 ColorMix also supports the menu benchmark.
           p4 play cm50l-bench-play 1 1 1 1
           # PERF controls remain unchanged: canonical fixed DEMO3 loop.
@@ -225,7 +238,7 @@ jobs:
                 'modes':{'vf-ctrl-play':'old normal PLAY',
                     'vf-bench-play':'Benchmark enabled, original menu rendering',
                     'vf-freeze-play':'3D stops during menu, no Benchmark',
-                    'vf-bench-freeze-play':'Both features',
+                    'vf-bf-play':'Both features',
                     'cm50l-bench-play':'both features and ColorMix/LUT',
                     'vf-ctrl-perf':'unchanged normal PERF',
                     'cm50l-ctrl-perf':'unchanged ColorMix/LUT PERF'},
@@ -234,7 +247,7 @@ jobs:
           (d/'MANIFEST.json').write_text(json.dumps(data,indent=2)+'\n')
           (d/'README.txt').write_text(
             'R50 PLAY BENCHMARK / FAST MENU\n'
-            'Compare vf-ctrl-play, vf-bench-play, vf-freeze-play, vf-bench-freeze-play.\n'
+            'Compare vf-ctrl-play, vf-bench-play, vf-freeze-play, vf-bf-play.\n'
             'For benchmark PLAY: open main menu -> Benchmark -> DEMO3 -> result -> Start returns to menu.\n'
             'Compare FPS/time vs vf-ctrl-perf using the same BlastEm divisor 7.\n'
             'Check game paused menu responsiveness in simple and complex E1M1 scenes.\n'
