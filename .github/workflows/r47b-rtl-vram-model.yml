@@ -48,7 +48,7 @@ jobs:
           iverilog -g2012 -Wall -s r47b_ym7101_vram_model \
             -o dist/r47b-rtl/ym7101-vram-model.vvp \
             scripts/lab/r47b_ym7101_vram_model_tb.sv \
-            dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v \\
+            dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v \
             dist/r47b-rtl/vram.v scripts/lab/r47b_vram_ip_model.sv
       - name: Run RTL stimulus and retain waveform
         shell: bash
