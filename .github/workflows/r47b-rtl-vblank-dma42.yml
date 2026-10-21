@@ -1,0 +1,73 @@
+name: R47B-RTL - integrated 42 DMA / 3192 bytes within real NTSC VBlank
+on:
+  push:
+    branches: [r47b-rtl-ym7101-busbench]
+    paths:
+      - 'scripts/lab/r47b_ym7101_vblank_dma42_tb.sv'
+      - 'scripts/lab/r47b_vram_ip_model.sv'
+      - '.github/workflows/r47b-rtl-vblank-dma42.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: r47b-rtl-vblank-dma42
+  cancel-in-progress: true
+jobs:
+  ym7101-vblank-dma42:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Verilator on disposable hosted runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y verilator g++ make
+      - name: Fetch two pinned RTL files and verify Git blob SHA-1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r47b-rtl
+          python3 - <<'PY'
+          import hashlib, pathlib, urllib.request
+          revision='becbdee78c48e6eb536871cd03c869f43d7afa4d'
+          manifest={'ym7101.v':'0862948114ddb7abec87e46fdbb16d4fa2172804',
+                    'ym_lib.v':'26fce976757bda2612e7ec0effcc93868660e108',
+                    'vram.v':'c6f0769fe871bb22ff09d2051ba348a5134f17cf'}
+          for file,expected in manifest.items():
+              source=f'https://raw.githubusercontent.com/MiSTer-devel/MegaDrive_MiSTer/{revision}/rtl/nuked-md/{file}'
+              raw=urllib.request.urlopen(source,timeout=45).read(500000)
+              actual=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              assert actual==expected,(file,actual)
+              pathlib.Path('dist/r47b-rtl',file).write_bytes(raw)
+              print(f'PINNED RTL VERIFIED {file} gitblob={actual} bytes={len(raw)}')
+          PY
+      - name: Compile complete YM7101 and VRAM model with Verilator
+        shell: bash
+        run: |
+          set -euo pipefail
+          verilator --binary --timing --trace -Wno-fatal -j 2 \
+            --top-module r47b_ym7101_vblank_dma42 \
+            --Mdir dist/r47b-rtl/obj_vblank_dma42 \
+            scripts/lab/r47b_ym7101_vblank_dma42_tb.sv \
+            dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v \
+            dist/r47b-rtl/vram.v scripts/lab/r47b_vram_ip_model.sv
+      - name: Run RTL stimulus and retain waveform
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 900s dist/r47b-rtl/obj_vblank_dma42/Vr47b_ym7101_vblank_dma42 | tee dist/r47b-rtl/simulation.log
+          grep -F 'PASS: integrated 42 DMA and 3192 VRAM bytes inside same YM7101 vertical display-blank interval' dist/r47b-rtl/simulation.log
+          test -s dist/r47b-rtl/r47b_ym7101_vblank_dma42.vcd
+      - name: Preserve reports and waveforms (not upstream RTL license copy)
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v dist/r47b-rtl/vram.v dist/r47b-rtl/obj_vblank_dma42
+      - name: Upload YM7101 RTL VCD and simulation logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47b-rtl-vblank-dma42
+          path: dist/r47b-rtl/
+          retention-days: 30
+          if-no-files-found: warn
