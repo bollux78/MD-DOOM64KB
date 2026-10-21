@@ -132,15 +132,6 @@ jobs:
           # P0: same Pair renderer/BSS/VRAM init, but zero per-frame map uploads.
           p4 pd-noup DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_NO_UPLOAD=1 DOOM_R47_BUILD=pd-noup
 
-          # P1: manual DMA only to Plane A. If it works, B/second transfer is implicated.
-          p4 pd-a DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_A_ONLY=1 DOOM_R47_BUILD=pd-a
-
-          # P2: both planes copied by CPU, no VDP memory DMA for Pair maps.
-          p4 pd-cpu DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_CPU_COPY=1 DOOM_R47_BUILD=pd-cpu
-
-          # P3: both planes use SGDK's DMA_doDma, including its bank-boundary handling.
-          p4 pd-sdk DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_SGDK_DMA=1 DOOM_R47_BUILD=pd-sdk
-
           # P4/P5: return 256/512 B of static Doom zone to SGDK pre-main heap.
           # If these boot, the hard hang is pre-main SGDK/font unpack pressure.
           p4 pd-br256 DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_BOOT_RESERVE=256 DOOM_R47_BUILD=pd-br256
@@ -184,13 +175,13 @@ jobs:
               out.append('BlastEm not found on runner; smoke skipped')
           else:
               env=os.environ.copy(); env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk','pd-br256','pd-br512','pd-reuse']
+              ids=['pd-goodfs','pd-cur','pd-noup','pd-br256','pd-br512','pd-reuse']
               for ident in ids:
                   rom=d/f'doom-md-r47-{ident}.bin'
                   t=time.monotonic()
                   try:
                       p=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
-                          stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=45)
+                          stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=12)
                       dt=time.monotonic()-t
                       line=f'{ident}: return={p.returncode} wall={dt:.2f}s tail={p.stdout[-160:].replace(chr(10)," ")}'
                   except subprocess.TimeoutExpired as e:
