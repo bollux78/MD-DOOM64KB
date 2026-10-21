@@ -133,7 +133,7 @@ jobs:
           build_p4 () {
             local label="$1"; shift
             echo "===== $label ====="
-            env               DOOM_R35D_CHECKER=1               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=1               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R40_STAGE1=fast               DOOM_R42_WALL_ASM=1               DOOM_R45_VARIANT=asm               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish pixel4-play
+            env               DOOM_R35D_CHECKER=1               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=0               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R40_STAGE1=fast               DOOM_R42_WALL_ASM=1               DOOM_R45_VARIANT=asm               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish pixel4-play
           }
 
           # 8x8 control and cumulative R46 migration stages
