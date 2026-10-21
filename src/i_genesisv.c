@@ -24,6 +24,10 @@
 #include "i_system.h"
 #include "i_video.h"
 #include "m_random.h"
+#if defined(DOOM_R47_STATE_HASH)
+#include "p_tick.h"
+#include "p_mobj.h"
+#endif
 #include "r_defs.h"
 #include "v_video.h"
 #include "w_wad.h"
@@ -568,6 +572,32 @@ static uint16_t bench_min_x10;
 static uint16_t bench_max_x10;
 static uint16_t bench_windows;
 static boolean bench_active;
+#if defined(DOOM_R47_STATE_HASH)
+static uint32_t R47_StateHash(uint16_t *mobj_count)
+{
+    uint32_t h=0x811c9dc5u;
+#define R47_MIX(v) do { h^=(uint32_t)(v); h*=0x01000193u; } while(0)
+    R47_MIX(M_R47RandomState());
+    R47_MIX(_g_leveltime);
+    if(_g_player.mo){
+        R47_MIX(_g_player.mo->x);R47_MIX(_g_player.mo->y);
+        R47_MIX(_g_player.mo->z);R47_MIX(_g_player.mo->angle);
+        R47_MIX(_g_player.mo->health);
+    }else{
+        R47_MIX(0);R47_MIX(0);R47_MIX(0);R47_MIX(0);R47_MIX(_g_player.health);
+    }
+    R47_MIX(_g_player.health);R47_MIX(_g_player.armorpoints);
+    for(uint16_t i=0;i<NUMAMMO;i++)R47_MIX(_g_player.ammo[i]);
+    R47_MIX(_g_player.killcount);
+    uint16_t n=0;thinker_t __far *th=NULL;
+    while((th=P_NextThinker(th))!=NULL)
+        if(th->function==(think_t)P_MobjThinker)n++;
+    R47_MIX(n);R47_MIX(_g_totalkills);
+    if(mobj_count)*mobj_count=n;
+#undef R47_MIX
+    return h;
+}
+#endif
 #if defined(DOOM_PROFILE)
 /* Coarse, low-overhead sampling: VBlank increments at 60 Hz.
    Totals are approximate, NOT cycle-accurate. */
@@ -885,6 +915,17 @@ void I_BenchmarkShowResults(void)
     R28_PAIR("COPIES / UPLOADS", r28_copies, r28_uploads, 21);
     R28_PAIR("RAW FREE / ERRORS", r28_raw_free, r28_errors, 22);
 #undef R28_PAIR
+#endif
+#if defined(DOOM_R47_STATE_HASH)
+    {
+        uint16_t mobjs=0;
+        const uint32_t hash=R47_StateHash(&mobjs);
+        VDP_drawText("STATE HASH",3,24);
+        intToHex(hash,buffer,8);VDP_drawText(buffer,24,24);
+        VDP_drawText("MOBJ / KILLS",3,25);
+        bench_u32(buffer,mobjs);VDP_drawText(buffer,24,25);
+        bench_u32(buffer,(uint16_t)_g_player.killcount);VDP_drawText(buffer,31,25);
+    }
 #endif
 #if defined(DOOM_R21_PROF)
     VDP_drawText("PROFILE SAMPLES", 3, 19);
