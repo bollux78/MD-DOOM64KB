@@ -42,6 +42,9 @@
 #include "globdata.h"
 #include "r20_stackguard.h"
 #include "r20_counters.h"
+#if defined(DOOM_R47_MUL_LOGIC)
+#include "r47_mul.h"
+#endif
 #if defined(DOOM_R20_SIGHT_ITERATIVE)
 #include "i_system.h"
 #endif
@@ -70,16 +73,26 @@ static int8_t P_DivlineSide(fixed_t x, fixed_t y, const divline_t *node)
   return
     !node->dx ? x == node->x ? 2 : x <= node->x ? node->dy > 0 : node->dy < 0 :
     !node->dy ? y == node->y ? 2 : y <= node->y ? node->dx < 0 : node->dx > 0 :
+#if defined(DOOM_R47_MUL_LOGIC)
+    (right = R47_Mul32x16((y - node->y) >> FRACBITS,(int16_t)(node->dx >> FRACBITS))) <
+    (left  = R47_Mul32x16((x - node->x) >> FRACBITS,(int16_t)(node->dy >> FRACBITS))) ? 0 :
+#else
     (right = ((y - node->y) >> FRACBITS) * (node->dx >> FRACBITS)) <
     (left  = ((x - node->x) >> FRACBITS) * (node->dy >> FRACBITS)) ? 0 :
+#endif
     right == left ? 2 : 1;
 }
 
 
 static uint16_t PUREFUNC P_InterceptVector2(const divline_t *v2, const divline_t *v1)
 {
+#if defined(DOOM_R47_MUL_LOGIC)
+	fixed_t a = R47_Mul32x16((v1->x - v2->x) >> 8,(int16_t)(v1->dy >> FRACBITS));
+	fixed_t b = R47_Mul32x16((v2->y - v1->y) >> 8,(int16_t)(v1->dx >> FRACBITS));
+#else
 	fixed_t a = (v1->dy >> FRACBITS) * ((v1->x - v2->x) >> 8);
 	fixed_t b = (v1->dx >> FRACBITS) * ((v2->y - v1->y) >> 8);
+#endif
 
 	fixed_t num = a + b;
 
@@ -187,14 +200,22 @@ static boolean P_CrossSubsector(int16_t num)
 
         if (front->floorheight != back->floorheight)
         {
+#if defined(DOOM_R47_MUL_LOGIC)
+            fixed_t slope = frac != 0 ? R47_Mul16xU32((int16_t)((openbottom - los.sightzstart) >> FRACBITS),FixedReciprocalSmall(frac)) : INT32_MAX;
+#else
             fixed_t slope = frac != 0 ? ((openbottom - los.sightzstart) >> FRACBITS) * FixedReciprocalSmall(frac) : INT32_MAX;
+#endif
             if (slope > los.bottomslope)
                 los.bottomslope = slope;
         }
 
         if (front->ceilingheight != back->ceilingheight)
         {
+#if defined(DOOM_R47_MUL_LOGIC)
+            fixed_t slope = frac != 0 ? R47_Mul16xU32((int16_t)((opentop - los.sightzstart) >> FRACBITS),FixedReciprocalSmall(frac)) : INT32_MAX;
+#else
             fixed_t slope = frac != 0 ? ((opentop - los.sightzstart) >> FRACBITS) * FixedReciprocalSmall(frac) : INT32_MAX;
+#endif
             if (slope < los.topslope)
                 los.topslope = slope;
         }
