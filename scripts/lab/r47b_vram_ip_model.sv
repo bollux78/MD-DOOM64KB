@@ -3,6 +3,7 @@
 // Used ONLY with upstream pinned rtl/nuked-md/vram.v in Icarus.
 module vram_ip(
   input clock,
+  input track_enable,
   input [7:0] address,
   input [31:0] byteena,
   input [255:0] data,
@@ -24,12 +25,12 @@ module vram_ip(
     if(wren) for(b=0;b<32;b=b+1) begin
       if(byteena[b]) begin
         mem[address][8*b+:8]<=data[8*b+:8];
-        write_count<=write_count+1;
-        if(touched[address][b]!==1'b1) begin
+        if(track_enable) write_count<=write_count+1;
+        if(track_enable && touched[address][b]!==1'b1) begin
           touched[address][b]<=1'b1;
           unique_count<=unique_count+1;
         end
-        if(data[8*b+:8] !== ((b%2==0)?8'h5a:8'ha5))
+        if(track_enable && data[8*b+:8] !== ((b%2==0)?8'h5a:8'ha5))
           wrong_pattern_count<=wrong_pattern_count+1;
       end
     end
