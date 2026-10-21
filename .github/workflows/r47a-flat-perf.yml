@@ -231,7 +231,8 @@ jobs:
               else flat=1;variant=pixel4-play;identity=doom-md-r47a-flat-p4play;fi
             fi
             echo "=== R47A $mode -> $identity ==="
-            env DOOM_R35D_CHECKER="$checker" DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE="$dither" DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R39F_DITHER3="$dither" DOOM_R42_WALL_ASM="$asm" DOOM_R43_GRAY_CRT=0 DOOM_R40_STAGE1=fast DOOM_R45_VARIANT="$r45" DOOM_R47_FLAT_HOIST="$flat" DOOM_R46_BUILD="$profile" DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"
+            if [[ "$mode" == primary ]]; then export DOOM_R46_BUILD=primary; else unset DOOM_R46_BUILD; fi
+            env DOOM_R35D_CHECKER="$checker" DOOM_R37_BSP_PROFILE=0 DOOM_R38_TIME_PROFILE=0 DOOM_R39C_VARIANT=mall DOOM_R39D_DITHER_TOGGLE="$dither" DOOM_R39E_AUDIO_TOGGLES=1 DOOM_R39F_DITHER3="$dither" DOOM_R42_WALL_ASM="$asm" DOOM_R43_GRAY_CRT=0 DOOM_R40_STAGE1=fast DOOM_R45_VARIANT="$r45" DOOM_R47_FLAT_HOIST="$flat" DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm" fish scripts/lab/build_r35_linear.fish "$variant"
             test -s "dist/r35/$identity.bin"
             cp "out/release/rom.out" "dist/r35/$identity-check.elf"
             "$HOME/mars/m68k-elf/bin/m68k-elf-size" "out/release/rom.out" > "dist/r35/size-$mode.txt"
