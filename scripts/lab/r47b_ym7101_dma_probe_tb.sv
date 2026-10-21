@@ -102,7 +102,7 @@ module r47b_ym7101_dma_probe;
       cpu_addr=address; cpu_data=data; cpu_rw_n=1'b0;
       repeat(32) @(negedge MCLK);
       cpu_as_n=1'b0; cpu_uds_n=1'b0; cpu_lds_n=1'b0;
-      repeat(112) @(negedge MCLK);
+      repeat(14) @(negedge MCLK);
       cpu_as_n=1'b1; cpu_uds_n=1'b1; cpu_lds_n=1'b1;
       repeat(64) @(negedge MCLK);
       cpu_rw_n=1'b1;
@@ -110,6 +110,12 @@ module r47b_ym7101_dma_probe;
   endtask
 
   integer dma_post_command=0, dma_early_post_command=0;
+  integer cmd_second_pulses=0, cmd_start_pulses=0, dma_state_pulses=0;
+  always @(posedge MCLK) if(RESET) begin
+    if(dut.w168===1'b1) cmd_second_pulses<=cmd_second_pulses+1;
+    if(dut.w182===1'b1) cmd_start_pulses<=cmd_start_pulses+1;
+    if(dut.t3===1'b1) dma_state_pulses<=dma_state_pulses+1;
+  end
   reg command_sent=0;
   always @(posedge MCLK) if(command_sent) begin
     if(vdp_dma===1'b1) dma_post_command<=dma_post_command+1;
@@ -145,6 +151,7 @@ module r47b_ym7101_dma_probe;
     repeat(50000) @(negedge MCLK);
     $display("R47B_DMA_RESULT dma_clocks=%0d early_clocks=%0d length=%h code=%h addr=%h cpu_bus=%h",
       dma_post_command,dma_early_post_command,dut.reg_lg,dut.reg_code,dut.reg_addr,dut.io_address);
+    $display("R47B_DMA_DIAG second_word=%0d dma_start=%0d dma_state=%0d bgack=%b bg=%b",cmd_second_pulses,cmd_start_pulses,dma_state_pulses,dut.cpu_bgack,dut.cpu_bg);
     if(dma_post_command==0)
       $fatal(1,"FAIL: DMA request not observed; no timing claim");
     $display("PASS: DMA request observed in RTL; memory write completion still requires a VRAM model");
