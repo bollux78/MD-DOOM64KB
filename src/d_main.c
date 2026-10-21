@@ -90,6 +90,30 @@ static int16_t  pagetic;
 
 static boolean singletics; // debug flag to cancel adaptiveness
 static boolean advancedemo;
+#if defined(DOOM_R50_PLAY_BENCH)
+static boolean r50_bench_from_menu;
+boolean D_R50_IsMenuBenchmark(void) { return r50_bench_from_menu; }
+void D_R50_BenchmarkStart(void)
+{
+    if(r50_bench_from_menu)return;
+    /* PERF mode advances exactly one Doom gametic per outer iteration.
+     * This is required to compare DEMO3 PLAY runs with PERF controls. */
+    r50_bench_from_menu=true;
+    singletics=true;
+    _g_timingdemo=true;
+    _g_singledemo=false;
+    G_DeferedPlayDemo("demo3");
+}
+void D_R50_BenchmarkFinish(void)
+{
+    r50_bench_from_menu=false;
+    _g_timingdemo=false;
+    singletics=false;
+    /* Old demo state is released in G_CheckDemoStatus before this call. */
+    D_StartTitle();
+    M_StartControlPanel();
+}
+#endif
 boolean _g_fps_show;
 
 //fps counter stuff
@@ -110,6 +134,11 @@ static int16_t titlepicnum;
 
 void D_PostEvent(event_t *ev)
 {
+#if defined(DOOM_R50_PLAY_BENCH)
+    /* The benchmark must be deterministic even if buttons are pressed.
+     * The result screen polls the joypad directly after the demo finishes. */
+    if(r50_bench_from_menu)return;
+#endif
     /* cph - suppress all input events at game start
    * FIXME: This is a lousy kludge */
     if (_g_gametic < 3)
@@ -189,19 +218,25 @@ static void D_Display (void)
         boolean viewactive = (!(automapmode & am_active) || (automapmode & am_overlay));
 
         // Now do the drawing
-        if (viewactive)
-            R_RenderPlayerView (&_g_player);
-
-        if (automapmode & am_active)
-            AM_Drawer();
-
-        ST_doPaletteStuff();  // Do red-/gold-shifts from damage/items
-#if !defined(DOOM_CLASSIC_TEXT_HUD)
-        ST_Drawer();  // Original status text shares 3D framebuffer.
+        /* R50: menus do not need to redraw the expensive 3D scene.
+         * M_Drawer draws its own background and glyphs. Keep game ticking
+         * normally: only presentation is skipped, never simulation. */
+#if defined(DOOM_R50_MENU_FREEZE)
+        if(!_g_menuactive || _g_demoplayback)
 #endif
-        /* In classic-HUD builds, i_genesisv.c draws a dedicated bottom
-         * tile-text bar after the 3D framebuffer, outside its viewport. */
-        HU_Drawer();
+        {
+            if (viewactive)
+                R_RenderPlayerView (&_g_player);
+
+            if (automapmode & am_active)
+                AM_Drawer();
+
+            ST_doPaletteStuff();  // Do red-/gold-shifts from damage/items
+#if !defined(DOOM_CLASSIC_TEXT_HUD)
+            ST_Drawer();
+#endif
+            HU_Drawer();
+        }
     }
 
     oldgamestate = wipegamestate = _g_gamestate;
