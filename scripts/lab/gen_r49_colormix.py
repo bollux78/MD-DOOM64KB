@@ -67,7 +67,10 @@ gates={}
 metrics={}
 for ratio,(wa,wb) in ratios.items():
     PA=[0]*16; PB=[0]*16
-    gate=[0]*256
+    # Gate per PLAYPAL subpalette: dark/tinted palettes may have entirely
+    # different quantization errors. This avoids forbidding useful mixes just
+    # because e.g. an all-dark special subpalette has no improvement.
+    gate=[0]*(14*256)
     for base in range(16):
         members=[ci for ci in range(256) if BASE[ci]==base]
         if not members:
@@ -96,24 +99,26 @@ for ratio,(wa,wb) in ratios.items():
                 q=tuple((wa*ca[k]+wb*cb[k])/4 for k in range(3))
                 contrast=D(ca,cb)*0.06*wa*wb/4
                 newer.append(D(SRC[sp][ci],q)+contrast)
-            # Strict all-subpalettes gate. Allow solid PAL1 refinements where
-            # the mixed partners happen to coincide.
-            if all(newer[s]+64 < old[s]*0.92 for s in range(14)):
-                gate[ci]=1
+            # No selected sample may worsen its own active subpalette:
+            # select only when >=8% lower predicted RGB squared error.
+            for sp in range(14):
+                if newer[sp]+64 < old[sp]*0.92:
+                    gate[sp*256+ci]=1
     pairs[ratio]=(PA,PB)
     gates[ratio]=gate
-    metrics[ratio]={"eligible_source_indices":sum(gate),
+    metrics[ratio]={"eligible_source_indices_palette0":sum(gate[:256]),
+                    "eligible_source_indices_all_subpalettes":sum(gate),
                     "chosen_pairs":sorted(set((PA[c],PB[c]) for c in BASE))}
     # Check invariant of gate, including its exact stripe penalty.
-    for ci,enabled in enumerate(gate):
+    for offset,enabled in enumerate(gate):
         if not enabled: continue
+        sp,ci=divmod(offset,256)
         base=BASE[ci]
-        for sp in range(14):
-            ca,cb=P1_RGB[sp][PA[base]],P1_RGB[sp][PB[base]]
-            q=tuple((wa*ca[k]+wb*cb[k])/4 for k in range(3))
-            newerr=D(SRC[sp][ci],q)+D(ca,cb)*0.06*wa*wb/4
-            olderr=D(SRC[sp][ci],BASE_RGB[sp][base])
-            assert newerr+64<olderr*0.92,(ratio,ci,sp)
+        ca,cb=P1_RGB[sp][PA[base]],P1_RGB[sp][PB[base]]
+        q=tuple((wa*ca[k]+wb*cb[k])/4 for k in range(3))
+        newerr=D(SRC[sp][ci],q)+D(ca,cb)*0.06*wa*wb/4
+        olderr=D(SRC[sp][ci],BASE_RGB[sp][base])
+        assert newerr+64<olderr*0.92,(ratio,ci,sp)
 
 # Extract original Doom colormap: convert WAD endianness is irrelevant to lump
 # contents. An offset inside COLORMAP refers to one 256-byte LUT.
@@ -149,7 +154,8 @@ for suffix in ratios:
     h.append(arr("r49_mix_ok_"+suffix,gates[suffix]))
 h.append(arr("r49_compmap",comp))
 for suffix in ratios:
-    h.append(arr("r49_compgate_"+suffix, [gates[suffix][ci] for ci in colormap]))
+    h.append(arr("r49_compgate_"+suffix,
+                 [gates[suffix][sp*256+ci] for sp in range(14) for ci in colormap]))
 h.append("#endif")
 (R/"src/r49_colormix_tables.h").write_text("\n".join(h)+"\n")
 (R/"src/r49_colormix_report.json").write_text(json.dumps({
