@@ -204,6 +204,9 @@ enum
 #if defined(DOOM_R24_EPISODE)
   selectlevel,
 #endif
+#if defined(DOOM_R50_PLAY_BENCH)
+  benchmark,
+#endif
   options,
 #if !defined DISABLE_SAVE_GAME
   loadgame,
@@ -227,6 +230,9 @@ static const menuitem_t MainMenu[]=
   {1,"New Game",  M_NewGame},
 #if defined(DOOM_R24_EPISODE)
   {1,"Select Level", M_SelectLevel},
+#endif
+#if defined(DOOM_R50_PLAY_BENCH)
+  {1,"Benchmark", M_RunBenchmark},
 #endif
   {1,"Options",   M_Options},
 #if !defined DISABLE_SAVE_GAME
@@ -312,6 +318,18 @@ static const menuitem_t LevelMenu[]={
 static const menu_t LevelDef={9,LevelMenu,M_DrawLevels,5,6,&MainDef,0};
 static void M_SelectLevel(int16_t choice){UNUSED(choice);M_SetupNextMenu(&LevelDef);itemOn=0;}
 void M_R24OpenLevels(void){M_StartControlPanel();M_SelectLevel(0);}
+#endif
+
+#if defined(DOOM_R50_PLAY_BENCH)
+/* From any normal PLAY session, launch exactly the same DEMO3 timedemo.
+ * Leave the menu before deferring the demo: there is no user input during
+ * the benchmark. The results screen restores the menu on Start. */
+static void M_RunBenchmark(int16_t choice)
+{
+    UNUSED(choice);
+    M_ClearMenus();
+    D_R50_BenchmarkStart();
+}
 #endif
 
 static void M_NewGame(int16_t choice)
