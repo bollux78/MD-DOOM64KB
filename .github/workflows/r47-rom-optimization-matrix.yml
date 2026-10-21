@@ -208,8 +208,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd dist/r47-matrix
-          zip -9 -r ../DOOM-MD-R47-OPTIMIZATION-MATRIX.zip .
+          python3 -m zipfile -c dist/DOOM-MD-R47-OPTIMIZATION-MATRIX.zip dist/r47-matrix/*
 
       - name: Upload full ROM pack
         if: always()
