@@ -252,6 +252,15 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R42_WALL_ASM'
     end
+    if set -q DOOM_R47_FLAT_HOIST; and test "$DOOM_R47_FLAT_HOIST" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R47 flat hoist must use independent pixel4 path'; exit 2
+        end
+        if not set -q DOOM_R42_WALL_ASM; or test "$DOOM_R42_WALL_ASM" != 1
+            echo 'R47 flat hoist comparison requires R45 ASM wall baseline'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_FLAT_HOIST'
+    end
     if set -q DOOM_R43_GRAY_CRT; and test "$DOOM_R43_GRAY_CRT" = 1
         if not contains -- $v pixel4-perf pixel4-play
             echo 'R43 grayscale requires native pixel4'; exit 2
@@ -557,6 +566,13 @@ for v in $variants
             end
         else
             set id doom-md-r46-m3c-video-perf
+        end
+    end
+    if set -q DOOM_R47_FLAT_HOIST; and test "$DOOM_R47_FLAT_HOIST" = 1
+        if test "$v" = pixel4-perf
+            set id doom-md-r47a-flat-p4perf
+        else
+            set id doom-md-r47a-flat-p4play
         end
     end
     set -gx DOOM_BUILD_ID $id
