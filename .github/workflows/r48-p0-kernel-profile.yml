@@ -8,6 +8,7 @@ on:
       - 'src/r22_video.inc'
       - 'src/r22_benchmark.inc'
       - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/set_rom_identity.py'
   workflow_dispatch:
 
 concurrency:
