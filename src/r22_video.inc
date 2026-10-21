@@ -460,12 +460,20 @@ static void R47_LoadPairTiles(void)
         /* Pair-V: upper/lower logical samples share an 8px-high tile.
          * Only left four physical pixels are opaque; Plane B is shifted +4. */
         uint8_t hi=(uint8_t)(p>>4),lo=(uint8_t)(p&15);
-#if defined(DOOM_R48_V_DITHER50)
-        /* Early tonal-experiment proof only, not an optimized perceptual LUT:
-         * introduce a second similar luminance/hue color in the 4px sample. */
+#if defined(DOOM_R48_V_DITHER50) || defined(DOOM_R48_V_DITHER75A) || defined(DOOM_R48_V_DITHER75B)
+        /* Tonal experiments with fixed partner table: NOT a measured
+         * perceptually optimal mapper. No RGB search at runtime. */
         static const uint8_t partner[16]={0,1,3,2,6,2,4,10,11,9,12,14,10,12,15,14};
+#if defined(DOOM_R48_V_DITHER75A)
+        uint32_t upper=((uint32_t)hi*0x11100000u)|((uint32_t)partner[hi]*0x00010000u);
+        uint32_t lower=((uint32_t)lo*0x11100000u)|((uint32_t)partner[lo]*0x00010000u);
+#elif defined(DOOM_R48_V_DITHER75B)
+        uint32_t upper=((uint32_t)hi*0x10000000u)|((uint32_t)partner[hi]*0x01110000u);
+        uint32_t lower=((uint32_t)lo*0x10000000u)|((uint32_t)partner[lo]*0x01110000u);
+#else
         uint32_t upper=((uint32_t)hi*0x11000000u)|((uint32_t)partner[hi]*0x00110000u);
         uint32_t lower=((uint32_t)lo*0x11000000u)|((uint32_t)partner[lo]*0x00110000u);
+#endif
 #else
         uint32_t upper=(uint32_t)hi*0x11110000u;
         uint32_t lower=(uint32_t)lo*0x11110000u;
