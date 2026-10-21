@@ -66,7 +66,9 @@ pairs={}
 gates={}
 metrics={}
 for ratio,(wa,wb) in ratios.items():
-    PA=[0]*16; PB=[0]*16
+    # Unused base-color slots are never eligible but their pattern ROM
+    # entries must still be opaque. Index 0 is VDP transparency, not black.
+    PA=[1]*16; PB=[1]*16
     # Gate per PLAYPAL subpalette: dark/tinted palettes may have entirely
     # different quantization errors. This avoids forbidding useful mixes just
     # because e.g. an all-dark special subpalette has no improvement.
