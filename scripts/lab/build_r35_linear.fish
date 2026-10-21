@@ -273,6 +273,12 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_PLANE_PAIR'
     end
+    if set -q DOOM_R47_PAIR_REUSE_TEXT_FB; and test "$DOOM_R47_PAIR_REUSE_TEXT_FB" = 1
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair framebuffer-text reuse requires plane-pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PAIR_REUSE_TEXT_FB'
+    end
     if set -q DOOM_R47_PAIR_NO_UPLOAD; and test "$DOOM_R47_PAIR_NO_UPLOAD" = 1
         if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
             echo 'R47 pair no-upload diagnostic requires plane-pair'; exit 2
