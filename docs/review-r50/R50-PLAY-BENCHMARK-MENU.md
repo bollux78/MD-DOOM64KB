@@ -40,7 +40,7 @@ Durante `_g_demoplayback`, o renderer continua ativo normalmente. Nenhuma das va
 | vf-ctrl-play | Não | Original | PLAY |
 | vf-bench-play | Sim | Original | PLAY |
 | vf-freeze-play | Não | Suspensa | PLAY |
-| vf-bench-freeze-play | Sim | Suspensa | PLAY |
+| vf-bf-play | Sim | Suspensa | PLAY |
 | cm50l-bench-play | Sim | Suspensa | PLAY, ColorMix 50/50 + LUT |
 | vf-ctrl-perf | Automático | N/A | PERF |
 | cm50l-ctrl-perf | Automático | N/A | PERF |
