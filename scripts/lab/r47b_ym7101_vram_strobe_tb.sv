@@ -112,9 +112,15 @@ module r47b_ym7101_vram_strobe;
 
   integer dma_post_command=0, dma_early_post_command=0;
   integer we0_falls=0,we1_falls=0,ras0_falls=0,ras1_falls=0,cas0_falls=0,cas1_falls=0;
+  integer we0_low=0,we1_low=0,we0_high=0,we1_high=0,write_qualified=0;
   reg prev_we0=1,prev_we1=1,prev_ras0=1,prev_ras1=1,prev_cas0=1,prev_cas1=1;
   always @(posedge MCLK) begin
-    if(command_sent && vdp_dma===1'b1) begin
+    if(command_sent) begin
+      if(WE0===1'b0) we0_low<=we0_low+1;
+      if(WE1===1'b0) we1_low<=we1_low+1;
+      if(WE0===1'b1) we0_high<=we0_high+1;
+      if(WE1===1'b1) we1_high<=we1_high+1;
+      if(RAS1===1'b0 && CAS1===1'b0 && WE0===1'b0) write_qualified<=write_qualified+1;
       if(prev_we0===1'b1 && WE0===1'b0) we0_falls<=we0_falls+1;
       if(prev_we1===1'b1 && WE1===1'b0) we1_falls<=we1_falls+1;
       if(prev_ras0===1'b1 && RAS0===1'b0) ras0_falls<=ras0_falls+1;
@@ -172,6 +178,7 @@ module r47b_ym7101_vram_strobe;
     $display("R47B_DMA_GRANT armed=%0d grant_accept=%0d",dma_armed_pulses,grant_accept_pulses);
     $display("R47B_DMA_W5 dff22=%b dff2=%b bgack=%b dtack=%b cpu_sel=%b w37=%b cpu_clk1=%b t4=%b w62=%b",dut.dff22_l2,dut.dff2_l2,dut.cpu_bgack,dut.DTACK_i,dut.cpu_sel,dut.w37,dut.cpu_clk1,dut.t4,dut.w62);
     $display("R47B_VRAM_STROBES we0=%0d we1=%0d ras0=%0d ras1=%0d cas0=%0d cas1=%0d last_ra=%h last_ad=%h last_rd=%h",we0_falls,we1_falls,ras0_falls,ras1_falls,cas0_falls,cas1_falls,RA,AD_o,RD_o);
+    $display("R47B_VRAM_WRITE_QUALIFIED clocks=%0d we0_low=%0d we0_high=%0d we1_low=%0d we1_high=%0d",write_qualified,we0_low,we0_high,we1_low,we1_high);
     if(dma_post_command==0)
       $fatal(1,"FAIL: DMA request not observed; no timing claim");
     $display("PASS: DMA request and VRAM external strobes observed for diagnosis; memory data not validated");
