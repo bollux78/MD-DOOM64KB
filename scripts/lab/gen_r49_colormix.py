@@ -148,6 +148,8 @@ for suffix in ratios:
     h.append(arr("r49_mix_b_"+suffix,pb))
     h.append(arr("r49_mix_ok_"+suffix,gates[suffix]))
 h.append(arr("r49_compmap",comp))
+for suffix in ratios:
+    h.append(arr("r49_compgate_"+suffix, [gates[suffix][ci] for ci in colormap]))
 h.append("#endif")
 (R/"src/r49_colormix_tables.h").write_text("\n".join(h)+"\n")
 (R/"src/r49_colormix_report.json").write_text(json.dumps({
