@@ -73,6 +73,9 @@ void I_BenchmarkReset(void)
 #if defined(DOOM_R20_COUNTERS)
     for (uint16_t i = 0; i < R20C_N; i++) r20_cnt[i] = 0;
 #endif
+#if defined(DOOM_R48_P0_PROFILE)
+    for (uint16_t i = 0; i < R48_STATS_N; i++) r48_prof[i] = 0;
+#endif
 #if defined(DOOM_R21_PROF)
 #if defined(DOOM_R20_STACKGUARD) || defined(DOOM_R20_COUNTERS) || defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_CACHE_STATS) || defined(DOOM_PROFILE)
 #error DOOM_R21_PROF owns result rows 19..22; build it without other diagnostics
@@ -197,7 +200,23 @@ void I_BenchmarkShowResults(void)
     bench_fixed(buffer, seconds_x100, 2);
     VDP_drawText(buffer, 24, 17);
 
-#if defined(DOOM_ROUTINE_PROFILE)
+#if defined(DOOM_R48_P0_PROFILE)
+    {
+        /* These are totals across DEMO3, not CPU cycle measurements.
+         * The profiler adds branches/stores to hot loops and distorts FPS. */
+        static const char *const labels[R48_STATS_N] = {
+            "WALL PIXELS", "FLAT PIXELS", "SPR PIXELS",
+            "WALL CALLS", "FLAT CALLS", "SPR CALLS",
+            "WAIT CALLS", "WAIT SPINS"
+        };
+        for (uint16_t i = 0; i < R48_STATS_N; i++) {
+            const uint16_t y = (uint16_t)(19 + i);
+            VDP_drawText(labels[i], 3, y);
+            bench_u32(buffer, r48_prof[i]);
+            VDP_drawText(buffer, 23, y);
+        }
+    }
+#elif defined(DOOM_ROUTINE_PROFILE)
     {
 #if defined(DOOM_R7_PROFILE)
         const char *names[11] = { "OTHER/LOGIC", "SETUP", "BSP OTHER", "SEG LOOP REST", "MASKED/SPR", "VDP/DMA", "DRAW WALL", "COMPOSE COL", "STORE RANGE", "ADD LINE", "CHECK BBOX" };
