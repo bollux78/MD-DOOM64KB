@@ -161,6 +161,8 @@ module r47b_ym7101_dma42_vram;
     write_vdp(23'h600002,16'h9700);
     if(dut.reg_m5!==1'b1 || dut.reg_m1!==1'b1 || dut.reg_inc!==8'h02)
       $fatal(1,"FAIL: DMA prerequisites not configured");
+    // Let the VDP pipeline reach steady state before first gameplay DMA.
+    repeat(10000) @(negedge MCLK);
     total_mclk=mcycles;
     for(batch=0;batch<42;batch=batch+1) begin
       cpu_bg_n=1'b1;
