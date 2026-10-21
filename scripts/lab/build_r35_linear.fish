@@ -25,6 +25,10 @@ python3 scripts/lab/test_r16_crt_hud.py; or exit 1
 python3 scripts/lab/test_r17_pixel_loop.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 python3 scripts/lab/gen_r22_pixel4.py; or exit 1
+if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
+    # Pure ROM tables: color fidelity gate and/or precomposed colormap.
+    python3 scripts/lab/gen_r49_colormix.py; or exit 1
+end
 python3 scripts/lab/gen_r43_gray.py; or exit 1
 python3 scripts/lab/test_r22_pixel4.py; or exit 1
 
@@ -315,6 +319,35 @@ for v in $variants
                 echo "R48 $ratio requires Pair-V"; exit 2
             end
             set defs $defs "-D$ratio"
+        end
+    end
+    if set -q DOOM_R49_COLORMIX; and test "$DOOM_R49_COLORMIX" = 1
+        if not test "$DOOM_R48_PAIR_V" = 1; or not test "$DOOM_R48_V_FAST" = 1
+            echo 'R49 ColorMix needs Pair-V Fast'; exit 2
+        end
+        set defs $defs '-DDOOM_R49_COLORMIX'
+    end
+    if set -q DOOM_R49_COMPLUT; and test "$DOOM_R49_COMPLUT" = 1
+        if not test "$DOOM_R48_PAIR_V" = 1
+            echo 'R49 composed LUT needs Pair-V'; exit 2
+        end
+        set defs $defs '-DDOOM_R49_COMPLUT'
+    end
+    if set -q DOOM_R49_RATIO
+        switch "$DOOM_R49_RATIO"
+            case 50
+            case 75a
+                if not test "$DOOM_R49_COLORMIX" = 1
+                    echo '75a needs ColorMix'; exit 2
+                end
+                set defs $defs '-DDOOM_R49_MIX_75A'
+            case 75b
+                if not test "$DOOM_R49_COLORMIX" = 1
+                    echo '75b needs ColorMix'; exit 2
+                end
+                set defs $defs '-DDOOM_R49_MIX_75B'
+            case '*'
+                echo 'Unknown R49 ColorMix ratio'; exit 2
         end
     end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
@@ -660,6 +693,12 @@ for v in $variants
             echo 'Invalid R48 build id'; exit 2
         end
         set id doom-md-r48-$DOOM_R48_BUILD
+    end
+    if set -q DOOM_R49_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R49_BUILD"
+            echo 'Invalid R49 build id'; exit 2
+        end
+        set id doom-md-r49-$DOOM_R49_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
