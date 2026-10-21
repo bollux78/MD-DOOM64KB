@@ -8,6 +8,7 @@ module r47b_ym7101_dma_probe;
   reg [15:0] cpu_data=16'hffff;
   reg cpu_as_n=1, cpu_uds_n=1, cpu_lds_n=1, cpu_rw_n=1;
   reg cpu_sel=1'b1;
+  reg cpu_bg_n=1'b1; // 68000 /BG, drive low to model granted bus
 
   reg MCLK_e=0;
   always @(posedge MCLK) MCLK_e <= ~MCLK_e; // matches md_board.v
@@ -48,7 +49,7 @@ module r47b_ym7101_dma_probe;
     .CD_i(cpu_data),.CD_o(CD_o),.CD_d(CD_d),
     .CA_i(cpu_addr),.CA_o(CA_o),.CA_d(CA_d),.SOUND(SOUND),
     .INT_pull(INT_pull),.BR_pull(BR_pull),.BGACK_i(1'b1),
-    .BGACK_pull(BGACK_pull),.BG(1'b1),.MREQ(1'b1),
+    .BGACK_pull(BGACK_pull),.BG(cpu_bg_n),.MREQ(1'b1),
     .INTAK(1'b1),.IPL1_pull(IPL1_pull),.IPL2_pull(IPL2_pull),
     .IORQ(1'b1),.RD(1'b1),.WR(1'b1),.M1(1'b1),
     .AS(cpu_as_n),.UDS(cpu_uds_n),.LDS(cpu_lds_n),.RW(cpu_rw_n),
@@ -110,11 +111,13 @@ module r47b_ym7101_dma_probe;
   endtask
 
   integer dma_post_command=0, dma_early_post_command=0;
-  integer cmd_second_pulses=0, cmd_start_pulses=0, dma_state_pulses=0;
+  integer cmd_second_pulses=0, cmd_start_pulses=0, dma_state_pulses=0, dma_armed_pulses=0, grant_accept_pulses=0;
   always @(posedge MCLK) if(RESET) begin
     if(dut.w168===1'b1) cmd_second_pulses<=cmd_second_pulses+1;
     if(dut.w182===1'b1) cmd_start_pulses<=cmd_start_pulses+1;
     if(dut.t3===1'b1) dma_state_pulses<=dma_state_pulses+1;
+    if(dut.t4===1'b1) dma_armed_pulses<=dma_armed_pulses+1;
+    if(dut.w5===1'b1) grant_accept_pulses<=grant_accept_pulses+1;
   end
   reg command_sent=0;
   always @(posedge MCLK) if(command_sent) begin
@@ -146,12 +149,14 @@ module r47b_ym7101_dma_probe;
     write_vdp(23'h600002,16'h4000);
     write_vdp(23'h600002,16'h0080);
     command_sent=1;
+    cpu_bg_n=1'b0; // grant bus after DMA command, not before CPU programming
     // A deterministic placeholder cartridge data word. NOT a full DMA bus grant model.
     cpu_data=16'hA55A;
     repeat(50000) @(negedge MCLK);
     $display("R47B_DMA_RESULT dma_clocks=%0d early_clocks=%0d length=%h code=%h addr=%h cpu_bus=%h",
       dma_post_command,dma_early_post_command,dut.reg_lg,dut.reg_code,dut.reg_addr,dut.io_address);
     $display("R47B_DMA_DIAG second_word=%0d dma_start=%0d dma_state=%0d bgack=%b bg=%b",cmd_second_pulses,cmd_start_pulses,dma_state_pulses,dut.cpu_bgack,dut.cpu_bg);
+    $display("R47B_DMA_GRANT armed=%0d grant_accept=%0d",dma_armed_pulses,grant_accept_pulses);
     if(dma_post_command==0)
       $fatal(1,"FAIL: DMA request not observed; no timing claim");
     $display("PASS: DMA request observed in RTL; memory write completion still requires a VRAM model");
