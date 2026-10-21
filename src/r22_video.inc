@@ -343,9 +343,10 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     while(count>=2) {
         uint8_t a=source[f>>9]; if(colormap)a=colormap[a];
         f=(uint16_t)(f+step);
+        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[a]&15u)<<4));
         uint8_t b=source[f>>9]; if(colormap)b=colormap[b];
         f=(uint16_t)(f+step);
-        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[b]&15u));
         dst+=152; count-=2;
     }
 #endif
