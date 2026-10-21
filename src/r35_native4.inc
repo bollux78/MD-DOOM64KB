@@ -34,7 +34,13 @@ static void R35_LeaveNative4(void)
     R20_StopVideo();
     VDP_setEnable(FALSE);
     VDP_clearPlane(BG_A,TRUE);
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Static art mirrored to B.  It must be erased on leave as well:
+     * otherwise transparent parts of gameplay and the HUD show title art. */
+    VDP_clearPlane(BG_B,TRUE);
+#endif
     VDP_clearPlane(WINDOW,TRUE);
+    VDP_waitDMACompletion();
     VDP_setWindowHPos(FALSE,0);
     VDP_setWindowVPos(FALSE,0);
     /* Picture load replaces the first 16 solid tiles. Restore them.
