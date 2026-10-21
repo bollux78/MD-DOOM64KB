@@ -52,6 +52,11 @@ module r47b_ym7101_vram_model;
     .RD_o(vram_ad_o),.RD_d(vram_ad_d),.SD_o(vram_sd_o),.SD_d(vram_sd_d)
   );
   integer vram_bytes_written;
+  integer write_trace_count=0;
+  always @(negedge MCLK) if(command_sent && WE0===1'b0 && RAS1===1'b0 && CAS1===1'b0 && write_trace_count<12) begin
+    $display("R47B_VRAM_TRACE index=%0d dram_addr=%h vdp_addr=%h ra=%h ad_bus=%h ad_o=%h ad_d=%b",write_trace_count,vram1.addr,dut.vram_address,RA,ad_bus,AD_o,AD_d);
+    write_trace_count=write_trace_count+1;
+  end
 
   // Idle 68000 bus with all active-low strobes deasserted.
   // CD_i / CA_i are NOT a functional DMA cartridge memory model here.
@@ -209,6 +214,7 @@ module r47b_ym7101_vram_model;
     $display("R47B_VRAM_MODEL writes=%0d bank0=%0d bank1=%0d bank2=%0d first8=%h",
       vram_bytes_written,vram1.l2[0].mem.write_count,vram1.l2[1].mem.write_count,
       vram1.l2[2].mem.write_count,vram1.l2[0].mem.mem[0][63:0]);
+    $display("R47B_VRAM_ADDR_FINAL dram=%h vdp=%h reg_addr=%h",vram1.addr,dut.vram_address,dut.reg_addr);
     if(vram_bytes_written<76)
       $fatal(1,"FAIL: upstream VRAM model observed fewer than 76 byte writes");
     if(dma_post_command==0)
