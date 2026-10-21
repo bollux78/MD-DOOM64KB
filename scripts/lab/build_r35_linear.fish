@@ -261,6 +261,39 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_FLAT_HOIST'
     end
+    if set -q DOOM_R47_SPRITE_HOIST; and test "$DOOM_R47_SPRITE_HOIST" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R47 sprite hoist requires independent pixel4 path'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_SPRITE_HOIST'
+    end
+    if set -q DOOM_R47_PLANE_PAIR; and test "$DOOM_R47_PLANE_PAIR" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R47 plane-pair requires independent pixel4 path'; exit 2
+        end
+        if not set -q DOOM_R22_SOLID_TILES
+            echo 'R47 plane-pair requires the R22 pixel4 tile backend'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PLANE_PAIR'
+    end
+    if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_MUL_BSP'
+    end
+    if set -q DOOM_R47_MUL_LOGIC; and test "$DOOM_R47_MUL_LOGIC" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R47 logic multiply experiment requires 8x8 cell backend'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_MUL_LOGIC'
+    end
+    if set -q DOOM_R47_STATE_HASH; and test "$DOOM_R47_STATE_HASH" = 1
+        if test "$v" != cell-perf
+            echo 'R47 state hash is a DEMO3 cell-perf oracle'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_STATE_HASH'
+    end
     if set -q DOOM_R43_GRAY_CRT; and test "$DOOM_R43_GRAY_CRT" = 1
         if not contains -- $v pixel4-perf pixel4-play
             echo 'R43 grayscale requires native pixel4'; exit 2
@@ -574,6 +607,12 @@ for v in $variants
         else
             set id doom-md-r47a-flat-p4play
         end
+    end
+    if set -q DOOM_R47_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R47_BUILD"
+            echo 'Invalid R47 build id'; exit 2
+        end
+        set id doom-md-r47-$DOOM_R47_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
