@@ -314,6 +314,42 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     uint16_t n=(uint16_t)(y1-first);
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(n+1u);
+#if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+#if defined(DOOM_R49_COMPLUT)
+    const uint8_t *fast=R49_MapLUT(colormap);
+#else
+    const uint8_t *fast=0;
+#endif
+    if((first&1u) && count){
+        uint8_t gate=0;
+        uint8_t c=R49_MapSample(source[frac>>9],colormap,fast,&gate);
+        *dst=(uint8_t)((*dst&0xf0u)|c);
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,first,gate);
+#endif
+        dst+=152; frac=(uint16_t)(frac+step); --count;
+    }
+    while(count>=2){
+        uint8_t ga=0,gb=0;
+        uint8_t a=R49_MapSample(source[frac>>9],colormap,fast,&ga);
+        frac=(uint16_t)(frac+step);
+        uint8_t b=R49_MapSample(source[frac>>9],colormap,fast,&gb);
+        frac=(uint16_t)(frac+step);
+        *dst=(uint8_t)((a<<4)|(b&15u));
+#if defined(DOOM_R49_COLORMIX)
+        dst[-1]=R49_TileAttr((uint8_t)((ga?1u:0u)|(gb?2u:0u)));
+#endif
+        dst+=152; count-=2;
+    }
+    if(count){
+        uint8_t gate=0;
+        uint8_t c=R49_MapSample(source[frac>>9],colormap,fast,&gate);
+        *dst=(uint8_t)((*dst&0x0fu)|(c<<4));
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,0,gate);
+#endif
+    }
+#else
     uint16_t odd=(uint16_t)(first&1);
     if(odd && count) {
         uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
@@ -344,6 +380,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
         uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
         *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
     }
+#endif /* R49 V optimized path */
 #else
     if(x&1){
         do{
@@ -397,7 +434,43 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     int16_t remaining=(int16_t)(y1-first+1);
 #if defined(DOOM_R48_PAIR_V)
-    uint16_t count=(uint16_t)remaining;
+    uint16_t count=(uint16_t)(remaining);
+#if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+#if defined(DOOM_R49_COMPLUT)
+    const uint8_t *fast=R49_MapLUT(colormap);
+#else
+    const uint8_t *fast=0;
+#endif
+    if((first&1u) && count){
+        uint8_t gate=0;
+        uint8_t c=R49_MapSample(source[f>>9],colormap,fast,&gate);
+        *dst=(uint8_t)((*dst&0xf0u)|c);
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,first,gate);
+#endif
+        dst+=152; f=(uint16_t)(f+step); --count;
+    }
+    while(count>=2){
+        uint8_t ga=0,gb=0;
+        uint8_t a=R49_MapSample(source[f>>9],colormap,fast,&ga);
+        f=(uint16_t)(f+step);
+        uint8_t b=R49_MapSample(source[f>>9],colormap,fast,&gb);
+        f=(uint16_t)(f+step);
+        *dst=(uint8_t)((a<<4)|(b&15u));
+#if defined(DOOM_R49_COLORMIX)
+        dst[-1]=R49_TileAttr((uint8_t)((ga?1u:0u)|(gb?2u:0u)));
+#endif
+        dst+=152; count-=2;
+    }
+    if(count){
+        uint8_t gate=0;
+        uint8_t c=R49_MapSample(source[f>>9],colormap,fast,&gate);
+        *dst=(uint8_t)((*dst&0x0fu)|(c<<4));
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,0,gate);
+#endif
+    }
+#else
     if((first&1) && count) {
         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
         *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
@@ -427,6 +500,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
         *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
     }
+#endif /* R49 V optimized path */
 #else
     if(x&1){
         do {
