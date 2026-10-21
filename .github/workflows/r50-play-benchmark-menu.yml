@@ -13,6 +13,7 @@ on:
       - 'scripts/lab/gen_r49_colormix.py'
       - 'scripts/lab/test_r49_colormix.py'
       - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/build_silent.fish'
       - 'scripts/set_rom_identity.py'
       - 'src/d_main.c'
       - 'src/d_main.h'
