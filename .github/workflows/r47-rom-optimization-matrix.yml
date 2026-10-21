@@ -136,6 +136,12 @@ jobs:
             env               DOOM_R35D_CHECKER=1               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=0               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R40_STAGE1=fast               DOOM_R42_WALL_ASM=1               DOOM_R45_VARIANT=asm               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish pixel4-play
           }
 
+          build_p4_perf () {
+            local label="$1"; shift
+            echo "===== $label ====="
+            env               DOOM_R35D_CHECKER=1               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=0               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R40_STAGE1=fast               DOOM_R42_WALL_ASM=1               DOOM_R45_VARIANT=asm               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish pixel4-perf
+          }
+
           # 8x8 control and cumulative R46 migration stages
           build_cell "R46 primary playable" DOOM_R46_BUILD=primary
           build_cell "R46 M1 playable" DOOM_R46_M1=1 DOOM_R46_BUILD=m1
@@ -148,9 +154,17 @@ jobs:
           build_p4 "R45 ASM 4x4 playable control"
           build_p4 "R47A flat-hoist 4x4 playable" DOOM_R47_FLAT_HOIST=1
 
-          # Timedemo controls for objective FPS comparison
+          # Timedemos for every stage needed to quantify the optimization ladder
           build_cell_perf "R46 primary timedemo" DOOM_R46_BUILD=primary
+          build_cell_perf "R46 M1 timedemo" DOOM_R46_M1=1 DOOM_R46_BUILD=m1
+          build_cell_perf "R46 M1B timedemo" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_BUILD=m1b
+          build_cell_perf "R46 M2A timedemo" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_BUILD=m2a
+          build_cell_perf "R46 M2B timedemo" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_BUILD=m2b
           build_cell_perf "R46 M2C timedemo" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_M2C=1 DOOM_R46_BUILD=m2c
+
+          # 4x4 objective comparison: ASM baseline vs Flat-Hoist
+          build_p4_perf "R45 ASM 4x4 timedemo"
+          build_p4_perf "R47A flat-hoist 4x4 timedemo" DOOM_R47_FLAT_HOIST=1
 
           # R5/R6A video/heap diagnostics already implemented and hardware-gated
           for mode in r5safe r5stress r6asafe r6astress; do
