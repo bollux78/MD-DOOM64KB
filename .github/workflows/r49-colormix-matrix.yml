@@ -98,6 +98,16 @@ jobs:
           assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
           PY
 
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r49-cm
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r49-cm/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r49-cm/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r49-cm/PREFLIGHT-color-report.json
+
       - name: Build R49 control, cleanup, LUT and color-fidelity variants
         shell: bash
         run: |
