@@ -88,7 +88,7 @@ module r47b_ym7101_bus;
   always @(posedge MCLK) begin
     if(RESET && dut.w217===1'b1) register_write_pulses<=register_write_pulses+1;
     if(RESET && dut.reg_m5===1'b1) m5_seen<=m5_seen+1;
-    if(RESET && dut.cpu_as===1'b1 && dut.cpu_rw===1'b0) cpu_write_windows<=cpu_write_windows+1;
+    if(RESET && dut.cpu_as===1'b1 && dut.cpu_rw===1'b1) cpu_write_windows<=cpu_write_windows+1;
   end
 
   // Deliberately conservative 68000-like strobe: address/data stable
