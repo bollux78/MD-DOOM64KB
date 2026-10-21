@@ -54,7 +54,12 @@ static void R35_LeaveNative4(void)
     /* Native art occupies the pair-pattern range. Restore all 256 immutable
      * pair patterns once before returning to gameplay. */
     R47_LoadPairTiles();
+#if defined(DOOM_R48_PAIR_V)
+    VDP_setVerticalScroll(BG_B,0);
+    VDP_setHorizontalScroll(BG_B,4);
+#else
     VDP_setVerticalScroll(BG_B,-4);
+#endif
 #endif
     PAL_setColors(0,r22_cram[0],16,CPU);
     r22_newpal=100;
@@ -94,6 +99,9 @@ static bool R35_DrawNative4(int16_t lump)
 #if defined(DOOM_R47_PLANE_PAIR)
         VDP_clearPlane(BG_B,TRUE);
         VDP_setVerticalScroll(BG_B,0);
+#if defined(DOOM_R48_PAIR_V)
+        VDP_setHorizontalScroll(BG_B,0);
+#endif
 #endif
         VDP_clearPlane(WINDOW,TRUE);
         VDP_setWindowHPos(TRUE,0);
