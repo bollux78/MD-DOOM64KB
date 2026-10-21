@@ -1,0 +1,183 @@
+name: R47 ROM optimization matrix - playable comparison pack
+
+on:
+  push:
+    branches: [r47-rom-optimization-matrix]
+    paths:
+      - '.github/workflows/r47-rom-optimization-matrix.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: r47-rom-optimization-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-matrix:
+    runs-on: [self-hosted, linux, x64, doom-md]
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check local toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/lib/libmd.a"
+          test -f "$HOME/mars/m68k-elf/inc/snd/xgm2.h"
+
+      - name: Restore pinned E1M1 XGM2 input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Locate Doom shareware WAD on runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          target=Path('scripts/doom1.wad')
+          candidates=[
+            target,
+            Path.home()/'Projetos/doom-assets/doom1.wad',
+            Path.home()/'Projetos/doom-assets/DOOM1.WAD',
+            Path.home()/'Downloads/doom1.wad',
+            Path.home()/'Games/doom1.wad',
+            Path.home()/'Jogos/doom1.wad',
+          ]
+          for p in candidates:
+              if p.is_file() and p.stat().st_size>4_000_000:
+                  if p.resolve()!=target.resolve():
+                      target.parent.mkdir(parents=True,exist_ok=True)
+                      shutil.copy2(p,target)
+                  print('WAD:',p)
+                  break
+          else:
+              raise SystemExit('doom1.wad not found on runner')
+          PY
+
+      - name: Build 14 comparison ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r47-matrix
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+
+          build_cell () {
+            local label="$1"; shift
+            echo "===== $label ====="
+            env               DOOM_R35D_CHECKER=1               DOOM_R37_BSP_PROFILE=0               DOOM_R38_TIME_PROFILE=0               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=1               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R39F_DITHER3=1               DOOM_R40_STAGE1=fast               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish cell-play
+          }
+
+          build_cell_perf () {
+            local label="$1"; shift
+            echo "===== $label ====="
+            env               DOOM_R35D_CHECKER=1               DOOM_R37_BSP_PROFILE=0               DOOM_R38_TIME_PROFILE=0               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=1               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R39F_DITHER3=1               DOOM_R40_STAGE1=fast               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish cell-perf
+          }
+
+          build_p4 () {
+            local label="$1"; shift
+            echo "===== $label ====="
+            env               DOOM_R35D_CHECKER=1               DOOM_R39C_VARIANT=mall               DOOM_R39D_DITHER_TOGGLE=1               DOOM_R39E_AUDIO_TOGGLES=1               DOOM_R40_STAGE1=fast               DOOM_R42_WALL_ASM=1               DOOM_R45_VARIANT=asm               DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM"               "$@"               fish scripts/lab/build_r35_linear.fish pixel4-play
+          }
+
+          # 8x8 control and cumulative R46 migration stages
+          build_cell "R46 primary playable" DOOM_R46_BUILD=primary
+          build_cell "R46 M1 playable" DOOM_R46_M1=1 DOOM_R46_BUILD=m1
+          build_cell "R46 M1B playable" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_BUILD=m1b
+          build_cell "R46 M2A playable" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_BUILD=m2a
+          build_cell "R46 M2B playable" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_BUILD=m2b
+          build_cell "R46 M2C playable" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_M2C=1 DOOM_R46_BUILD=m2c
+
+          # 4x4 ASM control and first implemented R47 optimization
+          build_p4 "R45 ASM 4x4 playable control"
+          build_p4 "R47A flat-hoist 4x4 playable" DOOM_R47_FLAT_HOIST=1
+
+          # Timedemo controls for objective FPS comparison
+          build_cell_perf "R46 primary timedemo" DOOM_R46_BUILD=primary
+          build_cell_perf "R46 M2C timedemo" DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_M2C=1 DOOM_R46_BUILD=m2c
+
+          # R5/R6A video/heap diagnostics already implemented and hardware-gated
+          for mode in r5safe r5stress r6asafe r6astress; do
+            safe=0; stress=0; audit=0
+            [[ "$mode" == *safe ]] && safe=1
+            [[ "$mode" == *stress ]] && stress=1
+            [[ "$mode" == r6a* ]] && audit=1
+            build_cell_perf "$mode"               DOOM_R46_M1=1 DOOM_R46_M1B=1 DOOM_R46_M2A=1 DOOM_R46_M2B=1 DOOM_R46_M2C=1               DOOM_R46_M3C_DIAG=1               DOOM_R46_M3C_SAFE_BLANK="$safe"               DOOM_R46_M3C_STRESS="$stress"               DOOM_R46_M3C_FONT_RESTORE=1               DOOM_R46_M3C_LATE_BUFFER=1               DOOM_R46_M6A_LAYOUT="$audit"               DOOM_R46_BUILD=m2c
+          done
+
+          find dist/r35 -maxdepth 1 -type f \( -name '*.bin' -o -name 'flags-*.txt' \) -print -exec cp -f {} dist/r47-matrix/ \;
+
+      - name: Generate comparison manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          d=Path('dist/r47-matrix')
+          rows=[]
+          for p in sorted(d.glob('*.bin')):
+              rows.append({
+                'file':p.name,
+                'bytes':p.stat().st_size,
+                'sha256':hashlib.sha256(p.read_bytes()).hexdigest()
+              })
+          expected_min=12
+          assert len(rows)>=expected_min,(len(rows),[r['file'] for r in rows])
+          notes={
+            'purpose':'hardware comparison pack; implemented optimizations only',
+            'implemented_in_this_pack':[
+              'R46 primary/M1/M1B/M2A/M2B/M2C cumulative stages',
+              'R45 ASM pixel4 control',
+              'R47A flat-hoist pixel4',
+              'R5 safe/stress heap-video diagnostics',
+              'R6A safe/stress fixed-layout metadata audit'
+            ],
+            'not_yet_implemented_not_faked':[
+              'R47 plane-pair',
+              'R47 flat-hoist + plane-pair combined',
+              'R47 mul-bsp',
+              'R47 mul-logic',
+              'R47 statehash',
+              'R47 fixedmaps-8x8',
+              'R47 dual 8x8/plane-pair runtime toggle'
+            ],
+            'roms':rows
+          }
+          (d/'MANIFEST-R47-MATRIX.json').write_text(json.dumps(notes,indent=2)+'\n')
+          print(json.dumps(notes,indent=2))
+          PY
+
+      - name: Pack ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/r47-matrix
+          zip -9 -r ../DOOM-MD-R47-OPTIMIZATION-MATRIX.zip .
+
+      - name: Upload full ROM pack
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47-optimization-matrix
+          path: |
+            dist/r47-matrix/
+            dist/DOOM-MD-R47-OPTIMIZATION-MATRIX.zip
+          retention-days: 30
+          if-no-files-found: warn
