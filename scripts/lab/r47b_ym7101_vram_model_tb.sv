@@ -201,14 +201,14 @@ module r47b_ym7101_vram_model;
     $display("R47B_DMA_W5 dff22=%b dff2=%b bgack=%b dtack=%b cpu_sel=%b w37=%b cpu_clk1=%b t4=%b w62=%b",dut.dff22_l2,dut.dff2_l2,dut.cpu_bgack,dut.DTACK_i,dut.cpu_sel,dut.w37,dut.cpu_clk1,dut.t4,dut.w62);
     $display("R47B_VRAM_STROBES we0=%0d we1=%0d ras0=%0d ras1=%0d cas0=%0d cas1=%0d last_ra=%h last_ad=%h last_rd=%h",we0_falls,we1_falls,ras0_falls,ras1_falls,cas0_falls,cas1_falls,RA,AD_o,RD_o);
     $display("R47B_VRAM_WRITE_QUALIFIED clocks=%0d we0_low=%0d we0_high=%0d we1_low=%0d we1_high=%0d",write_qualified,we0_low,we0_high,we1_low,we1_high);
-    vram_bytes_written=vram1.l1[0].mem.write_count+
-      vram1.l1[1].mem.write_count+vram1.l1[2].mem.write_count+
-      vram1.l1[3].mem.write_count+vram1.l1[4].mem.write_count+
-      vram1.l1[5].mem.write_count+vram1.l1[6].mem.write_count+
-      vram1.l1[7].mem.write_count;
+    vram_bytes_written=vram1.l2[0].mem.write_count+
+      vram1.l2[1].mem.write_count+vram1.l2[2].mem.write_count+
+      vram1.l2[3].mem.write_count+vram1.l2[4].mem.write_count+
+      vram1.l2[5].mem.write_count+vram1.l2[6].mem.write_count+
+      vram1.l2[7].mem.write_count;
     $display("R47B_VRAM_MODEL writes=%0d bank0=%0d bank1=%0d bank2=%0d first8=%h",
-      vram_bytes_written,vram1.l1[0].mem.write_count,vram1.l1[1].mem.write_count,
-      vram1.l1[2].mem.write_count,vram1.l1[0].mem.mem[0][63:0]);
+      vram_bytes_written,vram1.l2[0].mem.write_count,vram1.l2[1].mem.write_count,
+      vram1.l2[2].mem.write_count,vram1.l2[0].mem.mem[0][63:0]);
     if(vram_bytes_written<76)
       $fatal(1,"FAIL: upstream VRAM model observed fewer than 76 byte writes");
     if(dma_post_command==0)
