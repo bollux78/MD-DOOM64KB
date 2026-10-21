@@ -101,11 +101,11 @@ module r47b_ym7101_dma42_tight;
     begin
       @(negedge MCLK);
       cpu_addr=address; cpu_data=data; cpu_rw_n=1'b0;
-      repeat(12) @(negedge MCLK);
+      repeat(24) @(negedge MCLK);
       cpu_as_n=1'b0; cpu_uds_n=1'b0; cpu_lds_n=1'b0;
       repeat(14) @(negedge MCLK);
       cpu_as_n=1'b1; cpu_uds_n=1'b1; cpu_lds_n=1'b1;
-      repeat(8) @(negedge MCLK);
+      repeat(32) @(negedge MCLK);
       cpu_rw_n=1'b1;
     end
   endtask
