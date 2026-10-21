@@ -61,7 +61,13 @@ static void R35_LeaveNative4(void)
     r22_queued_pal=100;
     r22_overlay_dirty=0;
     r22_text_this_frame=0;
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Pair native-text occupancy masks alias the idle framebuffer. Restore
+     * valid 0x0100 tile words before the renderer or VBlank DMA sees it. */
+    R47_ClearPairBuffer();
+#else
     R40B_ResetNativeText();
+#endif
     r22_front=0;
     r22_ready=0;
     r35_native_active=-1;
