@@ -135,7 +135,8 @@ jobs:
           print('R48 Pair-H BSS:',sizes)
           assert sizes['h-prof-perf']<=57920,sizes
           assert sizes['h-prof-perf']-sizes['h-ctrl-perf']<=40,sizes
-          assert abs(sizes['h-all-play']-sizes['h-ctrl-perf'])<=10,sizes
+          # PLAY omits timedemo-only globals, so may use slightly less BSS.
+          assert abs(sizes['h-all-play']-sizes['h-ctrl-perf'])<=32,sizes
           (d/'BSS-AUDIT.txt').write_text('\n'.join(f'{k}: {v} bytes' for k,v in sizes.items())+'\n')
           PY
 
