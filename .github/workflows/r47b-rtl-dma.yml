@@ -2,6 +2,9 @@ name: R47B-RTL - 38-word YM7101 DMA request probe
 on:
   push:
     branches: [r47b-rtl-ym7101-busbench]
+    paths:
+      - 'scripts/lab/r47b_ym7101_dma_probe_tb.sv'
+      - '.github/workflows/r47b-rtl-dma.yml'
   workflow_dispatch:
 permissions:
   contents: read
