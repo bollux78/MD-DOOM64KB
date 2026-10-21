@@ -212,6 +212,9 @@ module r47b_ym7101_dma42_vram;
       $display("R47B_DMA42_TIGHT_BATCH index=%0d elapsed_mclk=%0d dma_active_mclk=%0d lg=%h",
         batch,batch_elapsed,active_count,dut.reg_lg);
     end
+    // DMA counter completion precedes the final DRAM write pipeline drain.
+    // Do not evaluate unique-byte integrity until VRAM strobes have settled.
+    repeat(2000) @(negedge MCLK);
     $display("R47B_DMA42_TIGHT_RESULT completed=%0d total_batch_mclk=%0d dma_active_mclk=%0d min_batch=%0d max_batch=%0d",
       dma_count,total_batch_cycles,total_dma_clocks,shortest_batch,longest_batch);
     unique_bytes=vram1.l2[0].mem.unique_count+
