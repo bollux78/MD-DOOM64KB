@@ -36,6 +36,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
       - name: Toolchain and Pair-H oracle
         shell: bash
         run: |
