@@ -11,10 +11,13 @@ module vram_ip(
 );
   reg [255:0] mem[0:255];
   integer write_count=0;
+  integer unique_count=0;
+  integer wrong_pattern_count=0;
+  reg [31:0] touched[0:255];
   integer a,b;
   initial begin
     q=0;
-    for(a=0;a<256;a=a+1) mem[a]=0;
+    for(a=0;a<256;a=a+1) begin mem[a]=0; touched[a]=0; end
   end
   always @(posedge clock) begin
     q<=mem[address];
@@ -22,6 +25,12 @@ module vram_ip(
       if(byteena[b]) begin
         mem[address][8*b+:8]<=data[8*b+:8];
         write_count<=write_count+1;
+        if(touched[address][b]!==1'b1) begin
+          touched[address][b]<=1'b1;
+          unique_count<=unique_count+1;
+        end
+        if(data[8*b+:8] !== ((b%2==0)?8'h5a:8'ha5))
+          wrong_pattern_count<=wrong_pattern_count+1;
       end
     end
   end
