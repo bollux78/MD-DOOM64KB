@@ -43,10 +43,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          verilator --binary --timing --trace -Wno-fatal -j 2 \\
-            --top-module r47b_ym7101_vblank \\
-            --Mdir dist/r47b-rtl/obj_vblank \\
-            scripts/lab/r47b_ym7101_vblank_tb.sv \\
+          verilator --binary --timing --trace -Wno-fatal -j 2 \
+            --top-module r47b_ym7101_vblank \
+            --Mdir dist/r47b-rtl/obj_vblank \
+            scripts/lab/r47b_ym7101_vblank_tb.sv \
             dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v
       - name: Measure full NTSC de_v low interval
         shell: bash
