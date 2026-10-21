@@ -926,7 +926,7 @@ void I_FinishUpdate(void){
     r22_next_bank=back;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
 #endif
     __asm__ volatile("":::"memory");r22_ready=1;
-#if defined(TIMEDEMO)
+#if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
     I_BenchmarkFrame();
 #endif
 }
