@@ -188,6 +188,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: doom-md-r48-p0-kernel-profile
-          path: dist/r47-pair-fix/
+          path: dist/r48-p0/
           retention-days: 90
           if-no-files-found: error
