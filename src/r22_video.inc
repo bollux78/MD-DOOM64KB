@@ -265,7 +265,31 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 #endif
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+#if defined(DOOM_R47_FLAT_HOIST)
+    /* R47A: eliminate per-pixel bounds/level checks and y*38 addressing.
+     * Exactly one framebuffer byte is modified per visible sample;
+     * the neighbouring nibble is preserved (required for 4x4 floors).
+     * Does not alter R39f's independent 8x8 backend. */
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W) return;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    if(x<border) return;
+    if(y0<border)y0=border;
+    if(y0<0)y0=0;
+    if(y1>=R22_H)y1=R22_H-1;
+    if(y0>y1)return;
+    uint8_t sample=(uint8_t)(r22_color[c]&15u);
+    uint8_t keep=(x&1)?0xf0u:0x0fu;
+    uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
+    uint8_t *dst=r22_fb.pixels+(uint16_t)y0*R22_PITCH+((uint16_t)x>>1);
+    uint16_t n=(uint16_t)(y1-y0);
+    do {
+        *dst=(uint8_t)((*dst&keep)|put);
+        dst+=R22_PITCH;
+    } while(n--);
+#else
     c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
+#endif
 }
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
 void I_SetPalette(int8_t p){r22_newpal=p;}
