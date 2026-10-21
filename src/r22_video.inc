@@ -69,11 +69,18 @@ static uint8_t r22_overlay_dirty,r22_text_this_frame;
 #endif
 /* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
 #if defined(DOOM_R47_PLANE_PAIR)
-/* The plane-pair framebuffer itself is DMA source data, so the old pending
- * 38x21 map disappears. Keep only the native-text occupancy bits. */
+/* During native static art the Pair framebuffer is idle. Reuse its first
+ * 210 bytes for the two native-text occupancy masks so Pair adds no separate
+ * WRAM object at boot. R35_LeaveNative4 restores the Pair framebuffer before
+ * gameplay resumes. */
+#if defined(DOOM_R47_PAIR_REUSE_TEXT_FB)
+#define r40b_native_prev (r22_fb.pixels)
+#define r40b_native_seen (r22_fb.pixels+R40B_OCC_BYTES)
+#else
 static uint8_t r40b_native_bits[R40B_OCC_BYTES*2];
 #define r40b_native_prev (r40b_native_bits)
 #define r40b_native_seen (r40b_native_bits+R40B_OCC_BYTES)
+#endif
 #else
 static uint16_t r22_map[38*21] __attribute__((aligned(2)));
 #define r40b_native_prev ((uint8_t*)(void*)r22_map)
