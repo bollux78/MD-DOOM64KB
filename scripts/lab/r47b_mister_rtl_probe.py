@@ -12,6 +12,8 @@ import argparse
 CORE_COMMIT="becbdee78c48e6eb536871cd03c869f43d7afa4d"
 FILE="rtl/nuked-md/ym7101.v"
 GIT_BLOB_SHA="0862948114ddb7abec87e46fdbb16d4fa2172804"
+DEPENDENCY="rtl/nuked-md/ym_lib.v"
+DEPENDENCY_BLOB_SHA="26fce976757bda2612e7ec0effcc93868660e108"
 BASE=f"https://raw.githubusercontent.com/MiSTer-devel/MegaDrive_MiSTer/{CORE_COMMIT}/"
 
 def git_blob_sha(data):
@@ -30,35 +32,44 @@ def main():
             "iverilog_available":bool(shutil.which("iverilog")),
             "verilator_available":bool(shutil.which("verilator"))}
     with tempfile.TemporaryDirectory(prefix="doom-r47b-rtl-") as td:
-        target=Path(td)/"ym7101.v"
         try:
-            with urllib.request.urlopen(BASE+FILE,timeout=45) as response:
-                raw=response.read(500000)
-            assert git_blob_sha(raw)==GIT_BLOB_SHA,"pinned source integrity mismatch"
-            text=raw.decode("utf-8")
-            assert "module ym7101" in text
-            assert "assign vdp_dma = " in text
-            assert "DMA/FIFO block" in text
-            target.write_bytes(raw)
+            inputs=[]
+            for source,expected in ((FILE,GIT_BLOB_SHA),(DEPENDENCY,DEPENDENCY_BLOB_SHA)):
+                with urllib.request.urlopen(BASE+source,timeout=45) as response:
+                    raw=response.read(500000)
+                assert git_blob_sha(raw)==expected,("pinned RTL mismatch",source)
+                v=raw.decode("utf-8")
+                if source==FILE:
+                    assert "module ym7101" in v
+                    assert "assign vdp_dma = " in v
+                    assert "DMA/FIFO block" in v
+                else:
+                    assert "module ym_slatch" in v and "module ym_sr_bit" in v
+                target=Path(td)/Path(source).name
+                target.write_bytes(raw)
+                inputs.append(str(target))
+                report.setdefault("pinned_sources",{})[source]={
+                    "bytes":len(raw),"git_blob_sha1":git_blob_sha(raw),
+                    "sha256":hashlib.sha256(raw).hexdigest()}
             report["rtl_fetched_and_sha_verified"]=True
-            report["source_length_bytes"]=len(raw)
-            report["git_blob_sha1"]=git_blob_sha(raw)
-            report["source_sha256"]=hashlib.sha256(raw).hexdigest()
+            report["source_length_bytes"]=report["pinned_sources"][FILE]["bytes"]
+            report["git_blob_sha1"]=report["pinned_sources"][FILE]["git_blob_sha1"]
+            report["source_sha256"]=report["pinned_sources"][FILE]["sha256"]
             if shutil.which("iverilog"):
-                p=subprocess.run(["iverilog","-g2012","-tnull","-s","ym7101",str(target)],
-                                 capture_output=True,text=True,timeout=90)
+                p=subprocess.run(["iverilog","-g2012","-tnull","-s","ym7101"]+inputs,
+                                 capture_output=True,text=True,timeout=120)
                 report["iverilog_exit_status"]=p.returncode
                 report["iverilog_diagnostics"]=p.stderr[-1800:]
                 report["rtl_elaborated"]=(p.returncode==0)
             elif shutil.which("verilator"):
                 p=subprocess.run(["verilator","--lint-only","--top-module","ym7101",
-                                  "-Wno-fatal",str(target)],
-                                 capture_output=True,text=True,timeout=90)
+                                  "-Wno-fatal"]+inputs,
+                                 capture_output=True,text=True,timeout=120)
                 report["verilator_exit_status"]=p.returncode
                 report["verilator_diagnostics"]=p.stderr[-1800:]
                 report["rtl_elaborated"]=(p.returncode==0)
             else:
-                report["elaboration_note"]="Neither Icarus Verilog nor Verilator installed; no HDL compile attempted"
+                report["elaboration_note"]="Icarus/Verilator missing; pinned source only verified"
         except Exception as exc:
             report["error"]=repr(exc)
     if args.out:
