@@ -71,3 +71,45 @@ jobs:
           path: dist/r47b-sim/
           retention-days: 90
           if-no-files-found: warn
+  rtl-elaboration:
+    name: Compile pinned YM7101 in disposable Ubuntu runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Icarus on disposable hosted runner, never self-hosted MarsDev
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v iverilog >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq iverilog
+          fi
+          iverilog -V | head -n 2
+      - name: Fetch pinned real MiSTer YM7101 RTL and elaborate hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r47b-sim
+          python3 scripts/lab/r47b_mister_rtl_probe.py --out dist/r47b-sim/R47B-MISTER-RTL-ELABORATED.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('dist/r47b-sim/R47B-MISTER-RTL-ELABORATED.json').read_text())
+          assert r['rtl_fetched_and_sha_verified']
+          assert r['iverilog_available'] is True
+          assert r['rtl_elaborated'] is True,r
+          assert r['actual_vdp_dma_simulated'] is False
+          print('R47B-SIM RTL source/provenance/elaboration PASS')
+          print('WARNING: DMA timing not simulated by this compile-only test')
+          PY
+      - name: Upload pinned YM7101 RTL elaboration result, no source copy
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47b-mister-vdp-rtl-compile
+          path: dist/r47b-sim/
+          retention-days: 90
+          if-no-files-found: warn
