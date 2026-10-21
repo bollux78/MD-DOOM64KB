@@ -77,8 +77,10 @@ for ratio,(wa,wb) in ratios.items():
             continue
         top_score=-1
         top_pair=(0,0)
-        for a in range(16):
-            for b in range(16):
+        # Index 0 is TRANSPARENT in plane tiles, not black. It must
+        # never be used inside an opaque spatial mixture.
+        for a in range(1,16):
+            for b in range(1,16):
                 # Large high-frequency vertical contrast is undesirable.
                 ca,cb=P1_RGB[0][a],P1_RGB[0][b]
                 sep=D(ca,cb)
@@ -124,13 +126,21 @@ for ratio,(wa,wb) in ratios.items():
 # contents. An offset inside COLORMAP refers to one 256-byte LUT.
 wad = (R/"scripts/doom64.wad").read_bytes()
 assert wad[:4] == b"IWAD"
-count,offset=struct.unpack_from(">hI",wad,4)
+# Doom64KB embeds a big-endian WAD header with a 16-bit lump count
+# at offset 4, a 16-bit reserved word at offset 6, and the directory
+# offset at byte 8. The earlier '>hI' starting at 4 wrongly read offset 6.
+count=struct.unpack_from(">h",wad,4)[0]
+offset=struct.unpack_from(">I",wad,8)[0]
+assert 0<count<4096 and 12<=offset<=len(wad)-count*16,(count,offset,len(wad))
 lumps={}
 for i in range(count):
-    a=offset+16*i
-    pos,sz=struct.unpack_from(">IH",wad,a)
-    name=wad[a+8:a+16].split(b"\0")[0].decode("ascii")
+    entry=offset+16*i
+    pos=struct.unpack_from(">I",wad,entry)[0]
+    sz=struct.unpack_from(">H",wad,entry+4)[0]
+    name=wad[entry+8:entry+16].split(b"\0")[0].decode("ascii")
+    assert pos+sz<=len(wad),(name,pos,sz,len(wad))
     lumps[name]=wad[pos:pos+sz]
+assert "COLORMAP" in lumps, "Embedded WAD missing COLORMAP: "+str(sorted(lumps))
 colormap=lumps["COLORMAP"]
 assert len(colormap)%256==0
 LEVELS=len(colormap)//256
@@ -161,7 +171,7 @@ h.append("#endif")
 (R/"src/r49_colormix_report.json").write_text(json.dumps({
     "ratio_metrics":metrics,"pal1_original_color_indices":pick,
     "baseline_original_colors":16,"new_colors_pal1":15,
-    "colormap_levels":LEVELS,"quality_gate":"all 14 subpalettes; avg RGB squared-error >=8% lower and >64 error margin, stripe penalty",
+    "colormap_levels":LEVELS,"quality_gate":"per PLAYPAL subpalette; avg RGB squared-error >=8% lower and >64 error margin, stripe penalty; opaque colors only",
 },indent=2)+"\n")
 print("R49 ROM ColorMix generated: 14x16 PAL1, 3 ratio gates,",
       LEVELS,"colormaps, metrics:",metrics)
