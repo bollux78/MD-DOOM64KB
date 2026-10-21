@@ -99,6 +99,9 @@ void D_R50_BenchmarkStart(void)
     /* PERF mode advances exactly one Doom gametic per outer iteration.
      * This is required to compare DEMO3 PLAY runs with PERF controls. */
     r50_bench_from_menu=true;
+    /* A pending title-screen demo transition must not replace our explicit
+     * DEMO3 request on the next game tic. */
+    advancedemo=false;
     singletics=true;
     _g_timingdemo=true;
     _g_singledemo=false;
