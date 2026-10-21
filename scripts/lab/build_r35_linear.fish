@@ -271,9 +271,6 @@ for v in $variants
         if not contains -- $v pixel4-perf pixel4-play
             echo 'R47 plane-pair requires independent pixel4 path'; exit 2
         end
-        if not set -q DOOM_R22_SOLID_TILES
-            echo 'R47 plane-pair requires the R22 pixel4 tile backend'; exit 2
-        end
         set defs $defs '-DDOOM_R47_PLANE_PAIR'
     end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
