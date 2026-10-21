@@ -1,0 +1,106 @@
+name: R47 Pair BlastEm 68K address probe
+
+on:
+  push:
+    branches: [r47-pair-diagnostic]
+    paths:
+      - '.github/workflows/r47-pair-address-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  address-probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download completed Pair diagnostic artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: doom-md-r47-pair-hard-hang-diagnostic
+          path: diag
+          repository: bollux78/MD-DOOM64KB
+          run-id: 39649681166
+          github-token: ${{ github.token }}
+
+      - name: Locate BlastEm and m68k tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(command -v blastem || true)"
+          if [[ -z "$exe" ]]; then
+            exe="$(find "$HOME/Projetos" -type f -name blastem -perm -111 2>/dev/null | head -1)"
+          fi
+          test -n "$exe"
+          echo "BLASTEM=$exe" >> "$GITHUB_ENV"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-addr2line"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+
+      - name: Run 68K address logging on good and Pair-no-upload
+        shell: bash
+        run: |
+          set -u
+          mkdir -p trace
+          run_one() {
+            id="$1"
+            rom="$PWD/diag/doom-md-r47-$id.bin"
+            rm -f address.log
+            echo "==== $id ===="
+            env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy timeout -k 1s 12s "$BLASTEM" -l -b 800 "$rom" >"trace/$id.stdout" 2>&1
+            rc=$?
+            echo "$rc" >"trace/$id.rc"
+            if [[ -f address.log ]]; then
+              cp address.log "trace/$id-address.log"
+              tail -n 300 address.log >"trace/$id-address-tail.txt"
+            else
+              : >"trace/$id-address.log"
+              : >"trace/$id-address-tail.txt"
+            fi
+            echo "rc=$rc lines=$(wc -l < "trace/$id-address.log")"
+          }
+          run_one pd-goodfs
+          run_one pd-noup
+          run_one pd-cur
+          exit 0
+
+      - name: Symbolicate address-log tails
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re,subprocess
+          from pathlib import Path
+          tool=str(Path.home()/'mars/m68k-elf/bin/m68k-elf-addr2line')
+          root=Path('trace')
+          diag=Path('diag')
+          for ident in ('pd-goodfs','pd-noup','pd-cur'):
+              src=root/f'{ident}-address-tail.txt'
+              elf=diag/f'doom-md-r47-{ident}.elf'
+              lines=src.read_text(errors='replace').splitlines()
+              addrs=[]
+              for line in lines:
+                  m=re.search(r'(?i)(?:0x)?([0-9a-f]{4,8})',line.strip())
+                  if m:
+                      a=m.group(1).lower()
+                      if a not in addrs: addrs.append(a)
+              report=[f'==== {ident} rc={(root/f"{ident}.rc").read_text().strip()} raw-lines={len(lines)} unique-tail-addrs={len(addrs)} ====']
+              for a in addrs[-120:]:
+                  p=subprocess.run([tool,'-e',str(elf),'-f','-C','0x'+a],
+                      text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+                  report.append('0x'+a+'  '+p.stdout.strip().replace('\n',' | '))
+              (root/f'{ident}-symbolicated.txt').write_text('\n'.join(report)+'\n')
+              print('\n'.join(report[-50:]))
+          PY
+
+      - name: Upload address traces
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47-pair-address-trace
+          path: trace/
+          retention-days: 30
+          if-no-files-found: error
