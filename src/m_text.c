@@ -204,10 +204,10 @@ enum
 #if defined(DOOM_R24_EPISODE)
   selectlevel,
 #endif
+  options,
 #if defined(DOOM_R50_PLAY_BENCH)
   benchmark,
 #endif
-  options,
 #if !defined DISABLE_SAVE_GAME
   loadgame,
   savegame,
@@ -231,10 +231,10 @@ static const menuitem_t MainMenu[]=
 #if defined(DOOM_R24_EPISODE)
   {1,"Select Level", M_SelectLevel},
 #endif
+  {1,"Options",   M_Options},
 #if defined(DOOM_R50_PLAY_BENCH)
   {1,"Benchmark", M_RunBenchmark},
 #endif
-  {1,"Options",   M_Options},
 #if !defined DISABLE_SAVE_GAME
   {1,"Load game", M_LoadGame},
   {1,"Save game", M_SaveGame},
