@@ -454,7 +454,13 @@ static void I_ShutdownTimer(void)
 // 調整可能。リンク時 RAM 使用量を見て増減する。
 #ifndef HEAP_SIZE
 #if defined(DOOM_R23_MAPMEM)
+#if defined(DOOM_R47_PAIR_BOOT_RESERVE)
+#define HEAP_SIZE (43 * 1024 + 2176 - DOOM_R47_PAIR_BOOT_RESERVE)
+/* R47 Pair diagnostic: return a small part of the Doom zone to the SGDK
+ * pre-main heap. This is ONLY a boot-memory probe, not a final optimization. */
+#else
 #define HEAP_SIZE (43 * 1024 + 2176) /* 1920 freed cache bytes + 256 SGDK margin. */
+#endif
 #else
 #define HEAP_SIZE (43 * 1024)
 #endif
