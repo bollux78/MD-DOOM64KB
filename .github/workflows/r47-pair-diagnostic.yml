@@ -146,6 +146,10 @@ jobs:
           p4 pd-br256 DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_BOOT_RESERVE=256 DOOM_R47_BUILD=pd-br256
           p4 pd-br512 DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_BOOT_RESERVE=512 DOOM_R47_BUILD=pd-br512
 
+          # P6: permanent-style zero-zone-loss fix candidate. Reuse the idle
+          # Pair framebuffer for native-text occupancy masks during static art.
+          p4 pd-reuse DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_REUSE_TEXT_FB=1 DOOM_R47_BUILD=pd-reuse
+
       - name: Compare ELF RAM layout
         shell: bash
         run: |
@@ -180,7 +184,7 @@ jobs:
               out.append('BlastEm not found on runner; smoke skipped')
           else:
               env=os.environ.copy(); env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk','pd-br256','pd-br512']
+              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk','pd-br256','pd-br512','pd-reuse']
               for ident in ids:
                   rom=d/f'doom-md-r47-{ident}.bin'
                   t=time.monotonic()
@@ -213,8 +217,9 @@ jobs:
           4. pd-sdk   - both Pair planes through SGDK DMA_doDma.
           5. pd-br256 - original Pair with 256 B returned to SGDK boot heap.
           6. pd-br512 - original Pair with 512 B returned to SGDK boot heap.
-          7. pd-cur   - exact original failing Pair transfer, reproducer.
-          8. pd-goodfs - non-Pair known-good control.
+          7. pd-reuse - Pair with native-text masks reused inside idle framebuffer.
+          8. pd-cur   - exact original failing Pair transfer, reproducer.
+          9. pd-goodfs - non-Pair known-good control.
 
           Interpretation:
           - noupload hangs: fault precedes Pair map DMA (WRAM/init/renderer/transition).
@@ -223,6 +228,7 @@ jobs:
           - cpucopy works, DMA variants hang: VDP memory-DMA path is implicated.
           - sgdkdma works, current hangs: our raw DMA sequence is implicated.
           - br256/br512 boot while current/noupload hang: pre-main SGDK heap is the cause.
+          - reuse boots and finishes: recover the 210 B without shrinking Doom zone.
           EOF
 
       - name: Upload Pair diagnostic lab
