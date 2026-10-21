@@ -140,7 +140,7 @@ module r47b_ym7101_vblank;
     // Vertical display enable (de_v) is the measured signal, not VSYNC.
     // Ignore unknown states and initial partial frame. Seek active->blank->active.
     begin : frame_measure
-      while(scan_cycles<1900000) begin
+      while(scan_cycles<2400000) begin
         @(negedge MCLK);
         scan_cycles=scan_cycles+1;
         if(vdp_de_v===1'b1) current_de=1;
