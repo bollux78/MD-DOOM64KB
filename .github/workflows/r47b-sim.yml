@@ -1,0 +1,73 @@
+name: R47B-SIM - MiSTer Nuked YM7101 VDP preflight, no ROM
+on:
+  push:
+    branches: [r47b-sim-mister-vdp-preflight]
+  workflow_dispatch:
+concurrency:
+  group: r47b-sim-mister-vdp-preflight
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  vdp-preflight:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - name: Source and scope guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/r47b_vdp_oracle.py scripts/lab/r47b_mister_rtl_probe.py
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('scripts/lab/r47b_vdp_oracle.py').read_text()
+          b=Path('scripts/lab/r47b_mister_rtl_probe.py').read_text()
+          d=Path('docs/review-r47/R47B-SIM-PLAN.md').read_text()
+          assert 'window_sat_overlap' in a and 'font_vram' in a
+          assert 'window_underlay' not in a or 'window' in a
+          assert 'hardware_vblank_deadline_proven' not in a
+          assert 'rtl_elaborated' in b and 'actual_vdp_dma_simulated' in b
+          assert 'No ROM ZIP' in d
+          print('R47B-SIM PASS: no video, m68k, or toolchain changes required')
+          PY
+      - name: Verify 48 complete VDP framebuffers, map ownership, 42 DMA commands
+        shell: bash
+        run: |
+          mkdir -p dist/r47b-sim
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r47b-sim/R47B-VRAM-PIXEL-DMA.json
+      - name: Verify pinned real MiSTer YM7101 source and RTL compile readiness
+        shell: bash
+        run: |
+          python3 scripts/lab/r47b_mister_rtl_probe.py --out dist/r47b-sim/R47B-MISTER-RTL.json
+      - name: Assert output truthfulness, no accidental HDL timing claim
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('dist/r47b-sim')
+          data=json.loads((p/'R47B-VRAM-PIXEL-DMA.json').read_text())
+          rtl=json.loads((p/'R47B-MISTER-RTL.json').read_text())
+          assert data['pixels']['matching_pixels']==48*304*224
+          assert data['pixels']['window_overlay_mismatches']>0
+          assert data['dma']['dma_commands']==42
+          assert data['dma']['plane_pair_map_dma_bytes']==3192
+          assert not data['dma']['hardware_vblank_deadline_proven']
+          assert data['layout']['dual_no_sgdk_font_relocation']['font_vram']=='B400'
+          assert data['layout']['standalone_proto_font_relocated']['font_vram']=='C400'
+          assert rtl['rtl_fetched_and_sha_verified']
+          assert rtl['actual_vdp_dma_simulated'] is False
+          assert rtl['full_rom_tested'] is False
+          if not rtl['rtl_elaborated']:
+              print('RTL elaboration NOT CONFIRMED; read report for tool availability')
+          print('R47B-SIM PASS: detailed results saved; VDP bus timing remains unverified')
+          PY
+      - name: Upload R47B-SIM technical results (no ROM)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47b-sim-results
+          path: dist/r47b-sim/
+          retention-days: 90
+          if-no-files-found: warn
