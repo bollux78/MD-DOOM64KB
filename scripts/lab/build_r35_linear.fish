@@ -335,7 +335,7 @@ for v in $variants
     end
     if set -q DOOM_R49_RATIO
         switch "$DOOM_R49_RATIO"
-            case 50
+            case none 50
             case 75a
                 if not test "$DOOM_R49_COLORMIX" = 1
                     echo '75a needs ColorMix'; exit 2
