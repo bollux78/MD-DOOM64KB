@@ -5,7 +5,12 @@
  */
 #if defined(DOOM_R30_NATIVE) && defined(DOOM_R35_ART_RAW)
 #include "r30_static_manifest.h"
-#if (16 + R30_TITLE_TILES >= 1696) || (16 + R30_INTER_TILES >= 1696) || (16 + R30_FINAL_TILES >= 1696)
+#if defined(DOOM_R47_PLANE_PAIR)
+#define R35_FONT_TILE_LIMIT 1440
+#else
+#define R35_FONT_TILE_LIMIT 1696
+#endif
+#if (16 + R30_TITLE_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_INTER_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_FINAL_TILES >= R35_FONT_TILE_LIMIT)
 #error R35 static picture would overwrite the SGDK font tiles
 #endif
 extern const u8 r30_title_pack[],r30_inter_pack[],r30_final_pack[];
@@ -45,6 +50,12 @@ static void R35_LeaveNative4(void)
         for(u16 y=0;y<8;y++)*data=row;
     }
     R22_Unlock(sr);
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Native art occupies the pair-pattern range. Restore all 256 immutable
+     * pair patterns once before returning to gameplay. */
+    R47_LoadPairTiles();
+    VDP_setVerticalScroll(BG_B,-4);
+#endif
     PAL_setColors(0,r22_cram[0],16,CPU);
     r22_newpal=100;
     r22_queued_pal=100;
@@ -74,6 +85,10 @@ static bool R35_DrawNative4(int16_t lump)
         R20_StopVideo();
         VDP_setEnable(FALSE);
         VDP_clearPlane(BG_A,TRUE);
+#if defined(DOOM_R47_PLANE_PAIR)
+        VDP_clearPlane(BG_B,TRUE);
+        VDP_setVerticalScroll(BG_B,0);
+#endif
         VDP_clearPlane(WINDOW,TRUE);
         VDP_setWindowHPos(TRUE,0);
         VDP_setWindowVPos(FALSE,0);
@@ -87,6 +102,11 @@ static bool R35_DrawNative4(int16_t lump)
         {
             for(u16 x=0;x<40;x++)row[x]=picture->map[y*40+x]+16;
             VDP_setTileMapDataRect(BG_A,row,0,y,40,1,40,CPU);
+#if defined(DOOM_R47_PLANE_PAIR)
+            /* Mirror the native picture on B so transparent WINDOW glyphs
+             * reveal the complete static image, not odd scanline pairs. */
+            VDP_setTileMapDataRect(BG_B,row,0,y,40,1,40,CPU);
+#endif
         }
         PAL_setColors(0,picture->palette,64,CPU);
         r22_newpal=100;
@@ -100,3 +120,5 @@ static bool R35_DrawNative4(int16_t lump)
     return FALSE;
 }
 #endif
+
+#undef R35_FONT_TILE_LIMIT
