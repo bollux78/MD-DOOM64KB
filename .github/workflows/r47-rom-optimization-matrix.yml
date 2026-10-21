@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build-matrix:
-    runs-on: [self-hosted, linux, x64, doom-md]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 180
 
     steps:
