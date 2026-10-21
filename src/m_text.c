@@ -137,6 +137,9 @@ static const char skullName[2] = {'\x02', '\x01'};
 // PROTOTYPES
 //
 static void M_NewGame(int16_t choice);
+#if defined(DOOM_R50_PLAY_BENCH)
+static void M_RunBenchmark(int16_t choice);
+#endif
 #if defined(DOOM_R24_EPISODE)
 static void M_SelectLevel(int16_t choice);
 #endif
