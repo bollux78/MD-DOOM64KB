@@ -50,6 +50,12 @@
 #define r49_mix_ok r49_mix_ok_50
 #define r49_compgate r49_compgate_50
 #endif
+/* Two ROM pointers (8 B WRAM) select the current 14-palette lighting gate.
+ * No per-pixel floating point, RGB arithmetic, or external scratch bitmap. */
+static const uint8_t *r49_gate_current=r49_mix_ok;
+#if defined(DOOM_R49_COMPLUT)
+static const uint8_t *r49_compgate_current=r49_compgate;
+#endif
 #endif
 
 #if defined(DOOM_R22_PAIR_LUT)
@@ -268,8 +274,8 @@ static inline uint8_t R49_MapSample(uint8_t sample,const uint8_t *colormap,
         /* fast points either to r22_color or the composed COLORMAP slice. */
         if(colormap){
             uint32_t off=(uint32_t)(fast-r49_compmap);
-            *gate=r49_compgate[off+sample];
-        }else *gate=r49_mix_ok[sample];
+            *gate=r49_compgate_current[off+sample];
+        }else *gate=r49_gate_current[sample];
 #else
         *gate=0;
 #endif
@@ -280,7 +286,7 @@ static inline uint8_t R49_MapSample(uint8_t sample,const uint8_t *colormap,
 #endif
     if(colormap)sample=colormap[sample];
 #if defined(DOOM_R49_COLORMIX)
-    *gate=r49_mix_ok[sample];
+    *gate=r49_gate_current[sample];
 #else
     *gate=0;
 #endif
@@ -572,7 +578,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(y1-y0+1);
 #if defined(DOOM_R49_COLORMIX)
-    const uint8_t gate=r49_mix_ok[c];
+    const uint8_t gate=r49_gate_current[c];
 #endif
     if((y0&1) && count) {
         *dst=(uint8_t)((*dst&0xf0u)|sample);
@@ -622,6 +628,10 @@ static void R22_Palette(int8_t p){
     PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);
 #if defined(DOOM_R49_COLORMIX)
     PAL_setColors(16,r49_palette1+(uint16_t)p*16u,16,DMA);
+    r49_gate_current=r49_mix_ok+(uint16_t)p*256u;
+#if defined(DOOM_R49_COMPLUT)
+    r49_compgate_current=r49_compgate+(uint32_t)(uint16_t)p*R49_COLORMAP_BYTES;
+#endif
 #endif
 }
 
