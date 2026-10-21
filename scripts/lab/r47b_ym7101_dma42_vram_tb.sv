@@ -45,6 +45,7 @@ module r47b_ym7101_dma42_vram;
     .SC(SC),.SE(SE0),.AD(ad_bus),.RD_i(ad_bus),
     .RD_o(vram_ad_o),.RD_d(vram_ad_d),.SD_o(vram_sd_o),.SD_d(vram_sd_d));
   integer unique_bytes,pattern_errors;
+  integer previous_unique=0,current_unique=0;
 
   // Idle 68000 bus with all active-low strobes deasserted.
   // CD_i / CA_i are NOT a functional DMA cartridge memory model here.
@@ -199,6 +200,13 @@ module r47b_ym7101_dma42_vram;
       total_batch_cycles=total_batch_cycles+batch_elapsed;
       total_dma_clocks=total_dma_clocks+active_count;
       dma_count=dma_count+1;
+      current_unique=vram1.l2[0].mem.unique_count+vram1.l2[1].mem.unique_count+
+        vram1.l2[2].mem.unique_count+vram1.l2[3].mem.unique_count+
+        vram1.l2[4].mem.unique_count+vram1.l2[5].mem.unique_count+
+        vram1.l2[6].mem.unique_count+vram1.l2[7].mem.unique_count;
+      $display("R47B_DMA42_UNIQUE index=%0d requested_dest=%h new_unique=%0d cumulative=%0d vdp_addr=%h dram_addr=%h",
+        batch,batch*76,current_unique-previous_unique,current_unique,dut.vram_address,vram1.addr);
+      previous_unique=current_unique;
       $display("R47B_DMA42_TIGHT_BATCH index=%0d elapsed_mclk=%0d dma_active_mclk=%0d lg=%h",
         batch,batch_elapsed,active_count,dut.reg_lg);
     end
