@@ -152,7 +152,7 @@ module r47b_ym7101_dma_probe;
     cpu_bg_n=1'b0; // grant bus after DMA command, not before CPU programming
     // A deterministic placeholder cartridge data word. NOT a full DMA bus grant model.
     cpu_data=16'hA55A;
-    repeat(50000) @(negedge MCLK);
+    repeat(8000) @(negedge MCLK);
     $display("R47B_DMA_RESULT dma_clocks=%0d early_clocks=%0d length=%h code=%h addr=%h cpu_bus=%h",
       dma_post_command,dma_early_post_command,dut.reg_lg,dut.reg_code,dut.reg_addr,dut.io_address);
     $display("R47B_DMA_DIAG second_word=%0d dma_start=%0d dma_state=%0d bgack=%b bg=%b",cmd_second_pulses,cmd_start_pulses,dma_state_pulses,dut.cpu_bgack,dut.cpu_bg);
