@@ -62,9 +62,17 @@ static uint8_t r22_overlay_dirty,r22_text_this_frame;
 #error R40b native text reuses r22_map and requires SOLID_TILES
 #endif
 /* One pending map only; BeginFrame/FinishUpdate wait before reusing it. */
+#if defined(DOOM_R47_PLANE_PAIR)
+/* The plane-pair framebuffer itself is DMA source data, so the old pending
+ * 38x21 map disappears. Keep only the native-text occupancy bits. */
+static uint8_t r40b_native_bits[R40B_OCC_BYTES*2];
+#define r40b_native_prev (r40b_native_bits)
+#define r40b_native_seen (r40b_native_bits+R40B_OCC_BYTES)
+#else
 static uint16_t r22_map[38*21] __attribute__((aligned(2)));
 #define r40b_native_prev ((uint8_t*)(void*)r22_map)
 #define r40b_native_seen (((uint8_t*)(void*)r22_map)+R40B_OCC_BYTES)
+#endif
 static void R40B_ResetNativeText(void)
 {
     memset(r40b_native_prev,0,R40B_OCC_BYTES);
@@ -89,6 +97,11 @@ static void R22_ClearOverlay(void){
     uint16_t sr=R22_Lock();
     /* Only rows0..21: never touch the aliased SAT/HScroll at FC00. */
     VDP_clearTileMap(VDP_WINDOW,0,64*22,TRUE);
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* WINDOW replaces plane A. Keep plane B black while a gameplay menu is
+     * open so transparent glyph pixels do not expose odd-only 4x4 rows. */
+    VDP_clearTileMap(VDP_BG_B,0,64*22,TRUE);
+#endif
     /* R40a: menu/intermission glyphs are written directly after this clear.
      * A pending DMA fill could otherwise overwrite freshly drawn characters.
      * Wait for the fill before subsequent CPU VRAM writes. */
@@ -188,6 +201,38 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
+#if defined(DOOM_R47_SPRITE_HOIST)
+    /* R47: same exact clipping/stride hoist as flats, while retaining the
+     * sprite read-modify-write required to preserve the neighbouring nibble. */
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W)return;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    if(x<border)return;
+    int16_t first=y0;
+    if(first<border)first=border;
+    if(first<0)first=0;
+    if(y1>=R22_H)y1=R22_H-1;
+    if(first>y1)return;
+    uint16_t frac=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
+    frac=(uint16_t)(frac+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
+    const uint16_t step=v->fracstep;
+    const uint8_t *source=v->source,*colormap=v->colormap;
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
+    uint16_t n=(uint16_t)(y1-first);
+    if(x&1){
+        do{
+            uint8_t ci=source[frac>>9];if(colormap)ci=colormap[ci];
+            *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+            dst+=R22_PITCH;frac=(uint16_t)(frac+step);
+        }while(n--);
+    }else{
+        do{
+            uint8_t ci=source[frac>>9];if(colormap)ci=colormap[ci];
+            *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+            dst+=R22_PITCH;frac=(uint16_t)(frac+step);
+        }while(n--);
+    }
+#else
     int16_t n=v->yh-v->yl+1;if(n<=0)return;
     uint16_t frac=(uint16_t)((v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep);
     for(int16_t y=v->yl;y<=v->yh;y++) {
@@ -195,6 +240,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
         if(v->colormap)c=v->colormap[c];
         R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
     }
+#endif
 }
 /* R42 Q2: packed-4bpp wall-only specialization. This remains independent
  * of the R20 8x8 tile-word assembly kernels. Preserve the original sprite,
@@ -219,7 +265,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
     const uint8_t *source=v->source, *colormap=v->colormap;
-    uint8_t *dst=r22_fb.pixels+(uint16_t)first*R22_PITCH+((uint16_t)x>>1);
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     int16_t remaining=(int16_t)(y1-first+1);
     if(x&1){
         do {
@@ -281,7 +327,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     uint8_t sample=(uint8_t)(r22_color[c]&15u);
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
-    uint8_t *dst=r22_fb.pixels+(uint16_t)y0*R22_PITCH+((uint16_t)x>>1);
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
     uint16_t n=(uint16_t)(y1-y0);
     do {
         *dst=(uint8_t)((*dst&keep)|put);
@@ -295,6 +341,24 @@ void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPA
 void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){if(p<0)p=0;if(p>13)p=13;PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);}
+
+#if defined(DOOM_R47_PLANE_PAIR)
+static void R47_LoadPairTiles(void)
+{
+    uint32_t tile[8];
+    for(uint16_t p=0;p<256;p++){
+        const uint32_t top=R22_ExpandPair((uint8_t)p);
+        tile[0]=tile[1]=tile[2]=tile[3]=top;
+        tile[4]=tile[5]=tile[6]=tile[7]=0;
+        VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
+    }
+}
+static void R47_ClearPairBuffer(void)
+{
+    uint16_t *w=(uint16_t *)(void *)r22_fb.pixels;
+    for(uint16_t i=0;i<38*R22_H;i++)w[i]=(uint16_t)R22_PAIR_TILE_BASE;
+}
+#endif
 
 #if defined(DOOM_R35_ART_RAW)
 #include "r35_native4.inc"
@@ -310,11 +374,37 @@ void R20_VBlankVideo(void){
     uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");
     bool bus=Z80_getAndRequestBus(TRUE);VDP_setAutoInc(2);
     volatile uint16_t *ctrl=(volatile uint16_t*)0xC00004;
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Each sample row already is 38 VDP tile words (0x0100 | color-pair).
+     * A receives even rows; B receives odd rows and is vertically shifted
+     * by -4 pixels. No dynamic pattern upload is required. */
+    const uint16_t *srca=R22_PairRow(r22_fb.pixels,2);
+    const uint16_t *srcb=R22_PairRow(r22_fb.pixels,3);
+    uint16_t dsta=VDP_BG_A+128,dstb=VDP_BG_B+128;
+    for(uint16_t y=1;y<22;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){
+        uint32_t a=((uint32_t)(uintptr_t)srca)>>1;
+        *ctrl=0x9300|38;*ctrl=0x9400;
+        *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
+        volatile uint32_t command=VDP_DMA_VRAM_ADDR(dsta);
+        volatile uint16_t *words=(volatile uint16_t*)&command;
+        *ctrl=words[0];
+        __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
+        if(!r22_overlay_dirty){
+            a=((uint32_t)(uintptr_t)srcb)>>1;
+            *ctrl=0x9300|38;*ctrl=0x9400;
+            *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
+            command=VDP_DMA_VRAM_ADDR(dstb);
+            words=(volatile uint16_t*)&command;
+            *ctrl=words[0];
+            __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
+        }
+    }
+#else
     #if defined(DOOM_R22_SOLID_TILES)
     const uint16_t *src=r22_map;
-#else
+    #else
     const uint16_t *src=&r22_maps[r22_next_bank][38];
-#endif
+    #endif
     /* Row0 is persistent text/FPS. Flip the21 graphics rows below it. */
     uint16_t dst=VDP_BG_A+128;
     for(uint16_t y=1;y<22;y++,src+=38,dst+=128){
@@ -326,14 +416,18 @@ void R20_VBlankVideo(void){
         *ctrl=words[0];
         __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
     }
+#endif
     if(!bus)Z80_releaseBus();
     __asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");
+#if !defined(DOOM_R47_PLANE_PAIR)
     r22_front=r22_next_bank;
+#endif
     __asm__ volatile("":::"memory");r22_ready=0;
 }
 void R20_AbortVideo(void){uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");r22_ready=0;r22_newpal=100;__asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");}
 void R20_StopVideo(void){while(r22_ready){if(_g_vblankCount-r22_queued>180)I_Error("PX4 VBlank timeout");}}
 
+#if !defined(DOOM_R47_PLANE_PAIR)
 static inline uint32_t R22_Expand(uint8_t p){
 #if defined(DOOM_R22_PAIR_LUT)
     return r22_pair_lut[p];
@@ -361,6 +455,7 @@ static void R22_UploadBack(uint16_t bank){
         R22_Unlock(sr);
     }
 }
+#endif
 
 static void R22_Text(int16_t x,int16_t y,const char *s){
 #if defined(DOOM_R35_ART_RAW)
@@ -412,7 +507,13 @@ static void R22_EndOverlay(void){
 #endif
     if(r22_overlay_dirty && !r22_text_this_frame)R22_ClearOverlay();
 }
-void V_ClearViewWindow(void){memset(r22_fb.pixels,0,R22_FB_BYTES);}
+void V_ClearViewWindow(void){
+#if defined(DOOM_R47_PLANE_PAIR)
+    R47_ClearPairBuffer();
+#else
+    memset(r22_fb.pixels,0,R22_FB_BYTES);
+#endif
+}
 
 void V_DrawBackground(int16_t n){(void)n;V_ClearViewWindow();}
 void V_DrawRawFullScreen(int16_t n){
@@ -461,9 +562,14 @@ void I_FinishUpdate(void){
 #if defined(DOOM_R20_STACKGUARD)
     static uint8_t sample;R20_PROBE();if((sample++&15u)==0)R20_DiagSample();
 #endif
+#if defined(DOOM_R47_PLANE_PAIR)
+    if(_g_gamestate==GS_LEVEL)R22_HUD();
+    r22_next_bank=0;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
+#else
     uint16_t back=r22_front^1;R22_UploadBack(back);
     if(_g_gamestate==GS_LEVEL)R22_HUD();
     r22_next_bank=back;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
+#endif
     __asm__ volatile("":::"memory");r22_ready=1;
 #if defined(TIMEDEMO)
     I_BenchmarkFrame();
@@ -471,6 +577,18 @@ void I_FinishUpdate(void){
 }
 void I_InitGraphicsHardwareSpecificCode(void){
     R20_StopVideo();VDP_setScreenWidth320();VDP_setPlaneSize(64,32,FALSE);
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Fixed non-moving R47 layout: pair patterns 256..511; font B400..BFFF. */
+    VDP_setBGBAddress(0xC000);VDP_setWindowAddress(0xD000);
+    VDP_setSpriteListAddress(0xF400);VDP_setHScrollTableAddress(0xF000);
+    VDP_setBGAAddress(0xE000);
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
+    if(TILE_FONT_INDEX!=1440 || VDP_BG_A!=0xE000 || VDP_BG_B!=0xC000 || VDP_WINDOW!=0xD000)
+        I_Error("R47 pair VDP/font layout");
+    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
+    VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,0);
+    VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,-4);
+#else
     /* All map/table addresses>=E000, soSGDK relocates its96font tiles to
        D400..DFFF, above both graphics banks (endingD2FF). */
     VDP_setBGBAddress(0xE000);VDP_setWindowAddress(0xF000);VDP_setSpriteListAddress(0xFC00);VDP_setHScrollTableAddress(0xFC00);VDP_setBGAAddress(0xE000);
@@ -479,6 +597,7 @@ void I_InitGraphicsHardwareSpecificCode(void){
         I_Error("PX4 VDP/font layout");
     VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(WINDOW,TRUE);
     VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,0);VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,0);
+#endif
     /* Explicit solid tiles also guarantee transparent tile0 for Window.
        Do not rely on the SDK's initial contents surviving font relocation. */
     uint16_t sr=R22_Lock();
@@ -486,8 +605,16 @@ void I_InitGraphicsHardwareSpecificCode(void){
     VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(0);
     for(uint16_t c=0;c<16;c++){uint32_t row=(uint32_t)c*0x11111111u;for(uint16_t y=0;y<8;y++)*data=row;}
     R22_Unlock(sr);
+#if defined(DOOM_R47_PLANE_PAIR)
+    R47_LoadPairTiles();
+#endif
     R22_InitOpenings();R22_Palette(0);r22_newpal=100;
-    r22_fb.before=r22_fb.after=R22_GUARD;memset(r22_fb.pixels,0,R22_FB_BYTES);
+    r22_fb.before=r22_fb.after=R22_GUARD;
+#if defined(DOOM_R47_PLANE_PAIR)
+    R47_ClearPairBuffer();
+#else
+    memset(r22_fb.pixels,0,R22_FB_BYTES);
+#endif
     r22_front=0;r22_ready=0;
 #if defined(DOOM_R22_PATTERN)
     for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,(uint8_t)((x+y)&15));
