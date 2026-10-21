@@ -239,6 +239,39 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     const uint8_t *source=v->source,*colormap=v->colormap;
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     uint16_t n=(uint16_t)(y1-first);
+#if defined(DOOM_R48_PAIR_V)
+    uint16_t count=(uint16_t)(n+1u);
+    uint16_t odd=(uint16_t)(first&1);
+    if(odd && count) {
+        uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        dst+=152; frac=(uint16_t)(frac+step); --count;
+    }
+#if defined(DOOM_R48_V_FAST)
+    while(count>=2) {
+        uint8_t a=source[frac>>9]; if(colormap)a=colormap[a];
+        frac=(uint16_t)(frac+step);
+        uint8_t b=source[frac>>9]; if(colormap)b=colormap[b];
+        frac=(uint16_t)(frac+step);
+        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        dst+=152; count-=2;
+    }
+#else
+    while(count>=2) {
+        uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+        frac=(uint16_t)(frac+step);
+        ci=source[frac>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        frac=(uint16_t)(frac+step);
+        dst+=152; count-=2;
+    }
+#endif
+    if(count) {
+        uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+    }
+#else
     if(x&1){
         do{
             uint8_t ci=source[frac>>9];if(colormap)ci=colormap[ci];
@@ -252,6 +285,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
             dst+=R22_PITCH;frac=(uint16_t)(frac+step);
         }while(n--);
     }
+#endif /* Pair-V column renderer */
 #else
     int16_t n=v->yh-v->yl+1;if(n<=0)return;
     uint16_t frac=(uint16_t)((v->texturemid>>7)+(v->yl-CENTERY)*v->fracstep);
@@ -289,6 +323,37 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     const uint8_t *source=v->source, *colormap=v->colormap;
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     int16_t remaining=(int16_t)(y1-first+1);
+#if defined(DOOM_R48_PAIR_V)
+    uint16_t count=(uint16_t)remaining;
+    if((first&1) && count) {
+        uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        dst+=152; f=(uint16_t)(f+step); --count;
+    }
+#if defined(DOOM_R48_V_FAST)
+    while(count>=2) {
+        uint8_t a=source[f>>9]; if(colormap)a=colormap[a];
+        f=(uint16_t)(f+step);
+        uint8_t b=source[f>>9]; if(colormap)b=colormap[b];
+        f=(uint16_t)(f+step);
+        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        dst+=152; count-=2;
+    }
+#else
+    while(count>=2) {
+        uint8_t a=source[f>>9]; if(colormap)a=colormap[a];
+        f=(uint16_t)(f+step);
+        uint8_t b=source[f>>9]; if(colormap)b=colormap[b];
+        f=(uint16_t)(f+step);
+        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        dst+=152; count-=2;
+    }
+#endif
+    if(count) {
+        uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
+        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+    }
+#else
     if(x&1){
         do {
             uint8_t ci=source[f>>9];
@@ -326,6 +391,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
             dst+=R22_PITCH; f=(uint16_t)(f+step);
         }while(--remaining);
     }
+#endif /* Pair-V column renderer */
 }
 void R_DrawColumnWall(const draw_column_vars_t *v){R42_DrawPackedWall(v);}
 #else
@@ -352,11 +418,29 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+#if defined(DOOM_R48_PAIR_V)
+    uint16_t count=(uint16_t)(y1-y0+1);
+    if((y0&1) && count) {
+        *dst=(uint8_t)((*dst&0xf0u)|sample); dst+=152; --count;
+    }
+#if defined(DOOM_R48_V_FAST)
+    const uint8_t pair=(uint8_t)(sample*0x11u);
+    while(count>=2) { *dst=pair; dst+=152; count-=2; }
+#else
+    while(count>=2) {
+        *dst=(uint8_t)((*dst&0x0fu)|(sample<<4));
+        *dst=(uint8_t)((*dst&0xf0u)|sample);
+        dst+=152; count-=2;
+    }
+#endif
+    if(count) *dst=(uint8_t)((*dst&0x0fu)|(sample<<4));
+#else
     uint16_t n=(uint16_t)(y1-y0);
     do {
         *dst=(uint8_t)((*dst&keep)|put);
         dst+=R22_PITCH;
     } while(n--);
+#endif
 #else
     c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
 #endif
@@ -371,9 +455,27 @@ static void R47_LoadPairTiles(void)
 {
     uint32_t tile[8];
     for(uint16_t p=0;p<256;p++){
+#if defined(DOOM_R48_PAIR_V)
+        /* Pair-V: upper/lower logical samples share an 8px-high tile.
+         * Only left four physical pixels are opaque; Plane B is shifted +4. */
+        uint8_t hi=(uint8_t)(p>>4),lo=(uint8_t)(p&15);
+#if defined(DOOM_R48_V_DITHER50)
+        /* Early tonal-experiment proof only, not an optimized perceptual LUT:
+         * introduce a second similar luminance/hue color in the 4px sample. */
+        static const uint8_t partner[16]={0,1,3,2,6,2,4,10,11,9,12,14,10,12,15,14};
+        uint32_t upper=((uint32_t)hi*0x11000000u)|((uint32_t)partner[hi]*0x00110000u);
+        uint32_t lower=((uint32_t)lo*0x11000000u)|((uint32_t)partner[lo]*0x00110000u);
+#else
+        uint32_t upper=(uint32_t)hi*0x11110000u;
+        uint32_t lower=(uint32_t)lo*0x11110000u;
+#endif
+        tile[0]=tile[1]=tile[2]=tile[3]=upper;
+        tile[4]=tile[5]=tile[6]=tile[7]=lower;
+#else
         const uint32_t top=R22_ExpandPair((uint8_t)p);
         tile[0]=tile[1]=tile[2]=tile[3]=top;
         tile[4]=tile[5]=tile[6]=tile[7]=0;
+#endif
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
     }
 }
@@ -402,8 +504,13 @@ void R20_VBlankVideo(void){
     /* Each sample row already is 38 VDP tile words (0x0100 | color-pair).
      * A receives even rows; B receives odd rows and is vertically shifted
      * by -4 pixels. No dynamic pattern upload is required. */
+#if defined(DOOM_R48_PAIR_V)
+    const uint16_t *srca=(const uint16_t *)(const void *)(r22_fb.pixels+152);
+    const uint16_t *srcb=(const uint16_t *)(const void *)(r22_fb.pixels+152+76);
+#else
     const uint16_t *srca=R22_PairRow(r22_fb.pixels,2);
     const uint16_t *srcb=R22_PairRow(r22_fb.pixels,3);
+#endif
     uint16_t dsta=VDP_BG_A+128,dstb=VDP_BG_B+128;
     for(uint16_t y=1;y<22;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){
         uint32_t a=((uint32_t)(uintptr_t)srca)>>1;
@@ -617,7 +724,13 @@ void I_InitGraphicsHardwareSpecificCode(void){
         I_Error("R47 pair VDP/font layout");
     VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
     VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,0);
-    VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,-4);
+    VDP_setVerticalScroll(BG_A,0);
+#if defined(DOOM_R48_PAIR_V)
+    VDP_setVerticalScroll(BG_B,0);
+    VDP_setHorizontalScroll(BG_B,4);
+#else
+    VDP_setVerticalScroll(BG_B,-4);
+#endif
 #else
     /* All map/table addresses>=E000, soSGDK relocates its96font tiles to
        D400..DFFF, above both graphics banks (endingD2FF). */
