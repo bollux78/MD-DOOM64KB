@@ -33,8 +33,8 @@ jobs:
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
           mkdir -p dist/r48-p0
-          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r47-pair-fix/ORACLE-plane-pair.txt
-          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r47-pair-fix/ORACLE-vdp.json
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r48-p0/ORACLE-plane-pair.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r48-p0/ORACLE-vdp.json
 
       - name: Restore pinned E1M1 VGM
         shell: bash
