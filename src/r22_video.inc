@@ -227,7 +227,13 @@ void I_R21_TextScreen(void)
     VDP_waitDMACompletion();
     VDP_setHInterrupt(FALSE);
     VDP_clearPlane(BG_A, TRUE);
+#if defined(DOOM_R47_PLANE_PAIR)
+    /* Pair A/B name tables contain independent video samples.  Erase B
+     * too, otherwise the PERF result screen retains raster stripes. */
+    VDP_clearPlane(BG_B, TRUE);
+#endif
     VDP_clearPlane(WINDOW, TRUE);
+    VDP_waitDMACompletion();
     VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
