@@ -68,6 +68,11 @@ static void R35_LeaveNative4(void)
 #endif
 #endif
     PAL_setColors(0,r22_cram[0],16,CPU);
+#if defined(DOOM_R49_COLORMIX)
+    /* Native static pictures load all 64 CRAM entries. Restore PAL1's
+     * additional 15 game shades before re-enabling raster gameplay. */
+    PAL_setColors(16,r49_palette1,16,CPU);
+#endif
     r22_newpal=100;
     r22_queued_pal=100;
     r22_overlay_dirty=0;
