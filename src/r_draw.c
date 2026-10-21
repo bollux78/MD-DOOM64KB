@@ -66,6 +66,9 @@
    Compare ROM bus reads with DIVU.W in timedemo. */
 #include "r20_counters.h"
 #include "r37_profile.h"
+#if defined(DOOM_R47_MUL_BSP)
+#include "r47_mul.h"
+#endif
 #if defined(DOOM_R12_RECIP_LUT)
 #include "r12_recip_lut.h"
 #endif
@@ -907,7 +910,11 @@ static PUREFUNC int16_t R_PointOnSide(fixed_t x, fixed_t y, const mapnode_t __fa
 		return (node->dy ^ ix) < 0;  // (left is negative)
 
 	//return FixedMul(y, node->dx) >= FixedMul(x, node->dy);
+#if defined(DOOM_R47_MUL_BSP)
+    return R47_Mul32x16(y >> 8,node->dx) >= R47_Mul32x16(x >> 8,node->dy);
+#else
 	return (y >> 8) * node->dx >= (x >> 8) * node->dy;
+#endif
 }
 
 //
