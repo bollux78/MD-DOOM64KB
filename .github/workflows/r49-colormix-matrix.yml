@@ -1,0 +1,243 @@
+name: R49 Pair-V cleanup, LUT, faithful ColorMix matrix
+
+on:
+  push:
+    branches: [r49-v-colormix-fixes]
+    paths:
+      - '.github/workflows/r49-v-colormix-fixes.yml'
+      - 'src/r22_video.inc'
+      - 'src/r22_benchmark.inc'
+      - 'src/r22_pixel4.h'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/test_r48_pair_v.py'
+      - 'scripts/lab/gen_r49_colormix.py'
+      - 'scripts/lab/test_r49_colormix.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/set_rom_identity.py'
+  workflow_dispatch:
+
+concurrency:
+  group: r49-v-colormix-fixes
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r49-cm
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r49-cm/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r49-cm/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r49-cm/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Build R49 control, cleanup, LUT and color-fidelity variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r49-cm
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          p4 () {
+            local mode="$1" id="$2" pairv="$3" fast="$4" mix="$5" lut="$6" ratio="$7"
+            echo "====== R49 $id / $mode ======"
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 \
+                DOOM_R47_SPRITE_HOIST=1 DOOM_R48_PAIR_V="$pairv" \
+                DOOM_R48_V_FAST="$fast" DOOM_R49_COLORMIX="$mix" \
+                DOOM_R49_COMPLUT="$lut" DOOM_R49_RATIO="$ratio" \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R49_BUILD="$id" \
+                fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            cp -f "dist/r35/doom-md-r49-$id.bin" "$D/"
+            cp -f "dist/r35/flags-doom-md-r49-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A \
+                "dist/r35/doom-md-r49-$id.elf" > "$D/size-$id.txt"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S -n \
+                "dist/r35/doom-md-r49-$id.elf" | grep -E 'r22_fb|r40b_native_bits|_bend|__stack|openings' \
+                > "$D/symbols-$id.txt" || true
+            if test "$mix" = 1; then
+                cp src/r49_colormix_report.json "$D/COLORMIX-PALETTE-REPORT.json"
+            fi
+          }
+          # Reference Pair-H, with the native-art B-plane cleanup fix.
+          p4 perf h-all-perf 0 0 0 0 none
+          p4 play h-all-play 0 0 0 0 none
+          # Reference Pair-V Fast, fix only (no new color palette).
+          p4 perf vf-all-perf 1 1 0 0 none
+          p4 play vf-all-play 1 1 0 0 none
+          # Isolate the ROM-only colormap composition effect.
+          p4 perf vlut-perf 1 1 0 1 none
+          p4 play vlut-play 1 1 0 1 none
+          # Second palette: only 4x4 pairs with BOTH sampled pixels eligible.
+          p4 perf cm50-perf 1 1 1 0 50
+          p4 play cm50-play 1 1 1 0 50
+          p4 perf cm50l-perf 1 1 1 1 50
+          p4 play cm50l-play 1 1 1 1 50
+          p4 perf cm75a-perf 1 1 1 1 75a
+          p4 play cm75a-play 1 1 1 1 75a
+          p4 perf cm75b-perf 1 1 1 1 75b
+          p4 play cm75b-play 1 1 1 1 75b
+          # Preserve a nonfast V reference to spot compiler/loop effects.
+          p4 perf v-raw-perf 1 0 0 0 none
+
+      - name: Assert all Pair builds respect WRAM budget and run LUT oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r49-cm
+          python3 scripts/lab/test_r49_colormix.py | tee "$D/ORACLE-colormix.txt"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          d=Path('dist/r49-cm')
+          sizes={}
+          for p in sorted(d.glob('size-*.txt')):
+              m=re.search(r'^\.bss\s+(\d+)\s+',p.read_text(),re.M)
+              if not m: raise SystemExit(f'No BSS in {p.name}')
+              sizes[p.name]=int(m.group(1))
+              if sizes[p.name]>57920: raise SystemExit(f'WRAM/boot heap limit {p.name}={sizes[p.name]}')
+          if len(sizes)!=15: raise SystemExit(f'Expected 15 ROMs, got {len(sizes)}')
+          if any('r40b_native_bits' in p.read_text() for p in d.glob('symbols-*.txt')):
+              raise SystemExit('Extra native-art WRAM buffer!')
+          (d/'BSS-AUDIT.txt').write_text('\n'.join(f'{p}: {s}' for p,s in sizes.items())+'\n')
+          print('\n'.join(f'{p}: {s}' for p,s in sizes.items()))
+          PY
+
+      - name: BlastEm PERF completion smoke on all 9 PERFs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,shutil,subprocess,time
+          d=Path('dist/r49-cm').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in (Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          if not exe: raise SystemExit('BlastEm not found on runner')
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy')
+          lines=[]
+          roms=sorted(d.glob('*-perf.bin'))
+          if len(roms)!=9: raise SystemExit(f'Expected 9 PERFs, got {len(roms)}')
+          for rom in roms:
+              start=time.monotonic()
+              try:
+                  r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                      stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                      text=True,errors='replace',timeout=35)
+              except subprocess.TimeoutExpired:
+                  raise SystemExit(f'{rom.name}: emulator hang')
+              line=f'{rom.name}: exit={r.returncode} wall={time.monotonic()-start:.2f}s'
+              print(line,flush=True);lines.append(line)
+              if r.returncode: raise SystemExit(line)
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Write R49 manifest and quality evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          d=Path('dist/r49-cm')
+          roms=[{'name':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in sorted(d.glob('*.bin'))]
+          if len(roms)!=15: raise SystemExit(f'Expected 15 ROMs, got {len(roms)}')
+          data={
+            'baseline':'R48 Pair-V Fast ALL measured 5.31 FPS / 402.23s before R49 fixes',
+            'control':'R49 vf-all-perf is fixed Pair-V Fast without ColorMix or LUT',
+            'pair_h':'R49 h-all-perf fixed Pair-H control (historical 4.71 FPS)',
+            'color_quality':'PAL0 original untouched; PAL1 independently selected; 50/75 ratio with per-PLAYPAL RGB average-error gate; BOTH upper and lower pixel gates required per tile',
+            'limitation':'quality gate concerns RGB-average and stripe penalty, NOT CRT psychovisual proof',
+            'layout':'4x256 pattern banks, 256..1279 (<1440 font), one 3344-byte framebuffer',
+            'validation':'host Pixel-V oracle + ColorMix RGB gate + BSS audit + BlastEm smoke. Gameplay/hardware user validation still required',
+            'roms':roms,
+          }
+          (d/'MANIFEST.json').write_text(json.dumps(data,indent=2)+'\n')
+          (d/'README.txt').write_text(
+            'R49: FIX native-static picture leftovers in BOTH Pair planes and PERF summary.\n'
+            'ROMs: h-all (Pair-H control), vf-all (Pair-V Fast control), vlut (ROM comp-LUT),\n'
+            'cm50 (PAL1 mix 2:2), cm50l (PAL1 mix+LUT), cm75a (3:1), cm75b (1:3).\n'
+            'ColorMix does NOT replace PAL0. Individual samples must pass a perceptual-proxy\n'
+            'RGB gate and both samples in a vertical tile must be eligible.\n'
+            'Pair palette mixing does NOT implement VDP alpha blending.\n'
+            'Run all PERFs under the same BlastEm divisor 7. Inspect PLAY art/HUD and colors.\n')
+          print(json.dumps({'roms':[x['name'] for x in roms]},indent=2))
+          PY
+
+      - name: Upload R49 fixes ColorMix batch
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r49-colormix-fixes
+          path: dist/r49-cm/
+          retention-days: 90
+          if-no-files-found: error
