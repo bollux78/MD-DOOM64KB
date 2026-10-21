@@ -267,6 +267,21 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_SPRITE_HOIST'
     end
+    if set -q DOOM_R48_P0_PROFILE; and test "$DOOM_R48_P0_PROFILE" = 1
+        if test "$v" != pixel4-perf
+            echo 'R48 P0 counters are only valid on pixel4-perf'; exit 2
+        end
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R48 P0 requires R47 Plane-Pair-H'; exit 2
+        end
+        if not set -q DOOM_R47_FLAT_HOIST; or test "$DOOM_R47_FLAT_HOIST" != 1
+            echo 'R48 P0 requires R47 Flat-Hoist'; exit 2
+        end
+        if not set -q DOOM_R47_SPRITE_HOIST; or test "$DOOM_R47_SPRITE_HOIST" != 1
+            echo 'R48 P0 requires R47 Sprite-Hoist'; exit 2
+        end
+        set defs $defs '-DDOOM_R48_P0_PROFILE'
+    end
     if set -q DOOM_R47_PLANE_PAIR; and test "$DOOM_R47_PLANE_PAIR" = 1
         if not contains -- $v pixel4-perf pixel4-play
             echo 'R47 plane-pair requires independent pixel4 path'; exit 2
@@ -610,6 +625,12 @@ for v in $variants
             echo 'Invalid R47 build id'; exit 2
         end
         set id doom-md-r47-$DOOM_R47_BUILD
+    end
+    if set -q DOOM_R48_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R48_BUILD"
+            echo 'Invalid R48 build id'; exit 2
+        end
+        set id doom-md-r48-$DOOM_R48_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
