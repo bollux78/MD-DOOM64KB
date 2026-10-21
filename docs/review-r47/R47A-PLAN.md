@@ -1,0 +1,13 @@
+# R47A: optimization experiment from independent R47 proposal
+- Frozen start: R46 M6A commit 48c7365. R5 hardware-approved controls preserved.
+- R47 external agent host proof: flat clipping ~197→92 cycles/pixel in Musashi; not measured as ROM.
+- R47A changes only R_DrawColumnFlat in native 4x4 standalone under -DDOOM_R47_FLAT_HOIST.
+- Same 4x4 wall ASM, palette, map upload, heap and SGDK as R45 ASM control.
+- Four ROMs: Primary 8x8 SHA locked; R45 ASM 4x4 SHA locked; optimized 4x4 PERF and PLAY.
+- Host randomized oracle checks 120000 cases for complete packed4 framebuffer equality.
+- Independent plane-pair host simulation shows 40 random frames equivalent for gameplay but the WINDOW/menu overlay difference is known and deliberately fails strict 1:1.
+- The plane-pair proposal is NOT integrated in R47A, NOT booted on hardware and estimates 4.7–6 FPS are only hypotheses.
+- CI must check primary and R45 SHA, 68k text/BSS, source flags and short BlastEm boot. Do not call that a complete timedemo.
+- User should compare DEMO3 2134 game frames, FPS, min/max, output text, RAM audit ERRORS=0, and inspect menus/intermission/play in real BlastEm then hardware.
+- Return policy: any black/red image, font corruption or memory audit failure requires code and upstream research before further changes.
+- Next after R47A: separate guarded R47B plane-pair 2-plan DMA proof; do not combine into the flat A/B measurement before documenting outcome.
