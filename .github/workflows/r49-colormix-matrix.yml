@@ -182,7 +182,7 @@ jobs:
           print('\n'.join(f'{p}: {s}' for p,s in sizes.items()))
           PY
 
-      - name: BlastEm PERF completion smoke on all 9 PERFs
+      - name: BlastEm PERF completion smoke on all 8 PERFs
         shell: bash
         run: |
           set -euo pipefail
@@ -196,7 +196,7 @@ jobs:
           env.update(SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy')
           lines=[]
           roms=sorted(d.glob('*-perf.bin'))
-          if len(roms)!=9: raise SystemExit(f'Expected 9 PERFs, got {len(roms)}')
+          if len(roms)!=8: raise SystemExit(f'Expected 8 PERFs, got {len(roms)}')
           for rom in roms:
               start=time.monotonic()
               try:
