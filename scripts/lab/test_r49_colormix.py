@@ -21,7 +21,11 @@ def extract(txt,name):
     assert m,name
     return [int(x) for x in m.group(1).replace("\n","").split(",")]
 base=extract(r22,"r22_color")
-pal0=extract(r22,"r22_cram")
+# Unlike the generated 1-D lookup arrays, r22_cram is [14][16].
+p0=re.search(r"r22_cram\[14\]\[16\]=\{(.*)\};",r22,re.S)
+assert p0,"Missing original PLAYPAL CRAM table"
+pal0=[int(n) for row in re.findall(r"\{([^}]+)\}",p0.group(1))
+      for n in row.split(",")]
 pal1=extract(tables,"r49_palette1")
 assert len(pal0)==len(pal1)==224
 assert len(base)==256
@@ -34,7 +38,7 @@ for key,(wa,wb) in {"50":(2,2),"75a":(3,1),"75b":(1,3)}.items():
     b=extract(tables,"r49_mix_b_"+key)
     g=extract(tables,"r49_mix_ok_"+key)
     assert len(a)==len(b)==16 and len(g)==14*256
-    assert max(a+b)<=15
+    assert min(a+b)>=1 and max(a+b)<=15, "Transparent PAL1 index in a mix"
     for offset,eligible in enumerate(g):
         assert eligible in (0,1)
         if not eligible: continue
@@ -50,18 +54,19 @@ for key,(wa,wb) in {"50":(2,2),"75a":(3,1),"75b":(1,3)}.items():
     counts[key]=sum(g)
     # A and B planes each store two vertically adjacent Doom sample indices.
     # The tilebank encodes the two eligibility flags, not an extra framebuffer.
-    for upper in (0,1,4,15,41,155,255):
+    for sp in (0,4,8,13):
+      for upper in (0,1,4,15,41,155,255):
         for lower in (0,1,15,17,91,254,255):
-            gu,gl=g[upper],g[lower]
-            bank=gu+2*gl
-            index=256+256*bank+(base[upper]<<4)+base[lower]
-            attr=(0x2000 if bank==3 else 0)+index
-            assert index<1280 and (attr&0x7ff)==index
-            assert (attr&0x6000)==(0x2000 if bank==3 else 0)
-            if bank!=3:
-                # Pattern banks 0/1/2 reproduce the exact old solid pixels.
-                out_a=base[upper]
-                out_b=base[lower]
-                assert out_a==base[upper] and out_b==base[lower]
+                gu,gl=g[sp*256+upper],g[sp*256+lower]
+                bank=gu+2*gl
+                index=256+256*bank+(base[upper]<<4)+base[lower]
+                attr=(0x2000 if bank==3 else 0)+index
+                assert index<1280 and (attr&0x7ff)==index
+                assert (attr&0x6000)==(0x2000 if bank==3 else 0)
+                if bank!=3:
+                    # Pattern banks 0/1/2 reproduce the exact old solid pixels.
+                    out_a=base[upper]
+                    out_b=base[lower]
+                    assert out_a==base[upper] and out_b==base[lower]
 print("R49 ColorMix oracle PASS; eligible original indices:",counts,
       "always exact original solids if either sample fails the gate")
