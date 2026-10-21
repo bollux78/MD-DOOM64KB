@@ -45,6 +45,23 @@ extern void R22_InitOpenings(void);
 void *R22_Alloc(uint16_t n) { return MEM_alloc(n); }
 static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;
 static volatile uint16_t r22_ready;
+/* R48 P0: count submitted/visible raster work, not 68000 cycles.
+ * Instrumented PERF must not be used as a speed baseline.
+ * Exactly 8 longs = 32 B of extra BSS; respect the Pair boot guard. */
+#if defined(DOOM_R48_P0_PROFILE)
+#if !defined(TIMEDEMO)
+#error R48 P0 is a timedemo-only diagnostic
+#endif
+enum {
+    R48_WALL_PIXELS, R48_FLAT_PIXELS, R48_SPRITE_PIXELS,
+    R48_WALL_CALLS, R48_FLAT_CALLS, R48_SPRITE_CALLS,
+    R48_WAIT_CALLS, R48_WAIT_SPINS, R48_STATS_N
+};
+static uint32_t r48_prof[R48_STATS_N];
+#define R48_COUNT(field,n) do { if(bench_active) r48_prof[(field)]+=(uint32_t)(n); } while(0)
+#else
+#define R48_COUNT(field,n) ((void)0)
+#endif
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
@@ -214,6 +231,8 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     if(first<0)first=0;
     if(y1>=R22_H)y1=R22_H-1;
     if(first>y1)return;
+    R48_COUNT(R48_SPRITE_CALLS,1);
+    R48_COUNT(R48_SPRITE_PIXELS,(uint16_t)(y1-first+1));
     uint16_t frac=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
     frac=(uint16_t)(frac+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
@@ -262,6 +281,8 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     if(first<border) first=border;
     if(y1>=R22_H) y1=R22_H-1;
     if(first>y1) return;
+    R48_COUNT(R48_WALL_CALLS,1);
+    R48_COUNT(R48_WALL_PIXELS,(uint16_t)(y1-first+1));
     uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
     f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
@@ -325,6 +346,8 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     if(y0<0)y0=0;
     if(y1>=R22_H)y1=R22_H-1;
     if(y0>y1)return;
+    R48_COUNT(R48_FLAT_CALLS,1);
+    R48_COUNT(R48_FLAT_PIXELS,(uint16_t)(y1-y0+1));
     uint8_t sample=(uint8_t)(r22_color[c]&15u);
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
@@ -426,7 +449,13 @@ void R20_VBlankVideo(void){
     __asm__ volatile("":::"memory");r22_ready=0;
 }
 void R20_AbortVideo(void){uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");r22_ready=0;r22_newpal=100;__asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");}
-void R20_StopVideo(void){while(r22_ready){if(_g_vblankCount-r22_queued>180)I_Error("PX4 VBlank timeout");}}
+void R20_StopVideo(void){
+    R48_COUNT(R48_WAIT_CALLS,1);
+    while(r22_ready){
+        R48_COUNT(R48_WAIT_SPINS,1);
+        if(_g_vblankCount-r22_queued>180)I_Error("PX4 VBlank timeout");
+    }
+}
 
 #if !defined(DOOM_R47_PLANE_PAIR)
 static inline uint32_t R22_Expand(uint8_t p){
