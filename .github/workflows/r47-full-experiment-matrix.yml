@@ -171,10 +171,10 @@ jobs:
           cell_perf "R47 mul-both perf" DOOM_R47_MUL_BSP=1 DOOM_R47_MUL_LOGIC=1 DOOM_R47_BUILD=mul-both-perf
 
           # End-state equivalence oracle: control and each multiply family.
-          cell_perf "R47 state control" DOOM_R47_STATE_HASH=1 DOOM_R47_BUILD=state-control-perf
-          cell_perf "R47 state mul-bsp" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_BSP=1 DOOM_R47_BUILD=state-mul-bsp-perf
-          cell_perf "R47 state mul-logic" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_LOGIC=1 DOOM_R47_BUILD=state-mul-logic-perf
-          cell_perf "R47 state mul-both" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_BSP=1 DOOM_R47_MUL_LOGIC=1 DOOM_R47_BUILD=state-mul-both-perf
+          cell_perf "R47 state control" DOOM_R47_STATE_HASH=1 DOOM_R47_BUILD=st-ctl-perf
+          cell_perf "R47 state mul-bsp" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_BSP=1 DOOM_R47_BUILD=st-bsp-perf
+          cell_perf "R47 state mul-logic" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_LOGIC=1 DOOM_R47_BUILD=st-logic-perf
+          cell_perf "R47 state mul-both" DOOM_R47_STATE_HASH=1 DOOM_R47_MUL_BSP=1 DOOM_R47_MUL_LOGIC=1 DOOM_R47_BUILD=st-both-perf
 
           # 4x4 renderer factorial: baseline plus every Flat/Sprite/PlanePair combination.
           p4_play "R45 ASM p4 play control"
@@ -183,16 +183,16 @@ jobs:
           p4_perf "R47 flat perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_BUILD=flat-p4perf
           p4_play "R47 sprite play" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=sprite-p4play
           p4_perf "R47 sprite perf" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=sprite-p4perf
-          p4_play "R47 flat+sprite play" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=flat-sprite-p4play
-          p4_perf "R47 flat+sprite perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=flat-sprite-p4perf
+          p4_play "R47 flat+sprite play" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=flat-spr-p4play
+          p4_perf "R47 flat+sprite perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_BUILD=flat-spr-p4perf
           p4_play "R47 plane-pair play" DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=pair-p4play
           p4_perf "R47 plane-pair perf" DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=pair-p4perf
           p4_play "R47 flat+pair play" DOOM_R47_FLAT_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=flat-pair-p4play
           p4_perf "R47 flat+pair perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=flat-pair-p4perf
-          p4_play "R47 sprite+pair play" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=sprite-pair-p4play
-          p4_perf "R47 sprite+pair perf" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=sprite-pair-p4perf
-          p4_play "R47 all p4 play" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=flat-sprite-pair-p4play
-          p4_perf "R47 all p4 perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=flat-sprite-pair-p4perf
+          p4_play "R47 sprite+pair play" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=spr-pair-p4play
+          p4_perf "R47 sprite+pair perf" DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=spr-pair-p4perf
+          p4_play "R47 all p4 play" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=all-p4play
+          p4_perf "R47 all p4 perf" DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1 DOOM_R47_BUILD=all-p4perf
 
           # Existing heap/layout stress controls stay in the same giant pack.
           for mode in r5safe r5stress r6asafe r6astress; do
