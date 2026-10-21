@@ -26,7 +26,7 @@ jobs:
           d=Path('docs/review-r47/R47B-SIM-PLAN.md').read_text()
           assert 'window_sat_overlap' in a and 'font_vram' in a
           assert 'window_underlay' not in a or 'window' in a
-          assert 'hardware_vblank_deadline_proven' not in a
+          assert '"hardware_vblank_deadline_proven":False' in a
           assert 'rtl_elaborated' in b and 'actual_vdp_dma_simulated' in b
           assert 'No ROM ZIP' in d
           print('R47B-SIM PASS: no video, m68k, or toolchain changes required')
