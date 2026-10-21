@@ -4,6 +4,8 @@
 
 module r47b_ym7101_smoke;
   reg MCLK=0, RESET=0;
+  reg MCLK_e=0;
+  always @(posedge MCLK) MCLK_e <= ~MCLK_e; // matches md_board.v
   always #9.313 MCLK=~MCLK; // approx NTSC 53.69 MHz oscillator
   wire vdp_hclk1,vdp_de_h,vdp_de_v,vdp_dma,vdp_dma_oe_early;
   wire vdp_hsync2,vdp_vsync2,VSYNC;
@@ -35,9 +37,9 @@ module r47b_ym7101_smoke;
     .SPA_B_i(1'b1),.SPA_B_pull(SPA_B_pull),.VSYNC(VSYNC),
     .CSYNC_i(1'b1),.CSYNC_pull(CSYNC_pull),
     .HSYNC_i(1'b1),.HSYNC_pull(HSYNC_pull),
-    .SEL0(1'b1),.CLK1_i(1'b0),.CLK1_o(CLK1_o),
+    .SEL0(1'b0),.CLK1_i(1'b0),.CLK1_o(CLK1_o),
     .SBCR(SBCR),.CLK0(CLK0),.CLK1_next(CLK1_next),.CLK0_next(CLK0_next),
-    .MCLK_e(MCLK),.EDCLK_i(1'b0),.EDCLK_o(EDCLK_o),.EDCLK_d(EDCLK_d),
+    .MCLK_e(MCLK_e),.EDCLK_i(1'b0),.EDCLK_o(EDCLK_o),.EDCLK_d(EDCLK_d),
     .CD_i(16'hFFFF),.CD_o(CD_o),.CD_d(CD_d),
     .CA_i(23'h7FFFFF),.CA_o(CA_o),.CA_d(CA_d),.SOUND(SOUND),
     .INT_pull(INT_pull),.BR_pull(BR_pull),.BGACK_i(1'b1),
