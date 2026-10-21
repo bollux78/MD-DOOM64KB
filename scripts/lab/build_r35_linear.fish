@@ -297,6 +297,384 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_PAIR_SGDK_DMA'
     end
+    if set -q DOOM_R47_PAIR_BOOT_RESERVE
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair boot-reserve diagnostic requires plane-pair'; exit 2
+        end
+        if not string match -rq '^[0-9]+
+    if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_MUL_BSP'
+    end
+    if set -q DOOM_R47_MUL_LOGIC; and test "$DOOM_R47_MUL_LOGIC" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R47 logic multiply experiment requires 8x8 cell backend'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_MUL_LOGIC'
+    end
+    if set -q DOOM_R47_STATE_HASH; and test "$DOOM_R47_STATE_HASH" = 1
+        if test "$v" != cell-perf
+            echo 'R47 state hash is a DEMO3 cell-perf oracle'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_STATE_HASH'
+    end
+    if set -q DOOM_R43_GRAY_CRT; and test "$DOOM_R43_GRAY_CRT" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R43 grayscale requires native pixel4'; exit 2
+        end
+        set defs $defs '-DDOOM_R43_GRAY_CRT'
+    end
+    if set -q DOOM_R46_M1; and test "$DOOM_R46_M1" = 1
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M1 requires primary R39f cell backend'
+            exit 2
+        end
+        if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+            echo 'R46 M1 requires full R39f tri-dither'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M1'
+    end
+    if set -q DOOM_R46_M1B; and test "$DOOM_R46_M1B" = 1
+        if not set -q DOOM_R46_M1; or test "$DOOM_R46_M1" != 1
+            echo 'R46 M1B requires the dual-linked M1A backend'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M1B prepares pixel4 VRAM alongside 8x8 cell'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M1B'
+    end
+    if set -q DOOM_R46_M2A; and test "$DOOM_R46_M2A" = 1
+        if not set -q DOOM_R46_M1B; or test "$DOOM_R46_M1B" != 1
+            echo 'R46 M2A requires linked M1B secondary pixel4 kernels'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M2A must preserve primary 8x8 geometry until dispatch'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M2A'
+    end
+    if set -q DOOM_R46_M2B; and test "$DOOM_R46_M2B" = 1
+        if not set -q DOOM_R46_M2A; or test "$DOOM_R46_M2A" != 1
+            echo 'R46 M2B needs linked M2A projection'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M2B keeps R39f 8x8 active until geometry dispatcher'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M2B'
+    end
+    if set -q DOOM_R46_M2C; and test "$DOOM_R46_M2C" = 1
+        if not set -q DOOM_R46_M2B; or test "$DOOM_R46_M2B" != 1
+            echo 'R46 M2C requires native vertical M2B geometry'
+            exit 2
+        end
+        if not contains -- $v cell-perf cell-play
+            echo 'R46 M2C retains primary 8x8 until full geometry dispatcher'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M2C'
+    end
+    if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+        if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+            echo 'M3B video boot test requires R46 M2C'
+            exit 2
+        end
+        if test "$v" != cell-perf
+            echo 'M3B diagnostic only builds timedemo cell-perf'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M3B_DIAG'
+    end
+    if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
+        if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+            echo 'M3C diagnostic requires the native 4x4 helper build'
+            exit 2
+        end
+        if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+            echo 'M3B and M3C video tests are mutually exclusive'
+            exit 2
+        end
+        if test "$v" != cell-perf
+            echo 'M3C boot diagnostic only builds cell-perf'
+            exit 2
+        end
+        set defs $defs '-DDOOM_R46_M3C_DIAG'
+        if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
+            set defs $defs '-DDOOM_R46_M3C_SAFE_BLANK'
+        end
+        if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
+            set defs $defs '-DDOOM_R46_M3C_STRESS'
+        end
+        if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+            set defs $defs '-DDOOM_R46_M3C_FONT_RESTORE'
+        end
+        if set -q DOOM_R46_M3C_LATE_BUFFER; and test "$DOOM_R46_M3C_LATE_BUFFER" = 1
+            if not set -q DOOM_R46_M3C_FONT_RESTORE; or test "$DOOM_R46_M3C_FONT_RESTORE" != 1
+                echo 'R5 delayed R20 allocation requires the R3 explicit font restore'
+                exit 2
+            end
+            set defs $defs '-DDOOM_R46_M3C_LATE_BUFFER'
+        end
+        if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+            if not set -q DOOM_R46_M3C_LATE_BUFFER; or test "$DOOM_R46_M3C_LATE_BUFFER" != 1
+                echo 'R6A oracle must use stable R5 deferred-video-heap diagnostic'
+                exit 2
+            end
+            # Layout-only contract. Does NOT change tile indices/SGDK ABI/VDP.
+            set defs $defs '-DDOOM_R46_M6A_LAYOUT'
+        end
+    end
+    set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
+    set -l id doom-md-r35d-$v
+    if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
+        set id doom-md-r37-$v
+    end
+    if set -q DOOM_R38_TIME_PROFILE; and test "$DOOM_R38_TIME_PROFILE" = 1; and contains -- $v cell-play cell-perf cell-profperf
+        set id doom-md-r38-$v
+    end
+    if set -q DOOM_R39C_VARIANT
+        set id doom-md-r39c-$DOOM_R39C_VARIANT-$v
+    end
+    if set -q DOOM_R39D_BUILD
+        switch "$DOOM_R39D_BUILD"
+            case control toggle
+                set id doom-md-r39d-$DOOM_R39D_BUILD-$v
+            case '*'
+                echo "Unknown R39d build $DOOM_R39D_BUILD"
+                exit 2
+        end
+    end
+    if set -q DOOM_R39E_BUILD
+        switch "$DOOM_R39E_BUILD"
+            case control audio
+                set id doom-md-r39e-$DOOM_R39E_BUILD-$v
+            case '*'
+                echo "Unknown R39e build $DOOM_R39E_BUILD"
+                exit 2
+        end
+    end
+    if set -q DOOM_R39F_BUILD
+        switch "$DOOM_R39F_BUILD"
+            case control dither3
+                if test "$DOOM_R39F_BUILD" = dither3
+                    if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+                        echo 'R39f dither3 build requires DOOM_R39F_DITHER3=1'
+                        exit 2
+                    end
+                end
+                set id doom-md-r39f-$DOOM_R39F_BUILD-$v
+            case '*'
+                echo "Unknown R39f build $DOOM_R39F_BUILD"
+                exit 2
+        end
+    end
+    if set -q DOOM_R40_STAGE1
+        switch "$DOOM_R40_STAGE1"
+            case base fast
+                if string match -q 'pixel4-*' -- "$v"
+                    set id doom-md-r40-$DOOM_R40_STAGE1-$v
+                else if string match -q 'cell-*' -- "$v"
+                    if test "$DOOM_R40_STAGE1" != fast
+                        echo 'R40 stage1 cell renderer uses only fast (R39e) build'
+                        exit 2
+                    end
+                    set id doom-md-r40-$v
+                else
+                    echo 'R40 stage1 only supports cell and pixel4 play/perf'
+                    exit 2
+                end
+            case '*'
+                echo "Unknown R40 Stage1 variant $DOOM_R40_STAGE1"
+                exit 2
+        end
+    end
+    if set -q DOOM_R40A_BUILD; and test "$DOOM_R40A_BUILD" = 1
+        if contains -- $v pixel4-play pixel4-perf
+            set id doom-md-r40a-$v
+        else
+            echo 'R40a fixes the pixel4 native picture overlay only'
+            exit 2
+        end
+    end
+    if set -q DOOM_R40B_BUILD; and test "$DOOM_R40B_BUILD" = 1
+        if contains -- $v pixel4-play pixel4-perf
+            set id doom-md-r40b-$v
+        else
+            echo 'R40b is a pixel4 title/intermission WINDOW change only'
+            exit 2
+        end
+    end
+    if set -q DOOM_R40C_M0; and test "$DOOM_R40C_M0" = 1
+        if contains -- $v cell-play cell-perf pixel4-play pixel4-perf
+            set id doom-md-r40c-$v
+        else
+            echo 'R40c M0 controls support only cell/pixel4 play/perf'
+            exit 2
+        end
+    end
+    if set -q DOOM_R45_VARIANT
+        switch "$DOOM_R45_VARIANT"
+            case cell
+                if not contains -- $v cell-perf cell-play
+                    echo 'R45 cell variant needs 8x8 renderer'; exit 2
+                end
+                if not set -q DOOM_R39F_DITHER3; or test "$DOOM_R39F_DITHER3" != 1
+                    echo 'R45 cell requires R39f dither3'; exit 2
+                end
+                set id doom-md-r45-$v
+            case asm gray
+                if not contains -- $v pixel4-perf pixel4-play
+                    echo 'R45 pixel4 variants require pixel4 renderer'; exit 2
+                end
+                if not set -q DOOM_R42_WALL_ASM; or test "$DOOM_R42_WALL_ASM" != 1
+                    echo 'R45 pixel4 variants require R42 ASM'; exit 2
+                end
+                if test "$DOOM_R45_VARIANT" = gray
+                    if not set -q DOOM_R43_GRAY_CRT; or test "$DOOM_R43_GRAY_CRT" != 1
+                        echo 'R45 gray requires R43 gray palette'; exit 2
+                    end
+                end
+                if test "$v" = pixel4-perf
+                    set id doom-md-r45-$DOOM_R45_VARIANT-p4perf
+                else
+                    set id doom-md-r45-$DOOM_R45_VARIANT-p4play
+                end
+            case '*'
+                echo 'Unknown R45 variant'; exit 2
+        end
+    end
+    if set -q DOOM_R46_BUILD
+        switch "$DOOM_R46_BUILD"
+            case primary m1 m1b m2a m2b m2c
+                if test "$DOOM_R46_BUILD" = m2c
+                    if not set -q DOOM_R46_M2C; or test "$DOOM_R46_M2C" != 1
+                        echo 'R46 m2c profile requires M2C feature flag'
+                        exit 2
+                    end
+                end
+                if test "$DOOM_R46_BUILD" = m2b
+                    if not set -q DOOM_R46_M2B; or test "$DOOM_R46_M2B" != 1
+                        echo 'R46 m2b profile requires M2B flag'
+                        exit 2
+                    end
+                end
+                if test "$DOOM_R46_BUILD" = m2a
+                    if not set -q DOOM_R46_M2A; or test "$DOOM_R46_M2A" != 1
+                        echo 'R46 m2a profile requires M2A feature flag'
+                        exit 2
+                    end
+                end
+                if test "$DOOM_R46_BUILD" = m1b
+                    if not set -q DOOM_R46_M1B; or test "$DOOM_R46_M1B" != 1
+                        echo 'R46 m1b ID requires M1B feature'
+                        exit 2
+                    end
+                end
+                if not contains -- $v cell-perf cell-play
+                    echo 'R46 primary/M1 must be 8x8 cell'
+                    exit 2
+                end
+                if test "$v" = cell-perf
+                    set id doom-md-r46-$DOOM_R46_BUILD-perf
+                else
+                    set id doom-md-r46-$DOOM_R46_BUILD-play
+                end
+            case '*'
+                echo 'Invalid R46 build profile'
+                exit 2
+        end
+    end
+    if set -q DOOM_R46_M3B_DIAG; and test "$DOOM_R46_M3B_DIAG" = 1
+        set id doom-md-r46-m3b-video-perf
+    end
+    if set -q DOOM_R46_M3C_DIAG; and test "$DOOM_R46_M3C_DIAG" = 1
+        if set -q DOOM_R46_M3C_SAFE_BLANK; and test "$DOOM_R46_M3C_SAFE_BLANK" = 1
+            if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+                if set -q DOOM_R46_M3C_LATE_BUFFER; and test "$DOOM_R46_M3C_LATE_BUFFER" = 1
+                    if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+                        set id doom-md-r46-r6a-audit-safe
+                    else
+                        set id doom-md-r46-r5-late-safe
+                    end
+                else
+                    set id doom-md-r46-m3c-r3-safe-perf
+                end
+            else
+                set id doom-md-r46-m3c-r2-safe-perf
+            end
+        else if set -q DOOM_R46_M3C_STRESS; and test "$DOOM_R46_M3C_STRESS" = 1
+            if set -q DOOM_R46_M3C_FONT_RESTORE; and test "$DOOM_R46_M3C_FONT_RESTORE" = 1
+                if set -q DOOM_R46_M3C_LATE_BUFFER; and test "$DOOM_R46_M3C_LATE_BUFFER" = 1
+                    if set -q DOOM_R46_M6A_LAYOUT; and test "$DOOM_R46_M6A_LAYOUT" = 1
+                        set id doom-md-r46-r6a-audit-stress
+                    else
+                        set id doom-md-r46-r5-late-stress
+                    end
+                else
+                    set id doom-md-r46-m3c-r3-stress-perf
+                end
+            else
+                set id doom-md-r46-m3c-r2-stress-perf
+            end
+        else
+            set id doom-md-r46-m3c-video-perf
+        end
+    end
+    if set -q DOOM_R47_FLAT_HOIST; and test "$DOOM_R47_FLAT_HOIST" = 1
+        if test "$v" = pixel4-perf
+            set id doom-md-r47a-flat-p4perf
+        else
+            set id doom-md-r47a-flat-p4play
+        end
+    end
+    if set -q DOOM_R47_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R47_BUILD"
+            echo 'Invalid R47 build id'; exit 2
+        end
+        set id doom-md-r47-$DOOM_R47_BUILD
+    end
+    set -gx DOOM_BUILD_ID $id
+    echo "BUILD: $id  [$DOOM_R20_DEFINES]"
+    rm -rf out
+    rm -f res/music.rs res/music.d
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    or begin
+        tail -n 100 "$dest/build-$id.log"
+        exit 1
+    end
+    python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+    cp out/release/rom.out "$dest/$id.elf"; or exit 1
+    cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
+    set built $built $id
+end
+cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
+sha256sum $dest/*.bin > "$dest/SHA256SUMS"
+echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
+ -- "$DOOM_R47_PAIR_BOOT_RESERVE"
+            echo 'R47 pair boot reserve must be an integer byte count'; exit 2
+        end
+        set defs $defs "-DDOOM_R47_PAIR_BOOT_RESERVE=$DOOM_R47_PAIR_BOOT_RESERVE"
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
