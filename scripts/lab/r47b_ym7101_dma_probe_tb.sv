@@ -157,6 +157,7 @@ module r47b_ym7101_dma_probe;
       dma_post_command,dma_early_post_command,dut.reg_lg,dut.reg_code,dut.reg_addr,dut.io_address);
     $display("R47B_DMA_DIAG second_word=%0d dma_start=%0d dma_state=%0d bgack=%b bg=%b",cmd_second_pulses,cmd_start_pulses,dma_state_pulses,dut.cpu_bgack,dut.cpu_bg);
     $display("R47B_DMA_GRANT armed=%0d grant_accept=%0d",dma_armed_pulses,grant_accept_pulses);
+    $display("R47B_DMA_W5 dff22=%b dff2=%b bgack=%b dtack=%b cpu_sel=%b w37=%b cpu_clk1=%b t4=%b w62=%b",dut.dff22_l2,dut.dff2_l2,dut.cpu_bgack,dut.DTACK_i,dut.cpu_sel,dut.w37,dut.cpu_clk1,dut.t4,dut.w62);
     if(dma_post_command==0)
       $fatal(1,"FAIL: DMA request not observed; no timing claim");
     $display("PASS: DMA request observed in RTL; memory write completion still requires a VRAM model");
