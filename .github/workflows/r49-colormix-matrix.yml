@@ -4,7 +4,7 @@ on:
   push:
     branches: [r49-v-colormix-fixes]
     paths:
-      - '.github/workflows/r49-v-colormix-fixes.yml'
+      - '.github/workflows/r49-colormix-matrix.yml'
       - 'src/r22_video.inc'
       - 'src/r22_benchmark.inc'
       - 'src/r22_pixel4.h'
