@@ -141,6 +141,11 @@ jobs:
           # P3: both planes use SGDK's DMA_doDma, including its bank-boundary handling.
           p4 pd-sdk DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_SGDK_DMA=1 DOOM_R47_BUILD=pd-sdk
 
+          # P4/P5: return 256/512 B of static Doom zone to SGDK pre-main heap.
+          # If these boot, the hard hang is pre-main SGDK/font unpack pressure.
+          p4 pd-br256 DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_BOOT_RESERVE=256 DOOM_R47_BUILD=pd-br256
+          p4 pd-br512 DOOM_R47_PLANE_PAIR=1 DOOM_R47_PAIR_BOOT_RESERVE=512 DOOM_R47_BUILD=pd-br512
+
       - name: Compare ELF RAM layout
         shell: bash
         run: |
@@ -175,7 +180,7 @@ jobs:
               out.append('BlastEm not found on runner; smoke skipped')
           else:
               env=os.environ.copy(); env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk']
+              ids=['pd-goodfs','pd-cur','pd-noup','pd-a','pd-cpu','pd-sdk','pd-br256','pd-br512']
               for ident in ids:
                   rom=d/f'doom-md-r47-{ident}.bin'
                   t=time.monotonic()
@@ -206,8 +211,10 @@ jobs:
           2. pd-a     - original manual DMA, Plane A only.
           3. pd-cpu   - both Pair planes, CPU VRAM copy instead of VDP memory DMA.
           4. pd-sdk   - both Pair planes through SGDK DMA_doDma.
-          5. pd-cur   - exact original failing Pair transfer, reproducer.
-          6. pd-goodfs - non-Pair known-good control.
+          5. pd-br256 - original Pair with 256 B returned to SGDK boot heap.
+          6. pd-br512 - original Pair with 512 B returned to SGDK boot heap.
+          7. pd-cur   - exact original failing Pair transfer, reproducer.
+          8. pd-goodfs - non-Pair known-good control.
 
           Interpretation:
           - noupload hangs: fault precedes Pair map DMA (WRAM/init/renderer/transition).
@@ -215,6 +222,7 @@ jobs:
           - aonly works, current hangs: Plane B/second transfer/dual-plane interaction.
           - cpucopy works, DMA variants hang: VDP memory-DMA path is implicated.
           - sgdkdma works, current hangs: our raw DMA sequence is implicated.
+          - br256/br512 boot while current/noupload hang: pre-main SGDK heap is the cause.
           EOF
 
       - name: Upload Pair diagnostic lab
