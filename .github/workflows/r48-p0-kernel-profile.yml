@@ -128,14 +128,14 @@ jobs:
           sizes={}
           for ident in ('h-ctrl-perf','h-prof-perf','h-all-play'):
               s=(d/f'size-{ident}.txt').read_text()
-              m=re.search(r'^\\.bss\\s+(\\d+)\\s+',s,re.M)
+              m=re.search(r'^\.bss\s+(\d+)\s+',s,re.M)
               assert m,(ident,s)
               sizes[ident]=int(m.group(1))
           print('R48 Pair-H BSS:',sizes)
           assert sizes['h-prof-perf']<=57920,sizes
           assert sizes['h-prof-perf']-sizes['h-ctrl-perf']<=40,sizes
           assert abs(sizes['h-all-play']-sizes['h-ctrl-perf'])<=10,sizes
-          (d/'BSS-AUDIT.txt').write_text('\\n'.join(f'{k}: {v} bytes' for k,v in sizes.items())+'\\n')
+          (d/'BSS-AUDIT.txt').write_text('\n'.join(f'{k}: {v} bytes' for k,v in sizes.items())+'\n')
           PY
 
       - name: BlastEm DEMO3 completion smoke
@@ -160,7 +160,7 @@ jobs:
               result=f'{ident}: exit={p.returncode} wall={time.monotonic()-started:.2f}s'
               lines.append(result);print(result,flush=True)
               if p.returncode: raise SystemExit(result)
-          (d/'BLASTEM-SMOKE.txt').write_text('\\n'.join(lines)+'\\n')
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(lines)+'\n')
           PY
 
       - name: Generate artifact manifest
@@ -177,7 +177,7 @@ jobs:
           obj={'baseline':'R47 ALL / Pair-H 4.71 FPS / 453.22s (historical)',
                'note':'P0 counts work and wait-loop spins, not CPU cycles; instrumented FPS is NOT baseline.',
                'roms':roms}
-          (d/'MANIFEST.json').write_text(json.dumps(obj,indent=2)+'\\n')
+          (d/'MANIFEST.json').write_text(json.dumps(obj,indent=2)+'\n')
           (d/'README.txt').write_text('R48 P0 PAIR-H: run h-ctrl-perf first, then h-prof-perf and compare the 8 counts. The profiler perturbs FPS. Also includes h-all-play.\\n')
           print(json.dumps(obj,indent=2))
           PY
