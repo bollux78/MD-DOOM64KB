@@ -2,6 +2,9 @@ name: R47B-RTL - external 68000 VDP bus register-write probe
 on:
   push:
     branches: [r47b-rtl-ym7101-busbench]
+    paths:
+      - 'scripts/lab/r47b_ym7101_bus_tb.sv'
+      - '.github/workflows/r47b-rtl-bus.yml'
   workflow_dispatch:
 permissions:
   contents: read
