@@ -24,6 +24,31 @@
 #include "r22_palette.h"
 #endif
 #include "r22_maps.h"
+#if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+#include "r49_colormix_tables.h"
+#endif
+#if defined(DOOM_R49_COLORMIX) && (!defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST))
+#error R49 ColorMix requires Pair-V Fast
+#endif
+#if defined(DOOM_R49_COLORMIX)
+#if defined(DOOM_R49_MIX_75A)
+#define r49_mix_a r49_mix_a_75a
+#define r49_mix_b r49_mix_b_75a
+#define r49_mix_ok r49_mix_ok_75a
+#define r49_compgate r49_compgate_75a
+#elif defined(DOOM_R49_MIX_75B)
+#define r49_mix_a r49_mix_a_75b
+#define r49_mix_b r49_mix_b_75b
+#define r49_mix_ok r49_mix_ok_75b
+#define r49_compgate r49_compgate_75b
+#else
+#define r49_mix_a r49_mix_a_50
+#define r49_mix_b r49_mix_b_50
+#define r49_mix_ok r49_mix_ok_50
+#define r49_compgate r49_compgate_50
+#endif
+#endif
+
 #if defined(DOOM_R22_PAIR_LUT)
 #include "r22_pair_lut.h"
 #endif
@@ -211,6 +236,48 @@ void I_R21_TextScreen(void)
 
 
 #include "r22_benchmark.inc"
+
+/* Optional ROM-only composed colormap. If a caller passes a map outside
+ * the WAD's ordinary COLORMAP lump, fall back to the original two lookups.
+ * Never read outside a known 256-byte table. */
+#if defined(DOOM_R49_COMPLUT)
+extern const uint8_t *fullcolormap;
+static inline const uint8_t *R49_MapLUT(const uint8_t *colormap)
+{
+    if(!colormap)return r22_color;
+    uint32_t diff=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
+    return diff<R49_COLORMAP_BYTES ? r49_compmap+diff : 0;
+}
+#endif
+#if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+static inline uint8_t R49_MapSample(uint8_t sample,const uint8_t *colormap,
+                                   const uint8_t *fast,uint8_t *gate)
+{
+#if defined(DOOM_R49_COMPLUT)
+    if(fast){
+#if defined(DOOM_R49_COLORMIX)
+        /* fast points either to r22_color or the composed COLORMAP slice. */
+        if(colormap){
+            uint32_t off=(uint32_t)(fast-r49_compmap);
+            *gate=r49_compgate[off+sample];
+        }else *gate=r49_mix_ok[sample];
+#else
+        *gate=0;
+#endif
+        return fast[sample];
+    }
+#else
+    (void)fast;
+#endif
+    if(colormap)sample=colormap[sample];
+#if defined(DOOM_R49_COLORMIX)
+    *gate=r49_mix_ok[sample];
+#else
+    *gate=0;
+#endif
+    return r22_color[sample];
+}
+#endif
 
 static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     if((uint16_t)x>=R22_W || (uint16_t)y>=R22_H)return;
