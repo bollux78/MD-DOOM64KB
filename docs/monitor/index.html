@@ -5,11 +5,11 @@
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#0b1018;color:#edf2f9}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1150px;margin:auto;padding:24px 18px 64px}header{display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap;border-bottom:1px solid #273345;padding-bottom:18px}h1{margin:0;font-size:clamp(24px,4vw,38px);letter-spacing:-1px}h2{font-size:17px;margin:0 0 14px}.sub,.muted{color:#99a9bc}.sub{margin:5px 0 0}.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}button,.link{border:1px solid #40546e;border-radius:9px;background:#172536;color:#e8f1ff;padding:9px 13px;text-decoration:none;cursor:pointer;font-size:13px}button:hover,.link:hover{background:#243b54}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:20px 0}.card,.panel{border:1px solid #26364b;border-radius:14px;background:#111b29;padding:18px}.label{color:#a6b6ca;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.big{font-size:28px;font-weight:750;margin:8px 0}.panel{margin:16px 0}.rows{display:grid;gap:9px}.item{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:13px;border-radius:10px;background:#172335;min-width:0}.item>div{min-width:0}.item a{color:#c8dfff;text-decoration:none;overflow-wrap:anywhere}.item a:hover{text-decoration:underline}.meta{font-size:12px;color:#91a6be;margin-top:5px}.tag{display:inline-block;white-space:nowrap;padding:4px 8px;border-radius:99px;background:#334256;color:#e3eaf2;font-size:11px;font-weight:700}.tag.success{background:#143b32;color:#84e4b2}.tag.failure{background:#4b242d;color:#ffacb8}.tag.active{background:#173e64;color:#94d5ff}.tag.waiting{background:#4a381d;color:#f8d18d}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.note{font-size:13px;line-height:1.6;color:#a5b4c8}.error{color:#ffb4bd}footer{font-size:12px;color:#8fa2b8;margin-top:25px}a{color:#a9ceff}#updated{font-size:12px;color:#a1b3c9}@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}@media(max-width:420px){.grid{gap:8px}.card{padding:13px}.big{font-size:22px}.wrap{padding:17px 12px 45px}.item{flex-wrap:wrap}}
 </style></head><body><div class="wrap">
 <header><div><div class="label">BOLLUX78 / MD-DOOM64KB</div><h1>DOOM-MD <span style="color:#8bbaff">Development Monitor</span></h1><p class="sub">Workflows, branches, commits e artefatos — dados públicos do GitHub</p></div><div class="actions"><span id="updated">Carregando…</span><button id="refresh">↻ Atualizar</button><a class="link" href="https://github.com/bollux78/MD-DOOM64KB/actions" target="_blank" rel="noopener">GitHub Actions ↗</a></div></header>
-<div class="grid"><div class="card"><div class="label">Executando</div><div class="big" id="running">—</div><div class="muted">Workflows ativos</div></div><div class="card"><div class="label">Na fila</div><div class="big" id="queued">—</div><div class="muted">Aguardando runner</div></div><div class="card"><div class="label">Última execução</div><div class="big" id="last">—</div><div class="muted" id="lasttime">GitHub Actions</div></div><div class="card"><div class="label">Último commit</div><div class="big" id="commit">—</div><div class="muted" id="commitdate">Branch principal</div></div></div>
+<p id="data-note" class="note" role="status"></p><div class="grid"><div class="card"><div class="label">Executando</div><div class="big" id="running">—</div><div class="muted">Workflows ativos</div></div><div class="card"><div class="label">Na fila</div><div class="big" id="queued">—</div><div class="muted">Aguardando runner</div></div><div class="card"><div class="label">Última execução</div><div class="big" id="last">—</div><div class="muted" id="lasttime">GitHub Actions</div></div><div class="card"><div class="label">Último commit</div><div class="big" id="commit">—</div><div class="muted" id="commitdate">Branch principal</div></div></div>
 <div class="panel"><h2>Execuções recentes</h2><div id="runs" class="rows"><p class="muted">Carregando workflows…</p></div></div>
 <div class="two"><section class="panel"><h2>Branches acompanhadas</h2><div id="branches" class="rows"><p class="muted">Carregando branches…</p></div></section><section class="panel"><h2>Commits recentes</h2><div id="commits" class="rows"><p class="muted">Carregando commits…</p></div></section></div>
 <div class="panel"><h2>Artefatos das últimas execuções</h2><div id="artifacts" class="rows"><p class="muted">Carregando artefatos…</p></div><p class="note">O download de artefatos do GitHub Actions pode exigir login e os arquivos expiram conforme a retenção configurada no workflow.</p></div>
-<footer>Atualização automática a cada 60 segundos enquanto a página estiver aberta. A API pública do GitHub pode impor limites de consultas. Este painel mostra somente atividades publicadas no GitHub; não acompanha raciocínio ou tarefas internas do ChatGPT. Nenhum FPS, tempo de DMA ou resultado de hardware é inferido.</footer>
+<footer>Atualização de execuções a cada 2 minutos enquanto a aba estiver visível. Branches/commits usam cache de 1 hora e artefatos de 10 minutos. Em caso de limite da API, a última cópia continua visível e as consultas aguardam a liberação. Este painel mostra somente atividades publicadas no GitHub; não acompanha raciocínio ou tarefas internas do ChatGPT. Nenhum FPS, tempo de DMA ou resultado de hardware é inferido.</footer>
 </div><script>
 const ROOT='https://api.github.com/repos/bollux78/MD-DOOM64KB';
 const PAGE='https://github.com/bollux78/MD-DOOM64KB';
@@ -20,9 +20,39 @@ function el(tag,cls,text){const x=document.createElement(tag);if(cls)x.className
 function item(parent,title,url,subtitle,status){const row=el('div','item'),left=el('div'),a=el('a','',title);a.href=url;a.target='_blank';a.rel='noopener';left.append(a,el('div','meta',subtitle));row.append(left);if(status){const b=el('span','tag '+statusClass(status),statusLabel(status));row.append(b)}parent.append(row)}
 function statusClass(s){return s==='success'?'success':s==='failure'||s==='cancelled'?'failure':s==='in_progress'?'active':s==='queued'||s==='waiting'||s==='pending'?'waiting':''}
 function statusLabel(s){return ({success:'Aprovado',failure:'Falhou',cancelled:'Cancelado',in_progress:'Executando',queued:'Na fila',waiting:'Aguardando',pending:'Pendente',completed:'Concluído'})[s]||s||'Indefinido'}
-async function get(path){const r=await fetch(ROOT+path,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error('GitHub API HTTP '+r.status);return r.json()}
-async function load(){ $('refresh').disabled=true;$('updated').textContent='Atualizando…';try{
- const [data,commits,branches]=await Promise.all([get('/actions/runs?per_page=35'),get('/commits?sha=fullscreen&per_page=8'),Promise.all(tracked.map(async name=>{try{return {name,data:await get('/branches/'+encodeURIComponent(name))}}catch{return{name,data:null}}}))]);
+const CACHE_KEY='doom-monitor-cache-v2';
+let cache={}, pausedUntil=0, snapshot=null, busy=false, stale=false;
+try { const saved=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}'); cache=saved.cache||{}; pausedUntil=saved.pausedUntil||0; } catch {}
+function save(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({cache,pausedUntil}))}catch{}}
+function ttl(path){return path.startsWith('/actions/runs?')?120000:path.startsWith('/actions/artifacts?')?600000:3600000}
+function fallback(path){
+ if(!snapshot)return null;
+ if(path.startsWith('/actions/runs?'))return snapshot.runs;
+ if(path.startsWith('/commits?'))return snapshot.commits;
+ if(path.startsWith('/branches?'))return snapshot.branches;
+ if(path.startsWith('/actions/artifacts?'))return snapshot.artifacts;
+ return null;
+}
+async function get(path){
+ const old=cache[path], now=Date.now();
+ if(old&&now-old.at<ttl(path))return old.data;
+ if(now<pausedUntil){stale=true;return old?old.data:fallback(path)}
+ try {
+  const r=await fetch(ROOT+path,{headers:{Accept:'application/vnd.github+json'}});
+  if(!r.ok){
+   if(r.status===403||r.status===429){
+    const reset=Number(r.headers.get('x-ratelimit-reset'))*1000;
+    const retry=Number(r.headers.get('retry-after'))*1000;
+    pausedUntil=Math.max(now+120000,reset||0,retry?now+retry:0);save();
+   }
+   throw Error('GitHub API HTTP '+r.status);
+  }
+  const data=await r.json();cache[path]={at:now,data};save();return data;
+ }catch(e){const data=old?old.data:fallback(path);if(data!==null&&data!==undefined){stale=true;return data}throw e}
+}
+async function load(){ if(busy)return;busy=true;stale=false;$('refresh').disabled=true;$('updated').textContent='Atualizando…';try{
+ const [data,commits,allBranches]=await Promise.all([get('/actions/runs?per_page=35'),get('/commits?sha=fullscreen&per_page=8'),get('/branches?per_page=100')]);
+ const branches=tracked.map(name=>({name,data:(allBranches||[]).find(x=>x.name===name)}));
  const runs=data.workflow_runs||[];$('running').textContent=runs.filter(x=>x.status==='in_progress').length;$('queued').textContent=runs.filter(x=>['queued','waiting','pending','requested'].includes(x.status)).length;
  const latest=runs[0];$('last').textContent=latest?statusLabel(latest.conclusion||latest.status):'—';$('lasttime').textContent=latest?time(latest.updated_at):'Nenhuma execução';
  const c=commits[0];$('commit').textContent=c?c.sha.slice(0,7):'—';$('commitdate').textContent=c?time(c.commit.committer.date):'—';
@@ -30,8 +60,11 @@ async function load(){ $('refresh').disabled=true;$('updated').textContent='Atua
  if(!runs.length)runsNode.textContent='Nenhuma execução encontrada.';
  const branchNode=$('branches');branchNode.replaceChildren();branches.forEach(x=>item(branchNode,x.name,PAGE+'/tree/'+encodeURIComponent(x.name),x.data?'Commit '+x.data.commit.sha.slice(0,7):'Branch não encontrada',x.data?'success':'failure'));
  const commitsNode=$('commits');commitsNode.replaceChildren();commits.forEach(x=>item(commitsNode,x.commit.message.split('\n')[0],x.html_url,time(x.commit.committer.date)+' · '+x.sha.slice(0,7)));
- const artNode=$('artifacts');artNode.replaceChildren();const recent=runs.slice(0,8);const results=await Promise.all(recent.map(async x=>{try{const j=await get('/actions/runs/'+x.id+'/artifacts?per_page=15');return{x,artifacts:j.artifacts||[]}}catch{return{x,artifacts:[]}}}));let n=0;for(const v of results)for(const a of v.artifacts){if(a.expired)continue;n++;item(artNode,a.name,v.x.html_url+'/artifacts/'+a.id,v.x.head_branch+' · '+(a.size_in_bytes/1048576).toFixed(2)+' MiB · '+time(a.created_at),'success')}if(!n)artNode.textContent='Nenhum artefato disponível nas oito execuções mais recentes.';
- $('updated').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
- }catch(e){$('updated').textContent='Erro de atualização';$('runs').replaceChildren(el('p','error',e.message+' — tente atualizar novamente.'));}finally{$('refresh').disabled=false}}
-$('refresh').addEventListener('click',load);load();setInterval(()=>{if(!document.hidden)load()},60000);
+ const artNode=$('artifacts');artNode.replaceChildren();const recent=runs.slice(0,8);const allArtifacts=await get('/actions/artifacts?per_page=100');const results=recent.map(x=>({x,artifacts:((allArtifacts||{}).artifacts||[]).filter(a=>a.workflow_run&&a.workflow_run.id===x.id)}));let n=0;for(const v of results)for(const a of v.artifacts){if(a.expired)continue;n++;item(artNode,a.name,v.x.html_url+'/artifacts/'+a.id,v.x.head_branch+' · '+(a.size_in_bytes/1048576).toFixed(2)+' MiB · '+time(a.created_at),'success')}if(!n)artNode.textContent='Nenhum artefato disponível nas oito execuções mais recentes.';
+ $('updated').textContent=stale?(Date.now()<pausedUntil?'Limite da API · nova tentativa após '+new Date(pausedUntil).toLocaleTimeString('pt-BR'):'Dados em cache · aguardando conexão'):'Atualizado '+new Date().toLocaleTimeString('pt-BR');
+ $('data-note').textContent=stale?'Exibindo a última cópia disponível. Snapshot publicado: '+(snapshot?time(snapshot.generated_at):'indisponível')+'. Os estados podem ter mudado; use GitHub Actions para conferir.':'';
+ }catch(e){$('updated').textContent='Erro de atualização';$('runs').replaceChildren(el('p','error',e.message+' — tente atualizar novamente.'));}finally{busy=false;$('refresh').disabled=false}}
+$('refresh').addEventListener('click',load);
+(async()=>{try{const r=await fetch('./data.json',{cache:'no-cache'});if(r.ok)snapshot=await r.json()}catch{}await load()})();
+setInterval(()=>{if(!document.hidden)load()},120000);
 </script></body></html>
