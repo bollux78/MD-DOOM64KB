@@ -1,5 +1,5 @@
 /* Shared R21 benchmark implementation. */
-#if defined(TIMEDEMO)
+#if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
 /* Benchmark v2: displayed frames, wall-clock VBlanks and one-second FPS windows.
    VDP/Z80 clocks are unchanged even when the 68000 is overclocked. */
 static uint32_t bench_start_vb;
@@ -372,7 +372,32 @@ void I_BenchmarkShowResults(void)
     VDP_drawText("DIAGNOSTIC FPS HAS OVERHEAD", 3, 23);
     R21_SHOW_HEAP_AT_END();
 #endif
+#if defined(DOOM_R50_PLAY_BENCH)
+    /* PLAY-only benchmark results, no mandatory ROM reset.
+     * Consume a new START press, then release it before returning so the
+     * same input cannot immediately dismiss/reopen the menu. Keep sound
+     * and joypad service active in each VBlank. */
+    VDP_drawText("START: RETURN TO MENU", 6, 26);
+    uint16_t keys;
+    do {
+        SYS_doVBlankProcess();
+        JOY_update();
+        keys=JOY_readJoypad(JOY_1);
+    } while (keys & BUTTON_START);
+    do {
+        SYS_doVBlankProcess();
+        JOY_update();
+        keys=JOY_readJoypad(JOY_1);
+    } while (!(keys & BUTTON_START));
+    do {
+        SYS_doVBlankProcess();
+        JOY_update();
+        keys=JOY_readJoypad(JOY_1);
+    } while (keys & BUTTON_START);
+    return;
+#else
     for (;;) SYS_doVBlankProcess();
+#endif
 }
 #endif
 
