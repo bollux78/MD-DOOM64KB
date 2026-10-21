@@ -1,0 +1,209 @@
+name: R47 plane-pair boot fix validation
+
+on:
+  push:
+    branches: [r47-pair-bootfix]
+    paths:
+      - '.github/workflows/r47-pair-bootfix.yml'
+      - 'src/r22_video.inc'
+      - 'src/r35_native4.inc'
+  workflow_dispatch:
+
+concurrency:
+  group: r47-pair-bootfix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-pair-fix:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check tools and Pair oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r47-pair-fix
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r47-pair-fix/ORACLE-plane-pair.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r47-pair-fix/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Build fixed Pair PLAY and PERF matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r47-pair-fix
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+
+          p4 () {
+            local mode="$1"; local id="$2"; shift 2
+            echo "===== $id / $mode ====="
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R47_BUILD="$id" "$@" \
+                fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            cp -f "dist/r35/doom-md-r47-$id.bin" "$D/"
+            cp -f "dist/r35/doom-md-r47-$id.elf" "$D/"
+            cp -f "dist/r35/flags-doom-md-r47-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "dist/r35/doom-md-r47-$id.elf" > "$D/size-$id.txt"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S -n "dist/r35/doom-md-r47-$id.elf" \
+              | grep -E 'r22_fb|r40b_native_bits|r22_map|_bend|__stack|heap|openings' > "$D/symbols-$id.txt" || true
+          }
+
+          p4 play fx-pair-play DOOM_R47_PLANE_PAIR=1
+          p4 perf fx-pair-perf DOOM_R47_PLANE_PAIR=1
+
+          p4 play fx-flat-pair-play DOOM_R47_FLAT_HOIST=1 DOOM_R47_PLANE_PAIR=1
+          p4 perf fx-flat-pair-perf DOOM_R47_FLAT_HOIST=1 DOOM_R47_PLANE_PAIR=1
+
+          p4 play fx-spr-pair-play DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1
+          p4 perf fx-spr-pair-perf DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1
+
+          p4 play fx-all-play DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1
+          p4 perf fx-all-perf DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 DOOM_R47_PLANE_PAIR=1
+
+          # Current best non-Pair control from user benchmark.
+          p4 perf fx-fs-perf DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1
+
+      - name: Assert boot-WRAM fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r47-pair-fix
+          if grep -R -q 'r40b_native_bits' "$D"/symbols-fx-*pair*.txt; then
+            echo 'ERROR: fixed Pair still has separate native text WRAM'; exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          d=Path('dist/r47-pair-fix')
+          rows=[]
+          for p in sorted(d.glob('size-fx-*-perf.txt')):
+              text=p.read_text()
+              m=re.search(r'^\.bss\s+(\d+)\s+',text,re.M)
+              if not m: raise SystemExit(f'No BSS in {p}')
+              bss=int(m.group(1)); rows.append((p.name,bss))
+              if 'pair' in p.name and bss>57920:
+                  raise SystemExit(f'Pair BSS regression {p.name}: {bss}')
+          (d/'BSS-SUMMARY.txt').write_text('\n'.join(f'{n} {b}' for n,b in rows)+'\n')
+          print('\n'.join(f'{n}: BSS={b}' for n,b in rows))
+          PY
+
+      - name: BlastEm PERF completion smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,shutil,subprocess,time
+          d=Path('dist/r47-pair-fix').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in (Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          ids=['fx-pair-perf','fx-flat-pair-perf','fx-spr-pair-perf','fx-all-perf','fx-fs-perf']
+          out=[]
+          if not exe:
+              raise SystemExit('BlastEm not found on runner')
+          env=os.environ.copy(); env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          for ident in ids:
+              rom=d/f'doom-md-r47-{ident}.bin'
+              t=time.monotonic()
+              try:
+                  p=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                      stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors='replace',timeout=12)
+                  dt=time.monotonic()-t
+                  line=f'{ident}: return={p.returncode} wall={dt:.2f}s'
+                  if p.returncode!=0: raise SystemExit(line)
+              except subprocess.TimeoutExpired:
+                  raise SystemExit(f'{ident}: TIMEOUT/HANG')
+              print(line,flush=True); out.append(line)
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(out)+'\n')
+          PY
+
+      - name: Write manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r47-pair-fix
+          {
+            echo 'R47 PLANE-PAIR BOOT FIX'
+            echo 'Cause: +280 B BSS crossed SGDK pre-main font-unpack heap threshold.'
+            echo 'Fix: reuse 210 B of idle Pair framebuffer for native-text occupancy masks.'
+            echo 'No Doom-zone reduction; runtime Pair renderer/DMA architecture unchanged.'
+            echo
+            cat "$D/BSS-SUMMARY.txt"
+            echo
+            cat "$D/BLASTEM-SMOKE.txt"
+            echo
+            sha256sum "$D"/*.bin
+          } > "$D/README.txt"
+
+      - name: Upload fixed Pair ROMs
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r47-pair-bootfix
+          path: dist/r47-pair-fix/
+          retention-days: 90
+          if-no-files-found: error
