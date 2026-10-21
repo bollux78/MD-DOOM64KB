@@ -52,6 +52,8 @@ module r47b_ym7101_vram_model;
     .RD_o(vram_ad_o),.RD_d(vram_ad_d),.SD_o(vram_sd_o),.SD_d(vram_sd_d)
   );
   integer vram_bytes_written;
+  integer physical_row,physical_col,verified_bytes=0;
+  reg [7:0] physical_byte,expected_byte;
   integer write_trace_count=0;
   always @(negedge MCLK) if(command_sent && WE0===1'b0 && RAS1===1'b0 && CAS1===1'b0 && write_trace_count<12) begin
     $display("R47B_VRAM_TRACE index=%0d dram_addr=%h vdp_addr=%h ra=%h ad_bus=%h ad_o=%h ad_d=%b",write_trace_count,vram1.addr,dut.vram_address,RA,ad_bus,AD_o,AD_d);
@@ -215,11 +217,31 @@ module r47b_ym7101_vram_model;
       vram_bytes_written,vram1.l2[0].mem.write_count,vram1.l2[1].mem.write_count,
       vram1.l2[2].mem.write_count,vram1.l2[0].mem.mem[0][63:0]);
     $display("R47B_VRAM_ADDR_FINAL dram=%h vdp=%h reg_addr=%h",vram1.addr,dut.vram_address,dut.reg_addr);
+    // Upstream vram.v uses a DRAM row/column mapping, not linear byte
+    // addressing: 76 bytes occupy 19 physical rows x first 4 columns.
+    // This pattern was observed independently in the address trace.
+    for(physical_row=0;physical_row<19;physical_row=physical_row+1) begin
+      for(physical_col=0;physical_col<32;physical_col=physical_col+1) begin
+        physical_byte=vram1.l2[0].mem.mem[physical_row][8*physical_col+:8];
+        if(physical_col<4) begin
+          expected_byte=(physical_col%2==0)?8'h5a:8'ha5;
+          if(physical_byte!==expected_byte)
+            $fatal(1,"FAIL: VRAM byte mismatch row=%0d col=%0d got=%h expected=%h",
+              physical_row,physical_col,physical_byte,expected_byte);
+          verified_bytes=verified_bytes+1;
+        end else if(physical_byte!==8'h00)
+          $fatal(1,"FAIL: VRAM out-of-range write row=%0d col=%0d data=%h",
+            physical_row,physical_col,physical_byte);
+      end
+    end
+    if(verified_bytes!=76) $fatal(1,"FAIL: fewer than 76 physical VRAM bytes verified");
+    $display("R47B_VRAM_DATA_VERIFIED bytes=%0d physical_rows=19 columns_per_row=4 pattern=5a,a5",
+      verified_bytes);
     if(vram_bytes_written<76)
       $fatal(1,"FAIL: upstream VRAM model observed fewer than 76 byte writes");
     if(dma_post_command==0)
       $fatal(1,"FAIL: DMA request not observed; no timing claim");
-    $display("PASS: real YM7101 + upstream VRAM model observed >=76 byte writes; address/data verification pending");
+    $display("PASS: real YM7101 + upstream VRAM model verified 76 physical byte values and guard columns");
     $finish;
   end
 endmodule
