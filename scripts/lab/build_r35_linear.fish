@@ -273,6 +273,30 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R47_PLANE_PAIR'
     end
+    if set -q DOOM_R47_PAIR_NO_UPLOAD; and test "$DOOM_R47_PAIR_NO_UPLOAD" = 1
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair no-upload diagnostic requires plane-pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PAIR_NO_UPLOAD'
+    end
+    if set -q DOOM_R47_PAIR_A_ONLY; and test "$DOOM_R47_PAIR_A_ONLY" = 1
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair A-only diagnostic requires plane-pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PAIR_A_ONLY'
+    end
+    if set -q DOOM_R47_PAIR_CPU_COPY; and test "$DOOM_R47_PAIR_CPU_COPY" = 1
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair CPU-copy diagnostic requires plane-pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PAIR_CPU_COPY'
+    end
+    if set -q DOOM_R47_PAIR_SGDK_DMA; and test "$DOOM_R47_PAIR_SGDK_DMA" = 1
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'R47 pair SGDK-DMA diagnostic requires plane-pair'; exit 2
+        end
+        set defs $defs '-DDOOM_R47_PAIR_SGDK_DMA'
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
