@@ -59,6 +59,10 @@ module r47b_ym7101_smoke;
 
   integer mcycles=0,hclk_edges=0,vdma_high=0;
   integer known_clock=0;
+  integer dma_after_reset=0;
+  integer de_h_known=0;
+  integer de_v_known=0;
+  integer dma_unknown=0;
   reg old_hclk=0;
   always @(posedge MCLK) begin
     mcycles<=mcycles+1;
@@ -66,7 +70,13 @@ module r47b_ym7101_smoke;
       known_clock<=known_clock+1;
     if(old_hclk===1'b0 && vdp_hclk1===1'b1) hclk_edges<=hclk_edges+1;
     old_hclk<=vdp_hclk1;
-    if(vdp_dma===1'b1) vdma_high<=vdma_high+1;
+    if(vdp_dma===1'b1) begin
+      vdma_high<=vdma_high+1;
+      if(RESET===1'b1) dma_after_reset<=dma_after_reset+1;
+    end
+    if(vdp_dma===1'bx || vdp_dma===1'bz) dma_unknown<=dma_unknown+1;
+    if(vdp_de_h===1'b0 || vdp_de_h===1'b1) de_h_known<=de_h_known+1;
+    if(vdp_de_v===1'b0 || vdp_de_v===1'b1) de_v_known<=de_v_known+1;
   end
   initial begin
     $dumpfile("dist/r47b-rtl/r47b_ym7101_smoke.vcd");
@@ -76,12 +86,13 @@ module r47b_ym7101_smoke;
     repeat(12000) @(negedge MCLK);
     $display("R47B_SMOKE master_clocks=%0d hclk_posedges=%0d clock_known=%0d dma_active_clocks=%0d",
              mcycles,hclk_edges,known_clock,vdma_high);
+    $display("R47B_DIAG dma_after_reset=%0d dma_unknown=%0d de_h_known=%0d de_v_known=%0d cpu_sel=%b reset_comb=%b",dma_after_reset,dma_unknown,de_h_known,de_v_known,dut.cpu_sel,dut.reset_comb);
     if(known_clock<3000 || hclk_edges<100) begin
       $display("FAIL: VDP clock outputs not cycling");
       $fatal(1);
     end
-    if(vdma_high!=0) begin
-      $display("WARN: DMA unexpectedly asserted during idle (investigate)"); 
+    if(dma_after_reset!=0) begin
+      $display("WARN: DMA active after reset deassertion during idle (investigate)"); 
     end
     $display("PASS: real RTL clock/reset activity observed; DMA transfers NOT exercised");
     $finish;
