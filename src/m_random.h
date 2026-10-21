@@ -49,5 +49,8 @@ int16_t P_Random (void);
 
 // Fix randoms for demos.
 void M_ClearRandom (void);
+#if defined(DOOM_R47_STATE_HASH)
+uint16_t M_R47RandomState(void);
+#endif
 
 #endif
