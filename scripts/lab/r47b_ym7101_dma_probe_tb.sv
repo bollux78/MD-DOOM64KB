@@ -43,7 +43,7 @@ module r47b_ym7101_dma_probe;
     .SPA_B_i(1'b1),.SPA_B_pull(SPA_B_pull),.VSYNC(VSYNC),
     .CSYNC_i(1'b1),.CSYNC_pull(CSYNC_pull),
     .HSYNC_i(1'b1),.HSYNC_pull(HSYNC_pull),
-    .SEL0(cpu_sel),.CLK1_i(1'b0),.CLK1_o(CLK1_o),
+    .SEL0(cpu_sel),.CLK1_i(CLK1_o),.CLK1_o(CLK1_o),
     .SBCR(SBCR),.CLK0(CLK0),.CLK1_next(CLK1_next),.CLK0_next(CLK0_next),
     .MCLK_e(MCLK_e),.EDCLK_i(1'b0),.EDCLK_o(EDCLK_o),.EDCLK_d(EDCLK_d),
     .CD_i(cpu_data),.CD_o(CD_o),.CD_d(CD_d),
