@@ -4,12 +4,30 @@
 #include <stdint.h>
 #define R22_W 76
 #define R22_H 44
+#if defined(DOOM_R47_PLANE_PAIR)
+/* R47B plane-pair: one VDP tilemap word per horizontal pair.
+ * Big-endian 68000 memory is [attribute/index high byte][pair low byte],
+ * so DMA can copy each 38-word sample row straight to a name table. */
+#define R22_PITCH 76
+#define R22_FB_BYTES (R22_PITCH * R22_H)
+#define R22_PAIR_TILE_BASE 256
+static inline uint8_t *R22_PixelByte(uint8_t *p,uint16_t x,uint16_t y) {
+    return p+y*R22_PITCH+((x>>1)<<1)+1;
+}
+static inline const uint16_t *R22_PairRow(const uint8_t *p,uint16_t y) {
+    return (const uint16_t *)(const void *)(p+y*R22_PITCH);
+}
+#else
 #define R22_PITCH 38
 #define R22_FB_BYTES (R22_PITCH * R22_H)
+static inline uint8_t *R22_PixelByte(uint8_t *p,uint16_t x,uint16_t y) {
+    return p+y*R22_PITCH+(x>>1);
+}
+#endif
 #define R22_TILES 836
 /* 2 independent horizontal samples per byte. */
 static inline void R22_Put(uint8_t *p,uint16_t x,uint16_t y,uint8_t c) {
-    uint8_t *d=p+y*R22_PITCH+(x>>1); c&=15;
+    uint8_t *d=R22_PixelByte(p,x,y); c&=15;
     *d=(x&1)?(uint8_t)((*d&240)|c):(uint8_t)((*d&15)|(c<<4));
 }
 static inline uint32_t R22_ExpandPair(uint8_t p) {
