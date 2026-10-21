@@ -91,3 +91,10 @@ void M_ClearRandom (void)
 {
     rndindex = prndindex = 0;
 }
+
+#if defined(DOOM_R47_STATE_HASH)
+uint16_t M_R47RandomState(void)
+{
+    return (uint16_t)(((uint16_t)rndindex<<8)|prndindex);
+}
+#endif
