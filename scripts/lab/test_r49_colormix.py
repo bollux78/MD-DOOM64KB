@@ -33,20 +33,20 @@ for key,(wa,wb) in {"50":(2,2),"75a":(3,1),"75b":(1,3)}.items():
     a=extract(tables,"r49_mix_a_"+key)
     b=extract(tables,"r49_mix_b_"+key)
     g=extract(tables,"r49_mix_ok_"+key)
-    assert len(a)==len(b)==16 and len(g)==256
+    assert len(a)==len(b)==16 and len(g)==14*256
     assert max(a+b)<=15
-    for ci,eligible in enumerate(g):
+    for offset,eligible in enumerate(g):
         assert eligible in (0,1)
         if not eligible: continue
+        sp,ci=divmod(offset,256)
         c=base[ci]
-        for sp in range(14):
-            x=to_rgb(pal1[sp*16+a[c]])
-            y=to_rgb(pal1[sp*16+b[c]])
-            mixed=tuple((wa*x[k]+wb*y[k])/4 for k in range(3))
-            new=D(src[sp][ci],mixed)+D(x,y)*0.06*wa*wb/4
-            solid=to_rgb(pal0[sp*16+c])
-            old=D(src[sp][ci],solid)
-            assert new+64<old*0.92,(key,ci,sp)
+        x=to_rgb(pal1[sp*16+a[c]])
+        y=to_rgb(pal1[sp*16+b[c]])
+        mixed=tuple((wa*x[k]+wb*y[k])/4 for k in range(3))
+        new=D(src[sp][ci],mixed)+D(x,y)*0.06*wa*wb/4
+        solid=to_rgb(pal0[sp*16+c])
+        old=D(src[sp][ci],solid)
+        assert new+64<old*0.92,(key,ci,sp)
     counts[key]=sum(g)
     # A and B planes each store two vertically adjacent Doom sample indices.
     # The tilebank encodes the two eligibility flags, not an extra framebuffer.
