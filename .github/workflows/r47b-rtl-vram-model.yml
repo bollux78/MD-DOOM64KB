@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 180s vvp dist/r47b-rtl/ym7101-vram-model.vvp | tee dist/r47b-rtl/simulation.log
-          grep -F 'PASS: real YM7101 + upstream VRAM model observed' dist/r47b-rtl/simulation.log
+          grep -F 'PASS: real YM7101 + upstream VRAM model verified 76 physical byte values' dist/r47b-rtl/simulation.log
           test -s dist/r47b-rtl/r47b_ym7101_vram_model.vcd
       - name: Preserve reports and waveforms (not upstream RTL license copy)
         if: always()
