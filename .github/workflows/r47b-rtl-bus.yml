@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          iverilog -g2012 -Wall -s r47b_ym7101_smoke \
+          iverilog -g2012 -Wall -s r47b_ym7101_bus \
             -o dist/r47b-rtl/ym7101-bus.vvp \
             scripts/lab/r47b_ym7101_bus_tb.sv \
             dist/r47b-rtl/ym7101.v dist/r47b-rtl/ym_lib.v
