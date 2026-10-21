@@ -1,7 +1,7 @@
 name: R47B-RTL - 38-word YM7101 DMA request probe
 on:
   push:
-    branches: [r47b-rtl-ym7101-dma-probebench]
+    branches: [r47b-rtl-ym7101-busbench]
   workflow_dispatch:
 permissions:
   contents: read
