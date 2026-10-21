@@ -568,12 +568,25 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(y1-y0+1);
+#if defined(DOOM_R49_COLORMIX)
+    const uint8_t gate=r49_mix_ok[c];
+#endif
     if((y0&1) && count) {
-        *dst=(uint8_t)((*dst&0xf0u)|sample); dst+=152; --count;
+        *dst=(uint8_t)((*dst&0xf0u)|sample);
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,y0,gate);
+#endif
+        dst+=152; --count;
     }
 #if defined(DOOM_R48_V_FAST)
     const uint8_t pair=(uint8_t)(sample*0x11u);
-    while(count>=2) { *dst=pair; dst+=152; count-=2; }
+    while(count>=2) {
+        *dst=pair;
+#if defined(DOOM_R49_COLORMIX)
+        dst[-1]=R49_TileAttr(gate?3u:0u);
+#endif
+        dst+=152; count-=2;
+    }
 #else
     while(count>=2) {
         *dst=(uint8_t)((*dst&0x0fu)|(sample<<4));
@@ -581,7 +594,12 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
         dst+=152; count-=2;
     }
 #endif
-    if(count) *dst=(uint8_t)((*dst&0x0fu)|(sample<<4));
+    if(count) {
+        *dst=(uint8_t)((*dst&0x0fu)|(sample<<4));
+#if defined(DOOM_R49_COLORMIX)
+        R49_WriteMixFlag(dst,0,gate);
+#endif
+    }
 #else
     uint16_t n=(uint16_t)(y1-y0);
     do {
@@ -596,7 +614,13 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
 void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
-static void R22_Palette(int8_t p){if(p<0)p=0;if(p>13)p=13;PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);}
+static void R22_Palette(int8_t p){
+    if(p<0)p=0;if(p>13)p=13;
+    PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);
+#if defined(DOOM_R49_COLORMIX)
+    PAL_setColors(16,r49_palette1+(uint16_t)p*16u,16,DMA);
+#endif
+}
 
 #if defined(DOOM_R47_PLANE_PAIR)
 static void R47_LoadPairTiles(void)
