@@ -376,6 +376,15 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R51_HW_CONTINUOUS'
     end
+    if set -q DOOM_R51_NO_PSPRITE; and test "$DOOM_R51_NO_PSPRITE" = 1
+        if test "$v" != pixel4-perf
+            echo 'R51 no-weapon ablation is PERF-only'; exit 2
+        end
+        if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
+            echo 'R51 no-weapon and hw-gun are mutually exclusive'; exit 2
+        end
+        set defs $defs '-DDOOM_R51_NO_PSPRITE'
+    end
     if set -q DOOM_R50_PLAY_BENCH; and test "$DOOM_R50_PLAY_BENCH" = 1
         if test "$v" != pixel4-play
             echo 'R50 menu benchmark is pixel4 PLAY only'; exit 2
