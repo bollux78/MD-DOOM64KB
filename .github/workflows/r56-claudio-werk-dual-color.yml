@@ -220,7 +220,7 @@ jobs:
           PY
           python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h
 
-      - name: BlastEm fast boot regression matrix
+      - name: BlastEm automated PERF-only regression matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -231,12 +231,12 @@ jobs:
               (pathlib.Path.home()/'Projetos').glob('**/blastem')
               if p.is_file() and os.access(p,os.X_OK)),None)
           assert exe,'BlastEm unavailable'
-          roms=sorted(d.glob('*.bin'))
-          assert len(roms)==4,[p.name for p in roms]
+          roms=sorted(d.glob('*-perf.bin'))
+          assert len(roms)==2,[p.name for p in roms]
           env=os.environ.copy()
           env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-          # Short boot checks only; prioritize meaningful gameplay/timedemo tests.
-          # All four ROMs run concurrently, never more than four processes.
+          # PERF ROMs run DEMO3 automatically; PLAY requires controller input.
+          # Keep PLAY artifacts for manual real-hardware validation.
           suites=((800,1),(6000,1))
           jobs=[(rom,frames,rep) for frames,repeats in suites
                 for rep in range(1,repeats+1) for rom in roms]
@@ -253,11 +253,11 @@ jobs:
               return [rom.name,frames,rep,round(frames/60,2),
                       round(time.monotonic()-t,3),'TIMEOUT','120-second timeout']
           rows=[]
-          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             for row in pool.map(check,jobs):
               rows.append(row)
               print(' | '.join(map(str,row[:6])),flush=True)
-          with (d/'BLASTEM-REGRESSION-MATRIX.csv').open('w',newline='') as fp:
+          with (d/'BLASTEM-PERF-REGRESSION.csv').open('w',newline='') as fp:
             w=csv.writer(fp)
             w.writerow(['rom','frames','repeat','emulated_seconds_60hz',
                         'wall_seconds','exit_code','stderr_tail'])
