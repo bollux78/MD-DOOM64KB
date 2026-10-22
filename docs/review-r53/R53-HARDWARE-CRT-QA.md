@@ -34,3 +34,13 @@ Nome: `doom-md-r53-<perfil>-<proporção>-<modo>.bin`, exemplo `doom-md-r53-n25f
 
 ## Acesso
 Workflow `r53-microdither-crt-matrix.yml` produz `doom-md-r53-microdither-crt-matrix` (24 ROMs + perfis, oráculos, SHA, relatório de memória).
+
+## Primeira medição real — Mega Drive + CRT (22/10/2026)
+
+- **ROM:** `doom-md-r52-cl-l32-f-perf` (Cláudio luma32, zero-policy forbid, PERF; R52, não R53).
+- **Plataforma:** Mega Drive real, saída AV analógica, CRT fotografado pelo usuário.
+- **DEMO3 NTSC 60 Hz:** 2.134 frames; média **5,43 FPS**; mínimo (janela de 1 s) **2,4 FPS**; máximo **8,4 FPS**; tempo **392,95 segundos**; SGDK FREE/BLOCK 790/790.
+- **Comparador BlastEm** informado anteriormente para a mesma variante: 5,46 FPS, 390,87 segundos; mínimo 2,4; máximo 8,4; SGDK 790/790.
+- **Diferença:** +2,08 s no hardware (+0,532% em tempo), -0,03 FPS (-0,549% em FPS arredondado).
+- **Interpretação:** excelente concordância inicial em timedemo; é uma única captura e não valida fielmente o aspecto visual do jogo, as transições de tela ou todas as ROMs R53. Repetir para estimar dispersão e confirmar condições de clock/sinal.
+- Esta é a **referência primária para os testes futuros de microdithering R53 no hardware CRT**. Preservar os controles R52 correspondentes antes de escolher um vencedor visual.
