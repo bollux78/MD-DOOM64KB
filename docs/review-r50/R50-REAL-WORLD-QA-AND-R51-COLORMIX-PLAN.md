@@ -15,7 +15,7 @@
 Branch `r50-static-menu-reset-fix` retains Pair-V Fast, ColorMix, on-demand timedemo and no-3D menu.
 
 - Static art fix: avoid putting full-screen WINDOW over native title. Write high-priority menu glyphs directly on BG_A over mirrored native art in BG_B, with byte-mask tracking of glyph cells and exact ROM tilemap restoration for stale glyph positions. Keep 320x224 native palette/picture and avoid new WRAM framebuffer.
-- Reset hypothesis: SRAM register A130F1 may remain enabled if hardware soft reset interrupts mapmem while SRAM is visible at 0x200000. Disable immediately at entry to main; explicitly re-enable VDP after video initialization. **This cannot cure a reset that fails before main runs.** On-device test remains essential.
+- **Reset hypotheses not yet discriminated:** (a) a soft reset during mapmem may leave SRAM register A130F1 enabled, masking ROM at 0x200000; the current experiment disables it at entry to main and re-enables VDP after video init. (b) Sega's official Genesis Software Manual describes soft reset during VDP DMA leaving DMA active, because the VDP is not reset; subsequent VDP initialization accesses can be ineffective. This second failure could happen *before* main, in SGDK startup. The current C-entry guard does not yet address it. Validate art-only/reset-only/combined A/B and do not claim a full warm-reset fix without empirical testing. See https://segaretro.org/images/9/95/GenesisSoftwareManual.pdf ("Repeated Resets").
 - Six A/B builds separate both fixes: control, art-only, reset-only, combined, ColorMix combined and VF PERF.
 
 ## R51 ColorMix research questions
