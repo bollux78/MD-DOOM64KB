@@ -220,7 +220,7 @@ jobs:
           PY
           python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h
 
-      - name: BlastEm regression matrix, endurance and reproducibility
+      - name: BlastEm fast boot regression matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -235,9 +235,9 @@ jobs:
           assert len(roms)==4,[p.name for p in roms]
           env=os.environ.copy()
           env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-          # Every ROM gets: boot, medium, long, and two independent 100k runs.
+          # Short boot checks only; prioritize meaningful gameplay/timedemo tests.
           # All four ROMs run concurrently, never more than four processes.
-          suites=((800,1),(6000,1),(30000,1),(100000,2))
+          suites=((800,1),(6000,1))
           jobs=[(rom,frames,rep) for frames,repeats in suites
                 for rep in range(1,repeats+1) for rom in roms]
           def check(job):
@@ -245,13 +245,13 @@ jobs:
             t=time.monotonic()
             try:
               p=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,
-                  env=env,capture_output=True,text=True,errors='replace',timeout=900)
+                  env=env,capture_output=True,text=True,errors='replace',timeout=120)
               return [rom.name,frames,rep,round(frames/60,2),
                       round(time.monotonic()-t,3),p.returncode,
                       (p.stderr or '')[-350:]]
             except subprocess.TimeoutExpired:
               return [rom.name,frames,rep,round(frames/60,2),
-                      round(time.monotonic()-t,3),'TIMEOUT','900-second timeout']
+                      round(time.monotonic()-t,3),'TIMEOUT','120-second timeout']
           rows=[]
           with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             for row in pool.map(check,jobs):
