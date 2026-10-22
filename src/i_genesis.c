@@ -431,6 +431,18 @@ int32_t I_GetTime(void)
 {
 	return ticcount * TICRATE / 60;
 }
+#if defined(DOOM_R54_LOGIC_HZ)
+/* Experimental PLAY-only logical tick scheduler.
+ * The wall/VBlank clock remains 60 Hz and I_GetTime stays 35Hz.
+ * This changes game speed: not a normal-speed or demo-compatible fix. */
+#if DOOM_R54_LOGIC_HZ < 12 || DOOM_R54_LOGIC_HZ > 35
+#error R54 logic rate outside 12..35
+#endif
+int32_t I_GetGameTime(void)
+{
+    return (ticcount * DOOM_R54_LOGIC_HZ) / 60;
+}
+#endif
 
 
 void I_InitTimer(void)
