@@ -18,7 +18,7 @@ static int16_t r51_weapon_x,r51_weapon_y;
 
 /* Called during R_DrawPSprite before the expensive column/raster work.
  * Return TRUE only for preconverted PISG frames; no WAD copy is needed. */
-bool I_R51_WeaponSubmit(int16_t lump,int16_t phys_x,int16_t phys_y)
+boolean I_R51_WeaponSubmit(int16_t lump,int16_t phys_x,int16_t phys_y)
 {
     const char __far *name=W_GetNameForNum(lump);
     for(uint16_t i=0;i<R51_WEAPON_ASSET_COUNT;i++){
