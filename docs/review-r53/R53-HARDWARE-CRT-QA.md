@@ -44,3 +44,10 @@ Workflow `r53-microdither-crt-matrix.yml` produz `doom-md-r53-microdither-crt-ma
 - **Diferença:** +2,08 s no hardware (+0,532% em tempo), -0,03 FPS (-0,549% em FPS arredondado).
 - **Interpretação:** excelente concordância inicial em timedemo; é uma única captura e não valida fielmente o aspecto visual do jogo, as transições de tela ou todas as ROMs R53. Repetir para estimar dispersão e confirmar condições de clock/sinal.
 - Esta é a **referência primária para os testes futuros de microdithering R53 no hardware CRT**. Preservar os controles R52 correspondentes antes de escolher um vencedor visual.
+
+## Menu START — validação em hardware real (22/10/2026)
+
+- Usuário testou `doom-md-r53-n25a-m25-play` e `doom-md-r53-l32a-m25-play` no Mega Drive real.
+- Ambas têm menu START rápido e suspendem a renderização 3D durante a exibição do menu.
+- Usuário informa que todas as variantes R53 têm esse comportamento; verificação direta explicitamente relatada nas duas ROMs acima.
+- **Decisão:** não incorporar `r53-menu-fast-freeze` (branch experimental redundante). Preservar o comportamento R53 existente e manter regressão START/menu nos testes futuros.
