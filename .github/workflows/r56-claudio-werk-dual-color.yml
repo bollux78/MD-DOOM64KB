@@ -15,6 +15,7 @@ on:
       - 'scripts/lab/gen_r52_claudio.py'
       - 'scripts/lab/r55_werk_snapshot.py'
       - 'scripts/lab/r56_claudio_snapshot.py'
+      - 'scripts/lab/r56_claudio_a4_snapshot.py'
       - 'scripts/lab/test_r56_dual_color.py'
       - 'scripts/lab/test_r53_micro.py'
       - 'scripts/lab/test_r52_claudio.py'
@@ -156,25 +157,29 @@ jobs:
             cp src/r52_ab_tables.h "dist/r56-dual/WORK-$kind.h"
           done
 
-      - name: Verify Cláudio A6 optimised tables and Pair-V geometry
+      - name: Verify Cláudio A4 and A6 tables and Pair-V geometry
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/lab/r56_claudio_a4_snapshot.py --out src/r56_tables.h
+          python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h | tee dist/r56-dual/R56-A4-PREFLIGHT.txt
+          cp src/r56_tables.h dist/r56-dual/PALETTES-r56-a4-mixed.h
           python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h
-          python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h | tee dist/r56-dual/R56-PREFLIGHT.txt
+          python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h | tee dist/r56-dual/R56-A6-PREFLIGHT.txt
           cp src/r56_tables.h dist/r56-dual/PALETTES-r56-a6-mixed.h
 
-      - name: Build Cláudio A6 mixed PLAY and PERF ROMs
+      - name: Build Cláudio A4 and A6 mixed PLAY and PERF ROMs
         shell: bash
         run: |
           set -euo pipefail
           D=dist/r56-dual
           mkdir -p "$D"
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
-          for mode in play perf; do
-            bench=0
-            if [ "$mode" = play ]; then bench=1; fi
-            id="a6m-$mode"
+          for prof in a4 a6; do
+            for mode in play perf; do
+              bench=0
+              if [ "$mode" = play ]; then bench=1; fi
+              id="${prof}m-$mode"
             echo "=========== R56 $id ==========="
             env -u DOOM_R53_MICRO_RATIO -u DOOM_R55_WERK_VARIANT \
               DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
@@ -185,7 +190,7 @@ jobs:
               DOOM_R49_COLORMIX=0 DOOM_R49_COMPLUT=0 DOOM_R49_RATIO=none \
               DOOM_R52_AB=1 DOOM_R52_CLAUDIO=1 DOOM_R52_AB_PROFILE=luma32 \
               DOOM_R52_ZERO_POLICY=forbid DOOM_R52_CPLUT=1 \
-              DOOM_R56_DUAL_COLOR=1 DOOM_R56_BUILD="$id" \
+              DOOM_R56_DUAL_COLOR=1 DOOM_R56_CLAUDIO_PROFILE="$prof" DOOM_R56_BUILD="$id" \
               DOOM_R50_PLAY_BENCH="$bench" DOOM_R50_MENU_FREEZE="$bench" \
               DOOM_R50_STATIC_MENU="$bench" DOOM_R50_HARD_REINIT="$bench" \
               DOOM_R50_RESET_SRAM=0 DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
@@ -196,6 +201,7 @@ jobs:
             cp "dist/r35/flags-doom-md-r56-$id.txt" "$D/"
             cp src/r56_tables.h "$D/PALETTES-$id.h"
             "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$path.elf" > "$D/size-$id.txt"
+            done
           done
 
       - name: ROM identity and R56 invariants
@@ -206,7 +212,7 @@ jobs:
           import pathlib
           d=pathlib.Path('dist/r56-dual')
           roms=sorted(d.glob('*.bin'))
-          assert len(roms)==2,[x.name for x in roms]
+          assert len(roms)==4,[x.name for x in roms]
           for p in roms:
             b=p.read_bytes()
             assert 2*1024*1024<len(b)<=4*1024*1024,(p.name,len(b))
@@ -235,7 +241,7 @@ jobs:
             msg=f'{rom.name} exit={r.returncode} wall={time.monotonic()-t:.2f}s'
             print(msg,flush=True);rows.append(msg)
             if r.returncode: raise SystemExit(msg+'\n'+r.stdout+r.stderr)
-          assert len(rows)==2
+          assert len(rows)==4
           (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(rows)+'\n')
           PY
 
@@ -243,8 +249,8 @@ jobs:
         shell: bash
         run: |
           cat > dist/r56-dual/README-CRT.txt <<'EOF'
-          R56 CLAUDIO+WERK A6 MIXED: isolated dual-color Pair-V proof of concept.
-          PLAY: fast START menu; PERF: DEMO3 baseline benchmark.
+          R56 CLAUDIO+WERK A4/A6 MIXED: isolated dual-color Pair-V experiments.
+          Four ROMs: A4/A6 each PLAY (fast START menu) and PERF (DEMO3 benchmark).
           R56 tiles: PAL0 ABABTTTT and PAL1 TTTTCDCD (both use left half,
           VDP shifts plane B right by 4 pixels). Pair codes != CRAM indices.
           Wall/sprites: r56_wall_even/odd with precomposed COLORMAP.
@@ -258,7 +264,7 @@ jobs:
       - name: Upload R56 dual-color ROMs
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r56-dual-flat-safe-a4-a6-matrix
+          name: doom-md-r56-claudio-werk-a4-a6-mixed-play-perf
           path: dist/r56-dual/
           retention-days: 90
           if-no-files-found: error
