@@ -37,7 +37,11 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
             python3 scripts/lab/r55_werk_snapshot.py --variant "$DOOM_R55_WERK_VARIANT" --repo . --out src; or exit 1
         end
         if set -q DOOM_R56_DUAL_COLOR; and test "$DOOM_R56_DUAL_COLOR" = 1
-            python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
+            if set -q DOOM_R56_CLAUDIO_PROFILE; and test "$DOOM_R56_CLAUDIO_PROFILE" = a4
+                python3 scripts/lab/r56_claudio_a4_snapshot.py --out src/r56_tables.h; or exit 1
+            else
+                python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
+            end
         end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
