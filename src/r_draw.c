@@ -1756,7 +1756,9 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
      * invisibility, and all other weapons, retain original raster path. */
     if(psp == &_g_player.psprites[ps_weapon] &&
        psp->state->sprite==SPR_PISG &&
+#if !defined(DOOM_R51_HW_CONTINUOUS)
        !_g_player.psprites[ps_flash].state &&
+#endif
        !_g_player.powers[pw_invisibility]){
         fixed_t top=(fixed_t)(CENTERY*FRACUNIT) -
                     FixedMul(vis->texturemid,vis->scale);
