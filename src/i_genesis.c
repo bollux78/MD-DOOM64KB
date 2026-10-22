@@ -582,6 +582,14 @@ extern void R23_ProbeMain(void);
 #endif
 int main(bool hardReset)
 {
+#if defined(DOOM_R50_RESET_SRAM)
+    /* A warm RESET can interrupt an SRAM blockmap/mapmem access while the
+     * cartridge register still maps odd-lane SRAM over ROM $200000-$20FFFF.
+     * Disable that overlay immediately on entry; otherwise WAD/music data
+     * beyond 2 MiB may be read as SRAM during startup and show a black screen.
+     * The next SRAM access enables it explicitly using R25_SRAM_BEGIN. */
+    *(volatile uint8_t*)0x00A130F1UL=0;
+#endif
 #if defined(DOOM_R23_CPU_PROBE)
     R23_ProbeMain();
 #endif
