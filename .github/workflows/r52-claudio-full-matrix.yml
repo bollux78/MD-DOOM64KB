@@ -1,0 +1,310 @@
+name: R52 Claudio ColorMix full 22-ROM comparison
+
+on:
+  push:
+    branches: [r52-claudio-full-matrix]
+    paths:
+      - '.github/workflows/r52-claudio-full-matrix.yml'
+      - 'src/r22_video.inc'
+      - 'src/r22_benchmark.inc'
+      - 'src/r22_pixel4.h'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/test_r48_pair_v.py'
+      - 'scripts/lab/gen_r49_colormix.py'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'scripts/lab/gen_r52_claudio.py'
+      - 'scripts/lab/test_r52_claudio.py'
+      - 'scripts/lab/test_r49_colormix.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/build_silent.fish'
+      - 'scripts/set_rom_identity.py'
+      - 'src/d_main.c'
+      - 'src/d_main.h'
+      - 'src/g_game.c'
+      - 'src/i_system.h'
+      - 'src/m_text.c'
+      - 'src/i_genesis.c'
+      - 'src/r_draw.c'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'src/r35_native4.inc'
+  workflow_dispatch:
+
+concurrency:
+  group: r52-claudio-full-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r52-full
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r52-full/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r52-full/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r52-full/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r52-full
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r52-full/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r52-full/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r52-full/PREFLIGHT-color-report.json
+
+      - name: Prepare NumPy for Claudio palette optimizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'System NumPy available'
+          else
+            python3 -m venv "$RUNNER_TEMP/r52-claudio-venv"
+            "$RUNNER_TEMP/r52-claudio-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
+            echo "$RUNNER_TEMP/r52-claudio-venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Check imported Claudio generator and baseline repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/gen_r52_claudio.py scripts/lab/test_r52_claudio.py scripts/lab/gen_r52_ab.py
+          mkdir -p dist/r52-full
+          python3 scripts/lab/gen_r52_ab.py --profile n25
+          python3 - <<'PY'
+          import re,pathlib
+          s=pathlib.Path('src/r52_ab_tables.h').read_text()
+          assert 'r52_pal0[224]' in s and 'r52_pal1[224]' in s
+          for name in ('r52_even','r52_odd'):
+              arr=re.search(r'\\b'+name+r'\\[256\\]=\\{([^}]+)\\}',s,re.S)
+              assert arr,name
+              values=[int(x) for x in arr.group(1).split(',')]
+              assert len(values)==256 and all(1<=x<=15 for x in values)
+          print('Frozen AB palette layout/index oracle PASS')
+          PY
+          # Validate the optimizer on the project WAD BEFORE building any ROM.
+          python3 scripts/lab/gen_r52_claudio.py --repo . --out dist/r52-full/preflight-n25-forbid --mode near25 --zero-policy forbid --no-preview
+          python3 scripts/lab/test_r52_claudio.py dist/r52-full/preflight-n25-forbid .
+          python3 - <<'PY'
+          import json,pathlib
+          o=pathlib.Path('dist/r52-full/preflight-n25-forbid')
+          x=json.loads((o/'r52_ab_report.json').read_text())
+          assert x['args']['zero_policy']=='forbid'
+          assert min(x['parity_maps']['even']+x['parity_maps']['odd'])>=1
+          print('Claudio forbids transparent index in near25')
+          PY
+
+      - name: Build full matrix 22 ROMs preserving comparable control flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r52-full
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          build () {
+            local id="$1" mode="$2" mix="$3" ab="$4" generator="$5" profile="$6" zero="$7" cplut="$8"
+            local comp49=0
+            if [[ "$mix" == 1 ]]; then comp49=1; fi
+            local bench=0 menu=0 static=0 reset=0
+            if [[ "$mode" == play ]]; then bench=1; menu=1; static=1; reset=1; fi
+            echo "========== R52 $id ($mode) =========="
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 \
+                DOOM_R47_SPRITE_HOIST=1 DOOM_R48_PAIR_V=1 DOOM_R48_V_FAST=1 \
+                DOOM_R49_COLORMIX="$mix" DOOM_R49_COMPLUT="$comp49" DOOM_R49_RATIO=none \
+                DOOM_R52_AB="$ab" DOOM_R52_CLAUDIO="$generator" \
+                DOOM_R52_AB_PROFILE="$profile" DOOM_R52_ZERO_POLICY="$zero" \
+                DOOM_R52_CPLUT="$cplut" DOOM_R50_PLAY_BENCH="$bench" \
+                DOOM_R50_MENU_FREEZE="$menu" DOOM_R50_STATIC_MENU="$static" \
+                DOOM_R50_HARD_REINIT="$reset" DOOM_R50_RESET_SRAM=0 \
+                DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R52_BUILD="$id-$mode" \
+                fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            local path="dist/r35/doom-md-r52-$id-$mode"
+            cp "$path.bin" "$D/"
+            cp "dist/r35/flags-doom-md-r52-$id-$mode.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$path.elf" > "$D/size-$id-$mode.txt"
+            if [[ "$ab" == 1 ]]; then
+              cp src/r52_ab_report.json "$D/REPORT-$id-$mode.json"
+              cp src/r52_ab_tables.h "$D/TABLES-$id-$mode.h"
+            fi
+          }
+          for mode in perf play; do
+            build c0-vf    "$mode" 0 0 0 n25    forbid 0
+            build c1-cm50  "$mode" 1 0 0 n25    forbid 0
+            build old-n25  "$mode" 0 1 0 n25    forbid 0
+            build old-l32  "$mode" 0 1 0 l32    forbid 0
+            build cl-n25-f "$mode" 0 1 1 near25 forbid 1
+            build cl-n25-a "$mode" 0 1 1 near25 allow  1
+            build cl-l32-f "$mode" 0 1 1 luma32 forbid 1
+            build cl-l32-a "$mode" 0 1 1 luma32 allow  1
+            build cl-free-f "$mode" 0 1 1 free   forbid 1
+            build cl-free-a "$mode" 0 1 1 free   allow  1
+            build cl-n25-df "$mode" 0 1 1 near25 forbid 0
+          done
+
+      - name: Assert all twenty-two ROMs and BSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,re,hashlib
+          p=pathlib.Path('dist/r52-full')
+          roms=sorted(p.glob('doom-md-r52-*.bin'))
+          assert len(roms)==22,('ROM count',len(roms))
+          records={}
+          for rom in roms:
+              id=rom.stem.removeprefix('doom-md-r52-')
+              report=p/f'size-{id}.txt'
+              m=re.search(r'^\\.bss\\s+(\\d+)\\s+',report.read_text(),re.M)
+              assert m,report
+              bss=int(m.group(1))
+              assert bss<=57920,(rom.name,bss)
+              assert len(rom.stem)<=30,rom.stem
+              records[id]={'bytes':rom.stat().st_size,'bss':bss,
+                           'sha256':hashlib.sha256(rom.read_bytes()).hexdigest()}
+          for report in sorted(p.glob('REPORT-cl-*.json')):
+              d=json.loads(report.read_text())
+              assert len(d['per_subpalette'])==14
+              ep=d['parity_maps']['even'];op=d['parity_maps']['odd']
+              assert len(ep)==len(op)==256 and max(ep+op)<=15
+              if d['args']['zero_policy']=='forbid':assert min(ep+op)>=1
+              assert len(d['palette_slots']['pal0'])==len(d['palette_slots']['pal1'])==15
+          (p/'BSS-AUDIT.json').write_text(json.dumps(records,indent=2)+'\\n')
+          print('22 ROMs and BSS validated')
+          PY
+
+      - name: BlastEm 800-frame smoke on every ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess,time
+          d=pathlib.Path('dist/r52-full').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in
+              (pathlib.Path.home()/'Projetos').glob('**/blastem')
+              if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm missing'
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          rows=[]
+          for rom in sorted(d.glob('*.bin')):
+              start=time.monotonic()
+              r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                    capture_output=True,text=True,errors='replace',timeout=45)
+              s=f'{rom.name} status={r.returncode} duration={time.monotonic()-start:.2f}'
+              print(s,flush=True);rows.append(s)
+              if r.returncode: raise SystemExit(s+'\\n'+r.stdout+r.stderr)
+          assert len(rows)==22
+          (d/'BLASTEM-SMOKE.txt').write_text('\\n'.join(rows)+'\\n')
+          PY
+
+      - name: Finalize manifest and QA matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('dist/r52-full')
+          records=json.loads((p/'BSS-AUDIT.json').read_text())
+          obj={'branch':'r52-claudio-full-matrix',
+               'comparison':'2 controls, 2 frozen seeds, 6 Claudio presets/policies, 1 Claudio direct-lookup ablation; PERF+PLAY',
+               'source_note':'Claudio fixed generator (22 Oct 2026); optimizer proxy, not live DEMO3 histogram',
+               'limitations':['Fidelity metrics are offline','BlastEm smoke only','PAL0 HUD contrast needs visual inspection',
+                              'Subpalettes 1..13 not jointly optimized','R51 HW pistol intentionally disabled'],
+               'roms':records}
+          (p/'MANIFEST.json').write_text(json.dumps(obj,indent=2)+'\\n')
+          (p/'README.txt').write_text(
+             'R52 CLAUDIO FULL COLOR MATRIX - 22 ROMS\\n'
+             'VF base and CM50L legacy control, frozen AB N25/L32, Claudio near25/luma32/free with forbid/allow.\\n'
+             'Claudio N25-DF disables the composed COLORMAP LUT for CPU ablation.\\n'
+             'Compare at same E1M1 camera/tic in RGB native and CRT/composite, monitor stripes, title/HUD/tint flashes.\\n'
+             'Record two DEMO3 timedemos per PERF; real-time FPS not verified by 800-frame smoke.\\n')
+          PY
+
+      - name: Publish 22-ROM batch and reports
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r52-claudio-full-matrix
+          path: dist/r52-full/
+          retention-days: 90
+          if-no-files-found: error
