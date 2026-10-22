@@ -373,6 +373,11 @@ _Noreturn static void D_DoomLoop(void)
         // process one or more tics
         if (singletics)
         {
+#if defined(DOOM_R54D_COMPENSATED)
+            /* Timedemo must remain byte-compatible with 35-Hz demo commands. */
+            r54d_steps = 1;
+            r54d_fraction = 0;
+#endif
             I_StartTic ();
             G_BuildTiccmd ();
 
