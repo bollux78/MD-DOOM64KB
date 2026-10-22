@@ -81,7 +81,10 @@ static void R35_LeaveNative4(void)
     VDP_setVerticalScroll(BG_B,-4);
 #endif
 #endif
-#if defined(DOOM_R52_AB)
+#if defined(DOOM_R56_DUAL_COLOR)
+    PAL_setColors(0,r56_pal0[0],16,CPU);
+    PAL_setColors(16,r56_pal1[0],16,CPU);
+#elif defined(DOOM_R52_AB)
     PAL_setColors(0,r52_pal0,16,CPU);
     PAL_setColors(16,r52_pal1,16,CPU);
 #else
