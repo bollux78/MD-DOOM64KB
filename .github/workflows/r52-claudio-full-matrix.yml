@@ -153,7 +153,7 @@ jobs:
           s=pathlib.Path('src/r52_ab_tables.h').read_text()
           assert 'r52_pal0[224]' in s and 'r52_pal1[224]' in s
           for name in ('r52_even','r52_odd'):
-              arr=re.search(r'\\b'+name+r'\\[256\\]=\\{([^}]+)\\}',s,re.S)
+              arr=re.search(r'\b'+name+r'\[256\]=\{([^}]+)\}',s,re.S)
               assert arr,name
               values=[int(x) for x in arr.group(1).split(',')]
               assert len(values)==256 and all(1<=x<=15 for x in values)
@@ -235,7 +235,7 @@ jobs:
           for rom in roms:
               id=rom.stem.removeprefix('doom-md-r52-')
               report=p/f'size-{id}.txt'
-              m=re.search(r'^\\.bss\\s+(\\d+)\\s+',report.read_text(),re.M)
+              m=re.search(r'^\.bss\s+(\d+)\s+',report.read_text(),re.M)
               assert m,report
               bss=int(m.group(1))
               assert bss<=57920,(rom.name,bss)
@@ -249,7 +249,7 @@ jobs:
               assert len(ep)==len(op)==256 and max(ep+op)<=15
               if d['args']['zero_policy']=='forbid':assert min(ep+op)>=1
               assert len(d['palette_slots']['pal0'])==len(d['palette_slots']['pal1'])==15
-          (p/'BSS-AUDIT.json').write_text(json.dumps(records,indent=2)+'\\n')
+          (p/'BSS-AUDIT.json').write_text(json.dumps(records,indent=2)+'\n')
           print('22 ROMs and BSS validated')
           PY
 
@@ -273,9 +273,9 @@ jobs:
                     capture_output=True,text=True,errors='replace',timeout=45)
               s=f'{rom.name} status={r.returncode} duration={time.monotonic()-start:.2f}'
               print(s,flush=True);rows.append(s)
-              if r.returncode: raise SystemExit(s+'\\n'+r.stdout+r.stderr)
+              if r.returncode: raise SystemExit(s+'\n'+r.stdout+r.stderr)
           assert len(rows)==22
-          (d/'BLASTEM-SMOKE.txt').write_text('\\n'.join(rows)+'\\n')
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(rows)+'\n')
           PY
 
       - name: Finalize manifest and QA matrix
@@ -292,13 +292,13 @@ jobs:
                'limitations':['Fidelity metrics are offline','BlastEm smoke only','PAL0 HUD contrast needs visual inspection',
                               'Subpalettes 1..13 not jointly optimized','R51 HW pistol intentionally disabled'],
                'roms':records}
-          (p/'MANIFEST.json').write_text(json.dumps(obj,indent=2)+'\\n')
+          (p/'MANIFEST.json').write_text(json.dumps(obj,indent=2)+'\n')
           (p/'README.txt').write_text(
-             'R52 CLAUDIO FULL COLOR MATRIX - 22 ROMS\\n'
-             'VF base and CM50L legacy control, frozen AB N25/L32, Claudio near25/luma32/free with forbid/allow.\\n'
-             'Claudio N25-DF disables the composed COLORMAP LUT for CPU ablation.\\n'
-             'Compare at same E1M1 camera/tic in RGB native and CRT/composite, monitor stripes, title/HUD/tint flashes.\\n'
-             'Record two DEMO3 timedemos per PERF; real-time FPS not verified by 800-frame smoke.\\n')
+             'R52 CLAUDIO FULL COLOR MATRIX - 22 ROMS\n'
+             'VF base and CM50L legacy control, frozen AB N25/L32, Claudio near25/luma32/free with forbid/allow.\n'
+             'Claudio N25-DF disables the composed COLORMAP LUT for CPU ablation.\n'
+             'Compare at same E1M1 camera/tic in RGB native and CRT/composite, monitor stripes, title/HUD/tint flashes.\n'
+             'Record two DEMO3 timedemos per PERF; real-time FPS not verified by 800-frame smoke.\n')
           PY
 
       - name: Publish 22-ROM batch and reports
