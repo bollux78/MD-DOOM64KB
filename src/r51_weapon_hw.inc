@@ -24,8 +24,11 @@ boolean I_R51_WeaponSubmit(int16_t lump,int16_t phys_x,int16_t phys_y)
     for(uint16_t i=0;i<R51_WEAPON_ASSET_COUNT;i++){
         const char *candidate=r51_weapon_assets[i].name;
         uint8_t match=1;
-        for(uint16_t c=0;c<8;c++)
-            if(name[c]!=candidate[c]){match=0;break;}
+        for(uint16_t c=0;c<8;c++){
+            const char expected=candidate[c];
+            if(!expected){if(name[c])match=0;break;}
+            if(name[c]!=expected){match=0;break;}
+        }
         if(!match)continue;
         r51_pending_asset=(int8_t)i;
         r51_weapon_x=phys_x;
