@@ -51,3 +51,13 @@ This uses two existing opaque colors from **PAL0** in A and two from **PAL1** in
 Hold existing `r52-claudio-full-matrix` intact. First test RGB TV output of the three visually preferred ROMs and record exact filenames. Then compare SOLID/M25/M50 for the preferred `near25` and `free` variants (both index-zero modes as needed), each in PLAY+PERF. Keep same 2,134 DEMO3 tic count, two timedemo runs each, native pixel screenshot at the same camera, and CRT/TV photo. Watch shimmer, moire, checkerboard, edge bleeding, dark gradients, red damage flashes, menus and the HUD.
 
 Acceptance: less intrusive perceived vertical 4px striping at native physical size; correct geometry and sprite outlines, no unexpected transparent pixels; ≥ current measured 5.46 FPS preferred (acceptable regression must be justified by clear visual advantage). If microdither does not remove stripe seams, redirect work to Candidate B before attempting costly C.
+
+## R52 CRT-simulation visual checkpoint (user review, 22 Oct)
+
+- User compared all 11 PLAY windows against an overlay of the original game's frame, using a CRT simulation.
+- **Finalists: top row, column 2 and top row, column 5**; both marked with red strokes below the viewport/HUD.
+- The original image's beige/brown pillar, neutral-grey background, saturated dark-blue floor and warm architectural accents are the visual anchors. The large differences in geometry/texture are expected from the 76×44 logical resolution; do not score them as pure palette error.
+- Compared to the other R52 samples, the two finalists preserve more plausible warm/neutral balance, without the strong magenta/red or olive tint of some alternatives. The CRT filter softens the 4-pixel banding but does not prove it disappears on real television output.
+- **Exact ROM filenames are not recoverable from this montage** because title bars are elided. Do not guess file identity from screenshot order; confirm the binary names before targeted R53 compilation or lock them from a reproducible screenshot manifest.
+- Keep both finalists and the `c0-vf` reference. Candidate A microdither can be evaluated at 1-pixel spatial pitch INSIDE each 4×4 cell, while preserving 4×4 scene sampling. For accurate cross-PAL0/PAL1 blending in the same cell, see Candidate C and its structural constraints.
+- Require real CRT/TV captures plus native unfiltered captures before promotion. Screenshots from software simulation are useful as a ranking criterion, not hardware verification.
