@@ -444,6 +444,12 @@ void G_Ticker (void)
         if (_g_demoplayback)
             G_ReadDemoTiccmd ();
     }
+#if defined(DOOM_R50_PLAY_BENCH)
+    /* The DEMOMARKER can be reached inside G_ReadDemoTiccmd above. Do not
+     * run P_Ticker against a demo that has already been retired; the outer
+     * Doom loop will restore title/menu state at the next safe boundary. */
+    if(D_R50_BenchmarkReturnPending())return;
+#endif
 
     // cph - if the gamestate changed, we may need to clean up the old gamestate
     if (_g_gamestate != prevgamestate)
@@ -1110,7 +1116,7 @@ void G_CheckDemoStatus (void)
             /* Interactive results have returned on Start. Resume the
              * title/menu without leaving benchmark flags or demo state. */
             G_ReloadDefaults();
-            D_R50_BenchmarkFinish();
+            D_R50_BenchmarkRequestReturn();
             return;
         }
 #endif
