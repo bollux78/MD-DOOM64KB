@@ -943,15 +943,34 @@ void V_DrawLine(int16_t x,int16_t y,int16_t xx,int16_t yy,uint8_t c){
 }
 void I_InitScreenPage(void){V_ClearViewWindow();}void I_InitScreenPages(void){V_ClearViewWindow();}
 void wipe_StartScreen(void){V_ClearViewWindow();}void D_Wipe(void){I_FinishUpdate();}
-static void R22_Num3(uint16_t x,uint16_t y,int32_t v){if(v<0)v=0;if(v>999)v=999;char s[4]={(char)('0'+v/100),(char)('0'+v/10%10),(char)('0'+v%10),0};R22_DrawText(VDP_BG_A,s,x,y);}
+#if defined(DOOM_R51_HW_HUD)
+/* Window replaces Plane A, rather than transparently compositing with it.
+ * Bottom HUD text therefore MUST be written to Window at high priority;
+ * the black Window fill itself uses low priority so it masks low-priority
+ * gun sprites, with no horizontal interrupt. */
+#define R51_HUD_TEXT_PLANE VDP_WINDOW
+#else
+#define R51_HUD_TEXT_PLANE VDP_BG_A
+#endif
+static void R22_Num3(uint16_t x,uint16_t y,int32_t v){if(v<0)v=0;if(v>999)v=999;char s[4]={(char)('0'+v/100),(char)('0'+v/10%10),(char)('0'+v%10),0};R22_DrawText(R51_HUD_TEXT_PLANE,s,x,y);}
 static void R22_HUD(void){
+#if defined(DOOM_R51_HW_HUD)
+    if(!_g_menuactive)R51_HudMaskPrepare();
+#endif
     static uint16_t health=65535,armor=65535,ammo=65535;
     uint16_t h=_g_player.mo?_g_player.mo->health:_g_player.health,a=_g_player.armorpoints,b=_g_player.ammo[am_clip];
     VDP_setTextPlane(BG_A);VDP_setTextPalette(PAL0);VDP_setTextPriority(TRUE);
-    if(h!=health||a!=armor||b!=ammo){
-        R22_DrawText(VDP_BG_A,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(VDP_BG_A,"ARMOR",13,23);R22_Num3(19,23,a);
-        R22_DrawText(VDP_BG_A,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
-        R22_DrawText(VDP_BG_A,"DOOM PX4 - 76x44",1,25);
+    if(h!=health||a!=armor||b!=ammo
+#if defined(DOOM_R51_HW_HUD)
+       ||r51_hud_text_dirty
+#endif
+    ){
+        R22_DrawText(R51_HUD_TEXT_PLANE,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(R51_HUD_TEXT_PLANE,"ARMOR",13,23);R22_Num3(19,23,a);
+        R22_DrawText(R51_HUD_TEXT_PLANE,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
+        R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - 76x44",1,25);
+#if defined(DOOM_R51_HW_HUD)
+        r51_hud_text_dirty=0;
+#endif
     }
     static uint32_t vb;static uint16_t frames;frames++;
     uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,31,0);frames=0;vb=_g_vblankCount;}
