@@ -1,0 +1,257 @@
+name: R50 Benchmark in-game return fix
+
+on:
+  push:
+    branches: [r50-benchmark-return-fix]
+    paths:
+      - '.github/workflows/r50-benchmark-return-fix.yml'
+      - 'src/r22_video.inc'
+      - 'src/r22_benchmark.inc'
+      - 'src/r22_pixel4.h'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/test_r48_pair_v.py'
+      - 'scripts/lab/gen_r49_colormix.py'
+      - 'scripts/lab/test_r49_colormix.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/build_silent.fish'
+      - 'scripts/set_rom_identity.py'
+      - 'src/d_main.c'
+      - 'src/d_main.h'
+      - 'src/g_game.c'
+      - 'src/i_system.h'
+      - 'src/m_text.c'
+  workflow_dispatch:
+
+concurrency:
+  group: r50-benchmark-return-fix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r50-return
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r50-return/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r50-return/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r50-return/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r50-return
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r50-return/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r50-return/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r50-return/PREFLIGHT-color-report.json
+
+      - name: Assert short and unique ROM ids
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          names=['vf-ctrl-play','vf-bench-fix-play','vf-bf-fix-play',
+                 'cm50l-fix-play','vf-ctrl-perf']
+          roms=['doom-md-r50-'+s for s in names]
+          assert len(roms)==len(set(roms))==5
+          assert all(len(x)<=30 for x in roms),[(x,len(x)) for x in roms]
+          print('Five R50 identifiers valid')
+          PY
+
+      - name: Build Pair-V in-game return regression matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r50-return
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          p4 () {
+            local mode="$1" id="$2" mix="$3" lut="$4" bench="$5" freeze="$6"
+            echo "====== R50 RETURN FIX $id / $mode ======"
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 \
+                DOOM_R47_SPRITE_HOIST=1 DOOM_R48_PAIR_V=1 DOOM_R48_V_FAST=1 \
+                DOOM_R49_COLORMIX="$mix" DOOM_R49_COMPLUT="$lut" \
+                DOOM_R49_RATIO=none DOOM_R50_PLAY_BENCH="$bench" \
+                DOOM_R50_MENU_FREEZE="$freeze" \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R50_BUILD="$id" \
+                fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            cp "dist/r35/doom-md-r50-$id.bin" "$D/"
+            cp "dist/r35/flags-doom-md-r50-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A \
+              "dist/r35/doom-md-r50-$id.elf" > "$D/size-$id.txt"
+          }
+          p4 play vf-ctrl-play      0 0 0 0
+          p4 play vf-bench-fix-play 0 0 1 0
+          p4 play vf-bf-fix-play    0 0 1 1
+          p4 play cm50l-fix-play    1 1 1 1
+          p4 perf vf-ctrl-perf      0 0 0 0
+
+      - name: WRAM and baseline audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,json
+          d=Path('dist/r50-return')
+          sizes={}
+          for p in sorted(d.glob('size-*.txt')):
+              m=re.search(r'^\.bss\s+(\d+)\s+',p.read_text(),re.M)
+              if not m: raise SystemExit('No BSS: '+p.name)
+              b=int(m.group(1))
+              if b>57920: raise SystemExit(f'Boot-risk BSS {p.name}: {b}')
+              sizes[p.stem[5:]]=b
+          assert len(sizes)==5,sizes
+          if sizes['vf-bf-fix-play']-sizes['vf-ctrl-play']>64:
+              raise SystemExit('Benchmark/fast-menu BSS overhead >64B')
+          (d/'BSS-AUDIT.json').write_text(json.dumps(sizes,indent=2)+'\n')
+          print(json.dumps(sizes,indent=2))
+          PY
+
+      - name: BlastEm smoke tests for both PERF and PLAY variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,shutil,subprocess,time
+          d=Path('dist/r50-return').resolve()
+          exe=shutil.which('blastem') or next(
+            (str(p) for p in (Path.home()/'Projetos').glob('**/blastem')
+             if p.is_file() and os.access(p,os.X_OK)),None)
+          if not exe: raise SystemExit('BlastEm not found')
+          env=os.environ.copy();env.update(SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy')
+          lines=[]
+          for rom in sorted(d.glob('*.bin')):
+              t=time.monotonic()
+              try:
+                  r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                        text=True,errors='replace',timeout=35)
+              except subprocess.TimeoutExpired:
+                  raise SystemExit('BlastEm 800-frame hang: '+rom.name)
+              msg=f'{rom.name}: exit={r.returncode} wall={time.monotonic()-t:.2f}s'
+              lines.append(msg);print(msg,flush=True)
+              if r.returncode: raise SystemExit(msg)
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Manifest and interactive regression instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          d=Path('dist/r50-return')
+          roms=[{'name':p.name,'bytes':p.stat().st_size,
+                 'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in sorted(d.glob('*.bin'))]
+          assert len(roms)==5,roms
+          data={'baseline':'R50 PLAY vf-bf 5.30 FPS; PERF vf 5.31 FPS',
+                'change':'deferred safe benchmark end, skip stale P_Ticker, align adaptive tic clock, enter title and menu immediately',
+                'tests_completed':'build, fish syntax, WAD/ColorMix oracles, BSS, BlastEm startup/800-frame smoke',
+                'tests_pending':'manual timedemo launched during E1M1 then Start -> menu -> New Game; repeat twice; test soft reset',
+                'roms':roms}
+          (d/'MANIFEST.json').write_text(json.dumps(data,indent=2)+'\n')
+          (d/'README.txt').write_text(
+            'R50 BENCHMARK RETURN FIX - EXPERIMENTAL\n'
+            'FIRST: test doom-md-r50-vf-bf-fix-play.bin\n'
+            '1. Boot -> Start -> select level -> New Game -> play/move in E1M1.\n'
+            '2. Start DURING gameplay -> Benchmark -> complete DEMO3.\n'
+            '3. On result press Start; verify immediate main menu, responsive arrows.\n'
+            '4. Start a NEW GAME, move/fire, use Start menu; repeat Benchmark.\n'
+            '5. Check opening art after returning and warm reset.\n'
+            '6. Compare FPS/time to vf-ctrl-perf and previous R50 5.30 FPS.\n'
+            'The previous in-game return path was reported BROKEN. This is a fix candidate;\n'
+            'CI does not simulate the full human-input sequence.\n')
+          print('Built',len(roms),'R50 ROMs')
+          PY
+
+      - name: Upload R50 in-game benchmark return candidates
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r50-benchmark-return-fix
+          path: dist/r50-return/
+          retention-days: 90
+          if-no-files-found: error
