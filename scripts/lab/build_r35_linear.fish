@@ -371,6 +371,12 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R50_STATIC_MENU'
     end
+    if set -q DOOM_R50_HARD_REINIT; and test "$DOOM_R50_HARD_REINIT" = 1
+        if test "$v" != pixel4-play
+            echo 'R50 soft reset hard reinit needs pixel4-play'; exit 2
+        end
+        set defs $defs '-DDOOM_R50_HARD_REINIT'
+    end
     if set -q DOOM_R50_RESET_SRAM; and test "$DOOM_R50_RESET_SRAM" = 1
         if test "$v" != pixel4-play
             echo 'R50 reset SRAM experiment is PLAY only'; exit 2
