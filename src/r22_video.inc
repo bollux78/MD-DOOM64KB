@@ -164,15 +164,24 @@ static void R22_ClearOverlay(void){
 /* R40b: Write current text without blanking the WINDOW first, tracking
  * the positions occupied this frame. Repeated glyph writes do not cause
  * visible blinking; a transparent tile is written only for retired glyphs. */
+#if defined(DOOM_R50_STATIC_MENU)
+/* Native art is installed later by r35_native4.inc. Recreate only the
+ * original map words displaced by glyphs, without allocating a second
+ * 320x224 framebuffer or using the full-screen Window plane. */
+static uint16_t R35_NativeMapWord(uint16_t x,uint16_t y);
+#endif
 static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
 {
     if(x<0||x>=R40B_TEXT_W||y<0||y>=R40B_TEXT_H)return;
     if(!r22_text_this_frame){
+#if !defined(DOOM_R50_STATIC_MENU)
+        /* Original R40b full-screen Window path; blacks out native art. */
         R20_StopVideo();
         uint16_t sr=R22_Lock();
         VDP_setWindowHPos(TRUE,0);
         VDP_setWindowVPos(FALSE,0);
         R22_Unlock(sr);
+#endif
         r22_text_this_frame=1;
     }
     r22_overlay_dirty=1;
@@ -183,7 +192,13 @@ static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
         r40b_native_seen[i>>3]|=(uint8_t)(1u<<(i&7));
         scan++; col++;
     }
+#if defined(DOOM_R50_STATIC_MENU)
+    /* Priority text directly in BG_A, over intact full-screen native art
+     * in BG_B. WINDOW stays hidden, preserving all 28 picture rows. */
+    R22_DrawText(VDP_BG_A,s,(uint16_t)x,(uint16_t)y);
+#else
     R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
+#endif
 }
 static void R40B_PruneNativeText(void)
 {
@@ -206,8 +221,20 @@ static void R40B_PruneNativeText(void)
                 uint8_t bit=(uint8_t)(1u<<(i&7));
                 if((r40b_native_prev[i>>3]&bit) &&
                    !(r40b_native_seen[i>>3]&bit)){
-                    if(!run)*ctrl=VDP_WRITE_VRAM_ADDR(VDP_WINDOW+y*128u+x*2u);
+                    if(!run)*ctrl=VDP_WRITE_VRAM_ADDR(
+#if defined(DOOM_R50_STATIC_MENU)
+                        VDP_BG_A+
+#else
+                        VDP_WINDOW+
+#endif
+                        y*128u+x*2u);
+#if defined(DOOM_R50_STATIC_MENU)
+                    /* Restore this glyph's exact title/intermission tile.
+                     * Native art map is immutable ROM, so no RAM shadow. */
+                    *data=R35_NativeMapWord(x,y);
+#else
                     *data=0; /* Transparent WINDOW cell shows native art. */
+#endif
                     run=1;
                 }else run=0;
             }
@@ -851,12 +878,21 @@ void R22_BeginFrame(void){
 static void R22_EndOverlay(void){
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0){
+#if defined(DOOM_R50_STATIC_MENU)
+        /* The native picture remains visible on both background planes.
+         * Remove glyphs that are no longer requested, including the case
+         * where the menu was closed on this frame. */
+        if(r22_overlay_dirty || r22_text_this_frame)
+            R40B_PruneNativeText();
+        r22_overlay_dirty=(r22_text_this_frame!=0);
+#else
         if(r22_overlay_dirty && !r22_text_this_frame){
             R22_ClearOverlay();
             R40B_ResetNativeText();
         } else if(r22_text_this_frame){
             R40B_PruneNativeText();
         }
+#endif
         return;
     }
 #endif
