@@ -365,6 +365,18 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R50_MENU_FREEZE'
     end
+    if set -q DOOM_R50_STATIC_MENU; and test "$DOOM_R50_STATIC_MENU" = 1
+        if test "$v" != pixel4-play
+            echo 'R50 static menu fix is Pair-V PLAY only'; exit 2
+        end
+        set defs $defs '-DDOOM_R50_STATIC_MENU'
+    end
+    if set -q DOOM_R50_RESET_SRAM; and test "$DOOM_R50_RESET_SRAM" = 1
+        if test "$v" != pixel4-play
+            echo 'R50 reset SRAM experiment is PLAY only'; exit 2
+        end
+        set defs $defs '-DDOOM_R50_RESET_SRAM'
+    end
     if set -q DOOM_R47_MUL_BSP; and test "$DOOM_R47_MUL_BSP" = 1
         if not contains -- $v cell-perf cell-play
             echo 'R47 BSP multiply experiment requires 8x8 cell backend'; exit 2
