@@ -28,6 +28,15 @@ static const R35Native4 r35_native4[3]={
     {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES}
 };
 static int16_t r35_native_active=-1;
+#if defined(DOOM_R50_STATIC_MENU)
+/* Called by R40B's displaced-glyph restoration. Native tilemap is immutable
+ * ROM data; no framebuffer duplication or new WRAM shadow required. */
+static uint16_t R35_NativeMapWord(uint16_t x,uint16_t y)
+{
+    if(r35_native_active<0 || x>=40 || y>=28)return 0;
+    return (uint16_t)(r35_native4[r35_native_active].map[y*40u+x]+16u);
+}
+#endif
 static void R35_LeaveNative4(void)
 {
     if(r35_native_active<0)return;
@@ -119,7 +128,13 @@ static bool R35_DrawNative4(int16_t lump)
 #endif
 #endif
         VDP_clearPlane(WINDOW,TRUE);
+#if defined(DOOM_R50_STATIC_MENU)
+        /* With text written directly into BG_A and restored from ROM, a
+         * full-screen WINDOW would hide the 320x224 static background. */
+        VDP_setWindowHPos(FALSE,0);
+#else
         VDP_setWindowHPos(TRUE,0);
+#endif
         VDP_setWindowVPos(FALSE,0);
         /* Tile data are 32B raw 4bpp, already converted with Bayer8.
            Every tile lives directly in ROM. Never call a codec here. */
