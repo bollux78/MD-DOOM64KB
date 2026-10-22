@@ -32,9 +32,16 @@
 #if !defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST) || defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
 #error R52 AB requires Pair-V Fast without R49 mix/composed LUT
 #endif
-#define R52_Map(x) (((x)&1u)?r52_odd:r52_even)
-#else
-#define R52_Map(x) r22_color
+#if defined(DOOM_R52_CPLUT)
+extern const uint8_t *fullcolormap;
+static inline const uint8_t *R52_LUT(const uint8_t *colormap,uint16_t parity)
+{
+    if(!colormap)return 0;
+    uint32_t diff=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
+    if(diff>=R52_COLORMAP_BYTES || (diff&255u)!=0u)return 0;
+    return (parity?r52_comp_odd:r52_comp_even)+diff;
+}
+#endif
 #endif
 #if defined(DOOM_R49_COLORMIX) && (!defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST))
 #error R49 ColorMix requires Pair-V Fast
@@ -340,7 +347,10 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
-    const uint8_t *r52map=R52_Map(v->x);
+    const uint8_t *r52map=r22_color;
+#if defined(DOOM_R52_AB)
+    r52map=(v->x&1u)?r52_odd:r52_even;
+#endif
 #if defined(DOOM_R47_SPRITE_HOIST)
     /* R47: same exact clipping/stride hoist as flats, while retaining the
      * sprite read-modify-write required to preserve the neighbouring nibble. */
@@ -359,6 +369,10 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     frac=(uint16_t)(frac+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
     const uint8_t *source=v->source,*colormap=v->colormap;
+#if defined(DOOM_R52_CPLUT)
+    const uint8_t *r52fast=R52_LUT(colormap,(uint16_t)(x&1u));
+    if(r52fast){r52map=r52fast;colormap=0;}
+#endif
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     uint16_t n=(uint16_t)(y1-first);
 #if defined(DOOM_R48_PAIR_V)
@@ -466,7 +480,10 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
 #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
-    const uint8_t *r52map=R52_Map(v->x);
+    const uint8_t *r52map=r22_color;
+#if defined(DOOM_R52_AB)
+    r52map=(v->x&1u)?r52_odd:r52_even;
+#endif
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
     int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
@@ -481,6 +498,10 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
     const uint8_t *source=v->source, *colormap=v->colormap;
+#if defined(DOOM_R52_CPLUT)
+    const uint8_t *r52fast=R52_LUT(colormap,(uint16_t)(x&1u));
+    if(r52fast){r52map=r52fast;colormap=0;}
+#endif
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     int16_t remaining=(int16_t)(y1-first+1);
 #if defined(DOOM_R48_PAIR_V)
@@ -597,7 +618,10 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 #endif
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
-    const uint8_t *r52map=R52_Map(v->x);
+    const uint8_t *r52map=r22_color;
+#if defined(DOOM_R52_AB)
+    r52map=(v->x&1u)?r52_odd:r52_even;
+#endif
 #if defined(DOOM_R47_FLAT_HOIST)
     /* R47A: eliminate per-pixel bounds/level checks and y*38 addressing.
      * Exactly one framebuffer byte is modified per visible sample;
@@ -668,8 +692,8 @@ void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){
     if(p<0)p=0;if(p>13)p=13;
 #if defined(DOOM_R52_AB)
-    PAL_setColors(0,r52_pal0[(uint8_t)p],16,DMA);
-    PAL_setColors(16,r52_pal1[(uint8_t)p],16,DMA);
+    PAL_setColors(0,r52_pal0+(uint16_t)(uint8_t)p*16u,16,DMA);
+    PAL_setColors(16,r52_pal1+(uint16_t)(uint8_t)p*16u,16,DMA);
 #else
     PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);
 #endif
