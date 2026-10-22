@@ -378,6 +378,12 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R52_AB'
     end
+    if set -q DOOM_R54_LOGIC_HZ
+        if not contains -- "$DOOM_R54_LOGIC_HZ" 35 28 24 21 18 15 12
+            echo 'R54 cadence must be 35,28,24,21,18,15,12'; exit 2
+        end
+        set defs $defs "-DDOOM_R54_LOGIC_HZ=$DOOM_R54_LOGIC_HZ"
+    end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
             echo 'R52 composed lookup requires Claudio generator'; exit 2
@@ -808,6 +814,12 @@ for v in $variants
             echo 'Invalid R52 build id'; exit 2
         end
         set id doom-md-r52-$DOOM_R52_BUILD
+    end
+    if set -q DOOM_R54_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R54_BUILD"
+            echo 'Invalid R54 build id'; exit 2
+        end
+        set id doom-md-r54-$DOOM_R54_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
