@@ -43,6 +43,7 @@
 #include "p_map.h"
 #include "p_spec.h"
 #include "p_user.h"
+#include "p_tick.h"
 
 #include "globdata.h"
 
@@ -78,10 +79,10 @@ static void P_BobAndThrust(player_t *player, int16_t angle, int8_t move)
 {
 	fixed_t x = FixedMulAngle(move * ORIG_FRICTION_FACTOR,finecosine(angle));
 	fixed_t y = FixedMulAngle(move * ORIG_FRICTION_FACTOR,finesine(  angle));
-	player->mo->momx += x;
-	player->mo->momy += y;
-	player->momx     += x;
-	player->momy     += y;
+	player->mo->momx += x * r54d_steps;
+	player->mo->momy += y * r54d_steps;
+	player->momx     += x * r54d_steps;
+	player->momy     += y * r54d_steps;
 }
 
 //
@@ -191,7 +192,7 @@ static void P_MovePlayer (player_t* player)
   ticcmd_t *cmd = &player->cmd;
   mobj_t __far* mo = player->mo;
 
-  mo->angle += ((int32_t)cmd->angleturn) << 16;
+  mo->angle += ((uint32_t)((int32_t)cmd->angleturn * r54d_steps)) << 16;
   onground = mo->z <= mo->floorz;
 
   // killough 10/98:
