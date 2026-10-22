@@ -30,7 +30,12 @@ if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
     python3 scripts/lab/gen_r49_colormix.py; or exit 1
 end
 if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
-    python3 scripts/lab/gen_r52_ab.py --profile "$DOOM_R52_AB_PROFILE"; or exit 1
+    if set -q DOOM_R52_CLAUDIO; and test "$DOOM_R52_CLAUDIO" = 1
+        python3 scripts/lab/gen_r52_claudio.py --repo . --out src --mode "$DOOM_R52_AB_PROFILE" --zero-policy "$DOOM_R52_ZERO_POLICY" --no-preview; or exit 1
+        python3 scripts/lab/test_r52_claudio.py src .; or exit 1
+    else
+        python3 scripts/lab/gen_r52_ab.py --profile "$DOOM_R52_AB_PROFILE"; or exit 1
+    end
 end
 python3 scripts/lab/gen_r43_gray.py; or exit 1
 python3 scripts/lab/test_r22_pixel4.py; or exit 1
@@ -372,6 +377,12 @@ for v in $variants
             echo 'R52-AB cannot combine with R49 ColorMix'; exit 2
         end
         set defs $defs '-DDOOM_R52_AB'
+    end
+    if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
+        if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
+            echo 'R52 composed lookup requires Claudio generator'; exit 2
+        end
+        set defs $defs '-DDOOM_R52_CPLUT'
     end
     if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
         set defs $defs '-DDOOM_R51_HW_WEAPON'
