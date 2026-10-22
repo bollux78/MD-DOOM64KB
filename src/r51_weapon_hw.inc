@@ -17,6 +17,7 @@ static uint8_t r51_weapon_visible;
 static int16_t r51_weapon_x,r51_weapon_y;
 #if defined(DOOM_R51_HW_HUD)
 static uint8_t r51_hud_mask_ready;
+static uint8_t r51_hud_text_dirty=1;
 /* Pair-V uses high-priority BG_A font tiles in HUD rows 23/25. Low-priority
  * weapon sprites can therefore sit BEHIND a low-priority opaque Window plane
  * in rows 22..27 while HUD font tiles remain on top. No H-INT required.
@@ -37,6 +38,7 @@ static void R51_HudMaskPrepare(void)
         }
         R22_Unlock(sr);
         r51_hud_mask_ready=1;
+        r51_hud_text_dirty=1;
     }
     /* Menu text may temporarily claim the whole Window. When closed,
      * always restore bottom-only partition before presenting sprites. */
@@ -91,6 +93,7 @@ static void R51_WeaponInvalidate(void)
     r51_pending_asset=-1;
 #if defined(DOOM_R51_HW_HUD)
     r51_hud_mask_ready=0;
+    r51_hud_text_dirty=1;
 #endif
 }
 static void R51_WeaponBeginFrame(void){r51_pending_asset=-1;}
