@@ -257,7 +257,10 @@ static void D_Display (void)
          * M_Drawer draws its own background and glyphs. Keep game ticking
          * normally: only presentation is skipped, never simulation. */
 #if defined(DOOM_R50_MENU_FREEZE)
-        if(!_g_menuactive || _g_demoplayback)
+        /* Freeze 3D even during demo playback: the old exception made
+         * START menus rerender the world at ~5 FPS. The cached VDP
+         * planes stay visible while M_Drawer updates menu glyphs. */
+        if(!_g_menuactive)
 #endif
         {
             if (viewactive)
