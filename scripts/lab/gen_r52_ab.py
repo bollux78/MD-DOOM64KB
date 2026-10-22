@@ -55,8 +55,8 @@ def run(profile):
     for name,values,typ in [('r52_even',even,'uint8_t'),('r52_odd',odd,'uint8_t')]:
         head.append('static const '+typ+' '+name+'[256]={\n'+nums(values)+'\n};')
     for name,rows in [('r52_pal0',cram0),('r52_pal1',cram1)]:
-        head.append('static const uint16_t '+name+'[14][16]={')
-        for row in rows:head.append(' {'+','.join(str(x) for x in row)+'},')
+        head.append('static const uint16_t '+name+'[224]={')
+        for row in rows:head.append(' '+','.join(str(x) for x in row)+',')
         head.append('};')
     head.append('#endif')
     (ROOT/'src/r52_ab_tables.h').write_text('\n'.join(head)+'\n')
