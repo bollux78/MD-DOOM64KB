@@ -29,6 +29,9 @@ if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
     # Pure ROM tables: color fidelity gate and/or precomposed colormap.
     python3 scripts/lab/gen_r49_colormix.py; or exit 1
 end
+if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
+    python3 scripts/lab/gen_r52_ab.py --profile "$DOOM_R52_AB_PROFILE"; or exit 1
+end
 python3 scripts/lab/gen_r43_gray.py; or exit 1
 python3 scripts/lab/test_r22_pixel4.py; or exit 1
 
@@ -360,6 +363,15 @@ for v in $variants
             case '*'
                 echo 'Unknown R49 ColorMix ratio'; exit 2
         end
+    end
+    if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
+        if not test "$DOOM_R48_PAIR_V" = 1; or not test "$DOOM_R48_V_FAST" = 1
+            echo 'R52-AB requires Pair-V Fast'; exit 2
+        end
+        if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
+            echo 'R52-AB cannot combine with R49 ColorMix'; exit 2
+        end
+        set defs $defs '-DDOOM_R52_AB'
     end
     if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
         set defs $defs '-DDOOM_R51_HW_WEAPON'
@@ -779,6 +791,12 @@ for v in $variants
             echo 'Invalid R51 build id'; exit 2
         end
         set id doom-md-r51-$DOOM_R51_BUILD
+    end
+    if set -q DOOM_R52_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R52_BUILD"
+            echo 'Invalid R52 build id'; exit 2
+        end
+        set id doom-md-r52-$DOOM_R52_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
