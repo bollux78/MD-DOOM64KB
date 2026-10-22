@@ -271,6 +271,38 @@ jobs:
             raise SystemExit('BlastEm matrix contains failed runs')
           PY
 
+      - name: Probe headless PNG capture capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r56-dual/capture-probe
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess
+          out=pathlib.Path('dist/r56-dual/capture-probe')
+          exe=shutil.which('blastem') or next((str(p) for p in
+              (pathlib.Path.home()/'Projetos').glob('**/blastem')
+              if p.is_file() and os.access(p,os.X_OK)),None)
+          tools=['blastem','Xvfb','xvfb-run','xdotool','import','scrot','ffmpeg','python3']
+          lines=['R56 PNG CAPTURE PREFLIGHT (no video recorded)',
+                 'blastem executable: '+str(exe)]
+          for name in tools:
+            lines.append(name+': '+str(shutil.which(name)))
+          lines.append('DISPLAY: '+repr(os.environ.get('DISPLAY')))
+          lines.append('WAYLAND_DISPLAY: '+repr(os.environ.get('WAYLAND_DISPLAY')))
+          if exe:
+            for flag in ('-h','--help'):
+              try:
+                p=subprocess.run([exe,flag],capture_output=True,text=True,
+                    errors='replace',timeout=5,
+                    env={**os.environ,'SDL_AUDIODRIVER':'dummy','SDL_VIDEODRIVER':'dummy'})
+                lines.append(f'blastem {flag}: exit={p.returncode}')
+                lines.append((p.stdout+'\n'+p.stderr)[-4000:])
+              except Exception as exc:
+                lines.append(f'blastem {flag}: {type(exc).__name__}: {exc}')
+          (out/'CAPTURE-CAPABILITIES.txt').write_text('\n'.join(lines)+'\n')
+          print('\n'.join(lines))
+          PY
+
       - name: Hardware comparison instructions
         shell: bash
         run: |
