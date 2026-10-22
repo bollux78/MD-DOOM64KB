@@ -1852,7 +1852,9 @@ static void R_DrawMasked(void)
         if (ds->maskedtexturecol)
             R_RenderMaskedSegRange(ds, ds->x1, ds->x2);
 
+#if !defined(DOOM_R51_NO_PSPRITE)
     R_DrawPlayerSprites ();
+#endif
 }
 
 
