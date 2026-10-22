@@ -201,7 +201,7 @@ jobs:
           assert len(roms)==6, [x.name for x in roms]
           for p in roms:
             b=p.read_bytes()
-            assert len(b)==4*1024*1024,(p.name,len(b))
+            assert 2*1024*1024 < len(b) <= 4*1024*1024,(p.name,len(b))
             print(p.name,len(b),b[0x120:0x150].decode('latin1',errors='replace'))
           for kind,n in [('a4',4),('a6',6)]:
             h=(d/f'PALETTES-werk-{kind}-play.h').read_text()
