@@ -84,6 +84,11 @@ const boolean nodrawers = false;
 
 
 static int32_t maketic;
+#if defined(DOOM_R50_PLAY_BENCH)
+/* Shared with D_BuildNewTiccmds so returning from single-tic benchmark can
+ * discard the accumulated real-time input backlog deterministically. */
+static int32_t r50_lastmadetic;
+#endif
 
 
 static int16_t  pagetic;
@@ -92,13 +97,22 @@ static boolean singletics; // debug flag to cancel adaptiveness
 static boolean advancedemo;
 #if defined(DOOM_R50_PLAY_BENCH)
 static boolean r50_bench_from_menu;
+static boolean r50_bench_return_pending;
 boolean D_R50_IsMenuBenchmark(void) { return r50_bench_from_menu; }
+boolean D_R50_BenchmarkReturnPending(void) { return r50_bench_return_pending; }
+void D_R50_BenchmarkRequestReturn(void)
+{
+    /* G_ReadDemoTiccmd/G_Ticker still own the stack. Never transition the
+     * game, menu or clocks from the middle of a demo command decode. */
+    r50_bench_return_pending=true;
+}
 void D_R50_BenchmarkStart(void)
 {
     if(r50_bench_from_menu)return;
     /* PERF mode advances exactly one Doom gametic per outer iteration.
      * This is required to compare DEMO3 PLAY runs with PERF controls. */
     r50_bench_from_menu=true;
+    r50_bench_return_pending=false;
     /* A pending title-screen demo transition must not replace our explicit
      * DEMO3 request on the next game tic. */
     advancedemo=false;
@@ -107,13 +121,26 @@ void D_R50_BenchmarkStart(void)
     _g_singledemo=false;
     G_DeferedPlayDemo("demo3");
 }
-void D_R50_BenchmarkFinish(void)
+/* Execute ONLY at the outer D_DoomLoop boundary, after the current
+ * G_Ticker has returned and the final game tic has been accounted for. */
+static void D_R50_BenchmarkFinish(void)
 {
+    if(!r50_bench_return_pending)return;
+    r50_bench_return_pending=false;
     r50_bench_from_menu=false;
     _g_timingdemo=false;
+    _g_singledemo=false;
     singletics=false;
-    /* Old demo state is released in G_CheckDemoStatus before this call. */
+    /* Single-tic mode did not call D_BuildNewTiccmds for the full DEMO3.
+     * Without resync, ordinary PLAY consumes several minutes of missed
+     * input tics before it can respond to Start or navigate the menu. */
+    maketic=_g_gametic;
+    r50_lastmadetic=I_GetTime();
+    /* Don't leave the just-finished demo's GS_LEVEL and its stale view/
+     * player state alive while the post-benchmark menu is shown. Set up
+     * the title immediately, not via a deferred advance on the next tick. */
     D_StartTitle();
+    D_DoAdvanceDemo();
     M_StartControlPanel();
 }
 #endif
@@ -155,9 +182,14 @@ void D_PostEvent(event_t *ev)
 
 static void D_BuildNewTiccmds(void)
 {
+    #if defined(DOOM_R50_PLAY_BENCH)
+    int16_t newtics = I_GetTime() - r50_lastmadetic;
+    r50_lastmadetic += newtics;
+#else
     static int32_t lastmadetic = 0;
     int16_t newtics = I_GetTime() - lastmadetic;
     lastmadetic += newtics;
+#endif
 
     while (newtics--)
     {
@@ -331,6 +363,12 @@ _Noreturn static void D_DoomLoop(void)
         }
         else
             TryRunTics (); // will run at least one tic
+
+#if defined(DOOM_R50_PLAY_BENCH)
+        /* Safe outer-loop handoff: all nested G_Ticker/G_ReadDemoTiccmd
+         * calls have unwound, so screen and menu state can be restored. */
+        if(r50_bench_return_pending)D_R50_BenchmarkFinish();
+#endif
 
 #if defined(DOOM_PROFILE)
         I_ProfileLogic(_g_vblankCount - profile_start_vb);
