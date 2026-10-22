@@ -174,6 +174,17 @@ for v in $variants
     # are omitted by repack_wad in R30_NATIVE variants.
     cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1
     python3 scripts/lab/prepare_r25_music.py; or exit 1
+    if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
+        if test "$v" != pixel4-play
+            echo 'R51 hardware weapon requires Pair-V PLAY'; exit 2
+        end
+        if not set -q DOOM_R48_PAIR_V; or test "$DOOM_R48_PAIR_V" != 1
+            echo 'R51 hardware weapon requires Pair-V'; exit 2
+        end
+        # Pixel art is converted from the same playable episode WAD.
+        # No runtime decoding, sprite heap, extra frame buffer or DMA scratch.
+        python3 scripts/lab/gen_r51_hw_weapon.py; or exit 1
+    end
     if test "$DOOM_R29_XGM2" = 1
         set defs $defs '-DDOOM_R29_XGM2'
     end
@@ -349,6 +360,9 @@ for v in $variants
             case '*'
                 echo 'Unknown R49 ColorMix ratio'; exit 2
         end
+    end
+    if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
+        set defs $defs '-DDOOM_R51_HW_WEAPON'
     end
     if set -q DOOM_R50_PLAY_BENCH; and test "$DOOM_R50_PLAY_BENCH" = 1
         if test "$v" != pixel4-play
@@ -738,6 +752,12 @@ for v in $variants
             echo 'Invalid R50 build id'; exit 2
         end
         set id doom-md-r50-$DOOM_R50_BUILD
+    end
+    if set -q DOOM_R51_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R51_BUILD"
+            echo 'Invalid R51 build id'; exit 2
+        end
+        set id doom-md-r51-$DOOM_R51_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
