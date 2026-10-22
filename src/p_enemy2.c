@@ -31,6 +31,7 @@
 #include "p_enemy.h"
 #include "p_inter.h"
 #include "p_map.h"
+#include "p_tick.h"
 
 #include "globdata.h"
 
@@ -54,7 +55,7 @@ static boolean P_Move(mobj_t __far* actor)
     I_Error ("P_Move: Weird actor->movedir!");
 #endif
 
-  int32_t speed = mobjinfo[actor->type].speed;
+  int32_t speed = mobjinfo[actor->type].speed * r54d_steps;
 
   fixed_t tryx = actor->x + speed * xspeed[actor->movedir];
   fixed_t tryy = actor->y + speed * yspeed[actor->movedir];
@@ -343,7 +344,8 @@ void A_Chase(mobj_t __far* actor)
     }
 
     // chase towards player
-    if (--actor->movecount<0 || !P_Move(actor))
+    actor->movecount -= r54d_steps;
+    if (actor->movecount<0 || !P_Move(actor))
         P_NewChaseDir(actor);
 
     // make active sound
