@@ -407,8 +407,8 @@ static void P_XYMovement(mobj_t __far* mo)
     else if (mo->momy < -MAXMOVE)
         mo->momy = -MAXMOVE;
 
-    xmove = mo->momx;
-    ymove = mo->momy;
+    xmove = mo->momx * r54d_steps;
+    ymove = mo->momy * r54d_steps;
 
     do
     {
@@ -574,7 +574,7 @@ static void P_ZMovement(mobj_t __far* mo)
 
   // adjust altitude
 
-  mo->z += mo->momz;
+  mo->z += mo->momz * r54d_steps;
 
   // clip movement
 
@@ -610,8 +610,8 @@ static void P_ZMovement(mobj_t __far* mo)
     if (!(mo->flags & MF_NOGRAVITY))
       {
   if (!mo->momz)
-    mo->momz = -GRAVITY;
-        mo->momz -= GRAVITY;
+    mo->momz = -GRAVITY * r54d_steps;
+        mo->momz -= GRAVITY * r54d_steps;
       }
 
   if (mo->z + MOBJ_HEIGHT(mo) > mo->ceilingz)
@@ -726,13 +726,15 @@ void P_MobjThinker (mobj_t __far* mobj)
 
     if (mobj->tics != -1)
     {
-        mobj->tics--;
-
-        // you can cycle through multiple states in a tic
-
-        if (!mobj->tics)
-            if (!P_SetMobjState (mobj, mobj->state->nextstate) )
-                return;     // freed itself
+        // Advance state timers by the elapsed original 35-Hz tic units.
+        // Extra state transitions execute actions, but full AI runs once.
+        for (uint8_t step = 0; step < r54d_steps; ++step)
+        {
+            if (mobj->tics == -1) break;
+            if (--mobj->tics <= 0)
+                if (!P_SetMobjState(mobj, mobj->state->nextstate))
+                    return;
+        }
     }
     else
     {
@@ -772,12 +774,13 @@ static void P_MobjBrainlessThinker(mobj_t __far* mobj)
 
     if (mobj->tics != -1)
     {
-        mobj->tics--;
-
-        // you can cycle through multiple states in a tic
-
-        if (!mobj->tics)
-            P_SetMobjState (mobj, mobj->state->nextstate);
+        for (uint8_t step = 0; step < r54d_steps; ++step)
+        {
+            if (mobj->tics == -1) break;
+            if (--mobj->tics <= 0)
+                if (!P_SetMobjState(mobj, mobj->state->nextstate))
+                    return;
+        }
     }
 }
 
