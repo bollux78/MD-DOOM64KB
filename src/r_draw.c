@@ -1667,6 +1667,9 @@ static void R_DrawSprite (const vissprite_t* spr)
 
 #define BASEXCENTER (SCREENWIDTH_VGA  / 2)
 #define BASEYCENTER (SCREENHEIGHT_VGA / 2L)
+#if defined(DOOM_R51_HW_WEAPON)
+extern boolean I_R51_WeaponSubmit(int16_t lump,int16_t phys_x,int16_t phys_y);
+#endif
 
 static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
 {
@@ -1748,6 +1751,19 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
     else
         vis->colormap = R_LoadColorMap(lightlevel);  // local light
 
+#if defined(DOOM_R51_HW_WEAPON)
+    /* Pilot: hardware pistol/hand with dynamic XY. Muzzle flash and
+     * invisibility, and all other weapons, retain original raster path. */
+    if(psp == &_g_player.psprites[ps_weapon] &&
+       psp->state->sprite==SPR_PISG &&
+       !_g_player.psprites[ps_flash].state &&
+       !_g_player.powers[pw_invisibility]){
+        fixed_t top=(fixed_t)(CENTERY*FRACUNIT) -
+                    FixedMul(vis->texturemid,vis->scale);
+        if(I_R51_WeaponSubmit(vis->lump_num,(int16_t)(x1*4),
+                              (int16_t)((top>>FRACBITS)*4)))return;
+    }
+#endif
     R_DrawVisSprite(vis);
 }
 
