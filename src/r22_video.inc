@@ -1004,6 +1004,22 @@ void wipe_StartScreen(void){V_ClearViewWindow();}void D_Wipe(void){I_FinishUpdat
 #endif
 static void R22_Num3(uint16_t x,uint16_t y,int32_t v){if(v<0)v=0;if(v>999)v=999;char s[4]={(char)('0'+v/100),(char)('0'+v/10%10),(char)('0'+v%10),0};R22_DrawText(R51_HUD_TEXT_PLANE,s,x,y);}
 static void R22_HUD(void){
+#if defined(DOOM_R54_LOGIC_HZ)
+    /* A one-second VBlank window counts ACTUAL G_Ticker calls, not scheduler
+     * requests; useful when the old <=4 backlog cap forces dropped tics. */
+    static uint32_t r54_vb_prev,r54_tics_prev;
+    uint32_t r54_vb_elapsed=_g_vblankCount-r54_vb_prev;
+    if(r54_vb_elapsed>=60u){
+        uint32_t counted=r54_game_tics-r54_tics_prev;
+        uint16_t tps=(uint16_t)((counted*60u+r54_vb_elapsed/2u)/r54_vb_elapsed);
+        if(tps>99)tps=99;
+        char label[16]={'L','0'+(DOOM_R54_LOGIC_HZ/10),'0'+(DOOM_R54_LOGIC_HZ%10),
+                        ' ','T','P','S','0'+(tps/10),'0'+(tps%10),0};
+        R22_DrawText(VDP_BG_A,label,1,0);
+        r54_vb_prev=_g_vblankCount;
+        r54_tics_prev=r54_game_tics;
+    }
+#endif
 #if defined(DOOM_R51_HW_HUD)
     if(!_g_menuactive)R51_HudMaskPrepare();
 #endif
