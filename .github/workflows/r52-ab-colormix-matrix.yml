@@ -140,9 +140,9 @@ jobs:
           import pathlib,re,json
           s=pathlib.Path('src/r52_ab_tables.h').read_text()
           def parse(name):
-              x=re.search(r'\\b'+name+r'\\[256\\]=\\{([^}]+)\\}',s,re.S)
+              x=re.search(r'\b'+name+r'\[256\]=\{([^}]+)\}',s,re.S)
               assert x,name
-              return [int(v) for v in x.group(1).replace('\\n','').split(',')]
+              return [int(v) for v in x.group(1).replace('\n','').split(',')]
           a,b=parse('r52_even'),parse('r52_odd')
           assert len(a)==len(b)==256
           assert min(a+b)>=1 and max(a+b)<=15
@@ -203,7 +203,7 @@ jobs:
           d=pathlib.Path('dist/r52-ab')
           sizes={}
           for p in sorted(d.glob('size-*.txt')):
-              match=re.search(r'^\\.bss\\s+(\\d+)\\s+',p.read_text(),re.M)
+              match=re.search(r'^\.bss\s+(\d+)\s+',p.read_text(),re.M)
               assert match, p
               value=int(match.group(1))
               assert value<=57920,(p,value)
@@ -216,7 +216,7 @@ jobs:
               report=json.loads(p.read_text())
               assert not report['maps_have_zero']
               assert report['combined_unique']>=16
-          (d/'BSS-AUDIT.json').write_text(json.dumps(sizes,indent=2)+'\\n')
+          (d/'BSS-AUDIT.json').write_text(json.dumps(sizes,indent=2)+'\n')
           print('Eight builds and BSS PASS',sizes)
           PY
 
@@ -243,7 +243,7 @@ jobs:
               print(line,flush=True);lines.append(line)
               if r.returncode:raise SystemExit(line)
           assert len(lines)==8
-          (d/'BLASTEM-SMOKE.txt').write_text('\\n'.join(lines)+'\\n')
+          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(lines)+'\n')
           PY
 
       - name: Prepare manifest and manual A/B instructions
@@ -266,14 +266,14 @@ jobs:
             'known_limitations':['offline DeltaE scores invalidated by opaque repair',
               'boot smoke does not prove scene geometry or stable color',
               'not evaluated on RGB/CRT or subpalettes 1..13','hardware gun disabled'],
-            'roms':roms},indent=2)+'\\n')
+            'roms':roms},indent=2)+'\n')
           (d/'README.txt').write_text(
-            'R52 AB COLOR MATRIX: baseline VF, legacy ColorMix CM50, AB n25, AB l32.\\n'
-            'Four pairs PLAY/PERF; no R51 hardware pistol to isolate ColorMix.\\n'
-            'Test same DEMO3 tic, 320x224 pixel-native plus CRT/composite.\\n'
-            'Check HUD text legibility and palette changes after native TITLEPIC.\\n'
-            'No 4px color-stripe acceptance without visual review.\\n'
-            'Record 2 timedemo runs per PERF; baseline R51 VF approx 5.31 FPS.\\n')
+            'R52 AB COLOR MATRIX: baseline VF, legacy ColorMix CM50, AB n25, AB l32.\n'
+            'Four pairs PLAY/PERF; no R51 hardware pistol to isolate ColorMix.\n'
+            'Test same DEMO3 tic, 320x224 pixel-native plus CRT/composite.\n'
+            'Check HUD text legibility and palette changes after native TITLEPIC.\n'
+            'No 4px color-stripe acceptance without visual review.\n'
+            'Record 2 timedemo runs per PERF; baseline R51 VF approx 5.31 FPS.\n')
           print([p['name'] for p in roms])
           PY
 
