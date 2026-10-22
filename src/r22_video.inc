@@ -27,6 +27,15 @@
 #if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
 #include "r49_colormix_tables.h"
 #endif
+#if defined(DOOM_R52_AB)
+#include "r52_ab_tables.h"
+#if !defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST) || defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+#error R52 AB requires Pair-V Fast without R49 mix/composed LUT
+#endif
+#define R52_Map(x) (((x)&1u)?r52_odd:r52_even)
+#else
+#define R52_Map(x) r22_color
+#endif
 #if defined(DOOM_R49_COLORMIX) && (!defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST))
 #error R49 ColorMix requires Pair-V Fast
 #endif
@@ -331,6 +340,7 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
+    const uint8_t *r52map=R52_Map(v->x);
 #if defined(DOOM_R47_SPRITE_HOIST)
     /* R47: same exact clipping/stride hoist as flats, while retaining the
      * sprite read-modify-write required to preserve the neighbouring nibble. */
@@ -392,7 +402,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     uint16_t odd=(uint16_t)(first&1);
     if(odd && count) {
         uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        *dst=(uint8_t)((*dst&0xf0u)|(r52map[ci]&15u));
         dst+=152; frac=(uint16_t)(frac+step); --count;
     }
 #if defined(DOOM_R48_V_FAST)
@@ -401,36 +411,36 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
         frac=(uint16_t)(frac+step);
         uint8_t b=source[frac>>9]; if(colormap)b=colormap[b];
         frac=(uint16_t)(frac+step);
-        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        *dst=(uint8_t)((r52map[a]<<4)|(r52map[b]&15u));
         dst+=152; count-=2;
     }
 #else
     while(count>=2) {
         uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+        *dst=(uint8_t)((*dst&0x0fu)|((r52map[ci]&15u)<<4));
         frac=(uint16_t)(frac+step);
         ci=source[frac>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        *dst=(uint8_t)((*dst&0xf0u)|(r52map[ci]&15u));
         frac=(uint16_t)(frac+step);
         dst+=152; count-=2;
     }
 #endif
     if(count) {
         uint8_t ci=source[frac>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+        *dst=(uint8_t)((*dst&0x0fu)|((r52map[ci]&15u)<<4));
     }
 #endif /* R49 V optimized path */
 #else
     if(x&1){
         do{
             uint8_t ci=source[frac>>9];if(colormap)ci=colormap[ci];
-            *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+            *dst=(uint8_t)((*dst&0xf0u)|(r52map[ci]&15u));
             dst+=R22_PITCH;frac=(uint16_t)(frac+step);
         }while(n--);
     }else{
         do{
             uint8_t ci=source[frac>>9];if(colormap)ci=colormap[ci];
-            *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+            *dst=(uint8_t)((*dst&0x0fu)|((r52map[ci]&15u)<<4));
             dst+=R22_PITCH;frac=(uint16_t)(frac+step);
         }while(n--);
     }
@@ -441,7 +451,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     for(int16_t y=v->yl;y<=v->yh;y++) {
         uint8_t c=v->source[frac>>9];
         if(v->colormap)c=v->colormap[c];
-        R22_Plot(v->x,y,r22_color[c]);frac+=v->fracstep;
+        R22_Plot(v->x,y,r52map[c]);frac+=v->fracstep;
     }
 #endif
 }
@@ -456,6 +466,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
 #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
+    const uint8_t *r52map=R52_Map(v->x);
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
     int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
@@ -512,7 +523,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
 #else
     if((first&1) && count) {
         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[ci]&15u));
+        *dst=(uint8_t)((*dst&0xf0u)|(r52map[ci]&15u));
         dst+=152; f=(uint16_t)(f+step); --count;
     }
 #if defined(DOOM_R48_V_FAST)
@@ -521,23 +532,23 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
         f=(uint16_t)(f+step);
         uint8_t b=source[f>>9]; if(colormap)b=colormap[b];
         f=(uint16_t)(f+step);
-        *dst=(uint8_t)((r22_color[a]<<4)|(r22_color[b]&15u));
+        *dst=(uint8_t)((r52map[a]<<4)|(r52map[b]&15u));
         dst+=152; count-=2;
     }
 #else
     while(count>=2) {
         uint8_t a=source[f>>9]; if(colormap)a=colormap[a];
         f=(uint16_t)(f+step);
-        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[a]&15u)<<4));
+        *dst=(uint8_t)((*dst&0x0fu)|((r52map[a]&15u)<<4));
         uint8_t b=source[f>>9]; if(colormap)b=colormap[b];
         f=(uint16_t)(f+step);
-        *dst=(uint8_t)((*dst&0xf0u)|(r22_color[b]&15u));
+        *dst=(uint8_t)((*dst&0xf0u)|(r52map[b]&15u));
         dst+=152; count-=2;
     }
 #endif
     if(count) {
         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
-        *dst=(uint8_t)((*dst&0x0fu)|((r22_color[ci]&15u)<<4));
+        *dst=(uint8_t)((*dst&0x0fu)|((r52map[ci]&15u)<<4));
     }
 #endif /* R49 V optimized path */
 #else
@@ -545,7 +556,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
         do {
             uint8_t ci=source[f>>9];
             if(colormap)ci=colormap[ci];
-            uint8_t c=(uint8_t)(r22_color[ci]&15);
+            uint8_t c=(uint8_t)(r52map[ci]&15);
 #if defined(DOOM_R42_WALL_ASM)
             __asm__ volatile(
                 "move.b (%[ptr]),%%d0\n\t"
@@ -563,7 +574,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
         do {
             uint8_t ci=source[f>>9];
             if(colormap)ci=colormap[ci];
-            uint8_t c=(uint8_t)((r22_color[ci]&15)<<4);
+            uint8_t c=(uint8_t)((r52map[ci]&15)<<4);
 #if defined(DOOM_R42_WALL_ASM)
             __asm__ volatile(
                 "move.b (%[ptr]),%%d0\n\t"
@@ -586,6 +597,7 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 #endif
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+    const uint8_t *r52map=R52_Map(v->x);
 #if defined(DOOM_R47_FLAT_HOIST)
     /* R47A: eliminate per-pixel bounds/level checks and y*38 addressing.
      * Exactly one framebuffer byte is modified per visible sample;
@@ -601,7 +613,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     if(y0>y1)return;
     R48_COUNT(R48_FLAT_CALLS,1);
     R48_COUNT(R48_FLAT_PIXELS,(uint16_t)(y1-y0+1));
-    uint8_t sample=(uint8_t)(r22_color[c]&15u);
+    uint8_t sample=(uint8_t)(r52map[c]&15u);
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
@@ -647,7 +659,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     } while(n--);
 #endif
 #else
-    c=r22_color[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
+    c=r52map[c];for(int16_t y=v->yl;y<=v->yh;y++)R22_Plot(v->x,y,c);
 #endif
 }
 void I_ReloadPalette(void) { /* Palette tables generated from the embeddedPLAYPAL. */ }
@@ -655,7 +667,12 @@ void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){
     if(p<0)p=0;if(p>13)p=13;
+#if defined(DOOM_R52_AB)
+    PAL_setColors(0,r52_pal0[(uint8_t)p],16,DMA);
+    PAL_setColors(16,r52_pal1[(uint8_t)p],16,DMA);
+#else
     PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);
+#endif
 #if defined(DOOM_R51_HW_WEAPON)
     /* Palette2: weapon colors remapped to each PLAYPAL tint.
      * World PAL0 and ColorMix PAL1 remain unchanged. */
@@ -735,7 +752,16 @@ static void R47_LoadPairTiles(void)
 static void R47_ClearPairBuffer(void)
 {
     uint16_t *w=(uint16_t *)(void *)r22_fb.pixels;
+#if defined(DOOM_R52_AB)
+    /* Pair-V y blocks: A (even x) uses PAL0, B (odd x) PAL1.
+     * Attribute high bytes survive 38-word VBlank DMA intact. */
+    for(uint16_t y=0;y<R22_H/2u;y++){
+        for(uint16_t x=0;x<38u;x++)w[y*76u+x]=(uint16_t)R22_PAIR_TILE_BASE;
+        for(uint16_t x=38u;x<76u;x++)w[y*76u+x]=(uint16_t)(0x2000u|R22_PAIR_TILE_BASE);
+    }
+#else
     for(uint16_t i=0;i<38*R22_H;i++)w[i]=(uint16_t)R22_PAIR_TILE_BASE;
+#endif
 }
 #endif
 
