@@ -83,6 +83,10 @@ const boolean nomusicparm = false;   // Genesis: XGM で BGM を鳴らすため�
 const boolean nodrawers = false;
 
 
+#if defined(DOOM_R54D_COMPENSATED)
+uint8_t r54d_steps = 1;
+static uint8_t r54d_fraction;
+#endif
 static int32_t maketic;
 #if defined(DOOM_R54_LOGIC_HZ)
 uint32_t r54_game_tics;
@@ -328,6 +332,17 @@ static void TryRunTics (void)
             D_DoAdvanceDemo ();
 
         M_Ticker ();
+#if defined(DOOM_R54D_COMPENSATED)
+        /* Wall-time 35/Hz conversion; exactly 35 simulated tic-units per second.
+         * One G_Ticker/P_RunThinkers call per slower scheduling tick, not 2.
+         * Demo playback stays at one step because demo inputs are 35-Hz. */
+        if (_g_demoplayback) { r54d_steps = 1; r54d_fraction = 0; }
+        else {
+            r54d_fraction += 35;
+            r54d_steps = r54d_fraction / DOOM_R54_LOGIC_HZ;
+            r54d_fraction %= DOOM_R54_LOGIC_HZ;
+        }
+#endif
         G_Ticker ();
         _g_gametic++;
 #if defined(DOOM_R54_LOGIC_HZ)
