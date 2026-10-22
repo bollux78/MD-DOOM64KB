@@ -144,7 +144,7 @@ jobs:
           python3 scripts/lab/gen_r52_claudio.py --repo . --out dist/r54d-logic/preflight --mode luma32 --zero-policy forbid --no-preview
           python3 scripts/lab/test_r52_claudio.py dist/r54d-logic/preflight .
 
-      - name: Build seven R54 PLAY cadence experiments
+      - name: Build three R54D PLAY cadence experiments
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +169,7 @@ jobs:
                 DOOM_R50_RESET_SRAM=0 DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
                 DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" \
                 fish scripts/lab/build_r35_linear.fish pixel4-play
-            id="doom-md-r54-l32f-h$hz-play"
+            id="doom-md-r54-l32f-h$hz-c$comp-play"
             cp "dist/r35/$id.bin" "$D/"
             cp "dist/r35/flags-$id.txt" "$D/"
             "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "dist/r35/$id.elf" > "$D/size-$id.txt"
@@ -184,7 +184,7 @@ jobs:
           import hashlib,json,re
           d=Path('dist/r54d-logic')
           roms=list(d.glob('doom-md-r54-*.bin'))
-          assert len(roms)==7,('R54 ROM count',len(roms))
+          assert len(roms)==3,('R54 ROM count',len(roms))
           report={}
           for f in sorted(roms):
               size=d/('size-'+f.stem+'.txt')
@@ -192,16 +192,16 @@ jobs:
               assert m,size
               bss=int(m.group(1))
               assert bss<=57920,(f,bss)
-              h=int(re.search(r'h(\d+)-play',f.name).group(1))
-              assert h in (35,28,24,21,18,15,12)
+              h=int(re.search(r'h(\d+)-c[01]-play',f.name).group(1))
+              assert h in (35,25,20)
               assert len(f.stem)<=30
               report[f.name]={'requested_logic_hz':h,'bss':bss,
                              'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()}
           (d/'AUDIT.json').write_text(json.dumps(report,indent=2)+'\n')
-          print('R54: all seven builds, memories and identities PASS')
+          print('R54D: all three builds, memories and identities PASS')
           PY
 
-      - name: BlastEm boot smoke all 7 R54 ROMs
+      - name: BlastEm boot smoke all 3 R54D ROMs
         shell: bash
         run: |
           set -euo pipefail
@@ -223,7 +223,7 @@ jobs:
               line=f'{rom.name}: code={r.returncode} elapsed={time.monotonic()-t:.2f}s'
               print(line,flush=True);out.append(line)
               if r.returncode:raise SystemExit(line+'\n'+r.stdout+r.stderr)
-          assert len(out)==7
+          assert len(out)==3
           (d/'SMOKE.txt').write_text('\n'.join(out)+'\n')
           PY
 
@@ -232,24 +232,24 @@ jobs:
         run: |
           set -euo pipefail
           cat > dist/r54d-logic/README.txt <<'EOF'
-          R54 PLAY cadence feasibility study - 7 ROMs, all luma32 forbid + composed LUT.
-          LOGIC clock values: 35, 28, 24, 21, 18, 15 and 12 tics per VBlank second.
+          R54D compensated-ticks pilot - 3 ROMs, luma32 forbid + composed LUT.
+          35Hz CONTROL (c0), 25Hz and 20Hz compensated PLAY (c1).
           Real 60Hz VBlank and DOOM 35Hz constants preserved.
-          IMPORTANT: lower rates deliberately SLOW game events and movement.
+          IMPORTANT: experimental compensation of weapon/object states and motion. Not full physics conversion.
           Do not use DEMO3 PERF as a performance comparator for reduced-rate PLAY.
           At top left of GAMEPLAY: Lxx TPSyy (xx=requested, yy=ACTUALLY executed).
           At top right: current live FPS, unchanged physical 60Hz basis.
           For each ROM: compare same E1M1 camera and duration (60s real time),
           movement distance over 10 seconds, enemy activity, shots, sound synchronization.
-          For normal-speed target, select Hz only as an initial load metric; rescaling
-          physics/AI/animation is a separate R54B experiment with new QA.
+          Goal: quantify remaining slow-motion and speed gain; refine collision/physics/AI.
+          Some mechanics are not fully normalized. E1M1 shots are a primary speed oracle.
           These ROMs are exploratory and not replacements for R52/R53 controls.
           EOF
 
       - name: Upload R54 logic-cadence PLAY matrix
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r54-logic-cadence-play-matrix
+          name: doom-md-r54d-compensated-ticks-play-matrix
           path: dist/r54d-logic/
           retention-days: 90
           if-no-files-found: error
