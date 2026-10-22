@@ -29,6 +29,15 @@
 #endif
 #if defined(DOOM_R52_AB)
 #include "r52_ab_tables.h"
+#if defined(DOOM_R53_MICRO)
+#include "r53_micro_tables.h"
+#if (DOOM_R53_MICRO != 25) && (DOOM_R53_MICRO != 50)
+#error R53 micro ratio must be 25 or 50
+#endif
+#if R22_PAIR_TILE_BASE + 512 > 1440
+#error R53 pattern banks collide with font
+#endif
+#endif
 #if !defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST) || defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
 #error R52 AB requires Pair-V Fast without R49 mix/composed LUT
 #endif
@@ -712,6 +721,28 @@ static void R22_Palette(int8_t p){
 }
 
 #if defined(DOOM_R47_PLANE_PAIR)
+#if defined(DOOM_R53_MICRO)
+/* 4x4 scene samples retain their geometry. Inside each immutable 8x8 tile,
+ * four opaque physical pixels alternate between two colors from the SAME
+ * VDP palette. Each attribute word selects one 16-entry palette, so this
+ * is a PAL-local optical mix, not 1px PAL0/PAL1 cross-blending.
+ * Rows y mod4 disperse the pattern; index zero stays transparent. */
+static inline uint32_t R53_MicroRow(uint8_t base,uint8_t partner,uint16_t row)
+{
+    if(base==0)return 0; /* never turn transparent source pixels opaque */
+    uint32_t word=0;
+    for(uint16_t x=0;x<4;x++){
+#if DOOM_R53_MICRO == 25
+        uint16_t select=((x+row)&3u)==0u;
+#else
+        uint16_t select=((x+row)&1u)==0u;
+#endif
+        uint8_t nib=(uint8_t)(select?partner:base);
+        word|=(uint32_t)nib<<(28u-x*4u);
+    }
+    return word;
+}
+#endif
 static void R47_LoadPairTiles(void)
 {
     uint32_t tile[8];
@@ -720,6 +751,12 @@ static void R47_LoadPairTiles(void)
         /* Pair-V: upper/lower logical samples share an 8px-high tile.
          * Only left four physical pixels are opaque; Plane B is shifted +4. */
         uint8_t hi=(uint8_t)(p>>4),lo=(uint8_t)(p&15);
+#if defined(DOOM_R53_MICRO)
+        for(uint16_t y=0;y<8;y++){
+            uint8_t base=(y<4u)?hi:lo;
+            tile[y]=R53_MicroRow(base,r53_partner_even[base],y&3u);
+        }
+#else
 #if defined(DOOM_R48_V_DITHER50) || defined(DOOM_R48_V_DITHER75A) || defined(DOOM_R48_V_DITHER75B)
         /* Tonal experiments with fixed partner table: NOT a measured
          * perceptually optimal mapper. No RGB search at runtime. */
@@ -740,12 +777,20 @@ static void R47_LoadPairTiles(void)
 #endif
         tile[0]=tile[1]=tile[2]=tile[3]=upper;
         tile[4]=tile[5]=tile[6]=tile[7]=lower;
+#endif /* R53_MICRO */
 #else
         const uint32_t top=R22_ExpandPair((uint8_t)p);
         tile[0]=tile[1]=tile[2]=tile[3]=top;
         tile[4]=tile[5]=tile[6]=tile[7]=0;
 #endif
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
+#if defined(DOOM_R53_MICRO)
+        for(uint16_t y=0;y<8;y++){
+            uint8_t base=(y<4u)?hi:lo;
+            tile[y]=R53_MicroRow(base,r53_partner_odd[base],y&3u);
+        }
+        VDP_loadTileData(tile,(uint16_t)(R22_PAIR_TILE_BASE+256u+p),1,CPU);
+#endif
 #if defined(DOOM_R49_COLORMIX)
         /* Four pattern banks encode the independent "eligible" bits from
          * top/bottom nibble writes. Banks 1/2 intentionally reproduce PAL0
@@ -781,7 +826,11 @@ static void R47_ClearPairBuffer(void)
      * Attribute high bytes survive 38-word VBlank DMA intact. */
     for(uint16_t y=0;y<R22_H/2u;y++){
         for(uint16_t x=0;x<38u;x++)w[y*76u+x]=(uint16_t)R22_PAIR_TILE_BASE;
+#if defined(DOOM_R53_MICRO)
+        for(uint16_t x=38u;x<76u;x++)w[y*76u+x]=(uint16_t)(0x2000u|R22_PAIR_TILE_BASE+256u);
+#else
         for(uint16_t x=38u;x<76u;x++)w[y*76u+x]=(uint16_t)(0x2000u|R22_PAIR_TILE_BASE);
+#endif
     }
 #else
     for(uint16_t i=0;i<38*R22_H;i++)w[i]=(uint16_t)R22_PAIR_TILE_BASE;
