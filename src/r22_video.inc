@@ -1013,6 +1013,12 @@ void I_InitGraphicsHardwareSpecificCode(void){
     memset(r22_fb.pixels,0,R22_FB_BYTES);
 #endif
     r22_front=0;r22_ready=0;
+#if defined(DOOM_R50_RESET_SRAM)
+    /* Some soft-reset paths preserve VDP display-enable state. Make the
+     * normal 3D/title pipeline explicitly visible after SRAM/ROM recovery. */
+    VDP_waitDMACompletion();
+    VDP_setEnable(TRUE);
+#endif
 #if defined(DOOM_R22_PATTERN)
     for(uint16_t y=0;y<44;y++)for(uint16_t x=0;x<76;x++)R22_Put(r22_fb.pixels,x,y,(uint8_t)((x+y)&15));
     I_FinishUpdate();R20_StopVideo();VDP_setTextPlane(BG_A);R22_DrawText(VDP_BG_A,"PX4: EACH SQUARE IS 4x4",1,0);
