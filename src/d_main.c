@@ -84,6 +84,12 @@ const boolean nodrawers = false;
 
 
 static int32_t maketic;
+#if defined(DOOM_R54_LOGIC_HZ)
+uint32_t r54_game_tics;
+#define R54_LOGIC_TIME() I_GetGameTime()
+#else
+#define R54_LOGIC_TIME() I_GetTime()
+#endif
 #if defined(DOOM_R50_PLAY_BENCH)
 /* Shared with D_BuildNewTiccmds so returning from single-tic benchmark can
  * discard the accumulated real-time input backlog deterministically. */
@@ -135,7 +141,7 @@ static void D_R50_BenchmarkFinish(void)
      * Without resync, ordinary PLAY consumes several minutes of missed
      * input tics before it can respond to Start or navigate the menu. */
     maketic=_g_gametic;
-    r50_lastmadetic=I_GetTime();
+    r50_lastmadetic=R54_LOGIC_TIME();
     /* Don't leave the just-finished demo's GS_LEVEL and its stale view/
      * player state alive while the post-benchmark menu is shown. Set up
      * the title immediately, not via a deferred advance on the next tick. */
@@ -183,11 +189,11 @@ void D_PostEvent(event_t *ev)
 static void D_BuildNewTiccmds(void)
 {
     #if defined(DOOM_R50_PLAY_BENCH)
-    int16_t newtics = I_GetTime() - r50_lastmadetic;
+    int16_t newtics = R54_LOGIC_TIME() - r50_lastmadetic;
     r50_lastmadetic += newtics;
 #else
     static int32_t lastmadetic = 0;
-    int16_t newtics = I_GetTime() - lastmadetic;
+    int16_t newtics = R54_LOGIC_TIME() - lastmadetic;
     lastmadetic += newtics;
 #endif
 
@@ -294,7 +300,7 @@ static void D_Display (void)
 static void TryRunTics (void)
 {
     int16_t runtics;
-    int32_t entertime = I_GetTime();
+    int32_t entertime = R54_LOGIC_TIME();
 
     // Wait for tics to run
     while (1)
@@ -305,7 +311,7 @@ static void TryRunTics (void)
         runtics = maketic - _g_gametic;
         if (runtics <= 0)
         {
-            if ((int16_t)(I_GetTime() - entertime) > 10)
+            if ((int16_t)(R54_LOGIC_TIME() - entertime) > 10)
             {
                 M_Ticker();
                 return;
@@ -324,6 +330,9 @@ static void TryRunTics (void)
         M_Ticker ();
         G_Ticker ();
         _g_gametic++;
+#if defined(DOOM_R54_LOGIC_HZ)
+        r54_game_tics++;
+#endif
     }
 }
 
@@ -357,7 +366,9 @@ _Noreturn static void D_DoomLoop(void)
 
             M_Ticker ();
             G_Ticker ();
-
+#if defined(DOOM_R54_LOGIC_HZ)
+            r54_game_tics++;
+#endif
             _g_gametic++;
             maketic++;
         }
