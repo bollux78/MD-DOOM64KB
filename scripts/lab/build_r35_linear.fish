@@ -36,6 +36,9 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
         if set -q DOOM_R55_WERK_VARIANT; and test "$DOOM_R55_WERK_VARIANT" != control
             python3 scripts/lab/r55_werk_snapshot.py --variant "$DOOM_R55_WERK_VARIANT" --repo . --out src; or exit 1
         end
+        if set -q DOOM_R56_DUAL_COLOR; and test "$DOOM_R56_DUAL_COLOR" = 1
+            python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
+        end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
                 python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio "$DOOM_R53_MICRO_RATIO"; or exit 1
@@ -405,6 +408,12 @@ for v in $variants
             echo 'R55 Werk variant must be a4 or a6'; exit 2
         end
         set defs $defs '-DDOOM_R55_FLAT_SAFE'
+    end
+    if set -q DOOM_R56_DUAL_COLOR; and test "$DOOM_R56_DUAL_COLOR" = 1
+        if not test "$DOOM_R52_AB" = 1; or not test "$DOOM_R52_CLAUDIO" = 1; or not test "$DOOM_R48_PAIR_V" = 1; or not test "$DOOM_R48_V_FAST" = 1
+            echo 'R56 needs R52 Cláudio, Pair-V Fast and composed LUT'; exit 2
+        end
+        set defs $defs '-DDOOM_R56_DUAL_COLOR'
     end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
@@ -848,6 +857,12 @@ for v in $variants
             echo 'Invalid R55 build id'; exit 2
         end
         set id doom-md-r55-$DOOM_R55_BUILD
+    end
+    if set -q DOOM_R56_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R56_BUILD"
+            echo 'Invalid R56 build id'; exit 2
+        end
+        set id doom-md-r56-$DOOM_R56_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
