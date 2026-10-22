@@ -32,6 +32,15 @@
 #endif
 #if defined(DOOM_R52_AB)
 #include "r52_ab_tables.h"
+#if defined(DOOM_R56_DUAL_COLOR)
+#include "r56_tables.h"
+#if defined(DOOM_R53_MICRO) || defined(DOOM_R55_FLAT_SAFE)
+#error R56 has its own Flat-Safe maps and dual-color patterns
+#endif
+#if (R22_PAIR_TILE_BASE+512u > 1440u)
+#error R56 dual color patterns collide with SGDK font
+#endif
+#endif
 #if defined(DOOM_R55_FLAT_SAFE) && !defined(R55_FLAT_TABLES_VERSION)
 #error R55 requires validated Werk snapshot tables
 #endif
@@ -54,7 +63,11 @@ static inline const uint8_t *R52_LUT(const uint8_t *colormap,uint16_t parity)
     if(!colormap)return 0;
     uint32_t diff=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
     if(diff>=R52_COLORMAP_BYTES || (diff&255u)!=0u)return 0;
+    #if defined(DOOM_R56_DUAL_COLOR)
+    return (parity?r56_comp_odd[0]:r56_comp_even[0])+diff;
+#else
     return (parity?r52_comp_odd:r52_comp_even)+diff;
+#endif
 }
 #endif
 #endif
@@ -363,7 +376,9 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
 }
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
     const uint8_t *r52map=r22_color;
-#if defined(DOOM_R52_AB)
+#if defined(DOOM_R56_DUAL_COLOR)
+    r52map=(v->x&1u)?r56_wall_odd:r56_wall_even;
+#elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
 #endif
 #if defined(DOOM_R47_SPRITE_HOIST)
@@ -496,7 +511,9 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
     const uint8_t *r52map=r22_color;
-#if defined(DOOM_R52_AB)
+#if defined(DOOM_R56_DUAL_COLOR)
+    r52map=(v->x&1u)?r56_wall_odd:r56_wall_even;
+#elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
 #endif
     int16_t x=v->x, y0=v->yl, y1=v->yh;
@@ -634,7 +651,9 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     const uint8_t *r52map=r22_color;
-#if defined(DOOM_R55_FLAT_SAFE)
+#if defined(DOOM_R56_DUAL_COLOR)
+    r52map=(v->x&1u)?r56_flat_odd:r56_flat_even;
+#elif defined(DOOM_R55_FLAT_SAFE)
     r52map=(v->x&1u)?r55_flat_odd:r55_flat_even;
 #elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
@@ -708,7 +727,10 @@ void I_SetPalette(int8_t p){r22_newpal=p;}
 void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){
     if(p<0)p=0;if(p>13)p=13;
-#if defined(DOOM_R52_AB)
+#if defined(DOOM_R56_DUAL_COLOR)
+    PAL_setColors(0,r56_pal0[(uint8_t)p],16,DMA);
+    PAL_setColors(16,r56_pal1[(uint8_t)p],16,DMA);
+#elif defined(DOOM_R52_AB)
     PAL_setColors(0,r52_pal0+(uint16_t)(uint8_t)p*16u,16,DMA);
     PAL_setColors(16,r52_pal1+(uint16_t)(uint8_t)p*16u,16,DMA);
 #else
@@ -751,6 +773,16 @@ static inline uint32_t R53_MicroRow(uint8_t base,uint8_t partner,uint16_t row)
     return word;
 }
 #endif
+#if defined(DOOM_R56_DUAL_COLOR)
+/* Each pair CODE owns two CRAM slots; each opaque 4px half is ABAB.
+ * Plane B is the same left-opaque tile shifted right by 4px (Pair-V). */
+static inline uint32_t R56_PairRow(uint8_t code,const uint8_t pairs[16][2])
+{
+    if(code==0u)return 0u;
+    uint32_t a=pairs[code][0],b=pairs[code][1];
+    return (a<<28)|(b<<24)|(a<<20)|(b<<16);
+}
+#endif
 static void R47_LoadPairTiles(void)
 {
     uint32_t tile[8];
@@ -759,7 +791,10 @@ static void R47_LoadPairTiles(void)
         /* Pair-V: upper/lower logical samples share an 8px-high tile.
          * Only left four physical pixels are opaque; Plane B is shifted +4. */
         uint8_t hi=(uint8_t)(p>>4),lo=(uint8_t)(p&15);
-#if defined(DOOM_R53_MICRO)
+#if defined(DOOM_R56_DUAL_COLOR)
+        for(uint16_t y=0;y<8;y++)
+            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_even);
+#elif defined(DOOM_R53_MICRO)
         for(uint16_t y=0;y<8;y++){
             uint8_t base=(y<4u)?hi:lo;
             tile[y]=R53_MicroRow(base,r53_partner_even[base],y&3u);
@@ -792,7 +827,11 @@ static void R47_LoadPairTiles(void)
         tile[4]=tile[5]=tile[6]=tile[7]=0;
 #endif
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
-#if defined(DOOM_R53_MICRO)
+#if defined(DOOM_R56_DUAL_COLOR)
+        for(uint16_t y=0;y<8;y++)
+            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_odd);
+        VDP_loadTileData(tile,(uint16_t)(R22_PAIR_TILE_BASE+256u+p),1,CPU);
+#elif defined(DOOM_R53_MICRO)
         for(uint16_t y=0;y<8;y++){
             uint8_t base=(y<4u)?hi:lo;
             tile[y]=R53_MicroRow(base,r53_partner_odd[base],y&3u);
@@ -834,7 +873,7 @@ static void R47_ClearPairBuffer(void)
      * Attribute high bytes survive 38-word VBlank DMA intact. */
     for(uint16_t y=0;y<R22_H/2u;y++){
         for(uint16_t x=0;x<38u;x++)w[y*76u+x]=(uint16_t)R22_PAIR_TILE_BASE;
-#if defined(DOOM_R53_MICRO)
+#if defined(DOOM_R53_MICRO) || defined(DOOM_R56_DUAL_COLOR)
         for(uint16_t x=38u;x<76u;x++)w[y*76u+x]=(uint16_t)(0x2000u|R22_PAIR_TILE_BASE+256u);
 #else
         for(uint16_t x=38u;x<76u;x++)w[y*76u+x]=(uint16_t)(0x2000u|R22_PAIR_TILE_BASE);
