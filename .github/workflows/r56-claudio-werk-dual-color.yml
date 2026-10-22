@@ -220,7 +220,7 @@ jobs:
           PY
           python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h
 
-      - name: BlastEm 800-frame boot smoke
+      - name: BlastEm 800-frame boot and 6000-frame endurance
         shell: bash
         run: |
           set -euo pipefail
@@ -233,16 +233,24 @@ jobs:
           assert exe,'BlastEm unavailable'
           env=os.environ.copy()
           env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
-          rows=[]
-          for rom in sorted(d.glob('*.bin')):
-            t=time.monotonic()
-            r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
-                capture_output=True,text=True,errors='replace',timeout=45)
-            msg=f'{rom.name} exit={r.returncode} wall={time.monotonic()-t:.2f}s'
-            print(msg,flush=True);rows.append(msg)
-            if r.returncode: raise SystemExit(msg+'\n'+r.stdout+r.stderr)
-          assert len(rows)==4
-          (d/'BLASTEM-SMOKE.txt').write_text('\n'.join(rows)+'\n')
+          roms=sorted(d.glob('*.bin'))
+          assert len(roms)==4,[p.name for p in roms]
+          lines=['ROM,frames,emulated_seconds_60hz,wall_seconds,exit_code']
+          for frames,timeout in ((800,45),(6000,180)):
+            for rom in roms:
+              t=time.monotonic()
+              try:
+                r=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,env=env,
+                    capture_output=True,text=True,errors='replace',timeout=timeout)
+              except subprocess.TimeoutExpired as exc:
+                raise SystemExit(f'TIMEOUT {rom.name} at {frames} frames (limit {timeout}s)') from exc
+              wall=time.monotonic()-t
+              msg=f'{rom.name},{frames},{frames/60:.2f},{wall:.2f},{r.returncode}'
+              print(msg,flush=True);lines.append(msg)
+              if r.returncode:
+                raise SystemExit('BlastEm failed: '+msg+'\n'+r.stdout+'\n'+r.stderr)
+          (d/'BLASTEM-SMOKE-ENDURANCE.csv').write_text('\n'.join(lines)+'\n')
+          print('PASS: 4 ROMs x 800 frames + 4 ROMs x 6000 frames')
           PY
 
       - name: Hardware comparison instructions
