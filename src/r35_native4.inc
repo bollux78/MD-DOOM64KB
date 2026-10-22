@@ -41,6 +41,11 @@ static void R35_LeaveNative4(void)
 {
     if(r35_native_active<0)return;
     R20_StopVideo();
+#if defined(DOOM_R51_HW_WEAPON)
+    /* Native art overwrites VRAM tiles 16..255. Invalidate the pistol
+     * atlas now so the next gameplay presentation reloads it from ROM. */
+    R51_WeaponInvalidate();
+#endif
     VDP_setEnable(FALSE);
     VDP_clearPlane(BG_A,TRUE);
 #if defined(DOOM_R47_PLANE_PAIR)
@@ -77,6 +82,9 @@ static void R35_LeaveNative4(void)
 #endif
 #endif
     PAL_setColors(0,r22_cram[0],16,CPU);
+#if defined(DOOM_R51_HW_WEAPON)
+    PAL_setColors(32,r51_weapon_pal2[0],16,CPU);
+#endif
 #if defined(DOOM_R49_COLORMIX)
     /* Native static pictures load all 64 CRAM entries. Restore PAL1's
      * additional 15 game shades before re-enabling raster gameplay. */
@@ -116,6 +124,9 @@ static bool R35_DrawNative4(int16_t lump)
     {
         if(lump!=ids[i])continue;
         if(r35_native_active==(int16_t)i)return TRUE;
+#if defined(DOOM_R51_HW_WEAPON)
+        R51_WeaponInvalidate();
+#endif
         const R35Native4 *picture=&r35_native4[i];
         R20_StopVideo();
         VDP_setEnable(FALSE);
