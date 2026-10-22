@@ -4,7 +4,7 @@ on:
   push:
     branches: [r53-microdither-research]
     paths:
-      - '.github/workflows/r53-microdither-research.yml'
+      - '.github/workflows/r53-microdither-crt-matrix.yml'
       - 'src/r22_video.inc'
       - 'src/r22_benchmark.inc'
       - 'src/r22_pixel4.h'
@@ -28,7 +28,6 @@ on:
       - 'src/i_genesis.c'
       - 'src/r_draw.c'
       - 'scripts/lab/gen_r52_ab.py'
-      - 'src/r35_native4.inc'
   workflow_dispatch:
 
 concurrency:
