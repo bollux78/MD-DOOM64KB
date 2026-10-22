@@ -36,6 +36,13 @@
 #define __P_TICK__
 
 #include "d_think.h"
+#include <stdint.h>
+#ifdef DOOM_R54D_COMPENSATED
+/* 1..2 original 35-Hz ticks represented by one scheduler update. */
+extern uint8_t r54d_steps;
+#else
+#define r54d_steps 1
+#endif
 
 
 /* Called by C_Ticker, can call G_PlayerExited.
