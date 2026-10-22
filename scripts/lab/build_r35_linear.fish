@@ -33,6 +33,13 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
     if set -q DOOM_R52_CLAUDIO; and test "$DOOM_R52_CLAUDIO" = 1
         python3 scripts/lab/gen_r52_claudio.py --repo . --out src --mode "$DOOM_R52_AB_PROFILE" --zero-policy "$DOOM_R52_ZERO_POLICY" --no-preview; or exit 1
         python3 scripts/lab/test_r52_claudio.py src .; or exit 1
+        if set -q DOOM_R53_MICRO_RATIO
+            if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
+                python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio "$DOOM_R53_MICRO_RATIO"; or exit 1
+            else
+                echo "Invalid R53 micro ratio: $DOOM_R53_MICRO_RATIO"; exit 2
+            end
+        end
     else
         python3 scripts/lab/gen_r52_ab.py --profile "$DOOM_R52_AB_PROFILE"; or exit 1
     end
@@ -377,6 +384,18 @@ for v in $variants
             echo 'R52-AB cannot combine with R49 ColorMix'; exit 2
         end
         set defs $defs '-DDOOM_R52_AB'
+    end
+    if set -q DOOM_R53_MICRO_RATIO
+        if not set -q DOOM_R52_AB; or test "$DOOM_R52_AB" != 1
+            echo 'R53 micro requires R52 dual palette'; exit 2
+        end
+        if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
+            echo 'R53 micro requires Claudio palette generator'; exit 2
+        end
+        if not contains -- "$DOOM_R53_MICRO_RATIO" 25 50
+            echo 'R53 ratio must be 25 or 50'; exit 2
+        end
+        set defs $defs "-DDOOM_R53_MICRO=$DOOM_R53_MICRO_RATIO"
     end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
@@ -808,6 +827,12 @@ for v in $variants
             echo 'Invalid R52 build id'; exit 2
         end
         set id doom-md-r52-$DOOM_R52_BUILD
+    end
+    if set -q DOOM_R53_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R53_BUILD"
+            echo 'Invalid R53 build id'; exit 2
+        end
+        set id doom-md-r53-$DOOM_R53_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
