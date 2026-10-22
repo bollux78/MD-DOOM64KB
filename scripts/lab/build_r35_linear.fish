@@ -33,6 +33,9 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
     if set -q DOOM_R52_CLAUDIO; and test "$DOOM_R52_CLAUDIO" = 1
         python3 scripts/lab/gen_r52_claudio.py --repo . --out src --mode "$DOOM_R52_AB_PROFILE" --zero-policy "$DOOM_R52_ZERO_POLICY" --no-preview; or exit 1
         python3 scripts/lab/test_r52_claudio.py src .; or exit 1
+        if set -q DOOM_R55_WERK_VARIANT; and test "$DOOM_R55_WERK_VARIANT" != control
+            python3 scripts/lab/r55_werk_snapshot.py --variant "$DOOM_R55_WERK_VARIANT" --repo . --out src; or exit 1
+        end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
                 python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio "$DOOM_R53_MICRO_RATIO"; or exit 1
@@ -396,6 +399,12 @@ for v in $variants
             echo 'R53 ratio must be 25 or 50'; exit 2
         end
         set defs $defs "-DDOOM_R53_MICRO=$DOOM_R53_MICRO_RATIO"
+    end
+    if set -q DOOM_R55_WERK_VARIANT; and test "$DOOM_R55_WERK_VARIANT" != control
+        if not contains -- "$DOOM_R55_WERK_VARIANT" a4 a6
+            echo 'R55 Werk variant must be a4 or a6'; exit 2
+        end
+        set defs $defs '-DDOOM_R55_FLAT_SAFE'
     end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
@@ -833,6 +842,12 @@ for v in $variants
             echo 'Invalid R53 build id'; exit 2
         end
         set id doom-md-r53-$DOOM_R53_BUILD
+    end
+    if set -q DOOM_R55_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R55_BUILD"
+            echo 'Invalid R55 build id'; exit 2
+        end
+        set id doom-md-r55-$DOOM_R55_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
