@@ -39,6 +39,7 @@
 #include "p_map.h"
 #include "p_inter.h"
 #include "p_pspr.h"
+#include "p_tick.h"
 #include "p_enemy.h"
 #include "m_random.h"
 #include "s_sound.h"
@@ -872,8 +873,9 @@ void P_MovePsprites(player_t *player)
   // a -1 tic count never changes
 
   for (i=0; i<NUMPSPRITES; i++, psp++)
-    if (psp->state && psp->tics != -1 && !--psp->tics)
-      P_SetPsprite(player, i, psp->state->nextstate);
+    for (uint8_t step = 0; step < r54d_steps; ++step)
+      if (psp->state && psp->tics != -1 && !--psp->tics)
+        P_SetPsprite(player, i, psp->state->nextstate);
 
   player->psprites[ps_flash].sx = player->psprites[ps_weapon].sx;
   player->psprites[ps_flash].sy = player->psprites[ps_weapon].sy;
