@@ -364,6 +364,18 @@ for v in $variants
     if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
         set defs $defs '-DDOOM_R51_HW_WEAPON'
     end
+    if set -q DOOM_R51_HW_HUD; and test "$DOOM_R51_HW_HUD" = 1
+        if not set -q DOOM_R51_HW_WEAPON; or test "$DOOM_R51_HW_WEAPON" != 1
+            echo 'R51 HUD mask requires hardware weapon'; exit 2
+        end
+        set defs $defs '-DDOOM_R51_HW_HUD'
+    end
+    if set -q DOOM_R51_HW_CONTINUOUS; and test "$DOOM_R51_HW_CONTINUOUS" = 1
+        if not set -q DOOM_R51_HW_WEAPON; or test "$DOOM_R51_HW_WEAPON" != 1
+            echo 'R51 pistol continuity requires hardware weapon'; exit 2
+        end
+        set defs $defs '-DDOOM_R51_HW_CONTINUOUS'
+    end
     if set -q DOOM_R50_PLAY_BENCH; and test "$DOOM_R50_PLAY_BENCH" = 1
         if test "$v" != pixel4-play
             echo 'R50 menu benchmark is pixel4 PLAY only'; exit 2
