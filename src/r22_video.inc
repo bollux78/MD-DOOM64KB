@@ -27,8 +27,14 @@
 #if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
 #include "r49_colormix_tables.h"
 #endif
+#if defined(DOOM_R55_FLAT_SAFE) && (!defined(DOOM_R52_AB) || !defined(DOOM_R47_FLAT_HOIST))
+#error R55 Werk requires R52 AB and flat hoist
+#endif
 #if defined(DOOM_R52_AB)
 #include "r52_ab_tables.h"
+#if defined(DOOM_R55_FLAT_SAFE) && !defined(R55_FLAT_TABLES_VERSION)
+#error R55 requires validated Werk snapshot tables
+#endif
 #if defined(DOOM_R53_MICRO)
 #include "r53_micro_tables.h"
 #if (DOOM_R53_MICRO != 25) && (DOOM_R53_MICRO != 50)
@@ -628,7 +634,9 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     const uint8_t *r52map=r22_color;
-#if defined(DOOM_R52_AB)
+#if defined(DOOM_R55_FLAT_SAFE)
+    r52map=(v->x&1u)?r55_flat_odd:r55_flat_even;
+#elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
 #endif
 #if defined(DOOM_R47_FLAT_HOIST)
