@@ -1,0 +1,286 @@
+name: R52 Pair-V dual-palette ColorMix matrix
+
+on:
+  push:
+    branches: [r52-ab-colormix-matrix]
+    paths:
+      - '.github/workflows/r52-ab-colormix-matrix.yml'
+      - 'src/r22_video.inc'
+      - 'src/r22_benchmark.inc'
+      - 'src/r22_pixel4.h'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/test_r48_pair_v.py'
+      - 'scripts/lab/gen_r49_colormix.py'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'scripts/lab/test_r49_colormix.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/build_silent.fish'
+      - 'scripts/set_rom_identity.py'
+      - 'src/d_main.c'
+      - 'src/d_main.h'
+      - 'src/g_game.c'
+      - 'src/i_system.h'
+      - 'src/m_text.c'
+      - 'src/i_genesis.c'
+      - 'src/r_draw.c'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'src/r35_native4.inc'
+  workflow_dispatch:
+
+concurrency:
+  group: r52-ab-colormix-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r52-ab
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r52-ab/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r52-ab/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r52-ab/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r52-ab
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r52-ab/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r52-ab/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r52-ab/PREFLIGHT-color-report.json
+
+      - name: Validate dual-palette seed generator and transparency repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/gen_r52_ab.py
+          for p in n25 l32; do
+            python3 scripts/lab/gen_r52_ab.py --profile "$p"
+            cp src/r52_ab_report.json "dist/r52-ab/SEED-$p.json"
+            cp src/r52_ab_tables.h "dist/r52-ab/TABLES-$p.h"
+            python3 - <<'PY'
+          import pathlib,re,json
+          s=pathlib.Path('src/r52_ab_tables.h').read_text()
+          def parse(name):
+              x=re.search(r'\\b'+name+r'\\[256\\]=\\{([^}]+)\\}',s,re.S)
+              assert x,name
+              return [int(v) for v in x.group(1).replace('\\n','').split(',')]
+          a,b=parse('r52_even'),parse('r52_odd')
+          assert len(a)==len(b)==256
+          assert min(a+b)>=1 and max(a+b)<=15
+          assert 'r52_pal0[14][16]' in s and 'r52_pal1[14][16]' in s
+          print('R52 AB opaque palette indices PASS')
+          PY
+          done
+
+      - name: Build eight comparable R52 ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r52-ab
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          build () {
+            local id="$1" mode="$2" cm="$3" ab="$4" profile="$5"
+            local complut=0
+            if [[ "$cm" == 1 ]]; then complut=1; fi
+            local bench=0 menu=0 static=0 reset=0
+            if [[ "$mode" == play ]]; then
+              bench=1; menu=1; static=1; reset=1
+            fi
+            echo "=== R52 $id $mode AB=$ab MIX=$cm ==="
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 \
+                DOOM_R47_SPRITE_HOIST=1 DOOM_R48_PAIR_V=1 DOOM_R48_V_FAST=1 \
+                DOOM_R49_COLORMIX="$cm" DOOM_R49_COMPLUT="$complut" DOOM_R49_RATIO=none \
+                DOOM_R52_AB="$ab" DOOM_R52_AB_PROFILE="$profile" \
+                DOOM_R50_PLAY_BENCH="$bench" DOOM_R50_MENU_FREEZE="$menu" \
+                DOOM_R50_STATIC_MENU="$static" DOOM_R50_HARD_REINIT="$reset" \
+                DOOM_R50_RESET_SRAM=0 DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R52_BUILD="$id" \
+                fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            cp "dist/r35/doom-md-r52-$id.bin" "$D/"
+            cp "dist/r35/flags-doom-md-r52-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A \
+                "dist/r35/doom-md-r52-$id.elf" > "$D/size-$id.txt"
+            if [[ "$ab" == 1 ]]; then
+              cp src/r52_ab_report.json "$D/REPORT-$id.json"
+            fi
+          }
+          for mode in perf play; do
+            build "c0-vf-$mode" "$mode" 0 0 n25
+            build "c1-cm50-$mode" "$mode" 1 0 n25
+            build "ab-n25-$mode" "$mode" 0 1 n25
+            build "ab-l32-$mode" "$mode" 0 1 l32
+          done
+
+      - name: Audit BSS, ROM identities and palette separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,re
+          d=pathlib.Path('dist/r52-ab')
+          sizes={}
+          for p in sorted(d.glob('size-*.txt')):
+              match=re.search(r'^\\.bss\\s+(\\d+)\\s+',p.read_text(),re.M)
+              assert match, p
+              value=int(match.group(1))
+              assert value<=57920,(p,value)
+              sizes[p.stem[5:]]=value
+          assert len(sizes)==8,sizes
+          roms=list(d.glob('doom-md-r52-*.bin'))
+          assert len(roms)==8,roms
+          assert all(len(p.stem)<=30 for p in roms)
+          for p in d.glob('REPORT-*.json'):
+              report=json.loads(p.read_text())
+              assert not report['maps_have_zero']
+              assert report['combined_unique']>=16
+          (d/'BSS-AUDIT.json').write_text(json.dumps(sizes,indent=2)+'\\n')
+          print('Eight builds and BSS PASS',sizes)
+          PY
+
+      - name: BlastEm 800-frame boot smoke for all eight ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,subprocess,shutil,os,time
+          d=pathlib.Path('dist/r52-ab').resolve()
+          exe=shutil.which('blastem') or next(
+            (str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem')
+             if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm unavailable on runner'
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          lines=[]
+          for rom in sorted(d.glob('*.bin')):
+              start=time.monotonic()
+              r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                 stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                 text=True,errors='replace',timeout=45)
+              line=f'{rom.name}: code={r.returncode} time={time.monotonic()-start:.1f}s'
+              print(line,flush=True);lines.append(line)
+              if r.returncode:raise SystemExit(line)
+          assert len(lines)==8
+          (d/'BLASTEM-SMOKE.txt').write_text('\\n'.join(lines)+'\\n')
+          PY
+
+      - name: Prepare manifest and manual A/B instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          d=Path('dist/r52-ab')
+          roms=[{'name':p.name,'bytes':p.stat().st_size,
+                 'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in sorted(d.glob('*.bin'))]
+          assert len(roms)==8
+          (d/'MANIFEST.json').write_text(json.dumps({
+            'origin':'R51 validated branch 292a6a69e19daf26c797ac119b90e3bfadc7d906',
+            'ab_origin':'external audit4 near25/luma32 corrected for VDP opaque-black slot',
+            'design':'PAL0 Plane A even x, PAL1 Plane B odd x, both 16 slots',
+            'comparison':'VF vs legacy CM50+LUT vs AB near25 vs AB luma32',
+            'known_limitations':['offline DeltaE scores invalidated by opaque repair',
+              'boot smoke does not prove scene geometry or stable color',
+              'not evaluated on RGB/CRT or subpalettes 1..13','hardware gun disabled'],
+            'roms':roms},indent=2)+'\\n')
+          (d/'README.txt').write_text(
+            'R52 AB COLOR MATRIX: baseline VF, legacy ColorMix CM50, AB n25, AB l32.\\n'
+            'Four pairs PLAY/PERF; no R51 hardware pistol to isolate ColorMix.\\n'
+            'Test same DEMO3 tic, 320x224 pixel-native plus CRT/composite.\\n'
+            'Check HUD text legibility and palette changes after native TITLEPIC.\\n'
+            'No 4px color-stripe acceptance without visual review.\\n'
+            'Record 2 timedemo runs per PERF; baseline R51 VF approx 5.31 FPS.\\n')
+          print([p['name'] for p in roms])
+          PY
+
+      - name: Upload R52 ColorMix four-pair matrix
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r52-ab-colormix-matrix
+          path: dist/r52-ab/
+          retention-days: 90
+          if-no-files-found: error
