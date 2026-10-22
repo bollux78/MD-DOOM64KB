@@ -226,6 +226,6 @@ void P_Ticker (void)
   P_RunThinkers();
   P_UpdateSpecials();
   P_MapEnd();
-  _g_leveltime++;                       // for par times
+  _g_leveltime += r54d_steps;           // 35-Hz virtual duration; for par times
 }
 
