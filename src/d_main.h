@@ -62,8 +62,9 @@ void D_PageTicker(void);
 void D_StartTitle(void);
 #if defined(DOOM_R50_PLAY_BENCH)
 void D_R50_BenchmarkStart(void);
-void D_R50_BenchmarkFinish(void);
 boolean D_R50_IsMenuBenchmark(void);
+void D_R50_BenchmarkRequestReturn(void);
+boolean D_R50_BenchmarkReturnPending(void);
 #endif
 void D_DoomMain(int argc, const char * const * argv);
 
