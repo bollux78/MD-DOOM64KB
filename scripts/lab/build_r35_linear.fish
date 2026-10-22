@@ -379,10 +379,16 @@ for v in $variants
         set defs $defs '-DDOOM_R52_AB'
     end
     if set -q DOOM_R54_LOGIC_HZ
-        if not contains -- "$DOOM_R54_LOGIC_HZ" 35 28 24 21 18 15 12
-            echo 'R54 cadence must be 35,28,24,21,18,15,12'; exit 2
+        if not contains -- "$DOOM_R54_LOGIC_HZ" 35 28 25 24 21 20 18 15 12
+            echo 'R54 cadence must be 35,28,25,24,21,20,18,15,12'; exit 2
         end
         set defs $defs "-DDOOM_R54_LOGIC_HZ=$DOOM_R54_LOGIC_HZ"
+    end
+    if set -q DOOM_R54D_COMPENSATED; and test "$DOOM_R54D_COMPENSATED" = 1
+        if not set -q DOOM_R54_LOGIC_HZ
+            echo 'R54D compensation requires explicit cadence'; exit 2
+        end
+        set defs $defs '-DDOOM_R54D_COMPENSATED'
     end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
