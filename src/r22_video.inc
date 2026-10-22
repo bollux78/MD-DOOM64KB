@@ -132,6 +132,9 @@ static void R40B_ResetNativeText(void)
 }
 static inline uint16_t R22_Lock(void){uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");return sr;}
 static inline void R22_Unlock(uint16_t sr){__asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");}
+#if defined(DOOM_R51_HW_WEAPON)
+#include "r51_weapon_hw.inc"
+#endif
 /* SDK text helpers use a 256-byte stack array. Write bounded glyphs directly,
    with exclusive ownership of the VDP address/data ports for the whole string. */
 static void R22_DrawText(uint16_t plane,const char *s,uint16_t x,uint16_t y){
@@ -653,6 +656,11 @@ void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){
     if(p<0)p=0;if(p>13)p=13;
     PAL_setColors(0,r22_cram[(uint8_t)p],16,DMA);
+#if defined(DOOM_R51_HW_WEAPON)
+    /* Palette2: weapon colors remapped to each PLAYPAL tint.
+     * World PAL0 and ColorMix PAL1 remain unchanged. */
+    PAL_setColors(32,r51_weapon_pal2[(uint8_t)p],16,DMA);
+#endif
 #if defined(DOOM_R49_COLORMIX)
     PAL_setColors(16,r49_palette1+(uint16_t)p*16u,16,DMA);
     r49_gate_current=r49_mix_ok+(uint16_t)p*256u;
@@ -870,6 +878,9 @@ void R22_BeginFrame(void){
     /* Complete the old flip before VDP use, retaining the displayed menu
        throughout title/raster work. Text replacement happens just-in-time. */
     R20_StopVideo();r22_text_this_frame=0;
+#if defined(DOOM_R51_HW_WEAPON)
+    R51_WeaponBeginFrame();
+#endif
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0)
         memset(r40b_native_seen,0,R40B_OCC_BYTES);
@@ -949,6 +960,9 @@ void I_FinishUpdate(void){
 #if defined(DOOM_R35_ART_RAW)
     if(r35_native_active>=0){
         if(_g_gamestate!=GS_LEVEL){
+#if defined(DOOM_R51_HW_WEAPON)
+            R51_WeaponInvalidate();
+#endif
             /* R40a: This branch skips regular pixel4 presentation, but
              * must still retire the previous WINDOW overlay on frames
              * without a menu (for example, after Start closes it). */
@@ -970,6 +984,9 @@ void I_FinishUpdate(void){
     uint16_t back=r22_front^1;R22_UploadBack(back);
     if(_g_gamestate==GS_LEVEL)R22_HUD();
     r22_next_bank=back;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
+#endif
+#if defined(DOOM_R51_HW_WEAPON)
+    R51_WeaponPresent();
 #endif
     __asm__ volatile("":::"memory");r22_ready=1;
 #if defined(TIMEDEMO) || defined(DOOM_R50_PLAY_BENCH)
@@ -1016,6 +1033,9 @@ void I_InitGraphicsHardwareSpecificCode(void){
     R47_LoadPairTiles();
 #endif
     R22_InitOpenings();R22_Palette(0);r22_newpal=100;
+#if defined(DOOM_R51_HW_WEAPON)
+    R51_WeaponInvalidate();
+#endif
     r22_fb.before=r22_fb.after=R22_GUARD;
 #if defined(DOOM_R47_PLANE_PAIR)
     R47_ClearPairBuffer();
