@@ -11,6 +11,7 @@ from pathlib import Path
 import collections
 import json
 import math
+import os
 import runpy
 import struct
 import sys
@@ -25,9 +26,24 @@ palettes=[SOURCES["decode_subpal"](raw,s) for s in range(14)]
 to_word=SOURCES["gen_color"]
 to_rgb=SOURCES["gen_to_rgb"]
 
+# Green/cyan flecks observed in hardware gun on R51. Rather than
+# invent a new palette without a source-image histogram, A/B test a
+# perceptual neutral-preservation penalty, only for actual PISG pixels.
+# No scene PAL0/PAL1 or weapon transparency changes.
+NEUTRAL=os.environ.get("DOOM_R51_WEAPON_NEUTRAL")=="1"
 def dist(a,b):
-    # Deliberately simple squared RGB first; visual evaluation will decide.
-    return sum((a[i]-b[i])**2 for i in range(3))
+    d=sum((a[i]-b[i])**2 for i in range(3))
+    if not NEUTRAL:
+        return d
+    src_sat=max(a)-min(a)
+    dst_sat=max(b)-min(b)
+    if src_sat<42:
+        excess=max(0,dst_sat-src_sat-12)
+        d+=5*excess*excess
+    green_excess=max(0,b[1]-max(b[0],b[2])-16)
+    if green_excess and a[1]<=max(a[0],a[2])+16:
+        d+=6*green_excess*green_excess
+    return d
 
 def wad_directory(data):
     if data[:4]!=b"IWAD":
@@ -221,7 +237,7 @@ header.append("};")
 header.append(f"#define R51_WEAPON_ASSET_COUNT {len(records)}u")
 header.append("#endif")
 TARGET.write_text("\n".join(header)+"\n")
-report=dict(source=str(WAD.relative_to(ROOT)),frames=[
+report=dict(source=str(WAD.relative_to(ROOT)),palette_objective="neutral-protected" if NEUTRAL else "original-rgb",frames=[
     {k:v for k,v in f.items() if k not in ("words","blocks")} |
     {"blocks":f["blocks"]} for f in records],tile_base=16,tile_limit=256,
     pixel_histogram_total=sampled,palette2_cram=palette_by_sub[0],
