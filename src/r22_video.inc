@@ -899,6 +899,16 @@ static void R22_EndOverlay(void){
     if(r22_overlay_dirty && !r22_text_this_frame)R22_ClearOverlay();
 }
 void V_ClearViewWindow(void){
+#if defined(DOOM_R50_STATIC_MENU) && defined(DOOM_R35_ART_RAW)
+    /* R40b reuses the otherwise idle Pair-V framebuffer as the two glyph
+     * occupancy bitsets (prev + seen). M_Drawer calls I_InitScreenPage()
+     * every frame, and wipe_StartScreen() may do so too. Resetting the
+     * framebuffer here destroys the records needed to retire old glyphs,
+     * leaving superseded menu text burned into the native art.
+     * Native 320x224 art already resides entirely in VDP VRAM; it has NO
+     * software framebuffer to clear. Guard every aliasing clear path. */
+    if(r35_native_active>=0)return;
+#endif
 #if defined(DOOM_R47_PLANE_PAIR)
     R47_ClearPairBuffer();
 #else
