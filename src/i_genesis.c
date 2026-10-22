@@ -582,6 +582,17 @@ extern void R23_ProbeMain(void);
 #endif
 int main(bool hardReset)
 {
+#if defined(DOOM_R50_HARD_REINIT)
+    /* SGDK _reset_entry() calls internal_reset() but DOES NOT clear WRAM or
+     * reload initialized .data. Doom retains static input timestamps, menu
+     * masks, native-picture IDs, video flags and event queues, so the title
+     * can return with Start no longer responsive after a warm reset.
+     * SGDK's SYS_hardReset() jumps directly to _start_entry(), which clears
+     * WRAM and restores initialized variables before calling main(TRUE).
+     * Call it only for a warm reset to avoid recursion. This still cannot
+     * repair a reset that hangs inside SGDK before reaching main. */
+    if(!hardReset)SYS_hardReset();
+#endif
 #if defined(DOOM_R50_RESET_SRAM)
     /* A warm RESET can interrupt an SRAM blockmap/mapmem access while the
      * cartridge register still maps odd-lane SRAM over ROM $200000-$20FFFF.
