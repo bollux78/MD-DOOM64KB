@@ -220,37 +220,55 @@ jobs:
           PY
           python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h
 
-      - name: BlastEm 800-frame boot and 6000-frame endurance
+      - name: BlastEm regression matrix, endurance and reproducibility
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os,pathlib,shutil,subprocess,time
+          import concurrent.futures,csv,os,pathlib,shutil,subprocess,time
           d=pathlib.Path('dist/r56-dual').resolve()
           exe=shutil.which('blastem') or next((str(p) for p in
               (pathlib.Path.home()/'Projetos').glob('**/blastem')
               if p.is_file() and os.access(p,os.X_OK)),None)
           assert exe,'BlastEm unavailable'
-          env=os.environ.copy()
-          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
           roms=sorted(d.glob('*.bin'))
           assert len(roms)==4,[p.name for p in roms]
-          lines=['ROM,frames,emulated_seconds_60hz,wall_seconds,exit_code']
-          for frames,timeout in ((800,45),(6000,180)):
-            for rom in roms:
-              t=time.monotonic()
-              try:
-                r=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,env=env,
-                    capture_output=True,text=True,errors='replace',timeout=timeout)
-              except subprocess.TimeoutExpired as exc:
-                raise SystemExit(f'TIMEOUT {rom.name} at {frames} frames (limit {timeout}s)') from exc
-              wall=time.monotonic()-t
-              msg=f'{rom.name},{frames},{frames/60:.2f},{wall:.2f},{r.returncode}'
-              print(msg,flush=True);lines.append(msg)
-              if r.returncode:
-                raise SystemExit('BlastEm failed: '+msg+'\n'+r.stdout+'\n'+r.stderr)
-          (d/'BLASTEM-SMOKE-ENDURANCE.csv').write_text('\n'.join(lines)+'\n')
-          print('PASS: 4 ROMs x 800 frames + 4 ROMs x 6000 frames')
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          # Every ROM gets: boot, medium, long, and two independent 100k runs.
+          # All four ROMs run concurrently, never more than four processes.
+          suites=((800,1),(6000,1),(30000,1),(100000,2))
+          jobs=[(rom,frames,rep) for frames,repeats in suites
+                for rep in range(1,repeats+1) for rom in roms]
+          def check(job):
+            rom,frames,rep=job
+            t=time.monotonic()
+            try:
+              p=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,
+                  env=env,capture_output=True,text=True,errors='replace',timeout=900)
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),p.returncode,
+                      (p.stderr or '')[-350:]]
+            except subprocess.TimeoutExpired:
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),'TIMEOUT','900-second timeout']
+          rows=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            for row in pool.map(check,jobs):
+              rows.append(row)
+              print(' | '.join(map(str,row[:6])),flush=True)
+          with (d/'BLASTEM-REGRESSION-MATRIX.csv').open('w',newline='') as fp:
+            w=csv.writer(fp)
+            w.writerow(['rom','frames','repeat','emulated_seconds_60hz',
+                        'wall_seconds','exit_code','stderr_tail'])
+            w.writerows(rows)
+          errors=[r for r in rows if r[5]!=0]
+          print(f'BLASTEM MATRIX: {len(rows)} runs, '
+                f'{sum(r[1] for r in rows):,} frames total, '
+                f'{len(errors)} process errors')
+          if errors:
+            for r in errors:print('FAIL',r,flush=True)
+            raise SystemExit('BlastEm matrix contains failed runs')
           PY
 
       - name: Hardware comparison instructions
