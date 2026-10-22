@@ -19,13 +19,13 @@ SEEDS={
 'o':'0c04a60006bcceee0aaaaaaaa7788888088888eee111c1c10fffffaaffffffff0fff75755333d33e03eaaaaaaaaaaaaa0aa7774444466699099999999b3bb0ff0ff555555ddbbdd50555deee5777bbb609999958bfaa788808888888888111aa0ab32222222c222a0ff5555555888ff9099998888eeec0660005988882700000'}}
 def nums(items,width=24):
     return ',\n'.join('  '+','.join(str(x) for x in items[i:i+width]) for i in range(0,len(items),width))
-def repair(indices,src,src0):
+def repair(indices,src,src0,palette):
     counts=collections.Counter(indices)
     replace=min(range(1,16),key=lambda k:(counts[k],k))
     other=[i for i in range(1,16) if i!=replace]
     def d(a,b):return sum((a[j]-b[j])**2 for j in range(3))
-    prior=src[0][src[replace-1]]
-    nearest=min(other,key=lambda i:d(prior,src[0][src[i-1]]))
+    prior=palette[src[replace-1]]
+    nearest=min(other,key=lambda i:d(prior,palette[src[i-1]]))
     changed=[replace if i==0 else nearest if i==replace else i for i in indices]
     original=src[replace-1]
     src[replace-1]=src0
@@ -42,8 +42,8 @@ def run(profile):
     even=[int(c,16) for c in z['e']]
     odd=[int(c,16) for c in z['o']]
     assert len(p0)==len(p1)==15 and len(even)==len(odd)==256
-    even,fix0=repair(even,p0,0)
-    odd,fix1=repair(odd,p1,0)
+    even,fix0=repair(even,p0,0,source[0])
+    odd,fix1=repair(odd,p1,0,source[0])
     conv=pal['gen_color']
     cram0=[[0]+[conv(source[s][i]) for i in p0] for s in range(14)]
     cram1=[[0]+[conv(source[s][i]) for i in p1] for s in range(14)]
