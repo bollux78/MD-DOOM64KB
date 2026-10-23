@@ -158,6 +158,11 @@ static void M_ChangeAlwaysRun(int16_t choice);
 static void M_ChangeVideoMode(int16_t choice){R57_ChangeView(0,choice);}
 static void M_ChangeHCrop(int16_t choice){R57_ChangeView(1,choice);}
 static void M_ChangeVCrop(int16_t choice){R57_ChangeView(2,choice);}
+#if defined(DOOM_R59_COLOR_VIEW)
+extern void R59_ChangeColor(int16_t right);
+extern uint8_t R59_ColorMode(void);
+static void M_ChangeColorMode(int16_t choice){R59_ChangeColor(choice);}
+#endif
 #endif
 #if defined(DOOM_R57_SIZE_MENU)
 static void M_ChangeScreenSize(int16_t choice){(void)choice;R57_SetCrop(!r57_crop_enabled);}
@@ -583,6 +588,9 @@ enum
   video_mode,
   h_crop,
   v_crop,
+#if defined(DOOM_R59_COLOR_VIEW)
+  color_mode,
+#endif
 #endif
 #if defined(DOOM_R57_SIZE_MENU)
   screen_size,
@@ -613,6 +621,9 @@ static const menuitem_t OptionsMenu[]=
   {2,"Video mode:", M_ChangeVideoMode},
   {2,"H crop:",     M_ChangeHCrop},
   {2,"V crop:",     M_ChangeVCrop},
+#if defined(DOOM_R59_COLOR_VIEW)
+  {2,"Color mode:", M_ChangeColorMode},
+#endif
 #endif
 #if defined(DOOM_R57_SIZE_MENU)
   {1,"Screen size:", M_ChangeScreenSize},
@@ -660,6 +671,10 @@ static void M_DrawOptions(void)
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*video_mode,12,r57_view.mode?"H32":"H40");
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*h_crop,12,crop_names[r57_view.hcrop/8]);
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*v_crop,12,crop_names[r57_view.vcrop/8]);
+#if defined(DOOM_R59_COLOR_VIEW)
+    static const char *const r59_names[4]={"CM6","Balanced","Tolerant","Accents"};
+    V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*color_mode,12,r59_names[R59_ColorMode()]);
+#endif
     /* Fixed-width size label avoids stale digits after resizing. */
     uint16_t w=(r57_view.xend-r57_view.xmin)*4u,h=(r57_view.yend-r57_view.ymin)*4u;
     char size[13]={'V','I','E','W',' ',(char)('0'+w/100),(char)('0'+w/10%10),(char)('0'+w%10),
