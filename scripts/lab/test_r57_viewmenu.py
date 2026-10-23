@@ -52,7 +52,7 @@ int main(void){
  }
  for(int mode=0;mode<2;mode++)for(int level=0;level<2;level++)for(int menu=0;menu<2;menu++)for(int demo=0;demo<2;demo++){
   r57_view=R57_ViewMake(mode,16,32);_g_gamestate=level;_g_menuactive=menu;_g_demoplayback=demo;
-  int desired=mode && level && (!menu || demo);
+  int desired=mode && level && !menu;
   /* Force both transition directions, after the old frame is retired. */
   r57_h32_active=!desired;queued=r57_view;pending=1;R20_StopVideo();cleared=0;
   R57_VideoMode();

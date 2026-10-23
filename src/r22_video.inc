@@ -177,9 +177,11 @@ static uint8_t r57_hud_dirty;
 #if defined(DOOM_R57_H32)
 static uint8_t r57_h32_active;
 static void R57_VideoMode(void){
-    uint8_t desired=(_g_gamestate==GS_LEVEL && (!_g_menuactive || _g_demoplayback)
+    uint8_t desired=(_g_gamestate==GS_LEVEL
 #if defined(DOOM_R57_VIEW_MENU)
-        && r57_view.mode
+        && !_g_menuactive && r57_view.mode
+#else
+        && (!_g_menuactive || _g_demoplayback)
 #endif
     );
     if(desired==r57_h32_active)return;
