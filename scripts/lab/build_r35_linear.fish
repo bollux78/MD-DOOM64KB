@@ -42,6 +42,13 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
             else
                 python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
             end
+            if set -q DOOM_R57_COLORMATCH; and test "$DOOM_R57_COLORMATCH" = 1
+                if set -q DOOM_R56_CLAUDIO_PROFILE; and test "$DOOM_R56_CLAUDIO_PROFILE" != a6
+                    echo 'R57 ColorMatch is based on R56 A6 only'; exit 2
+                end
+                python3 scripts/lab/gen_r57_colormatch.py --header src/r56_tables.h --out src/r56_tables.h --report src/r57_colormatch_report.json; or exit 1
+                python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h; or exit 1
+            end
         end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
@@ -867,6 +874,15 @@ for v in $variants
             echo 'Invalid R56 build id'; exit 2
         end
         set id doom-md-r56-$DOOM_R56_BUILD
+    end
+    if set -q DOOM_R57_BUILD
+        if string match -qr '[^a-z0-9-]' -- "$DOOM_R57_BUILD"
+            echo 'Invalid R57 build id'; exit 2
+        end
+        if not set -q DOOM_R57_COLORMATCH; or test "$DOOM_R57_COLORMATCH" != 1
+            echo 'R57 ID requires ColorMatch'; exit 2
+        end
+        set id doom-md-r57-$DOOM_R57_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
