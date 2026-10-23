@@ -46,21 +46,10 @@ def main():
                 'DOOM_R50_STATIC_MENU':bench,'DOOM_R50_HARD_REINIT':bench,'DOOM_R50_RESET_SRAM':'0',
                 'DOOM_R51_HW_WEAPON':'0','DOOM_R51_NO_PSPRITE':'0','DOOM_R20_BGM_VGM':vgm,
             })
+            # The approved CM6 palettes are generated inside the fish build
+            # from the exact R56 A6 snapshot, before code compilation.
             backend='pixel4'
-            if profile=='legacy8':
-                backend='cell'
-                for key in ('DOOM_R52_AB','DOOM_R52_CLAUDIO','DOOM_R52_CPLUT','DOOM_R56_DUAL_COLOR',
-                            'DOOM_R47_PLANE_PAIR','DOOM_R48_PAIR_V','DOOM_R48_V_FAST',
-                            'DOOM_R42_WALL_ASM','DOOM_R47_FLAT_HOIST','DOOM_R47_SPRITE_HOIST',
-                            'DOOM_R50_PLAY_BENCH','DOOM_R50_MENU_FREEZE','DOOM_R50_STATIC_MENU',
-                            'DOOM_R50_HARD_REINIT'):
-                    env[key]='0'
-                env.pop('DOOM_R45_VARIANT',None)
-                env.pop('DOOM_R40_STAGE1',None)
-            else:
-                # Palette and codebook generation occurs once per ROM, inside
-                # the fish build after the exact R56 A6 base snapshot.
-            print('BUILD R57',name,flush=True)
+            print('BUILD R58',name,flush=True)
             subprocess.run(['fish','scripts/lab/build_r35_linear.fish',backend+'-'+mode],env=env,check=True)
             stem='doom-md-r58-'+name;source=root/'dist/r35'/stem
             for suffix in ('.bin','.elf'):
@@ -72,7 +61,7 @@ def main():
             assert 0<bss<=57920,(name,bss)
             binary=(dest/(stem+'.bin')).read_bytes()
             assert 0<len(binary)<=4*1024*1024,(name,len(binary))
-            if profile!='legacy8':
+            if profile=='cm6':
                 runtime=root/'src/r56_tables.h'
                 report_src=root/'src/r58_colormatch_report.json'
                 assert runtime.is_file() and report_src.is_file(),'ColorMatch generator not run'
