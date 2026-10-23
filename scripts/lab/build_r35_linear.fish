@@ -918,10 +918,79 @@ for v in $variants
         set id doom-md-r56-$DOOM_R56_BUILD
     end
     if set -q DOOM_R57_BUILD
-        if not string match -qr '^[a-z0-9][a-z0-9-]*$' -- "$DOOM_R57_BUILD"
+        if not string match -qr '^[a-z0-9][a-z0-9-]*
+    echo "BUILD: $id  [$DOOM_R20_DEFINES]"
+    rm -rf out
+    rm -f res/music.rs res/music.d
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    or begin
+        tail -n 100 "$dest/build-$id.log"
+        exit 1
+    end
+    python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+    cp out/release/rom.out "$dest/$id.elf"; or exit 1
+    cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
+    set built $built $id
+end
+cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
+sha256sum $dest/*.bin > "$dest/SHA256SUMS"
+echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
+ -- "$DOOM_R57_BUILD"
             echo 'Invalid R57 build id'; exit 2
         end
         set id doom-md-r57-$DOOM_R57_BUILD
+    end
+    if set -q DOOM_R58_BUILD
+        if not string match -qr '^[a-z0-9][a-z0-9-]*
+    echo "BUILD: $id  [$DOOM_R20_DEFINES]"
+    rm -rf out
+    rm -f res/music.rs res/music.d
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    or begin
+        tail -n 100 "$dest/build-$id.log"
+        exit 1
+    end
+    python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+    cp out/release/rom.out "$dest/$id.elf"; or exit 1
+    cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
+    set built $built $id
+end
+cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
+sha256sum $dest/*.bin > "$dest/SHA256SUMS"
+echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
+ -- "$DOOM_R58_BUILD"
+            echo 'Invalid R58 build id'; exit 2
+        end
+        if not set -q DOOM_R58_CM_VIEW; or test "$DOOM_R58_CM_VIEW" != 1
+            echo 'R58 build requires ColorMatch integration'; exit 2
+        end
+        set id doom-md-r58-$DOOM_R58_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
