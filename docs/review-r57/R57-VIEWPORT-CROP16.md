@@ -4,8 +4,8 @@ Base: 7e6a6e4aa87c734a7b422fe0597a9d66d0e28a88 (R57 Werk color lab).
 User requested 2 tiles = 16 physical pixels removed from EACH visible edge.
 All four ROMs use the SAME c55-a6 table; this is not a new palette selection.
 
-- viewport-full-play/perf: original R57 gameplay rectangle.
-- viewport-crop16-play/perf: actual early renderer and Pair-V DMA clipping.
+- vp-full-play/perf: original R57 gameplay rectangle.
+- vp-crop16-play/perf: actual early renderer and Pair-V DMA clipping.
 
 The existing safety border excludes samples x<2 and y<2. Original visible
 rectangle [2,76) x [2,44) is 296x168 physical pixels. Crop rectangle

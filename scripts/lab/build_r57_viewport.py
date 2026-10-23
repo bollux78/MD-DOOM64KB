@@ -22,7 +22,7 @@ def main():
     assert Path(vgm).is_file(),'Run the existing pinned VGM preflight first'
     for profile in profiles:
         for variant,mode in (('full','play'),('full','perf'),('crop16','play'),('crop16','perf')):
-            bench='1' if mode=='play' else '0';name='viewport-'+variant+'-'+mode
+            bench='1' if mode=='play' else '0';name='vp-'+variant+'-'+mode
             env=os.environ.copy()
             for key in ('DOOM_R53_MICRO_RATIO','DOOM_R55_WERK_VARIANT','DOOM_R56_CLAUDIO_PROFILE',
                         'DOOM_R56_BUILD','DOOM_R55_BUILD','DOOM_R52_BUILD','DOOM_R57_PROFILE','DOOM_R57_TABLES_DIR'):
