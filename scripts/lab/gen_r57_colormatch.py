@@ -39,8 +39,8 @@ def color_family(l):
     c=np.linalg.norm(l[...,1:],axis=-1)
     h=(np.degrees(np.arctan2(l[...,2],l[...,1]))+360.)%360.
     bins=np.select([((h<25)|(h>=345)),(h>=25)&(h<70),
-                    (h>=70)&(h<105),(h>=105)&(h<200),
-                    (h>=200)&(h<280),(h>=280)&(h<345)],
+                    (h>=70)&(h<105),(h>=105)&(h<195),
+                    (h>=195)&(h<315),(h>=315)&(h<345)],
                    [1,2,3,4,5,6],default=0)
     return np.where((c>=17)&(l[...,0]>=13),bins,0).astype(int)
 
@@ -121,7 +121,9 @@ def pick_palette(base,refpal,gen,targets,w,groups,plane,prior):
     nearest=((lab(targets)[:,None,:]-lab(existing)[None,:,:])**2).sum(-1).min(axis=1)
     for fam in range(1,7):
         mask=groups==fam
-        candidates=[i for i in range(56) if cf[i]==fam and i not in taken]
+        candidates=[i for i in range(56)
+                    if cf[i]==fam and i not in taken
+                    and (prior is None or i not in prior["slots"])]
         if not candidates or not mask.any():continue
         best=None
         for i in candidates:
@@ -131,7 +133,7 @@ def pick_palette(base,refpal,gen,targets,w,groups,plane,prior):
             if prior is not None:
                 # A mild preference for distinct A/B colors, not a forced
                 # rainbow or an arbitrary difference between their outputs.
-                delta=np.sqrt(((lab(prior)-cl[i])**2).sum(axis=-1)).min()
+                delta=np.sqrt(((lab(prior["rgb"])-cl[i])**2).sum(axis=-1)).min()
                 diversity=min(30.,float(delta))*.002
             score=improvement+diversity
             if best is None or score>best[0]:best=(score,i)
@@ -141,12 +143,12 @@ def pick_palette(base,refpal,gen,targets,w,groups,plane,prior):
     while len(taken)<9:
         scores=[]
         for i in range(56):
-            if i in taken:continue
+            if i in taken or (prior is not None and i in prior["slots"]):continue
             d=((lab(targets)-cl[i])**2).sum(-1)
             gain=np.dot(w,np.maximum(0,nearest-d))
             bonus=0
             if prior is not None:
-                delta=np.sqrt(((lab(prior)-cl[i])**2).sum(axis=-1)).min()
+                delta=np.sqrt(((lab(prior["rgb"])-cl[i])**2).sum(axis=-1)).min()
                 bonus=min(30.,float(delta))*.002
             scores.append((float(gain)+bonus,i))
         _,chosen=max(scores,key=lambda q:(q[0],-q[1]))
@@ -228,12 +230,19 @@ def main():
     eight=reference_8x8(refpal,tl,gen)
     palettes=[];selections=[];books=[];cost=[];mix=[]
     for plane,base in enumerate([pal0,pal1]):
-        prior=None if plane==0 else np.asarray([
-            gen["gen_to_rgb"](word) for word in palettes[0][0,7:16]],float)
+        prior=None if plane==0 else {
+            "slots":set(selections[0]),
+            "rgb":np.asarray([
+                gen["gen_to_rgb"](word) for word in palettes[0][0,7:16]],float)
+        }
         p,slots=pick_palette(base,refpal,gen,target,w,groups,plane,prior)
         palettes.append(p);selections.append(slots)
         book,loss,mixed=pick_pairs(p,target,eight,w,groups)
         books.append(book);cost.append(loss);mix.append(mixed)
+    # Both planes now have complementary free-slot palettes.
+    # Preserve the two-planar advantage without introducing false flat hues.
+    assert not set(selections[0]).intersection(selections[1]), (
+        "two planes redundantly allocated the same 8x8 source colors",selections)
     # Matching the same source on both planes: enforce strict similarity for
     # neutrals; use looser penalty for genuinely chromatic material.
     seam=((mix[0][:,None,:]-mix[1][None,:,:])**2).sum(-1)
@@ -267,6 +276,8 @@ def main():
             "model":"CIELAB dE76, RGB linear-light 50/50, not measured CRT",
             "preserved_flat_anchors":6,"palette_slots_from_8x8":selections,
             "palette_rgb_free_slots":colors,
+            "unique_cram_words_union_normal":len(set(palettes[0][0]).union(palettes[1][0])),
+            "shared_free_color_source_slots":len(set(selections[0]).intersection(selections[1])),
             "codes_per_plane":15,"extra_codes_per_plane":9,
             "hue_family_weights":{name:round(float(w[groups==i].sum()),5)
                                   for i,name in enumerate(("neutral",)+FAMILIES)},
