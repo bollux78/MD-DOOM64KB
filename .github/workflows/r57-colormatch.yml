@@ -92,7 +92,7 @@ jobs:
               assert report['preserved_flat_anchors']==6
               assert len(report['palette_slots_from_8x8'][0])==9
               assert len(report['palette_slots_from_8x8'][1])==9
-              bss=re.search(r'^\\.bss\\s+(\\d+)\\s+', (d/('size-'+mode+'.txt')).read_text(),re.M)
+              bss=re.search(r'^\.bss\s+(\d+)\s+', (d/('size-'+mode+'.txt')).read_text(),re.M)
               assert bss and int(bss.group(1))<=57920,(mode,bss)
               print('PASS R57',rom.name,'palette union',report['unique_cram_words_union_normal'],'BSS',bss.group(1))
           PY
