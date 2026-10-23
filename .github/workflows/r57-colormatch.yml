@@ -71,16 +71,38 @@ jobs:
             cp "dist/r35/$id.bin" dist/r57-colormatch/
             cp "dist/r35/flags-$id.txt" dist/r57-colormatch/
             cp src/r57_colormatch_report.json "dist/r57-colormatch/report-$mode.json"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "dist/r35/$id.elf" > "dist/r57-colormatch/size-$mode.txt"
           done
       - name: Check LUT invariants and short BlastEm smoke
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h
+          python3 - <<'PY'
+          import json,re,pathlib
+          d=pathlib.Path('dist/r57-colormatch')
+          roms=sorted(d.glob('doom-md-r57-cm6-*.bin'))
+          assert len(roms)==2,[p.name for p in roms]
+          for mode in ('play','perf'):
+              rom=d/('doom-md-r57-cm6-'+mode+'.bin')
+              assert rom.is_file() and 2*1024*1024 < rom.stat().st_size <= 4*1024*1024
+              report=json.loads((d/('report-'+mode+'.json')).read_text())
+              assert report['shared_free_color_source_slots']==0
+              assert report['unique_cram_words_union_normal']>=21
+              assert report['preserved_flat_anchors']==6
+              assert len(report['palette_slots_from_8x8'][0])==9
+              assert len(report['palette_slots_from_8x8'][1])==9
+              bss=re.search(r'^\\.bss\\s+(\\d+)\\s+', (d/('size-'+mode+'.txt')).read_text(),re.M)
+              assert bss and int(bss.group(1))<=57920,(mode,bss)
+              print('PASS R57',rom.name,'palette union',report['unique_cram_words_union_normal'],'BSS',bss.group(1))
+          PY
           export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
           BLASTEM="$HOME/Projetos/blastem64-1.0.0/blastem"
           test -x "$BLASTEM"
-          timeout 50s "$BLASTEM" -b 800 dist/r57-colormatch/doom-md-r57-cm6-perf.bin
+          for frames in 800 6000; do
+            timeout 60s "$BLASTEM" -b "$frames" dist/r57-colormatch/doom-md-r57-cm6-perf.bin
+            echo "BlastEm PASS $frames emulated frames"
+          done
       - uses: actions/upload-artifact@v6
         with:
           name: doom-md-r57-colormatch-staged
