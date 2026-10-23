@@ -29,7 +29,7 @@ def main() -> None:
 
     display = identity
     # Normal linear 4 MiB Mega Drive mapping, no SSF / bank switching.
-    rom_end = '0x003FFFFF' if identity.startswith(('doom-md-r35-', 'doom-md-r35d-', 'doom-md-r37-', 'doom-md-r38-', 'doom-md-r39c-', 'doom-md-r39d-', 'doom-md-r39e-', 'doom-md-r39f-', 'doom-md-r40-', 'doom-md-r40a-', 'doom-md-r40b-', 'doom-md-r40c-', 'doom-md-r45-', 'doom-md-r46-', 'doom-md-r47-','doom-md-r47a-','doom-md-r48-','doom-md-r49-','doom-md-r50-','doom-md-r51-','doom-md-r52-','doom-md-r53-','doom-md-r55-', 'doom-md-r56-', 'doom-md-r57-')) else '0x001FFFFF'
+    rom_end = '0x003FFFFF' if identity.startswith(('doom-md-r35-', 'doom-md-r35d-', 'doom-md-r37-', 'doom-md-r38-', 'doom-md-r39c-', 'doom-md-r39d-', 'doom-md-r39e-', 'doom-md-r39f-', 'doom-md-r40-', 'doom-md-r40a-', 'doom-md-r40b-', 'doom-md-r40c-', 'doom-md-r45-', 'doom-md-r46-', 'doom-md-r47-','doom-md-r47a-','doom-md-r48-','doom-md-r49-','doom-md-r50-','doom-md-r51-','doom-md-r52-','doom-md-r53-','doom-md-r55-', 'doom-md-r56-', 'doom-md-r57-', 'doom-md-r58-')) else '0x001FFFFF'
     title = identity  # Keep case identical to the ROM filename and demo screen
     note = "DOOM MD 68000 RENDERER BENCHMARK"
 
