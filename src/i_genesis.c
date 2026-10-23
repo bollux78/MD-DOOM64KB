@@ -440,7 +440,13 @@ int32_t I_GetTime(void)
 #endif
 int32_t I_GetGameTime(void)
 {
+#if defined(DOOM_R54_LOGIC_DIV)
+    /* Rational VBlank scheduler: e.g. 25/(2*60) -> exactly 12.5 tics/s.
+     * Uses 60Hz wall time; no integer rounding to 12 or 13 tics/s. */
+    return (ticcount * DOOM_R54_LOGIC_HZ) / (60 * DOOM_R54_LOGIC_DIV);
+#else
     return (ticcount * DOOM_R54_LOGIC_HZ) / 60;
+#endif
 }
 #endif
 
