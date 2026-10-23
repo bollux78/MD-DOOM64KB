@@ -33,8 +33,9 @@ for short,name in (("balanced","a6-balanced"),("tolerant","a6-tolerant"),("accen
         assert dims1==dims2 and raw1==raw2,(name,field)
     assert "#define R56_ANCHORS 6" in historical
 assert "R59_COLOR_MODES 4" in header
+assert '#include "r56_tables.h"' in header
 for field in f:
-    assert initializer(header,"r56_"+field)==initializer(cm,"r56_"+field)
+    assert initializer(cm,"r56_"+field)[1]
 video=(d/"r22_video.inc").read_text()
 menu=(d/"m_text.c").read_text()
 for key in ("R59_CURRENT.comp_even","R59_CURRENT.comp_odd",
