@@ -29,3 +29,6 @@ O modelo usa o histograma do COLORMAP como proxy, não a distribuição real de 
 
 ## Execução autorizada
 Em 23/10/2026, o usuário solicitou iniciar a compilação experimental após revisar as R57 do Werk. Este registro ativa o workflow isolado, sem alterar a branch R57 do Werk.
+
+## Auditoria cromática v2
+A primeira execução compilou mas revelou PAL0 e PAL1 com os mesmos nove slots livres (A/B sem diversidade). Esta execução v2 exige nove slots distintos por plano e preservação dos seis flats, além de 800 e 6000 frames de smoke no BlastEm. A mudança é isolada da matriz do Werk.
