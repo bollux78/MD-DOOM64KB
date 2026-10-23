@@ -1,0 +1,221 @@
+name: R58 CMVIEW approved ColorMatch + Werk H32 H40 runtime menu
+
+on:
+  push:
+    branches: [exp-r58-cm6-viewmenu]
+    paths:
+      - '.github/workflows/r58-cmview.yml'
+      - 'scripts/lab/build_r58_cmview.py'
+      - 'scripts/lab/gen_r57_colormatch.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/set_rom_identity.py'
+      - 'docs/review-r58/**'
+  workflow_dispatch:
+
+concurrency:
+  group: r58-cmview
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r58-cmview
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r58-cmview/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r58-cmview/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r58-cmview/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r58-cmview
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r58-cmview/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r58-cmview/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r58-cmview/PREFLIGHT-color-report.json
+
+      - name: Ensure NumPy for Cláudio palettes and microdither
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'NumPy ready'
+          else
+            python3 -m venv "$RUNNER_TEMP/r53-venv"
+            "$RUNNER_TEMP/r53-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
+            echo "$RUNNER_TEMP/r53-venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Check R58 ColorMatch and integration syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/build_r58_cmview.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: Compile R58 ColorMatch CM6 and Werk dynamic menu PLAY and PERF
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          python3 scripts/lab/build_r58_cmview.py | tee dist/r58-cmview/BUILD.log
+          cp docs/review-r58/R58-CMVIEW.md dist/r58-cmview/README-CRT.md
+
+      - name: Verify R58 manifests ROM identities and CM6 palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r58-cmview')
+          m=json.loads((d/'MANIFEST.json').read_text())
+          assert len(m)==2 and len(list(d.glob('*.bin')))==2
+          for r in m:
+              p=d/r['rom'];b=p.read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920
+          print('PASS 2 ROM checksums, sizes, BSS and ColorMatch identity')
+          assert (d/'PALETTES-cmview-play.h').read_bytes()==(d/'PALETTES-cmview-perf.h').read_bytes()
+          CHECK
+
+      - name: BlastEm automated PERF-only regression matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import concurrent.futures,csv,os,pathlib,shutil,subprocess,time
+          d=pathlib.Path('dist/r58-cmview').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in
+              (pathlib.Path.home()/'Projetos').glob('**/blastem')
+              if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm unavailable'
+          roms=sorted(d.glob('*-perf.bin'))
+          assert len(roms)==1,[p.name for p in roms]
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          # PERF ROMs run DEMO3 automatically; PLAY requires controller input.
+          # Keep PLAY artifacts for manual real-hardware validation.
+          suites=((800,1),(30000,1))
+          jobs=[(rom,frames,rep) for frames,repeats in suites
+                for rep in range(1,repeats+1) for rom in roms]
+          def check(job):
+            rom,frames,rep=job
+            t=time.monotonic()
+            try:
+              p=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,
+                  env=env,capture_output=True,text=True,errors='replace',timeout=120)
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),p.returncode,
+                      (p.stderr or '')[-350:]]
+            except subprocess.TimeoutExpired:
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),'TIMEOUT','120-second timeout']
+          rows=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            for row in pool.map(check,jobs):
+              rows.append(row)
+              print(' | '.join(map(str,row[:6])),flush=True)
+          with (d/'BLASTEM-PERF-REGRESSION.csv').open('w',newline='') as fp:
+            w=csv.writer(fp)
+            w.writerow(['rom','frames','repeat','emulated_seconds_60hz',
+                        'wall_seconds','exit_code','stderr_tail'])
+            w.writerows(rows)
+          errors=[r for r in rows if r[5]!=0]
+          print(f'BLASTEM MATRIX: {len(rows)} runs, '
+                f'{sum(r[1] for r in rows):,} frames total, '
+                f'{len(errors)} process errors')
+          if errors:
+            for r in errors:print('FAIL',r,flush=True)
+            raise SystemExit('BlastEm matrix contains failed runs')
+          PY
+
+      - name: Upload R58 CMVIEW ColorMatch menu package
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r58-cmview-play-perf
+          path: dist/r58-cmview/
+          retention-days: 90
+          if-no-files-found: error
