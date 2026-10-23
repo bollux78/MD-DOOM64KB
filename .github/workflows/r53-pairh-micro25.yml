@@ -100,7 +100,7 @@ jobs:
           build () {
             local mode="$1" kind="$2"
             local bench=0 menu=0 static=0 reset=0
-            if [[ "$mode" == play ]]; then bench=1; menu=1; static=1; reset=1; fi
+            if [[ "$mode" == play ]]; then bench=0; menu=1; static=1; reset=1; fi
             local micro=()
             if [[ "$kind" == m25 ]]; then micro=(DOOM_R53_PAIRH_MICRO_RATIO=25); fi
             local id="h-$kind-$mode"
