@@ -31,6 +31,12 @@ if set -q DOOM_R53_PAIRH_MICRO_RATIO
     end
     python3 scripts/lab/gen_r53_pairh_micro.py; or exit 1
 end
+if set -q DOOM_R53_PAIRH_CHROMA; and test "$DOOM_R53_PAIRH_CHROMA" = 1
+    if not set -q DOOM_R53_PAIRH_MICRO_RATIO; or test "$DOOM_R53_PAIRH_MICRO_RATIO" != 25
+        echo 'Pair-H chroma requires 25 percent 1px microdither'; exit 2
+    end
+    python3 scripts/lab/gen_r53_pairh_chroma.py; or exit 1
+end
 if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
     # Pure ROM tables: color fidelity gate and/or precomposed colormap.
     python3 scripts/lab/gen_r49_colormix.py; or exit 1
