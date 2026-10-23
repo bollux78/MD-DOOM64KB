@@ -27,6 +27,15 @@
 #if defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
 #include "r49_colormix_tables.h"
 #endif
+#if defined(DOOM_R53_PAIRH_MICRO)
+#if defined(DOOM_R48_PAIR_V) || defined(DOOM_R52_AB)
+#error Pair-H microdither cannot be combined with Pair-V or R52 AB
+#endif
+#if DOOM_R53_PAIRH_MICRO != 25
+#error Pair-H microdither currently supports only 25 percent
+#endif
+#include "r53_pairh_micro_tables.h"
+#endif
 #if defined(DOOM_R52_AB)
 #include "r52_ab_tables.h"
 #if defined(DOOM_R53_MICRO)
@@ -779,9 +788,29 @@ static void R47_LoadPairTiles(void)
         tile[4]=tile[5]=tile[6]=tile[7]=lower;
 #endif /* R53_MICRO */
 #else
+#if defined(DOOM_R53_PAIRH_MICRO)
+        /* Pair-H: two horizontal 4x4 samples in the upper tile half.
+         * Plane B remains vertically offset by -4; bottom rows transparent.
+         * 25 percent local microdither; no change to geometry or framebuffer.
+         * Source index zero remains transparent, and partner indices are
+         * selected offline from the existing single R22 palette. */
+        const uint8_t left=(uint8_t)(p>>4),right=(uint8_t)(p&15u);
+        for(uint16_t y=0;y<4u;y++){
+            uint32_t word=0;
+            for(uint16_t x=0;x<8u;x++){
+                uint8_t base=x<4u?left:right;
+                uint8_t partner=r53_pairh_partner[base];
+                uint8_t color=(uint8_t)(base && (((x&3u)+y)&3u)==0u ? partner : base);
+                word|=(uint32_t)color<<(28u-4u*x);
+            }
+            tile[y]=word;
+        }
+        tile[4]=tile[5]=tile[6]=tile[7]=0;
+#else
         const uint32_t top=R22_ExpandPair((uint8_t)p);
         tile[0]=tile[1]=tile[2]=tile[3]=top;
         tile[4]=tile[5]=tile[6]=tile[7]=0;
+#endif
 #endif
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
 #if defined(DOOM_R53_MICRO)
