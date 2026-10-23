@@ -52,6 +52,19 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
                 python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
             end
         end
+        # R58: approved ColorMatch CM6 palette codebook, retaining Werk's
+        # R57 H32/H40 geometry/menu untouched. Identical source generator to
+        # the successful CM6 PLAY build, replacing only the R56 LUT tables.
+        if set -q DOOM_R58_CM_VIEW; and test "$DOOM_R58_CM_VIEW" = 1
+            if not set -q DOOM_R56_DUAL_COLOR; or test "$DOOM_R56_DUAL_COLOR" != 1
+                echo 'R58 ColorMatch requires R56 dual-color Pair-V'; exit 2
+            end
+            if set -q DOOM_R57_PROFILE; or set -q DOOM_R55_WERK_VARIANT
+                echo 'R58 CM6 must use its pinned A6 snapshot, not R57/R55 profiles'; exit 2
+            end
+            python3 scripts/lab/gen_r57_colormatch.py --header src/r56_tables.h --out src/r56_tables.h --report src/r58_colormatch_report.json; or exit 1
+            python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h; or exit 1
+        end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
                 python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio "$DOOM_R53_MICRO_RATIO"; or exit 1
