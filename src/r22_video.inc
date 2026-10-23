@@ -1013,8 +1013,15 @@ static void R22_HUD(void){
         uint32_t counted=r54_game_tics-r54_tics_prev;
         uint16_t tps=(uint16_t)((counted*60u+r54_vb_elapsed/2u)/r54_vb_elapsed);
         if(tps>99)tps=99;
+#if defined(DOOM_R54_LOGIC_DIV)
+        /* Fractional 12.5Hz pilot: show truthful rate, not numerator 25. */
+        char label[16]="L12.5 TPS00";
+        label[9]=(char)('0'+tps/10);
+        label[10]=(char)('0'+tps%10);
+#else
         char label[16]={'L','0'+(DOOM_R54_LOGIC_HZ/10),'0'+(DOOM_R54_LOGIC_HZ%10),
                         ' ','T','P','S','0'+(tps/10),'0'+(tps%10),0};
+#endif
         R22_DrawText(VDP_BG_A,label,1,0);
         r54_vb_prev=_g_vblankCount;
         r54_tics_prev=r54_game_tics;
