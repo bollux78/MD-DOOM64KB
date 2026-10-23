@@ -20,6 +20,7 @@ code=r'''
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+
 #include "r22_pixel4.h"
 #include "r57_viewport.h"
 #define VIEWWINDOWWIDTH 76
@@ -28,6 +29,9 @@ code=r'''
 #define GS_LEVEL 1
 #define R48_COUNT(a,b) ((void)0)
 static int _g_gamestate;
+#if defined(DOOM_R57_VIEW_MENU)
+R57ViewConfig r57_view;
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
 uint8_t r57_crop_enabled=1;
 #endif
@@ -41,7 +45,11 @@ const uint8_t *source,*colormap;} draw_column_vars_t;
 '''+funcs+r'''
 static uint32_t rng=123456;
 static uint32_t rnd(void){rng=rng*1664525u+1013904223u;return rng;}
+static unsigned argnum(const char *s){unsigned n=0;while(*s)n=n*10+(*s++-'0');return n;}
 int main(int argc,char **argv){
+#if defined(DOOM_R57_VIEW_MENU)
+ assert(argc==4);r57_view=R57_ViewMake(argnum(argv[1]),argnum(argv[2]),argnum(argv[3]));
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
  r57_crop_enabled=(argc>1 && argv[1][0]=='1');
 #endif
@@ -54,7 +62,12 @@ int main(int argc,char **argv){
  for(int i=0;i<128;i++)source[i]=i*11u;
  for(int state=0;state<2;state++){
   _g_gamestate=state;
-  for(int trial=0;trial<1200;trial++){
+  #if defined(DOOM_R57_VIEW_MENU)
+  const int trials=184;
+#else
+  const int trials=1200;
+#endif
+  for(int trial=0;trial<trials;trial++){
    memset(&r22_fb,0xa5,sizeof(r22_fb));memset(r22_fb.pixels,0,R22_FB_BYTES);
    draw_column_vars_t v={(int16_t)((int)(rnd()%92)-8),
       (int16_t)((int)(rnd()%55)-10),0,(uint16_t)(rnd()%4000),
@@ -110,7 +123,7 @@ int main(int argc,char **argv){
 '''
 with tempfile.TemporaryDirectory() as td:
     p=Path(td);(p/'oracle.c').write_text(code)
-    for crop,extra in ((False,[]),(True,[]),(True,['-DDOOM_R57_NARROW256']),(True,['-DDOOM_R57_SIZE_MENU'])):
+    for crop,extra in ((False,[]),(True,[]),(True,['-DDOOM_R57_NARROW256']),(True,['-DDOOM_R57_SIZE_MENU']),(True,['-DDOOM_R57_VIEW_MENU'])):
         flags=['-DDOOM_R22_PIXEL4','-DDOOM_R48_PAIR_V','-DDOOM_R47_PLANE_PAIR',
                '-DDOOM_R47_FLAT_HOIST','-DDOOM_R47_SPRITE_HOIST','-DDOOM_R48_V_FAST',
                '-DDOOM_R56_DUAL_COLOR','-DDOOM_R11_LEFTCOL_CLIP','-DDOOM_R11_TOPBAR_CLIP']
@@ -119,6 +132,13 @@ with tempfile.TemporaryDirectory() as td:
         subprocess.run(['gcc','-std=c99','-O1','-g','-fsanitize=undefined',*flags,
                         '-I',str(r/'src'),str(p/'oracle.c'),'-o',str(p/'oracle')],check=True)
         
-        for mode in ('0','1') if '-DDOOM_R57_SIZE_MENU' in extra else ('1',):
-            subprocess.run([str(p/'oracle'),mode],check=True)
+        if '-DDOOM_R57_VIEW_MENU' in extra:
+            for mode in (0,1):
+                for h in (0,8,16,24,32):
+                    for v in (0,8,16,24,32):
+                        subprocess.run([str(p/'oracle'),str(mode),str(h),str(v)],check=True)
+            print('PASS all 50 runtime mode / horizontal crop / vertical crop combinations')
+        else:
+            for mode in ('0','1') if '-DDOOM_R57_SIZE_MENU' in extra else ('1',):
+                subprocess.run([str(p/'oracle'),mode],check=True)
         print('PASS actual raster scalar equivalence, level/nonlevel, 2400 randomized columns, guards, culling, DMA bounds:', 'crop16' if crop else 'full')

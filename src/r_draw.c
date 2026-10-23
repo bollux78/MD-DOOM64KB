@@ -1381,7 +1381,8 @@ static void R_DrawVisSprite(const vissprite_t *vis)
         dcvars.x = R57_XMIN;
     }
     if (frac < 0 || (frac >> FRACBITS) >= patch->width)return;
-    while (dcvars.x < (R57_CROP_ACTIVE ? R57_XEND : VIEWWINDOWWIDTH))
+    const int16_t sprite_end=R57_CROP_ACTIVE?R57_XEND:VIEWWINDOWWIDTH;
+    while (dcvars.x < sprite_end)
 #else
     while (dcvars.x < VIEWWINDOWWIDTH)
 #endif

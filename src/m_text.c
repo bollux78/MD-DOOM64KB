@@ -154,6 +154,11 @@ static void M_QuitDOOM(int16_t choice);
 
 static void M_ChangeMessages(int16_t choice);
 static void M_ChangeAlwaysRun(int16_t choice);
+#if defined(DOOM_R57_VIEW_MENU)
+static void M_ChangeVideoMode(int16_t choice){R57_ChangeView(0,choice);}
+static void M_ChangeHCrop(int16_t choice){R57_ChangeView(1,choice);}
+static void M_ChangeVCrop(int16_t choice){R57_ChangeView(2,choice);}
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
 static void M_ChangeScreenSize(int16_t choice){(void)choice;R57_SetCrop(!r57_crop_enabled);}
 #endif
@@ -574,6 +579,11 @@ enum
   endgame,
   messages,
   alwaysrun,
+#if defined(DOOM_R57_VIEW_MENU)
+  video_mode,
+  h_crop,
+  v_crop,
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
   screen_size,
 #endif
@@ -599,6 +609,11 @@ static const menuitem_t OptionsMenu[]=
   {1,"End Game",     M_EndGame},
   {1,"Messages:",    M_ChangeMessages},
   {1,"Always Run:",  M_ChangeAlwaysRun},
+#if defined(DOOM_R57_VIEW_MENU)
+  {2,"Video mode:", M_ChangeVideoMode},
+  {2,"H crop:",     M_ChangeHCrop},
+  {2,"V crop:",     M_ChangeVCrop},
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
   {1,"Screen size:", M_ChangeScreenSize},
 #endif
@@ -640,6 +655,17 @@ static void M_DrawOptions(void)
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * messages,  12, msgNames[showMessages]);
 
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * alwaysrun, 12, msgNames[_g_alwaysRun]);
+#if defined(DOOM_R57_VIEW_MENU)
+    static const char crop_names[5][6]={"0 px ","8 px ","16 px","24 px","32 px"};
+    V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*video_mode,12,r57_view.mode?"H32":"H40");
+    V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*h_crop,12,crop_names[r57_view.hcrop/8]);
+    V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*v_crop,12,crop_names[r57_view.vcrop/8]);
+    /* Fixed-width size label avoids stale digits after resizing. */
+    uint16_t w=(r57_view.xend-r57_view.xmin)*4u,h=(r57_view.yend-r57_view.ymin)*4u;
+    char size[13]={'V','I','E','W',' ',(char)('0'+w/100),(char)('0'+w/10%10),(char)('0'+w%10),
+                  'x',(char)('0'+h/100),(char)('0'+h/10%10),(char)('0'+h%10),0};
+    V_DrawString((R22_TEXTWIDTH-12)/2,OptionsDef.y+LINEHEIGHT*opt_end+2,12,size);
+#endif
 #if defined(DOOM_R57_SIZE_MENU)
     V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * screen_size,
                  12, r57_crop_enabled?"Crop16":"Full  ");
