@@ -1,0 +1,194 @@
+name: R53 Pair-H 25pct microdither visual A-B
+
+on:
+  push:
+    branches: [exp-r53-pairh-micro25]
+    paths:
+      - '.github/workflows/r53-pairh-micro25.yml'
+      - 'src/r22_video.inc'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/lab/gen_r53_pairh_micro.py'
+  workflow_dispatch:
+
+concurrency:
+  group: r53-pairh-micro25
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pairh-ab:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight toolchain and Pair-H layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 -m py_compile scripts/lab/gen_r53_pairh_micro.py
+          python3 scripts/lab/test_r47a_plane_pair.py
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          mkdir -p dist/r53-pairh-micro
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+
+      - name: Build Pair-H control and micro25 PLAY/PERF
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r53-pairh-micro
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          build () {
+            local mode="$1" kind="$2"
+            local bench=0 menu=0 static=0 reset=0
+            if [[ "$mode" == play ]]; then bench=1; menu=1; static=1; reset=1; fi
+            local micro=()
+            if [[ "$kind" == m25 ]]; then micro=(DOOM_R53_PAIRH_MICRO_RATIO=25); fi
+            local id="h-$kind-$mode"
+            echo "=== R53 Pair-H $id ==="
+            env "${micro[@]}" DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+              DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+              DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+              DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 DOOM_R47_SPRITE_HOIST=1 \
+              DOOM_R48_PAIR_V=0 DOOM_R48_V_FAST=0 \
+              DOOM_R49_COLORMIX=0 DOOM_R49_COMPLUT=0 DOOM_R49_RATIO=none \
+              DOOM_R52_AB=0 \
+              DOOM_R50_PLAY_BENCH="$bench" DOOM_R50_MENU_FREEZE="$menu" \
+              DOOM_R50_STATIC_MENU="$static" DOOM_R50_HARD_REINIT="$reset" \
+              DOOM_R50_RESET_SRAM=0 DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
+              DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" DOOM_R53_BUILD="$id" \
+              fish scripts/lab/build_r35_linear.fish "pixel4-$mode"
+            local path="dist/r35/doom-md-r53-$id"
+            cp "$path.bin" "$D/"
+            cp "dist/r35/flags-doom-md-r53-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$path.elf" > "$D/size-$id.txt"
+            if [[ "$kind" == m25 ]]; then
+              cp src/r53_pairh_micro_report.json "$D/micro-$id.json"
+            fi
+          }
+          for mode in play perf; do
+            build "$mode" control
+            build "$mode" m25
+          done
+
+      - name: Verify A-B ROMs and 1px 25pct pattern
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,re
+          from pathlib import Path
+          d=Path('dist/r53-pairh-micro')
+          roms=sorted(d.glob('doom-md-r53-h-*.bin'))
+          assert len(roms)==4,[r.name for r in roms]
+          rep=json.loads((d/'micro-h-m25-play.json').read_text())
+          p=rep['companion_map']
+          assert len(p)==16 and p[0]==0 and rep['active_count']>0
+          for v in range(256):
+              a,b=v>>4,v&15
+              for y in range(4):
+                  row=[(p[base] if base and (((x&3)+y)&3)==0 else base)
+                       for x in range(8) for base in [a if x<4 else b]]
+                  assert all(0<=c<16 for c in row)
+                  if a and p[a]!=a: assert sum(row[x]!=a for x in range(4))==1
+                  if b and p[b]!=b: assert sum(row[x]!=b for x in range(4,8))==1
+          assert 'VDP_setVerticalScroll(BG_B,-4)' in Path('src/r22_video.inc').read_text()
+          for r in roms:
+              assert r.stat().st_size>50000,(r.name,r.stat().st_size)
+              print(r.name,r.stat().st_size,hashlib.sha256(r.read_bytes()).hexdigest())
+          assert (d/'doom-md-r53-h-control-play.bin').read_bytes() != (d/'doom-md-r53-h-m25-play.bin').read_bytes()
+          assert (d/'doom-md-r53-h-control-perf.bin').read_bytes() != (d/'doom-md-r53-h-m25-perf.bin').read_bytes()
+          print('Pair-H micro25 oracle PASS; changed palette slots:',rep['active_count'])
+          PY
+
+      - name: BlastEm short PERF smoke (no video or desktop capture)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BLASTEM="$HOME/Projetos/blastem64-1.0.0/blastem"
+          test -x "$BLASTEM"
+          export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
+          for kind in control m25; do
+            rom="dist/r53-pairh-micro/doom-md-r53-h-$kind-perf.bin"
+            for frames in 800 6000; do
+              timeout 45s "$BLASTEM" -b "$frames" "$rom" > "dist/r53-pairh-micro/smoke-$kind-$frames.log" 2>&1
+              echo "PASS $kind $frames emulated frames"
+            done
+          done
+
+      - name: Notes and upload four ROMs
+        shell: bash
+        run: |
+          cat > dist/r53-pairh-micro/README.txt <<'EOF'
+          Experimental Pair-H single-palette microdither, from R53 source.
+          h-control = original Pair-H 8px tile geometry with flat/sprite hoist.
+          h-m25 = same geometry and palette with 25% local 1px microdither.
+          Both have PLAY and PERF builds; PERF launches DEMO3.
+          Unlike R53 N25A M25 Pair-V, these use original R22 one-plane palette.
+          Compare identical scenes, not color accuracy in isolation.
+          No desktop screenshots or videos captured by this workflow.
+          EOF
+      - uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r53-pairh-micro25-ab
+          path: dist/r53-pairh-micro/
+          retention-days: 90
