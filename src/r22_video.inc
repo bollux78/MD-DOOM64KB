@@ -35,6 +35,13 @@
 #include "r52_ab_tables.h"
 #if defined(DOOM_R56_DUAL_COLOR)
 #include "r56_tables.h"
+#if defined(DOOM_R59_COLOR_VIEW)
+#include "r59_color_tables.h"
+/* One byte of mode state; all large LUTs and pair books stay in ROM. */
+static uint8_t r59_color_mode;
+static uint8_t r59_color_dirty;
+#define R59_CURRENT (r59_color_tables[r59_color_mode])
+#endif
 #if defined(DOOM_R53_MICRO) || defined(DOOM_R55_FLAT_SAFE)
 #error R56 has its own Flat-Safe maps and dual-color patterns
 #endif
@@ -65,7 +72,11 @@ static inline const uint8_t *R52_LUT(const uint8_t *colormap,uint16_t parity)
     uint32_t diff=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
     if(diff>=R52_COLORMAP_BYTES || (diff&255u)!=0u)return 0;
     #if defined(DOOM_R56_DUAL_COLOR)
+#if defined(DOOM_R59_COLOR_VIEW)
+    return (parity?R59_CURRENT.comp_odd[0]:R59_CURRENT.comp_even[0])+diff;
+#else
     return (parity?r56_comp_odd[0]:r56_comp_even[0])+diff;
+#endif
 #else
     return (parity?r52_comp_odd:r52_comp_even)+diff;
 #endif
@@ -124,6 +135,16 @@ extern void R22_InitOpenings(void);
 void *R22_Alloc(uint16_t n) { return MEM_alloc(n); }
 static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;
 static volatile uint16_t r22_ready;
+#if defined(DOOM_R59_COLOR_VIEW)
+static void R47_LoadPairTiles(void);
+/* Options menu invokes only this setter, never VDP writes mid-menu. */
+uint8_t R59_ColorMode(void){return r59_color_mode;}
+void R59_ChangeColor(int16_t right){
+    R20_StopVideo(); /* no pending DMA may use old LUT/CRAM */
+    r59_color_mode=(uint8_t)((r59_color_mode+(right?1u:3u))&3u);
+    r59_color_dirty=1;
+}
+#endif
 /* R48 P0: count submitted/visible raster work, not 68000 cycles.
  * Instrumented PERF must not be used as a speed baseline.
  * Exactly 8 longs = 32 B of extra BSS; respect the Pair boot guard. */
@@ -465,7 +486,11 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
+    #if defined(DOOM_R59_COLOR_VIEW)
+    r52map=(v->x&1u)?R59_CURRENT.wall_odd:R59_CURRENT.wall_even;
+#else
     r52map=(v->x&1u)?r56_wall_odd:r56_wall_even;
+#endif
 #elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
 #endif
@@ -610,7 +635,11 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
+    #if defined(DOOM_R59_COLOR_VIEW)
+    r52map=(v->x&1u)?R59_CURRENT.wall_odd:R59_CURRENT.wall_even;
+#else
     r52map=(v->x&1u)?r56_wall_odd:r56_wall_even;
+#endif
 #elif defined(DOOM_R52_AB)
     r52map=(v->x&1u)?r52_odd:r52_even;
 #endif
@@ -760,7 +789,11 @@ void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
+    #if defined(DOOM_R59_COLOR_VIEW)
+    r52map=(v->x&1u)?R59_CURRENT.flat_odd:R59_CURRENT.flat_even;
+#else
     r52map=(v->x&1u)?r56_flat_odd:r56_flat_even;
+#endif
 #elif defined(DOOM_R55_FLAT_SAFE)
     r52map=(v->x&1u)?r55_flat_odd:r55_flat_even;
 #elif defined(DOOM_R52_AB)
@@ -846,8 +879,13 @@ void V_SetSTPalette(void){}
 static void R22_Palette(int8_t p){
     if(p<0)p=0;if(p>13)p=13;
 #if defined(DOOM_R56_DUAL_COLOR)
+#if defined(DOOM_R59_COLOR_VIEW)
+    PAL_setColors(0,R59_CURRENT.pal0[(uint8_t)p],16,DMA);
+    PAL_setColors(16,R59_CURRENT.pal1[(uint8_t)p],16,DMA);
+#else
     PAL_setColors(0,r56_pal0[(uint8_t)p],16,DMA);
     PAL_setColors(16,r56_pal1[(uint8_t)p],16,DMA);
+#endif
 #elif defined(DOOM_R52_AB)
     PAL_setColors(0,r52_pal0+(uint16_t)(uint8_t)p*16u,16,DMA);
     PAL_setColors(16,r52_pal1+(uint16_t)(uint8_t)p*16u,16,DMA);
@@ -911,7 +949,11 @@ static void R47_LoadPairTiles(void)
         uint8_t hi=(uint8_t)(p>>4),lo=(uint8_t)(p&15);
 #if defined(DOOM_R56_DUAL_COLOR)
         for(uint16_t y=0;y<8;y++)
+            #if defined(DOOM_R59_COLOR_VIEW)
+            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_even);
+#else
             tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_even);
+#endif
 #elif defined(DOOM_R53_MICRO)
         for(uint16_t y=0;y<8;y++){
             uint8_t base=(y<4u)?hi:lo;
@@ -947,7 +989,11 @@ static void R47_LoadPairTiles(void)
         VDP_loadTileData(tile,R22_PAIR_TILE_BASE+p,1,CPU);
 #if defined(DOOM_R56_DUAL_COLOR)
         for(uint16_t y=0;y<8;y++)
+            #if defined(DOOM_R59_COLOR_VIEW)
+            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_odd);
+#else
             tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_odd);
+#endif
         VDP_loadTileData(tile,(uint16_t)(R22_PAIR_TILE_BASE+256u+p),1,CPU);
 #elif defined(DOOM_R53_MICRO)
         for(uint16_t y=0;y<8;y++){
@@ -1153,6 +1199,21 @@ void R22_BeginFrame(void){
     /* Complete the old flip before VDP use, retaining the displayed menu
        throughout title/raster work. Text replacement happens just-in-time. */
     R20_StopVideo();r22_text_this_frame=0;
+#if defined(DOOM_R59_COLOR_VIEW)
+    if(r59_color_dirty){
+        /* A profile changes pair patterns AND CRAM. Blank display while
+         * replacing all 512 shared VRAM patterns. No second framebuffer.
+         * Synchronous CRAM writes avoid SGDK deferred DMA palette mismatch. */
+        VDP_setEnable(FALSE);
+        VDP_waitDMACompletion();
+        R47_LoadPairTiles();
+        PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU);
+        PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU);
+        VDP_waitDMACompletion();
+        r59_color_dirty=0;
+        VDP_setEnable(TRUE);
+    }
+#endif
 #if defined(DOOM_R57_H32)
     R57_VideoMode();
 #endif
@@ -1376,6 +1437,9 @@ void I_InitGraphicsHardwareSpecificCode(void){
     R22_Unlock(sr);
 #if defined(DOOM_R47_PLANE_PAIR)
     R47_LoadPairTiles();
+#endif
+#if defined(DOOM_R59_COLOR_VIEW)
+    r59_color_dirty=0; /* hardware reset already loaded active pair book */
 #endif
     R22_InitOpenings();R22_Palette(0);r22_newpal=100;
 #if defined(DOOM_R51_HW_WEAPON)
