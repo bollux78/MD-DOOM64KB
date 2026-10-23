@@ -43,8 +43,13 @@ def main():
             if profile=='legacy8':
                 backend='cell'
                 for key in ('DOOM_R52_AB','DOOM_R52_CLAUDIO','DOOM_R52_CPLUT','DOOM_R56_DUAL_COLOR',
-                            'DOOM_R47_PLANE_PAIR','DOOM_R48_PAIR_V','DOOM_R48_V_FAST'):
+                            'DOOM_R47_PLANE_PAIR','DOOM_R48_PAIR_V','DOOM_R48_V_FAST',
+                            'DOOM_R42_WALL_ASM','DOOM_R47_FLAT_HOIST','DOOM_R47_SPRITE_HOIST',
+                            'DOOM_R50_PLAY_BENCH','DOOM_R50_MENU_FREEZE','DOOM_R50_STATIC_MENU',
+                            'DOOM_R50_HARD_REINIT'):
                     env[key]='0'
+                env.pop('DOOM_R45_VARIANT',None)
+                env.pop('DOOM_R40_STAGE1',None)
             else:
                 env['DOOM_R57_PROFILE']=profile;env['DOOM_R57_TABLES_DIR']=str(tables)
             print('BUILD R57',name,flush=True)
