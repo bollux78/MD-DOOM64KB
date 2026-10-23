@@ -626,6 +626,14 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R57_CROP16'
     end
+    for feature in DOOM_R57_SIZE_MENU DOOM_R57_NARROW256 DOOM_R57_H32
+        if set -q $feature; and test "$$feature" = 1
+            if not set -q DOOM_R57_CROP16; or test "$DOOM_R57_CROP16" != 1
+                echo "$feature requires R57 crop16"; exit 2
+            end
+            set defs $defs -D$feature
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf

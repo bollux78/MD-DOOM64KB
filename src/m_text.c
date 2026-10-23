@@ -44,6 +44,7 @@
 #include "s_sound.h"
 #include "sounds.h"
 #include "m_menu.h"
+#include "r57_viewport.h"
 #include "doomtype.h"
 #include "am_map.h"
 #include "i_system.h"
@@ -153,6 +154,9 @@ static void M_QuitDOOM(int16_t choice);
 
 static void M_ChangeMessages(int16_t choice);
 static void M_ChangeAlwaysRun(int16_t choice);
+#if defined(DOOM_R57_SIZE_MENU)
+static void M_ChangeScreenSize(int16_t choice){(void)choice;R57_SetCrop(!r57_crop_enabled);}
+#endif
 #if defined(DOOM_R39D_DITHER_TOGGLE)
 static void M_ChangeDithering(int16_t choice);
 #endif
@@ -570,6 +574,9 @@ enum
   endgame,
   messages,
   alwaysrun,
+#if defined(DOOM_R57_SIZE_MENU)
+  screen_size,
+#endif
 #if defined(DOOM_R39D_DITHER_TOGGLE)
   dithering,
 #endif
@@ -592,6 +599,9 @@ static const menuitem_t OptionsMenu[]=
   {1,"End Game",     M_EndGame},
   {1,"Messages:",    M_ChangeMessages},
   {1,"Always Run:",  M_ChangeAlwaysRun},
+#if defined(DOOM_R57_SIZE_MENU)
+  {1,"Screen size:", M_ChangeScreenSize},
+#endif
 #if defined(DOOM_R39D_DITHER_TOGGLE)
   {1,"Dithering:",   M_ChangeDithering},
 #endif
@@ -630,6 +640,10 @@ static void M_DrawOptions(void)
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * messages,  12, msgNames[showMessages]);
 
 	V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * alwaysrun, 12, msgNames[_g_alwaysRun]);
+#if defined(DOOM_R57_SIZE_MENU)
+    V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * screen_size,
+                 12, r57_crop_enabled?"Crop16":"Full  ");
+#endif
 #if defined(DOOM_R39D_DITHER_TOGGLE)
 #if defined(DOOM_R39F_DITHER3)
     V_DrawString(OptionsDef.x + 13, OptionsDef.y + LINEHEIGHT * dithering,

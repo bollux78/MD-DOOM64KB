@@ -5,12 +5,26 @@
  */
 #ifndef R57_VIEWPORT_H
 #define R57_VIEWPORT_H
+#if !defined(DOOM_R57_CROP16)
+#define R57_CROP_ACTIVE 1
+#endif
 #if defined(DOOM_R57_CROP16)
 #if !defined(DOOM_R22_PIXEL4) || !defined(DOOM_R48_PAIR_V) || !defined(DOOM_R47_PLANE_PAIR)
 #error R57 crop16 requires the native pixel4 Pair-V backend
 #endif
 #define R57_XMIN 6
+#if defined(DOOM_R57_NARROW256)
+#define R57_XEND 70
+#else
 #define R57_XEND 72
+#endif
+#if defined(DOOM_R57_SIZE_MENU)
+extern uint8_t r57_crop_enabled;
+void R57_SetCrop(uint8_t enabled);
+#define R57_CROP_ACTIVE (r57_crop_enabled != 0)
+#else
+#define R57_CROP_ACTIVE 1
+#endif
 #define R57_YMIN 6
 #define R57_YEND 40
 #define R57_TILE_XMIN (R57_XMIN / 2)

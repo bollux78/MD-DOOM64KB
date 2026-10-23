@@ -166,6 +166,9 @@ void I_BenchmarkShowResults(void)
 #endif
     R21_PROBE_HEAP();
     R21_TEXT_SCREEN();
+#if defined(DOOM_R57_H32)
+    VDP_setScreenWidth320();
+#endif
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
 #if defined(DOOM_BUILD_VARIANT)

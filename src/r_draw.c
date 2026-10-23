@@ -1376,12 +1376,12 @@ static void R_DrawVisSprite(const vissprite_t *vis)
 
     dcvars.x = vis->x1;
 #if defined(DOOM_R57_CROP16)
-    if (dcvars.x < R57_XMIN) {
+    if (R57_CROP_ACTIVE && dcvars.x < R57_XMIN) {
         frac += vis->xiscale * (R57_XMIN - dcvars.x);
         dcvars.x = R57_XMIN;
     }
     if (frac < 0 || (frac >> FRACBITS) >= patch->width)return;
-    while (dcvars.x < R57_XEND)
+    while (dcvars.x < (R57_CROP_ACTIVE ? R57_XEND : VIEWWINDOWWIDTH))
 #else
     while (dcvars.x < VIEWWINDOWWIDTH)
 #endif
@@ -3111,8 +3111,8 @@ static void R_ClearOpeningClippingDetermination(void)
     for (uint8_t i = 0; i < VIEWWINDOWWIDTH; i++)
     {
 #if defined(DOOM_R57_CROP16)
-        floorclip[i] = R57_YEND;
-        ceilingclip[i] = R57_YMIN - 1;
+        floorclip[i] = R57_CROP_ACTIVE ? R57_YEND : VIEWWINDOWHEIGHT;
+        ceilingclip[i] = R57_CROP_ACTIVE ? R57_YMIN - 1 : 0;
 #else
         floorclip[i] = VIEWWINDOWHEIGHT;
 #if defined(DOOM_R11_TOPBAR_CLIP)
@@ -4016,8 +4016,10 @@ static void R_ClearClipSegs (void)
     memset(solidcol, 0, VIEWWINDOWWIDTH);
 #if defined(DOOM_R57_CROP16)
     /* Exclude edge columns before BSP/texture work, not after rasterizing. */
-    memset(solidcol, 1, R57_XMIN);
-    memset(solidcol + R57_XEND, 1, VIEWWINDOWWIDTH - R57_XEND);
+    if(R57_CROP_ACTIVE){
+        memset(solidcol, 1, R57_XMIN);
+        memset(solidcol + R57_XEND, 1, VIEWWINDOWWIDTH - R57_XEND);
+    }
 #endif
 #if defined(DOOM_R11_LEFTCOL_CLIP)
     /* Column 0 is a permanent black border, not a visible wall column.

@@ -144,12 +144,33 @@ static uint32_t r48_prof[R48_STATS_N];
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
+static uint8_t r22_overlay_dirty,r22_text_this_frame;
 #if defined(DOOM_R57_CROP16)
 static uint8_t r57_queued_crop;
 static uint8_t r57_was_level;
+#if defined(DOOM_R57_SIZE_MENU)
+uint8_t r57_crop_enabled=1;
+void R57_SetCrop(uint8_t enabled){
+    R20_StopVideo();r57_crop_enabled=(enabled!=0);r57_was_level=0;
+}
+#endif
+#if defined(DOOM_R57_H32)
+static uint8_t r57_h32_active,r57_hud_dirty;
+static void R57_VideoMode(void){
+    uint8_t desired=(_g_gamestate==GS_LEVEL && (!_g_menuactive || _g_demoplayback));
+    if(desired==r57_h32_active)return;
+    VDP_setEnable(FALSE);VDP_waitDMACompletion();
+    if(desired)VDP_setScreenWidth256();else VDP_setScreenWidth320();
+    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
+    VDP_waitDMACompletion();
+    VDP_setHorizontalScroll(BG_A,desired?-24:0);
+    VDP_setHorizontalScroll(BG_B,desired?-20:4);
+    r57_h32_active=desired;r57_hud_dirty=1;r57_was_level=0;r22_overlay_dirty=0;
+    VDP_setEnable(TRUE);
+}
+#endif
 
 #endif
-static uint8_t r22_overlay_dirty,r22_text_this_frame;
 /* R40b: No additional WRAM.  The 38x21 4x4 VDP tilemap is used only
  * during raster gameplay, never while a native 320x224 static picture is
  * active.  Reuse its first 210 bytes as two 105-byte occupancy masks to
@@ -210,6 +231,10 @@ static void R57_ClearBorder(void){
 }
 #endif
 static void R22_DrawText(uint16_t plane,const char *s,uint16_t x,uint16_t y){
+#if defined(DOOM_R57_H32)
+    /* Gameplay planes scroll -24px. Text coordinates remain screen-relative. */
+    if(r57_h32_active){if(x>=32)return;x+=3;}
+#endif
     if(x>=38 || y>=28)return;
     R20_StopVideo();
     uint16_t sr=R22_Lock();
@@ -400,10 +425,11 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     if((uint16_t)x>=R22_W || (uint16_t)y>=R22_H)return;
     /* Same8px top/left safety border as the38x22 reference. */
 #if defined(DOOM_R57_CROP16)
-    if(_g_gamestate==GS_LEVEL &&
-       (x<R57_XMIN || x>=R57_XEND || y<R57_YMIN || y>=R57_YEND))return;
+    if(_g_gamestate==GS_LEVEL && (R57_CROP_ACTIVE ?
+       (x<R57_XMIN || x>=R57_XEND || y<R57_YMIN || y>=R57_YEND) :
+       (x<2 || y<2)))return;
 #else
-    if(_g_gamestate==GS_LEVEL && (x<2 || y<2))return;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && (x<2 || y<2))return;
 #endif
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
@@ -420,11 +446,11 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W)return;
 #if defined(DOOM_R57_CROP16)
-    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
-    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
-    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+    int16_t border=(_g_gamestate==GS_LEVEL)?(R57_CROP_ACTIVE?R57_YMIN:2):0;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
 #endif
     if(x<border)return;
     int16_t first=y0;
@@ -558,11 +584,11 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
 #if defined(DOOM_R57_CROP16)
-    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
-    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
-    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+    int16_t border=(_g_gamestate==GS_LEVEL)?(R57_CROP_ACTIVE?R57_YMIN:2):0;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
 #endif
     if(x<border) return;
     int16_t first=y0;
@@ -711,11 +737,11 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
 #if defined(DOOM_R57_CROP16)
-    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
-    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
-    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+    int16_t border=(_g_gamestate==GS_LEVEL)?(R57_CROP_ACTIVE?R57_YMIN:2):0;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
+    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
 #endif
     if(x<border) return;
     if(y0<border)y0=border;
@@ -1086,6 +1112,9 @@ void R22_BeginFrame(void){
     /* Complete the old flip before VDP use, retaining the displayed menu
        throughout title/raster work. Text replacement happens just-in-time. */
     R20_StopVideo();r22_text_this_frame=0;
+#if defined(DOOM_R57_H32)
+    R57_VideoMode();
+#endif
 #if defined(DOOM_R51_HW_WEAPON)
     R51_WeaponBeginFrame();
 #endif
@@ -1169,19 +1198,40 @@ static void R22_HUD(void){
     uint16_t h=_g_player.mo?_g_player.mo->health:_g_player.health,a=_g_player.armorpoints,b=_g_player.ammo[am_clip];
     VDP_setTextPlane(BG_A);VDP_setTextPalette(PAL0);VDP_setTextPriority(TRUE);
     if(h!=health||a!=armor||b!=ammo
+#if defined(DOOM_R57_H32)
+       ||r57_hud_dirty
+#endif
 #if defined(DOOM_R51_HW_HUD)
        ||r51_hud_text_dirty
 #endif
     ){
+#if defined(DOOM_R57_H32)
+        if(r57_h32_active){
+            R22_DrawText(R51_HUD_TEXT_PLANE,"H",1,23);R22_Num3(3,23,h);
+            R22_DrawText(R51_HUD_TEXT_PLANE,"A",10,23);R22_Num3(12,23,a);
+            R22_DrawText(R51_HUD_TEXT_PLANE,"AMMO",20,23);R22_Num3(25,23,b);
+            R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - H32",1,25);
+        }else{
+#endif
         R22_DrawText(R51_HUD_TEXT_PLANE,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(R51_HUD_TEXT_PLANE,"ARMOR",13,23);R22_Num3(19,23,a);
         R22_DrawText(R51_HUD_TEXT_PLANE,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
         R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - 76x44",1,25);
+#if defined(DOOM_R57_H32)
+        }
+        health=h;armor=a;ammo=b;r57_hud_dirty=0;
+#endif
 #if defined(DOOM_R51_HW_HUD)
         r51_hud_text_dirty=0;
 #endif
     }
     static uint32_t vb;static uint16_t frames;frames++;
-    uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,31,0);frames=0;vb=_g_vblankCount;}
+    uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,
+#if defined(DOOM_R57_H32)
+        r57_h32_active?24:31,
+#else
+        31,
+#endif
+        0);frames=0;vb=_g_vblankCount;}
 }
 void I_FinishUpdate(void){
 #if defined(DOOM_R35_ART_RAW)
@@ -1197,12 +1247,15 @@ void I_FinishUpdate(void){
             return; /* Native picture remains in VRAM. */
         }
         R35_LeaveNative4(); /* Gameplay uses the original p4 pipeline. */
+#if defined(DOOM_R57_H32)
+        if(r57_h32_active){VDP_setHorizontalScroll(BG_A,-24);VDP_setHorizontalScroll(BG_B,-20);}
+#endif
     }
 #endif
     if(r22_fb.before!=R22_GUARD||r22_fb.after!=R22_GUARD)I_Error("PX4 framebuffer guard");
     R20_StopVideo();R22_EndOverlay();
 #if defined(DOOM_R57_CROP16)
-    r57_queued_crop=(_g_gamestate==GS_LEVEL);
+    r57_queued_crop=(_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE);
     if(r57_queued_crop && !r57_was_level)R57_ClearBorder();
     r57_was_level=r57_queued_crop;
 #endif
