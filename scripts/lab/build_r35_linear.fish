@@ -37,7 +37,16 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
             python3 scripts/lab/r55_werk_snapshot.py --variant "$DOOM_R55_WERK_VARIANT" --repo . --out src; or exit 1
         end
         if set -q DOOM_R56_DUAL_COLOR; and test "$DOOM_R56_DUAL_COLOR" = 1
-            if set -q DOOM_R56_CLAUDIO_PROFILE; and test "$DOOM_R56_CLAUDIO_PROFILE" = a4
+            if set -q DOOM_R57_PROFILE
+                if not string match -qr '^[a-z0-9][a-z0-9-]*$' -- "$DOOM_R57_PROFILE"
+                    echo 'Invalid R57 profile'; exit 2
+                end
+                if not set -q DOOM_R57_TABLES_DIR; or not test -f "$DOOM_R57_TABLES_DIR/$DOOM_R57_PROFILE.h"
+                    echo 'Generate R57 tables first'; exit 2
+                end
+                cp "$DOOM_R57_TABLES_DIR/$DOOM_R57_PROFILE.h" src/r56_tables.h; or exit 1
+                python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h; or exit 1
+            else if set -q DOOM_R56_CLAUDIO_PROFILE; and test "$DOOM_R56_CLAUDIO_PROFILE" = a4
                 python3 scripts/lab/r56_claudio_a4_snapshot.py --out src/r56_tables.h; or exit 1
             else
                 python3 scripts/lab/r56_claudio_snapshot.py --out src/r56_tables.h; or exit 1
@@ -867,6 +876,12 @@ for v in $variants
             echo 'Invalid R56 build id'; exit 2
         end
         set id doom-md-r56-$DOOM_R56_BUILD
+    end
+    if set -q DOOM_R57_BUILD
+        if not string match -qr '^[a-z0-9][a-z0-9-]*$' -- "$DOOM_R57_BUILD"
+            echo 'Invalid R57 build id'; exit 2
+        end
+        set id doom-md-r57-$DOOM_R57_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
