@@ -26,3 +26,6 @@ A branch é isolada: exp-r57-colormatch-prepared. Não disparar um novo job até
 ## Limitações e verificações pendentes
 
 O modelo usa o histograma do COLORMAP como proxy, não a distribuição real de pixels do timedemo. O gerador e sua integração precisam passar pelo pipeline de build antes de considerarmos a ROM pronta; nenhum desempenho ou fidelidade visual foi validado ainda. Uma instância de runner self-hosted executa normalmente um job por vez, e jobs concorrentes são enfileirados.
+
+## Execução autorizada
+Em 23/10/2026, o usuário solicitou iniciar a compilação experimental após revisar as R57 do Werk. Este registro ativa o workflow isolado, sem alterar a branch R57 do Werk.
