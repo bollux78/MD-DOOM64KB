@@ -53,6 +53,7 @@
 #include "m_random.h"
 
 #include "globdata.h"
+#include "r57_viewport.h"
 #include "r24_romthings.h"
 #if defined(DOOM_R25_MUSIC)
 #include "r22_blocklinks.h"
@@ -1374,8 +1375,16 @@ static void R_DrawVisSprite(const vissprite_t *vis)
     const patch_t __far* patch = W_GetLumpByNum(vis->lump_num);
 
     dcvars.x = vis->x1;
-
+#if defined(DOOM_R57_CROP16)
+    if (dcvars.x < R57_XMIN) {
+        frac += vis->xiscale * (R57_XMIN - dcvars.x);
+        dcvars.x = R57_XMIN;
+    }
+    if (frac < 0 || (frac >> FRACBITS) >= patch->width)return;
+    while (dcvars.x < R57_XEND)
+#else
     while (dcvars.x < VIEWWINDOWWIDTH)
+#endif
     {
         const column_t __far* column = (const column_t __far*) ((const byte __far*)patch + patch->columnofs[frac >> FRACBITS]);
         R_DrawMaskedColumn(colfunc, &dcvars, column);
@@ -3101,11 +3110,16 @@ static void R_ClearOpeningClippingDetermination(void)
        columns begin at y=1 while retaining the exact 38x24 projection. */
     for (uint8_t i = 0; i < VIEWWINDOWWIDTH; i++)
     {
+#if defined(DOOM_R57_CROP16)
+        floorclip[i] = R57_YEND;
+        ceilingclip[i] = R57_YMIN - 1;
+#else
         floorclip[i] = VIEWWINDOWHEIGHT;
 #if defined(DOOM_R11_TOPBAR_CLIP)
         ceilingclip[i] = 0;
 #else
         ceilingclip[i] = -1;
+#endif
 #endif
     }
 }
@@ -4000,6 +4014,11 @@ static void R_ClearDrawSegs(void)
 static void R_ClearClipSegs (void)
 {
     memset(solidcol, 0, VIEWWINDOWWIDTH);
+#if defined(DOOM_R57_CROP16)
+    /* Exclude edge columns before BSP/texture work, not after rasterizing. */
+    memset(solidcol, 1, R57_XMIN);
+    memset(solidcol + R57_XEND, 1, VIEWWINDOWWIDTH - R57_XEND);
+#endif
 #if defined(DOOM_R11_LEFTCOL_CLIP)
     /* Column 0 is a permanent black border, not a visible wall column.
        Mark it solid before BSP traversal: R_ClipWallSegment and R_CheckBBox

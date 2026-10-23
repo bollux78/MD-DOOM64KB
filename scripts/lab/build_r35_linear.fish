@@ -620,6 +620,12 @@ for v in $variants
             set defs $defs '-DDOOM_R46_M6A_LAYOUT'
         end
     end
+    if set -q DOOM_R57_CROP16; and test "$DOOM_R57_CROP16" = 1
+        if not string match -q 'pixel4-*' -- $v
+            echo 'R57 crop16 requires pixel4'; exit 2
+        end
+        set defs $defs '-DDOOM_R57_CROP16'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf

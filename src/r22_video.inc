@@ -18,6 +18,7 @@
 #include "r21_prof.h"
 #include "r20_counters.h"
 #include "r22_pixel4.h"
+#include "r57_viewport.h"
 #if defined(DOOM_R43_GRAY_CRT)
 #include "r43_gray_palette.h" /* 4x4 CRAM/LUT only; Bayer8 still unchanged. */
 #else
@@ -143,6 +144,11 @@ static uint32_t r48_prof[R48_STATS_N];
 static volatile uint16_t r22_front;
 static uint16_t r22_next_bank;
 static uint32_t r22_queued;
+#if defined(DOOM_R57_CROP16)
+static uint8_t r57_queued_crop;
+static uint8_t r57_was_level;
+
+#endif
 static uint8_t r22_overlay_dirty,r22_text_this_frame;
 /* R40b: No additional WRAM.  The 38x21 4x4 VDP tilemap is used only
  * during raster gameplay, never while a native 320x224 static picture is
@@ -181,6 +187,28 @@ static inline void R22_Unlock(uint16_t sr){__asm__ volatile("move.w %0,%%sr"::"d
 #endif
 /* SDK text helpers use a 256-byte stack array. Write bounded glyphs directly,
    with exclusive ownership of the VDP address/data ports for the whole string. */
+#if defined(DOOM_R57_CROP16)
+/* Clear only excluded tiles when entering a cropped level. Normal native
+ * transitions already clear both planes. Never clear the HUD or FPS row. */
+static void R57_ClearBorder(void){
+    uint16_t sr=R22_Lock();
+    volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
+    volatile uint16_t *data=(volatile uint16_t*)0xC00000;
+    VDP_setAutoInc(2);
+    for(uint16_t plane=0;plane<2;plane++){
+        uint16_t base=plane?VDP_BG_B:VDP_BG_A;
+        for(uint16_t y=1;y<22;y++){
+            *ctrl=VDP_WRITE_VRAM_ADDR(base+y*128);
+            for(uint16_t x=0;x<38;x++){
+                if(y<R57_TILE_YMIN || y>=R57_TILE_YEND ||
+                   x<R57_TILE_XMIN || x>=R57_TILE_XEND)*data=0;
+                else *ctrl=VDP_WRITE_VRAM_ADDR(base+y*128+(x+1)*2);
+            }
+        }
+    }
+    R22_Unlock(sr);
+}
+#endif
 static void R22_DrawText(uint16_t plane,const char *s,uint16_t x,uint16_t y){
     if(x>=38 || y>=28)return;
     R20_StopVideo();
@@ -371,7 +399,12 @@ static inline uint8_t R49_MapSample(uint8_t sample,const uint8_t *colormap,
 static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
     if((uint16_t)x>=R22_W || (uint16_t)y>=R22_H)return;
     /* Same8px top/left safety border as the38x22 reference. */
+#if defined(DOOM_R57_CROP16)
+    if(_g_gamestate==GS_LEVEL &&
+       (x<R57_XMIN || x>=R57_XEND || y<R57_YMIN || y>=R57_YEND))return;
+#else
     if(_g_gamestate==GS_LEVEL && (x<2 || y<2))return;
+#endif
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
 void R_DrawColumnSprite(const draw_column_vars_t *v) {
@@ -386,7 +419,13 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
      * sprite read-modify-write required to preserve the neighbouring nibble. */
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W)return;
+#if defined(DOOM_R57_CROP16)
+    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
+    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
+    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+#else
     int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+#endif
     if(x<border)return;
     int16_t first=y0;
     if(first<border)first=border;
@@ -518,7 +557,13 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
 #endif
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
+#if defined(DOOM_R57_CROP16)
+    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
+    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
+    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+#else
     int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+#endif
     if(x<border) return;
     int16_t first=y0;
     if(first<border) first=border;
@@ -665,7 +710,13 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
      * Does not alter R39f's independent 8x8 backend. */
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
+#if defined(DOOM_R57_CROP16)
+    int16_t border=(_g_gamestate==GS_LEVEL)?R57_YMIN:0;
+    if(_g_gamestate==GS_LEVEL && x>=R57_XEND)return;
+    if(_g_gamestate==GS_LEVEL && y1>=R57_YEND)y1=R57_YEND-1;
+#else
     int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
+#endif
     if(x<border) return;
     if(y0<border)y0=border;
     if(y0<0)y0=0;
@@ -911,9 +962,20 @@ void R20_VBlankVideo(void){
     const uint16_t *srcb=R22_PairRow(r22_fb.pixels,3);
 #endif
     uint16_t dsta=VDP_BG_A+128,dstb=VDP_BG_B+128;
-    for(uint16_t y=1;y<22;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){
+    uint16_t first_row=1,end_row=22,words_per_row=38;
+#if defined(DOOM_R57_CROP16)
+    if(r57_queued_crop){
+        first_row=R57_TILE_YMIN;end_row=R57_TILE_YEND;
+        words_per_row=R57_DMA_WORDS;
+        srca+=(first_row-1)*76+R57_TILE_XMIN;
+        srcb+=(first_row-1)*76+R57_TILE_XMIN;
+        dsta+=(first_row-1)*128+R57_TILE_XMIN*2;
+        dstb+=(first_row-1)*128+R57_TILE_XMIN*2;
+    }
+#endif
+    for(uint16_t y=first_row;y<end_row;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){
         uint32_t a=((uint32_t)(uintptr_t)srca)>>1;
-        *ctrl=0x9300|38;*ctrl=0x9400;
+        *ctrl=0x9300|words_per_row;*ctrl=0x9400;
         *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
         volatile uint32_t command=VDP_DMA_VRAM_ADDR(dsta);
         volatile uint16_t *words=(volatile uint16_t*)&command;
@@ -921,7 +983,7 @@ void R20_VBlankVideo(void){
         __asm__ volatile("move.w %0,(%1)"::"m"(words[1]),"a"(ctrl):"cc","memory");
         if(!r22_overlay_dirty){
             a=((uint32_t)(uintptr_t)srcb)>>1;
-            *ctrl=0x9300|38;*ctrl=0x9400;
+            *ctrl=0x9300|words_per_row;*ctrl=0x9400;
             *ctrl=0x9500|(a&255);*ctrl=0x9600|((a>>8)&255);*ctrl=0x9700|((a>>16)&127);
             command=VDP_DMA_VRAM_ADDR(dstb);
             words=(volatile uint16_t*)&command;
@@ -1139,6 +1201,11 @@ void I_FinishUpdate(void){
 #endif
     if(r22_fb.before!=R22_GUARD||r22_fb.after!=R22_GUARD)I_Error("PX4 framebuffer guard");
     R20_StopVideo();R22_EndOverlay();
+#if defined(DOOM_R57_CROP16)
+    r57_queued_crop=(_g_gamestate==GS_LEVEL);
+    if(r57_queued_crop && !r57_was_level)R57_ClearBorder();
+    r57_was_level=r57_queued_crop;
+#endif
 #if defined(DOOM_R20_STACKGUARD)
     static uint8_t sample;R20_PROBE();if((sample++&15u)==0)R20_DiagSample();
 #endif
