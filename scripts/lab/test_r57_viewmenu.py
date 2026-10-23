@@ -21,7 +21,7 @@ code=r'''
 #define WINDOW 2
 R57ViewConfig r57_view;
 static R57ViewConfig queued;
-static int pending,waits,enabled=1,hardware_width=320,scroll[2]={0,4},cleared;
+static int pending,waits,enabled=1,hardware_width=320,scroll[2]={0,4},cleared,window_h,window_v;
 static uint8_t r57_was_level,r57_h32_active,r57_hud_dirty,r22_overlay_dirty;
 static int _g_gamestate,_g_menuactive,_g_demoplayback;
 void R20_StopVideo(void){if(pending)assert(memcmp(&queued,&r57_view,sizeof(queued))==0);pending=0;}
@@ -30,6 +30,8 @@ void VDP_waitDMACompletion(void){assert(!pending);waits++;}
 void VDP_setScreenWidth256(void){assert(!enabled);hardware_width=256;}
 void VDP_setScreenWidth320(void){assert(!enabled);hardware_width=320;}
 void VDP_clearPlane(int plane,int dma){assert(!enabled && dma==TRUE);cleared|=1<<plane;}
+void VDP_setWindowHPos(int side,int pos){assert(!enabled && !side && !pos);window_h=0;}
+void VDP_setWindowVPos(int side,int pos){assert(!enabled && !side && !pos);window_v=0;}
 void VDP_setHorizontalScroll(int plane,int value){assert(!enabled);scroll[plane]=value;}
 '''+function('R57_ChangeView')+'\n'+function('R57_VideoMode')+r'''
 static void geometry(void){
@@ -54,10 +56,11 @@ int main(void){
   r57_view=R57_ViewMake(mode,16,32);_g_gamestate=level;_g_menuactive=menu;_g_demoplayback=demo;
   int desired=mode && level && !menu;
   /* Force both transition directions, after the old frame is retired. */
-  r57_h32_active=!desired;queued=r57_view;pending=1;R20_StopVideo();cleared=0;
+  r57_h32_active=!desired;queued=r57_view;pending=1;R20_StopVideo();cleared=0;window_h=window_v=1;
   R57_VideoMode();
   assert(enabled && r57_h32_active==desired && hardware_width==(desired?256:320));
   assert(scroll[0]==(desired?-24:0) && scroll[1]==(desired?-20:4));
+  assert(!window_h && !window_v);
   assert(cleared==7 && r57_hud_dirty && !r57_was_level && !r22_overlay_dirty);
   int before=waits;R57_VideoMode();assert(waits==before); /* stable mode adds no VDP writes */
  }

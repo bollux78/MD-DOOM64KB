@@ -189,6 +189,9 @@ static void R57_VideoMode(void){
     if(desired)VDP_setScreenWidth256();else VDP_setScreenWidth320();
     VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
     VDP_waitDMACompletion();
+    /* A full-screen Window replaces plane A even when its tiles are zero.
+     * Retire that menu mask explicitly before marking the overlay clean. */
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
     VDP_setHorizontalScroll(BG_A,desired?-24:0);
     VDP_setHorizontalScroll(BG_B,desired?-20:4);
     r57_h32_active=desired;r57_hud_dirty=1;r57_was_level=0;r22_overlay_dirty=0;

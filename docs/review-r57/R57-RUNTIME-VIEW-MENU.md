@@ -28,7 +28,9 @@ Setter waits for the queued frame BEFORE mutating geometry; geometry then
 remains stable while DMA is pending. A transition invalidates border state;
 excluded cells are cleared and expanded areas refill on the next render.
 Mode switch retires the old frame, blanks display, completes DMA, switches
-width, clears the planes, restores scroll and invalidates cached HUD text.
+width, clears the planes, disables the old full-screen Window mask, restores
+scroll and invalidates cached HUD text. This explicitly preserves plane A
+when returning from H40 menu to H32 gameplay.
 No new heap allocation or SRAM writes. Seven configuration bytes in data.
 
 Five newly built ROMs:
