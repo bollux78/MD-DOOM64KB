@@ -338,7 +338,13 @@ static void TryRunTics (void)
          * Demo playback stays at one step because demo inputs are 35-Hz. */
         if (_g_demoplayback) { r54d_steps = 1; r54d_fraction = 0; }
         else {
+#if defined(DOOM_R54_LOGIC_DIV)
+            /* 12.5Hz = 25/2. Fractional 35/(25/2) = 70/25,
+             * so apply the existing partial compensation in a 2/3 pattern. */
+            r54d_fraction += 35 * DOOM_R54_LOGIC_DIV;
+#else
             r54d_fraction += 35;
+#endif
             r54d_steps = r54d_fraction / DOOM_R54_LOGIC_HZ;
             r54d_fraction %= DOOM_R54_LOGIC_HZ;
         }
