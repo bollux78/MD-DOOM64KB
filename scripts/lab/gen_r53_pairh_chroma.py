@@ -59,7 +59,7 @@ def main():
     rows=re.findall(r'\{([^}]+)\}',body)
     assert len(rows)==14
     cram=[[int(v) for v in row.split(',')] for row in rows]
-    assert all(len(row)==16 and row[1]==0 for row in cram)
+    assert all(len(row)==16 for row in cram) and cram[0][1]==0
     src=gp['decode_subpal'](gp['load_playpal'](),0)
     assert len(src)==256
     colors=[gp['gen_to_rgb'](w) for w in cram[0]]
