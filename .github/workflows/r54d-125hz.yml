@@ -1,0 +1,251 @@
+name: R54D fractional 12.5Hz compensated PLAY experiment
+
+on:
+  push:
+    branches: [exp-r54d-125hz-compensated]
+    paths:
+      - '.github/workflows/r54d-125hz.yml'
+      - 'src/r22_video.inc'
+      - 'src/r22_benchmark.inc'
+      - 'src/r22_pixel4.h'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/test_r48_pair_v.py'
+      - 'scripts/lab/gen_r49_colormix.py'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'scripts/lab/gen_r52_claudio.py'
+      - 'scripts/lab/test_r54_logic.py'
+      - 'scripts/lab/test_r54_half.py'
+      - 'scripts/lab/test_r52_claudio.py'
+      - 'scripts/lab/test_r49_colormix.py'
+      - 'scripts/lab/build_r35_linear.fish'
+      - 'scripts/build_silent.fish'
+      - 'scripts/set_rom_identity.py'
+      - 'src/d_main.c'
+      - 'src/d_main.h'
+      - 'src/g_game.c'
+      - 'src/i_system.h'
+      - 'src/m_text.c'
+      - 'src/i_genesis.c'
+      - 'src/r_draw.c'
+      - 'scripts/lab/gen_r52_ab.py'
+      - 'src/r35_native4.inc'
+  workflow_dispatch:
+
+concurrency:
+  group: r54d-fractional-125hz
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r54d-logic
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r54d-logic/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r54d-logic/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r54d-logic/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify or recover Doom shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,gzip,os,pathlib,shutil,urllib.request
+          target=pathlib.Path('scripts/doom1.wad')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          expected='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          expected_size=4196020
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          for top in (home/'Projetos',home/'Games',home/'Jogos'):
+              if not top.is_dir(): continue
+              depth=len(top.parts)
+              for directory,subdirs,names in os.walk(top,followlinks=False):
+                  if len(pathlib.Path(directory).parts)-depth>4:
+                      subdirs[:]=[]; continue
+                  subdirs[:]=[x for x in subdirs if not x.startswith('.')]
+                  for name in names:
+                      if name.lower()=='doom1.wad': candidates.append(pathlib.Path(directory)/name)
+          for p in candidates:
+              if not p.is_file(): continue
+              raw=p.read_bytes()
+              if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                  if p.resolve()!=target.resolve(): shutil.copyfile(p,target)
+                  print('Verified WAD from',p); break
+          else:
+              mirrors=[
+                ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB pair boot fix'})
+                      with urllib.request.urlopen(req,timeout=65) as response: raw=response.read(9_000_000)
+                      if compressed: raw=gzip.decompress(raw)
+                      if len(raw)==expected_size and hashlib.sha256(raw).hexdigest()==expected:
+                          target.write_bytes(raw); print('Recovered WAD from',name); break
+                  except Exception as e: print('mirror failed',name,str(e)[:100])
+              else: raise SystemExit('Pinned shareware WAD unavailable')
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          PY
+
+      - name: Preflight ColorMix source tables and fidelity oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r54d-logic
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r54d-logic/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r54d-logic/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r54d-logic/PREFLIGHT-color-report.json
+
+      - name: NumPy and R54 logic-clock source oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import numpy;print("NumPy ready:",numpy.__version__)'
+          python3 -m py_compile scripts/lab/test_r54_logic.py scripts/lab/test_r54_half.py
+          python3 scripts/lab/test_r54_logic.py
+          python3 scripts/lab/test_r54_half.py
+          python3 scripts/lab/gen_r52_claudio.py --repo . --out dist/r54d-logic/preflight --mode luma32 --zero-policy forbid --no-preview
+          python3 scripts/lab/test_r52_claudio.py dist/r54d-logic/preflight .
+
+      - name: Build single R54D 12.5Hz compensated PLAY
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=dist/r54d-logic
+          mkdir -p "$D"
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          hz=25
+          comp=1
+          echo "========== R54 LOGIC 12.5 Hz (25/2) ==========="
+            env DOOM_R35D_CHECKER=1 DOOM_R39C_VARIANT=mall \
+                DOOM_R39D_DITHER_TOGGLE=0 DOOM_R39E_AUDIO_TOGGLES=1 \
+                DOOM_R40_STAGE1=fast DOOM_R42_WALL_ASM=1 DOOM_R45_VARIANT=asm \
+                DOOM_R47_PLANE_PAIR=1 DOOM_R47_FLAT_HOIST=1 \
+                DOOM_R47_SPRITE_HOIST=1 DOOM_R48_PAIR_V=1 DOOM_R48_V_FAST=1 \
+                DOOM_R49_COLORMIX=0 DOOM_R49_COMPLUT=0 DOOM_R49_RATIO=none \
+                DOOM_R52_AB=1 DOOM_R52_CLAUDIO=1 DOOM_R52_AB_PROFILE=luma32 \
+                DOOM_R52_ZERO_POLICY=forbid DOOM_R52_CPLUT=1 \
+                DOOM_R54_LOGIC_HZ=25 DOOM_R54_LOGIC_DIV=2 DOOM_R54D_COMPENSATED=1 DOOM_R54_BUILD="l32f-h125-c1-play" \
+                DOOM_R50_PLAY_BENCH=1 DOOM_R50_MENU_FREEZE=1 \
+                DOOM_R50_STATIC_MENU=1 DOOM_R50_HARD_REINIT=1 \
+                DOOM_R50_RESET_SRAM=0 DOOM_R51_HW_WEAPON=0 DOOM_R51_NO_PSPRITE=0 \
+                DOOM_R20_BGM_VGM="$DOOM_R20_BGM_VGM" \
+                fish scripts/lab/build_r35_linear.fish pixel4-play
+            id="doom-md-r54-l32f-h125-c1-play"
+            cp "dist/r35/$id.bin" "$D/"
+            cp "dist/r35/flags-$id.txt" "$D/"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "dist/r35/$id.elf" > "$D/size-$id.txt"
+
+      - name: Audit R54 ROM count and memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,re
+          d=Path('dist/r54d-logic')
+          roms=list(d.glob('doom-md-r54-*.bin'))
+          assert len(roms)==1,('R54 ROM count',len(roms))
+          report={}
+          for f in sorted(roms):
+              size=d/('size-'+f.stem+'.txt')
+              m=re.search(r'^\.bss\s+(\d+)\s+',size.read_text(),re.M)
+              assert m,size
+              bss=int(m.group(1))
+              assert bss<=57920,(f,bss)
+              assert '-h125-c1-play' in f.name
+              assert len(f.stem)<=30
+              report[f.name]={'requested_logic_hz':12.5,'compensated':True,'bss':bss,
+                             'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()}
+          (d/'AUDIT.json').write_text(json.dumps(report,indent=2)+'\n')
+          print('R54D: fractional 12.5Hz build, memory and identity PASS')
+          PY
+
+      - name: BlastEm boot smoke all 3 R54D ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,shutil,subprocess,time
+          d=Path('dist/r54d-logic').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in
+              (Path.home()/'Projetos').glob('**/blastem')
+              if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm missing'
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          out=[]
+          for rom in sorted(d.glob('*.bin')):
+              t=time.monotonic()
+              r=subprocess.run([exe,'-b','800',str(rom)],cwd=d,env=env,
+                  capture_output=True,text=True,errors='replace',timeout=45)
+              line=f'{rom.name}: code={r.returncode} elapsed={time.monotonic()-t:.2f}s'
+              print(line,flush=True);out.append(line)
+              if r.returncode:raise SystemExit(line+'\n'+r.stdout+r.stderr)
+          assert len(out)==1
+          (d/'SMOKE.txt').write_text('\n'.join(out)+'\n')
+          PY
+
+      - name: Add R54 timing test instructions to artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > dist/r54d-logic/README.txt <<'EOF'
+          R54D fractional-rate experiment: 12.5Hz (25/2) compensated, PLAY.
+          This build has exactly the same luma32-forbid palette and Pair-V renderer
+          as R54D 35/25/20 controls and changes ONLY the logic clock ratio.
+          VBlank 60Hz / wall clock 35Hz preserved; game scheduler alternates
+          12 and 13 logic tics per real second, 25 over each two seconds.
+          Compensation uses 35/(25/2) = 2.8 simulated-tic steps per logic tic.
+          WARNING: PARTIAL compensation. Physics, AI, animations and DEMO3 are
+          not guaranteed to preserve original gameplay speed or synchronization.
+          Live gameplay top-left HUD: L12.5 TPSxx shows actual tick rate.
+          Compare distance traversed under held-forward input for 10 real seconds
+          in the same E1M1 corridor across 35Hz,25Hz,20Hz and this 12.5Hz ROM.
+          Compare gameplay feel and separate rendering FPS from movement speed.
+          No desktop interaction, package installation, or video recording.
+          EOF
+
+      - name: Upload R54 logic-cadence PLAY matrix
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r54d-125hz-compensated-play
+          path: dist/r54d-logic/
+          retention-days: 90
+          if-no-files-found: error
