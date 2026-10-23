@@ -25,6 +25,12 @@ python3 scripts/lab/test_r16_crt_hud.py; or exit 1
 python3 scripts/lab/test_r17_pixel_loop.py; or exit 1
 python3 scripts/lab/gen_r12_recip_lut.py --max-scale 65535; or exit 1
 python3 scripts/lab/gen_r22_pixel4.py; or exit 1
+if set -q DOOM_R53_PAIRH_MICRO_RATIO
+    if test "$DOOM_R53_PAIRH_MICRO_RATIO" != 25
+        echo 'Pair-H micro ratio must be 25'; exit 2
+    end
+    python3 scripts/lab/gen_r53_pairh_micro.py; or exit 1
+end
 if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
     # Pure ROM tables: color fidelity gate and/or precomposed colormap.
     python3 scripts/lab/gen_r49_colormix.py; or exit 1
@@ -396,6 +402,18 @@ for v in $variants
             echo 'R53 ratio must be 25 or 50'; exit 2
         end
         set defs $defs "-DDOOM_R53_MICRO=$DOOM_R53_MICRO_RATIO"
+    end
+    if set -q DOOM_R53_PAIRH_MICRO_RATIO
+        if not set -q DOOM_R47_PLANE_PAIR; or test "$DOOM_R47_PLANE_PAIR" != 1
+            echo 'Pair-H micro requires R47 plane-pair'; exit 2
+        end
+        if set -q DOOM_R48_PAIR_V; and test "$DOOM_R48_PAIR_V" = 1
+            echo 'Pair-H micro cannot use Pair-V'; exit 2
+        end
+        if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
+            echo 'Pair-H micro cannot use R52 dual palette'; exit 2
+        end
+        set defs $defs "-DDOOM_R53_PAIRH_MICRO=$DOOM_R53_PAIRH_MICRO_RATIO"
     end
     if set -q DOOM_R52_CPLUT; and test "$DOOM_R52_CPLUT" = 1
         if not set -q DOOM_R52_CLAUDIO; or test "$DOOM_R52_CLAUDIO" != 1
