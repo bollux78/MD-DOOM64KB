@@ -63,6 +63,13 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
             python3 scripts/lab/gen_r57_colormatch.py --header src/r56_tables.h --out src/r56_tables.h --report src/r58_colormatch_report.json; or exit 1
             python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h; or exit 1
         end
+        if set -q DOOM_R59_COLOR_VIEW; and test "$DOOM_R59_COLOR_VIEW" = 1
+            if not set -q DOOM_R58_CM_VIEW; or test "$DOOM_R58_CM_VIEW" != 1
+                echo 'R59 requires approved R58 ColorMatch CM6'; exit 2
+            end
+            python3 scripts/lab/gen_r59_colorview.py --cm6 src/r56_tables.h --out src/r59_color_tables.h --report src/r59_color_report.json; or exit 1
+            python3 scripts/lab/test_r59_colorview.py; or exit 1
+        end
         if set -q DOOM_R53_MICRO_RATIO
             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
                 python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio "$DOOM_R53_MICRO_RATIO"; or exit 1
@@ -658,6 +665,15 @@ for v in $variants
             end
         end
     end
+    if set -q DOOM_R59_COLOR_VIEW; and test "$DOOM_R59_COLOR_VIEW" = 1
+        if not set -q DOOM_R56_DUAL_COLOR; or test "$DOOM_R56_DUAL_COLOR" != 1
+            echo 'R59 needs R56 Pair-V Dual Color'; exit 2
+        end
+        if not set -q DOOM_R57_VIEW_MENU; or test "$DOOM_R57_VIEW_MENU" != 1
+            echo 'R59 needs R58 runtime VIEW menu'; exit 2
+        end
+        set defs $defs '-DDOOM_R59_COLOR_VIEW'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -929,6 +945,45 @@ for v in $variants
             echo 'R58 identity requires ColorMatch integration'; exit 2
         end
         set id doom-md-r58-$DOOM_R58_BUILD
+    end
+    if set -q DOOM_R59_BUILD
+        if not string match -qr '^[a-z0-9][a-z0-9-]*
+    echo "BUILD: $id  [$DOOM_R20_DEFINES]"
+    rm -rf out
+    rm -f res/music.rs res/music.d
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    or begin
+        tail -n 100 "$dest/build-$id.log"
+        exit 1
+    end
+    python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+    cp out/release/rom.out "$dest/$id.elf"; or exit 1
+    cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
+    set built $built $id
+end
+cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
+sha256sum $dest/*.bin > "$dest/SHA256SUMS"
+echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
+ -- "$DOOM_R59_BUILD"
+            echo 'Invalid R59 build id'; exit 2
+        end
+        if not set -q DOOM_R59_COLOR_VIEW; or test "$DOOM_R59_COLOR_VIEW" != 1
+            echo 'R59 identity requires COLOR VIEW'; exit 2
+        end
+        set id doom-md-r59-$DOOM_R59_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
