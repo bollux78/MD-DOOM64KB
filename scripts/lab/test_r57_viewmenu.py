@@ -73,4 +73,4 @@ with tempfile.TemporaryDirectory() as d:
   '-DDOOM_R22_PIXEL4','-DDOOM_R48_PAIR_V','-DDOOM_R47_PLANE_PAIR','-DDOOM_R57_CROP16',
   '-DDOOM_R57_VIEW_MENU','-I',str(r/'src'),str(p/'test.c'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS actual menu setter: 300 queued-frame crop/mode changes, 50 geometries; 32 actual H32/H40/menu/demo transitions and stable-mode no-op checks')
+print('PASS actual menu setter: 300 queued-frame crop/mode changes, 50 geometries; 16 actual H32/H40/menu/demo transitions and 16 stable-mode no-op checks')

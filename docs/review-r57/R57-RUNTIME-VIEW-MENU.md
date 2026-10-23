@@ -42,8 +42,8 @@ The PERF presets exercise the SAME runtime-capable renderer as PLAY.
 Host checks: all 50 mode/H/V combinations compile actual raster functions
 and compare scalar texture sampling, clipping, framebuffer guards and DMA
 source bounds. Actual menu setter is exercised for 300 queued-frame
-changes; actual mode-switch function for 32 menu/demo/level transitions,
-including stable-mode no-op checks. Existing legacy pixel4 oracle retained.
+changes; actual mode-switch function for 16 menu/demo/level transitions
+and 16 stable-mode no-op checks. Existing legacy pixel4 oracle retained.
 CI audits ROM/BSS bounds and runs four PERF presets at 800/30000 emulated
 frames. Normal exit is not proof of a correct screen or completed timedemo.
 Manual hardware checks: repeated H40/H32 changes and independent H/V
