@@ -384,6 +384,15 @@ for v in $variants
         end
         set defs $defs "-DDOOM_R54_LOGIC_HZ=$DOOM_R54_LOGIC_HZ"
     end
+    if set -q DOOM_R54_LOGIC_DIV
+        if test "$DOOM_R54_LOGIC_DIV" != 2; or test "$DOOM_R54_LOGIC_HZ" != 25
+            echo 'R54 fraction requires 25/2 = 12.5 Hz'; exit 2
+        end
+        if not set -q DOOM_R54D_COMPENSATED; or test "$DOOM_R54D_COMPENSATED" != 1
+            echo 'R54 fractional pilot requires partial compensation'; exit 2
+        end
+        set defs $defs '-DDOOM_R54_LOGIC_DIV=2'
+    end
     if set -q DOOM_R54D_COMPENSATED; and test "$DOOM_R54D_COMPENSATED" = 1
         if not set -q DOOM_R54_LOGIC_HZ
             echo 'R54D compensation requires explicit cadence'; exit 2
