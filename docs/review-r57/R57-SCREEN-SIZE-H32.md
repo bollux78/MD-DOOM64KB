@@ -16,7 +16,7 @@ B=-20 moves the 256-pixel ROI to screen x=0..255, preserving the +4-pixel
 Pair-V separation. H40 narrow uses A=0/B=4 at x=24..279. Packed framebuffer,
 assembly strides, palettes and sampling tables are unchanged.
 
-H32 gameplay uses a compact H/A/AMMO HUD; text is placed relative to the
+Both narrow H40 and H32 use the same compact H/A/AMMO HUD and FPS position; in H32, text is placed relative to the
 screen despite the scrolled planes. Title, intermission, menus and results
 remain H40 to preserve existing full-resolution static art and readable
 text. Width switches occur between completed frames, with display blanked,

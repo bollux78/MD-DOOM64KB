@@ -154,8 +154,11 @@ void R57_SetCrop(uint8_t enabled){
     R20_StopVideo();r57_crop_enabled=(enabled!=0);r57_was_level=0;
 }
 #endif
+#if defined(DOOM_R57_NARROW256)
+static uint8_t r57_hud_dirty;
+#endif
 #if defined(DOOM_R57_H32)
-static uint8_t r57_h32_active,r57_hud_dirty;
+static uint8_t r57_h32_active;
 static void R57_VideoMode(void){
     uint8_t desired=(_g_gamestate==GS_LEVEL && (!_g_menuactive || _g_demoplayback));
     if(desired==r57_h32_active)return;
@@ -429,7 +432,7 @@ static inline void R22_Plot(int16_t x,int16_t y,uint8_t c) {
        (x<R57_XMIN || x>=R57_XEND || y<R57_YMIN || y>=R57_YEND) :
        (x<2 || y<2)))return;
 #else
-    if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && (x<2 || y<2))return;
+    if(_g_gamestate==GS_LEVEL && (x<2 || y<2))return;
 #endif
     R22_Put(r22_fb.pixels,(uint16_t)x,(uint16_t)y,c);
 }
@@ -450,7 +453,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
 #endif
     if(x<border)return;
     int16_t first=y0;
@@ -588,7 +591,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
 #endif
     if(x<border) return;
     int16_t first=y0;
@@ -741,7 +744,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && x>=R57_XEND)return;
     if((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE) && y1>=R57_YEND)y1=R57_YEND-1;
 #else
-    int16_t border=((_g_gamestate==GS_LEVEL && R57_CROP_ACTIVE))?2:0;
+    int16_t border=(_g_gamestate==GS_LEVEL)?2:0;
 #endif
     if(x<border) return;
     if(y0<border)y0=border;
@@ -1198,26 +1201,26 @@ static void R22_HUD(void){
     uint16_t h=_g_player.mo?_g_player.mo->health:_g_player.health,a=_g_player.armorpoints,b=_g_player.ammo[am_clip];
     VDP_setTextPlane(BG_A);VDP_setTextPalette(PAL0);VDP_setTextPriority(TRUE);
     if(h!=health||a!=armor||b!=ammo
-#if defined(DOOM_R57_H32)
+#if defined(DOOM_R57_NARROW256)
        ||r57_hud_dirty
 #endif
 #if defined(DOOM_R51_HW_HUD)
        ||r51_hud_text_dirty
 #endif
     ){
-#if defined(DOOM_R57_H32)
-        if(r57_h32_active){
+#if defined(DOOM_R57_NARROW256)
+        {
             R22_DrawText(R51_HUD_TEXT_PLANE,"H",1,23);R22_Num3(3,23,h);
             R22_DrawText(R51_HUD_TEXT_PLANE,"A",10,23);R22_Num3(12,23,a);
             R22_DrawText(R51_HUD_TEXT_PLANE,"AMMO",20,23);R22_Num3(25,23,b);
-            R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - H32",1,25);
-        }else{
-#endif
+            R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - 256",1,25);
+        }
+#else
         R22_DrawText(R51_HUD_TEXT_PLANE,"HEALTH",1,23);R22_Num3(8,23,h);R22_DrawText(R51_HUD_TEXT_PLANE,"ARMOR",13,23);R22_Num3(19,23,a);
         R22_DrawText(R51_HUD_TEXT_PLANE,"BULLETS",24,23);R22_Num3(32,23,b);health=h;armor=a;ammo=b;
         R22_DrawText(R51_HUD_TEXT_PLANE,"DOOM PX4 - 76x44",1,25);
-#if defined(DOOM_R57_H32)
-        }
+#endif
+#if defined(DOOM_R57_NARROW256)
         health=h;armor=a;ammo=b;r57_hud_dirty=0;
 #endif
 #if defined(DOOM_R51_HW_HUD)
@@ -1226,8 +1229,8 @@ static void R22_HUD(void){
     }
     static uint32_t vb;static uint16_t frames;frames++;
     uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,
-#if defined(DOOM_R57_H32)
-        r57_h32_active?24:31,
+#if defined(DOOM_R57_NARROW256)
+        24,
 #else
         31,
 #endif

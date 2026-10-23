@@ -168,6 +168,8 @@ void I_BenchmarkShowResults(void)
     R21_TEXT_SCREEN();
 #if defined(DOOM_R57_H32)
     VDP_setScreenWidth320();
+    VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,4);
+    r57_h32_active=0;r57_hud_dirty=1;
 #endif
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
