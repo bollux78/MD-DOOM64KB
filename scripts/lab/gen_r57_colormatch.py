@@ -279,6 +279,7 @@ def main():
             "unique_cram_words_union_normal":len(set(palettes[0][0]).union(palettes[1][0])),
             "shared_free_color_source_slots":len(set(selections[0]).intersection(selections[1])),
             "codes_per_plane":15,"extra_codes_per_plane":9,
+            "mixed_code_count_per_plane":[int(np.count_nonzero(book[1:,0]!=book[1:,1])) for book in books],
             "hue_family_weights":{name:round(float(w[groups==i].sum()),5)
                                   for i,name in enumerate(("neutral",)+FAMILIES)},
             "weighted_Lab_error_per_plane":[float(np.dot(w,x)) for x in de],
