@@ -117,6 +117,12 @@ static const uint8_t *r49_compgate_current=r49_compgate;
 #if defined(DOOM_R22_PAIR_LUT)
 #include "r22_pair_lut.h"
 #endif
+#if defined(DOOM_R60_PAIR_ASM)
+#if !defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST) || !defined(DOOM_R52_CPLUT) || defined(DOOM_R49_COLORMIX) || defined(DOOM_R49_COMPLUT)
+#error R60 requires Pair-V Fast and composed LUT without R49
+#endif
+#include "r60_pair_wall.h"
+#endif
 #if defined(DOOM_BUILD_VARIANT)
 #include "doom_build_identity.h"
 #endif
@@ -713,6 +719,12 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
 #endif
     }
 #else
+#if defined(DOOM_R60_PAIR_ASM)
+    if(!colormap && count>=2){
+        R60_WallDraw(dst,source,r52map,f,step,count,(uint16_t)(first&1));
+        return;
+    }
+#endif
     if((first&1) && count) {
         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
         *dst=(uint8_t)((*dst&0xf0u)|(r52map[ci]&15u));

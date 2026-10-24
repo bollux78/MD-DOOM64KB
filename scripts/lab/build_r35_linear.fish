@@ -674,6 +674,18 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R59_COLOR_VIEW'
     end
+    if set -q DOOM_R60_PAIR_ASM; and test "$DOOM_R60_PAIR_ASM" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'R60 requires native pixel4'; exit 2
+        end
+        if not test "$DOOM_R48_PAIR_V" = 1; or not test "$DOOM_R48_V_FAST" = 1; or not test "$DOOM_R52_CPLUT" = 1
+            echo 'R60 requires Pair-V Fast and composed LUT'; exit 2
+        end
+        if test "$DOOM_R49_COLORMIX" = 1; or test "$DOOM_R49_COMPLUT" = 1
+            echo 'R60 incompatible with R49'; exit 2
+        end
+        set defs $defs '-DDOOM_R60_PAIR_ASM'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
@@ -954,6 +966,45 @@ for v in $variants
             echo 'R59 identity requires COLOR VIEW'; exit 2
         end
         set id doom-md-r59-$DOOM_R59_BUILD
+    end
+    if set -q DOOM_R60_BUILD
+        if not string match -qr '^[a-z0-9][a-z0-9-]* $id
+    echo "BUILD: $id  [$DOOM_R20_DEFINES]"
+    rm -rf out
+    rm -f res/music.rs res/music.d
+    # Explicit env boundary: preserve flags across nested fish interpreter.
+    env DOOM_R20_DEFINES="$DOOM_R20_DEFINES" fish scripts/build_silent.fish > "$dest/build-$id.log" 2>&1
+    or begin
+        tail -n 100 "$dest/build-$id.log"
+        exit 1
+    end
+    python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+    cp out/release/rom.out "$dest/$id.elf"; or exit 1
+    cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+    # The ELF's raw loadable image is the real occupied ROM content, unlike
+    # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+    set -l rawout "$dest/_payload-$v.tmp"
+    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
+    stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+    rm -f "$rawout"
+    set built $built $id
+end
+cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+if test (count $argv) -eq 0
+    # Whole-batch local run: check all 4 ROMs after the loop.
+    python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+end
+# CI invokes one variant per subprocess and performs this shared audit only
+# AFTER all four builds are complete.
+sha256sum $dest/*.bin > "$dest/SHA256SUMS"
+echo "READY: R35 4MiB linear, Bayer8 raw artwork, 52 mixed PCM, XGM2 untouched, 8x8/4x4 play+perf"
+ -- "$DOOM_R60_BUILD"
+            echo 'Invalid R60 build ID'; exit 2
+        end
+        if test (string length -- "doom-md-r60-$DOOM_R60_BUILD") -gt 30
+            echo 'R60 ROM ID exceeds header limit'; exit 2
+        end
+        set id doom-md-r60-$DOOM_R60_BUILD
     end
     set -gx DOOM_BUILD_ID $id
     echo "BUILD: $id  [$DOOM_R20_DEFINES]"
