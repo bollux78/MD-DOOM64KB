@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build R59 COLOR VIEW: R58 CM6 + three exact historical R57 A6 modes.
+"""Build R59 COLOR VIEW v3: CM6, 3 historical R57 A6, and 2 historical A4 modes.
 
 One full-featured PLAY ROM (Options H40/H32 + H/V crop 0..32, built-in benchmark)
 and one PERF companion. COLOR VIEW switches CRAM, LUTs and VDP pair patterns.
@@ -10,7 +10,7 @@ import argparse,hashlib,json,os,shutil,subprocess,sys
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--out',default='dist/r59-colorview')
+    ap=argparse.ArgumentParser();ap.add_argument('--out',default='dist/r59-colorview-v3')
     args=ap.parse_args();root=Path(__file__).resolve().parents[2];os.chdir(root)
     dest=Path(args.out).resolve();dest.mkdir(parents=True,exist_ok=True)
     profiles=['cm6']
@@ -20,7 +20,7 @@ def main():
     vgm=os.environ.get('DOOM_R20_BGM_VGM',str((root/'res/e1m1.vgm').resolve()))
     assert Path(vgm).is_file(),'Run the existing pinned VGM preflight first'
     for profile in profiles:
-        for variant,mode,video,hcrop,vcrop in (('colorview-v2','play',0,16,16),('colorview-v2','perf',0,16,16)):
+        for variant,mode,video,hcrop,vcrop in (('colorview-v3','play',0,16,16),('colorview-v3','perf',0,16,16)):
             bench='1' if mode=='play' else '0';name=variant+'-'+mode
             env=os.environ.copy()
             for key in ('DOOM_R53_MICRO_RATIO','DOOM_R55_WERK_VARIANT','DOOM_R56_CLAUDIO_PROFILE',
@@ -84,12 +84,12 @@ def main():
                             'bytes':len(binary),'bss_bytes':bss,'sha256':hashlib.sha256(binary).hexdigest()})
             (dest/'MANIFEST.json').write_text(json.dumps(records,indent=2)+'\n')
     assert len(records)==2
-    play_header=(dest/'PALETTES-colorview-v2-play.h').read_bytes()
-    perf_header=(dest/'PALETTES-colorview-v2-perf.h').read_bytes()
+    play_header=(dest/'PALETTES-colorview-v3-play.h').read_bytes()
+    perf_header=(dest/'PALETTES-colorview-v3-perf.h').read_bytes()
     assert play_header==perf_header,'ColorMatch table changed between PLAY/PERF'
-    assert (dest/'COLOR-TABLES-colorview-v2-play.h').read_bytes()==(dest/'COLOR-TABLES-colorview-v2-perf.h').read_bytes(),'R59 profiles changed between builds'
-    assert (dest/'COLOR-REPORT-colorview-v2-play.json').read_bytes()==(dest/'COLOR-REPORT-colorview-v2-perf.json').read_bytes(),'R59 profile report changed'
-    print('R59: CM6/Balanced/Tolerant/Accents in same ROM, runtime H32/H40 and crop; 2 ROMs built.',flush=True)
+    assert (dest/'COLOR-TABLES-colorview-v3-play.h').read_bytes()==(dest/'COLOR-TABLES-colorview-v3-perf.h').read_bytes(),'R59 profiles changed between builds'
+    assert (dest/'COLOR-REPORT-colorview-v3-play.json').read_bytes()==(dest/'COLOR-REPORT-colorview-v3-perf.json').read_bytes(),'R59 profile report changed'
+    print('R59 v3: CM6/Balanced/Tolerant/Accents/A4 Tolerant/A4 Accents in same ROM; H32/H40 and crop; 2 ROMs built.',flush=True)
     print('ColorMatch tables SHA256:',hashlib.sha256(play_header).hexdigest(),flush=True)
     print('Real-hardware mode switching and complete timedemo validation still pending.',flush=True)
 
