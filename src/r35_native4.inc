@@ -82,8 +82,16 @@ static void R35_LeaveNative4(void)
 #endif
 #endif
 #if defined(DOOM_R56_DUAL_COLOR)
+#if defined(DOOM_R59_COLOR_VIEW)
+    /* R59 must restore the SELECTED CRAM alongside the selected Pair-V
+     * patterns above. The historical A6 modes do not use CM6 colors. */
+    PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU);
+    PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU);
+    r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */
+#else
     PAL_setColors(0,r56_pal0[0],16,CPU);
     PAL_setColors(16,r56_pal1[0],16,CPU);
+#endif
 #elif defined(DOOM_R52_AB)
     PAL_setColors(0,r52_pal0,16,CPU);
     PAL_setColors(16,r52_pal1,16,CPU);
