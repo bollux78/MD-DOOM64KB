@@ -20,7 +20,7 @@ def main():
     vgm=os.environ.get('DOOM_R20_BGM_VGM',str((root/'res/e1m1.vgm').resolve()))
     assert Path(vgm).is_file(),'Run the existing pinned VGM preflight first'
     for profile in profiles:
-        for variant,mode,video,hcrop,vcrop in (('colorview','play',0,16,16),('colorview','perf',0,16,16)):
+        for variant,mode,video,hcrop,vcrop in (('colorview-v2','play',0,16,16),('colorview-v2','perf',0,16,16)):
             bench='1' if mode=='play' else '0';name=variant+'-'+mode
             env=os.environ.copy()
             for key in ('DOOM_R53_MICRO_RATIO','DOOM_R55_WERK_VARIANT','DOOM_R56_CLAUDIO_PROFILE',
@@ -84,11 +84,11 @@ def main():
                             'bytes':len(binary),'bss_bytes':bss,'sha256':hashlib.sha256(binary).hexdigest()})
             (dest/'MANIFEST.json').write_text(json.dumps(records,indent=2)+'\n')
     assert len(records)==2
-    play_header=(dest/'PALETTES-colorview-play.h').read_bytes()
-    perf_header=(dest/'PALETTES-colorview-perf.h').read_bytes()
+    play_header=(dest/'PALETTES-colorview-v2-play.h').read_bytes()
+    perf_header=(dest/'PALETTES-colorview-v2-perf.h').read_bytes()
     assert play_header==perf_header,'ColorMatch table changed between PLAY/PERF'
-    assert (dest/'COLOR-TABLES-colorview-play.h').read_bytes()==(dest/'COLOR-TABLES-colorview-perf.h').read_bytes(),'R59 profiles changed between builds'
-    assert (dest/'COLOR-REPORT-colorview-play.json').read_bytes()==(dest/'COLOR-REPORT-colorview-perf.json').read_bytes(),'R59 profile report changed'
+    assert (dest/'COLOR-TABLES-colorview-v2-play.h').read_bytes()==(dest/'COLOR-TABLES-colorview-v2-perf.h').read_bytes(),'R59 profiles changed between builds'
+    assert (dest/'COLOR-REPORT-colorview-v2-play.json').read_bytes()==(dest/'COLOR-REPORT-colorview-v2-perf.json').read_bytes(),'R59 profile report changed'
     print('R59: CM6/Balanced/Tolerant/Accents in same ROM, runtime H32/H40 and crop; 2 ROMs built.',flush=True)
     print('ColorMatch tables SHA256:',hashlib.sha256(play_header).hexdigest(),flush=True)
     print('Real-hardware mode switching and complete timedemo validation still pending.',flush=True)
