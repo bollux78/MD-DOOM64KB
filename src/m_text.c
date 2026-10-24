@@ -672,7 +672,7 @@ static void M_DrawOptions(void)
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*h_crop,12,crop_names[r57_view.hcrop/8]);
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*v_crop,12,crop_names[r57_view.vcrop/8]);
 #if defined(DOOM_R59_COLOR_VIEW)
-    static const char *const r59_names[4]={"CM6","Balanced","Tolerant","Accents"};
+    static const char *const r59_names[6]={"CM6","Balanced","Tolerant","Accents","A4 Tolerant","A4 Accents"};
     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*color_mode,12,r59_names[R59_ColorMode()]);
 #endif
     /* Fixed-width size label avoids stale digits after resizing. */
