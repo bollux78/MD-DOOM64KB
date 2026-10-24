@@ -48,7 +48,7 @@ jobs:
           command -v python3
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
-          mkdir -p dist/r59-colorview
+          mkdir -p dist/r59-colorview-v3
           python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r59-colorview-v3/ORACLE-plane-pair.txt
           python3 scripts/lab/test_r48_pair_v.py | tee dist/r59-colorview-v3/ORACLE-pair-v.txt
           python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r59-colorview-v3/ORACLE-vdp.json
@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/r59-colorview
+          mkdir -p dist/r59-colorview-v3
           python3 scripts/lab/gen_r22_pixel4.py
           python3 scripts/lab/gen_r49_colormix.py | tee dist/r59-colorview-v3/PREFLIGHT-generator.txt
           python3 scripts/lab/test_r49_colormix.py | tee dist/r59-colorview-v3/PREFLIGHT-color-oracle.txt
