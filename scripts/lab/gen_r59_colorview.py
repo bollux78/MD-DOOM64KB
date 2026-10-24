@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R59: bundle exact R58 CM6 plus R57 A6 Balanced/Tolerant/Accents LUTs.
+"""R59 v3: bundle exact CM6, three R57 A6 modes, and two contrasting R57 A4 modes.
 
 No new palette optimization: R57 historical profiles remain byte-identical
 to gen_r57_diversity.py, CM6 remains the R58-generated header. Both codebooks
@@ -9,7 +9,8 @@ from pathlib import Path
 import argparse, hashlib, json, re, subprocess, sys
 
 PROFILES = (("balanced", "a6-balanced"), ("tolerant", "a6-tolerant"),
-            ("accents", "a6-accents"))
+            ("accents", "a6-accents"), ("a4_tolerant", "a4-tolerant"),
+            ("a4_accents", "a4-accents"))
 FIELDS = ("pal0","pal1","pairs_even","pairs_odd","wall_even","wall_odd",
           "flat_even","flat_odd","comp_even","comp_odd")
 
@@ -32,7 +33,7 @@ def main():
                     "--repo",str(repo),"--out",str(tabledir)],check=True)
     generated=[]
     report={"source":"R58 fixed CM6 + exact historical R57 A6 profiles",
-            "order":["CM6","Balanced","Tolerant","Accents"],
+            "order":["CM6","Balanced","Tolerant","Accents","A4 Tolerant","A4 Accents"],
             "cm6_sha256":hashlib.sha256(original.encode()).hexdigest(),
             "profiles":{}}
     for short,name in PROFILES:
@@ -50,7 +51,7 @@ def main():
     lines=["/* R59: exact R58 CM6 + pinned R57 A6. NO runtime color math. */",
            "#ifndef R59_COLOR_TABLES_H","#define R59_COLOR_TABLES_H",
            "#include <stdint.h>","#include \"r56_tables.h\"",
-           "#define R59_COLOR_MODES 4"]
+           "#define R59_COLOR_MODES 6"]
     lines.extend(generated)
     lines.extend([
         "typedef struct {",
@@ -60,13 +61,13 @@ def main():
         " const uint8_t (*comp_even)[256],(*comp_odd)[256];",
         "} R59ColorTables;",
         "static const R59ColorTables r59_color_tables[R59_COLOR_MODES]={"])
-    for index,prefix in enumerate(("r56_","r59_balanced_","r59_tolerant_","r59_accents_")):
+    for index,prefix in enumerate(("r56_","r59_balanced_","r59_tolerant_","r59_accents_","r59_a4_tolerant_","r59_a4_accents_")):
         fields=", ".join(prefix+field for field in FIELDS)
-        lines.append(" {"+fields+"}," if index<3 else " {"+fields+"}")
+        lines.append(" {"+fields+"}," if index<5 else " {"+fields+"}")
     lines.append("};")
     lines.append("#endif")
     Path(args.out).write_text("\n".join(lines)+"\n")
     Path(args.report).write_text(json.dumps(report,indent=2)+"\n")
-    print("R59 4 color modes packaged. CM6 preserved:",report["cm6_sha256"][:16],flush=True)
+    print("R59 6 color modes packaged. CM6 preserved:",report["cm6_sha256"][:16],flush=True)
 
 if __name__=="__main__":main()
