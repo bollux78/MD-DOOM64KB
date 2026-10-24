@@ -80,7 +80,26 @@ jobs:
                       target.parent.mkdir(exist_ok=True,parents=True)
                       shutil.copyfile(p,target)
                   print('Pinned shareware WAD verified:',p.name);break
-          else:raise SystemExit('Known-path verified shareware WAD missing')
+          else:
+              import gzip,urllib.request
+              mirrors=[
+                  ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                  ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      request=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R60 pinned WAD'})
+                      with urllib.request.urlopen(request,timeout=65) as response:
+                          data=response.read(9_000_001)
+                      if len(data)>9_000_000:raise ValueError('download exceeds cap')
+                      if compressed:data=gzip.decompress(data)
+                      if len(data)==4196020 and hashlib.sha256(data).hexdigest()==wanted:
+                          target.parent.mkdir(exist_ok=True,parents=True)
+                          target.write_bytes(data)
+                          print('Pinned shareware WAD hash verified from',name)
+                          break
+                  except Exception as exc:
+                      print('WAD mirror failed',name,type(exc).__name__)
+              else:raise SystemExit('Pinned shareware WAD unavailable or checksum mismatch')
           PY
 
       - name: Color-table generation preflight (same as R59 v3)
