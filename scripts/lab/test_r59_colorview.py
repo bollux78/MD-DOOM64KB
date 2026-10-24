@@ -48,4 +48,31 @@ for key in ("R59_CURRENT.comp_even","R59_CURRENT.comp_odd",
     assert key in video,key
 for key in ("M_ChangeColorMode","Color mode:","CM6","Balanced","Tolerant","Accents"):
     assert key in menu,key
-print("PASS R59 four ROM-resident palettes/codebooks, CM6 unchanged, all A6 byte-exact, and runtime wiring")
+native=(d/"r35_native4.inc").read_text()
+assert "#if defined(DOOM_R59_COLOR_VIEW)" in native
+assert "PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU)" in native
+assert "PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU)" in native
+assert "r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */" in native
+assert "if(r59_color_dirty && r35_native_active<0)" in video
+def nums(src,name):
+    return list(map(int,re.findall(r"\d+",initializer(src,name)[1])))
+mode_names=("cm6","balanced","tolerant","accents")
+sources={name:cm if name=="cm6" else header for name in mode_names}
+prefixes={name:"r56_" if name=="cm6" else "r59_"+name+"_" for name in mode_names}
+for i,left in enumerate(mode_names):
+    for right in mode_names[i+1:]:
+        diffs={}
+        for field in f:
+            a=nums(sources[left],prefixes[left]+field)
+            b=nums(sources[right],prefixes[right]+field)
+            assert len(a)==len(b),(left,right,field,len(a),len(b))
+            diffs[field]=sum(x!=y for x,y in zip(a,b))
+        print("R59 profile comparison",left,"vs",right,
+              "palette words",diffs["pal0"]+diffs["pal1"],
+              "pair nibbles",diffs["pairs_even"]+diffs["pairs_odd"],
+              "wall LUT indices",diffs["wall_even"]+diffs["wall_odd"],
+              "COLORMAP indices",diffs["comp_even"]+diffs["comp_odd"],flush=True)
+        assert (diffs["pairs_even"]+diffs["pairs_odd"]+
+                diffs["wall_even"]+diffs["wall_odd"])>0, (
+                "two selectable profiles are identical",left,right)
+print("PASS R59 native-art CRAM restore + deferred pair upload, four ROM-resident modes, CM6 SHA and historical A6 tables")
