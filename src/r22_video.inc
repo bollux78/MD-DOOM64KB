@@ -1200,7 +1200,10 @@ void R22_BeginFrame(void){
        throughout title/raster work. Text replacement happens just-in-time. */
     R20_StopVideo();r22_text_this_frame=0;
 #if defined(DOOM_R59_COLOR_VIEW)
-    if(r59_color_dirty){
+    /* When a TITLEPIC/HELP2 native picture owns the pattern bank, do not
+     * overwrite its artwork just to preview a gameplay color profile.
+     * R35_LeaveNative4 restores the selected profile on gameplay entry. */
+    if(r59_color_dirty && r35_native_active<0){
         /* A profile changes pair patterns AND CRAM. Blank display while
          * replacing all 512 shared VRAM patterns. No second framebuffer.
          * Synchronous CRAM writes avoid SGDK deferred DMA palette mismatch. */
