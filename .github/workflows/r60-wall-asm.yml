@@ -141,7 +141,7 @@ jobs:
         run: |
           set -euo pipefail
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
-          python3 scripts/lab/build_r59_colorview.py | tee dist/r60-wall/BUILD.log
+          python3 scripts/lab/build_r60_wall.py | tee dist/r60-wall/BUILD.log
           cp docs/review-r59/R59-V3-SIX-MODES.md dist/r60-wall/R59-COLOR-REFERENCE.md
 
       - name: Verify R60 A/B identities, RAM and exact palette consistency
