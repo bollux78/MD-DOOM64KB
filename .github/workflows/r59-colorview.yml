@@ -1,4 +1,4 @@
-name: R59 COLOR VIEW - CM6 Balanced Tolerant Accents + runtime H32 H40 crop
+name: R59 COLOR VIEW v2 - native palette restoration + four A6 modes
 
 on:
   push:
@@ -11,6 +11,7 @@ on:
       - 'scripts/lab/gen_r59_colorview.py'
       - 'scripts/lab/test_r59_colorview.py'
       - 'src/r22_video.inc'
+      - 'src/r35_native4.inc'
       - 'src/m_text.c'
       - 'scripts/lab/build_r35_linear.fish'
       - 'scripts/set_rom_identity.py'
@@ -163,9 +164,9 @@ jobs:
               assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
               assert 0<r['bss_bytes']<=57920
           print('PASS 2 ROM checksums, sizes, BSS and ColorMatch identity')
-          assert (d/'PALETTES-colorview-play.h').read_bytes()==(d/'PALETTES-colorview-perf.h').read_bytes()
-          assert (d/'COLOR-TABLES-colorview-play.h').read_bytes()==(d/'COLOR-TABLES-colorview-perf.h').read_bytes()
-          assert (d/'COLOR-REPORT-colorview-play.json').read_bytes()==(d/'COLOR-REPORT-colorview-perf.json').read_bytes()
+          assert (d/'PALETTES-colorview-v2-play.h').read_bytes()==(d/'PALETTES-colorview-v2-perf.h').read_bytes()
+          assert (d/'COLOR-TABLES-colorview-v2-play.h').read_bytes()==(d/'COLOR-TABLES-colorview-v2-perf.h').read_bytes()
+          assert (d/'COLOR-REPORT-colorview-v2-play.json').read_bytes()==(d/'COLOR-REPORT-colorview-v2-perf.json').read_bytes()
           CHECK
 
       - name: BlastEm automated PERF-only regression matrix
@@ -219,10 +220,10 @@ jobs:
             raise SystemExit('BlastEm matrix contains failed runs')
           PY
 
-      - name: Upload R59 COLOR VIEW ColorMatch menu package
+      - name: Upload R59 COLOR VIEW v2 corrected native CRAM package
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r59-colorview-play-perf
+          name: doom-md-r59-colorview-v2-play-perf
           path: dist/r59-colorview/
           retention-days: 90
           if-no-files-found: error
