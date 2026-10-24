@@ -141,7 +141,9 @@ static void R47_LoadPairTiles(void);
 uint8_t R59_ColorMode(void){return r59_color_mode;}
 void R59_ChangeColor(int16_t right){
     R20_StopVideo(); /* no pending DMA may use old LUT/CRAM */
-    r59_color_mode=(uint8_t)((r59_color_mode+(right?1u:3u))&3u);
+    /* Six exact profiles: CM6, three A6 modes, two A4 controls. */
+    if(right)r59_color_mode=(uint8_t)((r59_color_mode+1u)%R59_COLOR_MODES);
+    else r59_color_mode=(uint8_t)((r59_color_mode+R59_COLOR_MODES-1u)%R59_COLOR_MODES);
     r59_color_dirty=1;
 }
 #endif
