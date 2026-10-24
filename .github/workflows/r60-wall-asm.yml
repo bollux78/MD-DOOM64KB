@@ -1,0 +1,196 @@
+name: R60 P1 Wall ASM - C vs 68000 A/B
+
+on:
+  push:
+    branches: [exp-r60-wall-pair-asm]
+    paths:
+      - '.github/workflows/r60-wall-asm.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: r60-wall-asm
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r60-wall
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r60-wall/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r60-wall/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r60-wall/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          for p in candidates:
+              if p.is_file() and p.stat().st_size==4196020 and hashlib.sha256(p.read_bytes()).hexdigest()==wanted:
+                  if p.resolve()!=target.resolve():
+                      target.parent.mkdir(exist_ok=True,parents=True)
+                      shutil.copyfile(p,target)
+                  print('Pinned shareware WAD verified:',p.name);break
+          else:raise SystemExit('Known-path verified shareware WAD missing')
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r60-wall
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r60-wall/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r60-wall/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r60-wall/PREFLIGHT-color-report.json
+
+      - name: Ensure NumPy for Cláudio palettes and microdither
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'NumPy ready'
+          else
+            python3 -m venv "$RUNNER_TEMP/r53-venv"
+            "$RUNNER_TEMP/r53-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
+            echo "$RUNNER_TEMP/r53-venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Preflight Python scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r60_wall.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: Build R60 C control PERF, PairASM PERF and PLAY
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          python3 scripts/lab/build_r59_colorview.py | tee dist/r60-wall/BUILD.log
+          cp docs/review-r59/R59-V3-SIX-MODES.md dist/r60-wall/R59-COLOR-REFERENCE.md
+
+      - name: Verify R60 A/B identities, RAM and exact palette consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r60-wall')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert len(rows)==3 and len(list(d.glob('*.bin')))==3
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920
+              print(r['rom'],r['bytes'],'BSS',r['bss_bytes'])
+          for table in ('r56_tables.h','r59_color_tables.h'):
+              assert len({(d/(name+'-'+table)).read_bytes() for name in
+                  ('control-perf','pairasm-perf','pairasm-play')})==1,table
+          print('PASS 3 ROMs, BSS, hashes, color tables')
+          CHECK
+
+      - name: BlastEm automated PERF-only regression matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import concurrent.futures,csv,os,pathlib,shutil,subprocess,time
+          d=pathlib.Path('dist/r60-wall').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in
+              (pathlib.Path.home()/'Projetos').glob('**/blastem')
+              if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm unavailable'
+          roms=sorted(d.glob('*-perf.bin'))
+          assert len(roms)==2,[p.name for p in roms]
+          env=os.environ.copy()
+          env.update(SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+          # PERF ROMs run DEMO3 automatically; PLAY requires controller input.
+          # Keep PLAY artifacts for manual real-hardware validation.
+          suites=((800,1),(6000,1))
+          jobs=[(rom,frames,rep) for frames,repeats in suites
+                for rep in range(1,repeats+1) for rom in roms]
+          def check(job):
+            rom,frames,rep=job
+            t=time.monotonic()
+            try:
+              p=subprocess.run([exe,'-b',str(frames),str(rom)],cwd=d,
+                  env=env,capture_output=True,text=True,errors='replace',timeout=120)
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),p.returncode,
+                      (p.stderr or '')[-350:]]
+            except subprocess.TimeoutExpired:
+              return [rom.name,frames,rep,round(frames/60,2),
+                      round(time.monotonic()-t,3),'TIMEOUT','120-second timeout']
+          rows=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            for row in pool.map(check,jobs):
+              rows.append(row)
+              print(' | '.join(map(str,row[:6])),flush=True)
+          with (d/'BLASTEM-PERF-REGRESSION.csv').open('w',newline='') as fp:
+            w=csv.writer(fp)
+            w.writerow(['rom','frames','repeat','emulated_seconds_60hz',
+                        'wall_seconds','exit_code','stderr_tail'])
+            w.writerows(rows)
+          errors=[r for r in rows if r[5]!=0]
+          print(f'BLASTEM MATRIX: {len(rows)} runs, '
+                f'{sum(r[1] for r in rows):,} frames total, '
+                f'{len(errors)} process errors')
+          if errors:
+            for r in errors:print('FAIL',r,flush=True)
+            raise SystemExit('BlastEm matrix contains failed runs')
+          PY
+
+      - name: Upload R60 PairASM A/B ROMs
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r60-wall-asm-ab
+          path: dist/r60-wall/
+          retention-days: 90
+          if-no-files-found: error
