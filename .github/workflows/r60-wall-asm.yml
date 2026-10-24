@@ -27,6 +27,15 @@ jobs:
           set -euo pipefail
           fish -n scripts/build_silent.fish
           fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1
+          assert f.count('echo "READY: R35 4MiB linear')==1
+          assert f.count('if set -q DOOM_R60_BUILD')==1
+          assert f.count("set defs $defs '-DDOOM_R60_PAIR_ASM'")==1
+          print('R60 fish structure PASS')
+          CHECK
           echo 'fish syntax PASS'
 
       - name: Toolchain and Pair-H oracle
