@@ -1,0 +1,256 @@
+name: R60 PairASM Cláudio R64D heap-backed diagnostic ROMs
+
+on:
+  push:
+    branches: [exp-r60-claudio-diag-heap]
+    paths:
+      - '.github/workflows/r60-claudio-r64d-heap.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: r60-claudio-r64d-heap
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact R60 base and apply Cláudio's unchanged diagnostic patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse c670a08af0646c35a4859eae4d2ccc2f4f9a6263)" = c670a08af0646c35a4859eae4d2ccc2f4f9a6263
+          mkdir -p dist/r64-diag
+          sha256sum scripts/lab/claudio-r64d-counters.patch | tee dist/r64-diag/PATCH-SHA256.txt
+          # The patch was imported from user's ZIP. Ensure a final LF so git apply can parse it.
+          cp scripts/lab/claudio-r64d-counters.patch "$RUNNER_TEMP/r64d.patch"
+          python3 - "$RUNNER_TEMP/r64d.patch" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]);v=p.read_bytes()
+          if not v.endswith(b'\n'):p.write_bytes(v+b'\n')
+          PY
+          git apply --check "$RUNNER_TEMP/r64d.patch"
+          git apply "$RUNNER_TEMP/r64d.patch"
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 -m py_compile scripts/lab/build_r64_diag.py scripts/lab/test_r64d.py scripts/lab/r64d_read.py
+          # The host C oracle includes <stdio.h>. -I src shadows host system
+          # headers with the project's embedded header variants; use -iquote
+          # solely for the quoted r64_diag.h include, without touching the
+          # diagnostic renderer patch or the m68k build.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/lab/test_r64d.py')
+          t=p.read_text()
+          assert t.count('"-I", str(SRC)')==2
+          p.write_text(t.replace('"-I", str(SRC)', '"-iquote", str(SRC)'))
+          PY
+          # Keep the original 50-counter data format, but relocate its
+          # 236-byte block from near-full BSS to SGDK's dynamically allocated
+          # heap. This is an experimental diagnostic overlay ONLY.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/r64_diag.h');h=p.read_text()
+          old='extern volatile r64d_block_t r64d; /* defined in r_draw.c */'
+          new=('extern volatile r64d_block_t *r64d_ptr; /* SGDK heap owned by D_DoomLoop */\\n'
+               '#define r64d (*r64d_ptr)')
+          assert h.count(old)==1
+          p.write_text(h.replace(old,new).replace('\\n','\n'))
+          p=Path('src/r_draw.c');d=p.read_text()
+          old='volatile r64d_block_t r64d;'
+          assert d.count(old)==1
+          p.write_text(d.replace(old,'volatile r64d_block_t *r64d_ptr;'))
+          p=Path('src/d_main.c');d=p.read_text()
+          old='_Noreturn static void D_DoomLoop(void)\\n{\\n    for (;;)'
+          new=('_Noreturn static void D_DoomLoop(void)\\n{\\n'
+               '#if defined(DOOM_R64_DIAG)\\n'
+               '    r64d_ptr = (volatile r64d_block_t*)MEM_alloc(sizeof(r64d_block_t));\\n'
+               '    if (!r64d_ptr) I_Error("R64D heap unavailable");\\n'
+               '    memset((void*)r64d_ptr, 0, sizeof(r64d_block_t));\\n'
+               '#endif\\n'
+               '    for (;;)')
+          assert d.count(old.replace('\\n','\n'))==1
+          d=d.replace(old.replace('\\n','\n'),new.replace('\\n','\n'))
+          # The SGDK memory allocator returns WRAM heap; use its public header
+          # only in diagnostic builds.
+          old='#include "r64_diag.h"'
+          new='#include "r64_diag.h"\\n#if defined(DOOM_R64_DIAG)\\n#include <genesis.h>\\n#endif'
+          assert d.count(old)==1
+          p.write_text(d.replace(old,new.replace('\\n','\n')))
+          p=Path('scripts/lab/test_r64d.py');t=p.read_text()
+          old='volatile r64d_block_t r64d;'
+          new='static volatile r64d_block_t r64d_storage;\\nvolatile r64d_block_t *r64d_ptr = &r64d_storage;'
+          assert t.count(old)==1
+          p.write_text(t.replace(old,new.replace('\\n','\n')))
+          PY
+          python3 scripts/lab/test_r64d.py | tee dist/r64-diag/HOST-CHECK.log
+          echo 'PATCH + HOST CHECK PASS'
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          for p in candidates:
+              if p.is_file() and p.stat().st_size==4196020 and hashlib.sha256(p.read_bytes()).hexdigest()==wanted:
+                  if p.resolve()!=target.resolve():
+                      target.parent.mkdir(exist_ok=True,parents=True)
+                      shutil.copyfile(p,target)
+                  print('Pinned shareware WAD verified:',p.name);break
+          else:
+              import gzip,urllib.request
+              mirrors=[
+                  ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                  ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      request=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R60 pinned WAD'})
+                      with urllib.request.urlopen(request,timeout=65) as response:
+                          data=response.read(9_000_001)
+                      if len(data)>9_000_000:raise ValueError('download exceeds cap')
+                      if compressed:data=gzip.decompress(data)
+                      if len(data)==4196020 and hashlib.sha256(data).hexdigest()==wanted:
+                          target.parent.mkdir(exist_ok=True,parents=True)
+                          target.write_bytes(data)
+                          print('Pinned shareware WAD hash verified from',name)
+                          break
+                  except Exception as exc:
+                      print('WAD mirror failed',name,type(exc).__name__)
+              else:raise SystemExit('Pinned shareware WAD unavailable or checksum mismatch')
+          PY
+
+
+      - name: Generator preflight and NumPy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r64-diag
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py > dist/r64-diag/GENERATOR.log
+          python3 scripts/lab/test_r49_colormix.py > dist/r64-diag/COLOR-ORACLE.log
+      - name: Ensure NumPy for Cláudio palettes and microdither
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'NumPy ready'
+          else
+            python3 -m venv "$RUNNER_TEMP/r53-venv"
+            "$RUNNER_TEMP/r53-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
+            echo "$RUNNER_TEMP/r53-venv/bin" >> "$GITHUB_PATH"
+          fi
+
+
+      - name: Build diag-PERF and diag-PLAY on MarsDev runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          # The historical native-pixel host oracle extracts the Flat writer
+          # without its normal includes. A diagnostic-only R64D hook exists
+          # inside it; feed the no-op header to that standalone test translation
+          # unit. Renderer code and 68000 output are unaffected.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/lab/test_r22_pixel4.py')
+          t=p.read_text()
+          old="'-iquote'+str(r/'src'),str(c)"
+          new="'-iquote'+str(r/'src'),'-include',str(r/'src/r64_diag.h'),str(c)"
+          assert t.count(old)==1
+          p.write_text(t.replace(old,new))
+          PY
+          python3 scripts/lab/build_r64_diag.py 2>&1 | tee dist/r64-diag/BUILD-R64D.log
+          cp src/r64_diag.h dist/r64-diag/R64D-COUNTERS-HEADER.h
+          cp scripts/lab/r64d_read.py dist/r64-diag/r64d_read.py
+          cp scripts/lab/claudio-r64d-counters.patch dist/r64-diag/ORIGINAL-Counters.patch
+          python3 - <<'PY'
+          import pathlib,json
+          d=pathlib.Path('dist/r64-diag')
+          r=json.loads((d/'MANIFEST.json').read_text())
+          for e in r:
+              msg=f"{e['rom']}: BSS={e['bss_bytes']} cap=57920 delta={e['bss_bytes']-57920:+d}"
+              print(msg)
+          PY
+
+      - name: Verify binary symbols, ROM cap, and report WRAM risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib,subprocess,os
+          d=pathlib.Path('dist/r64-diag')
+          entries=json.loads((d/'MANIFEST.json').read_text())
+          assert len(entries)==2
+          nm=str(pathlib.Path.home()/'mars/m68k-elf/bin/m68k-elf-nm')
+          info=[]
+          for e in entries:
+              path=d/e['rom'];data=path.read_bytes()
+              assert len(data)==e['bytes'] and hashlib.sha256(data).hexdigest()==e['sha256']
+              assert len(data)<=4*1024*1024
+              out=subprocess.run([nm,str(path.with_suffix('.elf'))],capture_output=True,text=True,check=True).stdout
+              assert 'R60_WallColumn' in out,'ASM kernel missing'
+              assert 'r64d' in out,'R64D counter block missing'
+              unsafe=e['bss_bytes']>57920
+              assert not unsafe,('heap-backed diagnostic still over BSS cap',e['rom'],e['bss_bytes'])
+              info.append({'name':e['rom'],'bss':e['bss_bytes'],'wram_over_project_cap':unsafe,'rom_sha256':e['sha256']})
+              print(e['rom'],'BSS',e['bss_bytes'],'over project limit',unsafe)
+          (d/'WRAM-STATUS.json').write_text(json.dumps(info,indent=2)+'\n')
+          PY
+          echo 'SGDK heap allocation experimental: even with BSS cap, validate heap and stack on emulator/hardware'
+
+      - name: Package diagnostic binaries and debug files
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "R60 PairASM diagnostics only - NOT performance benchmarks." > dist/r64-diag/LEIA-ME-DIAG.txt
+          printf '%s\n' "Includes full 50-counter R64D instrumentation, +236 bytes state." >> dist/r64-diag/LEIA-ME-DIAG.txt
+          printf '%s\n' "Only run on hardware after verifying WRAM-STATUS.json and stack/heap safety." >> dist/r64-diag/LEIA-ME-DIAG.txt
+          printf '%s\n' "The build does not itself contain a WRAM dump; use debugger to capture at end of DEMO3." >> dist/r64-diag/LEIA-ME-DIAG.txt
+          (cd dist/r64-diag && sha256sum *.bin > ROM-SHA256SUMS.txt)
+          python3 - <<'PY'
+          import pathlib,zipfile
+          d=pathlib.Path('dist/r64-diag')
+          z=pathlib.Path('dist/MD_DOOM_R60_CLAUDIO_DIAG_HEAP.zip')
+          with zipfile.ZipFile(z,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as out:
+              for p in sorted(d.glob('*')):
+                  if p.is_file() and (p.suffix in ('.bin','.elf','.json','.txt','.h','.py') or p.name=='BUILD-R64D.log'):
+                      out.write(p,p.name)
+          with zipfile.ZipFile(z) as out:assert out.testzip() is None
+          print('READY',z,z.stat().st_size)
+          PY
+
+      - name: Upload actual R60 R64D diagnostic ROMs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r60-claudio-r64d-diag-heap
+          path: |
+            dist/MD_DOOM_R60_CLAUDIO_DIAG_HEAP.zip
+            dist/r64-diag/BUILD-R64D.log
+            dist/r64-diag/WRAM-STATUS.json
+            dist/r64-diag/PATCH-SHA256.txt
+          retention-days: 90
+          if-no-files-found: warn
