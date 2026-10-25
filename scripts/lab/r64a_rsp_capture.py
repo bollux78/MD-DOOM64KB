@@ -6,7 +6,7 @@ complete timedemo; R64D counters here represent a prefix, not final totals.
 """
 import argparse,hashlib,json,os,pathlib,selectors,shutil,subprocess,sys,time
 
-FRAMES=(16,64,128,256,512)
+FRAMES=(8,16,64,128,256)
 PIXELS=3344
 RSP_CHUNK=192
 class RSP:
@@ -169,7 +169,7 @@ def main():
     p.add_argument("--blastem",required=True)
     p.add_argument("--out",required=True)
     p.add_argument("--kind",choices=["frame","diag"],required=True)
-    p.add_argument("--diag-tic",type=int,default=512)
+    p.add_argument("--diag-tic",type=int,default=128)
     p.add_argument("--max-emulated-frames",type=int,default=10000)
     p.add_argument("--max-breaks",type=int,default=1500)
     p.add_argument("--timeout",type=int,default=60)
