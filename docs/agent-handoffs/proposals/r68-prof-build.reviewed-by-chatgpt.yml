@@ -84,19 +84,15 @@ jobs:
           python3 - <<'PY'
           import hashlib,pathlib,shutil
           target=pathlib.Path('scripts/doom1.wad')
-          home=pathlib.Path.home()
-          candidates=[target,home/'Projetos/doom-assets/doom1.wad',
-              home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          source=pathlib.Path('/home/dan/Projetos/doom-assets/doom1.wad')
           wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
-          for p in candidates:
-              if p.is_file() and p.stat().st_size==4196020 and hashlib.sha256(p.read_bytes()).hexdigest()==wanted:
-                  if p.resolve()!=target.resolve():
-                      target.parent.mkdir(exist_ok=True,parents=True)
-                      shutil.copyfile(p,target)
-                  print('Pinned shareware WAD verified:',p.name);break
-          else:
-              raise SystemExit('Pinned shareware WAD not found locally; provision it separately before CI. No runner-side network fetch.')
-
+          if not source.is_file():
+              raise SystemExit(f'Missing canonical shareware WAD: {source}')
+          if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
+              raise SystemExit(f'Invalid canonical shareware WAD: {source}')
+          target.parent.mkdir(exist_ok=True,parents=True)
+          shutil.copyfile(source,target)
+          print('Pinned shareware WAD verified:',source)
           PY
 
       - name: Color-table generation preflight (same as R59 v3)
