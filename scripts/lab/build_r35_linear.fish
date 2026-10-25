@@ -687,6 +687,12 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R60_PAIR_ASM'
     end
+    if set -q DOOM_R64A_PROLOGUE; and test "$DOOM_R64A_PROLOGUE" = 1
+        if not test "$DOOM_R60_PAIR_ASM" = 1; or not test "$DOOM_R59_COLOR_VIEW" = 1; or not test "$DOOM_R47_FLAT_HOIST" = 1
+            echo 'R64A requires R60 + R59 + R47 flat hoist'; exit 2
+        end
+        set defs $defs '-DDOOM_R64A_PROLOGUE'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
