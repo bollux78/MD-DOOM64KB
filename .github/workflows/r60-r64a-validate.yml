@@ -1,4 +1,4 @@
-name: R60 R64A verify framebuffer byte-identical and capture R64D WRAM
+name: R60 R64A verify framebuffer byte-identical and capture R64D WRAM (retry static symbols)
 
 on:
   push:
