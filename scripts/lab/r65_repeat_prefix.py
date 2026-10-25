@@ -28,9 +28,6 @@ def symbol_addr(raw, wanted):
 def read_u32(rsp,address):
     return int.from_bytes(rsp.readmem(address,4),"big")
 
-def read_u8(rsp,address):
-    return rsp.readmem(address,1)[0]
-
 def measure(binary,elf,blastem,cap):
     raw=symbols(elf)
     s={key:symbol_addr(raw,key) for key in REQUIRED}
@@ -51,7 +48,7 @@ def measure(binary,elf,blastem,cap):
             frames=read_u32(rsp,s["bench_frames"])
             start=read_u32(rsp,s["bench_start_vb"])
             now=read_u32(rsp,s["_g_vblankCount"])
-            active=read_u8(rsp,s["bench_active"])
+            active=read_u32(rsp,s["bench_active"])
             elapsed=(now-start)&0xffffffff
             if not active or elapsed==0:
                 raise RuntimeError(f"Benchmark not active at tic {tic}, active={active}, elapsed={elapsed}")
@@ -114,7 +111,7 @@ def main():
         final.append(row)
         print("COMPARE",json.dumps(row,ensure_ascii=False),flush=True)
     result={"type":"DEMO3 PREFIX ONLY — NOT full 2134-frame benchmark",
-            "blasterm_frames_per_process_cap":args.frame_cap,
+            "blastem_frames_per_process_cap":args.frame_cap,
             "clock":"original Mega Drive; emulate VBlank count only",
             "repeats":args.repeats,"samples":measurements,"summary":final}
     output.write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n")
