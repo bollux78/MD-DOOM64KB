@@ -25,7 +25,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: doom-md-r67-approx-texture-g4-g8-g16
-          run-id: 40233035660
+          run-id: 40233731174
           github-token: ${{ github.token }}
           path: dist/r67-validate/roms
 
