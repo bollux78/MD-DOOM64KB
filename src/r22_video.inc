@@ -19,6 +19,7 @@
 #include "r20_counters.h"
 #include "r22_pixel4.h"
 #include "r57_viewport.h"
+#include "r64a_ctx.h"
 #if defined(DOOM_R43_GRAY_CRT)
 #include "r43_gray_palette.h" /* 4x4 CRAM/LUT only; Bayer8 still unchanged. */
 #else
@@ -82,6 +83,44 @@ static inline const uint8_t *R52_LUT(const uint8_t *colormap,uint16_t parity)
 #endif
 }
 #endif
+#endif
+
+#if defined(DOOM_R64A_PROLOGUE)
+#if !defined(DOOM_R56_DUAL_COLOR) || !defined(DOOM_R59_COLOR_VIEW) || !defined(DOOM_R57_CROP16) || !defined(DOOM_R57_VIEW_MENU) || !defined(DOOM_R52_CPLUT) || !defined(DOOM_R60_PAIR_ASM) || !defined(DOOM_R47_FLAT_HOIST)
+#error R64A requires R60 PairASM R56/R59 R57 crop+menu R52 CPLUT R47 flat hoist
+#endif
+/* Frame-scoped cache; when invalid, recalculate exactly as R60. */
+typedef struct {
+    const uint8_t *comp[2];
+    const uint8_t *flat[2];
+    int16_t border, xmin, xend, yend;
+} r64a_ctx_t; /* 24-byte BSS context */
+static r64a_ctx_t r64a_ctx;
+static inline void R64A_Fill(r64a_ctx_t *c)
+{
+    const uint8_t level=(_g_gamestate==GS_LEVEL);
+    const uint8_t crop=(uint8_t)(level && R57_CROP_ACTIVE);
+    c->comp[0]=R59_CURRENT.comp_even[0]; c->comp[1]=R59_CURRENT.comp_odd[0];
+    c->flat[0]=R59_CURRENT.flat_even; c->flat[1]=R59_CURRENT.flat_odd;
+    c->border=level?(R57_CROP_ACTIVE?R57_YMIN:2):0;
+    c->xmin=level?R57_XMIN:0;
+    c->xend=crop?(int16_t)R57_XEND:(int16_t)32767;
+    c->yend=crop?(int16_t)R57_YEND:(int16_t)32767;
+}
+void R64A_FrameBegin(void){ R64A_Fill(&r64a_ctx); }
+void R64A_FrameEnd(void){ r64a_ctx.comp[0]=0; }
+static inline const r64a_ctx_t *R64A_Get(r64a_ctx_t *tmp)
+{
+    if(r64a_ctx.comp[0]) return &r64a_ctx;
+    R64A_Fill(tmp); return tmp;
+}
+static inline const uint8_t *R64A_LUT(const r64a_ctx_t *cx,const uint8_t *colormap,uint16_t parity)
+{
+    if(!colormap)return 0;
+    uint32_t diff=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
+    if(diff>=R52_COLORMAP_BYTES || (diff&255u)!=0u)return 0;
+    return cx->comp[parity]+diff;
+}
 #endif
 #if defined(DOOM_R49_COLORMIX) && (!defined(DOOM_R48_PAIR_V) || !defined(DOOM_R48_V_FAST))
 #error R49 ColorMix requires Pair-V Fast
@@ -641,6 +680,18 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
 #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
+#if defined(DOOM_R64A_PROLOGUE)
+    r64a_ctx_t r64a_tmp;
+    const r64a_ctx_t *cx=R64A_Get(&r64a_tmp);
+    const uint8_t *r52map=r22_color;
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W) return;
+    int16_t border=cx->border;
+    if(x>=cx->xend)return;
+    if(y1>=cx->yend)y1=(int16_t)(cx->yend-1);
+    if(x<cx->xmin)return;
+    int16_t first=y0;
+#else
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
     #if defined(DOOM_R59_COLOR_VIEW)
@@ -666,6 +717,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     if(x<border) return;
 #endif
     int16_t first=y0;
+#endif
     if(first<border) first=border;
     if(y1>=R22_H) y1=R22_H-1;
     if(first>y1) return;
@@ -675,7 +727,11 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
     const uint16_t step=v->fracstep;
     const uint8_t *source=v->source, *colormap=v->colormap;
-#if defined(DOOM_R52_CPLUT)
+#if defined(DOOM_R64A_PROLOGUE)
+    const uint8_t *r52fast=R64A_LUT(cx,colormap,(uint16_t)(x&1u));
+    if(r52fast){r52map=r52fast;colormap=0;}
+    else r52map=(x&1u)?R59_CURRENT.wall_odd:R59_CURRENT.wall_even;
+#elif defined(DOOM_R52_CPLUT)
     const uint8_t *r52fast=R52_LUT(colormap,(uint16_t)(x&1u));
     if(r52fast){r52map=r52fast;colormap=0;}
 #endif
@@ -804,7 +860,9 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
     #if defined(DOOM_R59_COLOR_VIEW)
+#if !defined(DOOM_R64A_PROLOGUE)
     r52map=(v->x&1u)?R59_CURRENT.flat_odd:R59_CURRENT.flat_even;
+#endif
 #else
     r52map=(v->x&1u)?r56_flat_odd:r56_flat_even;
 #endif
@@ -818,6 +876,19 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
      * Exactly one framebuffer byte is modified per visible sample;
      * the neighbouring nibble is preserved (required for 4x4 floors).
      * Does not alter R39f's independent 8x8 backend. */
+#if defined(DOOM_R64A_PROLOGUE)
+    r64a_ctx_t r64a_tmp;
+    const r64a_ctx_t *cx=R64A_Get(&r64a_tmp);
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W) return;
+    int16_t border=cx->border;
+    if(x>=cx->xend)return;
+    if(y1>=cx->yend)y1=(int16_t)(cx->yend-1);
+    if(x<cx->xmin)return;
+    r52map=cx->flat[x&1u];
+    if(y0<border)y0=border;
+    if(y0<0)y0=0;
+#else
     int16_t x=v->x, y0=v->yl, y1=v->yh;
     if(y1<y0 || (uint16_t)x>=R22_W) return;
 #if defined(DOOM_R57_CROP16)
@@ -834,6 +905,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
 #endif
     if(y0<border)y0=border;
     if(y0<0)y0=0;
+#endif
     if(y1>=R22_H)y1=R22_H-1;
     if(y0>y1)return;
     R48_COUNT(R48_FLAT_CALLS,1);
