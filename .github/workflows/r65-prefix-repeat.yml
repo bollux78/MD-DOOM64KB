@@ -1,0 +1,99 @@
+name: R65 triple A/B R60 versus R64A clean DEMO3 prefix
+
+on:
+  push:
+    branches: [exp-r65-structural-profiling]
+    paths:
+      - '.github/workflows/r65-prefix-repeat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: r65-triple-prefix
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download previous validated R60 control and R64A optimized PERF binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-r64a-claudio-prologue
+          run-id: 40216335998
+          github-token: ${{ github.token }}
+          path: dist/r65-prefix/roms
+
+      - name: Check input ROMs, backend and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r65-prefix/report
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py scripts/lab/r65_repeat_prefix.py
+          for name in doom-md-r60-ref-perf doom-md-r60-r64a-perf; do
+            test -s "dist/r65-prefix/roms/$name.bin"
+            test -s "dist/r65-prefix/roms/$name.elf"
+            test "$(stat -c %s "dist/r65-prefix/roms/$name.bin")" = 2883584
+          done
+          sha256sum dist/r65-prefix/roms/*.bin > dist/r65-prefix/report/INPUT-SHA256.txt
+          if command -v blastem >/dev/null; then
+            BLASTEM=$(command -v blastem)
+          else
+            BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit)
+          fi
+          test -n "$BLASTEM" && test -x "$BLASTEM"
+          echo "BLASTEM_EXE=$BLASTEM" >> "$GITHUB_ENV"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" dist/r65-prefix/roms/doom-md-r60-ref-perf.elf | grep -E 'bench_(frames|start_vb|active)' | head -20
+
+      - name: Run 3+3 independent original ROMs and compare FPS from in-emulator VBlank counters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r65_repeat_prefix.py \
+            --ref-rom dist/r65-prefix/roms/doom-md-r60-ref-perf.bin \
+            --ref-elf dist/r65-prefix/roms/doom-md-r60-ref-perf.elf \
+            --candidate-rom dist/r65-prefix/roms/doom-md-r60-r64a-perf.bin \
+            --candidate-elf dist/r65-prefix/roms/doom-md-r60-r64a-perf.elf \
+            --blastem "$BLASTEM_EXE" \
+            --output dist/r65-prefix/report/TRIPLE-PREFIX-RESULT.json \
+            --repeats 3 \
+            --frame-cap 10000 \
+            2>&1 | tee dist/r65-prefix/report/TRIPLE-PREFIX-LOG.txt
+
+      - name: Plain text report, preserving distinction between prefix and complete DEMO3
+        if: success()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          d=Path("dist/r65-prefix/report")
+          r=json.loads((d/"TRIPLE-PREFIX-RESULT.json").read_text())
+          out=["R65 R60 vs R64A: 3 repeats per ROM (DEMO3 PREFIX, NOT COMPLETE)",
+               "Timing from in-game _g_vblankCount, not Linux host wall time.",
+               "Hard cap: <=10000 emulated frames PER BlastEm invocation.", ""]
+          for x in r["summary"]:
+              out.append(f'TIC {x["tic"]}: REF {x["ref_mean"]:.4f} FPS '
+                         f'(stdev {x["ref_stdev"]:.6f}), R64A {x["r64a_mean"]:.4f} FPS '
+                         f'(stdev {x["r64a_stdev"]:.6f}), delta {x["improvement_pct"]:+.3f}%')
+          out += ["", "Full 2134 rendered-frame DEMO3 remains pending manual 3x per ROM",
+                  "Graphics equality already passed at ticks 8/16/64/128/256 in workflow 40218061144.",
+                  "Do not use instrumented R64D ROM for FPS comparison."]
+          (d/"TRIPLE-PREFIX-SUMMARY.txt").write_text("\n".join(out)+"\n")
+          print("\n".join(out))
+          PY
+
+      - name: Upload ROM comparison evidence, even if validation fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r65-r60-r64a-triple-demo3-prefix
+          path: dist/r65-prefix/report/
+          retention-days: 90
+          if-no-files-found: warn
