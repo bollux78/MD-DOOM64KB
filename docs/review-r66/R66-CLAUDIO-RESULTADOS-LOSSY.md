@@ -1,6 +1,13 @@
 # R66 — Cláudio: compartilhamento horizontal aproximado (RESULTADOS EM 68000)
 
-**25/10/2026 · status: candidato experimental promissor, NÃO baseline promovida.**
+> **ATUALIZAÇÃO 25/10/2026 — BENCHMARK COMPLETO DE 2.134 QUADROS CONFIRMADO PELO USUÁRIO.**
+>
+> Na imagem de duas telas do DEMO3 NTSC 60Hz, R64A PERF `6,91 FPS / 308,98 s`, mínimo 1s `2,7`, máximo 1s `12,0`, contra R66 PERF `7,21 FPS / 295,88 s`, mínimo 1s `2,9`, máximo 1s `13,0`. Ambas têm `TOTAL FRAMES 2134`, `SGDK FREE / BLOCK AT END 750 / 750`. R66 ganho de FPS médio **+4,34%** (`(7.21/6.91-1)*100`) e 13,10 segundos a menos. **Usuário informou que as imagens eram visualmente iguais** nesse teste. Qualidade no movimento e demais cenas ainda precisa ser caracterizada: equivalência perceptiva é subjetiva, não prova matemática.
+>
+> **Autorização de investigação:** testar perdas ainda maiores de precisão das texturas, com geometria, mapa, clipping, game logic e jogabilidade preservados. R66 7,21 FPS é o controle para variantes agressivas R67 de 4/8/16 colunas. R64A 6,91 FPS segue referência de alta precisão relativa.
+
+
+**25/10/2026 · status: benchmark completo confirmado 7,21 FPS, versão visualmente aprovada pelo usuário; R64A preservada.**
 
 ## Objetivo de produto
 
