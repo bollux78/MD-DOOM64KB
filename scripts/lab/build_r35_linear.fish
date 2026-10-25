@@ -693,6 +693,13 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R64A_PROLOGUE'
     end
+    # Claudio R65-P2 wall-front: a small ASM hot-path dispatcher over the R64A context.
+    if set -q DOOM_R65_WALL_FRONT; and test "$DOOM_R65_WALL_FRONT" = 1
+        if not test "$DOOM_R64A_PROLOGUE" = 1
+            echo 'R65 wall front requires R64A'; exit 2
+        end
+        set defs $defs '-DDOOM_R65_WALL_FRONT'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
