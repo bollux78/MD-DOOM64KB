@@ -136,6 +136,7 @@ static int16_t* lastopening;
 
 #if VIEWWINDOWWIDTH == 76
 #include "r22_projection_max.h"
+#include "r68_prof.h"
 #elif VIEWWINDOWWIDTH == 240
 #define VIEWANGLETOXMAX 1029
 #elif VIEWWINDOWWIDTH == 120
@@ -1088,6 +1089,7 @@ CONSTFUNC angle_t R_PointToAngle3(fixed_t x, fixed_t y)
 
 static angle16_t R_PointToAngle16(int16_t x, int16_t y)
 {
+    R68_HIT(R68_PTA);
     x = x - (viewx >> FRACBITS);
     y = y - (viewy >> FRACBITS);
 
@@ -1571,6 +1573,7 @@ static PUREFUNC boolean R_PointOnSegSide(fixed_t x, fixed_t y, const seg_t __far
 
 static void R_DrawSprite (const vissprite_t* spr)
 {
+    R68_HIT(R68_SPRDRAW);
     int16_t* clipbot = floorclip;
     int16_t* cliptop = ceilingclip;
 
@@ -1949,6 +1952,7 @@ static fixed_t R_ScaleFromGlobalAngle(int16_t x)
 
 static void R_ProjectSprite (mobj_t __far* thing, int16_t lightlevel)
 {
+    R68_HIT(R68_SPRPROJ);
     const fixed_t fx = thing->x;
     const fixed_t fy = thing->y;
     const fixed_t fz = thing->z;
@@ -2771,6 +2775,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
         R37_HIT(R37_COLUMNS); /* every wall-strip loop iteration */
+        R68_HIT(R68_COL);
         // mark floor / ceiling areas
 
         int16_t yh = bottomfrac>>FRACBITS;
@@ -3211,6 +3216,7 @@ inline static int16_t CONSTFUNC Mod(uint8_t a, int16_t b)
 #endif
 static void R_StoreWallRange(const int16_t start, const int16_t stop)
 {
+    R68_HIT(R68_SEG);
     // don't overflow and crash
     if (ds_p == &_s_drawsegs[MAXDRAWSEGS])
     {
@@ -3687,6 +3693,7 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 
 static void R_AddLine(const seg_t __far* line)
 {
+    R68_HIT(R68_ADDLINE);
     curline = line;
 
     angle16_t angle1 = R_PointToAngle16(line->v1.x, line->v1.y);
@@ -3867,6 +3874,7 @@ static const byte checkcoord[12][4] =
 static boolean R_CheckBBox(const int16_t __far* bspcoord)
 {
     R37_HIT(R37_BBOX);
+    R68_HIT(R68_BBOX);
     // Find the corners of the box
     // that define the edges from current viewpoint.
     int16_t boxpos = (viewx <= ((fixed_t)bspcoord[BOXLEFT]<<FRACBITS) ? 0 : viewx < ((fixed_t)bspcoord[BOXRIGHT]<<FRACBITS) ? 1 : 2) +
@@ -3981,6 +3989,7 @@ static void R_RenderBSPNode(int16_t bspnum)
                 I_Error("R20a BSP depth overflow");
 
             R37_HIT(R37_NODES);
+            R68_HIT(R68_BSPNODE);
             bsp = &nodes[bspnum];
             side = R_PointOnSide(viewx, viewy, bsp);
 

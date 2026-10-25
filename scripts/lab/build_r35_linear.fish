@@ -700,6 +700,10 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R66_COLPAIR'
     end
+    # R68 diagnostic: per-frame workload log + PC sampler (BlastEm only, never for play/perf results).
+    if set -q DOOM_R68_PROF; and test "$DOOM_R68_PROF" = 1
+        set defs $defs '-DDOOM_R68_PROF'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf

@@ -20,6 +20,7 @@
 #include "r22_pixel4.h"
 #include "r57_viewport.h"
 #include "r64a_ctx.h"
+#include "r68_prof.h"
 #if defined(DOOM_R43_GRAY_CRT)
 #include "r43_gray_palette.h" /* 4x4 CRAM/LUT only; Bayer8 still unchanged. */
 #else
@@ -680,6 +681,7 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
 #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
+    R68_HIT(R68_WALL);
 #if defined(DOOM_R64A_PROLOGUE)
     r64a_ctx_t r64a_tmp;
     const r64a_ctx_t *cx=R64A_Get(&r64a_tmp);
@@ -857,6 +859,7 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 #endif
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
+    R68_HIT(R68_FLAT);
     const uint8_t *r52map=r22_color;
 #if defined(DOOM_R56_DUAL_COLOR)
     #if defined(DOOM_R59_COLOR_VIEW)

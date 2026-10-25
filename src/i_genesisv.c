@@ -36,6 +36,7 @@
 #include "gen_pal.h"
 #include "r21_textscreen.h"
 #include "r21_prof.h"
+#include "r68_prof.h"
 #include "r20_stackguard.h"
 #include "r20_counters.h"
 #include "r20_dma.h"
@@ -668,6 +669,12 @@ void I_BenchmarkReset(void)
 #error DOOM_R21_PROF owns result rows 19..22; build it without other diagnostics
 #endif
     R21_ProfStart();
+#endif
+#if defined(DOOM_R68_PROF)
+#if defined(DOOM_R21_PROF)
+#error R68 and R21 profilers both use the HInt vector
+#endif
+    R68_Start();
 #endif
 #if defined(DOOM_R21_STACK_PLAY)
 #if !defined(DOOM_R20_STACKGUARD)

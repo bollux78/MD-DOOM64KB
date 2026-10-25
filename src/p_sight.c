@@ -47,6 +47,7 @@
 #endif
 #if defined(DOOM_R20_SIGHT_ITERATIVE)
 #include "i_system.h"
+#include "r68_prof.h"
 #endif
 
 
@@ -338,6 +339,7 @@ static uint32_t linearAddress(const void __far* ptr)
 boolean P_CheckSight(mobj_t __far* t1, mobj_t __far* t2)
 {
   R20_COUNT(R20C_SIGHT, 1);
+  R68_HIT(R68_SIGHT);
   static uint32_t prevlat1;
   static uint32_t prevlat2;
   static boolean prevr;

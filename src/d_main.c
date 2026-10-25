@@ -67,6 +67,7 @@
 #include "globdata.h"
 #include "r24_romthings.h"
 #include "r22_mapdiag.h"
+#include "r68_prof.h"
 
 static void D_DoAdvanceDemo(void);
 static void D_PageDrawer(void);
@@ -340,8 +341,14 @@ static void TryRunTics (void)
 //
 _Noreturn static void D_DoomLoop(void)
 {
+#if defined(DOOM_R68_PROF)
+    R68_Init();
+#endif
     for (;;)
     {
+#if defined(DOOM_R68_PROF)
+        R68_FrameBegin();
+#endif
         // frame syncronous IO operations
 #if defined(DOOM_PROFILE)
         uint32_t profile_start_vb = _g_vblankCount;
@@ -370,6 +377,9 @@ _Noreturn static void D_DoomLoop(void)
         if(r50_bench_return_pending)D_R50_BenchmarkFinish();
 #endif
 
+#if defined(DOOM_R68_PROF)
+        R68_LogicDone();
+#endif
 #if defined(DOOM_PROFILE)
         I_ProfileLogic(_g_vblankCount - profile_start_vb);
         profile_start_vb = _g_vblankCount;
@@ -397,6 +407,9 @@ _Noreturn static void D_DoomLoop(void)
 
         // Update display, next frame, with current state.
         D_Display();
+#if defined(DOOM_R68_PROF)
+        R68_FrameEnd();
+#endif
 #if defined(DOOM_PROFILE)
         I_ProfileRender(_g_vblankCount - profile_start_vb);
 #endif
