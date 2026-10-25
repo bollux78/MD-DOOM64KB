@@ -1,0 +1,72 @@
+name: Handoff Cláudio R60 source ZIP and tic diagnostics
+
+on:
+  push:
+    branches: [handoff-r60-claudio-diagnostics]
+    paths: [.github/workflows/handoff-claudio-r60-sources.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify R60 source identity and create ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/handoff-claudio-r60/fontes/src dist/handoff-claudio-r60/fontes/scripts/lab dist/handoff-claudio-r60/fontes/.github/workflows
+          cp docs/handoff-claudio-r60/DIAGNOSTICO.md dist/handoff-claudio-r60/DIAGNOSTICO.md
+          files=(
+            src/r_draw.c
+            src/r60_pair_wall.s
+            src/r60_pair_wall.h
+            src/r_main.h
+            src/r22_video.inc
+            src/i_genesis.c
+            src/d_main.c
+            src/g_game.c
+            src/p_tick.c
+            src/p_tick.h
+            scripts/lab/build_r60_wall.py
+            scripts/lab/build_r35_linear.fish
+            .github/workflows/r60-wall-asm.yml
+          )
+          for f in "${files[@]}"; do
+            test -s "$f"
+            cp "$f" "dist/handoff-claudio-r60/fontes/$f"
+          done
+          grep -q '^R60_WallColumn:' src/r60_pair_wall.s
+          grep -q 'static void TryRunTics' src/d_main.c
+          grep -q 'return ticcount \* TICRATE / 60' src/i_genesis.c
+          grep -q 'R_RenderBSPNode' src/r_draw.c
+          (
+            cd dist/handoff-claudio-r60
+            find fontes -type f -print0 | sort -z | xargs -0 sha256sum > SOURCE-SHA256SUMS.txt
+          )
+          printf '%s\n' 'R60 PairASM pinned base commit: c670a08af0646c35a4859eae4d2ccc2f4f9a6263' > dist/handoff-claudio-r60/BASE-R60.txt
+          python3 - <<'PY'
+          import pathlib,zipfile
+          root=pathlib.Path('dist/handoff-claudio-r60')
+          files=sorted(p for p in root.rglob('*') if p.is_file())
+          out=pathlib.Path('dist/HANDOFF_CLAUDIO_R60_FONTES_TICS.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in files:z.write(p,p.relative_to(root))
+          with zipfile.ZipFile(out) as z:
+              assert z.testzip() is None
+              assert len(z.namelist())==16,z.namelist()
+          print('HANDOFF ZIP',out,'bytes',out.stat().st_size)
+          PY
+      - name: Upload complete handoff ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: handoff-claudio-r60-sources-and-tics
+          path: dist/HANDOFF_CLAUDIO_R60_FONTES_TICS.zip
+          if-no-files-found: error
+          retention-days: 90
