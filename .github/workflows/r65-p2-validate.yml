@@ -1,4 +1,4 @@
-name: R65-P2 Claudio test actual frame identity and triple prefix FPS
+name: R65-P2 Claudio image equality plus 3x A/B prefix (RSP dependency fixed)
 
 on:
   push:
