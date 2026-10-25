@@ -2723,6 +2723,14 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
     uint16_t r66_fs = 0;
     __typeof__(dcvars.source) r66_src = 0;
     uint8_t r66_arm = 0;
+#if defined(DOOM_R67_TEXGROUP)
+#if (DOOM_R67_TEXGROUP != 4) && (DOOM_R67_TEXGROUP != 8) && (DOOM_R67_TEXGROUP != 16)
+#error R67 approximate texture group size must be 4, 8 or 16
+#endif
+/* R67 deliberately reduces horizontal texture precision much more than R66.
+   Keep the R66 cache local to this wall seg; reset at each absolute block
+   boundary to avoid reusing coordinates across groups. No geometry change. */
+#endif
 #endif
 
     dcvars.colormap = R_LoadColorMap(rw_lightlevel);
@@ -2890,7 +2898,14 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #endif
         // texturecolumn and lighting are independent of wall tiers
 #if defined(DOOM_R66_COLPAIR)
+#if defined(DOOM_R67_TEXGROUP)
+        /* R67: repeat the first calculated texture coordinate/reciprocal
+           for subsequent columns until the next 4/8/16-column boundary.
+           The first pixel of a segment always calculates its own sample. */
+        const uint8_t r66_reuse = (uint8_t)(r66_arm && (rw_x & (DOOM_R67_TEXGROUP - 1u)));
+#else
         const uint8_t r66_reuse = (uint8_t)(r66_arm & (uint8_t)rw_x & 1u);
+#endif
         r66_arm = 0;
         if (r66_reuse)
             dcvars.fracstep = r66_fs; /* sky may have changed it */
@@ -2991,11 +3006,23 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
         }
 
  #if defined(DOOM_R66_COLPAIR)
+#if defined(DOOM_R67_TEXGROUP)
+        if (segtextured)
+        {
+            if (!r66_reuse)
+            {
+                r66_fs = dcvars.fracstep;
+                r66_src = 0; /* never carry a one-sided source across groups */
+            }
+            r66_arm = 1;
+        }
+#else
         if (segtextured && !r66_reuse && !(rw_x & 1))
         {
             r66_arm = 1;
             r66_fs = dcvars.fracstep;
         }
+#endif
 #endif
 
         // draw the wall tiers
