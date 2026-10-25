@@ -37,7 +37,7 @@ Essas opções **NÃO estão habilitadas na baseline R60**. Foram selecionadas p
 Outros auxiliares eram `tan` (produto tangente 16×32 ASM), `clip`/`bbox` (buscas 0/1 ASM) e combinações.
 **Resultados isolados R63:** `lazy` 6,72 FPS / 317,58 s; `locals` 6,72 / 317,75 s; `phase` 6,65 / 320,97 s; `ctl` 6,67 / 319,97 s. **R64:** `ll` (lazy+locals) 6,74 / 316,77 s; `allnop` (sem phase) 6,76 / 315,68 s; `allref` (com phase) 6,73 / 316,90 s. Diferenças pequenas em execuções únicas no BlastEm, não confirmam ganho repetível no hardware. **Não transportar automaticamente essas experiências descartadas para R60**.
 
-Referência histórica para consultar a implementação original **sem usar como base de desenvolvimento**: commit `c1e0a73962cb9cd9d539034be67ac892c5441b7d` da R63; arquivos `src/r_draw.c`, `src/r22_video.inc` e `src/r63_asm.h`. A pasta `historico-r63/` neste pacote contém essas três fontes do commit fixado, **apenas para leitura/estudo**.
+Referência histórica para consultar a implementação original **sem usar como base de desenvolvimento**: commit `c1e0a73962cb9cd9d539034be67ac892c5441b7d` da R63; arquivos `src/r_draw.c`, `src/r22_video.inc` e `src/r63_asm.h`. As fontes históricas R63 ficam referenciadas pelo commit acima, mas **não são a base deste ZIP**: ele reúne exclusivamente os arquivos R60 e este diagnóstico.
 
 ## 3. Política real de tics por quadro no PLAY
 
