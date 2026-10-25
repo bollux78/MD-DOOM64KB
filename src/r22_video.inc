@@ -678,7 +678,19 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
  * exact original sampling. Even x owns the high nibble; odd x owns low.
  * Both variants read-modify-write to preserve the neighbor pixel. */
 #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
+#if defined(DOOM_R65_WALL_FRONT)
+#if !defined(DOOM_R64A_PROLOGUE) || !defined(DOOM_R60_PAIR_ASM) || !defined(DOOM_R52_CPLUT)
+#error R65 wall front needs the R64A context, the R60 kernel and the composed LUT
+#endif
+#if defined(DOOM_R64_DIAG) || defined(DOOM_R48_P0_PROFILE)
+#error R65 wall front skips the counters inside R42_DrawPackedWall; do not combine with diagnostics
+#endif
+/* Original body, unchanged. Out of line so the hot path below saves few registers
+ * instead of the 8 this body forces on every call. */
+__attribute__((noinline)) static void R42_DrawPackedWall_Slow(const draw_column_vars_t *v)
+#else
 static void R42_DrawPackedWall(const draw_column_vars_t *v)
+#endif
 {
 #if defined(DOOM_R64A_PROLOGUE)
     r64a_ctx_t r64a_tmp;
@@ -851,6 +863,32 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     }
 #endif /* Pair-V column renderer */
 }
+#if defined(DOOM_R65_WALL_FRONT)
+/* R65 front: handles exactly the case that ends in R60_WallDraw (composed LUT hit and
+ * count>=2) with the same early exits and arithmetic as the body above. It has NO side
+ * effects before delegating, so every other case simply re-runs the original body. */
+static void R42_DrawPackedWall(const draw_column_vars_t *v)
+{
+    if(!r64a_ctx.comp[0]){ R42_DrawPackedWall_Slow(v); return; }   /* context not valid */
+    const r64a_ctx_t *cx=&r64a_ctx;
+    int16_t x=v->x, y0=v->yl, y1=v->yh;
+    if(y1<y0 || (uint16_t)x>=R22_W) return;
+    if(x>=cx->xend)return;
+    if(y1>=cx->yend)y1=(int16_t)(cx->yend-1);
+    if(x<cx->xmin)return;
+    int16_t first=y0;
+    if(first<cx->border) first=cx->border;
+    if(y1>=R22_H) y1=R22_H-1;
+    if(first>y1) return;
+    uint16_t count=(uint16_t)(y1-first+1);
+    const uint8_t *lut=R64A_LUT(cx,v->colormap,(uint16_t)(x&1u));
+    if(!lut || count<2){ R42_DrawPackedWall_Slow(v); return; }
+    uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
+    f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
+    R60_WallDraw(dst,v->source,lut,f,v->fracstep,count,(uint16_t)(first&1));
+}
+#endif
 void R_DrawColumnWall(const draw_column_vars_t *v){R42_DrawPackedWall(v);}
 #else
 void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
