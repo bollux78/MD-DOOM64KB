@@ -693,6 +693,12 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R64A_PROLOGUE'
     end
+    if set -q DOOM_R65_EARLY_WALL_CROP; and test "$DOOM_R65_EARLY_WALL_CROP" = 1
+        if not test "$DOOM_R64A_PROLOGUE" = 1; or not test "$DOOM_R57_VIEW_MENU" = 1; or not test "$DOOM_R42_WALL_ASM" = 1
+            echo 'R65-P1 requires R64A, R57 view menu, R42 wall ASM'; exit 2
+        end
+        set defs $defs '-DDOOM_R65_EARLY_WALL_CROP'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
