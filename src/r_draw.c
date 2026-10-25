@@ -67,6 +67,7 @@
    Compare ROM bus reads with DIVU.W in timedemo. */
 #include "r20_counters.h"
 #include "r37_profile.h"
+#include "r64a_ctx.h"
 #if defined(DOOM_R47_MUL_BSP)
 #include "r47_mul.h"
 #endif
@@ -4066,6 +4067,7 @@ static void R_SetupFrame (player_t *player)
 //
 void R_RenderPlayerView (player_t* player)
 {
+    R64A_FRAME_BEGIN();
 #if defined(DOOM_R38_TIME_PROFILE)
     R38_BeginView(player->mo->x, player->mo->y, player->mo->angle);
 #endif
@@ -4109,6 +4111,7 @@ void R_RenderPlayerView (player_t* player)
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 0;
 #endif
+    R64A_FRAME_END();
 }
 
 
