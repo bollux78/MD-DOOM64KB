@@ -27,7 +27,7 @@ BSS ≤ 57.920 B. ROM ≤ 4 MiB. Preservar kernel R60, Pair-V Fast, LUT composta
 | R64A | contexto por quadro hoistado no prólogo de `R42_DrawPackedWall` | +2,83% (6,72→6,91), framebuffer idêntico | aceito (referência) |
 | R64D | contadores diagnósticos | achou B1/B2 ≈0,1–0,2% | encerrado |
 | R65-P1 | corte precoce de parede | −0,72% | rejeitado |
-| R65-P2 | frente fina de `R42_DrawPackedWall` | estimativa 1,1–1,3%, não medido | pendente de medição |
+| R65-P2 | frente fina de `R42_DrawPackedWall` | `moveml` continuou com 8 registradores (objdump) | **rejeitado**: critério de descarte atingido, sem FPS |
 | R66 | par de colunas reaproveita textura/escala/fonte | **+4,34%** (6,91→7,21) | **aceito** |
 | R67 | grupos de 4/8/16 colunas | +1,9% / +3,6% / +4,4% sobre R66 | **rejeitado**: perda visual perceptível crescente |
 | R68 | log por quadro + amostrador de PC (diagnóstico) | em preparo, branch `claude/r68-profiling` | pendente de build e captura |
