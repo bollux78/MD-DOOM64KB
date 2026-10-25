@@ -1,6 +1,6 @@
 # MD-DOOM64KB — estado do projeto (documento vivo)
 
-Atualizado em 25/10/2026. Quem muda o estado atualiza este arquivo no mesmo PR. Fonte única para Claude, GPT e o dono.
+Atualizado em 25/10/2026. Fonte única do estado atual. Quem muda o estado atualiza este arquivo no mesmo PR.
 
 ## Objetivo de produto
 Um DOOM jogável de ponta a ponta no Mega Drive real, rodando o máximo possível do código original, reconhecível visualmente e com geometria, colisão e gameplay corretos. A precisão matemática do rasterizador **não** é prioridade; a identidade visual e a jogabilidade são. Meta de referência: 8–10 FPS médios.
@@ -12,14 +12,7 @@ Um DOOM jogável de ponta a ponta no Mega Drive real, rodando o máximo possíve
 | R64A | `exp-r60-r64a-prologue-memory-safe` `b6e7746` | 6,91 | referência imutável (precisão) |
 | **R66** | `exp-r66-claudio-colpair` `f5a9daa` | **7,21** | **baseline vigente** (visualmente indistinguível da R64A) |
 
-## Limites duros
-BSS ≤ 57.920 B. ROM ≤ 4 MiB. Preservar kernel R60, Pair-V Fast, LUT composta, CM6/R59, menus, H32/H40, crop. ROMs de diagnóstico só no BlastEm, nunca como resultado de desempenho.
-
-## Regras de aceite
-1. Medir sempre com 3 repetições, mesmo clock, DEMO3 completo antes de afirmar ganho; prefixos (tic 64/128/256) só triam.
-2. Qualidade visual é julgada pelo dono em movimento. **Ganho pequeno não compra perda visual perceptível.**
-3. Aproximação aceita só com ganho material e imagem reconhecível; geometria, clipping, portas e gameplay não podem degradar.
-4. Nada entra na baseline sem PR, README do experimento e veredito. Uma branch por experimento (`claude/…`, `gpt/…`).
+Regras permanentes (limites de BSS/ROM, regras de aceite, branches, CI, handoffs): ver [`AGENTS.md`](../AGENTS.md).
 
 ## Registro de experimentos
 | ID | Ideia | Resultado | Veredito |
