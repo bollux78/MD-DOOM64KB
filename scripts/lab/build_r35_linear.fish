@@ -693,6 +693,13 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R64A_PROLOGUE'
     end
+    # Cláudio R66: approximate pair-column texture/reciprocal sharing (not lossless).
+    if set -q DOOM_R66_COLPAIR; and test "$DOOM_R66_COLPAIR" = 1
+        if not test "$DOOM_R64A_PROLOGUE" = 1; or not test "$DOOM_R60_PAIR_ASM" = 1
+            echo 'R66 requires R64A and R60 PairASM baseline'; exit 2
+        end
+        set defs $defs '-DDOOM_R66_COLPAIR'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
