@@ -131,6 +131,19 @@ jobs:
         run: |
           set -euo pipefail
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          # The historical native-pixel host oracle extracts the Flat writer
+          # without its normal includes. A diagnostic-only R64D hook exists
+          # inside it; feed the no-op header to that standalone test translation
+          # unit. Renderer code and 68000 output are unaffected.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/lab/test_r22_pixel4.py')
+          t=p.read_text()
+          old="'-iquote'+str(r/'src'),str(c)"
+          new="'-iquote'+str(r/'src'),'-include',str(r/'src/r64_diag.h'),str(c)"
+          assert t.count(old)==1
+          p.write_text(t.replace(old,new))
+          PY
           python3 scripts/lab/build_r64_diag.py 2>&1 | tee dist/r64-diag/BUILD-R64D.log
           cp src/r64_diag.h dist/r64-diag/R64D-COUNTERS-HEADER.h
           cp scripts/lab/r64d_read.py dist/r64-diag/r64d_read.py
