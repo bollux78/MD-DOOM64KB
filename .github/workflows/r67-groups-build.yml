@@ -169,7 +169,7 @@ jobs:
       - name: Require rebuilt R66 ROM byte-identical to previously measured 7.21 FPS control
         uses: actions/download-artifact@v4
         with:
-          name: doom-md-r67-approx-texture-g4-g8-g16
+          name: doom-md-r66-cl-approx-colpair-perf-play
           run-id: 40231459814
           github-token: ${{ github.token }}
           path: dist/r67/original-control
@@ -235,6 +235,7 @@ jobs:
           PY
 
       - name: Upload original R66 PERF reference and R67 4 8 16 PERF PLAY variants
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: doom-md-r67-approx-texture-g4-g8-g16
