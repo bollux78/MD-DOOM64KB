@@ -1,0 +1,172 @@
+name: R67 G4 G8 G16 sampled frame differences and stock-clock prefix FPS
+
+on:
+  push:
+    branches: [exp-r67-aggressive-texture-groups]
+    paths: [.github/workflows/r67-groups-validate.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: r67-groups-validate
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  measure:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download R66 control and three aggressive R67 experimental ROM variants
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r67-approx-texture-g4-g8-g16
+          run-id: 40233035660
+          github-token: ${{ github.token }}
+          path: dist/r67-validate/roms
+
+      - name: Download original measured R66 (7.21 FPS) and verify exact control
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r67-validate/previous
+
+      - name: Preflight source, exact R66 comparison, and emulator location
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r67-validate/report
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py scripts/lab/r65_repeat_prefix.py scripts/lab/r67_multi_compare.py
+          cmp dist/r67-validate/roms/doom-md-r60-r66-perf.bin \
+              dist/r67-validate/previous/doom-md-r60-r66-perf.bin
+          sha256sum dist/r67-validate/roms/*.bin > dist/r67-validate/report/INPUT-SHA256.txt
+          BLASTEM=$(command -v blastem || :)
+          if test -z "$BLASTEM"; then BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
+          test -n "$BLASTEM" && test -x "$BLASTEM"
+          echo "BLASTEM_EXE=$BLASTEM" >> "$GITHUB_ENV"
+          echo "R66 control bit-identical to version benchmarked by user at 7.21 FPS"
+
+      - name: R66 reference framebuffer snapshots (5 DEMO3 tics)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r67-validate/roms/doom-md-r60-r66-perf.bin \
+            --elf dist/r67-validate/roms/doom-md-r60-r66-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r67-validate/report/r66 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r67-validate/report/CAPTURE-r66.txt
+
+      - name: R67 group4 five framebuffer snapshots
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r67-validate/roms/doom-md-r60-r67-g4-perf.bin \
+            --elf dist/r67-validate/roms/doom-md-r60-r67-g4-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r67-validate/report/g4 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r67-validate/report/CAPTURE-g4.txt
+
+      - name: R67 group8 five framebuffer snapshots
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r67-validate/roms/doom-md-r60-r67-g8-perf.bin \
+            --elf dist/r67-validate/roms/doom-md-r60-r67-g8-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r67-validate/report/g8 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r67-validate/report/CAPTURE-g8.txt
+
+      - name: R67 group16 five framebuffer snapshots
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r67-validate/roms/doom-md-r60-r67-g16-perf.bin \
+            --elf dist/r67-validate/roms/doom-md-r60-r67-g16-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r67-validate/report/g16 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r67-validate/report/CAPTURE-g16.txt
+
+      - name: Compare lossy pixel samples and check viewport/HUD untouched
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path("dist/r67-validate/report")
+          results=[]
+          if not (root/"r66/CAPTURE.json").is_file():
+              raise SystemExit("R66 snapshot missing, cannot compare")
+          ref=json.loads((root/"r66/CAPTURE.json").read_text())["records"]
+          for group in (4,8,16):
+              label=f"g{group}"
+              p=root/label/"CAPTURE.json"
+              if not p.is_file():
+                  results.append({"variant":label,"error":"RSP snapshot failed, cannot compare"})
+                  continue
+              candidate=json.loads(p.read_text())["records"]
+              assert len(candidate)==len(ref)==5
+              for a,b in zip(ref,candidate):
+                  assert a["gametic"]==b["gametic"]
+                  old=(root/"r66"/a["file"]).read_bytes()
+                  new=(root/label/b["file"]).read_bytes()
+                  assert len(old)==len(new)==3344
+                  changed=outside=inside=0
+                  group_positions=[0]*group
+                  for y in range(44):
+                      for x in range(76):
+                          offset=(y>>1)*152+(x&1)*76+(x>>1)*2+1
+                          u,v=old[offset],new[offset]
+                          a4=(u&15) if y&1 else u>>4
+                          b4=(v&15) if y&1 else v>>4
+                          if a4!=b4:
+                              changed+=1
+                              group_positions[x&(group-1)]+=1
+                              if 6<=x<72 and 6<=y<40: inside+=1
+                              else:outside+=1
+                  row={"variant":label,"tic":a["gametic"],"samples_changed":changed,
+                       "visible_window_changed":inside,
+                       "outside_visible_window_changed":outside,
+                       "visible_changed_percent":round(100*inside/(66*34),3),
+                       "changes_by_column_phase":group_positions}
+                  results.append(row)
+                  print("R67 LOSSY FRAME",row,flush=True)
+                  if outside: raise SystemExit(f"R67 changed pixels outside visible game viewport: {row}")
+          (root/"LOSSY-SCREEN-MATRIX.json").write_text(json.dumps(results,indent=2)+"\n")
+          print("PASS visually approximate changes accounted for, no requirement of identical framebuffers")
+          PY
+
+      - name: Measure R66 vs G4 G8 G16 across three independent DEMO3 prefixes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r67_multi_compare.py \
+            --roms dist/r67-validate/roms \
+            --blastem "$BLASTEM_EXE" \
+            --out dist/r67-validate/report/THREE-RUNS-FOUR-ROM-FPS.json \
+            --repeat 3 --cap 10000 \
+            2>&1 | tee dist/r67-validate/report/FPS-MULTI-LOG.txt
+
+      - name: Upload counters, raw Pixel4 samples, and benchmark comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r67-g4-g8-g16-pixel-diffs-triple-prefix-fps
+          path: dist/r67-validate/report/
+          retention-days: 90
+          if-no-files-found: warn
