@@ -20,7 +20,7 @@ python3 scripts/lab/r68_capture.py \
   --rom dist/r68/doom-md-r60-r68-prof-perf.bin --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
   --out dist/r68/capture --max-emulated-frames 10000
 ```
-Com ~8 VBlanks por quadro de jogo, 10.000 quadros do emulador cobrem os primeiros ~1.000–1.200 quadros do DEMO3. Para o DEMO3 inteiro (2.134 quadros, ~18 mil quadros do emulador) use `--max-emulated-frames 25000`, se você aceitar passar do limite de 10 mil por processo.
+Com ~8 VBlanks por quadro de jogo, 10.000 quadros do emulador (limite do `AGENTS.md`) cobrem os primeiros ~1.000–1.200 quadros do DEMO3. Cobrir os 2.134 quadros exigiria ~18 mil quadros do emulador por invocação; isso passa do limite e **só deve ser feito com autorização explícita do mantenedor** (`--max-emulated-frames 25000`).
 
 Saídas em `--out`: `frames.jsonl` (um registro por quadro), `rings.json` (amostras de PC por quadro), `summary.json` e **`report.md`**:
 1. distribuição do custo por quadro e quanto do tempo vai para os 10/20/30/50% mais lentos;
