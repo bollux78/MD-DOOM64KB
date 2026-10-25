@@ -2713,6 +2713,17 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #endif
     draw_column_vars_t dcvars;
     int16_t  texturecolumn = 0;   // shut up compiler warning
+#if defined(DOOM_R66_COLPAIR)
+#if defined(FLAT_WALL) || defined(DOOM_R21_LAZY_TEXCOL) || defined(DOOM_R20_COUNTERS)
+#error R66 column pairs: not combinable with FLAT_WALL, R21 lazy texcol or R20 counters
+#endif
+    /* R66 approximate: odd screen columns can reuse the even neighbour's
+       texturecolumn, reciprocal fracstep and one-sided source pointer.
+       Keep geometry, clipping, flats, masked bookkeeping and rw_scale exact. */
+    uint16_t r66_fs = 0;
+    __typeof__(dcvars.source) r66_src = 0;
+    uint8_t r66_arm = 0;
+#endif
 
     dcvars.colormap = R_LoadColorMap(rw_lightlevel);
 #if defined(DOOM_R20_REG_COLUMNS)
@@ -2878,6 +2889,13 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             R20_COUNT(R20C_TEX_SKIP, 1);
 #endif
         // texturecolumn and lighting are independent of wall tiers
+#if defined(DOOM_R66_COLPAIR)
+        const uint8_t r66_reuse = (uint8_t)(r66_arm & (uint8_t)rw_x & 1u);
+        r66_arm = 0;
+        if (r66_reuse)
+            dcvars.fracstep = r66_fs; /* sky may have changed it */
+        if (!r66_reuse)
+#endif
 #if defined(DOOM_R21_LAZY_TEXCOL)
         if (segtextured && r21_need_tex)
 #else
@@ -2972,6 +2990,14 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #endif
         }
 
+ #if defined(DOOM_R66_COLPAIR)
+        if (segtextured && !r66_reuse && !(rw_x & 1))
+        {
+            r66_arm = 1;
+            r66_fs = dcvars.fracstep;
+        }
+#endif
+
         // draw the wall tiers
         if (midtexture)
         {
@@ -2981,7 +3007,20 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             dcvars.texturemid = rw_midtexturemid;
             //
 
+ #if defined(DOOM_R66_COLPAIR)
+            if (r66_reuse && r66_src)
+            {
+                dcvars.source = r66_src;
+                R20_WALL_DRAW(&dcvars);
+            }
+            else
+            {
+                R20_WALLCOL(r20_mid, texmidtexture, midtexture, texturecolumn, &dcvars);
+                r66_src = dcvars.source;
+            }
+#else
             R20_WALLCOL(r20_mid, texmidtexture, midtexture, texturecolumn, &dcvars);
+#endif
 
             cc_rwx = VIEWWINDOWHEIGHT;
             fc_rwx = -1;
