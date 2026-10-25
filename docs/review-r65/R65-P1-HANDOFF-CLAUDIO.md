@@ -1,5 +1,8 @@
 # MD-DOOM64KB — R65-P1, handoff ao Cláudio / Werk
 
+> **RESULTADO FINAL (25/10/2026): R65-P1 REJEITADA POR REGRESSÃO.** Compilou e passou BSS / ASM / 5 framebuffers byte a byte, mas perdeu -0,53%, -0,72%, -0,89% nos prefixos tic 64/128/256, em três repetições por ROM. Nenhuma divergência de pixels. **Não mesclar na R64A.** A hipótese de pular busca de textura fora da janela não compensou o overhead das checagens neste DEMO3. Logs e arquivos: [run 40225100146](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40225100146/artifacts/12611206289). Manter R64A como candidata e buscar novo hotspot, sem adicionar checks por coluna sem contagem de descartes.
+
+
 **Data:** 25/10/2026. **Clock de referência único:** Mega Drive original, ~7,67 MHz. Overclock pessoal não entra nos resultados oficiais.
 
 **Branches intocadas:** `exp-r60-wall-pair-asm` (R60 histórica); `exp-r60-r64a-prologue-memory-safe` (R64A).
