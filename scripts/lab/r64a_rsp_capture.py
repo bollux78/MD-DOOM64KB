@@ -62,7 +62,8 @@ class RSP:
     def req(self,command,timeout=None):
         self.send(command)
         reply=self.recv(timeout)
-        if len(reply)==3 and reply.startswith("E") and all(c in "0123456789abcdefABCDEF" for c in reply[1:]):\n            raise RuntimeError("RSP "+command+" -> "+reply)
+        if len(reply)==3 and reply.startswith("E") and all(c in "0123456789abcdefABCDEF" for c in reply[1:]):
+            raise RuntimeError("RSP "+command+" -> "+reply)
         return reply
     def readmem(self,addr,size):
         out=bytearray()
