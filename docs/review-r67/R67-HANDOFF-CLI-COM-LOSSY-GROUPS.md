@@ -1,6 +1,25 @@
 # R67 · precisão agressivamente reduzida nas texturas — handoff Cláudio / Werk
 
-**25/10/2026. Experimento independente, NÃO promover antes de teste visual real.**
+**25/10/2026 — VEREDITO FINAL DO USUÁRIO: R67-G4 / G8 / G16 REJEITADAS POR DETERIORAÇÃO VISUAL PERCEPTÍVEL. R66 MANTIDA.** A perda visual aumenta com o tamanho do grupo e os ganhos reais de desempenho não justificam a troca. Não promover nem incorporar R67 à R66.
+
+## Benchmark COMPLETO enviado pelo usuário e decisão
+
+DEMO3 / NTSC 60 Hz; 2.134 quadros por ROM, configurações equivalentes; screenshot comparativo de quatro ROMs fornecido pelo usuário. Todos os valores abaixo são **medidos no benchmark completo** e distintos dos prefixos automatizados.
+
+| Métrica | R66 controle | R67-G4 | R67-G8 | R67-G16 |
+|---|---:|---:|---:|---:|
+| FPS médio | 7,21 | 7,35 | 7,47 | 7,53 |
+| Ganho sobre R66 | — | +1,94% | +3,61% | +4,44% |
+| Tempo de DEMO3 | 295,88 s | 290,17 s | 285,68 s | 283,42 s |
+| FPS mínimo 1s | 2,9 | 2,9 | 3,0 | 3,2 |
+| FPS máximo 1s | 13,0 | 14,0 | 14,3 | 14,5 |
+| SGDK FREE/BLOCK AT END | 750 / 750 | 750 / 750 | 750 / 750 | 750 / 750 |
+
+**Avaliação visual explícita do usuário:** «perda visual perceptível e crescente com ganhos pequenos. não aceito». Vale mesmo para G4 (+0,14 FPS); G16 (+0,32 FPS) é insuficiente para justificar a imagem mais degradada. Não confundir aceitabilidade de aproximação da R66 (relatada visualmente indistinguível da R64A) com permissão irrestrita para texturas em blocos maiores.
+
+**Nova orientação para Cláudio/Werk:** preservar R66 (grupo de 2 colunas) como melhor compromisso conhecido, alvo de performance de referência **7,21 FPS** no DEMO3 completo. Buscar economia em outros cálculos e estruturas (escala, distância, setup por segmento, reduções numéricas com erro controlado, cache seguro, chamada ao kernel ASM), evitando maior compartilhamento horizontal de textura. Aproximações novas são possíveis, mas devem passar pelo julgamento visual antes de promoção; não adotar ganhos de 1–4% à custa de faixas ou perda evidente de identidade visual. R60 e R64A continuam referências imutáveis.
+
+
 
 ## Decisão de produto
 
@@ -82,4 +101,4 @@ Amostras não provam o desempenho do DEMO3 completo. O usuário deve medir **2.1
 4. Manter controle R66 7,21 FPS e referência de precisão R64A 6,91 FPS. Se houver regressão, preservar R66 e rejeitar a variante.
 5. Qualquer próxima redução numérica de projeção (distância/escala/ângulo) exige experimento separado, já que altera geometria e o risco é maior que ampliar grupos de textura.
 
-**Status:** build, hash do controle, oráculos, 15 amostras de framebuffer e 3× prefixos A/B completos no GitHub. Testes do DEMO3 completo e qualidade visual real no PLAY ainda pendentes.
+**Status FINAL:** compilação, auditorias, 15 frames amostrados, 3× prefixos, benchmarks completos de 2.134 quadros e avaliação visual do usuário concluídos. **R67-G4/G8/G16 rejeitadas por custo visual superior ao ganho; R66 é a referência aprovada.**
