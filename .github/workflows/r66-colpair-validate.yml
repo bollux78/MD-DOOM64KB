@@ -1,0 +1,129 @@
+name: R66 approximate columns — pixel divergence and 3x DEMO3 prefix FPS
+
+on:
+  push:
+    branches: [exp-r66-claudio-colpair]
+    paths: [.github/workflows/r66-colpair-validate.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: r66-colpair-validation
+  cancel-in-progress: true
+
+jobs:
+  validation:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download R66 approximate PERF PLAY and ELF from MarsDev
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r66-validation/roms
+
+      - name: Download pinned original R64A control to audit unchanged compile
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-r64a-claudio-prologue
+          run-id: 40216335998
+          github-token: ${{ github.token }}
+          path: dist/r66-validation/pinned-r64a
+
+      - name: Verify exact R64A control and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r66-validation/report
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py scripts/lab/r65_repeat_prefix.py scripts/lab/r66_candidate_compare.py
+          cmp dist/r66-validation/roms/doom-md-r60-r64a-perf.bin \
+              dist/r66-validation/pinned-r64a/doom-md-r60-r64a-perf.bin
+          echo 'PASS clean R64A reproduced bit for bit' | tee dist/r66-validation/report/CONTROL-IDENTITY.txt
+          sha256sum dist/r66-validation/roms/*.bin > dist/r66-validation/report/ROM-SHA256.txt
+          BLASTEM=$(command -v blastem || :)
+          if test -z "$BLASTEM"; then BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
+          test -n "$BLASTEM" && test -x "$BLASTEM"
+          echo "BLASTEM_EXE=$BLASTEM" >> "$GITHUB_ENV"
+
+      - name: Capture R64A native Pixel4 framebuffer in five DEMO3 frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r66-validation/roms/doom-md-r60-r64a-perf.bin \
+            --elf dist/r66-validation/roms/doom-md-r60-r64a-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r66-validation/report/r64a \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r66-validation/report/R64A-FRAMECAP.log
+
+      - name: Capture R66 lossy Pixel4 framebuffer at same DEMO3 frame IDs
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r66-validation/roms/doom-md-r60-r66-perf.bin \
+            --elf dist/r66-validation/roms/doom-md-r60-r66-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r66-validation/report/r66 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r66-validation/report/R66-FRAMECAP.log
+
+      - name: Quantify deliberate Pixel4 pixel differences (NOT an equivalence gate)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('dist/r66-validation/report')
+          a=json.loads((root/'r64a/CAPTURE.json').read_text())['records']
+          b=json.loads((root/'r66/CAPTURE.json').read_text())['records']
+          assert len(a)==len(b)==5
+          checks=[]
+          for x,y in zip(a,b):
+            assert x['gametic']==y['gametic']
+            aa=(root/'r64a'/x['file']).read_bytes()
+            bb=(root/'r66'/y['file']).read_bytes()
+            assert len(aa)==len(bb)==3344
+            changed_bytes=sum(c!=d for c,d in zip(aa,bb))
+            changed_nibbles=sum(((c>>4)!=(d>>4)) + ((c&15)!=(d&15)) for c,d in zip(aa,bb))
+            row={'tic':x['gametic'],'raw_bytes':len(aa),
+                 'changed_bytes':changed_bytes,
+                 'changed_nibbles':changed_nibbles,
+                 'changed_nibbles_pct':round(100*changed_nibbles/(len(aa)*2),3),
+                 'sha256_r64a':x['sha256'],'sha256_r66':y['sha256']}
+            checks.append(row);print('LOSSY FRAME COMPARISON',row,flush=True)
+          (root/'FRAMEBUFFER-LOSSY-DIFFERENCE.json').write_text(json.dumps(checks,indent=2)+'\n')
+          print('PASS: difference quantified, NO requirement of bit-identical pixels.',flush=True)
+          PY
+
+      - name: Run 3x R64A and 3x R66 non-instrumented DEMO3 prefix comparisons
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r66_candidate_compare.py \
+            --r64a-rom dist/r66-validation/roms/doom-md-r60-r64a-perf.bin \
+            --r64a-elf dist/r66-validation/roms/doom-md-r60-r64a-perf.elf \
+            --r66-rom dist/r66-validation/roms/doom-md-r60-r66-perf.bin \
+            --r66-elf dist/r66-validation/roms/doom-md-r60-r66-perf.elf \
+            --blastem "$BLASTEM_EXE" \
+            --output dist/r66-validation/report/R66-TRIPLE-PREFIX.json \
+            --repeats 3 --frame-cap 10000 \
+            2>&1 | tee dist/r66-validation/report/R66-TRIPLE-PREFIX.log
+
+      - name: Upload raw lossy frame samples and repeated DEMO3 prefix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r66-approx-colpair-pixels-and-fps
+          path: dist/r66-validation/report/
+          retention-days: 90
+          if-no-files-found: warn
