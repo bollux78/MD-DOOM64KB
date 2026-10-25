@@ -1,4 +1,4 @@
-# REVIEWED DRAFT ONLY — DO NOT MOVE TO .github/workflows OR DISPATCH BEFORE MAINTAINER APPROVAL.
+# REVIEWED DRAFT v2 ONLY — DO NOT MOVE TO .github/workflows OR DISPATCH BEFORE MAINTAINER APPROVAL.
 # Based on Claudio's proposal. Requires local pinned WAD; no automatic external WAD download.
 # PROPOSAL (not active): move to .github/workflows/r68-prof-build.yml only after the maintainer reviews it.
 # Manual dispatch only (no push trigger), own concurrency group, no cancel-in-progress.
@@ -24,6 +24,16 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Verify intended R68 source and record environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r68
+          expected_branch='exp-claudio-r68-profiling-20261025'
+          test "$GITHUB_REF" = "refs/heads/$expected_branch" || { echo "ERROR: dispatch must target $expected_branch"; exit 1; }
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
+          { echo "branch=$GITHUB_REF"; echo "commit=$(git rev-parse HEAD)"; echo "baseline=f5a9daa7a0bd7225bbc227630defc73c67c34f1e"; uname -a; uptime; nproc; } | tee dist/r68/ENV.txt
 
       - name: Preflight fish scripts syntax
         shell: bash
@@ -86,26 +96,7 @@ jobs:
                   print('Pinned shareware WAD verified:',p.name);break
           else:
               raise SystemExit('Pinned shareware WAD not found locally; provision it separately before CI. No runner-side network fetch.')
-          if False:
-              import gzip,urllib.request
-              mirrors=[
-                  ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
-                  ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
-              for name,url,compressed in mirrors:
-                  try:
-                      request=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R60 pinned WAD'})
-                      with urllib.request.urlopen(request,timeout=65) as response:
-                          data=response.read(9_000_001)
-                      if len(data)>9_000_000:raise ValueError('download exceeds cap')
-                      if compressed:data=gzip.decompress(data)
-                      if len(data)==4196020 and hashlib.sha256(data).hexdigest()==wanted:
-                          target.parent.mkdir(exist_ok=True,parents=True)
-                          target.write_bytes(data)
-                          print('Pinned shareware WAD hash verified from',name)
-                          break
-                  except Exception as exc:
-                      print('WAD mirror failed',name,type(exc).__name__)
-              else:raise SystemExit('Pinned shareware WAD unavailable or checksum mismatch')
+
           PY
 
       - name: Color-table generation preflight (same as R59 v3)
@@ -125,9 +116,8 @@ jobs:
           if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
             echo 'NumPy ready'
           else
-            python3 -m venv "$RUNNER_TEMP/r53-venv"
-            "$RUNNER_TEMP/r53-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
-            echo "$RUNNER_TEMP/r53-venv/bin" >> "$GITHUB_PATH"
+            echo 'NumPy unavailable: provision dependency on runner before dispatch (no dynamic pip install).' >&2
+            exit 1
           fi
 
       - name: Preflight Python scripts
@@ -157,6 +147,7 @@ jobs:
           set -euo pipefail
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
           python3 scripts/lab/build_r68.py | tee dist/r68/BUILD.log
+          sha256sum dist/r68/doom-md-r60-r66-perf.bin dist/r68/doom-md-r60-r68-prof-perf.bin | tee dist/r68/ROM-SHA256.txt
 
       - name: Verify BSS, hashes and identical color tables
         shell: bash
@@ -194,15 +185,17 @@ jobs:
           echo 'PASS original R66 ROM reproduced byte for byte.'
 
       - name: R68 capture (at most 10000 emulated frames, diagnostic only)
+        timeout-minutes: 45
         shell: bash
         run: |
           set -euo pipefail
-          exe=$(command -v blastem || find "$HOME/Projetos" -name blastem -type f -perm -u+x | head -n1)
+          exe=$(command -v blastem || true)
+          if test -z "$exe"; then exe=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
           test -n "$exe"
           python3 scripts/lab/r68_capture.py --blastem "$exe" \
             --rom dist/r68/doom-md-r60-r68-prof-perf.bin \
             --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
-            --out dist/r68/capture --max-emulated-frames 10000 | tee dist/r68/CAPTURE.log
+            --out dist/r68/capture --max-emulated-frames 10000 --timeout 120 | tee dist/r68/CAPTURE.log
           head -n 40 dist/r68/capture/report.md
 
       - name: Upload R68 profiling artifacts (including partial evidence on failure)
