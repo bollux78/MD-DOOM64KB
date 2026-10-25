@@ -51,43 +51,39 @@ jobs:
           assert t.count('"-I", str(SRC)')==2
           p.write_text(t.replace('"-I", str(SRC)', '"-iquote", str(SRC)'))
           PY
-          # Keep the original 50-counter data format, but relocate its
-          # 236-byte block from near-full BSS to SGDK's dynamically allocated
-          # heap. This is an experimental diagnostic overlay ONLY.
+          # Move the 236-byte diagnostic block from static WRAM into the SGDK
+          # heap, preserving Cláudio's magic, version, counter order and reader.
           python3 - <<'PY'
           from pathlib import Path
           p=Path('src/r64_diag.h');h=p.read_text()
           old='extern volatile r64d_block_t r64d; /* defined in r_draw.c */'
-          new=('extern volatile r64d_block_t *r64d_ptr; /* SGDK heap owned by D_DoomLoop */\\n'
-               '#define r64d (*r64d_ptr)')
+          new='extern volatile r64d_block_t *r64d_ptr;\n#define r64d (*r64d_ptr)'
           assert h.count(old)==1
-          p.write_text(h.replace(old,new).replace('\\n','\n'))
+          p.write_text(h.replace(old,new))
           p=Path('src/r_draw.c');d=p.read_text()
           old='volatile r64d_block_t r64d;'
           assert d.count(old)==1
           p.write_text(d.replace(old,'volatile r64d_block_t *r64d_ptr;'))
           p=Path('src/d_main.c');d=p.read_text()
-          old='_Noreturn static void D_DoomLoop(void)\\n{\\n    for (;;)'
-          new=('_Noreturn static void D_DoomLoop(void)\\n{\\n'
-               '#if defined(DOOM_R64_DIAG)\\n'
-               '    r64d_ptr = (volatile r64d_block_t*)MEM_alloc(sizeof(r64d_block_t));\\n'
-               '    if (!r64d_ptr) I_Error("R64D heap unavailable");\\n'
-               '    memset((void*)r64d_ptr, 0, sizeof(r64d_block_t));\\n'
-               '#endif\\n'
+          old='_Noreturn static void D_DoomLoop(void)\n{\n    for (;;)'
+          new=('_Noreturn static void D_DoomLoop(void)\n{\n'
+               '#if defined(DOOM_R64_DIAG)\n'
+               '    r64d_ptr = (volatile r64d_block_t*)MEM_alloc(sizeof(r64d_block_t));\n'
+               '    if (!r64d_ptr) I_Error("R64D heap unavailable");\n'
+               '    memset((void*)r64d_ptr, 0, sizeof(r64d_block_t));\n'
+               '#endif\n'
                '    for (;;)')
-          assert d.count(old.replace('\\n','\n'))==1
-          d=d.replace(old.replace('\\n','\n'),new.replace('\\n','\n'))
-          # The SGDK memory allocator returns WRAM heap; use its public header
-          # only in diagnostic builds.
-          old='#include "r64_diag.h"'
-          new='#include "r64_diag.h"\\n#if defined(DOOM_R64_DIAG)\\n#include <genesis.h>\\n#endif'
           assert d.count(old)==1
-          p.write_text(d.replace(old,new.replace('\\n','\n')))
+          d=d.replace(old,new)
+          old='#include "r64_diag.h"'
+          new='#include "r64_diag.h"\n#if defined(DOOM_R64_DIAG)\n#include <genesis.h>\n#endif'
+          assert d.count(old)==1
+          p.write_text(d.replace(old,new))
           p=Path('scripts/lab/test_r64d.py');t=p.read_text()
           old='volatile r64d_block_t r64d;'
-          new='static volatile r64d_block_t r64d_storage;\\nvolatile r64d_block_t *r64d_ptr = &r64d_storage;'
+          new='static volatile r64d_block_t r64d_storage;\nvolatile r64d_block_t *r64d_ptr = &r64d_storage;'
           assert t.count(old)==1
-          p.write_text(t.replace(old,new.replace('\\n','\n')))
+          p.write_text(t.replace(old,new))
           PY
           python3 scripts/lab/test_r64d.py | tee dist/r64-diag/HOST-CHECK.log
           echo 'PATCH + HOST CHECK PASS'
