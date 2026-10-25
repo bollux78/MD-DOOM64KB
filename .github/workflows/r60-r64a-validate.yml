@@ -1,0 +1,130 @@
+name: R60 R64A verify framebuffer byte-identical and capture R64D WRAM
+
+on:
+  push:
+    branches: [exp-r60-r64a-prologue-memory-safe]
+    paths: [.github/workflows/r60-r64a-validate.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: r60-r64a-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download known successful R60 reference and R64A candidate ROMs
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-r64a-claudio-prologue
+          run-id: 40216335998
+          github-token: ${{ github.token }}
+          path: dist/r64a-validate/roms
+
+      - name: Download heap-backed R64D diagnostic ELF and counter decoder
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-claudio-r64d-diag-heap
+          run-id: 40215684973
+          github-token: ${{ github.token }}
+          path: dist/r64a-validate/diag-package
+
+      - name: Prepare local BlastEm binary and validate exact ROM files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v blastem >/dev/null; then
+            BLASTEM=$(command -v blastem)
+          else
+            BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit)
+          fi
+          test -n "$BLASTEM" && test -x "$BLASTEM"
+          echo "BLASTEM_EXE=$BLASTEM" >> "$GITHUB_ENV"
+          mkdir -p dist/r64a-validate/result
+          unzip -oq dist/r64a-validate/diag-package/MD_DOOM_R60_CLAUDIO_DIAG_HEAP.zip -d dist/r64a-validate/diag-unpacked
+          ls -l dist/r64a-validate/roms/*.bin dist/r64a-validate/roms/*.elf dist/r64a-validate/diag-unpacked/*.bin
+          sha256sum dist/r64a-validate/roms/*.bin > dist/r64a-validate/result/INPUT-ROM-SHA256SUMS.txt
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py
+
+      - name: Capture five fixed DEMO3 framebuffer snapshots from R60 reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --blastem "$BLASTEM_EXE" \
+            --rom dist/r64a-validate/roms/doom-md-r60-ref-perf.bin \
+            --elf dist/r64a-validate/roms/doom-md-r60-ref-perf.elf \
+            --out dist/r64a-validate/result/ref \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r64a-validate/result/REF-CAPTURE.log
+
+      - name: Capture same five DEMO3 framebuffer snapshots from R64A
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --blastem "$BLASTEM_EXE" \
+            --rom dist/r64a-validate/roms/doom-md-r60-r64a-perf.bin \
+            --elf dist/r64a-validate/roms/doom-md-r60-r64a-perf.elf \
+            --out dist/r64a-validate/result/r64a \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r64a-validate/result/R64A-CAPTURE.log
+
+      - name: Require byte-exact packed framebuffer identity at five ticks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('dist/r64a-validate/result')
+          a=json.loads((root/'ref/CAPTURE.json').read_text())
+          b=json.loads((root/'r64a/CAPTURE.json').read_text())
+          assert [x['gametic'] for x in a['records']]==[x['gametic'] for x in b['records']]
+          assert len(a['records'])==5
+          report=[]
+          for x,y in zip(a['records'],b['records']):
+              aa=(root/'ref'/x['file']).read_bytes()
+              bb=(root/'r64a'/y['file']).read_bytes()
+              n=sum(p!=q for p,q in zip(aa,bb))+abs(len(aa)-len(bb))
+              row=dict(tic=x['gametic'],mismatched_bytes=n,sha256_ref=x['sha256'],sha256_r64a=y['sha256'])
+              report.append(row)
+              print(row,flush=True)
+          (root/'FRAMEBUFFER-COMPARE.json').write_text(json.dumps(report,indent=2)+'\n')
+          assert all(x['mismatched_bytes']==0 for x in report),"Framebuffer DIFFERENT: do not promote candidate"
+          print("PASS five packed pixel4 framebuffers byte-for-byte identical",flush=True)
+          PY
+
+      - name: Capture heap R64D diagnostic WRAM at gametic 512 without GDB installation
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --blastem "$BLASTEM_EXE" \
+            --rom dist/r64a-validate/diag-unpacked/doom-md-r60-diag-perf.bin \
+            --elf dist/r64a-validate/diag-unpacked/doom-md-r60-diag-perf.elf \
+            --out dist/r64a-validate/result/diag \
+            --kind diag --diag-tic 512 --max-emulated-frames 10000 \
+            | tee dist/r64a-validate/result/DIAG-CAPTURE.log
+          cd dist/r64a-validate/diag-unpacked
+          python3 r64d_read.py ../result/diag/WRAM_R64D_PARTIAL.bin \
+            --header R64D-COUNTERS-HEADER.h --fps 6.72 --mhz 7.67 \
+            | tee ../result/DIAG-COUNTERS-PARTIAL.txt
+
+      - name: Upload evidence, screenshots bytes and any partial diagnostic dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r60-r64a-framebuffer-equality-and-r64d-wram
+          path: dist/r64a-validate/result/
+          retention-days: 90
+          if-no-files-found: warn
