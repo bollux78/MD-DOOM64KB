@@ -1,4 +1,4 @@
-name: R60 R64D heap counters WRAM partial dump (BlastEm RSP)
+name: R60 R64D heap counters WRAM partial dump (parser fix)
 
 on:
   push:
@@ -31,6 +31,7 @@ jobs:
           BLASTEM=$(command -v blastem || :)
           if test -z "$BLASTEM"; then BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
           test -n "$BLASTEM" && test -x "$BLASTEM"
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py
           python3 scripts/lab/r64a_rsp_capture.py \
             --blastem "$BLASTEM" \
             --rom dist/r64d-partial/roms/doom-md-r60-diag-perf.bin \
