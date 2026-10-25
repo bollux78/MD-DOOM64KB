@@ -1,0 +1,94 @@
+name: R60 Claudio R64D emulator smoke and WRAM capture
+
+on:
+  push:
+    branches: [exp-r60-claudio-diag-build]
+    paths: [.github/workflows/r60-claudio-r64d-smoke.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download successfully compiled diagnostic ROMs
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-claudio-r64d-diag
+          run-id: 40214328513
+          github-token: ${{ github.token }}
+          path: dist/r64-smoke
+      - name: Run BlastEm process tests and optional GDB WRAM dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/r64-smoke
+          unzip -oq MD_DOOM_R60_CLAUDIO_DIAG.zip -d unpacked
+          cd unpacked
+          echo "Files in diagnostic artifact:"
+          ls -l *.bin *.elf WRAM-STATUS.json
+          BLASTEM=$(command -v blastem || :)
+          if test -z "$BLASTEM"; then
+            BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit)
+          fi
+          test -n "$BLASTEM"
+          printf 'BLASTEM=%s\n' "$BLASTEM" > BLASTEM-RESULTS.txt
+          export SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy
+          for file in doom-md-r60-diag-perf.bin doom-md-r60-diag-play.bin; do
+            echo "SMOKE 800 $file"
+            if timeout 120 "$BLASTEM" -b 800 "$file" >> BLASTEM-RESULTS.txt 2>&1; then
+              echo "PASS 800 $file" | tee -a BLASTEM-RESULTS.txt
+            else
+              echo "FAIL 800 $file" | tee -a BLASTEM-RESULTS.txt
+            fi
+          done
+          echo "SMOKE 10000 PERF"
+          if timeout 180 "$BLASTEM" -b 10000 doom-md-r60-diag-perf.bin >> BLASTEM-RESULTS.txt 2>&1; then
+              echo "PASS 10000 PERF" | tee -a BLASTEM-RESULTS.txt
+          else
+              echo "FAIL 10000 PERF" | tee -a BLASTEM-RESULTS.txt
+          fi
+          GDB=$(command -v m68k-elf-gdb || :)
+          if test -z "$GDB" && test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gdb"; then GDB="$HOME/mars/m68k-elf/bin/m68k-elf-gdb"; fi
+          if test -z "$GDB"; then GDB=$(command -v gdb-multiarch || :); fi
+          if test -n "$GDB"; then
+             echo "Trying GDB $GDB" | tee GDB-RESULTS.txt
+             cat > dump.gdb <<'GDB_CMDS'
+          set pagination off
+          set confirm off
+          set remotetimeout 12
+          file doom-md-r60-diag-perf.elf
+          target remote | blastem doom-md-r60-diag-perf.bin -D
+          break I_BenchmarkShowResults
+          continue
+          dump binary memory WRAM_DIAG_PERF.bin 0xff0000 0x1000000
+          quit
+          GDB_CMDS
+             if timeout 180 "$GDB" -batch -x dump.gdb >> GDB-RESULTS.txt 2>&1 && test "$(stat -c %s WRAM_DIAG_PERF.bin)" = 65536; then
+                echo 'PASS WRAM 65536 bytes' | tee -a GDB-RESULTS.txt
+                python3 r64d_read.py WRAM_DIAG_PERF.bin --header R64D-COUNTERS-HEADER.h --fps 6.72 --mhz 7.67 > COUNTERS-RESULTS.txt 2>&1 || :
+             else
+                echo 'WRAM dump NOT captured; see GDB-RESULTS.txt' | tee -a GDB-RESULTS.txt
+             fi
+          else
+             echo 'No m68k-elf-gdb or gdb-multiarch installed; WRAM capture unavailable on runner' > GDB-RESULTS.txt
+          fi
+          echo 'Original R60 BSS conservative cap: 57920 bytes. These diagnostic ROMs exceed it. Emulator runs do not establish physical hardware safety.' > SAFETY.txt
+      - name: Upload emulator findings and optional WRAM
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r60-claudio-r64d-emulator-results
+          path: |
+            dist/r64-smoke/unpacked/BLASTEM-RESULTS.txt
+            dist/r64-smoke/unpacked/GDB-RESULTS.txt
+            dist/r64-smoke/unpacked/WRAM_DIAG_PERF.bin
+            dist/r64-smoke/unpacked/COUNTERS-RESULTS.txt
+            dist/r64-smoke/unpacked/SAFETY.txt
+          if-no-files-found: warn
+          retention-days: 90
