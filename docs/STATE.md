@@ -23,16 +23,19 @@ Regras permanentes (limites de BSS/ROM, regras de aceite, branches, CI, handoffs
 | R65-P2 | frente fina de `R42_DrawPackedWall` | `moveml` continuou com 8 registradores (objdump) | **rejeitado**: critério de descarte atingido, sem FPS |
 | R66 | par de colunas reaproveita textura/escala/fonte | **+4,34%** (6,91→7,21) | **aceito** |
 | R67 | grupos de 4/8/16 colunas | +1,9% / +3,6% / +4,4% sobre R66 | **rejeitado**: perda visual perceptível crescente |
-| R68 | log por quadro + amostrador de PC (diagnóstico) | em preparo, branch `claude/r68-profiling` | pendente de build e captura |
+| R68 | log por quadro + amostrador de PC (diagnóstico) | pronto para revisão, branch `exp-claudio-r68-profiling-20261025`; sem compilação m68k nem captura ainda | pendente de build e captura |
 
 ## O que aprendemos
 - Setup de textura/recíproca já é pequeno: com o grupo de 16 quase todo o setup some e o ganho é só +4,4%. O tempo está em outro lugar (BSP, setup de segmento, sprites, lógica, desenho).
 - `R_PointToAngle16` já usa DIVU em 16 bits; ~180 chamadas por quadro, teto de ganho ≈2%.
 - O FPS médio é dominado pelos quadros lentos (mínimo 2,9, máximo 13 FPS em janelas de 1 s).
 
-## Plano atual: qualidade adaptativa
-Em vez de degradar a imagem sempre, degradar só os quadros pesados: um governador mede o custo do quadro anterior (VBlanks) e, acima de um limiar, o seguinte usa um nível mais barato (grupos de colunas, limite de sprites, corte de segmentos distantes, menos checagens de visão). Passos: (1) R68 mede distribuição de custo e a carga que explica os quadros lentos; (2) desenhar o governador e escolher níveis; (3) o dono julga os quadros em que ele atua.
-Ideias de maior escala, depois dos dados: janela menor com resolução 2x2 (custo por amostra ainda não medido; ver experimento de tamanho de janela: FPS contra número de amostras em H40 sem crop, 8/8, 16/16, 24/24 e H32 16/16).
+## Hipótese experimental: qualidade adaptativa (NÃO é decisão de implementação)
+Hipótese: o FPS médio é dominado por poucos quadros pesados (mínimo 2,9, máximo 13 FPS em janelas de 1 s), então uma redução de custo aplicada **só** a esses quadros poderia elevar o FPS médio com pouco efeito visual. Nada disso está decidido nem autorizado.
+- A rejeição da R67-G4/G8/G16 **continua válida** e não autoriza reutilizar grupos maiores de colunas nos quadros lentos. Os níveis de redução, se vierem a existir, não estão definidos e podem nem envolver textura.
+- Qualquer redução adaptativa precisa demonstrar ganho relevante com medição e ser submetida à avaliação visual do mantenedor antes de qualquer promoção.
+- Primeiro passo, só diagnóstico: R68 (`exp-claudio-r68-profiling-20261025`) mede a distribuição de custo por quadro, a carga que a explica e o perfil de funções nos quadros lentos e rápidos. Os dados podem apontar para otimizações sem perda visual, preferíveis a qualquer degradação.
+- Hipótese de escala maior, depois dos dados: janela menor com resolução 2x2. O custo por amostra ainda não foi medido (experimento sugerido: FPS contra número de amostras em H40 sem crop, 8/8, 16/16, 24/24 e H32 16/16).
 
 ## Quem faz o quê
 - Claude: patches, testes em host, modelos de custo, leitura dos dados devolvidos.

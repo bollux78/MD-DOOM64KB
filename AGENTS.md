@@ -86,7 +86,7 @@ Estado: EM DESENVOLVIMENTO
 
 ## 6. Comparação de desempenho e qualidade
 
-**Controle obrigatório para novos experimentos:** R66, **7,21 FPS no DEMO3 completo**, sempre sob **clock original do Mega Drive (~7,67 MHz), NTSC 60 Hz, H40, crop H/V16**, mesmo perfil de cores e conteúdo. O overclock pessoal de 13,4 MHz NÃO entra nas metas nem nos resultados oficiais.
+**Controle obrigatório para novos experimentos:** a baseline vigente registrada em `docs/STATE.md` (hoje R66, **7,21 FPS no DEMO3 completo**), sempre sob **clock original do Mega Drive (~7,67 MHz), NTSC 60 Hz, H40, crop H/V16**, mesmo perfil de cores e conteúdo. O overclock pessoal de 13,4 MHz NÃO entra nas metas nem nos resultados oficiais.
 
 - Primeiros filtros: build, segurança de RAM, inicialização, DEMO3 curto/prefixos e detecção de falhas de desenho ou estabilidade.
 - **A/B limpo:** pelo menos três amostragens por ROM para diferenças pequenas quando viável; usar contadores VBlank no emulador, não FPS do título da janela/velocidade host. Medições dos tics 64/128/256 são **prefixos**, não substituem os 2.134 quadros do DEMO3 completo.
