@@ -1,4 +1,4 @@
-name: R60 R64A verify framebuffer byte-identical and capture R64D WRAM (retry static symbols)
+name: R60 R64A five-frame equality and R64D partial WRAM
 
 on:
   push:
@@ -103,7 +103,7 @@ jobs:
           print("PASS five packed pixel4 framebuffers byte-for-byte identical",flush=True)
           PY
 
-      - name: Capture heap R64D diagnostic WRAM at gametic 512 without GDB installation
+      - name: Capture heap R64D diagnostic WRAM at gametic 128 without GDB installation
         continue-on-error: true
         shell: bash
         run: |
@@ -113,7 +113,7 @@ jobs:
             --rom dist/r64a-validate/diag-unpacked/doom-md-r60-diag-perf.bin \
             --elf dist/r64a-validate/diag-unpacked/doom-md-r60-diag-perf.elf \
             --out dist/r64a-validate/result/diag \
-            --kind diag --diag-tic 512 --max-emulated-frames 10000 \
+            --kind diag --diag-tic 128 --max-emulated-frames 10000 \
             | tee dist/r64a-validate/result/DIAG-CAPTURE.log
           cd dist/r64a-validate/diag-unpacked
           python3 r64d_read.py ../result/diag/WRAM_R64D_PARTIAL.bin \
