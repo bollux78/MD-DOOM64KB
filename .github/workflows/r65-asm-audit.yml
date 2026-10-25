@@ -1,0 +1,102 @@
+name: R65 structural 68000 machine code audit of clean R64A
+
+on:
+  push:
+    branches: [exp-r65-structural-profiling]
+    paths: [.github/workflows/r65-asm-audit.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-r64a-claudio-prologue
+          run-id: 40216335998
+          github-token: ${{ github.token }}
+          path: dist/r65-asm-audit/roms
+
+      - name: Disassemble ORIGINAL R60 and R64A PERF, no rebuild or instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r65-asm-audit/results
+          BINDIR="$HOME/mars/m68k-elf/bin"
+          test -x "$BINDIR/m68k-elf-objdump"
+          test -x "$BINDIR/m68k-elf-nm"
+          for variant in ref-perf r64a-perf; do
+            elf="dist/r65-asm-audit/roms/doom-md-r60-$variant.elf"
+            test -s "$elf"
+            "$BINDIR/m68k-elf-objdump" -d --no-show-raw-insn "$elf" > "dist/r65-asm-audit/results/DISASM-$variant.txt"
+            "$BINDIR/m68k-elf-nm" -S -n "$elf" > "dist/r65-asm-audit/results/NM-SIZE-$variant.txt"
+            sha256sum "$elf" >> dist/r65-asm-audit/results/ELF-SHA256.txt
+          done
+
+      - name: Extract structural hotspots and inspect instruction classes (NOT a runtime cycle profile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re,json
+          from pathlib import Path
+          root=Path("dist/r65-asm-audit/results")
+          targets=("R_RenderSegLoop","R_StoreWallRange","R_DrawSegTextureColumn",
+                   "R_PointToAngle16","R_PointToDist","R_ScaleFromGlobalAngle",
+                   "R_AddLine","R_CheckBBox","R_ClipWallSegment","R_RenderBSPNode",
+                   "R_LoadColorMap","R60_WallColumn","R42_DrawPackedWall","R_DrawColumnFlat")
+          report={"method":"Static m68k disassembly of original non-instrumented ELF. No dynamic cycles, no emulator benchmarks.","targets":targets}
+          for variant in ("ref-perf","r64a-perf"):
+              data=(root/f"DISASM-{variant}.txt").read_text(errors="replace")
+              blocks=re.split(r"(?m)^([0-9a-fA-F]+) <([^>]+)>:\s*\n",data)
+              functions={}
+              for i in range(1,len(blocks)-2,3):
+                  addr,name,body=blocks[i:i+3]
+                  ins=[x.strip() for x in body.splitlines()
+                       if re.search(r"^\s*[0-9a-fA-F]+:\s+\S",x)]
+                  names=[re.sub(r"^\s*[0-9a-fA-F]+:\s+","",t).split()[0].lower()
+                         for t in ins]
+                  functions[name]={"start":addr,"instruction_count":len(ins),
+                     "mulu":sum("mulu" in x for x in names),
+                     "muls":sum("muls" in x for x in names),
+                     "divu":sum("divu" in x for x in names),
+                     "divs":sum("divs" in x for x in names),
+                     "calls":sum(x in ("jsr","bsr","bsr.s","bsr.w") for x in names)}
+              match={}
+              for t in targets:
+                  matches=[(n,f) for n,f in functions.items()
+                           if n==t or n.startswith(t+".") or n.startswith(t+"_")]
+                  match[t]=matches
+              report[variant]={"total_functions_with_disassembly":len(functions),
+                               "selected":match}
+              print(variant,"function labels",len(functions))
+              for t,entries in match.items():
+                  print(t,"FOUND" if entries else "INLINED OR NOT SEPARATE",
+                        [(name,entry) for name,entry in entries][:4])
+              lines=[]
+              for t,entries in match.items():
+                  for n,_ in entries:
+                      pattern=re.compile(r"(?ms)^([0-9a-fA-F]+) <"+re.escape(n)+r">:\s*\n(.*?)(?=^[0-9a-fA-F]+ <|\Z)")
+                      found=pattern.search(data)
+                      if found:
+                          body=found.group(0)
+                          lines += [f"######## {n} ({t}) ########",body[:80000],"\n"]
+              (root/f"EXTRACT-STRUCTURAL-{variant}.txt").write_text("\n".join(lines))
+          (root/"STATIC-AUDIT.json").write_text(json.dumps(report,indent=2)+"\n")
+          print("PASS: generated actual m68k assembly, no guessed cycle claims.")
+          PY
+
+      - name: Upload targeted assembly and complete disassembly for Cláudio / Werk
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r65-clean-r64a-vs-r60-m68k-structural-asm
+          path: dist/r65-asm-audit/results/
+          retention-days: 90
+          if-no-files-found: error
