@@ -40,6 +40,34 @@ Como cada amostra Pixel4 representa 4 pixels físicos horizontais, grupos de 4/8
 
 Todas com ROM 2.883.584 B, tabelas de cores idênticas, kernel ASM R60, alvo stock 7,67 MHz, e BSS alvo <= 57.920 B, sem aumento na PERF em relação à R66.
 
+## Resultados reais do primeiro A/B em DEMO3 (PREFIXOS)
+
+Os workflows agora encerraram com sucesso, incluindo build [40233731174](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40233731174) e validação [40234412567](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40234412567). [Arquivo de evidências / snapshots / JSON](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40234412567/artifacts/12614122676).
+
+Três execuções independentes por ROM em cada tic, VBlanks extraídos da ROM sem profiler e clock original, sem dispersão observada:
+
+| Tic | R66 FPS | G4 FPS (ganho) | G8 FPS (ganho) | G16 FPS (ganho) |
+|---:|---:|---:|---:|---:|
+| 64 | 4,1722 | 4,2000 (+0,67%) | 4,2424 (+1,68%) | 4,2616 (+2,14%) |
+| 128 | 4,0446 | 4,0727 (+0,69%) | 4,1145 (+1,73%) | 4,1391 (+2,34%) |
+| 256 | 4,5590 | 4,6070 (+1,05%) | 4,6575 (+2,16%) | 4,6918 (+2,91%) |
+
+**Não extrapolar estes percentuais para o DEMO3 completo de 2134 quadros; ainda não foi medido.** Todas as 7 ROMs têm BSS PERF 57900, PLAY 57908 (sem BSS adicional). O controle R66 foi byte-idêntico à ROM que registrou 7,21 FPS no DEMO3 completo. BlastEm smoke: 8 execuções PERF (800 e 10000 frames cada ROM), zero falhas.
+
+### Divergência visual intencional comparada ao controle R66
+
+O total é por **amostra de 4 bits** dentro da janela ativa de 66×34=2244 amostras; cinco instantâneos separados por tic. Zero pixels modificados fora da janela de jogo nas 15 comparações realizadas.
+
+| Tic | G4 % alterada | G8 % alterada | G16 % alterada |
+|---:|---:|---:|---:|
+| 8 | 6,46% | 9,72% | 12,39% |
+| 16 | 6,60% | 8,91% | 11,23% |
+| 64 | 6,24% | 9,98% | 17,47% |
+| 128 | 9,14% | 15,29% | 17,25% |
+| 256 | 7,35% | 12,34% | 18,23% |
+
+Em cada grupo, apenas fases 2..N-1 alteraram suas amostras; fases 0 e 1 permaneceram iguais ao R66, consistente com o algoritmo de compartilhamento. **Tendência de retornos decrescentes:** G16 ganha mais FPS mas muda muito mais pixels do que G8. Não avaliar a qualidade da imagem só por percentuais: é preciso jogar, girar a câmera, andar junto a paredes, abrir portas e olhar grades/texturas.
+
 ## Métricas para não confundir
 
 Workflow de build `r67-groups-build.yml` utiliza 800 e 10.000 quadros por **invocação**, sem usar tempo de execução do host como FPS. Workflow de análise `r67-groups-validate.yml` mede os valores reais via contadores de VBlank na WRAM com ROMs sem profiler, 3× prefixo em tics 64/128/256 para R66/G4/G8/G16, e compara cinco snapshots Pixel4 de 3344 bytes, incluindo mudanças por fase horizontal e pixels que saem da janela.
@@ -54,4 +82,4 @@ Amostras não provam o desempenho do DEMO3 completo. O usuário deve medir **2.1
 4. Manter controle R66 7,21 FPS e referência de precisão R64A 6,91 FPS. Se houver regressão, preservar R66 e rejeitar a variante.
 5. Qualquer próxima redução numérica de projeção (distância/escala/ângulo) exige experimento separado, já que altera geometria e o risco é maior que ampliar grupos de textura.
 
-**Status da publicação:** código e oráculos preparados; resultados da execução de CI e do teste visual serão acrescentados quando disponíveis. Este documento não presume ganho de G4/G8/G16.
+**Status:** build, hash do controle, oráculos, 15 amostras de framebuffer e 3× prefixos A/B completos no GitHub. Testes do DEMO3 completo e qualidade visual real no PLAY ainda pendentes.
