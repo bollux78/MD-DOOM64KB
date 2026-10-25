@@ -62,7 +62,7 @@ class RSP:
     def req(self,command,timeout=None):
         self.send(command)
         reply=self.recv(timeout)
-        if reply.startswith("E"):raise RuntimeError("RSP "+command+" -> "+reply)
+        if len(reply)==3 and reply.startswith("E") and all(c in "0123456789abcdefABCDEF" for c in reply[1:]):\n            raise RuntimeError("RSP "+command+" -> "+reply)
         return reply
     def readmem(self,addr,size):
         out=bytearray()
@@ -135,15 +135,16 @@ def run(args):
                 print("SNAP",row,flush=True)
                 if len(records)==len(FRAMES):break
             elif args.kind=="diag" and gametic>=args.diag_tic:
-                addr=int.from_bytes(g.readmem(syms["r64d_ptr"],4),"big")
+                rawaddr=int.from_bytes(g.readmem(syms["r64d_ptr"],4),"big")
+                addr=rawaddr & 0xffffff  # Genesis 68000 exposes 24-bit physical addressing
                 if not (0xff0000<=addr<0x1000000):
-                    raise RuntimeError(f"R64D diagnostic pointer invalid: {addr:08X}")
+                    raise RuntimeError(f"R64D diagnostic pointer invalid: {rawaddr:08X} (phys {addr:06X})")
                 block=g.readmem(addr,236)
                 (out/"R64D-counter-block.bin").write_bytes(block)
                 # Capture whole physical WRAM; Cláudio's r64d_read accepts this dump.
                 wram=g.readmem(0xff0000,65536)
                 (out/"WRAM_R64D_PARTIAL.bin").write_bytes(wram)
-                row={"gametic":gametic,"counter_address":f"0x{addr:08X}",
+                row={"gametic":gametic,"counter_address":f"0x{addr:06X}","raw_pointer":f"0x{rawaddr:08X}",
                     "counter_sha256":hashlib.sha256(block).hexdigest(),
                     "wram_sha256":hashlib.sha256(wram).hexdigest(),
                     "wram_bytes":len(wram),"frame_hit":frame_hits,
