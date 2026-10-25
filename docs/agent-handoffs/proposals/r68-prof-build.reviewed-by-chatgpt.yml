@@ -84,12 +84,12 @@ jobs:
           python3 - <<'PY'
           import hashlib,pathlib,shutil
           target=pathlib.Path('scripts/doom1.wad')
-          source=pathlib.Path('/home/dan/Projetos/doom-assets/doom1.wad')
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
           wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
           if not source.is_file():
-              raise SystemExit(f'Missing canonical shareware WAD: {source}')
+              raise SystemExit(f'Missing runner-local shareware WAD: {source}')
           if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
-              raise SystemExit(f'Invalid canonical shareware WAD: {source}')
+              raise SystemExit(f'Invalid runner-local shareware WAD: {source}')
           target.parent.mkdir(exist_ok=True,parents=True)
           shutil.copyfile(source,target)
           print('Pinned shareware WAD verified:',source)
