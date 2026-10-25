@@ -1,0 +1,32 @@
+name: R60 Claudio R64D read emulator diagnostic logs
+
+on:
+  push:
+    branches: [exp-r60-claudio-diag-build]
+    paths: [.github/workflows/r60-claudio-r64d-read-logs.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-claudio-r64d-emulator-results
+          run-id: 40214784759
+          github-token: ${{ github.token }}
+          path: logs
+      - name: Display exact failure reasons
+        shell: bash
+        run: |
+          find logs -type f -printf '%p %s bytes\n'
+          echo '--- BLASTEM ---'
+          cat logs/BLASTEM-RESULTS.txt || true
+          echo '--- GDB ---'
+          cat logs/GDB-RESULTS.txt || true
+          echo '--- SAFETY ---'
+          cat logs/SAFETY.txt || true
