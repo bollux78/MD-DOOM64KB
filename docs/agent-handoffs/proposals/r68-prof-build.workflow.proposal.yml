@@ -1,0 +1,208 @@
+# PROPOSAL (not active): move to .github/workflows/r68-prof-build.yml only after the maintainer reviews it.
+# Manual dispatch only (no push trigger), own concurrency group, no cancel-in-progress.
+name: R68 Claudio profiling build and capture (BlastEm only)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: r68-prof-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1
+          assert f.count('echo "READY: R35 4MiB linear')==1
+          assert f.count('if set -q DOOM_R60_BUILD')==1
+          assert f.count("set defs $defs '-DDOOM_R60_PAIR_ASM'")==1
+          print('R60 fish structure PASS')
+          CHECK
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r68
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r68/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r68/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r68/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          home=pathlib.Path.home()
+          candidates=[target,home/'Projetos/doom-assets/doom1.wad',
+              home/'Projetos/doom-assets/DOOM1.WAD',home/'Downloads/doom1.wad']
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          for p in candidates:
+              if p.is_file() and p.stat().st_size==4196020 and hashlib.sha256(p.read_bytes()).hexdigest()==wanted:
+                  if p.resolve()!=target.resolve():
+                      target.parent.mkdir(exist_ok=True,parents=True)
+                      shutil.copyfile(p,target)
+                  print('Pinned shareware WAD verified:',p.name);break
+          else:
+              import gzip,urllib.request
+              mirrors=[
+                  ('archive','https://archive.org/download/wadarchive/DATA/5b.zip/5b%2F2e249b9c5133ec987b3ea77596381dc0d6bc1d%2F5b2e249b9c5133ec987b3ea77596381dc0d6bc1d.wad.gz',True),
+                  ('aikernel','https://aikernel.net/demo/doom/DOOM1.WAD',False)]
+              for name,url,compressed in mirrors:
+                  try:
+                      request=urllib.request.Request(url,headers={'User-Agent':'MD-DOOM64KB R60 pinned WAD'})
+                      with urllib.request.urlopen(request,timeout=65) as response:
+                          data=response.read(9_000_001)
+                      if len(data)>9_000_000:raise ValueError('download exceeds cap')
+                      if compressed:data=gzip.decompress(data)
+                      if len(data)==4196020 and hashlib.sha256(data).hexdigest()==wanted:
+                          target.parent.mkdir(exist_ok=True,parents=True)
+                          target.write_bytes(data)
+                          print('Pinned shareware WAD hash verified from',name)
+                          break
+                  except Exception as exc:
+                      print('WAD mirror failed',name,type(exc).__name__)
+              else:raise SystemExit('Pinned shareware WAD unavailable or checksum mismatch')
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r68
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r68/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r68/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r68/PREFLIGHT-color-report.json
+
+      - name: Ensure NumPy for Cláudio palettes and microdither
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'NumPy ready'
+          else
+            python3 -m venv "$RUNNER_TEMP/r53-venv"
+            "$RUNNER_TEMP/r53-venv/bin/python3" -m pip install --disable-pip-version-check 'numpy>=2.2,<3'
+            echo "$RUNNER_TEMP/r53-venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Preflight Python scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r68.py scripts/lab/r68_capture.py scripts/lab/test_r68.py scripts/lab/check_r68_inert.py scripts/lab/r64a_rsp_capture.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: R68 host tests and inertness against the exact R66 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r68.py | tee dist/r68/HOST-test-r68.txt
+          rm -rf "$RUNNER_TEMP/base66" && mkdir -p "$RUNNER_TEMP/base66"
+          git archive f5a9daa7a0bd7225bbc227630defc73c67c34f1e | tar -x -C "$RUNNER_TEMP/base66"
+          python3 scripts/lab/check_r68_inert.py "$RUNNER_TEMP/base66" . | tee dist/r68/HOST-inert-r68.txt
+
+      - name: Build R66 PERF control and R68 profiling PERF
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          python3 scripts/lab/build_r68.py | tee dist/r68/BUILD.log
+
+      - name: Verify BSS, hashes and identical color tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r68')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert len(rows)==2 and len(list(d.glob('*.bin')))==2
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920,r
+              print(r['rom'],r['bytes'],'BSS',r['bss_bytes'])
+          bss={r['rom']:r['bss_bytes'] for r in rows}
+          assert bss['doom-md-r60-r68-prof-perf.bin']<=bss['doom-md-r60-r66-perf.bin']+8
+          print('PASS 2 ROMs, BSS within +8 B of the R66 control')
+          CHECK
+
+      - name: Require rebuilt R66 ROM byte-identical to the previously measured 7.21 FPS control
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r68/original-control
+
+      - name: Exact original R66 control ROM binary comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp dist/r68/doom-md-r60-r66-perf.bin dist/r68/original-control/doom-md-r60-r66-perf.bin
+          sha256sum dist/r68/doom-md-r60-r66-perf.bin
+          echo 'PASS original R66 ROM reproduced byte for byte.'
+
+      - name: R68 capture (at most 10000 emulated frames, diagnostic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=$(command -v blastem || find "$HOME/Projetos" -name blastem -type f -perm -u+x | head -n1)
+          test -n "$exe"
+          python3 scripts/lab/r68_capture.py --blastem "$exe" \
+            --rom dist/r68/doom-md-r60-r68-prof-perf.bin \
+            --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
+            --out dist/r68/capture --max-emulated-frames 10000 | tee dist/r68/CAPTURE.log
+          head -n 40 dist/r68/capture/report.md
+
+      - name: Upload R68 profiling artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r68-claudio-profiling
+          path: dist/r68/
+          retention-days: 90
+          if-no-files-found: error

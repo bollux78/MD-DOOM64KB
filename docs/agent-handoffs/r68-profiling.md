@@ -10,3 +10,4 @@ Pendências: build (BSS <= 57.920), captura (<= 10.000 quadros do emulador), dev
 Resultado de desempenho: nenhum (build de diagnóstico, nunca usar como medida de FPS).
 Decisão solicitada ao mantenedor: TESTAR (compilar e capturar).
 Estado: PRONTO PARA REVISÃO
+Proposta de workflow (inativa, para o mantenedor revisar e mover): docs/agent-handoffs/proposals/r68-prof-build.workflow.proposal.yml (somente workflow_dispatch, grupo de concorrência próprio, controle R66 byte a byte contra o run 40231459814, captura <= 10.000 quadros).
