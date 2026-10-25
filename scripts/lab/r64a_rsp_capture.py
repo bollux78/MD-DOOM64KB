@@ -89,6 +89,14 @@ def symbols(elf):
         if len(parts)>=3:
             try:result[parts[-1]]=int(parts[0],16)
             except ValueError:pass
+    # GCC commonly emits translation-unit-local statics with suffixes (.0, .123).
+    for want in ("r22_fb", "bench_active", "r64d_ptr"):
+        if want not in result:
+            matching=[(k,v) for k,v in result.items()
+                      if k==("_"+want) or k.startswith(want+".")]
+            if len(matching)==1:
+                result[want]=matching[0][1]
+                print("SYMBOL ALIAS",want,matching[0][0],hex(matching[0][1]),flush=True)
     return result
 
 def run(args):
@@ -97,7 +105,9 @@ def run(args):
     required=["I_FinishUpdate","r22_fb","_g_gametic"]
     if args.kind=="diag":required+=["r64d_ptr"]
     missing=[k for k in required if k not in syms]
-    if missing:raise RuntimeError("ELF missing debug symbols: "+str(missing))
+    if missing:
+        related=[k for k in syms if ("fb" in k.lower() or "r22" in k.lower() or "pixel" in k.lower())][:80]
+        raise RuntimeError("ELF missing debug symbols: "+str(missing)+"; related="+str(related))
     print("SYMBOLS", {k:hex(syms[k]) for k in required},flush=True)
     g=RSP(args.blastem,args.rom,args.max_emulated_frames,args.timeout)
     records=[]
