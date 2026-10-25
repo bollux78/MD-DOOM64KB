@@ -700,6 +700,17 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R66_COLPAIR'
     end
+    # R67: optional EXPERIMENTAL lossy sharing of texture sampling over 4/8/16 columns.
+    if set -q DOOM_R67_TEXGROUP
+        if contains -- "$DOOM_R67_TEXGROUP" 4 8 16
+            if not test "$DOOM_R66_COLPAIR" = 1
+                echo 'R67 requires R66 approximate colpair base'; exit 2
+            end
+            set defs $defs "-DDOOM_R67_TEXGROUP=$DOOM_R67_TEXGROUP"
+        else
+            echo 'R67 group width must be exactly 4, 8 or 16'; exit 2
+        end
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
