@@ -2705,6 +2705,31 @@ static inline __attribute__((always_inline)) void R20_SegFlat(uint16_t cell, int
         : "+&a"(dest),"+&d"(n) : "d"(cell) : "cc","memory");
 }
 #endif
+/*
+ * R65-P1 (experimental, zero static WRAM): eliminate texture-column source
+ * fetch and dispatcher work when a wall tier is wholly outside the vertical
+ * visible window. R42_DrawPackedWall already drops these columns, but it
+ * does so *after* R_DrawSegTextureColumn resolves patches/cache and sources.
+ *
+ * This deliberately skips only the draw call; floorclip/ceilingclip,
+ * solidcol, pixhigh/pixlow, masked texture bookkeeping and the BSP traversal
+ * are kept bit-for-bit untouched. Only build for native Pixel4+R57.
+ *
+ * If the extra two checks exceed the saved source fetch cost, revert this
+ * candidate; this is a controlled A/B experiment, NOT a proven speedup.
+ */
+#if defined(DOOM_R65_EARLY_WALL_CROP)
+#if !defined(DOOM_R22_PIXEL4) || !defined(DOOM_R64A_PROLOGUE) || !defined(DOOM_R57_VIEW_MENU) || !defined(DOOM_R57_CROP16) || !defined(DOOM_R42_WALL_ASM)
+#error R65 early wall crop requires R64A native Pixel4 + R57 menu crop + R42 wall ASM
+#endif
+#define R65_WALLCOL(w,tex,texture,col,dc) do { \
+    if ((dc)->yh >= (int16_t)R57_YMIN && (dc)->yl < (int16_t)R57_YEND) \
+        R20_WALLCOL(w,tex,texture,col,dc); \
+} while (0)
+#else
+#define R65_WALLCOL(w,tex,texture,col,dc) R20_WALLCOL(w,tex,texture,col,dc)
+#endif
+
 static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling)
 {
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
@@ -2981,7 +3006,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
             dcvars.texturemid = rw_midtexturemid;
             //
 
-            R20_WALLCOL(r20_mid, texmidtexture, midtexture, texturecolumn, &dcvars);
+            R65_WALLCOL(r20_mid, texmidtexture, midtexture, texturecolumn, &dcvars);
 
             cc_rwx = VIEWWINDOWHEIGHT;
             fc_rwx = -1;
@@ -3005,7 +3030,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                     dcvars.yh = mid;
                     dcvars.texturemid = rw_toptexturemid;
 
-                    R20_WALLCOL(r20_top, textoptexture, toptexture, texturecolumn, &dcvars);
+                    R65_WALLCOL(r20_top, textoptexture, toptexture, texturecolumn, &dcvars);
 
                     cc_rwx = mid;
                 }
@@ -3034,7 +3059,7 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
                     dcvars.yh = yh;
                     dcvars.texturemid = rw_bottomtexturemid;
 
-                    R20_WALLCOL(r20_bottom, texbottomtexture, bottomtexture, texturecolumn, &dcvars);
+                    R65_WALLCOL(r20_bottom, texbottomtexture, bottomtexture, texturecolumn, &dcvars);
 
                     fc_rwx = mid;
                 }
