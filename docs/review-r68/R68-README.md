@@ -1,6 +1,6 @@
 # R68 — onde vai o tempo? (diagnóstico, só BlastEm)
 
-Base: R66 (`exp-r66-claudio-colpair`, 7,21 FPS no DEMO3). Branch: `claude/r68-profiling`.
+Base: R66 (`exp-r66-claudio-colpair`, 7,21 FPS no DEMO3). Branch: `exp-claudio-r68-profiling-20261025`.
 **Não é build de desempenho.** O ROM com a flag mede onde o tempo vai, nunca quão rápido o jogo é.
 
 ## Pergunta
