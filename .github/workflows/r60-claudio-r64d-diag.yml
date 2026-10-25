@@ -40,6 +40,17 @@ jobs:
           git apply "$RUNNER_TEMP/r64d.patch"
           fish -n scripts/lab/build_r35_linear.fish
           python3 -m py_compile scripts/lab/build_r64_diag.py scripts/lab/test_r64d.py scripts/lab/r64d_read.py
+          # The host C oracle includes <stdio.h>. -I src shadows host system
+          # headers with the project's embedded header variants; use -iquote
+          # solely for the quoted r64_diag.h include, without touching the
+          # diagnostic renderer patch or the m68k build.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/lab/test_r64d.py')
+          t=p.read_text()
+          assert t.count('"-I", str(SRC)')==2
+          p.write_text(t.replace('"-I", str(SRC)', '"-iquote", str(SRC)'))
+          PY
           python3 scripts/lab/test_r64d.py | tee dist/r64-diag/HOST-CHECK.log
           echo 'PATCH + HOST CHECK PASS'
       - name: Restore pinned E1M1 VGM
