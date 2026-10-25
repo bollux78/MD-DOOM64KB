@@ -1,10 +1,13 @@
 # REVIEWED DRAFT v2 ONLY — DO NOT MOVE TO .github/workflows OR DISPATCH BEFORE MAINTAINER APPROVAL.
 # Based on Claudio's proposal. Requires local pinned WAD; no automatic external WAD download.
 # PROPOSAL (not active): move to .github/workflows/r68-prof-build.yml only after the maintainer reviews it.
-# Manual dispatch only (no push trigger), own concurrency group, no cancel-in-progress.
+# Proposed push path filter and manual dispatch; draft remains inactive outside .github/workflows.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
+  push:
+    branches: [exp-claudio-r68-profiling-20261025]
+    paths: ['.github/workflows/r68-prof-build.yml']
   workflow_dispatch:
 
 concurrency:
@@ -185,9 +188,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          exe=$(command -v blastem || true)
-          if test -z "$exe"; then exe=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
-          test -n "$exe"
+          exe=/home/dan/Projetos/blastem64-1.0.0/blastem
+          test -x "$exe" || { echo "BlastEm missing or not executable: $exe" >&2; exit 1; }
           python3 scripts/lab/r68_capture.py --blastem "$exe" \
             --rom dist/r68/doom-md-r60-r68-prof-perf.bin \
             --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
