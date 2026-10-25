@@ -1,0 +1,746 @@
+diff -ruN a/scripts/lab/build_r35_linear.fish b/scripts/lab/build_r35_linear.fish
+--- a/scripts/lab/build_r35_linear.fish	2026-10-25 16:31:54.402793379 +0000
++++ b/scripts/lab/build_r35_linear.fish	2026-10-25 16:31:54.404977559 +0000
+@@ -687,6 +687,13 @@
+         end
+         set defs $defs '-DDOOM_R60_PAIR_ASM'
+     end
++    # R64 diagnostic counters: DIAGNOSTIC ROMs only. Never set for benchmark/perf results.
++    if set -q DOOM_R64_DIAG; and test "$DOOM_R64_DIAG" = 1
++        if not contains -- $v pixel4-perf pixel4-play
++            echo 'R64 diagnostics require native pixel4'; exit 2
++        end
++        set defs $defs '-DDOOM_R64_DIAG'
++    end
+     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
+     set -l id doom-md-r35d-$v
+     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
+diff -ruN a/scripts/lab/build_r64_diag.py b/scripts/lab/build_r64_diag.py
+--- a/scripts/lab/build_r64_diag.py	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/lab/build_r64_diag.py	2026-10-25 16:31:54.405691831 +0000
+@@ -0,0 +1,78 @@
++#!/usr/bin/env python3
++"""R60 P1 A/B on pinned R59 v3: only ASM flag varies within PERF pair."""
++from pathlib import Path
++import os, subprocess, shutil, hashlib, json
++
++def main():
++    root=Path(__file__).resolve().parents[2]
++    os.chdir(root)
++    dest=(root/'dist/r64-diag').resolve()
++    dest.mkdir(parents=True,exist_ok=True)
++    size_exe=Path.home()/'mars/m68k-elf/bin/m68k-elf-size'
++    nm_exe=Path.home()/'mars/m68k-elf/bin/m68k-elf-nm'
++    assert size_exe.is_file() and nm_exe.is_file(),'MarsDev missing'
++    vgm=os.environ.get('DOOM_R20_BGM_VGM',str(root/'res/e1m1.vgm'))
++    assert Path(vgm).is_file()
++    variants=(('diag-perf','perf',1),('diag-play','play',1))
++    flags={}
++    records=[]
++    for name,mode,kernel in variants:
++        video=0;hcrop=16;vcrop=16
++        bench='1' if mode=='play' else '0'
++        env=os.environ.copy()
++        for key in ('DOOM_R53_MICRO_RATIO','DOOM_R55_WERK_VARIANT','DOOM_R56_CLAUDIO_PROFILE',
++                    'DOOM_R56_BUILD','DOOM_R55_BUILD','DOOM_R52_BUILD','DOOM_R57_PROFILE',
++                    'DOOM_R57_TABLES_DIR','DOOM_R58_BUILD','DOOM_R58_CM_VIEW','DOOM_R57_BUILD',
++                    'DOOM_R59_BUILD','DOOM_R59_COLOR_VIEW','DOOM_R60_BUILD','DOOM_R60_PAIR_ASM',
++                    'DOOM_R64_DIAG','DOOM_R64A_PROLOGUE'):
++            env.pop(key,None)
++        env.update({
++                'DOOM_R35D_CHECKER':'1','DOOM_R39C_VARIANT':'mall','DOOM_R39D_DITHER_TOGGLE':'0',
++                'DOOM_R39E_AUDIO_TOGGLES':'1','DOOM_R40_STAGE1':'fast','DOOM_R42_WALL_ASM':'1',
++                'DOOM_R45_VARIANT':'asm','DOOM_R47_PLANE_PAIR':'1','DOOM_R47_FLAT_HOIST':'1',
++                'DOOM_R47_SPRITE_HOIST':'1','DOOM_R48_PAIR_V':'1','DOOM_R48_V_FAST':'1',
++                'DOOM_R49_COLORMIX':'0','DOOM_R49_COMPLUT':'0','DOOM_R49_RATIO':'none',
++                'DOOM_R52_AB':'1','DOOM_R52_CLAUDIO':'1','DOOM_R52_AB_PROFILE':'luma32',
++                'DOOM_R52_ZERO_POLICY':'forbid','DOOM_R52_CPLUT':'1','DOOM_R56_DUAL_COLOR':'1',
++                'DOOM_R57_CROP16':'1',
++                'DOOM_R57_SIZE_MENU':'0',
++                'DOOM_R57_VIEW_MENU':'1',
++                'DOOM_R57_VIEW_MODE':str(video),
++                'DOOM_R57_VIEW_HCROP':str(hcrop),
++                'DOOM_R57_VIEW_VCROP':str(vcrop),
++                'DOOM_R57_NARROW256':'1',
++                'DOOM_R57_H32':'1',
++                'DOOM_R59_BUILD':name,'DOOM_R59_COLOR_VIEW':'1','DOOM_R58_CM_VIEW':'1','DOOM_R50_PLAY_BENCH':bench,'DOOM_R50_MENU_FREEZE':bench,
++                'DOOM_R50_STATIC_MENU':bench,'DOOM_R50_HARD_REINIT':bench,'DOOM_R50_RESET_SRAM':'0',
++                'DOOM_R51_HW_WEAPON':'0','DOOM_R51_NO_PSPRITE':'0','DOOM_R20_BGM_VGM':vgm,
++        })
++        env.update(DOOM_R60_BUILD=name,DOOM_R60_PAIR_ASM=str(kernel),DOOM_R64_DIAG='1')
++        print('BUILD R64 DIAGNOSTIC (never benchmark this ROM)',name,flush=True)
++        subprocess.run(['fish','scripts/lab/build_r35_linear.fish','pixel4-'+mode],env=env,check=True)
++        stem='doom-md-r60-'+name
++        src=root/'dist/r35'/stem
++        for ext in ('.bin','.elf'):
++            shutil.copy2(src.with_suffix(ext),dest/(stem+ext))
++        flagpath=root/'dist/r35'/('flags-'+stem+'.txt')
++        flags[name]=flagpath.read_text()
++        (dest/('flags-'+stem+'.txt')).write_text(flags[name])
++        nm=subprocess.run([str(nm_exe),str(src.with_suffix('.elf'))],check=True,capture_output=True,text=True).stdout
++        assert ('R60_WallColumn' in nm)==bool(kernel),('R60 linked kernel mismatch',name)
++        sizes=subprocess.run([str(size_exe),'-A',str(src.with_suffix('.elf'))],check=True,capture_output=True,text=True).stdout
++        (dest/('SIZE-'+name+'.txt')).write_text(sizes)
++        bss=sum(int(a[1]) for line in sizes.splitlines() if len(a:=line.split())>=2 and a[0] in ('.bss','.sbss'))
++        print('BSS',name,bss,'(cap 57920 applies to the perf build, not enforced for diagnostics)',flush=True)
++        blob=(dest/(stem+'.bin')).read_bytes()
++        assert 0<len(blob)<=4*1024*1024
++        for table in ('r56_tables.h','r59_color_tables.h'):
++            shutil.copy2(root/'src'/table,dest/(name+'-'+table))
++        report=json.loads((root/'src/r58_colormatch_report.json').read_text())
++        assert report['preserved_flat_anchors']==6
++        assert report['palette_slots_from_8x8']==[[41,11,43,7,2,1,32,52,10],[8,22,39,16,15,35,19,40,36]]
++        records.append(dict(rom=stem+'.bin',mode=mode,kernel=kernel,bytes=len(blob),bss_bytes=bss,sha256=hashlib.sha256(blob).hexdigest()))
++        (dest/'MANIFEST.json').write_text(json.dumps(records,indent=2)+'\n')
++    assert len(records)==2
++    print('DONE R64 diagnostic ROMs in',dest,'- FPS of these ROMs is meaningless; dump RAM and run scripts/lab/r64d_read.py',flush=True)
++
++if __name__=='__main__':
++    main()
+diff -ruN a/scripts/lab/check_r64d_inert.py b/scripts/lab/check_r64d_inert.py
+--- a/scripts/lab/check_r64d_inert.py	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/lab/check_r64d_inert.py	2026-10-25 16:31:54.405576447 +0000
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Prove the R64 patch is inert for performance builds: strip every R64D hook from the
++patched sources and compare with the original R60 files (whitespace-normalised).
++Usage: check_r64d_inert.py ORIG_DIR PATCHED_DIR   (each containing src/ and scripts/)"""
++import re, sys
++from pathlib import Path
++
++FILES = ["src/r_draw.c", "src/r22_video.inc", "src/d_main.c"]
++
++
++def strip(t):
++    # 1. #if defined(DOOM_R64_DIAG) ... #endif blocks (nesting aware)
++    out, depth, skip = [], 0, False
++    for line in t.splitlines():
++        s = line.strip()
++        if not skip and re.match(r"#\s*if\s+defined\(DOOM_R64_DIAG\)", s):
++            skip, depth = True, 1; continue
++        if skip:
++            if re.match(r"#\s*if", s): depth += 1
++            elif re.match(r"#\s*endif", s):
++                depth -= 1
++                if depth == 0: skip = False
++            continue
++        out.append(line)
++    t = "\n".join(out)
++    t = re.sub(r'#include "r64_diag\.h"', "", t)
++    t = re.sub(r"R64D_[A-Z0-9_]+\([^;]*\);", "", t)
++    norm = [re.sub(r"[ \t]+", " ", l).strip() for l in t.splitlines()]
++    return [l for l in norm if l]
++
++
++def main(a, b):
++    ok = True
++    for f in FILES:
++        x, y = strip(Path(a, f).read_text()), strip(Path(b, f).read_text())
++        same = x == y
++        ok &= same
++        print(("IDENTICAL " if same else "DIFFERS   ") + f)
++        if not same:
++            import difflib
++            print("\n".join(list(difflib.unified_diff(x, y, lineterm=""))[:30]))
++    sys.exit(0 if ok else 1)
++
++
++if __name__ == "__main__":
++    main(sys.argv[1], sys.argv[2])
+diff -ruN a/scripts/lab/r64d_read.py b/scripts/lab/r64d_read.py
+--- a/scripts/lab/r64d_read.py	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/lab/r64d_read.py	2026-10-25 16:31:54.405464641 +0000
+@@ -0,0 +1,102 @@
++#!/usr/bin/env python3
++"""Read the R64 diagnostic block from a RAM/savestate dump and print the decision table.
++
++Usage: r64d_read.py DUMP [--header src/r64_diag.h] [--cost prologue=150 ...] [--fps 6.72 --mhz 7.67]
++Counter names/order are parsed from r64_diag.h, so the reader cannot drift from the ROM.
++Costs are ASSUMPTIONS (68000 cycles) used only to rank hypotheses; replace them with
++measured values. FPS of a diagnostic ROM is meaningless.
++"""
++import argparse, re, struct, sys
++from pathlib import Path
++
++MAGIC = b"R64D"
++
++
++def names_from_header(path):
++    t = Path(path).read_text()
++    enum = re.search(r"enum\s*\{(.*?R64D_NCOUNTERS)\s*\};", t, re.S).group(1)
++    enum = re.sub(r"/\*.*?\*/", "", enum, flags=re.S)
++    return [n for n in re.findall(r"R64D_[A-Z0-9_]+", enum) if n != "R64D_NCOUNTERS"]
++
++
++def read_block(data, names, nstate=7):
++    i = data.find(MAGIC)
++    if i < 0:
++        sys.exit("magic R64D not found (was the ROM built with DOOM_R64_DIAG=1 and a frame rendered?)")
++    magic, ver, n = struct.unpack_from(">IHH", data, i)
++    if n != len(names):
++        sys.exit(f"block has {n} counters but header lists {len(names)}: header/ROM mismatch")
++    c = struct.unpack_from(f">{n}I", data, i + 8 + 4 * nstate)
++    return ver, dict(zip(names, c))
++
++
++def derive(c, fps, mhz, costs):
++    g = lambda k: c["R64D_" + k]
++    F = max(g("FRAMES"), 1)
++    out = []
++    P = lambda s: out.append(s)
++    al = g("AL_CALLS")
++    early = g("AL_REAR") + g("AL_LEFT") + g("AL_RIGHT") + g("AL_ZERO")
++    clipped_seen = sum(g(f"SEG_R{k}") for k in ("0", "1", "2", "3", "4P"))
++    ignored = max(clipped_seen - g("AL_CLIPCALLS"), 0)
++    with_ranges = sum(g(f"SEG_R{k}") for k in ("1", "2", "3", "4P"))
++    P(f"frames rendered (level): {F}   D_Display calls: {g('DF_FRAMES')}")
++    P(f"R_AddLine/frame {al/F:.1f}: rear {100*g('AL_REAR')/max(al,1):.1f}%  left {100*g('AL_LEFT')/max(al,1):.1f}%  "
++      f"right {100*g('AL_RIGHT')/max(al,1):.1f}%  zero-col {100*g('AL_ZERO')/max(al,1):.1f}%  "
++      f"RF_IGNORE {100*ignored/max(al,1):.1f}%  reached clip {100*g('AL_CLIPCALLS')/max(al,1):.1f}%")
++    rear_total = g("XP_REAR_OK") + g("XP_MISSED_REAR")
++    P(f"cross-product prefilter: catches {100*g('XP_REAR_OK')/max(rear_total,1):.1f}% of rear faces; "
++      f"FALSE rear = {g('XP_FALSE_REAR')} (must be ~0 to be exact), out-of-range skips = {g('XP_SKIP')}")
++    P(f"v1 == previous v2 (angle reuse candidate): {g('AL_V1_REUSE')/F:.1f}/frame ({100*g('AL_V1_REUSE')/max(al,1):.1f}% of segs)")
++    P(f"fragments: segs with >=1 range {with_ranges/F:.1f}/frame; ranges 1/2/3/4+: "
++      f"{g('SEG_R1')}/{g('SEG_R2')}/{g('SEG_R3')}/{g('SEG_R4P')}; extra fragments {max(g('SR_CALLS')-with_ranges,0)/F:.1f}/frame")
++    P(f"columns: submitted {g('SR_COLS')/F:.0f}/frame, seg-loop iterations {g('SEG_COLS')/F:.0f}/frame")
++    P(f"BSP: nodes {g('NODES')/F:.0f}  subsectors {g('SUBSECTORS')/F:.0f}  bbox {g('BB_CALLS')/F:.0f}/frame "
++      f"(fov {100*g('BB_FOV')/max(g('BB_CALLS'),1):.0f}%, occluded {100*g('BB_OCC')/max(g('BB_CALLS'),1):.0f}%, "
++      f"accepted {100*g('BB_ACCEPT')/max(g('BB_CALLS'),1):.0f}%)")
++    P(f"visited with screen already full: nodes {g('NODES_FULL')/F:.1f}  subsectors {g('SUBSECTORS_FULL')/F:.1f}  bbox {g('BB_FULL')/F:.1f} per frame")
++    wc = g("WALL_CALLS"); fc = g("FLAT_CALLS")
++    P(f"wall calls {wc/F:.0f}/frame (drawn {g('WALL_DRAWN')/F:.0f}, avg {g('WALL_PIXELS')/max(g('WALL_DRAWN'),1):.1f} px); "
++      f"ASM {100*g('WALL_ASM')/max(g('WALL_DRAWN'),1):.0f}%  fallback colormap {g('WALL_FB_CMAP')/F:.1f}/frame  short {g('WALL_FB_SHORT')/F:.1f}/frame")
++    P(f"flat calls {fc/F:.0f}/frame (drawn {g('FLAT_DRAWN')/F:.0f}, avg {g('FLAT_PIXELS')/max(g('FLAT_DRAWN'),1):.1f} px)")
++    d = max(g("DF_FRAMES"), 1)
++    hist = [g(f"TICS_H{k}") for k in "0123456"] + [g("TICS_H7P")]
++    P(f"tics per displayed frame: mean {g('TICS')/d:.2f}; histogram 0..7+: {hist}")
++    vb = g("VB_LOGIC") + g("VB_RENDER")
++    P(f"VBlanks: logic {100*g('VB_LOGIC')/max(vb,1):.1f}%  render+present {100*g('VB_RENDER')/max(vb,1):.1f}%  (60 Hz granularity)")
++    budget = mhz * 1e6 / fps
++    target = budget * (1 - 1 / 1.05)
++    P("")
++    P(f"cycle budget per frame at {fps} FPS / {mhz} MHz: {budget:,.0f}; 5% FPS needs {target:,.0f} cycles/frame")
++    P("HYPOTHESES (counts measured, cycles ASSUMED; rank only):")
++    cand = [
++        ("A prologue hoist (wall+flat calls)", (wc + fc) / F * costs["prologue"]),
++        ("B1 rear-face cross-product prefilter", g("XP_REAR_OK") / F * costs["angle2"]),
++        ("B2 vertex-angle reuse", g("AL_V1_REUSE") / F * costs["angle1"]),
++        ("C per-fragment setup cache", max(g("SR_CALLS") - with_ranges, 0) / F * costs["setup"]),
++        ("D BSP early-out when screen full", (g("BB_FULL") + g("NODES_FULL")) / F * costs["bbox"]),
++    ]
++    for n, cyc in sorted(cand, key=lambda x: -x[1]):
++        P(f"  {n:40s} ~{cyc:9,.0f} cycles/frame  = {100*cyc/budget:4.1f}% of frame  {'<-- passes 5%' if cyc >= target else ''}")
++    return "\n".join(out)
++
++
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument("dump"); ap.add_argument("--header", default=str(Path(__file__).resolve().parents[2] / "src/r64_diag.h"))
++    ap.add_argument("--fps", type=float, default=6.72); ap.add_argument("--mhz", type=float, default=7.67)
++    ap.add_argument("--cost", nargs="*", default=[], help="name=cycles for prologue angle1 angle2 setup bbox")
++    a = ap.parse_args()
++    costs = dict(prologue=150, angle1=300, angle2=300, setup=1000, bbox=1000)
++    for kv in a.cost:
++        k, v = kv.split("="); costs[k] = float(v)
++    names = names_from_header(a.header)
++    ver, c = read_block(Path(a.dump).read_bytes(), names)
++    print(f"R64D block v{ver}, {len(c)} counters")
++    for k, v in c.items():
++        print(f"  {k[5:]:18s} {v}")
++    print(); print(derive(c, a.fps, a.mhz, costs))
++
++
++if __name__ == "__main__":
++    main()
+diff -ruN a/scripts/lab/test_r64d.py b/scripts/lab/test_r64d.py
+--- a/scripts/lab/test_r64d.py	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/lab/test_r64d.py	2026-10-25 16:31:54.405663274 +0000
+@@ -0,0 +1,87 @@
++#!/usr/bin/env python3
++"""Host-side test of the R64 diagnostic header (no m68k toolchain needed).
++Compiles src/r64_diag.h with -DDOOM_R64_DIAG into a small harness that exercises every macro,
++writes the block big-endian (as the 68000 would) and checks it with r64d_read.py's parser.
++Also compiles the header WITHOUT the flag to prove every hook disappears."""
++import os, subprocess, sys, tempfile
++from pathlib import Path
++sys.path.insert(0, str(Path(__file__).parent))
++import r64d_read
++
++SRC = Path(__file__).resolve().parents[2] / "src"
++C = r'''
++#include <stdio.h>
++#include <string.h>
++#include <stdint.h>
++#define FRACBITS 16
++#define ANG180_16 0x8000u
++#define VIEWWINDOWWIDTH 76
++static uint8_t solidcol[VIEWWINDOWWIDTH];
++static int32_t viewx = 0, viewy = 0;
++typedef struct { struct { int16_t x, y; } v1, v2; } seg_t;
++#include "r64_diag.h"
++#if defined(DOOM_R64_DIAG)
++volatile r64d_block_t r64d;
++static void put32(FILE *f, uint32_t v){ unsigned char b[4]={v>>24,v>>16,v>>8,v}; fwrite(b,1,4,f); }
++static void put16(FILE *f, uint16_t v){ unsigned char b[2]={v>>8,v}; fwrite(b,1,2,f); }
++#endif
++int main(int argc, char **argv) {
++#if defined(DOOM_R64_DIAG)
++    seg_t front={{10,5},{10,-5}}, rear={{10,-5},{10,5}}, chain={{10,-5},{20,5}};
++    R64D_FRAME(); R64D_FRAME();
++    R64D_SUBSEC();
++    R64D_VREUSE(&front); R64D_HIT(R64D_AL_CALLS); R64D_XPRED(&front, 1000);   /* front/front: no counter */
++    R64D_VREUSE(&chain); R64D_HIT(R64D_AL_CALLS);                              /* v1 == prev v2 -> reuse */
++    R64D_XPRED(&rear, 0xF000u);                                                /* rear agrees */
++    R64D_XPRED(&rear, 0u);                                                     /* false rear */
++    R64D_XPRED(&front, 0xF000u);                                               /* missed rear */
++    { seg_t far_={{-32768,0},{0,0}}; R64D_XPRED(&far_, 0u); }                  /* out of range */
++    R64D_SEG_BEGIN(); R64D_SEG_END();                                          /* 0 ranges */
++    R64D_SEG_BEGIN(); R64D_SR(10); R64D_SEG_END();                             /* 1 */
++    R64D_SEG_BEGIN(); R64D_SR(10); R64D_SR(5); R64D_SEG_END();                 /* 2 */
++    R64D_SEG_BEGIN(); R64D_SR(1); R64D_SR(1); R64D_SR(1); R64D_SR(1); R64D_SR(1); R64D_SEG_END(); /* 4+ */
++    R64D_NODE(); memset(solidcol, 1, VIEWWINDOWWIDTH); R64D_NODE(); R64D_BBOX(); R64D_SUBSEC();
++    R64D_WALL_DRAWN(12); R64D_WALL_FB(0, 1); R64D_WALL_FB(solidcol, 5); R64D_FLAT_DRAWN(7);
++    R64D_LOOP_BEGIN(100u, 1000u); R64D_LOGIC_END(103u, 1002u); R64D_RENDER_END(1007u);
++    R64D_LOOP_BEGIN(103u, 1007u); R64D_LOGIC_END(113u, 1008u); R64D_RENDER_END(1010u);   /* 10 tics -> bin 7+ */
++    FILE *f = fopen(argv[1], "wb"); unsigned char pad[17]={0}; fwrite(pad,1,17,f);        /* magic not at offset 0 */
++    put32(f, r64d.magic); put16(f, r64d.version); put16(f, r64d.ncounters);
++    for (int i=0;i<R64D_S_N;++i) put32(f, r64d.state[i]);
++    for (int i=0;i<R64D_NCOUNTERS;++i) put32(f, r64d.c[i]);
++    fclose(f);
++#else
++    /* with the flag off every hook must be a no-op that still compiles */
++    seg_t s={{0,0},{0,0}};
++    R64D_FRAME(); R64D_HIT(R64D_AL_CALLS); R64D_VREUSE(&s); R64D_XPRED(&s,0); R64D_SR(1); R64D_SEG_BEGIN(); R64D_SEG_END();
++    R64D_NODE(); R64D_BBOX(); R64D_SUBSEC(); R64D_WALL_DRAWN(1); R64D_WALL_FB(0,0); R64D_FLAT_DRAWN(1);
++    R64D_LOOP_BEGIN(0,0); R64D_LOGIC_END(0,0); R64D_RENDER_END(0); R64D_RESET(); R64D_ADD(0,1);
++    (void)argc; (void)argv; (void)s; (void)solidcol; (void)viewx; (void)viewy;
++#endif
++    return 0;
++}
++'''
++
++def run(cmd): return subprocess.run(cmd, capture_output=True, text=True)
++
++with tempfile.TemporaryDirectory() as d:
++    src = os.path.join(d, "h.c"); open(src, "w").write(C)
++    r = run(["cc", "-std=gnu99", "-Wall", "-Wextra", "-Werror", "-I", str(SRC), "-o", os.path.join(d, "off"), src])
++    assert r.returncode == 0, "perf flavour does not compile cleanly:\n" + r.stderr
++    assert run([os.path.join(d, "off"), "x"]).returncode == 0
++    r = run(["cc", "-std=gnu99", "-Wall", "-Wextra", "-DDOOM_R64_DIAG", "-I", str(SRC), "-o", os.path.join(d, "on"), src])
++    assert r.returncode == 0, "diag flavour does not compile:\n" + r.stderr
++    dump = os.path.join(d, "dump.bin")
++    assert run([os.path.join(d, "on"), dump]).returncode == 0
++    names = r64d_read.names_from_header(SRC / "r64_diag.h")
++    ver, c = r64d_read.read_block(Path(dump).read_bytes(), names)
++    g = lambda k: c["R64D_" + k]
++    exp = dict(FRAMES=2, AL_CALLS=2, AL_V1_REUSE=1, XP_REAR_OK=1, XP_FALSE_REAR=1, XP_MISSED_REAR=1, XP_SKIP=1,
++               SEG_R0=1, SEG_R1=1, SEG_R2=1, SEG_R4P=1, SR_CALLS=8, SR_COLS=10 + 15 + 5,
++               NODES=2, NODES_FULL=1, BB_CALLS=1, BB_FULL=1, SUBSECTORS=2, SUBSECTORS_FULL=1,
++               WALL_DRAWN=1, WALL_PIXELS=12, WALL_FB_SHORT=1, WALL_FB_CMAP=1, FLAT_DRAWN=1, FLAT_PIXELS=7,
++               TICS=13, TICS_H3=1, TICS_H7P=1, VB_LOGIC=3, VB_RENDER=7, DF_FRAMES=2)
++    bad = {k: (g(k), v) for k, v in exp.items() if g(k) != v}
++    assert not bad, f"counter mismatch (got, want): {bad}"
++    text = r64d_read.derive(c, 6.72, 7.67, dict(prologue=150, angle1=300, angle2=300, setup=1000, bbox=1000))
++    assert "cross-product prefilter" in text
++print("R64D header test: PASS (perf flavour compiles to no-ops; diag flavour counts exactly; reader parses big-endian block)")
+diff -ruN a/src/d_main.c b/src/d_main.c
+--- a/src/d_main.c	2026-10-25 16:31:54.402847135 +0000
++++ b/src/d_main.c	2026-10-25 16:31:54.405746886 +0000
+@@ -67,6 +67,10 @@
+ #include "globdata.h"
+ #include "r24_romthings.h"
+ #include "r22_mapdiag.h"
++#include "r64_diag.h"
++#if defined(DOOM_R64_DIAG)
++extern volatile uint32_t _g_vblankCount;
++#endif
+ 
+ static void D_DoAdvanceDemo(void);
+ static void D_PageDrawer(void);
+@@ -116,6 +120,7 @@
+     /* A pending title-screen demo transition must not replace our explicit
+      * DEMO3 request on the next game tic. */
+     advancedemo=false;
++    R64D_RESET();
+     singletics=true;
+     _g_timingdemo=true;
+     _g_singledemo=false;
+@@ -342,6 +347,7 @@
+ {
+     for (;;)
+     {
++        R64D_LOOP_BEGIN(_g_gametic, _g_vblankCount);
+         // frame syncronous IO operations
+ #if defined(DOOM_PROFILE)
+         uint32_t profile_start_vb = _g_vblankCount;
+@@ -396,7 +402,9 @@
+ #endif
+ 
+         // Update display, next frame, with current state.
++        R64D_LOGIC_END(_g_gametic, _g_vblankCount);
+         D_Display();
++        R64D_RENDER_END(_g_vblankCount);
+ #if defined(DOOM_PROFILE)
+         I_ProfileRender(_g_vblankCount - profile_start_vb);
+ #endif
+diff -ruN a/src/r22_video.inc b/src/r22_video.inc
+--- a/src/r22_video.inc	2026-10-25 16:31:54.402933033 +0000
++++ b/src/r22_video.inc	2026-10-25 16:31:54.406602200 +0000
+@@ -19,6 +19,7 @@
+ #include "r20_counters.h"
+ #include "r22_pixel4.h"
+ #include "r57_viewport.h"
++#include "r64_diag.h"
+ #if defined(DOOM_R43_GRAY_CRT)
+ #include "r43_gray_palette.h" /* 4x4 CRAM/LUT only; Bayer8 still unchanged. */
+ #else
+@@ -641,6 +642,7 @@
+ #if defined(DOOM_R42_WALL_HOIST) || defined(DOOM_R42_WALL_ASM)
+ static void R42_DrawPackedWall(const draw_column_vars_t *v)
+ {
++    R64D_HIT(R64D_WALL_CALLS);
+     const uint8_t *r52map=r22_color;
+ #if defined(DOOM_R56_DUAL_COLOR)
+     #if defined(DOOM_R59_COLOR_VIEW)
+@@ -671,6 +673,7 @@
+     if(first>y1) return;
+     R48_COUNT(R48_WALL_CALLS,1);
+     R48_COUNT(R48_WALL_PIXELS,(uint16_t)(y1-first+1));
++    R64D_WALL_DRAWN((uint16_t)(y1-first+1));
+     uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*v->fracstep);
+     f=(uint16_t)(f+(uint16_t)((uint32_t)(uint16_t)(first-y0)*(uint32_t)v->fracstep));
+     const uint16_t step=v->fracstep;
+@@ -721,9 +724,11 @@
+ #else
+ #if defined(DOOM_R60_PAIR_ASM)
+     if(!colormap && count>=2){
++        R64D_HIT(R64D_WALL_ASM);
+         R60_WallDraw(dst,source,r52map,f,step,count,(uint16_t)(first&1));
+         return;
+     }
++    R64D_WALL_FB(colormap,count);
+ #endif
+     if((first&1) && count) {
+         uint8_t ci=source[f>>9]; if(colormap)ci=colormap[ci];
+@@ -801,6 +806,7 @@
+ #endif
+ void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
+ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
++    R64D_HIT(R64D_FLAT_CALLS);
+     const uint8_t *r52map=r22_color;
+ #if defined(DOOM_R56_DUAL_COLOR)
+     #if defined(DOOM_R59_COLOR_VIEW)
+@@ -838,6 +844,7 @@
+     if(y0>y1)return;
+     R48_COUNT(R48_FLAT_CALLS,1);
+     R48_COUNT(R48_FLAT_PIXELS,(uint16_t)(y1-y0+1));
++    R64D_FLAT_DRAWN((uint16_t)(y1-y0+1));
+     uint8_t sample=(uint8_t)(r52map[c]&15u);
+     uint8_t keep=(x&1)?0xf0u:0x0fu;
+     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
+diff -ruN a/src/r64_diag.h b/src/r64_diag.h
+--- a/src/r64_diag.h	1970-01-01 00:00:00.000000000 +0000
++++ b/src/r64_diag.h	2026-10-25 16:31:54.407710942 +0000
+@@ -0,0 +1,133 @@
++/* R64 diagnostic counters. EXPERIMENTAL, OFF by default.
++ *
++ * Everything here is compiled only with -DDOOM_R64_DIAG. Without that flag every
++ * R64D_* hook expands to nothing, so performance builds are source-identical to R60
++ * after preprocessing (checked by scripts/lab/check_r64d_inert.py).
++ *
++ * Hooks only COUNT. They never branch the renderer, change a value, touch the VDP,
++ * or alter the tic policy. Counters live in one block in WRAM that can be found in a
++ * RAM dump by its magic (see scripts/lab/r64d_read.py). Do not use FPS from a
++ * diagnostic ROM: the increments cost cycles.
++ */
++#ifndef R64_DIAG_H
++#define R64_DIAG_H
++#include <stdint.h>
++
++#if defined(DOOM_R64_DIAG)
++
++#define R64D_MAGIC 0x52363444UL /* 'R64D' */
++#define R64D_VERSION 1u
++
++enum {
++    R64D_FRAMES,        /* R_RenderPlayerView calls */
++    /* R_AddLine */
++    R64D_AL_CALLS, R64D_AL_REAR, R64D_AL_LEFT, R64D_AL_RIGHT, R64D_AL_ZERO,
++    R64D_AL_CLIPCALLS,  /* segs that reached R_ClipWallSegment (not RF_IGNORE) */
++    R64D_AL_V1_REUSE,   /* v1 equals previous seg's v2 inside the same subsector */
++    R64D_XP_REAR_OK,    /* cross product says rear AND angle test says rear */
++    R64D_XP_FALSE_REAR, /* cross product says rear but angle test says NOT rear */
++    R64D_XP_MISSED_REAR,/* angle test says rear but cross product does not */
++    R64D_XP_SKIP,       /* coordinates out of int32-safe range, not evaluated */
++    /* fragments: R_StoreWallRange calls per seg that reached the clip */
++    R64D_SEG_R0, R64D_SEG_R1, R64D_SEG_R2, R64D_SEG_R3, R64D_SEG_R4P,
++    R64D_SR_CALLS, R64D_SR_COLS, R64D_SEG_COLS, /* SEG_COLS = R_RenderSegLoop iterations */
++    /* BSP */
++    R64D_NODES, R64D_NODES_FULL, R64D_SUBSECTORS, R64D_SUBSECTORS_FULL,
++    R64D_BB_CALLS, R64D_BB_FULL, R64D_BB_FOV, R64D_BB_OCC, R64D_BB_ACCEPT,
++    /* column drawing */
++    R64D_WALL_CALLS, R64D_WALL_DRAWN, R64D_WALL_PIXELS, R64D_WALL_ASM,
++    R64D_WALL_FB_CMAP, R64D_WALL_FB_SHORT,
++    R64D_FLAT_CALLS, R64D_FLAT_DRAWN, R64D_FLAT_PIXELS,
++    /* tics / time (VBlank = 1/60 s, coarse but additive) */
++    R64D_DF_FRAMES, R64D_TICS, R64D_TICS_H0, R64D_TICS_H1, R64D_TICS_H2, R64D_TICS_H3,
++    R64D_TICS_H4, R64D_TICS_H5, R64D_TICS_H6, R64D_TICS_H7P,
++    R64D_VB_LOGIC, R64D_VB_RENDER,
++    R64D_NCOUNTERS
++};
++
++/* state[] slots (not counters) */
++enum { R64D_S_RANGES, R64D_S_PVALID, R64D_S_PX, R64D_S_PY, R64D_S_TIC0, R64D_S_VB0, R64D_S_VB1, R64D_S_N };
++
++typedef struct {
++    uint32_t magic;
++    uint16_t version;
++    uint16_t ncounters;
++    uint32_t state[R64D_S_N];
++    uint32_t c[R64D_NCOUNTERS];
++} r64d_block_t;
++
++extern volatile r64d_block_t r64d; /* defined in r_draw.c */
++
++#define R64D_HIT(id) (r64d.c[(id)]++)
++#define R64D_ADD(id,n) (r64d.c[(id)]+=(uint32_t)(n))
++#define R64D_FRAME() do{ if(r64d.magic!=R64D_MAGIC){ r64d.magic=R64D_MAGIC; r64d.version=R64D_VERSION; \
++    r64d.ncounters=R64D_NCOUNTERS; } R64D_HIT(R64D_FRAMES); }while(0)
++#define R64D_RESET() do{ uint16_t _i; for(_i=0;_i<R64D_NCOUNTERS;++_i) r64d.c[_i]=0; }while(0)
++
++/* solidcol / VIEWWINDOWWIDTH exist only in r_draw.c; these macros are used only there. */
++#define R64D_FULL() (memchr(solidcol,0,VIEWWINDOWWIDTH)==0)
++#define R64D_NODE() do{ R64D_HIT(R64D_NODES); if(R64D_FULL()) R64D_HIT(R64D_NODES_FULL); }while(0)
++#define R64D_SUBSEC() do{ R64D_HIT(R64D_SUBSECTORS); if(R64D_FULL()) R64D_HIT(R64D_SUBSECTORS_FULL); \
++    r64d.state[R64D_S_PVALID]=0; }while(0)
++#define R64D_BBOX() do{ R64D_HIT(R64D_BB_CALLS); if(R64D_FULL()) R64D_HIT(R64D_BB_FULL); }while(0)
++
++/* R_AddLine: vertex reuse candidate (same subsector, previous v2 == this v1) */
++#define R64D_VREUSE(l) do{ \
++    if(r64d.state[R64D_S_PVALID] && (int16_t)r64d.state[R64D_S_PX]==(int16_t)(l)->v1.x \
++       && (int16_t)r64d.state[R64D_S_PY]==(int16_t)(l)->v1.y) R64D_HIT(R64D_AL_V1_REUSE); \
++    r64d.state[R64D_S_PX]=(uint16_t)(l)->v2.x; r64d.state[R64D_S_PY]=(uint16_t)(l)->v2.y; \
++    r64d.state[R64D_S_PVALID]=1; }while(0)
++
++/* Would a cross-product pre-test have agreed with the 16-bit angle back-face test? */
++#define R64D_XPRED(l,span) do{ \
++    int32_t _vx=(int32_t)(viewx>>FRACBITS), _vy=(int32_t)(viewy>>FRACBITS); \
++    int32_t _x1=(int32_t)(l)->v1.x-_vx, _y1=(int32_t)(l)->v1.y-_vy; \
++    int32_t _x2=(int32_t)(l)->v2.x-_vx, _y2=(int32_t)(l)->v2.y-_vy; \
++    if(_x1>32767||_x1<-32767||_y1>32767||_y1<-32767||_x2>32767||_x2<-32767||_y2>32767||_y2<-32767) \
++        R64D_HIT(R64D_XP_SKIP); \
++    else { \
++        uint8_t _pr=((_x1*_y2-_x2*_y1)>0); uint8_t _ar=((span)>=ANG180_16); \
++        if(_pr&&_ar) R64D_HIT(R64D_XP_REAR_OK); \
++        else if(_pr&&!_ar) R64D_HIT(R64D_XP_FALSE_REAR); \
++        else if(!_pr&&_ar) R64D_HIT(R64D_XP_MISSED_REAR); \
++    } }while(0)
++
++/* fragments per seg */
++#define R64D_SEG_BEGIN() (r64d.state[R64D_S_RANGES]=0)
++#define R64D_SR(ncols) do{ R64D_HIT(R64D_SR_CALLS); R64D_ADD(R64D_SR_COLS,(ncols)); r64d.state[R64D_S_RANGES]++; }while(0)
++#define R64D_SEG_END() do{ uint32_t _n=r64d.state[R64D_S_RANGES]; \
++    R64D_HIT(_n==0?R64D_SEG_R0:_n==1?R64D_SEG_R1:_n==2?R64D_SEG_R2:_n==3?R64D_SEG_R3:R64D_SEG_R4P); }while(0)
++
++/* column drawers */
++#define R64D_WALL_DRAWN(npix) do{ R64D_HIT(R64D_WALL_DRAWN); R64D_ADD(R64D_WALL_PIXELS,(npix)); }while(0)
++#define R64D_WALL_FB(colormap,count) do{ if(colormap) R64D_HIT(R64D_WALL_FB_CMAP); else R64D_HIT(R64D_WALL_FB_SHORT); (void)(count); }while(0)
++#define R64D_FLAT_DRAWN(npix) do{ R64D_HIT(R64D_FLAT_DRAWN); R64D_ADD(R64D_FLAT_PIXELS,(npix)); }while(0)
++
++/* tics per rendered frame and VBlanks spent in logic vs render (d_main.c) */
++#define R64D_LOOP_BEGIN(gametic,vbl) do{ r64d.state[R64D_S_TIC0]=(uint32_t)(gametic); r64d.state[R64D_S_VB0]=(uint32_t)(vbl); }while(0)
++#define R64D_LOGIC_END(gametic,vbl) do{ uint32_t _t=(uint32_t)(gametic)-r64d.state[R64D_S_TIC0]; \
++    R64D_ADD(R64D_TICS,_t); R64D_HIT(R64D_TICS_H0+(_t>7u?7u:_t)); \
++    r64d.state[R64D_S_VB1]=(uint32_t)(vbl); R64D_ADD(R64D_VB_LOGIC,r64d.state[R64D_S_VB1]-r64d.state[R64D_S_VB0]); }while(0)
++#define R64D_RENDER_END(vbl) do{ R64D_HIT(R64D_DF_FRAMES); R64D_ADD(R64D_VB_RENDER,(uint32_t)(vbl)-r64d.state[R64D_S_VB1]); }while(0)
++
++#else /* !DOOM_R64_DIAG: every hook vanishes */
++#define R64D_HIT(id) ((void)0)
++#define R64D_ADD(id,n) ((void)0)
++#define R64D_FRAME() ((void)0)
++#define R64D_RESET() ((void)0)
++#define R64D_NODE() ((void)0)
++#define R64D_SUBSEC() ((void)0)
++#define R64D_BBOX() ((void)0)
++#define R64D_VREUSE(l) ((void)0)
++#define R64D_XPRED(l,span) ((void)0)
++#define R64D_SEG_BEGIN() ((void)0)
++#define R64D_SR(ncols) ((void)0)
++#define R64D_SEG_END() ((void)0)
++#define R64D_WALL_DRAWN(npix) ((void)0)
++#define R64D_WALL_FB(colormap,count) ((void)0)
++#define R64D_FLAT_DRAWN(npix) ((void)0)
++#define R64D_LOOP_BEGIN(gametic,vbl) ((void)0)
++#define R64D_LOGIC_END(gametic,vbl) ((void)0)
++#define R64D_RENDER_END(vbl) ((void)0)
++#endif
++#endif
+diff -ruN a/src/r_draw.c b/src/r_draw.c
+--- a/src/r_draw.c	2026-10-25 16:31:54.402995541 +0000
++++ b/src/r_draw.c	2026-10-25 16:31:54.407064273 +0000
+@@ -67,6 +67,10 @@
+    Compare ROM bus reads with DIVU.W in timedemo. */
+ #include "r20_counters.h"
+ #include "r37_profile.h"
++#include "r64_diag.h"
++#if defined(DOOM_R64_DIAG)
++volatile r64d_block_t r64d;
++#endif
+ #if defined(DOOM_R47_MUL_BSP)
+ #include "r47_mul.h"
+ #endif
+@@ -2759,6 +2763,7 @@
+     for ( ; rw_x < rw_stopx ; rw_x++)
+     {
+         R37_HIT(R37_COLUMNS); /* every wall-strip loop iteration */
++        R64D_HIT(R64D_SEG_COLS);
+         // mark floor / ceiling areas
+ 
+         int16_t yh = bottomfrac>>FRACBITS;
+@@ -3171,6 +3176,7 @@
+ #endif
+ static void R_StoreWallRange(const int16_t start, const int16_t stop)
+ {
++    R64D_SR(stop-start+1);
+     // don't overflow and crash
+     if (ds_p == &_s_drawsegs[MAXDRAWSEGS])
+     {
+@@ -3605,6 +3611,7 @@
+ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
+ {
+     byte *p;
++    R64D_HIT(R64D_AL_CLIPCALLS);
+     while (first < last)
+     {
+         if (solidcol[first])
+@@ -3648,6 +3655,8 @@
+ static void R_AddLine(const seg_t __far* line)
+ {
+     curline = line;
++    R64D_VREUSE(line);
++    R64D_HIT(R64D_AL_CALLS);
+ 
+     angle16_t angle1 = R_PointToAngle16(line->v1.x, line->v1.y);
+     angle16_t angle2 = R_PointToAngle16(line->v2.x, line->v2.y);
+@@ -3655,9 +3664,11 @@
+     // Clip to view edges.
+     angle16_t span = angle1 - angle2;
+ 
++    R64D_XPRED(line, span);
+     // Back side, i.e. backface culling
+     if (span >= ANG180_16) {
+         R37_HIT(R37_SEG_EARLY); /* rear face */
++        R64D_HIT(R64D_AL_REAR);
+         return;
+     }
+ 
+@@ -3674,6 +3685,7 @@
+         // Totally off the left edge?
+         if (tspan >= span) {
+             R37_HIT(R37_SEG_EARLY); /* outside left clip */
++            R64D_HIT(R64D_AL_LEFT);
+             return;
+         }
+ 
+@@ -3688,6 +3700,7 @@
+         // Totally off the left edge?
+         if (tspan >= span) {
+             R37_HIT(R37_SEG_EARLY); /* outside right clip */
++            R64D_HIT(R64D_AL_RIGHT);
+             return;
+         }
+         angle2 = -clipangle;
+@@ -3703,6 +3716,7 @@
+     // Does not cross a pixel?
+     if (x1 >= x2) {     // killough 1/31/98 -- change == to >= for robustness
+         R37_HIT(R37_SEG_EARLY); /* projects to zero columns */
++        R64D_HIT(R64D_AL_ZERO);
+         return;
+     }
+ 
+@@ -3718,15 +3732,19 @@
+         R_RecalcLineFlags();render_info=(uint16_t)R23_GET(linedef,r_flags);
+     }
+     const uint16_t flags=(uint16_t)render_info;
++    R64D_SEG_BEGIN();
+     if (!(flags & RF_IGNORE))R_ClipWallSegment(x1,x2,flags & RF_CLOSED);
++    R64D_SEG_END();
+ #else
+     if (R23_GET(linedef,r_validcount) != (uint16_t)_g_gametic)
+         R_RecalcLineFlags();
+ 
++    R64D_SEG_BEGIN();
+     if (!(R23_GET(linedef,r_flags) & RF_IGNORE))
+     {
+         R_ClipWallSegment (x1, x2, R23_GET(linedef,r_flags) & RF_CLOSED);
+     }
++    R64D_SEG_END();
+ #endif
+ }
+ 
+@@ -3740,6 +3758,7 @@
+ static void R_Subsector(int16_t num)
+ {
+     R37_HIT(R37_SUBSECTORS);
++    R64D_SUBSEC();
+     int16_t         count;
+     const seg_t       __far* line;
+     subsector_t __far* sub;
+@@ -3827,6 +3846,7 @@
+ static boolean R_CheckBBox(const int16_t __far* bspcoord)
+ {
+     R37_HIT(R37_BBOX);
++    R64D_BBOX();
+     // Find the corners of the box
+     // that define the edges from current viewpoint.
+     int16_t boxpos = (viewx <= ((fixed_t)bspcoord[BOXLEFT]<<FRACBITS) ? 0 : viewx < ((fixed_t)bspcoord[BOXRIGHT]<<FRACBITS) ? 1 : 2) +
+@@ -3854,10 +3874,10 @@
+     }
+ 
+     if ((int16_t)angle2 >=  (int16_t)clipangle) {
+-        R37_HIT(R37_BBOX_FOV); return false;
++        R37_HIT(R37_BBOX_FOV); R64D_HIT(R64D_BB_FOV); return false;
+     } // Both off left edge
+     if ((int16_t)angle1 <= -(int16_t)clipangle) {
+-        R37_HIT(R37_BBOX_FOV); return false;
++        R37_HIT(R37_BBOX_FOV); R64D_HIT(R64D_BB_FOV); return false;
+     } // Both off right edge
+     if ((int16_t)angle1 >=  (int16_t)clipangle) angle1 =  clipangle; // Clip at left edge
+     if ((int16_t)angle2 <= -(int16_t)clipangle) angle2 = -clipangle; // Clip at right edge
+@@ -3873,16 +3893,19 @@
+     // Does not cross a pixel.
+     if (sx1 == sx2) {
+         R37_HIT(R37_BBOX_FOV);
++        R64D_HIT(R64D_BB_FOV);
+         return false;
+     }
+ 
+     if (!memchr(solidcol+sx1, 0, sx2-sx1)) {
+         R37_HIT(R37_BBOX_OCCLUDED);
++        R64D_HIT(R64D_BB_OCC);
+         return false;
+     }
+     // All columns it covers are already solidly covered
+ 
+ 
++    R64D_HIT(R64D_BB_ACCEPT);
+     return true;
+ }
+ 
+@@ -3941,6 +3964,7 @@
+                 I_Error("R20a BSP depth overflow");
+ 
+             R37_HIT(R37_NODES);
++            R64D_NODE();
+             bsp = &nodes[bspnum];
+             side = R_PointOnSide(viewx, viewy, bsp);
+ 
+@@ -4066,6 +4090,7 @@
+ //
+ void R_RenderPlayerView (player_t* player)
+ {
++    R64D_FRAME();
+ #if defined(DOOM_R38_TIME_PROFILE)
+     R38_BeginView(player->mo->x, player->mo->y, player->mo->angle);
+ #endif
