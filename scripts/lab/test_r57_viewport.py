@@ -28,6 +28,7 @@ code=r'''
 #define CENTERY 22
 #define GS_LEVEL 1
 #define R48_COUNT(a,b) ((void)0)
+#define R68_HIT(k) ((void)0)
 static int _g_gamestate;
 #if defined(DOOM_R57_VIEW_MENU)
 R57ViewConfig r57_view;
