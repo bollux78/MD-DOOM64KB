@@ -1,0 +1,122 @@
+name: R65-P1 validate exact images and repeated prefix FPS vs R64A
+
+on:
+  push:
+    branches: [exp-r65-p1-early-wall-crop]
+    paths: [.github/workflows/r65-p1-validate.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: r65-p1-validation
+  cancel-in-progress: true
+
+jobs:
+  validation:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download actual R65-P1 ELF and ROMs from successful MarsDev run
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r65-p1-early-wall-crop
+          run-id: 40224741397
+          github-token: ${{ github.token }}
+          path: dist/r65-validation/roms
+
+      - name: Download pinned original R64A control to audit unchanged compile
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r60-r64a-claudio-prologue
+          run-id: 40216335998
+          github-token: ${{ github.token }}
+          path: dist/r65-validation/pinned-r64a
+
+      - name: Verify exact R64A control and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r65-validation/report
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py scripts/lab/r65_repeat_prefix.py scripts/lab/r65_candidate_compare.py
+          cmp dist/r65-validation/roms/doom-md-r60-r64a-perf.bin \
+              dist/r65-validation/pinned-r64a/doom-md-r60-r64a-perf.bin
+          echo 'PASS clean R64A reproduced bit for bit' | tee dist/r65-validation/report/CONTROL-IDENTITY.txt
+          sha256sum dist/r65-validation/roms/*.bin > dist/r65-validation/report/ROM-SHA256.txt
+          BLASTEM=$(command -v blastem || :)
+          if test -z "$BLASTEM"; then BLASTEM=$(find "$HOME/Projetos" -name blastem -type f -executable -print -quit); fi
+          test -n "$BLASTEM" && test -x "$BLASTEM"
+          echo "BLASTEM_EXE=$BLASTEM" >> "$GITHUB_ENV"
+
+      - name: Capture R64A native Pixel4 framebuffer in five DEMO3 frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r65-validation/roms/doom-md-r60-r64a-perf.bin \
+            --elf dist/r65-validation/roms/doom-md-r60-r64a-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r65-validation/report/r64a \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r65-validation/report/R64A-FRAMECAP.log
+
+      - name: Capture R65-P1 native Pixel4 framebuffer at same DEMO3 frame IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r64a_rsp_capture.py \
+            --rom dist/r65-validation/roms/doom-md-r60-r65-perf.bin \
+            --elf dist/r65-validation/roms/doom-md-r60-r65-perf.elf \
+            --blastem "$BLASTEM_EXE" --out dist/r65-validation/report/r65 \
+            --kind frame --max-emulated-frames 10000 \
+            | tee dist/r65-validation/report/R65-FRAMECAP.log
+
+      - name: Require five framebuffers bit identical
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('dist/r65-validation/report')
+          a=json.loads((root/'r64a/CAPTURE.json').read_text())['records']
+          b=json.loads((root/'r65/CAPTURE.json').read_text())['records']
+          assert len(a)==len(b)==5
+          checks=[]
+          for x,y in zip(a,b):
+            assert x['gametic']==y['gametic']
+            aa=(root/'r64a'/x['file']).read_bytes()
+            bb=(root/'r65'/y['file']).read_bytes()
+            errors=sum(c!=d for c,d in zip(aa,bb))+abs(len(aa)-len(bb))
+            row={'tic':x['gametic'],'bytes':len(aa),'mismatches':errors,
+                 'sha256_r64a':x['sha256'],'sha256_r65':y['sha256']}
+            print(row,flush=True);checks.append(row)
+          (root/'FRAMEBUFFER-DIFF.json').write_text(json.dumps(checks,indent=2)+'\n')
+          assert all(x['mismatches']==0 for x in checks),"R65 changes output pixels; reject"
+          print('PASS 5/5 R64A×R65 framebuffers identical',flush=True)
+          PY
+
+      - name: Run 3x R64A and 3x R65 non-instrumented DEMO3 prefix comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r65_candidate_compare.py \
+            --r64a-rom dist/r65-validation/roms/doom-md-r60-r64a-perf.bin \
+            --r64a-elf dist/r65-validation/roms/doom-md-r60-r64a-perf.elf \
+            --r65-rom dist/r65-validation/roms/doom-md-r60-r65-perf.bin \
+            --r65-elf dist/r65-validation/roms/doom-md-r60-r65-perf.elf \
+            --blastem "$BLASTEM_EXE" \
+            --output dist/r65-validation/report/R65-TRIPLE-PREFIX.json \
+            --repeats 3 --frame-cap 10000 \
+            2>&1 | tee dist/r65-validation/report/R65-TRIPLE-PREFIX.log
+
+      - name: Upload immutable evidence, including both complete snapshots and repeat metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r65-p1-image-and-performance-validated
+          path: dist/r65-validation/report/
+          retention-days: 90
+          if-no-files-found: warn
