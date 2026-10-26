@@ -24,6 +24,7 @@ video=(b/'src/r22_video.inc').read_text()
 start=video.index('/* R71-OFS: two pure ROM tables')
 end=video.index('/* R42 Q2:',start)
 video=video[:start]+video[end:]
+video=re.sub(r'#if defined\(DOOM_R71_OFS\)\s*(uint8_t \*dst=R71_PixelByte\([^;]+;)\s*#else\s*(uint8_t \*dst=R22_PixelByte\([^;]+;)\s*#endif',r'\2',video)
 video=video.replace('R71_PixelByte(r22_fb.pixels','R22_PixelByte(r22_fb.pixels')
 start=video.index('/* R71-B1b: wall-only fast entry')
 end=video.index('void R_DrawFuzzColumn(',start)
