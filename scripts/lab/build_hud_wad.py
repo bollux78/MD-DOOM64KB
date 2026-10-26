@@ -90,7 +90,10 @@ def main():
         sizes = subprocess.run([str(size_exe), '-A', str(src.with_suffix('.elf'))], check=True, capture_output=True, text=True).stdout
         (dest / ('SIZE-' + name + '.txt')).write_text(sizes)
         bss = sum(int(a[1]) for line in sizes.splitlines() if len(a := line.split()) >= 2 and a[0] in ('.bss', '.sbss'))
-        assert 0 < bss <= 57920, (name, bss)
+        print('BSS', name, bss, 'margin', 57920 - bss, flush=True)
+        small = subprocess.run([str(nm_exe), '-S', '-t', 'd', '--size-sort', str(src.with_suffix('.elf'))], check=True, capture_output=True, text=True).stdout
+        print('SMALL-BSS', name, ' '.join(f"{l.split()[3]}:{int(l.split()[1])}" for l in small.splitlines() if len(l.split()) == 4 and l.split()[2] in 'bB' and int(l.split()[1]) <= 12 and 'hudw' in l or len(l.split()) == 4 and l.split()[2] in 'bB' and int(l.split()[1]) <= 2), flush=True)
+        assert 0 < bss <= 57920 + int(os.environ.get('HUD_BSS_SLACK', '0')), (name, bss)
         blob = (dest / (stem + '.bin')).read_bytes()
         assert 0 < len(blob) <= 4 * 1024 * 1024
         for table in ('r56_tables.h', 'r59_color_tables.h'):

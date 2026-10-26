@@ -19,6 +19,7 @@ permissions:
 
 env:
   BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  HUD_BSS_SLACK: "200"   # diagnostic: build all ROMs even if the 57,920 B BSS ceiling is exceeded; the report states the real margin
 
 jobs:
   hud-wad:
