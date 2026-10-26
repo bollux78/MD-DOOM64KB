@@ -19,6 +19,7 @@ code='''#include <stdint.h>
 static const int16_t CENTERY=22;
 static unsigned _g_gamestate=0;
 #define GS_LEVEL 1
+#define R68_HIT(k) ((void)0)
 static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;
 static uint8_t r22_color[256];
 typedef struct {int16_t x,yl,yh;uint16_t fracstep;int32_t texturemid;const uint8_t *source,*colormap;} draw_column_vars_t;
