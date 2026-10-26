@@ -1,0 +1,554 @@
+R71 control report (3/3)
+### #10  R_DrawSegTextureColumn @23e50  221 samples (1.23%), 9 insns, 34 bytes, abs 0, stack 8, calls 0
+```
+23e50     9  lea %sp@(-16),%sp
+23e54    23  moveml %d2-%d7/%a2-%fp,%sp@-
+23e58    13  moveal %sp@(64),%fp
+23e5c   118  movel %sp@(68),%d2
+23e60    19  moveal %sp@(76),%a4
+23e64    17  movew %fp@,%d0
+23e66     6  andw %sp@(74),%d0
+23e6a    10  tstb %fp@(6)
+23e6e     6  bnew 23f06 <R_DrawSegTextureColumn+0xb6>
+```
+
+### #11  R42_DrawPackedWall.lto_priv.0 @f16c  201 samples (1.12%), 5 insns, 22 bytes, abs 1, stack 3, calls 0
+
+### #12  R60_WallColumn @1b04  189 samples (1.05%), 12 insns, 24 bytes, abs 0, stack 0, calls 0
+
+### #13  R_DrawColumnSprite @3398  170 samples (0.95%), 24 insns, 74 bytes, abs 0, stack 1, calls 0
+
+### #14  R_PointToAngle16.lto_priv.0 @277dc  157 samples (0.88%), 12 insns, 36 bytes, abs 2, stack 4, calls 0
+
+### #15  R_Subsector.lto_priv.0 @2a534  140 samples (0.78%), 22 insns, 98 bytes, abs 7, stack 8, calls 0
+
+### #16  R42_DrawPackedWall.lto_priv.0 @f4d6  138 samples (0.77%), 3 insns, 10 bytes, abs 0, stack 2, calls 0
+
+### #17  L4 @370fe  135 samples (0.75%), 9 insns, 22 bytes, abs 0, stack 0, calls 0
+
+### #18  R_Subsector.lto_priv.0 @2a35e  130 samples (0.73%), 13 insns, 52 bytes, abs 4, stack 2, calls 0
+
+### #19  R_DrawSegTextureColumn @2411a  122 samples (0.68%), 17 insns, 52 bytes, abs 1, stack 1, calls 0
+
+### #20  R_DrawColumnFlat.isra.0 @f534  121 samples (0.68%), 8 insns, 30 bytes, abs 1, stack 6, calls 0
+
+### #21  R_DrawSegTextureColumn @2418e  120 samples (0.67%), 4 insns, 12 bytes, abs 0, stack 0, calls 0
+
+### #22  __udivsi3 @370da  120 samples (0.67%), 10 insns, 22 bytes, abs 0, stack 1, calls 0
+
+### #23  R_DrawColumnFlat.isra.0 @f634  112 samples (0.62%), 11 insns, 30 bytes, abs 0, stack 3, calls 0
+
+### #24  R_DrawSegTextureColumn @23ec4  109 samples (0.61%), 4 insns, 18 bytes, abs 0, stack 3, calls 0
+
+
+R71 control report (2/3)
+f5c0     5  addal %a1,%a1
+f5c2     6  movew %fp,%d2
+f5c4     8  andil #255,%d2
+f5ca    20  moveal %a1@(0,%a0:l),%a0
+f5ce    36  moveb %a0@(0,%d2:l),%d2
+f5d2    17  andib #15,%d2
+f5d6     9  moveb %d2,%sp@(13)
+f5da    11  lsrw #1,%d0
+f5dc     2  andil #65535,%d0
+f5e2    23  addl %d0,%d0
+f5e4    18  movew %sp@(14),%d2
+f5e8    18  muluw #76,%d2
+f5ec    12  moveal %d2,%a0
+f5ee    52  lea %a0@(1,%d0:l),%fp
+f5f2     8  movew %sp@(10),%d0
+f5f6    20  lsrw #1,%d0
+f5f8     2  muluw #152,%d0
+f5fc    17  addal %d0,%fp
+f5fe    47  addal #-520154416,%fp
+f604    14  subw %sp@(10),%d1
+f608    17  moveaw %d1,%a1
+f60a     2  addqw #1,%a1
+f60c     6  movew %sp@(10),%d0
+f610    17  btst #0,%d0
+f614     9  beqs f62e <R_DrawColumnFlat.isra.0+0xfa>
+```
+
+### #4  R_Subsector.lto_priv.0 @2a47e  389 samples (2.17%), 15 insns, 72 bytes, abs 7, stack 2, calls 0
+```
+2a47e     7  movel e0ffdf1c <rw_scalestep>,%d1
+2a484    50  addl %d1,e0ffde64 <rw_scale>
+2a48a    33  movel e0ffde2a <topstep>,%d4
+2a490    55  addl %d4,%fp@(-80)
+2a494    27  movel %fp@(-80),e0ffde26 <topfrac>
+2a49c    48  addl e0ffde22 <bottomstep>,%d0
+2a4a2    31  movel %d0,e0ffde1e <bottomfrac>
+2a4a8    28  addal %a2,%a2
+2a4aa     8  movew %d2,%a2@(0,%a4:l)
+2a4ae    22  movel #-520157668,%d6
+2a4b4    22  movew %d3,%a2@(0,%d6:l)
+2a4b8    18  addqw #1,%d5
+2a4ba    13  moveaw e0ffde68 <rw_stopx>,%a0
+2a4c0    23  cmpw %a0,%d5
+2a4c2     4  bgew 2a596 <R_Subsector.lto_priv.0+0x1c62>
+```
+
+### #5  R42_DrawPackedWall.lto_priv.0 @f232  353 samples (1.97%), 18 insns, 56 bytes, abs 0, stack 0, calls 0
+```
+f232    23  lsrw #1,%d2
+f234    12  andil #65535,%d2
+f23a    26  addl %d2,%d2
+f23c     9  muluw #76,%d7
+f240    16  moveal %d2,%a0
+f242    77  lea %a0@(1,%d7:l),%a0
+f246     8  movel %a0,%d6
+f248    20  movew %d4,%d2
+f24a    10  lsrw #1,%d2
+f24c     3  muluw #152,%d2
+f250    27  addl %d2,%d6
+f252    55  addil #-520154416,%d6
+f258    29  subw %d4,%d0
+f25a    11  movew %d0,%d2
+f25c     0  addqw #1,%d2
+f25e     6  andiw #1,%d3
+f262    17  cmpaw #0,%fp
+f266     4  beqw f47c <R42_DrawPackedWall.lto_priv.0+0x310>
+```
+
+### #6  D_DoomLoop.lto_priv.0 @ff4a  336 samples (1.88%), 4 insns, 16 bytes, abs 1, stack 0, calls 0
+```
+ff4a    40  movel e0ff11e2 <_g_vblankCount>,%d0
+ff50   207  subl %d1,%d0
+ff52    23  cmpil #180,%d0
+ff58    66  blss ff40 <D_DoomLoop.lto_priv.0+0xf8>
+```
+
+### #7  R42_DrawPackedWall.lto_priv.0 @f1d4  298 samples (1.66%), 15 insns, 48 bytes, abs 0, stack 1, calls 0
+```
+f1d4     9  movew %a0@(6),%d1
+f1d8    27  movew %d3,%d4
+f1da     5  movew %d3,%d5
+f1dc     9  addiw #-22,%d5
+f1e0    15  mulsw %d1,%d5
+f1e2     2  movel %a0@(8),%d6
+f1e6    91  asrl #7,%d6
+f1e8    11  addw %d6,%d5
+f1ea    34  movew %d5,%sp@(32)
+f1ee     8  moveal %a0@(12),%a1
+f1f2    25  moveal %a0@(16),%fp
+f1f6    33  movew %d2,%d7
+f1f8     6  andiw #1,%d7
+f1fc    15  cmpaw #0,%fp
+f200     8  beqw f41c <R42_DrawPackedWall.lto_priv.0+0x2b0>
+```
+
+### #8  R_Subsector.lto_priv.0 @2a2a4  280 samples (1.56%), 18 insns, 54 bytes, abs 1, stack 2, calls 0
+```
+2a2a4     8  movel %d0,%d6
+2a2a6    22  swap %d6
+2a2a8     4  extl %d6
+2a2aa     7  moveal %d6,%a5
+2a2ac     9  moveaw %d5,%a2
+2a2ae     9  lea %a2@(0,%a2:l),%a0
+2a2b2     5  lea e0ff061c <ceilingclip.lto_priv.0>,%a1
+2a2b8    30  movew %a0@(0,%a1:l),%d3
+2a2bc    37  moveaw %a0@(0,%a4:l),%a3
+2a2c0    25  moveaw %d3,%a1
+2a2c2     6  addqw #1,%a1
+2a2c4     7  movew %d5,%fp@(-20)
+2a2c8    18  movel %fp@(-80),%d6
+2a2cc    41  addil #65535,%d6
+2a2d2    23  clrw %d6
+2a2d4    19  swap %d6
+2a2d6     6  cmpw %a1,%d6
+2a2d8     4  bges 2a2dc <R_Subsector.lto_priv.0+0x19a8>
+```
+
+### #9  D_DoomLoop.lto_priv.0 @ff40  273 samples (1.52%), 2 insns, 10 bytes, abs 1, stack 0, calls 0
+```
+ff40   108  movew e0ff11dc <r22_ready.lto_priv.0>,%d5
+ff46   165  beqw 10006 <D_DoomLoop.lto_priv.0+0x1be>
+```
+
+
+R71 control report (1/3)
+# R71 real-assembly profile: r66-control
+
+17920 PC samples (HInt every N lines, VBlank lines not sampled); 9 (0.1%) outside the linked text.
+
+## Function groups
+
+| group | samples | share |
+|---|---:|---:|
+| BSP traversal / subsector (incl. inlined seg loop) | 4297 | 24.0% |
+| wall column C glue | 2712 | 15.1% |
+| other | 2355 | 13.1% |
+| wall kernel (ASM) | 2349 | 13.1% |
+| segment setup + geometry | 1578 | 8.8% |
+| game logic | 1420 | 7.9% |
+| flat span/column | 1239 | 6.9% |
+| sprite/masked draw | 1206 | 6.7% |
+| map streaming | 573 | 3.2% |
+| sprite project/sort | 182 | 1.0% |
+
+## Functions (as linked; LTO-inlined code is inside its caller)
+
+| function | samples | share | insns | bytes |
+|---|---:|---:|---:|---:|
+| R_Subsector.lto_priv.0 | 4248 | 23.71% | 3205 | 11024 |
+| R60_WallColumn | 2349 | 13.11% | 57 | 142 |
+| R42_DrawPackedWall.lto_priv.0 | 1672 | 9.33% | 286 | 968 |
+| D_DoomLoop.lto_priv.0 | 1292 | 7.21% | 4779 | 17114 |
+| R_DrawColumnFlat.isra.0 | 1239 | 6.91% | 149 | 488 |
+| R_DrawSegTextureColumn | 1039 | 5.80% | 297 | 980 |
+| R_DrawColumnSprite | 724 | 4.04% | 300 | 1002 |
+| R_PointToAngle16.lto_priv.0 | 551 | 3.07% | 361 | 1106 |
+| R_DrawVisSprite.lto_priv.0 | 482 | 2.69% | 206 | 610 |
+| __mulsi3 | 478 | 2.67% | 11 | 34 |
+| R_ScaleFromGlobalAngle | 343 | 1.91% | 249 | 720 |
+| P_CheckSight | 234 | 1.31% | 1145 | 3588 |
+| L4 | 224 | 1.25% | 17 | 44 |
+| P_CheckPosition | 221 | 1.23% | 683 | 2258 |
+| __udivsi3 | 191 | 1.07% | 15 | 40 |
+| R_ProjectSprite | 182 | 1.02% | 475 | 1414 |
+| R23_MapRead.constprop.0 | 167 | 0.93% | 45 | 160 |
+| P_MobjThinker | 160 | 0.89% | 1442 | 4566 |
+| P_SetThingPosition | 156 | 0.87% | 631 | 2128 |
+| P_RecursiveSound | 149 | 0.83% | 441 | 1354 |
+| R23_MapRead.constprop.1 | 135 | 0.75% | 43 | 148 |
+| memcpy | 128 | 0.71% | 67 | 164 |
+| G_Ticker | 124 | 0.69% | 2016 | 7778 |
+| PIT_AddLineIntercepts | 113 | 0.63% | 739 | 1992 |
+| make.lto_priv.0 | 108 | 0.60% | 181 | 574 |
+| SYS_setInterruptMaskLevel | 105 | 0.59% | 7 | 24 |
+| R27_ReadBlock.constprop.0 | 105 | 0.59% | 81 | 252 |
+| R23_MapWrite.constprop.2 | 90 | 0.50% | 118 | 402 |
+| R_PointInSubsector | 82 | 0.46% | 142 | 428 |
+| P_BlockLinesIterator.constprop.2 | 71 | 0.40% | 271 | 974 |
+
+## What the CPU is doing (heat-weighted instruction census; heat is skewed by at most one instruction)
+
+| instruction kind | share |
+|---|---:|
+| register / immediate | 44.6% |
+| register-indirect / pc-relative access | 14.1% |
+| stack/frame access | 13.5% |
+| branch | 11.9% |
+| absolute-address data access | 8.1% |
+| call/return | 4.9% |
+| mul/div | 2.2% |
+| movem | 0.7% |
+
+## Hottest basic blocks (heat = samples; %% of all samples)
+
+### #1  R60_WallColumn @1b4c  2009 samples (11.21%), 15 insns, 42 bytes, abs 0, stack 0, calls 0
+```
+1b4c   113  moveb %a1@(0,%d0:w),%d5
+1b50   315  addw %d6,%d4
+1b52    63  addxw %d1,%d0
+1b54    68  andw %d7,%d0
+1b56    75  moveb %a1@(0,%d0:w),%d3
+1b5a   242  addw %d6,%d4
+1b5c    54  addxw %d1,%d0
+1b5e    66  andw %d7,%d0
+1b60    65  moveb %a2@(0,%d5:w),%d5
+1b64   205  moveb %a2@(0,%d3:w),%d3
+1b68   234  lslb #4,%d5
+1b6a    58  orb %d3,%d5
+1b6c   257  moveb %d5,%a0@
+1b6e    78  lea %a0@(152),%a0
+1b72   116  dbf %d2,1b4c <R60_WallColumn+0x48>
+```
+
+### #2  __mulsi3 @370a4  478 samples (2.67%), 11 insns, 34 bytes, abs 0, stack 6, calls 0
+```
+370a4    14  movew %sp@(4),%d0
+370a8    51  muluw %sp@(10),%d0
+370ac    30  movew %sp@(6),%d1
+370b0   101  muluw %sp@(8),%d1
+370b4    24  addw %d1,%d0
+370b6    82  swap %d0
+370b8    12  clrw %d0
+370ba    11  movew %sp@(6),%d1
+370be    21  muluw %sp@(10),%d1
+370c2    29  addl %d1,%d0
+370c4   103  rts 
+```
+
+### #3  R_DrawColumnFlat.isra.0 @f5b0  450 samples (2.51%), 31 insns, 102 bytes, abs 0, stack 6, calls 0
+```
+f5b0     6  movew %d0,%d2
+f5b2    13  andiw #1,%d2
+f5b6    13  movew %d2,%sp@(14)
+f5ba    10  moveaw %d2,%a1
+f5bc     8  addql #2,%a1
+f5be     4  addal %a1,%a1
+
+R71 A12 report (3/3)
+### #14  R_PointToAngle16.lto_priv.0 @277b8  167 samples (0.93%), 12 insns, 36 bytes, abs 2, stack 4, calls 0
+
+### #15  R_Subsector.lto_priv.0 @2a440  142 samples (0.79%), 11 insns, 40 bytes, abs 0, stack 6, calls 0
+
+### #16  L4 @373e2  142 samples (0.79%), 9 insns, 22 bytes, abs 0, stack 0, calls 0
+
+### #17  R_DrawSegTextureColumn @2416a  137 samples (0.76%), 4 insns, 12 bytes, abs 0, stack 0, calls 0
+
+### #18  R_DrawSegTextureColumn @240f6  127 samples (0.71%), 17 insns, 52 bytes, abs 1, stack 1, calls 0
+
+### #19  R_DrawColumnFlat.isra.0 @f536  125 samples (0.70%), 8 insns, 30 bytes, abs 1, stack 6, calls 0
+
+### #20  __udivsi3 @373be  123 samples (0.69%), 10 insns, 22 bytes, abs 0, stack 1, calls 0
+
+### #21  R_Subsector.lto_priv.0 @2a6d0  110 samples (0.61%), 14 insns, 56 bytes, abs 1, stack 14, calls 1
+
+### #22  R_DrawSegTextureColumn @23ea0  109 samples (0.61%), 4 insns, 18 bytes, abs 0, stack 3, calls 0
+
+### #23  R42_DrawPackedWall.lto_priv.0 @f4bc  107 samples (0.60%), 7 insns, 28 bytes, abs 0, stack 1, calls 1
+
+### #24  R42_DrawPackedWall.lto_priv.0 @f21e  100 samples (0.56%), 7 insns, 20 bytes, abs 0, stack 0, calls 0
+
+### #25  R_DrawColumnFlat.isra.0 @f636  97 samples (0.54%), 11 insns, 30 bytes, abs 0, stack 3, calls 0
+
+### #26  SYS_doVBlankProcessEx.constprop.0 @32a7c  97 samples (0.54%), 2 insns, 4 bytes, abs 0, stack 0, calls 0
+
+### #27  R_DrawColumnFlat.isra.0 @f654  93 samples (0.52%), 4 insns, 10 bytes, abs 0, stack 0, calls 0
+
+### #28  R_Subsector.lto_priv.0 @2a5ae  91 samples (0.51%), 16 insns, 56 bytes, abs 0, stack 9, calls 0
+
+
+R71 A12 report (2/3)
+f5c2     5  addal %a1,%a1
+f5c4    10  movew %fp,%d2
+f5c6     5  andil #255,%d2
+f5cc    16  moveal %a1@(0,%a0:l),%a0
+f5d0    30  moveb %a0@(0,%d2:l),%d2
+f5d4    16  andib #15,%d2
+f5d8     9  moveb %d2,%sp@(13)
+f5dc     7  lsrw #1,%d0
+f5de     8  andil #65535,%d0
+f5e4    14  addl %d0,%d0
+f5e6    11  movew %sp@(14),%d2
+f5ea    24  muluw #76,%d2
+f5ee     8  moveal %d2,%a0
+f5f0    38  lea %a0@(1,%d0:l),%fp
+f5f4     4  movew %sp@(10),%d0
+f5f8    20  lsrw #1,%d0
+f5fa     8  muluw #152,%d0
+f5fe    26  addal %d0,%fp
+f600    56  addal #-520154416,%fp
+f606    12  subw %sp@(10),%d1
+f60a    21  moveaw %d1,%a1
+f60c     4  addqw #1,%a1
+f60e     3  movew %sp@(10),%d0
+f612    14  btst #0,%d0
+f616     7  beqs f630 <R_DrawColumnFlat.isra.0+0xfa>
+```
+
+### #4  R42_DrawPackedWall.lto_priv.0 @f234  356 samples (1.99%), 18 insns, 56 bytes, abs 0, stack 0, calls 0
+```
+f234    14  lsrw #1,%d2
+f236    15  andil #65535,%d2
+f23c    12  addl %d2,%d2
+f23e     9  muluw #76,%d7
+f242    16  moveal %d2,%a0
+f244    68  lea %a0@(1,%d7:l),%a0
+f248    12  movel %a0,%d6
+f24a    12  movew %d4,%d2
+f24c    10  lsrw #1,%d2
+f24e     7  muluw #152,%d2
+f252    19  addl %d2,%d6
+f254    90  addil #-520154416,%d6
+f25a    25  subw %d4,%d0
+f25c    10  movew %d0,%d2
+f25e    11  addqw #1,%d2
+f260     5  andiw #1,%d3
+f264    15  cmpaw #0,%fp
+f268     6  beqw f47e <R42_DrawPackedWall.lto_priv.0+0x310>
+```
+
+### #5  D_DoomLoop.lto_priv.0 @ff4c  343 samples (1.91%), 4 insns, 16 bytes, abs 1, stack 0, calls 0
+```
+ff4c    25  movel e0ff11e2 <_g_vblankCount>,%d0
+ff52   221  subl %d1,%d0
+ff54    30  cmpil #180,%d0
+ff5a    67  blss ff42 <D_DoomLoop.lto_priv.0+0xf8>
+```
+
+### #6  R42_DrawPackedWall.lto_priv.0 @f1d6  331 samples (1.85%), 15 insns, 48 bytes, abs 0, stack 1, calls 0
+```
+f1d6     4  movew %a0@(6),%d1
+f1da    48  movew %d3,%d4
+f1dc     5  movew %d3,%d5
+f1de     5  addiw #-22,%d5
+f1e2    13  mulsw %d1,%d5
+f1e4     3  movel %a0@(8),%d6
+f1e8   105  asrl #7,%d6
+f1ea    10  addw %d6,%d5
+f1ec    36  movew %d5,%sp@(32)
+f1f0     7  moveal %a0@(12),%a1
+f1f4    38  moveal %a0@(16),%fp
+f1f8    29  movew %d2,%d7
+f1fa     8  andiw #1,%d7
+f1fe    10  cmpaw #0,%fp
+f202    10  beqw f41e <R42_DrawPackedWall.lto_priv.0+0x2b0>
+```
+
+### #7  D_DoomLoop.lto_priv.0 @ff42  270 samples (1.51%), 2 insns, 10 bytes, abs 1, stack 0, calls 0
+```
+ff42   108  movew e0ff11dc <r22_ready.lto_priv.0>,%d5
+ff48   162  beqw 10008 <D_DoomLoop.lto_priv.0+0x1be>
+```
+
+### #8  R_DrawSegTextureColumn @23e2c  214 samples (1.19%), 9 insns, 34 bytes, abs 0, stack 8, calls 0
+```
+23e2c     9  lea %sp@(-16),%sp
+23e30    19  moveml %d2-%d7/%a2-%fp,%sp@-
+23e34     9  moveal %sp@(64),%fp
+23e38   119  movel %sp@(68),%d2
+23e3c    13  moveal %sp@(76),%a4
+23e40    17  movew %fp@,%d0
+23e42     4  andw %sp@(74),%d0
+23e46    16  tstb %fp@(6)
+23e4a     8  bnew 23ee2 <R_DrawSegTextureColumn+0xb6>
+```
+
+### #9  R42_DrawPackedWall.lto_priv.0 @f16e  213 samples (1.19%), 5 insns, 22 bytes, abs 1, stack 3, calls 0
+```
+f16e    16  lea %sp@(-28),%sp
+f172    21  moveml %d2-%d7/%a2/%fp,%sp@-
+f176    14  moveal %sp@(64),%a0
+f17a   136  tstl e0ffd940 <r64a_ctx>
+f180    26  beqw f38e <R42_DrawPackedWall.lto_priv.0+0x220>
+```
+
+### #10  R60_WallColumn @1b04  197 samples (1.10%), 12 insns, 24 bytes, abs 0, stack 0, calls 0
+```
+1b04     2  movew %d0,%d4
+1b06    37  lslw #7,%d4
+1b08     5  lsrw #8,%d0
+1b0a    29  lsrw #1,%d0
+1b0c    28  movew %d1,%d6
+1b0e    12  lslw #7,%d6
+1b10     5  lsrw #8,%d1
+1b12    24  lsrw #1,%d1
+1b14    26  moveq #127,%d7
+1b16    14  moveq #0,%d5
+1b18     8  tstw %d3
+1b1a     7  beqs 1b3c <R60_WallColumn+0x38>
+```
+
+### #11  R_Subsector.lto_priv.0 @2a366  193 samples (1.08%), 14 insns, 34 bytes, abs 0, stack 3, calls 0
+
+### #12  R_DrawColumnSprite @3398  175 samples (0.98%), 24 insns, 74 bytes, abs 0, stack 1, calls 0
+
+### #13  R42_DrawPackedWall.lto_priv.0 @f4d8  168 samples (0.94%), 3 insns, 10 bytes, abs 0, stack 2, calls 0
+
+
+R71 A12 report (1/3)
+# R71 real-assembly profile: r70a12
+
+17920 PC samples (HInt every N lines, VBlank lines not sampled); 7 (0.0%) outside the linked text.
+
+## Function groups
+
+| group | samples | share |
+|---|---:|---:|
+| BSP traversal / subsector (incl. inlined seg loop) | 3902 | 21.8% |
+| wall column C glue | 2900 | 16.2% |
+| other | 2364 | 13.2% |
+| wall kernel (ASM) | 2219 | 12.4% |
+| segment setup + geometry | 1840 | 10.3% |
+| game logic | 1494 | 8.3% |
+| flat span/column | 1249 | 7.0% |
+| sprite/masked draw | 1181 | 6.6% |
+| map streaming | 588 | 3.3% |
+| sprite project/sort | 176 | 1.0% |
+
+## Functions (as linked; LTO-inlined code is inside its caller)
+
+| function | samples | share | insns | bytes |
+|---|---:|---:|---:|---:|
+| R_Subsector.lto_priv.0 | 3853 | 21.50% | 3417 | 11798 |
+| R60_WallColumn | 2219 | 12.38% | 57 | 142 |
+| R42_DrawPackedWall.lto_priv.0 | 1810 | 10.10% | 286 | 968 |
+| D_DoomLoop.lto_priv.0 | 1264 | 7.05% | 4779 | 17114 |
+| R_DrawColumnFlat.isra.0 | 1249 | 6.97% | 149 | 488 |
+| R_DrawSegTextureColumn | 1089 | 6.08% | 297 | 980 |
+| R_DrawColumnSprite | 742 | 4.14% | 300 | 1002 |
+| __mulsi3 | 709 | 3.96% | 11 | 34 |
+| R_PointToAngle16.lto_priv.0 | 592 | 3.30% | 361 | 1106 |
+| R_DrawVisSprite.lto_priv.0 | 439 | 2.45% | 206 | 610 |
+| R_ScaleFromGlobalAngle | 336 | 1.88% | 249 | 720 |
+| L4 | 251 | 1.40% | 17 | 44 |
+| P_CheckSight | 247 | 1.38% | 1145 | 3588 |
+| P_CheckPosition | 236 | 1.32% | 683 | 2258 |
+| __udivsi3 | 192 | 1.07% | 15 | 40 |
+| R_ProjectSprite | 176 | 0.98% | 475 | 1414 |
+| P_SetThingPosition | 169 | 0.94% | 631 | 2128 |
+| R23_MapRead.constprop.1 | 169 | 0.94% | 43 | 148 |
+| P_MobjThinker | 152 | 0.85% | 1442 | 4566 |
+| G_Ticker | 144 | 0.80% | 2016 | 7778 |
+| P_RecursiveSound | 142 | 0.79% | 441 | 1354 |
+| R23_MapRead.constprop.0 | 137 | 0.76% | 45 | 160 |
+| SYS_doVBlankProcessEx.constprop.0 | 131 | 0.73% | 333 | 1324 |
+| R27_ReadBlock.constprop.0 | 123 | 0.69% | 81 | 252 |
+| memcpy | 116 | 0.65% | 67 | 164 |
+| PIT_AddLineIntercepts | 92 | 0.51% | 739 | 1992 |
+| R_PointInSubsector | 87 | 0.49% | 142 | 428 |
+| make.lto_priv.0 | 81 | 0.45% | 181 | 574 |
+| R23_MapWrite.constprop.2 | 75 | 0.42% | 118 | 402 |
+| SYS_setInterruptMaskLevel | 73 | 0.41% | 7 | 24 |
+
+## What the CPU is doing (heat-weighted instruction census; heat is skewed by at most one instruction)
+
+| instruction kind | share |
+|---|---:|
+| register / immediate | 44.0% |
+| stack/frame access | 15.6% |
+| register-indirect / pc-relative access | 13.7% |
+| branch | 12.3% |
+| absolute-address data access | 5.6% |
+| call/return | 5.1% |
+| mul/div | 3.0% |
+| movem | 0.7% |
+
+## Hottest basic blocks (heat = samples; %% of all samples)
+
+### #1  R60_WallColumn @1b4c  1881 samples (10.50%), 15 insns, 42 bytes, abs 0, stack 0, calls 0
+```
+1b4c   109  moveb %a1@(0,%d0:w),%d5
+1b50   290  addw %d6,%d4
+1b52    74  addxw %d1,%d0
+1b54    45  andw %d7,%d0
+1b56    65  moveb %a1@(0,%d0:w),%d3
+1b5a   196  addw %d6,%d4
+1b5c    62  addxw %d1,%d0
+1b5e    70  andw %d7,%d0
+1b60    63  moveb %a2@(0,%d5:w),%d5
+1b64   215  moveb %a2@(0,%d3:w),%d3
+1b68   205  lslb #4,%d5
+1b6a    64  orb %d3,%d5
+1b6c   226  moveb %d5,%a0@
+1b6e    54  lea %a0@(152),%a0
+1b72   143  dbf %d2,1b4c <R60_WallColumn+0x48>
+```
+
+### #2  __mulsi3 @37388  709 samples (3.96%), 11 insns, 34 bytes, abs 0, stack 6, calls 0
+```
+37388    26  movew %sp@(4),%d0
+3738c    75  muluw %sp@(10),%d0
+37390    27  movew %sp@(6),%d1
+37394   160  muluw %sp@(8),%d1
+37398    40  addw %d1,%d0
+3739a   112  swap %d0
+3739c    17  clrw %d0
+3739e    12  movew %sp@(6),%d1
+373a2    41  muluw %sp@(10),%d1
+373a6    44  addl %d1,%d0
+373a8   155  rts 
+```
+
+### #3  R_DrawColumnFlat.isra.0 @f5b2  446 samples (2.49%), 31 insns, 102 bytes, abs 0, stack 6, calls 0
+```
+f5b2    18  movew %d0,%d2
+f5b4    14  andiw #1,%d2
+f5b8    17  movew %d2,%sp@(14)
+f5bc     4  moveaw %d2,%a1
+f5be    12  addql #2,%a1
+f5c0     5  addal %a1,%a1
+
