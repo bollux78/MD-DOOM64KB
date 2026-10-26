@@ -58,16 +58,26 @@ static void HUDW_LoadTiles(void)
 
 static void HUDW_WriteRows(const HudState *s)
 {
-    uint16_t words[HUDW_COLS];
-    const uint16_t x0 = r57_h32_active ? 3u : 4u;       /* H32: planes scroll 24 px; H40: bar centred in the 40 columns */
+    /* H32: the 32-cell bar fills the screen (plane columns 3..34). H40: 4 extra cells on each side (columns 0..3 and 36..39) repeat two
+     * stone tiles of the bar itself instead of showing black. */
+    uint16_t words[40];
+    const uint8_t h40 = !r57_h32_active;
     for (uint8_t row = 0; row < HUDW_ROWS; row++) {
-        HUDW_ComposeRow(s, row, words);
+        HUDW_ComposeRow(s, row, words + 4);
+        if (h40) {
+            const uint8_t r = row < 2 ? row : 1;            /* rows 2..3 of the bar carry labels: repeat a clean stone row */
+            for (uint8_t k = 0; k < 4; k++) {
+                words[k] = HUDW_WORD(hudw_bgmap[r][HUDW_HEALTH_C + 1 + (k & 1)]);
+                words[36 + k] = HUDW_WORD(hudw_bgmap[r][HUDW_HEALTH_C + 1 + (k & 1)]);
+            }
+        }
         uint16_t sr = R22_Lock();
         volatile uint32_t *ctrl = (volatile uint32_t *)0xC00004;
         volatile uint16_t *data = (volatile uint16_t *)0xC00000;
         VDP_setAutoInc(2);
-        *ctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_A + (HUDW_ROW0 + row) * 128u + x0 * 2u);
-        for (uint8_t c = 0; c < HUDW_COLS; c++) *data = words[c];
+        *ctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_A + (HUDW_ROW0 + row) * 128u + (h40 ? 0u : 3u * 2u));
+        const uint16_t *src = h40 ? words : words + 4;
+        for (uint8_t c = 0; c < (h40 ? 40u : 32u); c++) *data = src[c];
         R22_Unlock(sr);
     }
 }
