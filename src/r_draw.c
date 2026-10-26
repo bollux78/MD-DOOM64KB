@@ -698,7 +698,23 @@ static inline int16_t R15_Mul16x32Shift16S(int16_t a, int32_t b)
  */
 static inline int16_t R20_TanMulU16(int16_t a, uint16_t b)
 {
+#if defined(DOOM_R71_MUL_ASM) && defined(__m68k__)
+    /*
+     * R71-MUL: the A12 LTO register allocation turns this signed 16x16
+     * multiply into a 32x32 libgcc __mulsi3 call in four inlined branches.
+     * Inputs a=int16_t, b=uint16_t; MULS.W takes both low words and
+     * produces the exact 32-bit signed product. The established R20
+     * high-bit correction remains untouched below.
+     */
+    int32_t product = (int32_t)a;
+    __asm__ volatile("muls.w %1,%0"
+                     : "+d" (product)
+                     : "d" (b)
+                     : "cc");
+    int16_t hi = (int16_t)(product >> 16);
+#else
     int16_t hi = (int16_t)(((int32_t)a * (int16_t)b) >> 16);
+#endif
     if (b & 0x8000u)
         hi += a;
     return hi;
