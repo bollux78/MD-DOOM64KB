@@ -24,7 +24,7 @@ int main(void) {
             uint16_t out[32];
             HUDW_ComposeRow(&cases[i].s, (uint8_t)r, out);
             for (int c = 0; c < 32; c++)
-                if (out[c] != (uint16_t)(0xE000u | (HUDW_VRAM_BASE + cases[i].exp[r][c]))) { printf("FAIL case %u row %d col %d: %u vs %u\n", i, r, c, out[c], cases[i].exp[r][c]); fails++; }
+                if (out[c] != (uint16_t)((cases[i].exp[r][c] >= HUDW_NTILES ? 0xC000u : 0xE000u) | (HUDW_VRAM_BASE + cases[i].exp[r][c]))) { printf("FAIL case %u row %d col %d: %u vs %u\n", i, r, c, out[c], cases[i].exp[r][c]); fails++; }
         }
     /* hash changes with every displayed field */
     HudState a = {0}; HudState b = a; uint16_t h0 = HUDW_Hash(&a);

@@ -12,6 +12,7 @@
 #endif
 #define HUDW_FACE_SLOT HUDW_NTILES       /* 12 tiles after the static ones hold the current face */
 #define HUDW_WORD(id) ((uint16_t)(0xE000u | (HUDW_VRAM_BASE + (uint16_t)(id))))   /* priority + palette 3 */
+#define HUDW_FWORD(id) ((uint16_t)(0xC000u | (HUDW_VRAM_BASE + (uint16_t)(id))))  /* priority + palette 2: the face slot */
 
 typedef struct {
     int16_t health, armor, ammo_r;       /* ammo_r < 0: weapon without ammo */
@@ -76,7 +77,7 @@ static void hudw_compose_ids(const HudState *s, uint8_t row, uint16_t *out)
 static void HUDW_ComposeRow(const HudState *s, uint8_t row, uint16_t *out)
 {
     hudw_compose_ids(s, row, out);
-    for (uint8_t c = 0; c < HUDW_COLS; c++) out[c] = HUDW_WORD(out[c]);
+    for (uint8_t c = 0; c < HUDW_COLS; c++) out[c] = out[c] >= HUDW_NTILES ? HUDW_FWORD(out[c]) : HUDW_WORD(out[c]);
 }
 
 /* 16-bit digest of the displayed state: redraw only when it changes. */

@@ -39,11 +39,12 @@ jobs:
           pathlib.Path('scripts').mkdir(exist_ok=True)
           shutil.copyfile(source,'scripts/doom1.wad')
           PY
-          python3 scripts/lab/hud_bg_dither.py --wad scripts/doom1.wad --out dist/img/hud-bg-dither.png --b64 dist/img/b64.txt
-          grep '^ORIG ' dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/ORIG.parts
-          n=$(wc -l < dist/img/ORIG.parts); k=0
-          while IFS= read -r part; do
-            k=$((k+1)); echo "::notice title=IMG ORIG $k/$n::$part"
-          done < dist/img/ORIG.parts
-          [ "$n" -le 10 ] || echo "::warning title=IMG parts::$n parts exceed the 10 annotations per step"
-# rerun: dither strengths 50/100
+          python3 scripts/lab/hud_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-original.png --out-cur dist/img/hud-current.png --b64 dist/img/b64.txt
+          for tag in ORIG CUR; do
+            grep "^$tag " dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/$tag.parts
+            n=$(wc -l < dist/img/$tag.parts); k=0
+            while IFS= read -r part; do
+              k=$((k+1)); echo "::notice title=IMG $tag $k/$n::$part"
+            done < dist/img/$tag.parts
+          done
+# run: FS bg + FS faces, two palettes
