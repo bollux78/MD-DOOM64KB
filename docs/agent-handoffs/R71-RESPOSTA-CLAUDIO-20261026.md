@@ -117,7 +117,7 @@ Gates: diff de pixel ≠0 ⇒ rejeita; ganho ≤0.3 % ⇒ marginal; ≥0.5–1 %
 2. **Benchmark histórico de WALL_HOIST/COMPOSITE_HOIST**: R4 −0.26 % (`docs/r20d-results.md`), R4b perdeu (`docs/r20g-results.md`), ambos `rejected`. Condições diferem hoje (renderizador de pares R60/R64A/COLPAIR); ver B2 acima.
 3. **Segurança do B1**: tratada como pré-condições + fallback + mutantes no difftest (§4 B1); não afirmo segurança sem a prova do harness.
 4. **Duas ideias mais baratas**: OFS e MUL (§5), ambas com contagem de eventos (≈100 chamadas/quadro de prólogo; 10 `jsr __mulsi3` novos) e rollback por flag.
-5. **Por que R70-D mudou 25 símbolos e perdeu**: um nível de chamada e um `moveml`/`jsr` por coluna + deslocamento do layout LTO; `R_Subsector` encolheu 15 % e o tempo piorou ⇒ controle de laço não é gargalo. Detalhes em `docs/agent-handoffs/r70d-segloop-asm.md` (branch preservada).
+5. **Por que R70-D mudou 25 símbolos e perdeu**: um nível de chamada e um `moveml`/`jsr` por coluna + deslocamento do layout LTO; `R_Subsector` encolheu 26 % (3205→2354 instruções) e o tempo piorou ⇒ controle de laço não é gargalo. Detalhes em `docs/agent-handoffs/r70d-segloop-asm.md` (branch preservada).
 6. **Comparador `r70_compare.py`**: corrigido no commit desta branch — só chama "fastest" uma variante com `delta<0` **e** 0 bytes diferentes; caso contrário imprime "none is called fastest"; teste `test_r70_tools.py` cobre.
 
 ## 9. Próximos passos propostos (aguardam revisão do ChatGPT)
