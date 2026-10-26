@@ -887,6 +887,47 @@ void R_DrawColumnWall(const draw_column_vars_t *v){R42_DrawPackedWall(v);}
 #else
 void R_DrawColumnWall(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 #endif
+/* R71-B1b: wall-only fast entry for a fully-visible, composed-LUT Pair-V column.
+ * The input has exactly the same semantics as R42; every unmet precondition
+ * falls back to that existing, tested implementation. Sky, sprites, flats and
+ * fuzz still call their original entry points. No shared cache/BSS added.
+ * CRITICAL: use actual v->colormap and v->source: sky can mutate dcvars and
+ * R66 odd-column reuse may reuse its source, both intentionally preserved. */
+#if defined(DOOM_R71_B1B)
+#if !defined(DOOM_R64A_PROLOGUE) || !defined(DOOM_R60_PAIR_ASM) || !defined(DOOM_R52_CPLUT) || !defined(DOOM_R48_PAIR_V)
+#error R71-B1b requires R66 R64A + R60 Pair-V composed-LUT path
+#endif
+void R71_DrawColumnWallFast(const draw_column_vars_t *v)
+{
+    const int16_t x=v->x, y0=v->yl, y1=v->yh;
+    const r64a_ctx_t *cx=&r64a_ctx;
+    const uint8_t *colormap=v->colormap;
+    /* Keep each comparison: producer clip != viewport/crop/physical clip.
+     * Only the standard, not-truncated, >=2-pixel R60 path is specialised. */
+    if (cx->comp[0] &&
+        (uint16_t)x < R22_W && x>=cx->xmin && x<cx->xend &&
+        y0>=0 && y0>=cx->border && y1>=y0 && y1<R22_H &&
+        y1<cx->yend && y1-y0+1>=2 &&
+        colormap && fullcolormap)
+    {
+        const uint32_t offset=(uint32_t)((uintptr_t)colormap-(uintptr_t)fullcolormap);
+        if (offset<R52_COLORMAP_BYTES && (offset&255u)==0u)
+        {
+            const uint16_t step=v->fracstep;
+            const uint16_t f=(uint16_t)((v->texturemid>>7)+(y0-CENTERY)*step);
+            uint8_t *const dst=R71_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+            const uint8_t *const composed=cx->comp[x&1u]+offset;
+            const uint16_t count=(uint16_t)(y1-y0+1);
+            R48_COUNT(R48_WALL_CALLS,1);
+            R48_COUNT(R48_WALL_PIXELS,count);
+            R60_WallDraw(dst,v->source,composed,f,step,count,(uint16_t)(y0&1u));
+            return;
+        }
+    }
+    R42_DrawPackedWall(v);
+}
+#endif
+
 void R_DrawFuzzColumn(const draw_column_vars_t *v){R_DrawColumnSprite(v);}
 void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     const uint8_t *r52map=r22_color;
