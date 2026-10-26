@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 7, SPLIT + instruction-level hot spots; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 8, phase timing marks, no SPLIT; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -145,7 +145,7 @@ jobs:
           set -euo pipefail
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
           rc=0
-          export R68_SPLIT=1
+          export R68_SPLIT=0
           python3 scripts/lab/build_r68.py 2>&1 | tee dist/r68/BUILD.log || rc=$?
           if [ "$rc" -ne 0 ]; then
             # Surface the failure as annotations (readable without log download).
@@ -210,6 +210,7 @@ jobs:
         run: |
           enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | head -c 14000; }
           if [ -f dist/r68/capture/report.md ]; then
+            echo "::notice title=R68 phase breakdown::$(sed -n '/^## Phase breakdown/,/^## Mean workload/p' dist/r68/capture/report.md | enc)"
             echo "::notice title=R68 report part 1::$(sed -n '1,50p' dist/r68/capture/report.md | enc)"
             echo "::notice title=R68 report part 2::$(sed -n '51,100p' dist/r68/capture/report.md | enc)"
             echo "::notice title=R68 report part 3::$(sed -n '101,160p' dist/r68/capture/report.md | enc)"
@@ -228,7 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r68-claudio-profiling-split
+          name: doom-md-r68-claudio-profiling-phases
           path: dist/r68/
           retention-days: 90
           if-no-files-found: warn

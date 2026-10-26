@@ -280,6 +280,7 @@ static void D_Display (void)
     // menus go directly to the screen
     M_Drawer();          // menu is drawn even on top of everything
 
+    R68_MARK(5);
     D_BuildNewTiccmds();
 
     if (wipe)
@@ -288,6 +289,7 @@ static void D_Display (void)
     else
         // normal update
         I_FinishUpdate ();              // page flip or blit buffer
+    R68_MARK(6);
 }
 
 

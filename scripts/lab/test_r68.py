@@ -16,20 +16,21 @@ cap = importlib.util.module_from_spec(spec); spec.loader.exec_module(cap)
 def test_layout(tmp):
     c = tmp / "lay.c"
     fields = ["ring", "head", "pad", "samples", "bad", "magic", "version", "ring_n", "frame",
-              "vb_start", "vb_logic", "vb_end", "tic_start", "tic_end", "c"]
+              "vb_start", "vb_logic", "vb_end", "tic_start", "tic_end", "c", "marks"]
     body = "".join('printf("%s %%zu\\n", offsetof(r68_block_t, %s));' % (f, f) for f in fields)
     c.write_text('#include <stdio.h>\n#include <stddef.h>\n#include "r68_prof.h"\nint main(void){%s printf("size %%zu\\n", sizeof(r68_block_t)); return 0;}\n' % body)
     exe = tmp / "lay"
     subprocess.run(["gcc", "-DDOOM_R68_PROF", "-I", str(SRC), str(c), "-o", str(exe)], check=True)
     got = dict((k, int(v)) for k, v in (l.split() for l in subprocess.run([str(exe)], capture_output=True, text=True, check=True).stdout.splitlines()))
-    assert got["size"] == cap.SIZE == 324, got
+    assert got["size"] == cap.SIZE == 356, got
     # python-side offsets from the struct format
     off, expect = 0, {}
     expect["ring"] = 0; off = 2 * cap.RING
     for name, size in (("head", 2), ("pad", 2), ("samples", 4), ("bad", 4), ("magic", 4), ("version", 2), ("ring_n", 2),
                        ("frame", 4), ("vb_start", 4), ("vb_logic", 4), ("vb_end", 4), ("tic_start", 4), ("tic_end", 4)):
         expect[name] = off; off += size
-    expect["c"] = off
+    expect["c"] = off; off += 24
+    expect["marks"] = off
     for k, v in expect.items():
         assert got[k] == v, (k, got[k], v)
     s = (SRC / "r68_prof_hint.s").read_text()
@@ -41,6 +42,18 @@ def test_layout(tmp):
     print("layout OK: C struct == Python reader == asm offsets (size %d)" % got["size"])
 
 
+def make_marks(vb0, d):
+    """Stamps for a frame whose phases last d[] lines, starting right after a vint of vblank vb0."""
+    t, out = 70, []                      # 70 lines after the vint (avoid the 6-line V-counter ambiguity window)
+    for x in [0] + list(d):
+        t += x
+        vb, ln = vb0 + t // 262, t % 262  # ln = lines since vint
+        line = (ln + 224) % 262
+        v = line if line <= 0xEA else 0xE5 + (line - 235)
+        out.append((vb << 8) | v)
+    return out + [out[-1]]
+
+
 def make_frame(i):
     c = {k: 0 for k in cap.COUNTERS}
     c["seg"] = 30 + (i * 7) % 40; c["col"] = 150 + (i * 13) % 120; c["wall"] = 100 + (i * 5) % 60
@@ -48,13 +61,14 @@ def make_frame(i):
     vb = 6 + (i % 5) * 2 + (4 if i % 17 == 0 else 0)
     ring = [0x1000 // 8 + (j * 37 + i) % 2000 for j in range(20 + i % 30)]
     return dict(frame=i, vb_start=1000 + i * 12, vb_logic=1000 + i * 12 + 2, vb_end=1000 + i * 12 + vb,
-                tic_start=i, tic_end=i + 1, samples=len(ring) + (3 if i % 11 == 0 else 0), head=len(ring), bad=0, c=c, ring=ring)
+                tic_start=i, tic_end=i + 1, samples=len(ring) + (3 if i % 11 == 0 else 0), head=len(ring), bad=0, c=c, ring=ring,
+                marks=make_marks(1000 + i * 12, [40, 10, 120, 30, 15, 60]))
 
 
 def pack(f):
     ring = f["ring"] + [0] * (cap.RING - len(f["ring"]))
     return struct.pack(cap.FMT, *ring, f["head"], 0, f["samples"], f["bad"], cap.MAGIC, 1, cap.RING, f["frame"],
-                       f["vb_start"], f["vb_logic"], f["vb_end"], f["tic_start"], f["tic_end"], *[f["c"][k] for k in cap.COUNTERS])
+                       f["vb_start"], f["vb_logic"], f["vb_end"], f["tic_start"], f["tic_end"], *[f["c"][k] for k in cap.COUNTERS], *f["marks"])
 
 
 def test_fit():
@@ -71,6 +85,10 @@ def test_fit():
     fit = r["fit"]; assert fit["r2"] > 0.999, fit["r2"]
     for k, v in truth.items():
         assert abs(fit["cycles_per_unit"][k] - v) / v < 0.02, (k, fit["cycles_per_unit"][k], v)
+    ph = r["phases"]["lines_mean"]
+    for got, want in zip(ph, [40, 10, 120, 30, 15, 60]):
+        assert abs(got - want) < 1e-6, (ph,)
+    print("phase decode OK:", [round(x, 1) for x in ph])
     print("cost model OK: R2=%.5f, coefficients within 2%% of the truth" % fit["r2"])
 
 

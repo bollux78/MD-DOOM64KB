@@ -53,6 +53,7 @@ def resolve(text):
 def norm(t):
     t = re.sub(r'^\s*#include "r68_prof\.h"\s*$', "", t, flags=re.M)
     t = re.sub(r"^\s*R68_HIT\([A-Z0-9_]+\);\s*$", "", t, flags=re.M)
+    t = re.sub(r"^\s*R68_MARK\([0-9]+\);\s*$", "", t, flags=re.M)
     return [l for l in (re.sub(r"[ \t]+", " ", x).strip() for x in t.splitlines()) if l]
 
 

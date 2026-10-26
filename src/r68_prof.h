@@ -32,6 +32,10 @@ enum {
     R68_N
 };
 
+#define R68_NMARKS 8
+/* marks: 0 frame begin, 1 logic done, 2 before BSP, 3 after BSP/planes, 4 after masked/sprites,
+ * 5 before page flip, 6 after page flip (video upload/wait), 7 frame end */
+
 typedef struct {
     uint16_t ring[DOOM_R68_RING];  /* PC>>3 (0xFFFF = beyond 512 KiB) */
     uint16_t head;                 /* entries stored this frame */
@@ -45,6 +49,7 @@ typedef struct {
     uint32_t vb_start, vb_logic, vb_end;
     int32_t  tic_start, tic_end;
     uint16_t c[R68_N];
+    uint32_t marks[R68_NMARKS];    /* phase stamps: (vblank count << 8) | VDP V counter */
 } r68_block_t;
 
 extern r68_block_t *r68_ptr;
@@ -55,7 +60,10 @@ void R68_FrameBegin(void);
 void R68_LogicDone(void);
 void R68_FrameEnd(void);      /* publish the record, call R68_FrameMark, clear */
 void R68_FrameMark(void);     /* the host's breakpoint */
+void R68_Mark(uint8_t k);     /* stamp phase k with vblank count + V counter */
+#define R68_MARK(k) R68_Mark(k)
 #else
 #define R68_HIT(k) ((void)0)
+#define R68_MARK(k) ((void)0)
 #endif
 #endif

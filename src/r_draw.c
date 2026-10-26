@@ -4189,6 +4189,7 @@ void R_RenderPlayerView (player_t* player)
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 2;
 #endif
+    R68_MARK(2);
     R_RenderBSPNode (numnodes-1);
 
 #if defined FLAT_SPAN
@@ -4200,7 +4201,9 @@ void R_RenderPlayerView (player_t* player)
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 4;
 #endif
+    R68_MARK(3);
     R_DrawMasked ();
+    R68_MARK(4);
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
     doom_profile_stage = 0;
 #endif

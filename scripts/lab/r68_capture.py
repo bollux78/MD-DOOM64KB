@@ -14,12 +14,36 @@ DEMO3 at ~8 vblanks per game frame reaches about tic 1000 inside that limit.
 import re, argparse, bisect, collections, importlib.util, json, os, pathlib, shutil, struct, subprocess, sys
 
 RING = 128
-FMT = ">%dHHHIIIHHIIIIii12H" % RING
+NMARKS = 8
+FMT = ">%dHHHIIIHHIIIIii12H%dI" % (RING, NMARKS)
 SIZE = struct.calcsize(FMT)
-assert SIZE == 324, SIZE
+assert SIZE == 356, SIZE
 COUNTERS = ["bspnode", "bbox", "addline", "seg", "col", "wall", "flat", "pta",
             "sprproj", "sprdraw", "sight", "spare"]
 MAGIC = 0x52363850
+LINES = 262
+LINE_CYCLES = 7670453 / 60.0 / LINES
+PHASES = ["logic", "setup", "bsp+planes", "masked+sprites", "hud+menu", "flip+video"]
+
+
+def mark_lines(m):
+    """(vblank << 8 | V counter) -> absolute NTSC lines since the vblank interrupt (vint at line 224)."""
+    vb, v = m >> 8, m & 0xFF
+    # V counter 0..0xEA then 0xE5..0xFF: values 0xE5..0xEA are ambiguous (lines 229-234 vs 235-240, both
+    # inside vblank); they are decoded as the first pass. Rare: only stamps taken in vblank are affected.
+    line = v if v <= 0xEA else 235 + (v - 0xE5)
+    return vb * LINES + (line - 224) % LINES
+
+
+def phase_lines(marks):
+    """Lines spent in each phase: 0->1 logic, 1->2 setup, 2->3 bsp+planes, 3->4 masked, 4->5 hud, 5->6 flip."""
+    if not all(marks[:7]):
+        return None
+    t = [mark_lines(m) for m in marks[:7]]
+    d = [t[i + 1] - t[i] for i in range(6)]
+    return d if all(x >= 0 for x in d) else None
+
+
 VB_CYCLES = 7670453 / 60.0        # 68000 cycles per NTSC vblank at the stock clock
 
 
@@ -37,12 +61,13 @@ def parse_block(raw):
     v = struct.unpack(FMT, raw)
     ring = list(v[:RING])
     (head, _pad, samples, bad, magic, version, ring_n, frame, vb0, vb1, vb2, t0, t1) = v[RING:RING + 13]
-    c = dict(zip(COUNTERS, v[RING + 13:]))
+    c = dict(zip(COUNTERS, v[RING + 13:RING + 25]))
+    marks = [m for m in v[RING + 25:RING + 25 + NMARKS]]
     if magic != MAGIC:
         raise ValueError("bad R68 magic %08x" % magic)
     head = min(head, RING)
     return dict(frame=frame, vb_start=vb0, vb_logic=vb1, vb_end=vb2, tic_start=t0, tic_end=t1,
-                samples=samples, head=head, bad=bad, c=c, ring=ring[:head], version=version, ring_n=ring_n)
+                samples=samples, head=head, bad=bad, c=c, marks=marks, ring=ring[:head], version=version, ring_n=ring_n)
 
 
 def read_symbols(elf):
@@ -88,6 +113,14 @@ def analyze(frames, code, outdir):
     res = {"frames": n, "total_vblanks": sum(tot), "mean_vb": sum(tot) / max(n, 1),
            "p50": pct(srt, .5), "p90": pct(srt, .9), "p99": pct(srt, .99), "max": srt[-1] if srt else 0,
            "logic_share": sum(logic) / total_vb, "render_share": sum(rend) / total_vb}
+    ph = [phase_lines(f["marks"]) for f in frames if "marks" in f]
+    ph = [p for p in ph if p]
+    if ph:
+        sums = [sum(p[i] for p in ph) for i in range(6)]
+        tt = sum(sums) or 1
+        res["phases"] = {"frames": len(ph), "lines_mean": [x / len(ph) for x in sums],
+                         "cycles_mean": [x * LINE_CYCLES / len(ph) for x in sums],
+                         "share": [x / tt for x in sums]}
     order = sorted(range(n), key=lambda i: -tot[i])
     for q in (0.1, 0.2, 0.3, 0.5):
         k = max(1, int(round(q * n)))
@@ -149,6 +182,12 @@ def analyze(frames, code, outdir):
     L += ["", "## Frame cost histogram", "", "| vblanks | frames | share of time |", "|---|---:|---:|"]
     for b in res["bins"]:
         L.append("| %s | %d | %.1f%% |" % (b["vb"], b["frames"], 100 * b["time_share"]))
+    if res.get("phases"):
+        P = res["phases"]
+        L += ["", "## Phase breakdown (%d frames, V-counter resolution ~%d cycles)" % (P["frames"], LINE_CYCLES), "",
+              "| phase | mean lines | mean cycles | share |", "|---|---:|---:|---:|"]
+        for i, nme in enumerate(PHASES):
+            L.append("| %s | %.1f | %.0f | %.1f%% |" % (nme, P["lines_mean"][i], P["cycles_mean"][i], 100 * P["share"][i]))
     L += ["", "## Mean workload per frame", ""]
     L += ["- %s: %.1f" % (k, v) for k, v in res["mean_counters"].items()]
     if res["fit"]:
