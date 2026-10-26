@@ -1,6 +1,6 @@
 # R69 — matriz de tamanho de janela (diagnóstico)
 
-Estado: EM EXECUÇÃO (workflow `r69-build.yml`, autorizado pelo mantenedor em 2026-10-26).
+Estado: CONCLUÍDO (run 40333315226 OK). Resultados em docs/review-r69/R69-RESULTS.md.
 Base: `exp-claudio-r68-profiling-20261025` @ 15e4768 (R66 f5a9daa + R68 inerte). R66 segue baseline (7,21 FPS).
 
 Motivo: o perfil por instrução (run 7 do R68) é plano; não há ponto quente que dê ganho grande sem perda visual.
