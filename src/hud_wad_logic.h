@@ -112,12 +112,19 @@ typedef struct {                          /* what the face needs from the player
     uint16_t random;                      /* any per-tic pseudo random value */
 } HudFaceIn;
 
+/* Packed to 6 bytes (BSS is at its ceiling): the face must fit next to the 57,920 B limit of the R66 builds. */
 typedef struct {
-    uint8_t index, count, priority;
-    int8_t lastattack;                    /* -1 or tics until rage */
-    int16_t oldhealth;
-    uint16_t oldweapons;
+    uint16_t index : 6;                   /* 0..41, see HUDW_Face* */
+    uint16_t shown : 6;                   /* face currently uploaded to VRAM, 63 = none */
+    uint16_t priority : 4;                /* 0..9 */
+    uint16_t count : 7;                   /* tics until the next idle face, <= 70 */
+    uint16_t lastattack : 7;              /* 0 = not attacking, else tics until rage + 1 (<= 71) */
+    uint8_t oldhealth;                    /* clamped to 0..255 (health never exceeds 200) */
+    uint8_t oldweapons;                   /* weapon bits folded to 8 bits: change detector only */
 } HudFace;
+
+#define HUDW_FOLD(w) ((uint8_t)(((w) ^ ((w) >> 8)) & 0xFFu))
+#define HUDW_CLAMPH(h) ((uint8_t)((h) < 0 ? 0 : (h) > 255 ? 255 : (h)))
 
 static uint8_t hudw_pain_offset(int16_t health)
 {
@@ -128,22 +135,22 @@ static uint8_t hudw_pain_offset(int16_t health)
 
 static void HUDW_FaceInit(HudFace *f, int16_t health, uint16_t weapons)
 {
-    f->index = 0; f->count = 0; f->priority = 0; f->lastattack = -1; f->oldhealth = health; f->oldweapons = weapons;
+    f->index = 0; f->shown = 63; f->count = 0; f->priority = 0; f->lastattack = 0; f->oldhealth = HUDW_CLAMPH(health); f->oldweapons = HUDW_FOLD(weapons);
 }
 
 static void HUDW_FaceTick(HudFace *f, const HudFaceIn *p)
 {
     if (f->priority < 10 && p->health <= 0) { f->priority = 9; f->index = HUDW_DEADFACE; f->count = 1; }
     if (f->priority < 9 && p->bonuscount) {
-        if (f->oldweapons != p->weapons) {
-            f->oldweapons = p->weapons;
+        if (f->oldweapons != HUDW_FOLD(p->weapons)) {
+            f->oldweapons = HUDW_FOLD(p->weapons);
             f->priority = 8; f->count = 70;                         /* 2 * TICRATE */
             f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_EVIL);
         }
     }
     if (f->priority < 8 && p->damagecount && p->has_attacker) {
         f->priority = 7;
-        if (f->oldhealth - p->health > HUDW_MUCHPAIN) {
+        if ((int16_t)f->oldhealth - p->health > HUDW_MUCHPAIN) {
             f->count = 35;
             f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_OUCH);
         } else {
@@ -157,18 +164,20 @@ static void HUDW_FaceTick(HudFace *f, const HudFaceIn *p)
         }
     }
     if (f->priority < 7 && p->damagecount) {
-        if (f->oldhealth - p->health > HUDW_MUCHPAIN) {
+        if ((int16_t)f->oldhealth - p->health > HUDW_MUCHPAIN) {
             f->priority = 7; f->count = 35; f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_OUCH);
         } else {
             f->priority = 6; f->count = 35; f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_RAGE);
         }
     }
-    if (f->priority < 7) f->oldhealth = p->health;                   /* the original refreshes it inside this block */
+    if (f->priority < 7) f->oldhealth = HUDW_CLAMPH(p->health);                   /* the original refreshes it inside this block */
     if (f->priority < 6) {
         if (p->attackdown) {
-            if (f->lastattack == -1) f->lastattack = 70;
-            else if (!--f->lastattack) { f->priority = 5; f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_RAGE); f->count = 1; f->lastattack = 1; }
-        } else f->lastattack = -1;
+            if (!f->lastattack) f->lastattack = 71;                      /* original: -1 -> 70 (stored +1) */
+            else if (--f->lastattack == 1) {                               /* original: !--lastattack */
+                f->priority = 5; f->index = (uint8_t)(hudw_pain_offset(p->health) + HUDW_RAGE); f->count = 1; f->lastattack = 2;
+            }
+        } else f->lastattack = 0;
     }
     if (f->priority < 5 && p->god) { f->priority = 4; f->index = HUDW_GODFACE; f->count = 1; }
     if (!f->count) {

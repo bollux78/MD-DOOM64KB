@@ -14,8 +14,7 @@
 #define HUDW_ROW0 22u
 
 static HudFace hudw_face;
-static uint16_t hudw_hash;
-static uint8_t hudw_shown_face = 255;
+static uint8_t hudw_hash;           /* 8-bit fold of HUDW_Hash; a forced redraw every 32 tics bounds any collision */
 
 static void HUDW_Snapshot(HudState *s)
 {
@@ -41,7 +40,7 @@ static void HUDW_UploadFace(void)
     const uint32_t *w = &hudw_faces[hudw_face.index < HUDW_NFACES ? hudw_face.index : 0][0][0];
     for (uint16_t i = 0; i < 12u * 8u; i++) *data = w[i];
     R22_Unlock(sr);
-    hudw_shown_face = hudw_face.index;
+    hudw_face.shown = hudw_face.index;
 }
 
 static void HUDW_LoadTiles(void)
@@ -77,13 +76,15 @@ static void HUDW_Frame(uint8_t force)
 {
     HudState s;
     HUDW_Snapshot(&s);
-    uint16_t h = HUDW_Hash(&s);
-    uint8_t face_changed = (hudw_shown_face != hudw_face.index);
-    if (!force && !face_changed && h == hudw_hash) return;
+    uint16_t h16 = HUDW_Hash(&s);
+    uint8_t h = (uint8_t)(h16 ^ (h16 >> 8));
+    uint8_t face_changed = (hudw_face.shown != hudw_face.index);
+    uint8_t rows_changed = (h != hudw_hash) || (((uint16_t)_g_gametic & 31u) == 0);
+    if (!force && !face_changed && !rows_changed) return;
     R20_StopVideo();
     if (force) { HUDW_LoadTiles(); face_changed = 1; }
     if (face_changed) HUDW_UploadFace();
-    if (force || h != hudw_hash) { HUDW_WriteRows(&s); hudw_hash = h; }
+    if (force || rows_changed) { HUDW_WriteRows(&s); hudw_hash = h; }
 }
 
 /* Per game tic (from ST_Ticker): the face widget. */

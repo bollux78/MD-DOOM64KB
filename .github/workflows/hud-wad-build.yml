@@ -232,3 +232,4 @@ jobs:
           if-no-files-found: warn
 # retry after fish flag placement fix
 # retry: whitelist DOOM_HUD_WAD
+# retry: packed face state
