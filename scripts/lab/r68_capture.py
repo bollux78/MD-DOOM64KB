@@ -162,7 +162,7 @@ def analyze(frames, code, outdir):
     for title, key in (("All frames", "profile_all"), ("Slowest 20% of frames", "profile_slow20"),
                        ("Fastest 50% of frames", "profile_fast50")):
         L += ["", "## PC profile: " + title, "", "| function | samples | share |", "|---|---:|---:|"]
-        L += ["| %s | %d | %.1f%% |" % r for r in res[key]]
+        L += ["| %s | %d | %.1f%% |" % (r[0], r[1], 100 * r[2]) for r in res[key]]
     L += ["", "Samples come from the horizontal interrupt, so VBlank lines are not sampled. "
           "Lost samples (ring full): %d. Frames with unexpected HInt stack layout: %d." % (
               res["samples_lost"], res["bad_frames"])]
