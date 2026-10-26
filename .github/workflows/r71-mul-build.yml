@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/r71
+          mkdir -p dist/r71mul
           expected_branch='exp-chatgpt-r71-mul-review-20261026'
           test "$GITHUB_REF" = "refs/heads/$expected_branch" || { echo "ERROR: must run on $expected_branch"; exit 1; }
           git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
