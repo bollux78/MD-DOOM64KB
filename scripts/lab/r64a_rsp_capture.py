@@ -8,7 +8,14 @@ import argparse,hashlib,json,os,pathlib,selectors,shutil,subprocess,sys,time
 
 FRAMES=(8,16,64,128,256)
 PIXELS=3344
-RSP_CHUNK=192
+# The installed BlastEm GDB stub has a local 512-byte response buffer:
+# 'm' returns at most floor((512-1)/2)=255 raw bytes per packet.
+# Use 252 (4-byte aligned, 14 transactions for a 3344-byte framebuffer)
+# when validated. The original, known-good baseline is 192 (18 transactions).
+# Set BLASTEM_RSP_CHUNK=192 to revert instantly; no emulated clock change.
+RSP_CHUNK=int(os.environ.get("BLASTEM_RSP_CHUNK", "192"))
+if not 1 <= RSP_CHUNK <= 254:
+    raise ValueError("BLASTEM_RSP_CHUNK must be 1..254 (BlastEm 512-byte GDB reply buffer)")
 class RSP:
     def __init__(self,exe,rom,max_frames,timeout):
         self.timeout=timeout
