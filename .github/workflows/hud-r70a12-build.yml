@@ -4,9 +4,11 @@ name: HUD-WAD R70-A12 Claudio recreated Doom status bar (A12 perf/play/HUD ROMs,
 
 on:
   push:
-    branches: [exp-claudio-hud-r70a12-20261026]
+    # ChatGPT can start this build too: push to any exp-chatgpt-* branch (based on this workflow) touching the trigger file below.
+    branches: [exp-claudio-hud-r70a12-20261026, 'exp-chatgpt-*']
     paths:
       - '.github/workflows/hud-r70a12-build.yml'
+      - '.github/triggers/hud-r70a12-build.trigger'
   workflow_dispatch:
 
 concurrency:
@@ -35,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/hud
-          test "$GITHUB_REF" = "refs/heads/exp-claudio-hud-r70a12-20261026" || { echo "ERROR: wrong branch"; exit 1; }
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) echo "ERROR: wrong branch $GITHUB_REF"; exit 1;; esac
           git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
           { echo "commit=$(git rev-parse HEAD)"; uname -a; nproc; } | tee dist/hud/ENV.txt
 
