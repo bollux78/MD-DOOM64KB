@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 10, whole-DEMO3 capture: the maintainer lifted the emulated-frame cap on 2026-10-26, capture stops at demo end; hot spots disassembled from the function start; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 11 = run 10 plus stderr in CAPTURE.log; whole-DEMO3 capture: the maintainer lifted the emulated-frame cap on 2026-10-26, capture stops at demo end; hot spots disassembled from the function start; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -201,7 +201,7 @@ jobs:
           python3 scripts/lab/r68_capture.py --blastem "$exe" \
             --rom dist/r68/doom-md-r60-r68-prof-perf.bin \
             --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
-            --out dist/r68/capture --max-emulated-frames 150000 --timeout 120 | tee dist/r68/CAPTURE.log
+            --out dist/r68/capture --max-emulated-frames 150000 --timeout 120 2>&1 | tee dist/r68/CAPTURE.log
           head -n 40 dist/r68/capture/report.md
 
       - name: Publish capture report as annotations (readable without artifact download)
