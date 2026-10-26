@@ -146,12 +146,23 @@ jobs:
           for r in rows:
               b=(d/r['rom']).read_bytes()
               assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
-              assert 0<r['bss_bytes']<=57920 and len(b)<=4*1024*1024,r
+              assert len(b)<=4*1024*1024,r
               lines.append('| %s | %d | %d | %s |'%(r['variant'],r['bytes'],r['bss_bytes'],r['sha256']))
           bss={r['variant']:r['bss_bytes'] for r in rows}
           lines.append('')
           lines.append('BSS added by the HUD: PERF %+d B, PLAY %+d B'%(bss['r66-hud-perf']-bss['r66-control'],bss['r66-hud-play']-bss['r66-play-control']))
           (d/'ROM-TABLE.md').write_text('\n'.join(lines)+'\n'); print('\n'.join(lines))
+          import subprocess,os
+          nm=os.path.expanduser('~/mars/m68k-elf/bin/m68k-elf-nm')
+          def syms(stem):
+              out=subprocess.run([nm,'-S','-t','d',str(d/('doom-md-r60-'+stem+'.elf'))],capture_output=True,text=True,check=True).stdout
+              return {l.split()[3]:int(l.split()[1]) for l in out.splitlines() if len(l.split())==4 and l.split()[2] in 'bB'}
+          a,b2=syms('r66-play'),syms('r66-hud-play')
+          diff={k:(a.get(k,0),b2.get(k,0)) for k in set(a)|set(b2) if a.get(k)!=b2.get(k)}
+          print('::notice title=BSS symbol diff play control->hud::'+' ; '.join('%s %d->%d'%(k,*v) for k,v in sorted(diff.items())))
+          print('::notice title=smallest BSS symbols hud-play::'+' '.join('%s:%d'%(k,v) for k,v in sorted(b2.items(),key=lambda x:x[1])[:60]))
+          print('::notice title=HUD BSS::'+' ; '.join('%s=%d (margin %+d)'%(k,v,57920-v) for k,v in bss.items()))
+          assert all(0<v<=57920 for v in bss.values()),bss
           CHECK
 
       - name: Require rebuilt R66 control byte-identical to the approved 7.21 FPS ROM (run 40231459814)
