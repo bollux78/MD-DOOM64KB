@@ -1,4 +1,4 @@
-# R71 analysis: rerun with masked 24-bit sampler addresses
+# R71 analysis: rerun, report annotations in 3.9 kB chunks
 # R71 analysis (no new optimisation): builds R66 control and R70-A12 from commit 4668ca9 sources, dumps the real compiler output of the hot path and samples the PC over the whole DEMO3 (BlastEm GDB RSP, ROM untouched). Maintainer standing authorization: "autorizo compilação em todas as branchs e versões sempre"; the R71 request asks for bottlenecks in the real generated assembly.
 # Triggers: push of this file on branch exp-claudio-r71-analysis-20261026 (a new workflow cannot be dispatched before it exists on the default branch) and workflow_dispatch.
 name: R71 Claudio real-assembly profile (R66 control and R70-A12, BlastEm PC sampling)
@@ -256,7 +256,7 @@ jobs:
         run: |
           set -uo pipefail
           for f in dist/r71/pc-r70a12.log dist/r71/report-r70a12.log; do [ -f "$f" ] && python3 scripts/lab/r71_annotate.py --title "R71 log $(basename $f)" --file "$f" --chunk 3000 --max 1; done
-          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 12000 --max 9
+          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 3900 --max 9
           [ -f dist/r71/nm-top-r70a12.txt ] && python3 scripts/lab/r71_annotate.py --title "R71 A12 symbol sizes" --file dist/r71/nm-top-r70a12.txt --chunk 6000 --max 1
           exit 0
 
@@ -264,7 +264,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 12000 --max 10 --skip 9
+          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 3900 --max 10 --skip 9
           exit 0
 
       - name: Publish control profile (annotations)
@@ -273,7 +273,7 @@ jobs:
         run: |
           set -uo pipefail
           for f in dist/r71/pc-r66-control.log; do [ -f "$f" ] && python3 scripts/lab/r71_annotate.py --title "R71 log $(basename $f)" --file "$f" --chunk 3000 --max 1; done
-          python3 scripts/lab/r71_annotate.py --title "R71 control report" --file dist/r71/report-r66-control/REPORT.md --chunk 12000 --max 5
+          python3 scripts/lab/r71_annotate.py --title "R71 control report" --file dist/r71/report-r66-control/REPORT.md --chunk 3900 --max 10
           [ -f dist/r70/ROM-TABLE.md ] && python3 scripts/lab/r71_annotate.py --title "R71 ROM table" --file dist/r70/ROM-TABLE.md --max 1
           exit 0
 
