@@ -111,7 +111,8 @@ static void R60_WallDraw(uint8_t *dst, const uint8_t *src,const uint8_t *lut,
 static uint32_t rng=0x71b1b026u;
 static uint32_t next(void){rng=rng*1664525u+1013904223u;return rng;}
 """
-source=rd+'\n'+cd+'\n'+ofs_fn+'\n'+reference+'\n'+fast
+source_ref=reference+'\n'+fast
+source_ofs=rd+'\n'+cd+'\n'+ofs_fn+'\n'
 tail=r"""
 int main(void) {
     unsigned taken=0, possible=0;
@@ -177,7 +178,7 @@ int main(void) {
 }
 """
 for label, extra in [('b1b-only','#define R71_PixelByte R22_PixelByte\n'),('b1b-ofs','')]:
-    code=program+extra+source+tail
+    code=program+extra+(source_ofs if not extra else '')+source_ref+tail
     with tempfile.TemporaryDirectory(prefix='r71-'+label+'-') as td:
         f=Path(td)/'test.c'
         f.write_text(code)
