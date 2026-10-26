@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import numpy;print("numpy",numpy.__version__)'
-          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r70.py scripts/lab/build_r71.py scripts/lab/test_r71_host.py scripts/lab/check_r71_inert.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py scripts/lab/r70_disasm_compare.py scripts/lab/test_r70_tools.py scripts/lab/test_r70a_segloop.py scripts/lab/check_r70_inert.py scripts/lab/r64a_rsp_capture.py
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r70.py scripts/lab/build_r71.py scripts/lab/test_r71_host.py scripts/lab/check_r71_inert.py scripts/lab/r71_mul_callsites.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py scripts/lab/r70_disasm_compare.py scripts/lab/test_r70_tools.py scripts/lab/test_r70a_segloop.py scripts/lab/check_r70_inert.py scripts/lab/r64a_rsp_capture.py
 
       - name: Host pixel clipping and DMA bounds oracle
         shell: bash
@@ -206,6 +206,14 @@ jobs:
             exit "$rc"
           fi
 
+      - name: Rodada 0 - enumerate actual R66 and A12 libgcc __mulsi3 call sites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r71_mul_callsites.py "$OBJDUMP" dist/r71/R71-MUL-REPORT.md \
+            r66=dist/r71/doom-md-r60-r66-perf.elf r70a12=dist/r71/doom-md-r60-r70a12.elf
+          echo "::notice title=R71 actual mulsi3 sites::$(grep -E '^## r|^# R71' dist/r71/R71-MUL-REPORT.md | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')"
+
       - name: Require rebuilt R66 control byte-identical to the approved 7.21 FPS ROM (run 40231459814)
         uses: actions/download-artifact@v4
         with:
@@ -287,7 +295,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           specs=()
           for v in r66-control r70a12 r71ofs r71b1b r71both repeat; do
             if [ -s "dist/r71/capture/$v/frames.jsonl" ]; then specs+=("$v=dist/r71/capture/$v"); else echo "MISSING capture: $v"; fi
@@ -298,6 +306,14 @@ jobs:
             echo "::error title=R71 compare::Missing mandatory capture"
             exit 2
           fi
+          python3 - <<'CHECK'
+          import json,pathlib
+          for v in ('r66-control','r70a12','r71ofs','r71b1b','r71both','repeat'):
+              f=pathlib.Path('dist/r71/capture')/v/'CAPTURE.json'
+              r=json.loads(f.read_text())
+              assert r['frames']>=2134 and r['last_tic']>=2134, ('incomplete full DEMO3',v,r)
+          print('PASS six complete DEMO3 framebuffer captures, including reference repeat')
+          CHECK
           python3 scripts/lab/r70_compare.py dist/r71/compare "${specs[@]}"
           python3 scripts/lab/r70_compare.py dist/r71/compare-vs-a12 "r70a12=dist/r71/capture/r70a12" "r71ofs=dist/r71/capture/r71ofs" "r71b1b=dist/r71/capture/r71b1b" "r71both=dist/r71/capture/r71both"
 
@@ -312,6 +328,9 @@ jobs:
             echo "::notice title=R71 A/B report part 2::$(sed -n '46,120p' dist/r71/compare/REPORT.md | enc)"
           else
             echo "::warning title=R71 A/B report::no compare/REPORT.md produced"
+          fi
+          if [ -f dist/r71/R71-MUL-REPORT.md ]; then
+            echo "::notice title=R71 mulsi3 call sites::$(grep -E '^## r|^# R71' dist/r71/R71-MUL-REPORT.md | enc)"
           fi
           if [ -f dist/r71/disasm/DISASM-COMPARE.md ]; then
             echo "::notice title=R71 disassembly part 1::$(sed -n '1,40p' dist/r71/disasm/DISASM-COMPARE.md | enc)"
