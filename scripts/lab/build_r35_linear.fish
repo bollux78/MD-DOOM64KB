@@ -708,6 +708,20 @@ for v in $variants
     if set -q DOOM_R70A_INVARIANTS; and test "$DOOM_R70A_INVARIANTS" = 1
         set defs $defs '-DDOOM_R70A_INVARIANTS'
     end
+    # R71: optional lossless pixel-offset ROM tables and guarded R42 wall fast path.
+    # Both flags are inert for all established R66/R70 builds.
+    if set -q DOOM_R71_OFS; and test "$DOOM_R71_OFS" = 1
+        if not test "$DOOM_R60_PAIR_ASM" = 1
+            echo 'R71 OFS requires the R66 Pair-V baseline'; exit 2
+        end
+        set defs $defs '-DDOOM_R71_OFS'
+    end
+    if set -q DOOM_R71_B1B; and test "$DOOM_R71_B1B" = 1
+        if not test "$DOOM_R64A_PROLOGUE" = 1; or not test "$DOOM_R60_PAIR_ASM" = 1
+            echo 'R71 B1b requires R64A and R60 PairASM'; exit 2
+        end
+        set defs $defs '-DDOOM_R71_B1B'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
