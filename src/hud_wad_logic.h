@@ -22,41 +22,34 @@ typedef struct {
     uint8_t face;                        /* 0..41, see HUDW_Face* */
 } HudState;
 
-static void hudw_big3(uint16_t *top, uint16_t *bot, uint8_t c0, int16_t v, uint8_t pct)
+/* One tile row of a big number: only the digits that are shown replace the background tile, so blanks show the stone behind. */
+static void hudw_big_row(uint16_t *out, uint8_t c0, uint8_t row, int16_t v, uint8_t pct)
 {
     if (v < 0) v = 0;
     if (v > 999) v = 999;
     uint8_t d[3] = {(uint8_t)(v / 100), (uint8_t)(v / 10 % 10), (uint8_t)(v % 10)};
     uint8_t lead[3] = {v >= 100, v >= 10, 1};
-    for (uint8_t i = 0; i < 3; i++) {
-        top[c0 + i] = lead[i] ? hudw_big_top[d[i]] : HUDW_BLANK_TOP;
-        bot[c0 + i] = lead[i] ? hudw_big_bot[d[i]] : HUDW_BLANK_BOT;
-    }
-    if (pct) { top[c0 + 3] = HUDW_PCT_TOP; bot[c0 + 3] = HUDW_PCT_BOT; }
+    for (uint8_t i = 0; i < 3; i++)
+        if (lead[i]) out[c0 + i] = hudw_big[d[i]][row];
+    if (pct) out[c0 + 3] = hudw_pct[row];
 }
 
-/* out[32]: tilemap words of bar row `row` (0..3). */
+/* out[32]: tilemap ids of bar row `row` (0..3). */
 static void hudw_compose_ids(const HudState *s, uint8_t row, uint16_t *out)
 {
     for (uint8_t c = 0; c < HUDW_COLS; c++) out[c] = hudw_bgmap[row][c];
-    if (row < 2) {
-        /* big numbers occupy rows 0 (top half) and 1 (bottom half): compose both halves for this row */
-        uint16_t top[HUDW_COLS], bot[HUDW_COLS];
-        for (uint8_t c = 0; c < HUDW_COLS; c++) { top[c] = hudw_bgmap[0][c]; bot[c] = hudw_bgmap[1][c]; }
-        if (s->ammo_r >= 0) hudw_big3(top, bot, HUDW_AMMO_C, s->ammo_r, 0);
-        hudw_big3(top, bot, HUDW_HEALTH_C, s->health, 1);
-        hudw_big3(top, bot, HUDW_ARMOR_C, s->armor, 1);
-        const uint16_t *src = row ? bot : top;
-        for (uint8_t c = 0; c < HUDW_COLS; c++) out[c] = src[c];
+    if (row < 3) {
+        if (s->ammo_r >= 0) hudw_big_row(out, HUDW_AMMO_C, row, s->ammo_r, 0);
+        hudw_big_row(out, HUDW_HEALTH_C, row, s->health, 1);
+        hudw_big_row(out, HUDW_ARMOR_C, row, s->armor, 1);
     }
-    for (uint8_t i = 0; i < 6; i++) {
-        uint8_t r = HUDW_ARMS_R + i / 3;
-        if (r == row) out[HUDW_ARMS_C + i % 3] = ((s->arms >> i) & 1 ? hudw_ysm : hudw_gsm)[i + 2];
-    }
-    if ((unsigned)((int)row - HUDW_KEYS_R) < 3u) {
-        uint8_t k = (uint8_t)(row - HUDW_KEYS_R);
-        out[HUDW_KEYS_C] = hudw_keys[(s->keys >> k) & 1 ? k : 3];
-    }
+    uint16_t mask = (uint16_t)(s->arms | (s->keys << 6));
+    for (uint8_t k = 0; k < HUDW_NWID; k++)
+        if (hudw_wid_row[k] == row) {
+            uint8_t v = (uint8_t)((mask >> hudw_wid_b0[k]) & 1);
+            if (hudw_wid_b1[k] != 255) v |= (uint8_t)(((mask >> hudw_wid_b1[k]) & 1) << 1);
+            out[hudw_wid_col[k]] = hudw_wid_id[k][v];
+        }
     if ((unsigned)((int)row - HUDW_FACE_R) < 4u)
         for (uint8_t c = 0; c < HUDW_FACE_W; c++)
             out[HUDW_FACE_C + c] = (uint16_t)(HUDW_FACE_SLOT + (row - HUDW_FACE_R) * HUDW_FACE_W + c);
@@ -69,7 +62,7 @@ static void hudw_compose_ids(const HudState *s, uint8_t row, uint16_t *out)
             uint8_t d[3] = {(uint8_t)(v / 100), (uint8_t)(v / 10 % 10), (uint8_t)(v % 10)};
             uint8_t lead[3] = {v >= 100, v >= 10, 1};
             for (uint8_t i = 0; i < 3; i++)
-                out[HUDW_TABLE_C + part * 3 + i] = lead[i] ? hudw_ysm[d[i]] : HUDW_BLANK_SMALL;
+                if (lead[i]) out[HUDW_TABLE_C + part * 3 + i] = hudw_ysm[t][d[i]];
         }
     }
 }

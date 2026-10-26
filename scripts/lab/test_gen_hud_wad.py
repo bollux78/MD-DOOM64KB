@@ -46,13 +46,13 @@ def test_iwad_roundtrip():
 def test_assets_and_header():
     a = G.build_assets(G.read_iwad(G.make_iwad(synthetic_lumps())))
     assert len(a["faces"]) == 42 and all(len(f) == 16 for f in a["faces"])
-    assert len(a["tiles"]) + 16 <= 255, len(a["tiles"])
+    assert len(a["tiles"]) + 16 <= 1440 - 800, len(a["tiles"])
     assert len(a["palette"]) == 16 and a["palette"][0] == (0, 0, 0)
     assert all(0 <= w < 2 ** 32 for t in a["tiles"] for w in t)
     # every background id is a valid static tile
     assert all(0 <= v < len(a["tiles"]) for r in a["bgmap"] for v in r)
     h = G.emit_header(a)
-    for needle in ("hudw_pal[16]", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][16][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
+    for needle in ("hudw_pal[16]", "hudw_big[10][3]", "hudw_wid_id", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][16][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
         assert needle in h, needle
     # determinism
     b = G.build_assets(G.read_iwad(G.make_iwad(synthetic_lumps())))
@@ -66,13 +66,17 @@ def test_model_and_preview():
         rows = G.model_rows(a, st)
         assert len(rows) == 4 and all(len(r) == 32 for r in rows)
         assert all(0 <= v < n + 16 for r in rows for v in r)
-        # health 63 -> blank leading? 3 digits widget: values < 100 blank the hundreds
-        if st["health"] == 63:
-            assert rows[0][G.LAYOUT["HEALTH_C"]] == a["ids"]["blank_top"]
-            assert rows[0][G.LAYOUT["HEALTH_C"] + 1] == a["ids"]["big_top"][6]
-            assert rows[0][G.LAYOUT["HEALTH_C"] + 3] == a["ids"]["pct_top"]
-        if st["ammo_r"] < 0:       # no ammo widget: the background blank stays
-            assert rows[0][G.LAYOUT["AMMO_C"]] == a["ids"]["blank_top"]
+        L, ids = G.LAYOUT, a["ids"]
+        if st["health"] == 63:       # leading zero of the hundreds is transparent: the stone tile stays
+            assert rows[0][L["HEALTH_C"]] == a["bgmap"][0][L["HEALTH_C"]]
+            assert rows[0][L["HEALTH_C"] + 1] == ids["big"][6][0]
+            assert rows[0][L["HEALTH_C"] + 3] == ids["pct"][0]
+        if st["ammo_r"] < 0:         # no ammo widget: the background stays
+            assert rows[0][L["AMMO_C"]] == a["bgmap"][0][L["AMMO_C"]]
+        mask = st["arms"] | (st["keys"] << 6)
+        for c in ids["wid"]:         # every ARMS / key cell selects its variant from the owned bits
+            v = (mask >> c["b0"] & 1) | ((mask >> c["b1"] & 1) << 1 if c["b1"] != 255 else 0)
+            assert rows[c["row"]][c["col"]] == c["ids"][v]
     with tempfile.TemporaryDirectory() as d:
         out, png = os.path.join(d, "h.h"), os.path.join(d, "p.png")
         wad = os.path.join(d, "s.wad")
