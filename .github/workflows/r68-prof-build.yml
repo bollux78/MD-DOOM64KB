@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 2) with explicit maintainer authorization after test-only fix 3bdae48. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 3) with explicit maintainer authorization after test-only fixes 3bdae48 and 65fa676. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -144,7 +144,15 @@ jobs:
         run: |
           set -euo pipefail
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
-          python3 scripts/lab/build_r68.py | tee dist/r68/BUILD.log
+          rc=0
+          python3 scripts/lab/build_r68.py 2>&1 | tee dist/r68/BUILD.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            # Surface the failure as annotations (readable without log download).
+            enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+            echo "::error title=R68 build failed (rc=$rc), first error lines::$(grep -nE 'error|Error|undefined reference|No such file|FAIL' dist/r68/BUILD.log | head -n 12 | enc)"
+            echo "::error title=R68 build failed, last 30 lines::$(tail -n 30 dist/r68/BUILD.log | enc)"
+            exit "$rc"
+          fi
           sha256sum dist/r68/doom-md-r60-r66-perf.bin dist/r68/doom-md-r60-r68-prof-perf.bin | tee dist/r68/ROM-SHA256.txt
 
       - name: Verify BSS, hashes and identical color tables
