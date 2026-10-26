@@ -46,3 +46,4 @@ jobs:
             k=$((k+1)); echo "::notice title=IMG ORIG $k/$n::$part"
           done < dist/img/ORIG.parts
           [ "$n" -le 10 ] || echo "::warning title=IMG parts::$n parts exceed the 10 annotations per step"
+# rerun: dither strengths 50/100

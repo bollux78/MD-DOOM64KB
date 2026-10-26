@@ -2,8 +2,8 @@
 """Background-only dithering study for the recreated status bar. Source: original STBAR + STARMS from the user's IWAD, squeezed
 320 -> 256 px (area average), then reduced to a k-colour Mega Drive palette (3 bits/channel) with different dithers.
 Output: one indexed PNG, 256x32 strips separated by 2 px, in this fixed order (a legend is added by the viewer):
-  0 reference (squeezed, 64 colours)   1 nearest k=12   2 Floyd-Steinberg k=12   3 Bayer 4x4 k=12   4 Bayer 8x8 k=12
-  5 nearest k=8   6 Floyd-Steinberg k=8   7 Bayer 4x4 k=8   8 Bayer 8x8 k=8
+  0 reference (squeezed, 64 colours)   1 nearest (12 colours)   2 Floyd-Steinberg 50 %   3 Floyd-Steinberg 100 %
+  4 Bayer 4x4 50 %   5 Bayer 4x4 100 %   6 Bayer 8x8 50 %   7 Bayer 8x8 100 %   (all with the same 12-colour MD palette)
 Optionally a base64 dump for CI annotations. Reads the IWAD only; nothing derived is committed."""
 import argparse, base64, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -35,7 +35,7 @@ def dither_none(img, pal):
     return [[nearest(pal, px) for px in r] for r in img]
 
 
-def dither_fs(img, pal):
+def dither_fs(img, pal, strength=1.0):
     h, w = len(img), len(img[0])
     buf = [[list(map(float, px)) for px in r] for r in img]
     out = [[None] * w for _ in range(h)]
@@ -46,7 +46,7 @@ def dither_fs(img, pal):
             old = tuple(clamp(v) for v in buf[y][x])
             new = nearest(pal, old)
             out[y][x] = new
-            err = [old[i] - new[i] for i in range(3)]
+            err = [(old[i] - new[i]) * strength for i in range(3)]
             for dx, dy, f in ((d, 0, 7 / 16), (-d, 1, 3 / 16), (0, 1, 5 / 16), (d, 1, 1 / 16)):
                 xx, yy = x + dx, y + dy
                 if 0 <= xx < w and 0 <= yy < h:
@@ -83,10 +83,14 @@ def main():
             weights[px] = weights.get(px, 0) + 1
     ref64 = dither_none(ref, g.quantise_palette(weights, k=64))      # reference strip: 64 colours (keeps the PNG indexed)
     strips = [ref64]
-    for k in (12, 8):
-        pal = g.quantise_palette(weights, k=k)
-        spread = 56 if k == 12 else 80
-        strips += [dither_none(ref, pal), dither_fs(ref, pal), dither_bayer(ref, pal, 4, spread), dither_bayer(ref, pal, 8, spread)]
+    pal = g.quantise_palette(weights, k=12)
+    full = 64                                   # Bayer spread (8-bit units) at 100 %; strength scales it
+    strips.append(dither_none(ref, pal))
+    for st in (0.5, 1.0):
+        strips.append(dither_fs(ref, pal, st))
+    for n in (4, 8):
+        for st in (0.5, 1.0):
+            strips.append(dither_bayer(ref, pal, n, full * st))
     img = []
     for s in strips:
         img += s + [[(40, 40, 40)] * W] * 2
