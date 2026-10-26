@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #ifndef HUDW_VRAM_BASE
-#define HUDW_VRAM_BASE 600u              /* first VDP tile of the bar: free in gameplay (pair tiles 256..511, font 1440..) */
+#define HUDW_VRAM_BASE 800u              /* free in gameplay: pair tiles use 256..767, the SGDK font starts at 1440 */
 #endif
 #define HUDW_FACE_SLOT HUDW_NTILES       /* 12 tiles after the static ones hold the current face */
 #define HUDW_WORD(id) ((uint16_t)(0xE000u | (HUDW_VRAM_BASE + (uint16_t)(id))))   /* priority + palette 3 */

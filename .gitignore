@@ -36,3 +36,6 @@ dist/
 
 # Generated alongside colormap_cells.h
 src/r20_colorcell.h
+
+# HUD assets generated from the user IWAD (never committed)
+/src/hud_wad_assets.h

@@ -1381,10 +1381,17 @@ void wipe_StartScreen(void){V_ClearViewWindow();}void D_Wipe(void){I_FinishUpdat
 #define R51_HUD_TEXT_PLANE VDP_BG_A
 #endif
 static void R22_Num3(uint16_t x,uint16_t y,int32_t v){if(v<0)v=0;if(v>999)v=999;char s[4]={(char)('0'+v/100),(char)('0'+v/10%10),(char)('0'+v%10),0};R22_DrawText(R51_HUD_TEXT_PLANE,s,x,y);}
+#if defined(DOOM_HUD_WAD)
+#include "hud_wad.inc"
+#endif
 static void R22_HUD(void){
 #if defined(DOOM_R51_HW_HUD)
     if(!_g_menuactive)R51_HudMaskPrepare();
 #endif
+#if defined(DOOM_HUD_WAD)
+    VDP_setTextPlane(BG_A);VDP_setTextPalette(PAL0);VDP_setTextPriority(TRUE);
+    HUDW_Frame(r57_hud_dirty);r57_hud_dirty=0;
+#else
     static uint16_t health=65535,armor=65535,ammo=65535;
     uint16_t h=_g_player.mo?_g_player.mo->health:_g_player.health,a=_g_player.armorpoints,b=_g_player.ammo[am_clip];
     VDP_setTextPlane(BG_A);VDP_setTextPalette(PAL0);VDP_setTextPriority(TRUE);
@@ -1426,6 +1433,7 @@ static void R22_HUD(void){
         r51_hud_text_dirty=0;
 #endif
     }
+#endif /* !DOOM_HUD_WAD */
     static uint32_t vb;static uint16_t frames;frames++;
     uint32_t dt=_g_vblankCount-vb;if(dt>=60){uint16_t f=(uint32_t)frames*600/dt;if(f>999)f=999;char s[8]={(char)('0'+f/100),(char)('0'+f/10%10),'.',(char)('0'+f%10),'f','p','s',0};R22_DrawText(VDP_BG_A,s,
 #if defined(DOOM_R57_VIEW_MENU)
