@@ -1,12 +1,14 @@
 # HUD-WAD: recreated Doom status bar from the user's IWAD. R66 control + HUD variants, built on the runner under the maintainer's standing authorization
-# ("autorizo compilação em todas as branchs e versões sempre"). Push trigger limited to this branch and this file; no other trigger.
+# ("autorizo compilação em todas as branchs e versões sempre"). Push trigger limited to this branch / exp-chatgpt-* branches and to this file + its .trigger file; no other trigger.
 name: HUD-WAD Claudio recreated Doom status bar (R66 control and HUD ROMs, BlastEm)
 
 on:
   push:
-    branches: [exp-claudio-hud-wad-20261026]
+    # ChatGPT can start this build too: push to any exp-chatgpt-* branch (based on this workflow) touching the trigger file below.
+    branches: [exp-claudio-hud-wad-20261026, 'exp-chatgpt-*']
     paths:
       - '.github/workflows/hud-wad-build.yml'
+      - '.github/triggers/hud-wad-build.trigger'
   workflow_dispatch:
 
 concurrency:
@@ -35,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/hud
-          test "$GITHUB_REF" = "refs/heads/exp-claudio-hud-wad-20261026" || { echo "ERROR: wrong branch"; exit 1; }
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) echo "ERROR: wrong branch $GITHUB_REF"; exit 1;; esac
           git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
           { echo "commit=$(git rev-parse HEAD)"; uname -a; nproc; } | tee dist/hud/ENV.txt
 
