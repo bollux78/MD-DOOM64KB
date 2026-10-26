@@ -1,4 +1,4 @@
-# R71 GPT-owned 5-ROM matrix, user-authorized x360-linux tests. Trigger only changes to this workflow file on experimental branch.
+# R71 GPT-owned 5-ROM matrix, user-authorized x360-linux tests. Trigger only workflow-file changes on the experimental branch; native oracle compatibility fixed.
 name: R71 ChatGPT OFS and B1b renderer A/B (BlastEm)
 
 on:
