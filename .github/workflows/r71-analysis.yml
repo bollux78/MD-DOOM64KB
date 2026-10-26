@@ -1,3 +1,4 @@
+# R71 analysis: rerun with masked 24-bit sampler addresses
 # R71 analysis (no new optimisation): builds R66 control and R70-A12 from commit 4668ca9 sources, dumps the real compiler output of the hot path and samples the PC over the whole DEMO3 (BlastEm GDB RSP, ROM untouched). Maintainer standing authorization: "autorizo compilação em todas as branchs e versões sempre"; the R71 request asks for bottlenecks in the real generated assembly.
 # Triggers: push of this file on branch exp-claudio-r71-analysis-20261026 (a new workflow cannot be dispatched before it exists on the default branch) and workflow_dispatch.
 name: R71 Claudio real-assembly profile (R66 control and R70-A12, BlastEm PC sampling)
