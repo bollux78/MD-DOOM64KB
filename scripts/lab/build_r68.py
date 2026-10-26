@@ -24,7 +24,7 @@ def main():
                     'DOOM_R56_BUILD','DOOM_R55_BUILD','DOOM_R52_BUILD','DOOM_R57_PROFILE',
                     'DOOM_R57_TABLES_DIR','DOOM_R58_BUILD','DOOM_R58_CM_VIEW','DOOM_R57_BUILD',
                     'DOOM_R59_BUILD','DOOM_R59_COLOR_VIEW','DOOM_R60_BUILD','DOOM_R60_PAIR_ASM',
-                    'DOOM_R64_DIAG','DOOM_R64A_PROLOGUE','DOOM_R66_COLPAIR','DOOM_R68_PROF'):
+                    'DOOM_R64_DIAG','DOOM_R64A_PROLOGUE','DOOM_R66_COLPAIR','DOOM_R68_PROF','DOOM_R68_SPLIT'):
             env.pop(key,None)
         env.update({
                 'DOOM_R35D_CHECKER':'1','DOOM_R39C_VARIANT':'mall','DOOM_R39D_DITHER_TOGGLE':'0',
@@ -46,7 +46,7 @@ def main():
                 'DOOM_R50_STATIC_MENU':bench,'DOOM_R50_HARD_REINIT':bench,'DOOM_R50_RESET_SRAM':'0',
                 'DOOM_R51_HW_WEAPON':'0','DOOM_R51_NO_PSPRITE':'0','DOOM_R20_BGM_VGM':vgm,
         })
-        env.update(DOOM_R60_BUILD=name,DOOM_R60_PAIR_ASM='1',DOOM_R64A_PROLOGUE='1',DOOM_R66_COLPAIR='1',DOOM_R68_PROF=str(r68))
+        env.update(DOOM_R60_BUILD=name,DOOM_R60_PAIR_ASM='1',DOOM_R64A_PROLOGUE='1',DOOM_R66_COLPAIR='1',DOOM_R68_PROF=str(r68),DOOM_R68_SPLIT=('1' if (r68 and os.environ.get('R68_SPLIT')=='1') else '0'))
         print('BUILD R68',name,flush=True)
         subprocess.run(['fish','scripts/lab/build_r35_linear.fish','pixel4-'+mode],env=env,check=True)
         stem='doom-md-r60-'+name
@@ -76,7 +76,8 @@ def main():
         return text.replace('doom-md-r60-'+id,'ID').split()
     original=normalize(flags['r66-perf'],'r66-perf')
     candidate=normalize(flags['r68-prof-perf'],'r68-prof-perf')
-    assert sorted(candidate)==sorted(original+['-DDOOM_R68_PROF']),('Unexpected flag drift',set(candidate)^set(original))
+    extra=['-DDOOM_R68_PROF']+(['-DDOOM_R68_SPLIT'] if os.environ.get('R68_SPLIT')=='1' else [])
+    assert sorted(candidate)==sorted(original+extra),('Unexpected flag drift',set(candidate)^set(original))
     for table in ('r56_tables.h','r59_color_tables.h'):
         assert len({(dest/(id+'-'+table)).read_bytes() for id,_,_ in variants})==1,table
     assert records[1]['bss_bytes']<=records[0]['bss_bytes']+8, ('R68 may add only the 4-byte r68_ptr to BSS',records)

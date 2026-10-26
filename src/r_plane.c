@@ -113,6 +113,9 @@ static fixed_t distscale(uint8_t x)
 }
 
 
+#if defined(DOOM_R68_SPLIT)
+static void R_MapPlane(uint16_t y, uint16_t x1, uint16_t x2, draw_span_vars_t *dsvars) __attribute__((noinline));
+#endif
 static void R_MapPlane(uint16_t y, uint16_t x1, uint16_t x2, draw_span_vars_t *dsvars)
 {    
     const fixed_t distance = FixedMul(planeheight, yslope(y));
@@ -135,6 +138,9 @@ static void R_MapPlane(uint16_t y, uint16_t x1, uint16_t x2, draw_span_vars_t *d
 // R_MakeSpans
 //
 
+#if defined(DOOM_R68_SPLIT)
+static void R_MakeSpans(int16_t x, uint16_t t1, uint16_t b1, uint16_t t2, uint16_t b2, draw_span_vars_t *dsvars) __attribute__((noinline));
+#endif
 static void R_MakeSpans(int16_t x, uint16_t t1, uint16_t b1, uint16_t t2, uint16_t b2, draw_span_vars_t *dsvars)
 {
     static byte spanstart[VIEWWINDOWHEIGHT];
@@ -153,6 +159,9 @@ static void R_MakeSpans(int16_t x, uint16_t t1, uint16_t b1, uint16_t t2, uint16
 }
 
 
+#if defined(DOOM_R68_SPLIT)
+static void R_DoDrawPlane(visplane_t __far* pl) __attribute__((noinline));
+#endif
 static void R_DoDrawPlane(visplane_t __far* pl)
 {
     if (pl->minx <= pl->maxx)

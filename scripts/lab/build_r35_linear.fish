@@ -703,6 +703,11 @@ for v in $variants
     # R68 diagnostic: per-frame workload log + PC sampler (BlastEm only, never for play/perf results).
     if set -q DOOM_R68_PROF; and test "$DOOM_R68_PROF" = 1
         set defs $defs '-DDOOM_R68_PROF'
+        # R68 split: force noinline on the BSP/seg/sprite/plane functions so the PC profile
+        # separates what LTO folded into R_Subsector (diagnostic; shifts code layout slightly).
+        if set -q DOOM_R68_SPLIT; and test "$DOOM_R68_SPLIT" = 1
+            set defs $defs '-DDOOM_R68_SPLIT'
+        end
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v

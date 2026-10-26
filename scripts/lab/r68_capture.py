@@ -127,7 +127,7 @@ def analyze(frames, code, outdir):
     fast = order[n // 2:]
     slowh, slowt = profile(slow)
     fasth, fastt = profile(fast)
-    def rows(h, t, top=25):
+    def rows(h, t, top=40):
         return [(name, c, c / t if t else 0) for name, c in h.most_common(top)]
     res["samples_total"] = alltot
     res["samples_lost"] = sum(max(0, f["samples"] - f["head"]) for f in frames)

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Prove that WITHOUT -DDOOM_R68_PROF the patched sources equal the base (R66): resolve every
+"""Prove that WITHOUT -DDOOM_R68_PROF / -DDOOM_R68_SPLIT the patched sources equal the base (R66): resolve every
 conditional on DOOM_R68_PROF as 'undefined', drop the r68 include and the standalone
 R68_HIT(...); statements, normalise whitespace and compare.
 Usage: check_r68_inert.py BASE_DIR PATCHED_DIR"""
 import re, sys
 from pathlib import Path
 
-FILES = ["src/d_main.c", "src/r_draw.c", "src/p_sight.c", "src/i_genesisv.c", "src/r22_video.inc", "src/r22_benchmark.inc"]
-A = "DOOM_R68_PROF"
+FILES = ["src/d_main.c", "src/r_draw.c", "src/p_sight.c", "src/i_genesisv.c", "src/r22_video.inc", "src/r22_benchmark.inc", "src/r_plane.c"]
+A = re.compile(r"DOOM_R68_(PROF|SPLIT)")
 
 
 def resolve(text):
@@ -21,9 +21,9 @@ def resolve(text):
             continue
         d, rest = m.group(1), m.group(2).strip()
         if d in ("if", "ifdef", "ifndef"):
-            if A in rest:
+            if A.search(rest):
                 if "&&" in rest or "||" in rest:
-                    sys.exit("unsupported compound condition on %s: %s" % (A, s))
+                    sys.exit("unsupported compound condition on R68 flag: %s" % s)
                 neg = rest.startswith("!") or d == "ifndef"
                 val = True if neg else False
                 stack.append([True, val, val, False])

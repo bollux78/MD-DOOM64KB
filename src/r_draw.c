@@ -1260,6 +1260,9 @@ const uint8_t* R_LoadColorMap(int16_t lightlevel)
 
 typedef void (*R_DrawColumn_f)(const draw_column_vars_t *dcvars);
 
+#if defined(DOOM_R68_SPLIT)
+static void R_DrawMaskedColumn(R_DrawColumn_f colfunc, draw_column_vars_t *dcvars, const column_t __far* column) __attribute__((noinline));
+#endif
 static void R_DrawMaskedColumn(R_DrawColumn_f colfunc, draw_column_vars_t *dcvars, const column_t __far* column)
 {
     const fixed_t basetexturemid = dcvars->texturemid;
@@ -1403,6 +1406,9 @@ static void R_DrawVisSprite(const vissprite_t *vis)
 }
 
 
+#if defined(DOOM_R68_SPLIT)
+static void R_GetColumn(const texture_t __far* texture, int16_t texcolumn, int16_t* patch_num, int16_t* x_c) __attribute__((noinline));
+#endif
 static void R_GetColumn(const texture_t __far* texture, int16_t texcolumn, int16_t* patch_num, int16_t* x_c)
 {
 #if defined(DOOM_R20_HYGIENE)
@@ -1789,6 +1795,9 @@ static void R_DrawPSprite (pspdef_t *psp, int16_t lightlevel)
 // R_DrawPlayerSprites
 //
 
+#if defined(DOOM_R68_SPLIT)
+static void R_DrawPlayerSprites(void) __attribute__((noinline));
+#endif
 static void R_DrawPlayerSprites(void)
 {
 
@@ -1848,6 +1857,9 @@ static void R_SortVisSprites (void)
 // R_DrawMasked
 //
 
+#if defined(DOOM_R68_SPLIT)
+static void R_DrawMasked(void) __attribute__((noinline));
+#endif
 static void R_DrawMasked(void)
 {
     drawseg_t *ds;
@@ -2096,6 +2108,9 @@ static void R_ProjectSprite (mobj_t __far* thing, int16_t lightlevel)
 // During BSP traversal, this adds sprites by sector.
 //
 // killough 9/18/98: add lightlevel as parameter, fixing underwater lighting
+#if defined(DOOM_R68_SPLIT)
+static void R_AddSprites(subsector_t __far* subsec, int16_t lightlevel) __attribute__((noinline));
+#endif
 static void R_AddSprites(subsector_t __far* subsec, int16_t lightlevel)
 {
   sector_t __far* sec=SUBSECTOR_SECTOR(subsec);
@@ -2709,6 +2724,9 @@ static inline __attribute__((always_inline)) void R20_SegFlat(uint16_t cell, int
         : "+&a"(dest),"+&d"(n) : "d"(cell) : "cc","memory");
 }
 #endif
+#if defined(DOOM_R68_SPLIT)
+static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling) __attribute__((noinline));
+#endif
 static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor, boolean markceiling)
 {
 #if defined(DOOM_ROUTINE_PROFILE) || defined(DOOM_R38_TIME_PROFILE)
@@ -3134,6 +3152,9 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #endif
 }
 
+#if defined(DOOM_R68_SPLIT)
+static boolean R_CheckOpenings(const int16_t start) __attribute__((noinline));
+#endif
 static boolean R_CheckOpenings(const int16_t start)
 {
     int16_t pos = lastopening - openings;
@@ -3213,6 +3234,9 @@ inline static int16_t CONSTFUNC Mod(uint8_t a, int16_t b)
 #else
 #define R27_STORED_FLAGS(p) R23_GET(p,r_flags)
 #define R27_SET_RENDER_FLAGS(p,v) R23_SET(p,r_flags,v)
+#endif
+#if defined(DOOM_R68_SPLIT)
+static void R_StoreWallRange(const int16_t start, const int16_t stop) __attribute__((noinline));
 #endif
 static void R_StoreWallRange(const int16_t start, const int16_t stop)
 {
@@ -3648,6 +3672,9 @@ static void R_RecalcLineFlags(void)
 // Replaces the old R_Clip*WallSegment functions. It draws bits of walls in those
 // columns which aren't solid, and updates the solidcol[] array appropriately
 
+#if defined(DOOM_R68_SPLIT)
+static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid) __attribute__((noinline));
+#endif
 static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 {
     byte *p;
@@ -3691,6 +3718,9 @@ static void R_ClipWallSegment(int16_t first, int16_t last, const boolean solid)
 // and adds any visible pieces to the line list.
 //
 
+#if defined(DOOM_R68_SPLIT)
+static void R_AddLine(const seg_t __far* line) __attribute__((noinline));
+#endif
 static void R_AddLine(const seg_t __far* line)
 {
     R68_HIT(R68_ADDLINE);
@@ -3784,6 +3814,9 @@ static void R_AddLine(const seg_t __far* line)
 // Draw one or more line segments.
 //
 
+#if defined(DOOM_R68_SPLIT)
+static void R_Subsector(int16_t num) __attribute__((noinline));
+#endif
 static void R_Subsector(int16_t num)
 {
     R37_HIT(R37_SUBSECTORS);
@@ -3871,6 +3904,9 @@ static const byte checkcoord[12][4] =
 };
 
 
+#if defined(DOOM_R68_SPLIT)
+static boolean R_CheckBBox(const int16_t __far* bspcoord) __attribute__((noinline));
+#endif
 static boolean R_CheckBBox(const int16_t __far* bspcoord)
 {
     R37_HIT(R37_BBOX);
@@ -3941,6 +3977,9 @@ static boolean R_CheckBBox(const int16_t __far* bspcoord)
 
 
 
+#if defined(DOOM_R68_SPLIT)
+static boolean R_RenderBspSubsector(int16_t bspnum) __attribute__((noinline));
+#endif
 static boolean R_RenderBspSubsector(int16_t bspnum)
 {
     // Found a subsector?
@@ -3970,6 +4009,9 @@ static boolean R_RenderBspSubsector(int16_t bspnum)
 //performance profile.
 #define MAX_BSP_DEPTH 64
 
+#if defined(DOOM_R68_SPLIT)
+static void R_RenderBSPNode(int16_t bspnum) __attribute__((noinline));
+#endif
 static void R_RenderBSPNode(int16_t bspnum)
 {
     R20_PROBE();
@@ -4035,6 +4077,9 @@ static void R_RenderBSPNode(int16_t bspnum)
     }
 }
 #else
+#if defined(DOOM_R68_SPLIT)
+static void R_RenderBSPNode(int16_t bspnum) __attribute__((noinline));
+#endif
 static void R_RenderBSPNode(int16_t bspnum)
 {
     R20_PROBE();
