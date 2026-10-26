@@ -128,12 +128,23 @@ jobs:
       - name: R70-A host tests (differential seg loop, tooling) and inertness against the exact R66 base
         shell: bash
         run: |
-          set -euo pipefail
-          python3 scripts/lab/test_r70a_segloop.py 20000 | tee dist/r70/HOST-segloop-equivalence.txt
-          python3 scripts/lab/test_r70_tools.py | tee dist/r70/HOST-tools.txt
+          set -uo pipefail
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+          gcc --version | head -1 | tee dist/r70/HOST.log
+          python3 --version 2>&1 | tee -a dist/r70/HOST.log
           rm -rf "$RUNNER_TEMP/base66" && mkdir -p "$RUNNER_TEMP/base66"
           git archive f5a9daa7a0bd7225bbc227630defc73c67c34f1e | tar -x -C "$RUNNER_TEMP/base66"
-          python3 scripts/lab/check_r70_inert.py "$RUNNER_TEMP/base66" . | tee dist/r70/HOST-inert-r70.txt
+          fail=0
+          for t in "scripts/lab/test_r70a_segloop.py 20000" "scripts/lab/test_r70_tools.py" "scripts/lab/check_r70_inert.py $RUNNER_TEMP/base66 ."; do
+            echo "== $t" | tee -a dist/r70/HOST.log
+            python3 $t > dist/r70/HOST-last.txt 2>&1; rc=$?
+            cat dist/r70/HOST-last.txt | tee -a dist/r70/HOST.log
+            if [ "$rc" -ne 0 ]; then
+              echo "::error title=R70 host test failed: $t (rc=$rc)::$(tail -n 25 dist/r70/HOST-last.txt | enc)"
+              fail=1
+            fi
+          done
+          exit $fail
 
       - name: Build the four variants, each in its own copy of the checkout
         shell: bash
