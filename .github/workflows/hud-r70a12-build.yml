@@ -232,3 +232,4 @@ jobs:
 # retry after fish flag placement fix
 # retry: whitelist DOOM_HUD_WAD
 # retry: packed face state
+# rerun: new FS background/faces

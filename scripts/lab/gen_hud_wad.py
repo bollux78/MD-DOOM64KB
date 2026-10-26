@@ -2,9 +2,11 @@
 """Recreate the Doom status bar for the Mega Drive from the original IWAD (not committed: read at build time).
 
 Reads the status-bar patches of a Doom IWAD (STBAR, STTNUM*, STYSNUM*, STGNUM*, STKEYS*, STF* faces), resamples them onto the 8x8 tile
-grid of the VDP, quantises everything to ONE 16-colour CRAM line (index 0 = black) and writes a C header with ROM tables:
+grid of the VDP, quantises the background/digits to CRAM line 3 and the faces to CRAM line 2 (index 0 = black; background and faces are
+Floyd-Steinberg dithered, the face square is a flat colour) and writes a C header with ROM tables:
 
-    hud_pal[16]            CRAM words (0x0BGR) for palette line 3
+    hud_pal[16]            CRAM words (0x0BGR) for palette line 3 (background, digits, keys)
+    hud_fpal[16]           CRAM words for palette line 2 (faces)
     hud_tiles[N][8]        static tiles: background, big digits (8x16 as top/bottom tiles), small digits, keys, blanks
     hud_bgmap[4][32]       background tile ids (index into hud_tiles) of the 32x4-cell bar
     hud_faces[42][12][8]   face frames, 3 x 4 tiles each, uploaded to a 12-tile VRAM slot when the face changes
@@ -183,6 +185,13 @@ def build_images(lumps):
     rgb = lambda n: patch_rgb(P[n][2], pal)
 
     stbar = rgb("STBAR")
+    if "STARMS" in lumps:                     # the ARMS plate is a separate patch drawn over STBAR at (104, 0)
+        aw, ah, arows = decode_patch(lumps["STARMS"])
+        apx = patch_rgb(arows, pal)
+        for y in range(min(ah, len(stbar))):
+            for x in range(aw):
+                if apx[y][x] is not None and 104 + x < len(stbar[0]):
+                    stbar[y][104 + x] = apx[y][x]
     sw, sh = P["STBAR"][0], P["STBAR"][1]
     # 1. the background: STBAR squeezed to 256 x 32 (4/5 horizontally), vertically cropped/padded to 32.
     black = (0, 0, 0)
@@ -225,18 +234,21 @@ def build_images(lumps):
                     img[y][x] = g[y][x]
         keys.append(img)
     keys.append(solid(8, 8, panel_key))     # no key
-    faces = []
+    faces, fmasks = [], []
     for n in FACE_NAMES:
         g = rgb(n)
         w, h = P[n][0], P[n][1]
         img = solid(24, 32, panel_face)
+        mask = [[False] * 24 for _ in range(32)]          # True = pixel belongs to the face art (False: flat panel colour)
         ox, oy = (24 - w) // 2, (32 - h) // 2
         for y in range(h):
             for x in range(w):
                 if g[y][x] is not None and 0 <= ox + x < 24 and 0 <= oy + y < 32:
                     img[oy + y][ox + x] = g[y][x]
+                    mask[oy + y][ox + x] = True
         faces.append(img)
-    return dict(bar=bar, big=big, ysm=ysm, gsm=gsm, keys=keys, faces=faces, panel_small=panel_small)
+        fmasks.append(mask)
+    return dict(bar=bar, big=big, ysm=ysm, gsm=gsm, keys=keys, faces=faces, fmasks=fmasks, panel_small=panel_small, panel_face=panel_face)
 
 
 def quantise_palette(colours, k=15, iters=12):
@@ -276,6 +288,37 @@ def quantise_palette(colours, k=15, iters=12):
     return centres
 
 
+def _dist(a, b):
+    return 2 * (a[0] - b[0]) ** 2 + 4 * (a[1] - b[1]) ** 2 + 3 * (a[2] - b[2]) ** 2
+
+
+def fs_dither(img, pal, mask=None, flat=None, strength=1.0):
+    """Serpentine Floyd-Steinberg onto the palette `pal` (list of RGB). Pixels with mask False are set to the palette entry nearest
+    to `flat` and neither receive nor spread error (a flat colour box stays flat)."""
+    h, w = len(img), len(img[0])
+    buf = [[[float(v) for v in px] for px in r] for r in img]
+    out = [[None] * w for _ in range(h)]
+    near = lambda c: min(pal, key=lambda p: (_dist(p, c), p))
+    flat_c = near(flat) if flat is not None else None
+    for y in range(h):
+        xs = range(w) if y % 2 == 0 else range(w - 1, -1, -1)
+        d = 1 if y % 2 == 0 else -1
+        for x in xs:
+            if mask is not None and not mask[y][x]:
+                out[y][x] = flat_c
+                continue
+            old = tuple(0 if v < 0 else 255 if v > 255 else int(round(v)) for v in buf[y][x])
+            new = near(old)
+            out[y][x] = new
+            err = [(old[i] - new[i]) * strength for i in range(3)]
+            for dx, dy, f in ((d, 0, 7 / 16), (-d, 1, 3 / 16), (0, 1, 5 / 16), (d, 1, 1 / 16)):
+                xx, yy = x + dx, y + dy
+                if 0 <= xx < w and 0 <= yy < h and (mask is None or mask[yy][xx]):
+                    for i in range(3):
+                        buf[yy][xx][i] += err[i] * f
+    return out
+
+
 def md_word(c):
     return ((c[2] >> 5) << 9) | ((c[1] >> 5) << 5) | ((c[0] >> 5) << 1)
 
@@ -284,7 +327,22 @@ def build_assets(lumps):
     im = build_images(lumps)
     L = LAYOUT
     # static background tile cells: the squeezed STBAR, with every dynamic cell replaced by the blank panel tile of its widget
-    bar = [row[:] for row in im["bar"]]
+    # CRAM line 3 serves the background, digits, keys; the faces get their own line (2). Floyd-Steinberg (100 %) on the background only;
+    # glyphs stay crisp (nearest colour); the face square is a flat colour.
+    hist3 = {}
+    for r in range(ROWS * 8):
+        for c in range(COLS * 8):
+            if not (L["FACE_C"] * 8 <= c < (L["FACE_C"] + 3) * 8):
+                hist3[im["bar"][r][c]] = hist3.get(im["bar"][r][c], 0) + 1
+    glyphs = list(im["big"].values()) + list(im["ysm"].values()) + list(im["gsm"].values()) + im["keys"]
+    for gimg in glyphs:
+        for r in gimg:
+            for c in r:
+                hist3[c] = hist3.get(c, 0) + 4          # glyph colours (reds, yellows, card colours) must keep a palette slot
+    palette = [(0, 0, 0)] + quantise_palette(hist3)
+    while len(palette) < 16:
+        palette.append((0, 0, 0))
+    bar = fs_dither(im["bar"], palette[1:])
     # collect every tile (as RGB) in a stable order
     tiles_rgb = []            # list of 8x8 RGB tiles
     index = {}
@@ -336,26 +394,23 @@ def build_assets(lumps):
                     bg_ids[ty][tx] = ids["blank_small"]
             else:
                 bg_ids[ty][tx] = add(tile_of(bar, tx, ty))
-    # face frames as tiles (3 x 4 each); not part of the static table
+    # face frames: own 15 colours + black (CRAM line 2), Floyd-Steinberg from the original patches, flat panel outside the face art
+    fhist = {}
+    for img, mask in zip(im["faces"], im["fmasks"]):
+        for y in range(32):
+            for x in range(24):
+                if mask[y][x]:
+                    fhist[img[y][x]] = fhist.get(img[y][x], 0) + 1
+    fcentres = quantise_palette(fhist, k=14)
+    fcentres.append(tuple(min(255, (im["panel_face"][i] >> 5) * 255 // 7) for i in range(3)))      # the flat face square
+    fpal = [(0, 0, 0)] + fcentres
+    while len(fpal) < 16:
+        fpal.append((0, 0, 0))
     face_tiles = []
-    for img in im["faces"]:
-        face_tiles.append([tile_of(img, tx, ty) for ty in range(4) for tx in range(3)])
-    # palette from all colours used
-    hist = {}
-    for t in tiles_rgb:
-        for r in t:
-            for c in r:
-                hist[c] = hist.get(c, 0) + 1
-    for ft in face_tiles:
-        for t in ft:
-            for r in t:
-                for c in r:
-                    hist[c] = hist.get(c, 0) + 1
-    centres = quantise_palette(hist)
-    palette = [(0, 0, 0)] + centres
-    while len(palette) < 16:
-        palette.append((0, 0, 0))
-    dist = lambda a, b: 2 * (a[0] - b[0]) ** 2 + 4 * (a[1] - b[1]) ** 2 + 3 * (a[2] - b[2]) ** 2
+    for img, mask in zip(im["faces"], im["fmasks"]):
+        d = fs_dither(img, fpal[1:], mask, fcentres[-1])
+        face_tiles.append([tile_of(d, tx, ty) for ty in range(4) for tx in range(3)])
+    dist = _dist
     cache = {}
     def nearest(c):
         if c not in cache:
@@ -363,8 +418,15 @@ def build_assets(lumps):
         return cache[c]
     def pack(t):
         return [sum(nearest(t[y][x]) << (28 - 4 * x) for x in range(8)) for y in range(8)]
-    return dict(palette=palette, tiles=[pack(t) for t in tiles_rgb], tiles_rgb=tiles_rgb, ids=ids, bgmap=bg_ids,
-                faces=[[pack(t) for t in ft] for ft in face_tiles], n_dynamic=n_dynamic)
+    fcache = {}
+    def fnearest(c):
+        if c not in fcache:
+            fcache[c] = min(range(16), key=lambda i: (dist(c, fpal[i]), i))
+        return fcache[c]
+    def fpack(t):
+        return [sum(fnearest(t[y][x]) << (28 - 4 * x) for x in range(8)) for y in range(8)]
+    return dict(palette=palette, fpalette=fpal, tiles=[pack(t) for t in tiles_rgb], tiles_rgb=tiles_rgb, ids=ids, bgmap=bg_ids,
+                faces=[[fpack(t) for t in ft] for ft in face_tiles], n_dynamic=n_dynamic)
 
 
 def emit_header(a):
@@ -385,6 +447,7 @@ def emit_header(a):
     o.append("static const uint8_t hudw_gsm[10] = {%s};" % ",".join(map(str, ids["gsm"])))
     o.append("static const uint8_t hudw_keys[4] = {%s};" % ",".join(map(str, ids["keys"])))
     o.append("static const uint16_t hudw_pal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["palette"]))
+    o.append("static const uint16_t hudw_fpal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["fpalette"]))
     assert len(a["tiles"]) + 12 <= 255, "tile ids no longer fit the uint8 tables"
     wide = False
     o.append("static const %s hudw_bgmap[%d][%d] = {" % ("uint16_t" if wide else "uint8_t", ROWS, COLS))
@@ -446,13 +509,16 @@ def model_rows(a, st):
 # ---- preview ---------------------------------------------------------------------------------------------------------------------
 def render_rows_rgb(a, rows, face, scale=1):
     """Compose a preview image (list of RGB rows, 256x32) from tile ids with the quantised palette, face tiles from the face table."""
-    pal = [((w >> 1 & 7) * 255 // 7, (w >> 5 & 7) * 255 // 7, (w >> 9 & 7) * 255 // 7) for w in [md_word(c) for c in a["palette"]]]
+    rgbp = lambda pl: [((w >> 1 & 7) * 255 // 7, (w >> 5 & 7) * 255 // 7, (w >> 9 & 7) * 255 // 7) for w in [md_word(c) for c in pl]]
+    pal3, pal2 = rgbp(a["palette"]), rgbp(a["fpalette"])
     L = LAYOUT
     img = [[(0, 0, 0)] * (COLS * 8) for _ in range(ROWS * 8)]
     for ty in range(ROWS):
         for tx in range(COLS):
             tid = rows[ty][tx]
-            t = a["tiles"][tid] if tid < len(a["tiles"]) else a["faces"][face][tid - len(a["tiles"])]
+            isface = tid >= len(a["tiles"])
+            t = a["faces"][face][tid - len(a["tiles"])] if isface else a["tiles"][tid]
+            pal = pal2 if isface else pal3
             for y in range(8):
                 for x in range(8):
                     img[ty * 8 + y][tx * 8 + x] = pal[(t[y] >> (28 - 4 * x)) & 15]

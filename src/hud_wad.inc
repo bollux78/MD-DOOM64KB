@@ -52,7 +52,8 @@ static void HUDW_LoadTiles(void)
     for (uint16_t t = 0; t < HUDW_NTILES; t++)
         for (uint8_t r = 0; r < 8; r++) *data = hudw_tiles[t][r];
     R22_Unlock(sr);
-    PAL_setColors(48, hudw_pal, 16, CPU);          /* CRAM line 3 belongs to the bar */
+    PAL_setColors(48, hudw_pal, 16, CPU);          /* CRAM line 3: background, digits, keys */
+    PAL_setColors(32, hudw_fpal, 16, CPU);         /* CRAM line 2: faces */
 }
 
 static void HUDW_WriteRows(const HudState *s)
