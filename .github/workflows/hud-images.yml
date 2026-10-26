@@ -1,6 +1,6 @@
-# HUD-WAD: render the original status bar (composed from the IWAD patches) and the current recreation as PNGs and publish them
-# as base64 annotations (artifacts cannot be downloaded through the review proxy). No ROM build, no emulator. Runs under the
-# maintainer's standing authorization; trigger limited to this branch and this file.
+# HUD-WAD: render comparison images from the runner-local IWAD and publish them as base64 annotations (artifacts cannot be
+# downloaded through the review proxy). No ROM build, no emulator. Standing maintainer authorization; trigger limited to this
+# branch and this file. Current job: background dithering study (scripts/lab/hud_bg_dither.py).
 name: HUD-WAD Claudio comparison images (original vs recreated, from the runner IWAD)
 
 on:
@@ -39,13 +39,10 @@ jobs:
           pathlib.Path('scripts').mkdir(exist_ok=True)
           shutil.copyfile(source,'scripts/doom1.wad')
           PY
-          python3 scripts/lab/hud_bg_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-bg-original.png --out-cur dist/img/hud-bg-current.png --b64 dist/img/b64.txt
-          i=0
-          for tag in ORIG CUR; do
-            grep "^$tag " dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/$tag.parts
-            n=$(wc -l < dist/img/$tag.parts); k=0
-            while IFS= read -r part; do
-              k=$((k+1)); echo "::notice title=IMG $tag $k/$n::$part"
-            done < dist/img/$tag.parts
-          done
-# run: background-only images
+          python3 scripts/lab/hud_bg_dither.py --wad scripts/doom1.wad --out dist/img/hud-bg-dither.png --b64 dist/img/b64.txt
+          grep '^ORIG ' dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/ORIG.parts
+          n=$(wc -l < dist/img/ORIG.parts); k=0
+          while IFS= read -r part; do
+            k=$((k+1)); echo "::notice title=IMG ORIG $k/$n::$part"
+          done < dist/img/ORIG.parts
+          [ "$n" -le 10 ] || echo "::warning title=IMG parts::$n parts exceed the 10 annotations per step"

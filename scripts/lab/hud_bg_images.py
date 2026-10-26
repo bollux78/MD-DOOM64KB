@@ -12,6 +12,8 @@ def stbar(lumps, with_arms):
     pal = [tuple(pp[3 * i:3 * i + 3]) for i in range(256)]
     img = [[(0, 0, 0)] * 320 for _ in range(32)]
     for name, x0 in (("STBAR", 0), ("STARMS", 104)) if with_arms else (("STBAR", 0),):
+        if name not in lumps:
+            continue
         w, h, rows = g.decode_patch(lumps[name])
         for y in range(min(h, 32)):
             for x in range(w):
