@@ -1,8 +1,8 @@
 /* R68: per-frame workload log + PC sampler (diagnostic only). See r68_prof.h. */
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 #include <genesis.h>
+#include <string.h>   /* after genesis.h: SGDK string.h needs u16/s32 types first */
 #include "i_system.h"
 #include "globdata.h"
 #include "r68_prof.h"
