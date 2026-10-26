@@ -1,4 +1,4 @@
-# R70-A A/B build, equivalence and timedemo. ACTIVATED (re-triggered after making host-test failures visible) with explicit maintainer authorization (2026-10-26 13:07: "autorizo compilação em todas as branchs e versões sempre").
+# R70-A A/B build, equivalence and timedemo. ACTIVATED (re-triggered: host-test log always published) with explicit maintainer authorization (2026-10-26 13:07: "autorizo compilação em todas as branchs e versões sempre").
 # Only trigger: push of this file on branch exp-claudio-r70a-segloop-20261026 (plus workflow_dispatch). Proposal copy: docs/review-r70/r70a-build.workflow-proposal.yml.
 # Variants: r66-control, r70a1 (LOCALS), r70a2 (INVARIANTS), r70a12 (both). H40, crop 16/16, no R68 instrumentation.
 name: R70-A Claudio A/B build, pixel equivalence and timedemo (BlastEm only)
@@ -138,10 +138,11 @@ jobs:
             python3 $t > dist/r70/HOST-last.txt 2>&1; rc=$?
             cat dist/r70/HOST-last.txt | tee -a dist/r70/HOST.log
             if [ "$rc" -ne 0 ]; then
-              echo "::error title=R70 host test failed: $t (rc=$rc)::$(tail -n 25 dist/r70/HOST-last.txt | enc)"
+              echo "::error title=R70 host test failed::rc=$rc cmd=$t $(tail -n 25 dist/r70/HOST-last.txt | enc)"
               fail=1
             fi
           done
+          echo "::notice title=R70 host test log::$(tail -n 60 dist/r70/HOST.log | enc)"
           exit $fail
 
       - name: Build the four variants, each in its own copy of the checkout

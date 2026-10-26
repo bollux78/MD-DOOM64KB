@@ -140,10 +140,11 @@ jobs:
             python3 $t > dist/r70/HOST-last.txt 2>&1; rc=$?
             cat dist/r70/HOST-last.txt | tee -a dist/r70/HOST.log
             if [ "$rc" -ne 0 ]; then
-              echo "::error title=R70 host test failed: $t (rc=$rc)::$(tail -n 25 dist/r70/HOST-last.txt | enc)"
+              echo "::error title=R70 host test failed::rc=$rc cmd=$t $(tail -n 25 dist/r70/HOST-last.txt | enc)"
               fail=1
             fi
           done
+          echo "::notice title=R70 host test log::$(tail -n 60 dist/r70/HOST.log | enc)"
           exit $fail
 
       - name: Build the four variants, each in its own copy of the checkout
