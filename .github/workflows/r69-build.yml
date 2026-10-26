@@ -1,0 +1,235 @@
+# R69 window-size matrix (diagnostic): R66 PERF control + instrumented PERF at several view windows.
+# Maintainer-authorized: "criar e rodar r69-build.yml na branch exp-claudio-r69-..." (2026-10-26).
+# Triggers: push of this file on exp-claudio-r69-window-matrix-20261026 (one run) and manual dispatch.
+# Own concurrency group, no cancel-in-progress. Max 10,000 emulated frames per BlastEm invocation.
+name: R69 Claudio window-size matrix (BlastEm only)
+
+on:
+  push:
+    branches: [exp-claudio-r69-window-matrix-20261026]
+    paths: ['.github/workflows/r69-build.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: r69-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify intended R68 source and record environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r69
+          expected_branch='exp-claudio-r69-window-matrix-20261026'
+          test "$GITHUB_REF" = "refs/heads/$expected_branch" || { echo "ERROR: dispatch must target $expected_branch"; exit 1; }
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
+          { echo "branch=$GITHUB_REF"; echo "commit=$(git rev-parse HEAD)"; echo "baseline=f5a9daa7a0bd7225bbc227630defc73c67c34f1e"; uname -a; uptime; nproc; } | tee dist/r69/ENV.txt
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1
+          assert f.count('echo "READY: R35 4MiB linear')==1
+          assert f.count('if set -q DOOM_R60_BUILD')==1
+          assert f.count("set defs $defs '-DDOOM_R60_PAIR_ASM'")==1
+          print('R60 fish structure PASS')
+          CHECK
+          echo 'fish syntax PASS'
+
+      - name: Toolchain and Pair-H oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish
+          command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          mkdir -p dist/r69
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r69/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r69/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r69/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          p=pathlib.Path('assets/r18-e1m1.vgm.xz')
+          data=lzma.decompress(p.read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          if not source.is_file():
+              raise SystemExit(f'Missing runner-local shareware WAD: {source}')
+          if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
+              raise SystemExit(f'Invalid runner-local shareware WAD: {source}')
+          target.parent.mkdir(exist_ok=True,parents=True)
+          shutil.copyfile(source,target)
+          print('Pinned shareware WAD verified:',source)
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r69
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r69/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r69/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r69/PREFLIGHT-color-report.json
+
+      - name: Ensure NumPy for Cláudio palettes and microdither
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 -c 'import numpy;print("numpy",numpy.__version__)'; then
+            echo 'NumPy ready'
+          else
+            echo 'NumPy unavailable: provision dependency on runner before dispatch (no dynamic pip install).' >&2
+            exit 1
+          fi
+
+      - name: Preflight Python scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/build_r69.py scripts/lab/r69_summary.py scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r68.py scripts/lab/r68_capture.py scripts/lab/test_r68.py scripts/lab/check_r68_inert.py scripts/lab/r64a_rsp_capture.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: R68 host tests and inertness against the exact R66 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r68.py | tee dist/r69/HOST-test-r68.txt
+          rm -rf "$RUNNER_TEMP/base66" && mkdir -p "$RUNNER_TEMP/base66"
+          git archive f5a9daa7a0bd7225bbc227630defc73c67c34f1e | tar -x -C "$RUNNER_TEMP/base66"
+          python3 scripts/lab/check_r68_inert.py "$RUNNER_TEMP/base66" . | tee dist/r69/HOST-inert-r68.txt
+
+      - name: Build R66 PERF control and seven view-window variants
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          rc=0
+          python3 scripts/lab/build_r69.py 2>&1 | tee dist/r69/BUILD.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+            echo "::error title=R69 build failed (rc=$rc), first error lines::$(grep -nE 'error|Error|undefined reference|No such file|FAIL' dist/r69/BUILD.log | head -n 12 | enc)"
+            echo "::error title=R69 build failed, last 30 lines::$(tail -n 30 dist/r69/BUILD.log | enc)"
+            exit "$rc"
+          fi
+          sha256sum dist/r69/*.bin | tee dist/r69/ROM-SHA256.txt
+
+      - name: Verify BSS, hashes and identical color tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r69')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert len(rows)==7 and len(list(d.glob('*.bin')))==7,len(rows)
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920,r
+              print(r['rom'],r['view'],r['bytes'],'BSS',r['bss_bytes'])
+          base=rows[0]['bss_bytes']
+          assert all(r['bss_bytes']<=base+8 for r in rows[1:])
+          print('PASS 7 ROMs, BSS within +8 B of the R66 control')
+          CHECK
+
+      - name: Require rebuilt R66 ROM byte-identical to the previously measured 7.21 FPS control
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r69/original-control
+
+      - name: Exact original R66 control ROM binary comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp dist/r69/doom-md-r60-r66-perf.bin dist/r69/original-control/doom-md-r60-r66-perf.bin
+          sha256sum dist/r69/doom-md-r60-r66-perf.bin
+          echo 'PASS original R66 ROM reproduced byte for byte.'
+
+      - name: Capture each instrumented window (one BlastEm run each, at most 10000 emulated frames)
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          exe=/home/dan/Projetos/blastem64-1.0.0/blastem
+          test -x "$exe" || { echo "BlastEm missing or not executable: $exe" >&2; exit 1; }
+          fails=0
+          for n in w32-prof w24-prof w16-prof w08-prof w00-prof h32-prof; do
+            echo "== capture $n"
+            python3 scripts/lab/r68_capture.py --blastem "$exe" \
+              --rom dist/r69/doom-md-r60-$n.bin --elf dist/r69/doom-md-r60-$n.elf \
+              --out dist/r69/capture-$n --max-emulated-frames 10000 --timeout 120 2>&1 | tee dist/r69/CAPTURE-$n.log || fails=$((fails+1))
+          done
+          test "$fails" -eq 0
+
+      - name: Window matrix summary
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          python3 scripts/lab/r69_summary.py dist/r69 | tee dist/r69/WINDOW-MATRIX.txt || true
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | head -c 14000; }
+          if [ -f dist/r69/WINDOW-MATRIX.md ]; then
+            echo "::notice title=R69 window matrix::$(cat dist/r69/WINDOW-MATRIX.md | enc)"
+          else
+            echo "::warning title=R69 window matrix::not produced"
+          fi
+          for n in w16-prof w00-prof; do
+            [ -f dist/r69/capture-$n/report.md ] && echo "::notice title=R69 report $n::$(sed -n '1,45p' dist/r69/capture-$n/report.md | enc)"
+          done
+          echo "::notice title=R69 manifest::$(tr -s ' \n' ' ' < dist/r69/MANIFEST.json | enc)"
+          true
+
+      - name: Upload R69 window matrix artifacts (including partial evidence on failure)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r69-window-matrix
+          path: dist/r69/
+          retention-days: 90
+          if-no-files-found: warn
