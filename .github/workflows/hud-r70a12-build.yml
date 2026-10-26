@@ -238,3 +238,4 @@ jobs:
 # rerun: 4-wide centred face on black
 # rerun: transparent digits
 # rerun: per-position big digits
+# rerun: stone margins in H40
