@@ -218,3 +218,4 @@ jobs:
           path: dist/hud/
           retention-days: 90
           if-no-files-found: warn
+# retry after fish flag placement fix

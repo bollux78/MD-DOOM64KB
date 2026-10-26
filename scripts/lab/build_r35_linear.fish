@@ -63,19 +63,6 @@ if set -q DOOM_R52_AB; and test "$DOOM_R52_AB" = 1
             python3 scripts/lab/gen_r57_colormatch.py --header src/r56_tables.h --out src/r56_tables.h --report src/r58_colormatch_report.json; or exit 1
             python3 scripts/lab/test_r56_dual_color.py src/r56_tables.h; or exit 1
         end
-        # Recreated Doom status bar from the user's IWAD (scripts/lab/gen_hud_wad.py writes src/hud_wad_assets.h). Absent = unchanged ROM.
-    if set -q DOOM_HUD_WAD; and test "$DOOM_HUD_WAD" = 1
-        if not contains -- $v pixel4-perf pixel4-play
-            echo 'HUD WAD requires native pixel4'; exit 2
-        end
-        if not test -f src/hud_wad_assets.h
-            echo 'HUD WAD assets missing: run scripts/lab/gen_hud_wad.py --wad doom1.wad --out src/hud_wad_assets.h'; exit 2
-        end
-        if not test "$DOOM_R57_VIEW_MENU" = 1; or not test "$DOOM_R57_NARROW256" = 1; or not test "$DOOM_R57_H32" = 1
-            echo 'HUD WAD requires the R57 H32/H40 view layout'; exit 2
-        end
-        set defs $defs '-DDOOM_HUD_WAD'
-    end
     if set -q DOOM_R59_COLOR_VIEW; and test "$DOOM_R59_COLOR_VIEW" = 1
             if not set -q DOOM_R58_CM_VIEW; or test "$DOOM_R58_CM_VIEW" != 1
                 echo 'R59 requires approved R58 ColorMatch CM6'; exit 2
@@ -712,6 +699,19 @@ for v in $variants
             echo 'R66 requires R64A and R60 PairASM baseline'; exit 2
         end
         set defs $defs '-DDOOM_R66_COLPAIR'
+    end
+        # Recreated Doom status bar from the user's IWAD (scripts/lab/gen_hud_wad.py writes src/hud_wad_assets.h). Absent = unchanged ROM.
+    if set -q DOOM_HUD_WAD; and test "$DOOM_HUD_WAD" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'HUD WAD requires native pixel4'; exit 2
+        end
+        if not test -f src/hud_wad_assets.h
+            echo 'HUD WAD assets missing: run scripts/lab/gen_hud_wad.py --wad doom1.wad --out src/hud_wad_assets.h'; exit 2
+        end
+        if not test "$DOOM_R57_VIEW_MENU" = 1; or not test "$DOOM_R57_NARROW256" = 1; or not test "$DOOM_R57_H32" = 1
+            echo 'HUD WAD requires the R57 H32/H40 view layout'; exit 2
+        end
+        set defs $defs '-DDOOM_HUD_WAD'
     end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
