@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 3) with explicit maintainer authorization after test-only fixes 3bdae48 and 65fa676. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 4) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676 and c3f3fd6. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
