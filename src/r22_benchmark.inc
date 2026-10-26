@@ -82,6 +82,12 @@ void I_BenchmarkReset(void)
 #endif
     R21_ProfStart();
 #endif
+#if defined(DOOM_R68_PROF)
+#if defined(DOOM_R21_PROF)
+#error R68 and R21 profilers both use the HInt vector
+#endif
+    R68_Start();
+#endif
 #if defined(DOOM_R21_STACK_PLAY)
 #if !defined(DOOM_R20_STACKGUARD)
 #error DOOM_R21_STACK_PLAY extends DOOM_R20_STACKGUARD

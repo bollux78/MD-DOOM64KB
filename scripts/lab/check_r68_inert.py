@@ -6,7 +6,7 @@ Usage: check_r68_inert.py BASE_DIR PATCHED_DIR"""
 import re, sys
 from pathlib import Path
 
-FILES = ["src/d_main.c", "src/r_draw.c", "src/p_sight.c", "src/i_genesisv.c", "src/r22_video.inc"]
+FILES = ["src/d_main.c", "src/r_draw.c", "src/p_sight.c", "src/i_genesisv.c", "src/r22_video.inc", "src/r22_benchmark.inc"]
 A = "DOOM_R68_PROF"
 
 
