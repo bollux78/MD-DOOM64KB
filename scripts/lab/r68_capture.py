@@ -26,6 +26,39 @@ LINE_CYCLES = 7670453 / 60.0 / LINES
 PHASES = ["logic", "setup", "bsp+planes", "masked+sprites", "hud+menu", "flip+video"]
 
 
+GROUPS = [  # (group, regex on symbol name); first match wins
+    ("wall kernel (ASM)", r"^R60_WallColumn"),
+    ("wall column C glue", r"^(R_RenderSegLoop|R42_DrawPackedWall|R_DrawSegTextureColumn|R_GetColumn)"),
+    ("flat span/column", r"^(R_DrawColumnFlat|R_DrawSpan|R_MapPlane|R_MakeSpans|R_DoDrawPlane|R_DrawPlanes|R_FreeSkyPatch)"),
+    ("sprite/masked draw", r"^(R_DrawColumnSprite|R_DrawMaskedColumn|R_DrawVisSprite|R_DrawMasked|R_DrawPlayerSprites)"),
+    ("segment setup + geometry", r"^(R_StoreWallRange|R_PointToAngle|R_ScaleFromGlobalAngle|__mulsi3|__udivsi3|__divsi3|__umodsi3|FixedReciprocal|FixedDiv|FixedMul|R_PointToDist)"),
+    ("BSP traversal", r"^(R_AddLine|R_CheckBBox|R_RenderBSPNode|R_RenderBspSubsector|R_ClipWallSegment|R_Subsector|R_CheckOpenings|R_PointOnSide)"),
+    ("sprite project/sort", r"^(R_ProjectSprite|R_AddSprites)"),
+    ("game logic", r"^(P_|G_|A_|T_|M_Random|D_Think|S_)"),
+    ("map streaming", r"^(R23_|R27_|node_read|R2\d_)"),
+]
+
+
+def group_of(name):
+    for g, rx in GROUPS:
+        if re.search(rx, name):
+            return g
+    return "other"
+
+
+def group_table(frames, code, label):
+    h = collections.Counter(); tot = 0
+    for f in frames:
+        for b in f["ring"]:
+            h[group_of(symbolize(code, b * 8))] += 1; tot += 1
+    if not tot:
+        return []
+    rows = ["", "## Function groups: %s (%d samples)" % (label, tot), "", "| group | samples | share |", "|---|---:|---:|"]
+    for g, c in h.most_common():
+        rows.append("| %s | %d | %.1f%% |" % (g, c, 100.0 * c / tot))
+    return rows
+
+
 def mark_lines(m):
     """(vblank << 8 | V counter) -> absolute NTSC lines since the vblank interrupt (vint at line 224)."""
     vb, v = m >> 8, m & 0xFF
@@ -188,6 +221,12 @@ def analyze(frames, code, outdir):
               "| phase | mean lines | mean cycles | share |", "|---|---:|---:|---:|"]
         for i, nme in enumerate(PHASES):
             L.append("| %s | %.1f | %.0f | %.1f%% |" % (nme, P["lines_mean"][i], P["cycles_mean"][i], 100 * P["share"][i]))
+    thirds = [frames[i * n // 3:(i + 1) * n // 3] for i in range(3)] if n >= 30 else []
+    L += group_table(frames, code, "all frames")
+    for i, part in enumerate(thirds):
+        L += group_table(part, code, "demo third %d (tics %d..%d, mean %.1f vb/frame)" % (
+            i + 1, part[0]["tic_start"], part[-1]["tic_end"],
+            sum(f["vb_end"] - f["vb_start"] for f in part) / len(part)))
     L += ["", "## Mean workload per frame", ""]
     L += ["- %s: %.1f" % (k, v) for k, v in res["mean_counters"].items()]
     if res["fit"]:
