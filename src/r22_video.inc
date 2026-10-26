@@ -767,7 +767,11 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     const uint8_t *r52fast=R52_LUT(colormap,(uint16_t)(x&1u));
     if(r52fast){r52map=r52fast;colormap=0;}
 #endif
+    #if defined(DOOM_R71_OFS)
     uint8_t *dst=R71_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
+#else
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
+#endif
     int16_t remaining=(int16_t)(y1-first+1);
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(remaining);
@@ -986,7 +990,11 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     uint8_t sample=(uint8_t)(r52map[c]&15u);
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
+    #if defined(DOOM_R71_OFS)
     uint8_t *dst=R71_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+#else
+    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+#endif
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(y1-y0+1);
 #if defined(DOOM_R49_COLORMIX)
