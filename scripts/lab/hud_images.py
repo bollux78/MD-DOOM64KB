@@ -86,6 +86,7 @@ def main():
         c += g.render_rows_rgb(assets, g.model_rows(assets, s), s["face"], 1) + gap(256)
     do, dc = indexed_png(a.out_orig, o), indexed_png(a.out_cur, c)
     print("orig.png", len(do), "bytes; cur.png", len(dc), "bytes")
+    print("HUD tiles:", len(assets["tiles"]), "static +", 16, "face slot; free VRAM range allows", 1440 - 800)
     if a.b64:
         open(a.b64, "w").write("ORIG " + base64.b64encode(do).decode() + "\nCUR " + base64.b64encode(dc).decode() + "\n")
 

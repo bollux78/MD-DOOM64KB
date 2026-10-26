@@ -367,14 +367,15 @@ def build_assets(lumps):
     def comp_tile(tx, ty, sprites):
         """The dithered bar cell (tx, ty) with sprites given in bar pixels drawn over it."""
         return over(tile_of(bar, tx, ty), [(img, sx - tx * 8, sy - ty * 8) for img, sx, sy in sprites])
-    # Big digits sit over ONE stone tile per tile row (taken from the HEALTH panel, above its label), so a digit tile is the same for every
-    # position and widget: 10 digits x 3 rows + percent, not one per position. Digits are drawn BIG_Y px below the top of the bar.
+    # Big digits are drawn BIG_Y px below the top of the bar. The ammo table (small digits) sits over one stone tile per row (taken from the
+    # HEALTH panel, above its label): a clean dark panel, the labels of the original table are not kept.
     BY = L["BIG_Y"]
     assert BY + 16 <= 24
     stone = [tile_of(bar, L["HEALTH_C"] + 1, min(r, 1)) for r in range(4)]
-    ids["stone"] = [add(stone[r]) for r in range(3)]
-    ids["big"] = [[add(over(stone[r], [(im["big"][d], 0, BY - 8 * r)])) for r in range(3)] for d in range(10)]     # [digit][row]
-    ids["pct"] = [add(over(stone[r], [(im["big"]["%"], 0, BY - 8 * r)])) for r in range(3)]
+    # One tile per (widget, position, tile row, digit): the glyph over THAT cell of the dithered bar, so the original texture shows through.
+    ids["big"] = [[[[add(comp_tile(c0 + i, r, [(im["big"][d], (c0 + i) * 8, BY)])) for d in range(10)] for r in range(3)]
+                   for i in range(3)] for c0 in (L["AMMO_C"], L["HEALTH_C"], L["ARMOR_C"])]            # [widget][position][row][digit]
+    ids["pct"] = [[add(comp_tile(c0 + 3, r, [(im["big"]["%"], (c0 + 3) * 8, BY)])) for r in range(3)] for c0 in (L["HEALTH_C"], L["ARMOR_C"])]
     # Boolean widgets over the real bar cells: the six ARMS digits (grey = not owned, yellow = owned), centred on the boxes of the STARMS
     # plate (original digit at x = 111 + 12 i, y = 4 + 10 j, bar squeezed 0.8), and the three key cards (nothing / card) at x = 239, y = 3 + 10 k.
     widgets = []
@@ -418,10 +419,6 @@ def build_assets(lumps):
     n_dynamic = len(tiles_rgb)
     bg_ids = [[0] * COLS for _ in range(ROWS)]
     over_cells = {}                                       # cells whose background is a shared stone tile
-    for c0 in (L["AMMO_C"], L["HEALTH_C"], L["ARMOR_C"]):
-        for i in range(4):
-            for r in range(3):
-                over_cells[(c0 + i, r)] = stone[r]
     for t in range(4):
         for i in range(6):
             over_cells[(L["TABLE_C"] + i, t)] = stone[t]
@@ -479,8 +476,8 @@ def emit_header(a):
     o.append("#define HUDW_NTILES %d" % len(a["tiles"]))
     o.append("#define HUDW_NFACES %d" % len(a["faces"]))
     nest = lambda x: "{" + ",".join(nest(e) if isinstance(e, list) else str(e) for e in x) + "}"
-    o.append("static const uint16_t hudw_big[10][3] = %s;   /* [digit][tile row]: glyph over the shared stone tile */" % nest(ids["big"]))
-    o.append("static const uint16_t hudw_pct[3] = %s;" % nest(ids["pct"]))
+    o.append("static const uint16_t hudw_big[3][3][3][10] = %s;   /* [ammo,health,armor][position][tile row][digit] */" % nest(ids["big"]))
+    o.append("static const uint16_t hudw_pct[2][3] = %s;          /* [health,armor][tile row] */" % nest(ids["pct"]))
     o.append("static const uint16_t hudw_ysm[4][10] = %s;   /* ammo table: [row][digit] */" % nest(ids["ysm"]))
     o.append("static const uint16_t hudw_blank_small[4] = %s;" % nest(ids["blank_small"]))
     wc = ids["wid"]
@@ -517,20 +514,20 @@ def model_rows(a, st):
     """st: dict(health, armor, ammo_r (-1 none), ammo[4], maxammo[4], arms (6-bit), keys (3-bit), face). -> 4 rows of 32 tile ids."""
     L, ids = LAYOUT, a["ids"]
     rows = [list(r) for r in a["bgmap"]]
-    def big3(c0, v, pct):
+    def big3(w, c0, v, pct):
         v = max(0, min(999, v))
         digs = [v // 100, v // 10 % 10, v % 10]
         lead = [v >= 100, v >= 10, True]
         for r in range(3):
             for i in range(3):
                 if lead[i]:
-                    rows[r][c0 + i] = ids["big"][digs[i]][r]
+                    rows[r][c0 + i] = ids["big"][w][i][r][digs[i]]
             if pct:
-                rows[r][c0 + 3] = ids["pct"][r]
+                rows[r][c0 + 3] = ids["pct"][w - 1][r]
     if st["ammo_r"] >= 0:
-        big3(L["AMMO_C"], st["ammo_r"], False)
-    big3(L["HEALTH_C"], st["health"], True)
-    big3(L["ARMOR_C"], st["armor"], True)
+        big3(0, L["AMMO_C"], st["ammo_r"], False)
+    big3(1, L["HEALTH_C"], st["health"], True)
+    big3(2, L["ARMOR_C"], st["armor"], True)
     mask = st["arms"] | (st["keys"] << 6)
     for c in ids["wid"]:
         v = (mask >> c["b0"] & 1) | ((mask >> c["b1"] & 1) << 1 if c["b1"] != 255 else 0)
