@@ -143,7 +143,13 @@ def test_compare(tmp):
     assert r["best_pixel_identical"] == "a1"
     md = (tmp / "out/REPORT.md").read_text()
     assert "PIXEL DIFFERENCES" in md and "a third of the demo got slower" in md and "tic 7" in md
-    print("compare report OK (speedup, pixel diffs located, regression flag, repeat determinism)")
+    # only regressing pixel-identical candidates: nothing may be called "fastest"
+    synth(tmp / "c2", lambda t: 10 + (t % 4)); synth(tmp / "slow", lambda t: 11 + (t % 4))
+    cmp.main(tmp / "out2", ["ctl=%s" % (tmp / "c2"), "slow=%s" % (tmp / "slow")])
+    r2 = json.loads((tmp / "out2/summary.json").read_text())
+    md2 = (tmp / "out2/REPORT.md").read_text()
+    assert r2["best_pixel_identical"] is None and "Fastest pixel-identical" not in md2 and "none is called fastest" in md2, md2[-400:]
+    print("compare report OK (speedup, pixel diffs located, regression flag, repeat determinism, no 'fastest' for a regression)")
 
 
 if __name__ == "__main__":

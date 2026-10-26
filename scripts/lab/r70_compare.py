@@ -130,12 +130,18 @@ def main(out, specs):
         if any(x > 0.5 for x in v["thirds_pct"]): flag.append("a third of the demo got slower by more than 0.5%")
         L.append("- `%s`: %+.2f%% vblanks vs control, thirds %s; %s" % (
             l, v["delta_pct"], " / ".join("%+.2f%%" % x for x in v["thirds_pct"]), "; ".join(flag) if flag else "no visual difference, no third regressed"))
-    if ok:
-        best = min(ok, key=lambda l: res["variants"][l]["total_vb"])
+    faster = [l for l in ok if res["variants"][l]["delta_pct"] < 0]       # pixel-identical AND strictly faster than the control
+    if faster:
+        best = min(faster, key=lambda l: res["variants"][l]["total_vb"])
         res["best_pixel_identical"] = best
         L.append("")
         L.append("Fastest pixel-identical variant on this capture: `%s` (%+.2f%%). Combinations are not preferred by default: "
-                 "if A1 or A2 alone beats A12, that one is the candidate." % (best, res["variants"][best]["delta_pct"]))
+                 "if one component alone beats the combination, that one is the candidate." % (best, res["variants"][best]["delta_pct"]))
+    else:
+        res["best_pixel_identical"] = None
+        L.append("")
+        L.append("No variant is both pixel-identical and faster than the control (delta < 0); none is called fastest. "
+                 "Pixel-identical but not faster: %s." % (", ".join("`%s` (%+.2f%%)" % (l, res["variants"][l]["delta_pct"]) for l in ok) or "none"))
     (out / "REPORT.md").write_text("\n".join(L) + "\n")
     (out / "summary.json").write_text(json.dumps(res, indent=1))
     print("\n".join(L))
