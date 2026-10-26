@@ -161,7 +161,7 @@ jobs:
           fi
           sha256sum dist/r70/*.bin | tee dist/r70/ROM-SHA256.txt
 
-      - name: Verify manifest (2 ROMs, sizes, BSS, hashes)
+      - name: Verify manifest (control and A12 present, sizes, BSS, hashes)
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +169,7 @@ jobs:
           import hashlib,json,pathlib
           d=pathlib.Path('dist/r70')
           rows=json.loads((d/'MANIFEST.json').read_text())
-          assert [r['variant'] for r in rows]==['r66-control','r70a12'] and len(list(d.glob('*.bin')))==2
+          assert {'r66-control','r70a12'} <= {r['variant'] for r in rows}, rows
           lines=['| variant | ROM bytes | BSS bytes | SHA-256 |','|---|---:|---:|---|']
           for r in rows:
               b=(d/r['rom']).read_bytes()
@@ -234,6 +234,20 @@ jobs:
           for f in dist/r70/doom-md-r60-r70a12.bin dist/r70/doom-md-r60-r70a12.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)"; exit 0; }; done
           python3 scripts/lab/r71_pcsample.py --blastem "$BLASTEM" --label r70a12 --rom dist/r70/doom-md-r60-r70a12.bin --elf dist/r70/doom-md-r60-r70a12.elf --out dist/r71/pc/r70a12 --lines 16 --max-samples 450000 --stop-tic 2134 --max-seconds 3000 2>&1 | tee dist/r71/pc-r70a12.log
           python3 scripts/lab/r71_asm_report.py --objdump "$OBJDUMP" --elf dist/r70/doom-md-r60-r70a12.elf --samples dist/r71/pc/r70a12/samples.json --out dist/r71/report-r70a12 --label r70a12 --top-funcs 30 --top-blocks 28 > dist/r71/report-r70a12.log 2>&1
+
+      - name: Static disassembly of the hot wall path (control and A12)
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          for v in r66-perf r70a12; do [ -s "dist/r70/doom-md-r60-$v.elf" ] || { echo "SKIPPED - build/capture unavailable ($v)"; exit 0; }; done
+          python3 scripts/lab/r70_disasm_compare.py --objdump "$OBJDUMP" --func R42_DrawPackedWall,R_DrawSegTextureColumn,R_DrawColumnWall,R_GetColumn,R64A_FrameBegin,R_StoreWallRange,R_Subsector,R_ScaleFromGlobalAngle dist/r71/disasm r66-control=dist/r70/doom-md-r60-r66-perf.elf r70a12=dist/r70/doom-md-r60-r70a12.elf > dist/r71/disasm.log 2>&1 || true
+          python3 scripts/lab/r71_annotate.py --title "R71 static counts" --file dist/r71/disasm/DISASM-COMPARE.md --chunk 12000 --max 3
+          for f in R42_DrawPackedWall R_DrawSegTextureColumn R_DrawColumnWall; do
+            g="dist/r71/disasm/disasm-r66-control-$f.txt"; [ -f "$g" ] && python3 scripts/lab/r71_annotate.py --title "R71 control asm $f" --file "$g" --chunk 12000 --max 3
+          done
+          exit 0
 
       - name: Publish A12 profile (annotations part 1)
         if: always()

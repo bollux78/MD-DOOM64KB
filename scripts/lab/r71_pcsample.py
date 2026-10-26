@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """R71 PC sampler for an UNINSTRUMENTED ROM (BlastEm GDB RSP, no ROM change).
 
-The ROM is not modified. After the first rendered frame the host enables the VDP horizontal interrupt by writing the
-VDP control port through the RSP memory-write packet (register 0 bit 4, register 10 = LINES-1), puts a breakpoint on
-the address stored in the HInt vector (0x70) and, at every hit, reads the interrupted PC from the 68000 exception
-frame ([A7+2]). The emulated CPU is stopped while the host reads, so the emulated timeline is not perturbed except by
+The ROM file is not modified. After the first rendered frame the host enables the VDP horizontal interrupt (register 0\nbit 4, register 10 = LINES-1) by running a 22-byte snippet it writes to RAM (see inject_vdp_writes), puts breakpoints on\nthe addresses stored in the HInt (0x70) and VInt (0x78) vectors and, at every hit, reads the interrupted PC from the 68000\nexception frame ([A7+2]). The emulated CPU is stopped while the host reads, so the emulated timeline is not perturbed except by
 the (short) HInt service routine itself. Output: histogram of interrupted PCs.
 
 Known biases (same as R68, which sampled with an in-ROM HInt handler): HInt fires only on active display lines, so
@@ -23,35 +20,57 @@ def load_rsp():
     return mod
 
 
-def vdp_write(g, word):
-    """16-bit write to the VDP control port (0xC00004) through the RSP memory-write packet."""
-    r = g.req("M%x,2:%04x" % (0xC00004, word & 0xffff))
+def inject_vdp_writes(g, words, resume_pc, sp, regs_hex):
+    """The RSP memory-write packet writes BYTES, and a byte write to the VDP control port is duplicated into both halves of the
+    word (0x80,0x14 -> 0x8080,0x1414), so the VDP cannot be programmed that way. Instead a 68000 snippet
+    (move.w #w,$C00004 ... ; jmp resume_pc) is written to RAM below the stack and the PC is redirected to it. Called at
+    a function entry (I_FinishUpdate), where CCR is dead. Returns the snippet address."""
+    code = b""
+    for w in words:
+        code += bytes([0x33, 0xFC]) + (w & 0xffff).to_bytes(2, "big") + (0x00C00004).to_bytes(4, "big")   # move.w #w,$00C00004.l
+    code += bytes([0x4E, 0xF9]) + resume_pc.to_bytes(4, "big")                                               # jmp resume_pc.l
+    snippet = (sp - 0x400) & ~1
+    r = g.req("M%x,%x:%s" % (snippet, len(code), code.hex()))
     if r != "OK":
-        raise RuntimeError("VDP write %04x refused: %r" % (word, r))
+        raise RuntimeError("snippet write refused: %r" % r)
+    new_regs = regs_hex[:17 * 8] + "%08x" % snippet + regs_hex[18 * 8:]
+    r = g.req("G" + new_regs)
+    if r != "OK":                                  # fall back to the single-register write (PC is register 0x11)
+        r2 = g.req("P11=%08x" % snippet)
+        if r2 != "OK":
+            raise RuntimeError("cannot redirect PC: G -> %r, P -> %r" % (r, r2))
+    return snippet
 
 
 def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_seconds=1500, log=print):
-    """g needs req/cont/readmem. Returns (hist, meta)."""
+    """g needs req/cont/readmem. Samples the interrupted PC at every horizontal interrupt (hist) and, as a fallback and
+    cross-check, at every vertical interrupt (vhist, 60 Hz, phase-locked to the frame so biased). Returns (hist, vhist, meta)."""
     t0 = time.monotonic()
     g.req("qSupported")
     ifu = syms["I_FinishUpdate"]
     assert g.req("Z0,%x,2" % ifu) == "OK"
     g.cont()                                   # first rendered frame: the game is running
     assert g.req("z0,%x,2" % ifu) == "OK"
-    vec = int.from_bytes(g.readmem(0x70, 4), "big")
-    log("HInt vector (0x70) -> %#x" % vec)
+    hvec = int.from_bytes(g.readmem(0x70, 4), "big")
+    vvec = int.from_bytes(g.readmem(0x78, 4), "big")
+    log("HInt vector (0x70) -> %#x, VInt vector (0x78) -> %#x" % (hvec, vvec))
     reg0 = 0x04
     for name in ("regValues", "_regValues"):
         if name in syms:
             reg0 = g.readmem(syms[name], 1)[0]
             log("VDP shadow register 0 = %#04x (%s)" % (reg0, name)); break
-    vdp_write(g, 0x8000 | (reg0 | 0x10))       # reg 0: horizontal interrupt enable
-    vdp_write(g, 0x8A00 | ((lines - 1) & 0xff))  # reg 10: HInt every `lines` lines
-    assert g.req("Z0,%x,2" % vec) == "OK"
-    hist, meta = {}, {"vector": vec, "lines": lines, "samples": 0, "invalid_sp": 0, "status": "max_samples",
-                      "tic_first": None, "tic_last": None, "regs_len": None}
-    last_tic = 0
-    started = False
+    assert g.req("Z0,%x,2" % hvec) == "OK"
+    if vvec != hvec:
+        assert g.req("Z0,%x,2" % vvec) == "OK"
+    regs = g.req("g")
+    sp = int(regs[15 * 8:16 * 8], 16)
+    pc0 = int(regs[17 * 8:18 * 8], 16)
+    snippet = inject_vdp_writes(g, [0x8000 | (reg0 | 0x10), 0x8A00 | ((lines - 1) & 0xff)], pc0, sp, regs)
+    log("VDP snippet at %#x, resume %#x" % (snippet, pc0))
+    hist, vhist = {}, {}
+    meta = {"hint_vector": hvec, "vint_vector": vvec, "lines": lines, "hint_samples": 0, "vint_samples": 0, "invalid_sp": 0,
+            "status": "max_samples", "tic_first": None, "tic_last": None, "regs_len": None, "stops": 0}
+    last_tic, started = 0, False
     for n in range(max_samples):
         try:
             g.cont()
@@ -60,15 +79,16 @@ def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_second
                 meta["status"] = "emulator_ended"; break
             raise
         except TimeoutError:
-            meta["status"] = "no_hint_within_timeout"; break
+            meta["status"] = "timeout_no_stop"; break
+        meta["stops"] += 1
         regs = g.req("g")
         meta["regs_len"] = len(regs)
         if len(regs) < 18 * 8:
             raise RuntimeError("unexpected 'g' reply length %d: %r" % (len(regs), regs[:60]))
         a7 = int(regs[15 * 8:16 * 8], 16)
         pc_here = int(regs[17 * 8:18 * 8], 16)
-        if n < 3:
-            log("sample %d: regs pc=%#x (vector %#x) a7=%#x" % (n, pc_here, vec, a7))
+        if n < 4:
+            log("stop %d: pc=%#x a7=%#x" % (n, pc_here, a7))
         if a7 & 1 or a7 < 0xE00000 or a7 > 0x1000000:
             meta["invalid_sp"] += 1
             continue
@@ -87,10 +107,12 @@ def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_second
                 meta["status"] = "max_seconds"; break
         if not started:
             continue
-        hist[pc] = hist.get(pc, 0) + 1
-        meta["samples"] += 1
+        if pc_here == hvec:
+            hist[pc] = hist.get(pc, 0) + 1; meta["hint_samples"] += 1
+        else:
+            vhist[pc] = vhist.get(pc, 0) + 1; meta["vint_samples"] += 1
     meta["seconds"] = round(time.monotonic() - t0, 1)
-    return hist, meta
+    return hist, vhist, meta
 
 
 def main():
@@ -108,13 +130,16 @@ def main():
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     g = mod.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     try:
-        hist, meta = sample_loop(g, syms, a.lines, a.max_samples, a.stop_tic, a.max_seconds)
+        hist, vhist, meta = sample_loop(g, syms, a.lines, a.max_samples, a.stop_tic, a.max_seconds)
     finally:
         g.close()
     meta["label"] = a.label
-    (out / "samples.json").write_text(json.dumps({"meta": meta, "hist": {"%x" % k: v for k, v in sorted(hist.items())}}))
+    use_v = meta["hint_samples"] < 1000            # HInt did not work: the (biased) VInt histogram is all we have
+    meta["profile_source"] = "vint" if use_v else "hint"
+    (out / "samples.json").write_text(json.dumps({"meta": meta, "hist": {"%x" % k: v for k, v in sorted((vhist if use_v else hist).items())},
+                                                  "vint_hist": {"%x" % k: v for k, v in sorted(vhist.items())}}))
     print(json.dumps(meta))
-    return 0 if meta["samples"] > 1000 else 3
+    return 0 if (meta["vint_samples"] if use_v else meta["hint_samples"]) > 1000 else 3
 
 
 if __name__ == "__main__":

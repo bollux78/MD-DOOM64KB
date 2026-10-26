@@ -27,7 +27,7 @@ class FakeRSP:
     def req(self, c):
         self.log.append(c)
         if c == "qSupported": return "PacketSize=1000"
-        if c.startswith(("Z0", "z0", "M")): return "OK"
+        if c.startswith(("Z0", "z0", "M", "G")): return "OK"
         if c == "g":
             return "".join("%08x" % v for v in [0] * 15 + [0xFFFF00, 0x2700, 0x300])
         raise AssertionError(c)
@@ -35,6 +35,7 @@ class FakeRSP:
         self.n += 1; return "S05"
     def readmem(self, addr, n):
         if addr == 0x70: return (0x300).to_bytes(4, "big")
+        if addr == 0x78: return (0x400).to_bytes(4, "big")
         if addr == 0xFFFF00 + 2: return [0x108, 0x10a, 0x108, 0x112][self.n % 4].to_bytes(4, "big")
         if addr == 0xFF0000: return (self.n // 100 + 1).to_bytes(4, "big")
         raise AssertionError(hex(addr))
@@ -42,11 +43,13 @@ class FakeRSP:
 
 def main():
     g = FakeRSP()
-    hist, meta = S.sample_loop(g, {"I_FinishUpdate": 0x200, "_g_gametic": 0xFF0000}, lines=16, max_samples=5000, stop_tic=20, log=lambda *a: None)
+    hist, vhist, meta = S.sample_loop(g, {"I_FinishUpdate": 0x200, "_g_gametic": 0xFF0000}, lines=16, max_samples=5000, stop_tic=20, log=lambda *a: None)
     assert meta["status"] == "demo_end", meta
-    assert meta["samples"] > 1000 and sum(hist.values()) == meta["samples"], meta
-    assert any(c.startswith("M") and "8014" in c for c in g.log) and any("8a0f" in c for c in g.log), g.log[:12]
-    assert "Z0,300,2" in g.log, "breakpoint on the HInt vector target"
+    assert meta["hint_samples"] > 1000 and sum(hist.values()) == meta["hint_samples"], meta
+    snip = [c for c in g.log if c.startswith("M") and "33fc8014" in c.replace(" ", "")]
+    assert snip and "33fc8a0f00c00004" in snip[0] and snip[0].endswith("4ef9" + "%08x" % 0x300), snip
+    assert any(c.startswith("G") and c[1 + 17 * 8:1 + 18 * 8] != "00000300" for c in g.log), "PC redirected to the snippet"
+    assert "Z0,300,2" in g.log and "Z0,400,2" in g.log, "breakpoints on both interrupt vectors"
     funcs, per_fn, heat, total, outside = R.build(OBJ, hist)
     assert per_fn["hot_fn"] + per_fn["cold_fn"] == total and not outside and per_fn["hot_fn"] > per_fn["cold_fn"]
     md, js = R.report("synthetic", funcs, per_fn, heat, total, outside)
