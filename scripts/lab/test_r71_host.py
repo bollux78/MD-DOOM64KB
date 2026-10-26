@@ -81,8 +81,8 @@ static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22
 static uint8_t r22_color[256], walls_even[256], walls_odd[256];
 static uint8_t cmem[8192+256],outside_cm[256],sourcebuf[128],composed[2][8192];
 static const uint8_t *fullcolormap=cmem;
-typedef struct {const uint8_t *wall_even,*wall_odd;} mode_t;
-static mode_t mode={walls_even,walls_odd};
+typedef struct {const uint8_t *wall_even,*wall_odd;} r71_mode_t;
+static r71_mode_t mode={walls_even,walls_odd};
 #define R59_CURRENT mode
 static inline const r64a_ctx_t *R64A_Get(r64a_ctx_t *tmp) {
     if(r64a_ctx.comp[0]) return &r64a_ctx;
