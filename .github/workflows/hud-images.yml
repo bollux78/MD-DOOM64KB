@@ -39,7 +39,7 @@ jobs:
           pathlib.Path('scripts').mkdir(exist_ok=True)
           shutil.copyfile(source,'scripts/doom1.wad')
           PY
-          python3 scripts/lab/hud_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-original.png --out-cur dist/img/hud-current.png --b64 dist/img/b64.txt
+          python3 scripts/lab/hud_bg_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-bg-original.png --out-cur dist/img/hud-bg-current.png --b64 dist/img/b64.txt
           i=0
           for tag in ORIG CUR; do
             grep "^$tag " dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/$tag.parts
@@ -48,3 +48,4 @@ jobs:
               k=$((k+1)); echo "::notice title=IMG $tag $k/$n::$part"
             done < dist/img/$tag.parts
           done
+# run: background-only images
