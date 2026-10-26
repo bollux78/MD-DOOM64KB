@@ -1,6 +1,6 @@
 # R70-A — R_RenderSegLoop (sem perda visual)
 
-Branch `exp-claudio-r70a-segloop-20261026`, base R66 `f5a9daa` (imutável). Estado: **código + testes host prontos; nenhuma ROM compilada**.
+Branch `exp-claudio-r70a-segloop-20261026`, base R66 `f5a9daa` (imutável). Estado: **código + testes host + proposta de workflow A/B prontos; nada ativado, nenhuma ROM compilada**.
 
 ## O que muda (duas etapas, cada uma com sua flag)
 - **A1** `DOOM_R70A_LOCALS=1` → liga o `DOOM_R21_SEGLOOP_LOCALS` que já existia no código (R21 N3) e nunca foi medido no R66. Estado do laço
@@ -35,3 +35,25 @@ Branch `exp-claudio-r70a-segloop-20261026`, base R66 `f5a9daa` (imutável). Esta
 Compilação A/B **não instrumentada**, 4 ROMs a partir deste commit, todas com `DOOM_R57_VIEW_*` do R66 (H40 16/16):
 `r66-control`, `r70a1` (LOCALS), `r70a2` (INVARIANTS), `r70a12`. Verificar: controle byte a byte igual ao R66 original, tamanho da ROM e BSS
 de cada uma; depois timedemo completo no BlastEm (mesma ordem de captura da R66), e hash de frame para provar pixel idêntico.
+
+
+## Preparação da A/B (aprovada pelo ChatGPT para preparo; execução aguarda o mantenedor)
+- Proposta de workflow (INATIVA, fora de `.github/workflows`): `docs/review-r70/r70a-build.workflow-proposal.yml`.
+  Ativação = copiar para `.github/workflows/r70a-build.yml` nesta branch e commitar (único gatilho: push desse arquivo nesta branch; também `workflow_dispatch`).
+- `scripts/lab/build_r70.py`: 4 ROMs (`r66-perf` = controle, `r70a1`, `r70a2`, `r70a12`), H40 crop 16/16, sem R68. Cada variante é compilada numa cópia própria do checkout
+  (`R70_WORK`), sem resíduos compartilhados. O controle usa o nome de build `r66-perf` porque o nome vira `DOOM_BUILD_ID` na ROM e o `cmp` contra o original exige bytes idênticos.
+  Verificações: flags = controle + só as próprias, paletas idênticas, BSS <= 57.920 B, ROM <= 4 MiB, símbolos de captura presentes.
+- Workflow: checkout, ancestral `f5a9daa`, testes host (equivalência do laço, ferramentas, inércia), build, manifesto (tamanho, BSS, SHA-256), disassembly comparativo,
+  `cmp` do controle com o run 40231459814 (falha o workflow se diferente), 5 capturas de timedemo (controle, A1, A2, A12, repetição do controle),
+  comparação, anotações e artifact `doom-md-r70a-ab` (`if: always()`).
+- `scripts/lab/r70_capture.py`: BlastEm via RSP, breakpoint em `I_FinishUpdate`, grava tic, vblank e o framebuffer real do renderizador (3344 B, SHA-256 e bytes brutos).
+  O teto de 10.000 quadros foi retirado pelo mantenedor: captura a DEMO3 inteira e para ao fim da demo.
+- `scripts/lab/r70_compare.py`: casa quadros por tic; compara pixels (lista posição e diferença máxima), tempo por quadro (média, p50, p90, terços da demo, mais rápido/igual/mais lento),
+  determinismo do controle repetido; marca regressão em qualquer terço > +0,5% e indica a variante pixel-idêntica mais rápida (não força A12).
+- `scripts/lab/r70_disasm_compare.py`: listagem completa e contagem estática (instruções, bytes, acessos à memória absolutos/frame/indiretos, chamadas, mul/div, movem) de
+  `R_RenderSegLoop` e `R_StoreWallRange` (o primeiro pode estar inlinado pelo LTO); inclui os sufixos `.lto_priv/.isra/.part`.
+- Testes: `test_r70_tools.py` (parser, captura com RSP simulado, relatório de comparação) e `test_r70a_segloop.py`.
+
+## Limites
+- A comparação de pixels usa o framebuffer do renderizador (`r22_fb`, 76x44), antes do envio ao VDP; não cobre HUD nem a paleta/VDP.
+- A medição é do BlastEm (resolução de um vblank por quadro, agregada em ~2.100 quadros); o Mega Drive real continua sendo a referência final.
