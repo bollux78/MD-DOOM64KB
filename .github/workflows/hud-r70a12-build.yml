@@ -1,0 +1,234 @@
+# HUD-WAD on R70-A12: recreated Doom status bar from the user's IWAD. A12 control + HUD variants, built on the runner under the maintainer's standing authorization
+# ("autorizo compilação em todas as branchs e versões sempre"). Push trigger limited to this branch and this file; no other trigger.
+name: HUD-WAD R70-A12 Claudio recreated Doom status bar (A12 perf/play/HUD ROMs, BlastEm)
+
+on:
+  push:
+    branches: [exp-claudio-hud-r70a12-20261026]
+    paths:
+      - '.github/workflows/hud-r70a12-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hud-r70a12-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+
+jobs:
+  hud-wad:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify branch and R66 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/hud
+          test "$GITHUB_REF" = "refs/heads/exp-claudio-hud-r70a12-20261026" || { echo "ERROR: wrong branch"; exit 1; }
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
+          { echo "commit=$(git rev-parse HEAD)"; uname -a; nproc; } | tee dist/hud/ENV.txt
+
+      - name: Preflight fish syntax and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1 and f.count("set defs $defs '-DDOOM_HUD_WAD'")==1
+          print('fish structure PASS')
+          CHECK
+          command -v python3; command -v gcc
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"; test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"; test -x "$BLASTEM"
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          if not source.is_file():
+              raise SystemExit(f'Missing runner-local shareware WAD: {source}')
+          if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
+              raise SystemExit(f'Invalid runner-local shareware WAD: {source}')
+          target.parent.mkdir(exist_ok=True,parents=True)
+          shutil.copyfile(source,target)
+          print('Pinned shareware WAD verified:',source)
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/hud/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/hud/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/hud/PREFLIGHT-color-report.json
+          python3 -c 'import numpy;print("numpy",numpy.__version__)'
+
+      - name: Host tests (HUD converter, C-vs-Python compositor, comparator)
+        shell: bash
+        run: |
+          set +e
+          set -u
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+          fail=0
+          for t in scripts/lab/test_gen_hud_wad.py scripts/lab/test_hud_wad_logic.py scripts/lab/test_r70_tools.py; do
+            echo "== $t" | tee -a dist/hud/HOST.log
+            python3 $t > dist/hud/HOST-last.txt 2>&1; rc=$?
+            cat dist/hud/HOST-last.txt | tee -a dist/hud/HOST.log
+            if [ "$rc" -ne 0 ]; then echo "::error title=host test failed::rc=$rc $t $(tail -n 25 dist/hud/HOST-last.txt | enc)"; fail=1; fi
+          done
+          exit $fail
+
+      - name: Generate HUD assets from the pinned IWAD (not committed) and preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png | tee dist/hud/HUD-ASSETS.log
+          sha256sum src/hud_wad_assets.h dist/hud/hud-preview.png | tee -a dist/hud/HUD-ASSETS.log
+          echo "::notice title=HUD assets::$(sed 's/%/%25/g' dist/hud/HUD-ASSETS.log | awk '{printf "%s%%0A",$0}')"
+
+      - name: Build control and HUD variants, each in its own copy of the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          export HUD_WORK="$RUNNER_TEMP/hud-work-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rc=0
+          python3 scripts/lab/build_hud_r70a12.py 2>&1 | tee dist/hud/BUILD.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+            echo "::error title=HUD build failed (rc=$rc), first error lines::$(grep -nE 'error|Error|undefined reference|No such file|FAIL|Assertion' dist/hud/BUILD.log | head -n 14 | enc)"
+            echo "::error title=HUD build failed, last 30 lines::$(tail -n 30 dist/hud/BUILD.log | enc)"
+            exit "$rc"
+          fi
+          sha256sum dist/hud/*.bin | tee dist/hud/ROM-SHA256.txt
+
+      - name: Verify manifest (sizes, BSS, hashes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/hud')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert [r['variant'] for r in rows]==['a12-control','a12-play-control','r70a12-hud-perf','r70a12-hud-play'], rows
+          lines=['| variant | ROM bytes | BSS bytes | SHA-256 |','|---|---:|---:|---|']
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert len(b)<=4*1024*1024,r
+              lines.append('| %s | %d | %d | %s |'%(r['variant'],r['bytes'],r['bss_bytes'],r['sha256']))
+          bss={r['variant']:r['bss_bytes'] for r in rows}
+          lines.append('')
+          lines.append('BSS added by the HUD: PERF %+d B, PLAY %+d B'%(bss['r70a12-hud-perf']-bss['a12-control'],bss['r70a12-hud-play']-bss['a12-play-control']))
+          (d/'ROM-TABLE.md').write_text('\n'.join(lines)+'\n'); print('\n'.join(lines))
+          import subprocess,os
+          nm=os.path.expanduser('~/mars/m68k-elf/bin/m68k-elf-nm')
+          def syms(stem):
+              out=subprocess.run([nm,'-S','-t','d',str(d/('doom-md-r60-'+stem+'.elf'))],capture_output=True,text=True,check=True).stdout
+              return {l.split()[3]:int(l.split()[1]) for l in out.splitlines() if len(l.split())==4 and l.split()[2] in 'bB'}
+          a,b2=syms('r70a12-play'),syms('r70a12-hud-play')
+          diff={k:(a.get(k,0),b2.get(k,0)) for k in set(a)|set(b2) if a.get(k)!=b2.get(k)}
+          print('::notice title=BSS symbol diff play control->hud::'+' ; '.join('%s %d->%d'%(k,*v) for k,v in sorted(diff.items())))
+          print('::notice title=smallest BSS symbols hud-play::'+' '.join('%s:%d'%(k,v) for k,v in sorted(b2.items(),key=lambda x:x[1])[:60]))
+          print('::notice title=HUD BSS::'+' ; '.join('%s=%d (margin %+d)'%(k,v,57920-v) for k,v in bss.items()))
+          assert all(0<v<=57920 for v in bss.values()),bss
+          CHECK
+
+      - name: Require rebuilt A12 control byte-identical to the A12 ROM of run 40362045678
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r70a-ab
+          run-id: 40362045678
+          github-token: ${{ github.token }}
+          path: dist/hud/original-control
+
+      - name: Exact original R66 control ROM binary comparison (fails the workflow if different)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp dist/hud/doom-md-r60-r70a12.bin dist/hud/original-control/doom-md-r60-r70a12.bin
+          sha256sum dist/hud/doom-md-r60-r70a12.bin
+          echo 'PASS original A12 ROM reproduced byte for byte (HUD flag off = unchanged ROM).'
+
+      - name: Timedemo capture, a12-control
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/hud/doom-md-r60-r70a12.bin dist/hud/doom-md-r60-r70a12.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/hud/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label a12-control --rom dist/hud/doom-md-r60-r70a12.bin --elf dist/hud/doom-md-r60-r70a12.elf --out dist/hud/capture/a12-control --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/hud/CAPTURE.log
+
+      - name: Timedemo capture, r70a12-hud-perf
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/hud/doom-md-r60-r70a12-hud-perf.bin dist/hud/doom-md-r60-r70a12-hud-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/hud/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r70a12-hud-perf --rom dist/hud/doom-md-r60-r70a12-hud-perf.bin --elf dist/hud/doom-md-r60-r70a12-hud-perf.elf --out dist/hud/capture/hud-perf --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/hud/CAPTURE.log
+
+      - name: Compare 3D pixels and timing (HUD must not change the 3D view; vblank cost reported)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ -s dist/hud/capture/a12-control/frames.jsonl ] && [ -s dist/hud/capture/hud-perf/frames.jsonl ]; then
+            python3 scripts/lab/r70_compare.py dist/hud/compare a12-control=dist/hud/capture/a12-control hud-perf=dist/hud/capture/hud-perf
+          else
+            mkdir -p dist/hud/compare
+            echo "SKIPPED - build/capture unavailable (need both captures)." | tee dist/hud/compare/REPORT.md
+          fi
+
+      - name: Publish results as annotations
+        if: always()
+        shell: bash
+        run: |
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | head -c 14000; }
+          [ -f dist/hud/ROM-TABLE.md ] && echo "::notice title=HUD ROM table::$(cat dist/hud/ROM-TABLE.md | enc)"
+          [ -f dist/hud/compare/REPORT.md ] && echo "::notice title=HUD timing and pixel report::$(sed -n '1,60p' dist/hud/compare/REPORT.md | enc)"
+          echo "::notice title=HUD capture log::$( (cat dist/hud/CAPTURE.log 2>/dev/null) | tr -s ' \n' ' ' | enc)"
+
+      - name: Upload HUD artifacts (ROMs, ELFs, preview PNG, logs)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-hud-r70a12
+          path: dist/hud/
+          retention-days: 90
+          if-no-files-found: warn
+# retry after fish flag placement fix
+# retry: whitelist DOOM_HUD_WAD
+# retry: packed face state

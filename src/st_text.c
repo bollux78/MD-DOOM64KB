@@ -52,8 +52,16 @@
 static void ST_Stop(void);
 
 
+#if defined(DOOM_HUD_WAD)
+void HUDW_Ticker(void);
+void HUDW_Start(void);
+#endif
+
 void ST_Ticker(void)
 {
+#if defined(DOOM_HUD_WAD)
+	HUDW_Ticker();
+#endif
 	// Somehow removing this code results in a linker error:
 	//
 	// /usr/lib/x86_64-linux-gnu/gcc/ia16-elf/6.3.0/../../../../../ia16-elf/bin/ld: BFD (GNU Binutils) 2.39 internal error, aborting at ../../bfd/linker.c:2204 in _bfd_generic_link_output_symbols
@@ -195,6 +203,9 @@ void ST_Start(void)
   if (!st_stopped)
     ST_Stop();
   ST_initPalette();
+#if defined(DOOM_HUD_WAD)
+  HUDW_Start();
+#endif
   st_stopped = false;
 }
 
