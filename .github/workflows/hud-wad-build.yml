@@ -219,3 +219,4 @@ jobs:
           retention-days: 90
           if-no-files-found: warn
 # retry after fish flag placement fix
+# retry: whitelist DOOM_HUD_WAD
