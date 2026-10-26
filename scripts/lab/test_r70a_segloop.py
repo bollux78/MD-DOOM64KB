@@ -77,18 +77,22 @@ static uint16_t r12_recip_table[65535 - 512 + 1];
 static uint8_t cmaps[64][4];
 static uint64_t trace_hash; static unsigned trace_n;
 static void T(uint64_t v){ trace_hash = (trace_hash ^ v) * 1099511628211ull; trace_n++; }
-static void TD(int kind, const draw_column_vars_t *d){
-    T(kind); T((uint16_t)d->x); T((uint16_t)d->yl); T((uint16_t)d->yh); T(d->fracstep); T((uint32_t)d->texturemid);
+/* Hash only what the real routine reads: stack garbage in the unused dcvars fields must not reach the comparison. */
+static void TD3(int kind, int16_t x, int16_t yl, int16_t yh){ T(kind); T((uint16_t)x); T((uint16_t)yl); T((uint16_t)yh); }
+static void TDW(int kind, const draw_column_vars_t *d){
+    TD3(kind, d->x, d->yl, d->yh); T(d->fracstep); T((uint32_t)d->texturemid);
     T((uint64_t)(uintptr_t)d->source); T((uint64_t)(d->colormap - &cmaps[0][0]));
 }
 static const uint8_t *R_LoadColorMap(int16_t l){ return cmaps[(uint16_t)l & 63]; }
-static void R_DrawColumnFlat(int16_t color, draw_column_vars_t *d){ T((uint16_t)color); TD(1, d); }
-static void R_DrawSky(draw_column_vars_t *d){ TD(2, d); d->fracstep = (uint16_t)(d->fracstep * 3u + 1u); d->colormap = cmaps[5]; }
-static void R_DrawColumnWall(const draw_column_vars_t *d){ TD(3, d); }
+static void R_DrawColumnFlat(int16_t color, draw_column_vars_t *d){ T((uint16_t)color); TD3(1, d->x, d->yl, d->yh); }
+/* like r_sky.c: sets texturemid, colormap, fracstep and source, then draws the column */
+static void R_DrawSky(draw_column_vars_t *d){
+    d->texturemid = 100 * FRACUNIT; d->colormap = cmaps[5]; d->fracstep = 77; d->source = (const byte *)0 + 9000 + (uint16_t)d->x; TDW(2, d); }
+static void R_DrawColumnWall(const draw_column_vars_t *d){ TDW(3, d); }
 static void R_DrawSegTextureColumn(const texture_t *tex, int16_t texture, int16_t col, draw_column_vars_t *d){
     T((uint64_t)tex->dummy); T((uint16_t)texture); T((uint16_t)col);
     d->source = (const byte *)0 + 4096 + (uint16_t)texture * 131u + (uint16_t)col * 7u;
-    TD(4, d); R_DrawColumnWall(d);
+    R_DrawColumnWall(d);
 }
 '''
 
@@ -125,7 +129,7 @@ int main(int argc, char **argv){
         rw_midtexturemid = pick(-200000, 600000); rw_toptexturemid = pick(-200000, 600000); rw_bottomtexturemid = pick(-200000, 600000);
         for (int x = 0; x < VIEWWINDOWWIDTH; x++){ ceilingclip[x] = (int16_t)pick(-1, 30); floorclip[x] = (int16_t)pick(10, 44); solidcol[x] = 0; masked[x] = -999; }
         maskedtexturecol = masked; didsolidcol = 0;
-        boolean segtextured = pick(0, 4) != 0, markfloor = pick(0, 2) != 0, markceiling = pick(0, 2) != 0;
+        boolean segtextured = ((midtexture | toptexture | bottomtexture | maskedtexture) > 0), markfloor = pick(0, 2) != 0, markceiling = pick(0, 2) != 0;
         trace_hash = 1469598103934665603ull; trace_n = 0;
         R_RenderSegLoop((int16_t)start, segtextured, markfloor, markceiling);
         T((uint32_t)rw_scale); T((uint32_t)topfrac); T((uint32_t)bottomfrac); T((uint32_t)pixhigh); T((uint32_t)pixlow);
@@ -145,7 +149,7 @@ def build(tmp, name, defs):
     c = tmp / (name + '.c')
     c.write_text('#include <stdlib.h>\n' + PRELUDE + tan + '\n' + seg + '\n#include <stdlib.h>\n' + MAIN)
     exe = tmp / name
-    subprocess.run(['gcc', '-O1', '-w', *defs, str(c), '-o', str(exe)], check=True)
+    subprocess.run(['gcc', '-O1', '-w', '-ftrivial-auto-var-init=zero', *defs, str(c), '-o', str(exe)], check=True)
     return exe
 
 
