@@ -708,6 +708,14 @@ for v in $variants
     if set -q DOOM_R70A_INVARIANTS; and test "$DOOM_R70A_INVARIANTS" = 1
         set defs $defs '-DDOOM_R70A_INVARIANTS'
     end
+    # R71-MUL: force native signed 16x16 MULS.W on the established R20 tangent
+    # product; inert unless explicitly enabled, and only for R66-based builds.
+    if set -q DOOM_R71_MUL_ASM; and test "$DOOM_R71_MUL_ASM" = 1
+        if not test "$DOOM_R66_COLPAIR" = 1
+            echo 'R71 MUL requires R66 COLPAIR baseline'; exit 2
+        end
+        set defs $defs '-DDOOM_R71_MUL_ASM'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
