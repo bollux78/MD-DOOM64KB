@@ -234,3 +234,4 @@ jobs:
 # retry: packed face state
 # rerun: new FS background/faces
 # rerun: 4-wide centred face on black
+# rerun: transparent digits
