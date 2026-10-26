@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 6, SPLIT diagnostic; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 7, SPLIT + instruction-level hot spots; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -214,6 +214,11 @@ jobs:
             echo "::notice title=R68 report part 2::$(sed -n '51,100p' dist/r68/capture/report.md | enc)"
             echo "::notice title=R68 report part 3::$(sed -n '101,160p' dist/r68/capture/report.md | enc)"
             echo "::notice title=R68 report part 4::$(sed -n '161,260p' dist/r68/capture/report.md | enc)"
+            if [ -f dist/r68/capture/hot.md ]; then
+              echo "::notice title=R68 hot spots part 1::$(sed -n '1,60p' dist/r68/capture/hot.md | enc)"
+              echo "::notice title=R68 hot spots part 2::$(sed -n '61,130p' dist/r68/capture/hot.md | enc)"
+              echo "::notice title=R68 hot spots part 3::$(sed -n '131,200p' dist/r68/capture/hot.md | enc)"
+            fi
           else
             echo "::warning title=R68 report::no capture/report.md produced"
           fi

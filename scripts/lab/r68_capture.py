@@ -11,7 +11,7 @@ NOT a benchmark: the ROM carries sampler overhead (a few percent). It answers WH
 goes, never how fast the game is. Max 10_000 emulated frames per BlastEm process by default;
 DEMO3 at ~8 vblanks per game frame reaches about tic 1000 inside that limit.
 """
-import argparse, bisect, collections, importlib.util, json, os, pathlib, shutil, struct, subprocess, sys
+import re, argparse, bisect, collections, importlib.util, json, os, pathlib, shutil, struct, subprocess, sys
 
 RING = 128
 FMT = ">%dHHHIIIHHIIIIii12H" % RING
@@ -170,6 +170,49 @@ def analyze(frames, code, outdir):
     return res
 
 
+def objdump_exe():
+    od = os.environ.get("M68K_OBJDUMP")
+    if od and pathlib.Path(od).is_file():
+        return od
+    p = pathlib.Path.home() / "mars/m68k-elf/bin/m68k-elf-objdump"
+    return str(p) if p.is_file() else shutil.which("m68k-elf-objdump")
+
+
+def hotspots(frames, code, elf, outdir, top_funcs=8, top_buckets=10):
+    """Instruction-level view: for the busiest functions, the busiest 8-byte buckets with disassembly."""
+    starts = [a for a, _ in code]
+    hist = collections.Counter()
+    for f in frames:
+        for b in f["ring"]:
+            hist[b * 8] += 1
+    total = sum(hist.values()) or 1
+    per_func = collections.Counter()
+    for a, c in hist.items():
+        i = bisect.bisect_right(starts, a) - 1
+        if i >= 0:
+            per_func[(code[i][0], code[i][1])] += c
+    od = objdump_exe()
+    L = ["# R68 hot spots (8-byte buckets, all frames; total samples %d)" % total, ""]
+    for (fa, fn), fc in per_func.most_common(top_funcs):
+        i = bisect.bisect_right(starts, fa)
+        fend = code[i][0] if i < len(code) else fa + 4096
+        L.append("## %s  [%#x..%#x)  %d samples (%.1f%%)" % (fn, fa, fend, fc, 100.0 * fc / total))
+        bk = sorted(((a, c) for a, c in hist.items() if fa <= a < fend), key=lambda x: -x[1])[:top_buckets]
+        for a, c in bk:
+            ins = ""
+            if od:
+                try:
+                    txt = subprocess.run([od, "-d", "--no-show-raw-insn", "--start-address=%d" % a, "--stop-address=%d" % (a + 8),
+                                          str(elf)], check=True, capture_output=True, text=True).stdout
+                    ins = " ; ".join(" ".join(l.split()[1:]) for l in txt.splitlines()
+                                     if re.match(r"\s*[0-9a-f]+:", l))
+                except Exception:
+                    ins = "(objdump failed)"
+            L.append("- %06x  %4d (%.1f%% of func)  %s" % (a, c, 100.0 * c / fc, ins))
+        L.append("")
+    (pathlib.Path(outdir) / "hot.md").write_text("\n".join(L) + "\n")
+
+
 def capture(args):
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     names, code = read_symbols(args.elf)
@@ -212,7 +255,12 @@ def capture(args):
     (out / "rings.json").write_text(json.dumps([f["ring"] for f in frames]))
     if not frames:
         raise RuntimeError("no frames captured")
-    return analyze(frames, code, out)
+    res = analyze(frames, code, out)
+    try:
+        hotspots(frames, code, args.elf, out)
+    except Exception as e:  # diagnostic extra, never fail the capture
+        print("hotspots skipped:", e, file=sys.stderr)
+    return res
 
 
 def main():
