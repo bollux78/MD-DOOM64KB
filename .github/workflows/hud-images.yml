@@ -50,3 +50,4 @@ jobs:
 # run: FS bg + FS faces, two palettes
 # rerun: 4-wide centred face on black
 # rerun: transparent big digits 4px lower, ARMS digits centred
+# rerun: shared stone tiles, boolean widgets

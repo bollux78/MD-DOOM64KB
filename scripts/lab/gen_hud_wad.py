@@ -205,7 +205,6 @@ def build_images(lumps):
     panel_small = median_color(bar, L["TABLE_C"] * 8, 0, (L["TABLE_C"] + 6) * 8, 32)    # flat panel behind the ammo-table digits
     panel_face = (0, 0, 0)                                    # the face square is black
     frame_face = median_color(bar, L["FACE_C"] * 8, 0, (L["FACE_C"] + L["FACE_W"]) * 8, 2)   # top frame line, kept above the face
-    panel_key = median_color(bar, L["KEYS_C"] * 8, 0, (L["KEYS_C"] + 1) * 8, 24)
     # 2. widget glyph images
     def glyph(name, dw, dh):
         return box_resample(rgb(name), dw, dh, None)       # transparent where the patch is: the dithered bar shows through
@@ -213,6 +212,7 @@ def build_images(lumps):
     for d in range(10):
         big[d] = glyph("STTNUM%d" % d, 8, 16)
     big["%"] = glyph("STTPRCNT", 8, 16)
+    keyg = [(P["STKEYS%d" % k][0], P["STKEYS%d" % k][1], rgb("STKEYS%d" % k)) for k in range(3)]
     armsg = {}                                           # ARMS digits keep their native size; centred in the plate boxes by build_assets
     for d in range(2, 8):
         armsg["y%d" % d] = (P["STYSNUM%d" % d][0], P["STYSNUM%d" % d][1], rgb("STYSNUM%d" % d))
@@ -229,17 +229,6 @@ def build_images(lumps):
         return img
     ysm = {d: small("STYSNUM%d" % d) for d in range(10)}
     ysm[" "] = solid(8, 8, panel_small)
-    keys = []
-    for k in range(3):
-        g = rgb("STKEYS%d" % k)
-        w, h = P["STKEYS%d" % k][0], P["STKEYS%d" % k][1]
-        img = solid(8, 8, panel_key)
-        for y in range(min(h, 8)):
-            for x in range(min(w, 8)):
-                if g[y][x] is not None:
-                    img[y][x] = g[y][x]
-        keys.append(img)
-    keys.append(solid(8, 8, panel_key))     # no key
     faces, fmasks = [], []
     for n in FACE_NAMES:
         g = rgb(n)
@@ -258,7 +247,7 @@ def build_images(lumps):
                     mask[oy + y][ox + x] = True
         faces.append(img)
         fmasks.append(mask)
-    return dict(bar=bar, big=big, armsg=armsg, ysm=ysm, keys=keys, faces=faces, fmasks=fmasks, panel_small=panel_small, panel_face=panel_face, frame_face=frame_face)
+    return dict(bar=bar, big=big, armsg=armsg, keyg=keyg, ysm=ysm, faces=faces, fmasks=fmasks, panel_small=panel_small, panel_face=panel_face, frame_face=frame_face)
 
 
 def quantise_palette(colours, k=15, iters=12):
@@ -343,7 +332,7 @@ def build_assets(lumps):
         for c in range(COLS * 8):
             if not (L["FACE_C"] * 8 <= c < (L["FACE_C"] + L["FACE_W"]) * 8):
                 hist3[im["bar"][r][c]] = hist3.get(im["bar"][r][c], 0) + 1
-    glyphs = list(im["big"].values()) + list(im["ysm"].values()) + im["keys"] + [v[2] for v in im["armsg"].values()]
+    glyphs = list(im["big"].values()) + list(im["ysm"].values()) + [v[2] for v in im["armsg"].values()] + [v[2] for v in im["keyg"]]
     for gimg in glyphs:
         for r in gimg:
             for c in r:
@@ -365,25 +354,30 @@ def build_assets(lumps):
     def tile_img(img8, ty=0):
         return tuple(tuple(img8[y + ty * 8][x] for x in range(8)) for y in range(8))
     ids = {}
-    def comp_tile(tx, ty, sprites):
-        """The dithered bar cell (tx, ty) with sprites (img with None = transparent, x, y in bar pixels) drawn over it."""
-        px = [[bar[ty * 8 + y][tx * 8 + x] for x in range(8)] for y in range(8)]
+    def over(base, sprites):
+        """base tile (8x8 RGB) with sprites (img with None = transparent, x, y relative to the tile) drawn over it."""
+        px = [list(r) for r in base]
         for img, sx, sy in sprites:
             for yy, row in enumerate(img):
                 for xx, v in enumerate(row):
-                    X, Y = sx + xx - tx * 8, sy + yy - ty * 8
+                    X, Y = sx + xx, sy + yy
                     if v is not None and 0 <= X < 8 and 0 <= Y < 8:
                         px[Y][X] = v
         return tuple(tuple(r) for r in px)
-    # big digits: one tile per (widget, position, row, digit) = the glyph over THAT cell of the bar, so the digits are transparent
+    def comp_tile(tx, ty, sprites):
+        """The dithered bar cell (tx, ty) with sprites given in bar pixels drawn over it."""
+        return over(tile_of(bar, tx, ty), [(img, sx - tx * 8, sy - ty * 8) for img, sx, sy in sprites])
+    # Big digits sit over ONE stone tile per tile row (taken from the HEALTH panel, above its label), so a digit tile is the same for every
+    # position and widget: 10 digits x 3 rows + percent, not one per position. Digits are drawn BIG_Y px below the top of the bar.
     BY = L["BIG_Y"]
-    big_rows = (BY + 16 + 7) // 8                       # tile rows touched by a 16-px glyph
-    assert big_rows == 3 and BY >= 0
-    ids["big"] = [[[[add(comp_tile(c0 + i, r, [(im["big"][d], (c0 + i) * 8, BY)])) for d in range(10)] for r in range(big_rows)]
-                   for i in range(3)] for c0 in (L["AMMO_C"], L["HEALTH_C"], L["ARMOR_C"])]
-    ids["pct"] = [[add(comp_tile(c0 + 3, r, [(im["big"]["%"], (c0 + 3) * 8, BY)])) for r in range(big_rows)] for c0 in (L["HEALTH_C"], L["ARMOR_C"])]
-    # ARMS digits: centred on the boxes of the STARMS plate (original digit at x = 111 + 12 i, y = 4 + 10 j; bar squeezed 0.8 horizontally)
-    spr = {}
+    assert BY + 16 <= 24
+    stone = [tile_of(bar, L["HEALTH_C"] + 1, min(r, 1)) for r in range(4)]
+    ids["stone"] = [add(stone[r]) for r in range(3)]
+    ids["big"] = [[add(over(stone[r], [(im["big"][d], 0, BY - 8 * r)])) for r in range(3)] for d in range(10)]     # [digit][row]
+    ids["pct"] = [add(over(stone[r], [(im["big"]["%"], 0, BY - 8 * r)])) for r in range(3)]
+    # Boolean widgets over the real bar cells: the six ARMS digits (grey = not owned, yellow = owned), centred on the boxes of the STARMS
+    # plate (original digit at x = 111 + 12 i, y = 4 + 10 j, bar squeezed 0.8), and the three key cards (nothing / card) at x = 239, y = 3 + 10 k.
+    widgets = []
     for i in range(6):
         pos = {}
         for state, pre in ((0, "g"), (1, "y")):
@@ -391,47 +385,53 @@ def build_assets(lumps):
             ow, oh = im["armsg"]["y%d" % (i + 2)][0], im["armsg"]["y%d" % (i + 2)][1]
             cx, cy = (111 + 12 * (i % 3) + ow / 2.0) * 0.8, 4 + 10 * (i // 3) + oh / 2.0
             pos[state] = (img, int(round(cx - w / 2.0)), int(round(cy - h / 2.0)), w, h)
-        spr[i] = pos
+        widgets.append(dict(bit=i, pos=pos))
+    for k in range(3):
+        kw, kh, kimg = im["keyg"][k]
+        widgets.append(dict(bit=6 + k, pos={0: None, 1: (kimg, int(round(239 * 0.8)), 3 + 10 * k, kw, kh)}))
     cells = {}
-    for i in range(6):
+    for wi, wd in enumerate(widgets):
         for st in (0, 1):
-            _img, sx, sy, w, h = spr[i][st]
+            if wd["pos"][st] is None:
+                continue
+            _img, sx, sy, w, h = wd["pos"][st]
             for ty in range(sy // 8, (sy + h - 1) // 8 + 1):
                 for tx in range(sx // 8, (sx + w - 1) // 8 + 1):
-                    if i not in cells.setdefault((tx, ty), []):
-                        cells[(tx, ty)].append(i)
-    arms_cells = []
+                    if wi not in cells.setdefault((tx, ty), []):
+                        cells[(tx, ty)].append(wi)
+    wid_cells = []
     for (tx, ty), bl in sorted(cells.items(), key=lambda kv: (kv[0][1], kv[0][0])):
-        assert len(bl) <= 2, "a tile may overlap at most two ARMS boxes"
+        assert len(bl) <= 2, "a tile may overlap at most two widgets"
         vs = []
         for v in range(4):
             sprites = []
-            for k, b in enumerate(bl):
-                img, sx, sy, _w, _h = spr[b][(v >> k) & 1]
-                sprites.append((img, sx, sy))
+            for k, wi in enumerate(bl):
+                pp = widgets[wi]["pos"][(v >> k) & 1]
+                if pp is not None:
+                    sprites.append((pp[0], pp[1], pp[2]))
             vs.append(add(comp_tile(tx, ty, sprites)))
-        arms_cells.append(dict(col=tx, row=ty, b0=bl[0], b1=bl[1] if len(bl) > 1 else 255, ids=vs))
-    ids["arms"] = arms_cells
-    def tile_img(img8, ty=0):
-        return tuple(tuple(img8[y + ty * 8][x] for x in range(8)) for y in range(8))
-    # the remaining small widgets (ammo table, keys) keep a flat panel behind them
-    ids["ysm"] = [add(tile_img(im["ysm"][d])) for d in range(10)]
-    ids["blank_small"] = add(tile_img(im["ysm"][" "]))
-    ids["keys"] = [add(tile_img(k)) for k in im["keys"]]
+        wid_cells.append(dict(col=tx, row=ty, b0=widgets[bl[0]]["bit"], b1=widgets[bl[1]]["bit"] if len(bl) > 1 else 255, ids=vs))
+    ids["wid"] = wid_cells
+    # ammo table: small digits over a stone tile per row
+    ids["ysm"] = [[add(over(stone[r], [(im["ysm"][d], 0, 0)])) for d in range(10)] for r in range(4)]     # [row][digit]
+    ids["blank_small"] = [add(stone[r]) for r in range(4)]
     n_dynamic = len(tiles_rgb)
     bg_ids = [[0] * COLS for _ in range(ROWS)]
-    dyn_cells = set()                                   # cells whose bar tile is replaced by a flat panel
-    for rr in range(3):
-        dyn_cells.add((L["KEYS_C"], L["KEYS_R"] + rr))
-    for rr in range(4):
+    over_cells = {}                                       # cells whose background is a shared stone tile
+    for c0 in (L["AMMO_C"], L["HEALTH_C"], L["ARMOR_C"]):
+        for i in range(4):
+            for r in range(3):
+                over_cells[(c0 + i, r)] = stone[r]
+    for t in range(4):
         for i in range(6):
-            dyn_cells.add((L["TABLE_C"] + i, L["TABLE_R"] + rr))
+            over_cells[(L["TABLE_C"] + i, t)] = stone[t]
+    flat_face = tuple(tuple((0, 0, 0) for _ in range(8)) for _ in range(8))
     for i in range(L["FACE_W"]):
         for rr in range(4):
-            dyn_cells.add((L["FACE_C"] + i, L["FACE_R"] + rr))
+            over_cells[(L["FACE_C"] + i, rr)] = flat_face
     for ty in range(ROWS):
         for tx in range(COLS):
-            bg_ids[ty][tx] = ids["blank_small"] if (tx, ty) in dyn_cells else add(tile_of(bar, tx, ty))
+            bg_ids[ty][tx] = add(over_cells[(tx, ty)] if (tx, ty) in over_cells else tile_of(bar, tx, ty))
     # face frames: own 15 colours + black (CRAM line 2), Floyd-Steinberg from the original patches, flat panel outside the face art
     fhist = {}
     for img, mask in zip(im["faces"], im["fmasks"]):
@@ -478,19 +478,18 @@ def emit_header(a):
     ids = a["ids"]
     o.append("#define HUDW_NTILES %d" % len(a["tiles"]))
     o.append("#define HUDW_NFACES %d" % len(a["faces"]))
-    o.append("#define HUDW_BLANK_SMALL %d" % ids["blank_small"])
     nest = lambda x: "{" + ",".join(nest(e) if isinstance(e, list) else str(e) for e in x) + "}"
-    o.append("static const uint16_t hudw_big[3][3][3][10] = %s;   /* [ammo,health,armor][position][tile row][digit] */" % nest(ids["big"]))
-    o.append("static const uint16_t hudw_pct[2][3] = %s;         /* [health,armor][tile row] */" % nest(ids["pct"]))
-    o.append("static const uint16_t hudw_ysm[10] = {%s};" % ",".join(map(str, ids["ysm"])))
-    o.append("static const uint16_t hudw_keys[4] = {%s};" % ",".join(map(str, ids["keys"])))
-    ac = ids["arms"]
-    o.append("#define HUDW_NARMS %d" % len(ac))
-    o.append("static const uint8_t hudw_arms_col[%d] = {%s};" % (len(ac), ",".join(str(c["col"]) for c in ac)))
-    o.append("static const uint8_t hudw_arms_row[%d] = {%s};" % (len(ac), ",".join(str(c["row"]) for c in ac)))
-    o.append("static const uint8_t hudw_arms_b0[%d] = {%s};" % (len(ac), ",".join(str(c["b0"]) for c in ac)))
-    o.append("static const uint8_t hudw_arms_b1[%d] = {%s};   /* 255: one box only */" % (len(ac), ",".join(str(c["b1"]) for c in ac)))
-    o.append("static const uint16_t hudw_arms_id[%d][4] = {%s};   /* tile for each combination of the two boxes' owned bits */" % (len(ac), ",".join("{" + ",".join(map(str, c["ids"])) + "}" for c in ac)))
+    o.append("static const uint16_t hudw_big[10][3] = %s;   /* [digit][tile row]: glyph over the shared stone tile */" % nest(ids["big"]))
+    o.append("static const uint16_t hudw_pct[3] = %s;" % nest(ids["pct"]))
+    o.append("static const uint16_t hudw_ysm[4][10] = %s;   /* ammo table: [row][digit] */" % nest(ids["ysm"]))
+    o.append("static const uint16_t hudw_blank_small[4] = %s;" % nest(ids["blank_small"]))
+    wc = ids["wid"]
+    o.append("#define HUDW_NWID %d   /* tiles that depend on the owned bits: ARMS digits (bits 0..5) and key cards (bits 6..8) */" % len(wc))
+    o.append("static const uint8_t hudw_wid_col[%d] = {%s};" % (len(wc), ",".join(str(c["col"]) for c in wc)))
+    o.append("static const uint8_t hudw_wid_row[%d] = {%s};" % (len(wc), ",".join(str(c["row"]) for c in wc)))
+    o.append("static const uint8_t hudw_wid_b0[%d] = {%s};" % (len(wc), ",".join(str(c["b0"]) for c in wc)))
+    o.append("static const uint8_t hudw_wid_b1[%d] = {%s};   /* 255: one widget only */" % (len(wc), ",".join(str(c["b1"]) for c in wc)))
+    o.append("static const uint16_t hudw_wid_id[%d][4] = {%s};   /* tile for each combination of the two widgets' bits */" % (len(wc), ",".join("{" + ",".join(map(str, c["ids"])) + "}" for c in wc)))
     o.append("static const uint16_t hudw_pal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["palette"]))
     o.append("static const uint16_t hudw_fpal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["fpalette"]))
     assert len(a["tiles"]) + 4 * L["FACE_W"] <= 1440 - 800, "tiles no longer fit the free VRAM range"
@@ -518,25 +517,24 @@ def model_rows(a, st):
     """st: dict(health, armor, ammo_r (-1 none), ammo[4], maxammo[4], arms (6-bit), keys (3-bit), face). -> 4 rows of 32 tile ids."""
     L, ids = LAYOUT, a["ids"]
     rows = [list(r) for r in a["bgmap"]]
-    def big3(w, c0, v, pct):
+    def big3(c0, v, pct):
         v = max(0, min(999, v))
         digs = [v // 100, v // 10 % 10, v % 10]
         lead = [v >= 100, v >= 10, True]
         for r in range(3):
             for i in range(3):
                 if lead[i]:
-                    rows[r][c0 + i] = ids["big"][w][i][r][digs[i]]
+                    rows[r][c0 + i] = ids["big"][digs[i]][r]
             if pct:
-                rows[r][c0 + 3] = ids["pct"][w - 1][r]
+                rows[r][c0 + 3] = ids["pct"][r]
     if st["ammo_r"] >= 0:
-        big3(0, L["AMMO_C"], st["ammo_r"], False)
-    big3(1, L["HEALTH_C"], st["health"], True)
-    big3(2, L["ARMOR_C"], st["armor"], True)
-    for c in ids["arms"]:
-        v = (st["arms"] >> c["b0"] & 1) | ((st["arms"] >> c["b1"] & 1) << 1 if c["b1"] != 255 else 0)
+        big3(L["AMMO_C"], st["ammo_r"], False)
+    big3(L["HEALTH_C"], st["health"], True)
+    big3(L["ARMOR_C"], st["armor"], True)
+    mask = st["arms"] | (st["keys"] << 6)
+    for c in ids["wid"]:
+        v = (mask >> c["b0"] & 1) | ((mask >> c["b1"] & 1) << 1 if c["b1"] != 255 else 0)
         rows[c["row"]][c["col"]] = c["ids"][v]
-    for k in range(3):
-        rows[L["KEYS_R"] + k][L["KEYS_C"]] = ids["keys"][k if st["keys"] >> k & 1 else 3]
     n = len(a["tiles"])
     for r in range(4):
         for c in range(L["FACE_W"]):
@@ -547,7 +545,8 @@ def model_rows(a, st):
             digs = [v // 100, v // 10 % 10, v % 10]
             lead = [v >= 100, v >= 10, True]
             for i in range(3):
-                rows[L["TABLE_R"] + t][L["TABLE_C"] + part * 3 + i] = ids["ysm"][digs[i]] if lead[i] else ids["blank_small"]
+                if lead[i]:
+                    rows[L["TABLE_R"] + t][L["TABLE_C"] + part * 3 + i] = ids["ysm"][t][digs[i]]
     return rows
 
 
