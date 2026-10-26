@@ -89,10 +89,10 @@ def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_second
         pc_here = int(regs[17 * 8:18 * 8], 16)
         if n < 4:
             log("stop %d: pc=%#x a7=%#x" % (n, pc_here, a7))
-        if a7 & 1 or a7 < 0xE00000 or a7 > 0x1000000:
+        if a7 & 1 or not (0xE00000 <= (a7 & 0xFFFFFF) < 0x1000000):
             meta["invalid_sp"] += 1
             continue
-        pc = int.from_bytes(g.readmem(a7 + 2, 4), "big")
+        pc = int.from_bytes(g.readmem(a7 + 2, 4), "big") & 0xFFFFFF
         if n % 256 == 0:
             tic = int.from_bytes(g.readmem(syms["_g_gametic"], 4), "big")
             if tic + 5 < last_tic:
@@ -107,7 +107,7 @@ def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_second
                 meta["status"] = "max_seconds"; break
         if not started:
             continue
-        if pc_here == hvec:
+        if (pc_here & 0xFFFFFF) == hvec:
             hist[pc] = hist.get(pc, 0) + 1; meta["hint_samples"] += 1
         else:
             vhist[pc] = vhist.get(pc, 0) + 1; meta["vint_samples"] += 1
