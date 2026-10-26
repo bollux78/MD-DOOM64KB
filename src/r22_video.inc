@@ -669,6 +669,38 @@ void R_DrawColumnSprite(const draw_column_vars_t *v) {
     }
 #endif
 }
+
+/* R71-OFS: two pure ROM tables for the Pair-V 76x44 framebuffer.
+ * Exact R22_PixelByte (y>>1)*152 + (x&1)*76 + (x>>1)*2 + 1.
+ * Only use after coordinates have been clipped; no RAM allocation. */
+#if defined(DOOM_R71_OFS)
+#if !defined(DOOM_R48_PAIR_V) || R22_W != 76 || R22_H != 44
+#error R71-OFS requires native 76x44 Pair-V pixel4
+#endif
+static const uint16_t r71_rowofs[22] = {
+    0, 152, 304, 456, 608, 760, 912, 1064, 
+    1216, 1368, 1520, 1672, 1824, 1976, 2128, 2280, 
+    2432, 2584, 2736, 2888, 3040, 3192
+};
+static const uint16_t r71_colofs[76] = {
+    1, 77, 3, 79, 5, 81, 7, 83, 
+    9, 85, 11, 87, 13, 89, 15, 91, 
+    17, 93, 19, 95, 21, 97, 23, 99, 
+    25, 101, 27, 103, 29, 105, 31, 107, 
+    33, 109, 35, 111, 37, 113, 39, 115, 
+    41, 117, 43, 119, 45, 121, 47, 123, 
+    49, 125, 51, 127, 53, 129, 55, 131, 
+    57, 133, 59, 135, 61, 137, 63, 139, 
+    65, 141, 67, 143, 69, 145, 71, 147, 
+    73, 149, 75, 151
+};
+static inline uint8_t *R71_PixelByte(uint8_t *base, uint16_t x, uint16_t y) {
+    return base + r71_rowofs[y >> 1] + r71_colofs[x];
+}
+#else
+#define R71_PixelByte R22_PixelByte
+#endif
+
 /* R42 Q2: packed-4bpp wall-only specialization. This remains independent
  * of the R20 8x8 tile-word assembly kernels. Preserve the original sprite,
  * fuzz, and flat paths, where overdrawing an existing pixel is essential.
@@ -735,7 +767,7 @@ static void R42_DrawPackedWall(const draw_column_vars_t *v)
     const uint8_t *r52fast=R52_LUT(colormap,(uint16_t)(x&1u));
     if(r52fast){r52map=r52fast;colormap=0;}
 #endif
-    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
+    uint8_t *dst=R71_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);
     int16_t remaining=(int16_t)(y1-first+1);
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(remaining);
@@ -913,7 +945,7 @@ void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){
     uint8_t sample=(uint8_t)(r52map[c]&15u);
     uint8_t keep=(x&1)?0xf0u:0x0fu;
     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
-    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+    uint8_t *dst=R71_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
 #if defined(DOOM_R48_PAIR_V)
     uint16_t count=(uint16_t)(y1-y0+1);
 #if defined(DOOM_R49_COLORMIX)
