@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 4) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676 and c3f3fd6. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 5) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6 and e39b522. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -202,6 +202,19 @@ jobs:
             --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
             --out dist/r68/capture --max-emulated-frames 10000 --timeout 120 | tee dist/r68/CAPTURE.log
           head -n 40 dist/r68/capture/report.md
+
+      - name: Publish capture report as annotations (readable without artifact download)
+        if: always()
+        shell: bash
+        run: |
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | head -c 3800; }
+          if [ -f dist/r68/capture/report.md ]; then
+            echo "::notice title=R68 report part 1::$(sed -n '1,45p' dist/r68/capture/report.md | enc)"
+            echo "::notice title=R68 report part 2::$(sed -n '46,200p' dist/r68/capture/report.md | enc)"
+          else
+            echo "::warning title=R68 report::no capture/report.md produced"
+          fi
+          echo "::notice title=R68 manifest and capture log::$( (cat dist/r68/MANIFEST.json dist/r68/CAPTURE.log 2>/dev/null) | tr -s ' \n' ' ' | enc)"
 
       - name: Upload R68 profiling artifacts (including partial evidence on failure)
         if: always()
