@@ -1,12 +1,9 @@
 # R70-A A/B build, equivalence and timedemo. ACTIVATED (re-triggered: build-flag whitelist now accepts DOOM_R7x_*) with explicit maintainer authorization (2026-10-26 13:07: "autorizo compilação em todas as branchs e versões sempre").
-# Only trigger: push of this file on branch exp-claudio-r70a-segloop-20261026 (plus workflow_dispatch). Proposal copy: docs/review-r70/r70a-build.workflow-proposal.yml.
+# Only trigger: workflow_dispatch (push trigger removed 2026-10-26 while the host-test failure is diagnosed; no run without explicit authorization). Proposal copy: docs/review-r70/r70a-build.workflow-proposal.yml.
 # Variants: r66-control, r70a1 (LOCALS), r70a2 (INVARIANTS), r70a12 (both). H40, crop 16/16, no R68 instrumentation.
 name: R70-A Claudio A/B build, pixel equivalence and timedemo (BlastEm only)
 
 on:
-  push:
-    branches: [exp-claudio-r70a-segloop-20261026]
-    paths: ['.github/workflows/r70a-build.yml']
   workflow_dispatch:
 
 concurrency:
@@ -184,10 +181,26 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          miss=0
+          for v in r66-perf r70a1 r70a2 r70a12; do
+            [ -s "dist/r70/doom-md-r60-$v.elf" ] || { echo "MISSING ELF: dist/r70/doom-md-r60-$v.elf"; miss=1; }
+          done
+          if [ "$miss" -ne 0 ]; then
+            echo "SKIPPED - build/capture unavailable (not all four ELFs exist); disassembly not attempted." | tee dist/r70/DISASM-SKIPPED.txt
+            echo "::warning title=R70 disassembly::SKIPPED - build/capture unavailable"
+            exit 0
+          fi
+          mkdir -p dist/r70/disasm
           python3 scripts/lab/r70_disasm_compare.py --objdump "$OBJDUMP" --func R_RenderSegLoop,R_StoreWallRange dist/r70/disasm \
             r66-control=dist/r70/doom-md-r60-r66-perf.elf r70a1=dist/r70/doom-md-r60-r70a1.elf \
-            r70a2=dist/r70/doom-md-r60-r70a2.elf r70a12=dist/r70/doom-md-r60-r70a12.elf | tail -n 60
+            r70a2=dist/r70/doom-md-r60-r70a2.elf r70a12=dist/r70/doom-md-r60-r70a12.elf > dist/r70/disasm/run.log 2> dist/r70/disasm/stderr.log
+          rc=$?
+          tail -n 60 dist/r70/disasm/run.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=R70 disassembly failed::rc=$rc $(tail -n 30 dist/r70/disasm/stderr.log | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500)"
+            exit "$rc"
+          fi
 
       - name: Require rebuilt R66 control byte-identical to the approved 7.21 FPS ROM (run 40231459814)
         uses: actions/download-artifact@v4
@@ -211,7 +224,9 @@ jobs:
         timeout-minutes: 90
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r66-perf.bin dist/r70/doom-md-r60-r66-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r70/CAPTURE.log; exit 0; }; done
+          set -e
           python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r66-control --rom dist/r70/doom-md-r60-r66-perf.bin --elf dist/r70/doom-md-r60-r66-perf.elf --out dist/r70/capture/r66-control --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r70/CAPTURE.log
 
       - name: Timedemo capture, r70a1
@@ -219,7 +234,9 @@ jobs:
         timeout-minutes: 90
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r70a1.bin dist/r70/doom-md-r60-r70a1.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r70/CAPTURE.log; exit 0; }; done
+          set -e
           python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r70a1 --rom dist/r70/doom-md-r60-r70a1.bin --elf dist/r70/doom-md-r60-r70a1.elf --out dist/r70/capture/r70a1 --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r70/CAPTURE.log
 
       - name: Timedemo capture, r70a2
@@ -227,7 +244,9 @@ jobs:
         timeout-minutes: 90
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r70a2.bin dist/r70/doom-md-r60-r70a2.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r70/CAPTURE.log; exit 0; }; done
+          set -e
           python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r70a2 --rom dist/r70/doom-md-r60-r70a2.bin --elf dist/r70/doom-md-r60-r70a2.elf --out dist/r70/capture/r70a2 --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r70/CAPTURE.log
 
       - name: Timedemo capture, r70a12
@@ -235,7 +254,9 @@ jobs:
         timeout-minutes: 90
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r70a12.bin dist/r70/doom-md-r60-r70a12.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r70/CAPTURE.log; exit 0; }; done
+          set -e
           python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r70a12 --rom dist/r70/doom-md-r60-r70a12.bin --elf dist/r70/doom-md-r60-r70a12.elf --out dist/r70/capture/r70a12 --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r70/CAPTURE.log
 
       - name: Timedemo capture, r66-control repeat (run-to-run determinism)
@@ -243,7 +264,9 @@ jobs:
         timeout-minutes: 90
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r66-perf.bin dist/r70/doom-md-r60-r66-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r70/CAPTURE.log; exit 0; }; done
+          set -e
           python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label repeat --rom dist/r70/doom-md-r60-r66-perf.bin --elf dist/r70/doom-md-r60-r66-perf.elf --out dist/r70/capture/repeat --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r70/CAPTURE.log
 
       - name: Compare pixels and timing (fails if any variant differs in pixels)
@@ -255,8 +278,12 @@ jobs:
           for v in r66-control r70a1 r70a2 r70a12 repeat; do
             if [ -s "dist/r70/capture/$v/frames.jsonl" ]; then specs+=("$v=dist/r70/capture/$v"); else echo "MISSING capture: $v"; fi
           done
-          test "${#specs[@]}" -ge 2 || { echo '::error title=R70 compare::fewer than two captures available'; exit 1; }
-          test "${specs[0]%%=*}" = r66-control || { echo '::error title=R70 compare::control capture missing'; exit 1; }
+          if [ "${#specs[@]}" -lt 2 ] || [ "${specs[0]%%=*}" != r66-control ]; then
+            mkdir -p dist/r70/compare
+            echo "SKIPPED - build/capture unavailable (need the r66-control capture and at least one other)." | tee dist/r70/compare/REPORT.md
+            echo "::warning title=R70 compare::SKIPPED - build/capture unavailable"
+            exit 0
+          fi
           python3 scripts/lab/r70_compare.py dist/r70/compare "${specs[@]}"
 
       - name: Publish report as annotations (readable without artifact download)

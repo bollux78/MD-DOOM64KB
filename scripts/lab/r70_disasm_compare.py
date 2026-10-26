@@ -6,7 +6,7 @@ Writes OUT_DIR/disasm-<label>-<func>.txt (full listing of each routine), DISASM-
 Static counts, not dynamic: a loop body is counted once. The dynamic result is the timedemo timing.
 A routine that LTO inlined into another one is reported as missing; compare the caller (e.g. R_StoreWallRange).
 """
-import argparse, json, pathlib, re, subprocess, sys
+import sys, argparse, json, pathlib, re, subprocess, sys
 
 BRANCH = re.compile(r"^(bra|bsr|b(hi|ls|cc|cs|ne|eq|vc|vs|pl|mi|ge|lt|gt|le))[sw]?$|^db[a-z]{1,2}$|^(jmp|jsr)$")
 HEXWORD = re.compile(r"^[0-9a-f]{4}$")
@@ -137,11 +137,20 @@ def diff_section(allstats, labels, top=14):
     return L
 
 
+def run_objdump(objdump, elf):
+    """objdump -d; on failure keep the detailed stderr (tool, ELF, return code) and stop with a readable error."""
+    r = subprocess.run([objdump, "-d", "-z", str(elf)], capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.stderr.write("objdump FAILED rc=%d cmd=%s -d -z %s\n--- objdump stderr ---\n%s\n" % (r.returncode, objdump, elf, r.stderr))
+        sys.exit(3)
+    return r.stdout
+
+
 def run(objdump, funcnames, out, pairs):
     out = pathlib.Path(out); out.mkdir(parents=True, exist_ok=True)
     results, labels, allstats = {}, [], {}
     for lab, elf in pairs:
-        text = subprocess.run([objdump, "-d", "-z", str(elf)], check=True, capture_output=True, text=True).stdout
+        text = run_objdump(objdump, elf)
         funcs = parse(text)
         allstats[lab] = {k: stats(v) for k, v in funcs.items() if v}
         labels.append(lab); results[lab] = {}
@@ -162,7 +171,7 @@ def run(objdump, funcnames, out, pairs):
         changed = sorted({s for lab in labels[1:] for s in allstats[lab] if s in ctl and allstats[lab][s]["bytes"] != ctl[s]["bytes"]},
                          key=lambda s: -max(abs(allstats[lab][s]["bytes"] - ctl[s]["bytes"]) for lab in labels[1:] if s in allstats[lab]))[:4]
         for lab, elf in pairs:
-            funcs = parse(subprocess.run([objdump, "-d", "-z", str(elf)], check=True, capture_output=True, text=True).stdout)
+            funcs = parse(run_objdump(objdump, elf))
             for sym in changed:
                 if sym in funcs:
                     (out / ("disasm-%s-changed-%s.txt" % (lab, sym.replace("/", "_")))).write_text(
