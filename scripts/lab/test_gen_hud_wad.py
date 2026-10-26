@@ -52,7 +52,7 @@ def test_assets_and_header():
     # every background id is a valid static tile
     assert all(0 <= v < len(a["tiles"]) for r in a["bgmap"] for v in r)
     h = G.emit_header(a)
-    for needle in ("hudw_pal[16]", "hudw_big[10][3]", "hudw_wid_id", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][16][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
+    for needle in ("hudw_pal[16]", "hudw_big[3][3][3][10]", "hudw_wid_id", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][16][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
         assert needle in h, needle
     # determinism
     b = G.build_assets(G.read_iwad(G.make_iwad(synthetic_lumps())))
@@ -69,8 +69,8 @@ def test_model_and_preview():
         L, ids = G.LAYOUT, a["ids"]
         if st["health"] == 63:       # leading zero of the hundreds is transparent: the stone tile stays
             assert rows[0][L["HEALTH_C"]] == a["bgmap"][0][L["HEALTH_C"]]
-            assert rows[0][L["HEALTH_C"] + 1] == ids["big"][6][0]
-            assert rows[0][L["HEALTH_C"] + 3] == ids["pct"][0]
+            assert rows[0][L["HEALTH_C"] + 1] == ids["big"][1][1][0][6]
+            assert rows[0][L["HEALTH_C"] + 3] == ids["pct"][0][0]
         if st["ammo_r"] < 0:         # no ammo widget: the background stays
             assert rows[0][L["AMMO_C"]] == a["bgmap"][0][L["AMMO_C"]]
         mask = st["arms"] | (st["keys"] << 6)

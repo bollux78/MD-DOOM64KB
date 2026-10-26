@@ -235,3 +235,4 @@ jobs:
 # rerun: new FS background/faces
 # rerun: 4-wide centred face on black
 # rerun: transparent digits
+# rerun: per-position big digits

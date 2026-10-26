@@ -39,7 +39,8 @@ jobs:
           pathlib.Path('scripts').mkdir(exist_ok=True)
           shutil.copyfile(source,'scripts/doom1.wad')
           PY
-          python3 scripts/lab/hud_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-original.png --out-cur dist/img/hud-current.png --b64 dist/img/b64.txt
+          python3 scripts/lab/hud_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-original.png --out-cur dist/img/hud-current.png --b64 dist/img/b64.txt | tee dist/img/log.txt
+          echo "::notice title=HUD tile count::$(tr '\n' ' ' < dist/img/log.txt)"
           for tag in ORIG CUR; do
             grep "^$tag " dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/$tag.parts
             n=$(wc -l < dist/img/$tag.parts); k=0
@@ -51,3 +52,4 @@ jobs:
 # rerun: 4-wide centred face on black
 # rerun: transparent big digits 4px lower, ARMS digits centred
 # rerun: shared stone tiles, boolean widgets
+# rerun: per-position big digits
