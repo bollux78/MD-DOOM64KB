@@ -89,8 +89,8 @@ def main():
         (dest / ('flags-' + stem + '.txt')).write_text(flags[name])
         nm = subprocess.run([str(nm_exe), str(src.with_suffix('.elf'))], check=True, capture_output=True, text=True).stdout
         assert 'R60_WallColumn' in nm, ('R60 linked kernel mismatch', name)
-        # R_RenderSegLoop may be inlined into R_StoreWallRange by LTO, so it is not required as a symbol.
-        for sym in ('I_FinishUpdate', 'r22_fb', '_g_gametic', '_g_vblankCount', 'R_StoreWallRange'):
+        # R_RenderSegLoop and R_StoreWallRange are inlined by LTO in the normal build, so they are not required symbols.
+        for sym in ('I_FinishUpdate', 'r22_fb', '_g_gametic', '_g_vblankCount'):
             assert any(l.split()[-1] == sym or l.split()[-1].startswith(sym + '.') for l in nm.splitlines() if l.split()), ('symbol missing', name, sym)
         sizes = subprocess.run([str(size_exe), '-A', str(src.with_suffix('.elf'))], check=True, capture_output=True, text=True).stdout
         (dest / ('SIZE-' + name + '.txt')).write_text(sizes)

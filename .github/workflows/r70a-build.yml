@@ -1,4 +1,4 @@
-# R70-A A/B build, equivalence and timedemo. ACTIVATED (re-triggered: differential test no longer hashes uninitialised dcvars fields) with explicit maintainer authorization (2026-10-26 13:07: "autorizo compilação em todas as branchs e versões sempre").
+# R70-A A/B build, equivalence and timedemo. ACTIVATED (re-triggered: build no longer requires inlined symbols; disassembly finds changed functions itself) with explicit maintainer authorization (2026-10-26 13:07: "autorizo compilação em todas as branchs e versões sempre").
 # Only trigger: push of this file on branch exp-claudio-r70a-segloop-20261026 (plus workflow_dispatch). Proposal copy: docs/review-r70/r70a-build.workflow-proposal.yml.
 # Variants: r66-control, r70a1 (LOCALS), r70a2 (INVARIANTS), r70a12 (both). H40, crop 16/16, no R68 instrumentation.
 name: R70-A Claudio A/B build, pixel equivalence and timedemo (BlastEm only)

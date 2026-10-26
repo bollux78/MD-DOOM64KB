@@ -53,8 +53,15 @@ def test_disasm():
             res[lab] = {"R_RenderSegLoop": {k: dis.stats(v) for k, v in dis.pick(dis.parse(subprocess.run([str(ex), "-d", "-z", "x"], capture_output=True, text=True).stdout), "R_RenderSegLoop").items()}}
         md = dis.report(res, ["ctl", "a1"], ["R_RenderSegLoop"])
         assert "abs -1" in md and "stack/fp +1" in md, md
-        dis.run(str(fake), ["R_RenderSegLoop"], d / "o", [("ctl", "x"), ("a1", "x")])
-        assert (d / "o/DISASM-COMPARE.md").is_file() and (d / "o/disasm-ctl-R_RenderSegLoop.txt").is_file()
+        class Alt:                     # first call = control text, second = variant text
+            pass
+        shell = d / "objdump3"
+        shell.write_text("#!/bin/sh\ncase \"$3\" in *ctl.elf) cat %s;; *) cat %s;; esac\n" % (d / "text.txt", d / "text2.txt")); shell.chmod(0o755)
+        dis.run(str(shell), ["R_RenderSegLoop"], d / "o", [("ctl", "ctl.elf"), ("a1", "a1.elf")])
+        md2 = (d / "o/DISASM-COMPARE.md").read_text()
+        assert (d / "o/disasm-ctl-R_RenderSegLoop.txt").is_file()
+        assert "Functions whose code differs" in md2 and "R_RenderSegLoop" in md2 and "-> " in md2, md2
+        assert (d / "o/disasm-a1-changed-R_RenderSegLoop.txt").is_file()
     print("disasm parser/statistics OK")
 
 

@@ -110,12 +110,40 @@ def report(results, labels, funcnames):
     return "\n".join(L) + "\n"
 
 
+def diff_section(allstats, labels, top=14):
+    """Functions whose static counts differ from the first label: finds code that LTO inlined elsewhere."""
+    L = ["## Functions whose code differs from `%s` (all symbols, by |bytes delta|)" % labels[0], ""]
+    base = allstats[labels[0]]
+    for lab in labels[1:]:
+        rows = []
+        for sym in set(base) | set(allstats[lab]):
+            a, b = base.get(sym), allstats[lab].get(sym)
+            if a is None or b is None:
+                rows.append((sym, None if a is None else a, None if b is None else b)); continue
+            if (a["insns"], a["bytes"], a["abs"], a["stack"]) != (b["insns"], b["bytes"], b["abs"], b["stack"]):
+                rows.append((sym, a, b))
+        L += ["### %s: %d differing symbols" % (lab, len(rows)), ""]
+        if rows:
+            L += ["| symbol | insns | bytes | mem | abs | stack/fp |", "|---|---|---|---|---|---|"]
+        def key(r):
+            a, b = r[1], r[2]
+            return -abs((b["bytes"] if b else 0) - (a["bytes"] if a else 0))
+        for sym, a, b in sorted(rows, key=key)[:top]:
+            if a is None or b is None:
+                L.append("| %s | only in %s | | | | |" % (sym, lab if a is None else labels[0])); continue
+            L.append("| %s | %d -> %d | %d -> %d | %d -> %d | %d -> %d | %d -> %d |" % (
+                sym, a["insns"], b["insns"], a["bytes"], b["bytes"], a["mem_total"], b["mem_total"], a["abs"], b["abs"], a["stack"], b["stack"]))
+        L.append("")
+    return L
+
+
 def run(objdump, funcnames, out, pairs):
     out = pathlib.Path(out); out.mkdir(parents=True, exist_ok=True)
-    results, labels = {}, []
+    results, labels, allstats = {}, [], {}
     for lab, elf in pairs:
         text = subprocess.run([objdump, "-d", "-z", str(elf)], check=True, capture_output=True, text=True).stdout
         funcs = parse(text)
+        allstats[lab] = {k: stats(v) for k, v in funcs.items() if v}
         labels.append(lab); results[lab] = {}
         for fn in funcnames:
             found = pick(funcs, fn)
@@ -127,7 +155,18 @@ def run(objdump, funcnames, out, pairs):
                 listing += ["%x\t%s %s" % (i["addr"], i["mn"], ",".join(i["ops"])) for i in v]
             (out / ("disasm-%s-%s.txt" % (lab, fn))).write_text("\n".join(listing) + "\n")
     (out / "disasm.json").write_text(json.dumps(results, indent=1))
-    md = report(results, labels, funcnames)
+    md = report(results, labels, funcnames) + "\n".join(diff_section(allstats, labels)) + "\n"
+    # full listings of the (up to 4) most changed functions, so the inlined loop can be read
+    if len(labels) > 1:
+        ctl = allstats[labels[0]]
+        changed = sorted({s for lab in labels[1:] for s in allstats[lab] if s in ctl and allstats[lab][s]["bytes"] != ctl[s]["bytes"]},
+                         key=lambda s: -max(abs(allstats[lab][s]["bytes"] - ctl[s]["bytes"]) for lab in labels[1:] if s in allstats[lab]))[:4]
+        for lab, elf in pairs:
+            funcs = parse(subprocess.run([objdump, "-d", "-z", str(elf)], check=True, capture_output=True, text=True).stdout)
+            for sym in changed:
+                if sym in funcs:
+                    (out / ("disasm-%s-changed-%s.txt" % (lab, sym.replace("/", "_")))).write_text(
+                        "\n".join("%x\t%s %s" % (i["addr"], i["mn"], ",".join(i["ops"])) for i in funcs[sym]) + "\n")
     (out / "DISASM-COMPARE.md").write_text(md)
     return results, md
 
