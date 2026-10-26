@@ -2585,6 +2585,9 @@ static inline void R20_DrawRegWall(const draw_column_vars_t *v) {
     R20_RegDraw(&_s_screen[v->yl*VIEWWINDOWWIDTH+v->x],v->source,r20_wall_cellmap,frac,v->fracstep,n);
 }
 #define R20_WALL_DRAW(v) R20_DrawRegWall(v)
+#elif defined(DOOM_R71_B1B)
+extern void R71_DrawColumnWallFast(const draw_column_vars_t *);
+#define R20_WALL_DRAW(v) R71_DrawColumnWallFast(v)
 #else
 #define R20_WALL_DRAW(v) R_DrawColumnWall(v)
 #endif
