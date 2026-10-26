@@ -20,26 +20,25 @@ def load_rsp():
     return mod
 
 
-def inject_vdp_writes(g, words, resume_pc, sp, regs_hex):
-    """The RSP memory-write packet writes BYTES, and a byte write to the VDP control port is duplicated into both halves of the
-    word (0x80,0x14 -> 0x8080,0x1414), so the VDP cannot be programmed that way. Instead a 68000 snippet
-    (move.w #w,$C00004 ... ; jmp resume_pc) is written to RAM below the stack and the PC is redirected to it. Called at
-    a function entry (I_FinishUpdate), where CCR is dead. Returns the snippet address."""
+def inject_vdp_writes(g, words, sp):
+    """BlastEm's RSP has no register-write packet ('G' makes it exit) and a byte write to the VDP control port is
+    duplicated into both halves of the word, so the VDP cannot be programmed directly. Instead: stopped at the entry of
+    a function (I_FinishUpdate) the return address is at [A7]. A 68000 snippet (move.w #w,$C00004 ...; jmp original_return)
+    is written to free stack space below A7 and the return address is replaced by the snippet address, so it runs right
+    after the function returns (CCR is dead after a call; no register is touched). Returns the snippet address."""
+    ret = int.from_bytes(g.readmem(sp, 4), "big")
     code = b""
     for w in words:
         code += bytes([0x33, 0xFC]) + (w & 0xffff).to_bytes(2, "big") + (0x00C00004).to_bytes(4, "big")   # move.w #w,$00C00004.l
-    code += bytes([0x4E, 0xF9]) + resume_pc.to_bytes(4, "big")                                               # jmp resume_pc.l
-    snippet = (sp - 0x400) & ~1
+    code += bytes([0x4E, 0xF9]) + ret.to_bytes(4, "big")                                                     # jmp ret.l
+    snippet = (sp - 0x1800) & ~1
     r = g.req("M%x,%x:%s" % (snippet, len(code), code.hex()))
     if r != "OK":
         raise RuntimeError("snippet write refused: %r" % r)
-    new_regs = regs_hex[:17 * 8] + "%08x" % snippet + regs_hex[18 * 8:]
-    r = g.req("G" + new_regs)
-    if r != "OK":                                  # fall back to the single-register write (PC is register 0x11)
-        r2 = g.req("P11=%08x" % snippet)
-        if r2 != "OK":
-            raise RuntimeError("cannot redirect PC: G -> %r, P -> %r" % (r, r2))
-    return snippet
+    r = g.req("M%x,4:%08x" % (sp, snippet))
+    if r != "OK":
+        raise RuntimeError("return address write refused: %r" % r)
+    return snippet, ret
 
 
 def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_seconds=1500, log=print):
@@ -59,14 +58,15 @@ def sample_loop(g, syms, lines=16, max_samples=400000, stop_tic=2134, max_second
         if name in syms:
             reg0 = g.readmem(syms[name], 1)[0]
             log("VDP shadow register 0 = %#04x (%s)" % (reg0, name)); break
-    assert g.req("Z0,%x,2" % hvec) == "OK"
-    if vvec != hvec:
-        assert g.req("Z0,%x,2" % vvec) == "OK"
     regs = g.req("g")
     sp = int(regs[15 * 8:16 * 8], 16)
-    pc0 = int(regs[17 * 8:18 * 8], 16)
-    snippet = inject_vdp_writes(g, [0x8000 | (reg0 | 0x10), 0x8A00 | ((lines - 1) & 0xff)], pc0, sp, regs)
-    log("VDP snippet at %#x, resume %#x" % (snippet, pc0))
+    snippet, ret = inject_vdp_writes(g, [0x8000 | (reg0 | 0x10), 0x8A00 | ((lines - 1) & 0xff)], sp)
+    log("VDP snippet at %#x, return to %#x (a7=%#x)" % (snippet, ret, sp))
+    # the 68000 bus is 24 bit: break on the masked addresses, and on the raw ones too when they differ
+    hv24, vv24 = hvec & 0xFFFFFF, vvec & 0xFFFFFF
+    for a_ in sorted({hv24, vv24}):
+        assert g.req("Z0,%x,2" % a_) == "OK"
+    hvec, vvec = hv24, vv24
     hist, vhist = {}, {}
     meta = {"hint_vector": hvec, "vint_vector": vvec, "lines": lines, "hint_samples": 0, "vint_samples": 0, "invalid_sp": 0,
             "status": "max_samples", "tic_first": None, "tic_last": None, "regs_len": None, "stops": 0}

@@ -243,9 +243,9 @@ jobs:
           set -uo pipefail
           for v in r66-perf r70a12; do [ -s "dist/r70/doom-md-r60-$v.elf" ] || { echo "SKIPPED - build/capture unavailable ($v)"; exit 0; }; done
           python3 scripts/lab/r70_disasm_compare.py --objdump "$OBJDUMP" --func R42_DrawPackedWall,R_DrawSegTextureColumn,R_DrawColumnWall,R_GetColumn,R64A_FrameBegin,R_StoreWallRange,R_Subsector,R_ScaleFromGlobalAngle dist/r71/disasm r66-control=dist/r70/doom-md-r60-r66-perf.elf r70a12=dist/r70/doom-md-r60-r70a12.elf > dist/r71/disasm.log 2>&1 || true
-          python3 scripts/lab/r71_annotate.py --title "R71 static counts" --file dist/r71/disasm/DISASM-COMPARE.md --chunk 12000 --max 3
+          python3 scripts/lab/r71_annotate.py --title "R71 static counts" --file dist/r71/disasm/DISASM-COMPARE.md --chunk 3900 --max 9
           for f in R42_DrawPackedWall R_DrawSegTextureColumn R_DrawColumnWall; do
-            g="dist/r71/disasm/disasm-r66-control-$f.txt"; [ -f "$g" ] && python3 scripts/lab/r71_annotate.py --title "R71 control asm $f" --file "$g" --chunk 12000 --max 3
+            g="dist/r71/disasm/disasm-r66-control-$f.txt"; [ -f "$g" ] && python3 scripts/lab/r71_annotate.py --title "R71 control asm $f" --file "$g" --chunk 3900 --max 9
           done
           exit 0
 

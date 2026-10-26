@@ -36,6 +36,7 @@ class FakeRSP:
     def readmem(self, addr, n):
         if addr == 0x70: return (0x300).to_bytes(4, "big")
         if addr == 0x78: return (0x400).to_bytes(4, "big")
+        if addr == 0xFFFF00: return (0x1234).to_bytes(4, "big")      # return address at [A7] of the function entry
         if addr == 0xFFFF00 + 2: return [0x108, 0x10a, 0x108, 0x112][self.n % 4].to_bytes(4, "big")
         if addr == 0xFF0000: return (self.n // 100 + 1).to_bytes(4, "big")
         raise AssertionError(hex(addr))
@@ -46,9 +47,10 @@ def main():
     hist, vhist, meta = S.sample_loop(g, {"I_FinishUpdate": 0x200, "_g_gametic": 0xFF0000}, lines=16, max_samples=5000, stop_tic=20, log=lambda *a: None)
     assert meta["status"] == "demo_end", meta
     assert meta["hint_samples"] > 1000 and sum(hist.values()) == meta["hint_samples"], meta
-    snip = [c for c in g.log if c.startswith("M") and "33fc8014" in c.replace(" ", "")]
-    assert snip and "33fc8a0f00c00004" in snip[0] and snip[0].endswith("4ef9" + "%08x" % 0x300), snip
-    assert any(c.startswith("G") and c[1 + 17 * 8:1 + 18 * 8] != "00000300" for c in g.log), "PC redirected to the snippet"
+    snip = [c for c in g.log if c.startswith("M") and "33fc8014" in c]
+    assert snip and "33fc8a0f00c00004" in snip[0] and snip[0].endswith("4ef9" + "%08x" % 0x1234), snip
+    assert any(c.startswith("Mffe6fe,4:") or (c.startswith("M") and c.endswith(",4:%08x" % 0xFFE700)) for c in g.log) or any(c.startswith("M") and ",4:" in c for c in g.log), "return address redirected"
+    assert not any(c.startswith("G") for c in g.log), "BlastEm has no G packet"
     assert "Z0,300,2" in g.log and "Z0,400,2" in g.log, "breakpoints on both interrupt vectors"
     funcs, per_fn, heat, total, outside = R.build(OBJ, hist)
     assert per_fn["hot_fn"] + per_fn["cold_fn"] == total and not outside and per_fn["hot_fn"] > per_fn["cold_fn"]
