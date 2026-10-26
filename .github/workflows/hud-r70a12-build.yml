@@ -233,3 +233,4 @@ jobs:
 # retry: whitelist DOOM_HUD_WAD
 # retry: packed face state
 # rerun: new FS background/faces
+# rerun: 4-wide centred face on black

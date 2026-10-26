@@ -8,7 +8,7 @@
 #if !defined(DOOM_R57_NARROW256) || !defined(DOOM_R57_VIEW_MENU) || !defined(DOOM_R57_H32)
 #error DOOM_HUD_WAD needs the R57 H32/H40 view-menu layout (r57_hud_dirty, r57_h32_active)
 #endif
-#if (HUDW_VRAM_BASE < R22_PAIR_TILE_BASE + 512) || (HUDW_VRAM_BASE + HUDW_NTILES + 12 > 1440)
+#if (HUDW_VRAM_BASE < R22_PAIR_TILE_BASE + 512) || (HUDW_VRAM_BASE + HUDW_NTILES + 4 * HUDW_FACE_W > 1440)
 #error HUD tiles overlap the pair patterns or the SGDK font
 #endif
 #define HUDW_ROW0 22u
@@ -38,7 +38,7 @@ static void HUDW_UploadFace(void)
     VDP_setAutoInc(2);
     *ctrl = VDP_WRITE_VRAM_ADDR((uint32_t)(HUDW_VRAM_BASE + HUDW_FACE_SLOT) * 32u);
     const uint32_t *w = &hudw_faces[hudw_face.index < HUDW_NFACES ? hudw_face.index : 0][0][0];
-    for (uint16_t i = 0; i < 12u * 8u; i++) *data = w[i];
+    for (uint16_t i = 0; i < 4u * HUDW_FACE_W * 8u; i++) *data = w[i];
     R22_Unlock(sr);
     hudw_face.shown = hudw_face.index;
 }
