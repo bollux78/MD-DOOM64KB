@@ -1,0 +1,50 @@
+# HUD-WAD: render the original status bar (composed from the IWAD patches) and the current recreation as PNGs and publish them
+# as base64 annotations (artifacts cannot be downloaded through the review proxy). No ROM build, no emulator. Runs under the
+# maintainer's standing authorization; trigger limited to this branch and this file.
+name: HUD-WAD Claudio comparison images (original vs recreated, from the runner IWAD)
+
+on:
+  push:
+    branches: [exp-claudio-hud-wad-20261026]
+    paths:
+      - '.github/workflows/hud-images.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hud-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Render images from the pinned runner-local IWAD (not committed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/img
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          if not source.is_file() or source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771':
+              raise SystemExit('Missing or invalid runner-local shareware WAD')
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+          python3 scripts/lab/hud_images.py --wad scripts/doom1.wad --out-orig dist/img/hud-original.png --out-cur dist/img/hud-current.png --b64 dist/img/b64.txt
+          i=0
+          for tag in ORIG CUR; do
+            grep "^$tag " dist/img/b64.txt | cut -d' ' -f2 | fold -w 3400 > dist/img/$tag.parts
+            n=$(wc -l < dist/img/$tag.parts); k=0
+            while IFS= read -r part; do
+              k=$((k+1)); echo "::notice title=IMG $tag $k/$n::$part"
+            done < dist/img/$tag.parts
+          done
