@@ -10,7 +10,7 @@
 #ifndef HUDW_VRAM_BASE
 #define HUDW_VRAM_BASE 800u              /* free in gameplay: pair tiles use 256..767, the SGDK font starts at 1440 */
 #endif
-#define HUDW_FACE_SLOT HUDW_NTILES       /* 12 tiles after the static ones hold the current face */
+#define HUDW_FACE_SLOT HUDW_NTILES       /* HUDW_FACE_W x 4 tiles after the static ones hold the current face */
 #define HUDW_WORD(id) ((uint16_t)(0xE000u | (HUDW_VRAM_BASE + (uint16_t)(id))))   /* priority + palette 3 */
 #define HUDW_FWORD(id) ((uint16_t)(0xC000u | (HUDW_VRAM_BASE + (uint16_t)(id))))  /* priority + palette 2: the face slot */
 
@@ -58,8 +58,8 @@ static void hudw_compose_ids(const HudState *s, uint8_t row, uint16_t *out)
         out[HUDW_KEYS_C] = hudw_keys[(s->keys >> k) & 1 ? k : 3];
     }
     if ((unsigned)((int)row - HUDW_FACE_R) < 4u)
-        for (uint8_t c = 0; c < 3; c++)
-            out[HUDW_FACE_C + c] = (uint16_t)(HUDW_FACE_SLOT + (row - HUDW_FACE_R) * 3 + c);
+        for (uint8_t c = 0; c < HUDW_FACE_W; c++)
+            out[HUDW_FACE_C + c] = (uint16_t)(HUDW_FACE_SLOT + (row - HUDW_FACE_R) * HUDW_FACE_W + c);
     if ((unsigned)((int)row - HUDW_TABLE_R) < 4u) {
         uint8_t t = (uint8_t)(row - HUDW_TABLE_R);
         for (uint8_t part = 0; part < 2; part++) {

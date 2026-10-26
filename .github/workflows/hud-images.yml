@@ -48,3 +48,4 @@ jobs:
             done < dist/img/$tag.parts
           done
 # run: FS bg + FS faces, two palettes
+# rerun: 4-wide centred face on black

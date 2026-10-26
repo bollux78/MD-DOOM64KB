@@ -45,14 +45,14 @@ def test_iwad_roundtrip():
 
 def test_assets_and_header():
     a = G.build_assets(G.read_iwad(G.make_iwad(synthetic_lumps())))
-    assert len(a["faces"]) == 42 and all(len(f) == 12 for f in a["faces"])
-    assert len(a["tiles"]) + 12 <= 255, len(a["tiles"])
+    assert len(a["faces"]) == 42 and all(len(f) == 16 for f in a["faces"])
+    assert len(a["tiles"]) + 16 <= 255, len(a["tiles"])
     assert len(a["palette"]) == 16 and a["palette"][0] == (0, 0, 0)
     assert all(0 <= w < 2 ** 32 for t in a["tiles"] for w in t)
     # every background id is a valid static tile
     assert all(0 <= v < len(a["tiles"]) for r in a["bgmap"] for v in r)
     h = G.emit_header(a)
-    for needle in ("hudw_pal[16]", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][12][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
+    for needle in ("hudw_pal[16]", "hudw_tiles[%d][8]" % len(a["tiles"]), "hudw_faces[42][16][8]", "HUDW_NTILES", "hudw_bgmap[4][32]"):
         assert needle in h, needle
     # determinism
     b = G.build_assets(G.read_iwad(G.make_iwad(synthetic_lumps())))
@@ -65,7 +65,7 @@ def test_model_and_preview():
     for st in G.SAMPLE_STATES:
         rows = G.model_rows(a, st)
         assert len(rows) == 4 and all(len(r) == 32 for r in rows)
-        assert all(0 <= v < n + 12 for r in rows for v in r)
+        assert all(0 <= v < n + 16 for r in rows for v in r)
         # health 63 -> blank leading? 3 digits widget: values < 100 blank the hundreds
         if st["health"] == 63:
             assert rows[0][G.LAYOUT["HEALTH_C"]] == a["ids"]["blank_top"]

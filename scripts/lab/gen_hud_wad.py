@@ -9,7 +9,7 @@ Floyd-Steinberg dithered, the face square is a flat colour) and writes a C heade
     hud_fpal[16]           CRAM words for palette line 2 (faces)
     hud_tiles[N][8]        static tiles: background, big digits (8x16 as top/bottom tiles), small digits, keys, blanks
     hud_bgmap[4][32]       background tile ids (index into hud_tiles) of the 32x4-cell bar
-    hud_faces[42][12][8]   face frames, 3 x 4 tiles each, uploaded to a 12-tile VRAM slot when the face changes
+    hud_faces[42][16][8]   face frames, 4 x 4 tiles each, uploaded to a 16-tile VRAM slot when the face changes
 
 The bar is a recreation, not a copy: STBAR is squeezed from 320 to 256 pixels (0.8 horizontally) so it fits both the H32 and the
 H40 screen, numbers and faces are separate tile-aligned widgets, and the 15 colours are chosen by k-means over all the artwork.
@@ -24,7 +24,8 @@ LAYOUT = dict(
     HEALTH_C=5, HEALTH_R=0,      # 3 big digits + percent sign
     ARMOR_C=18, ARMOR_R=0,       # 3 big digits + percent sign
     ARMS_C=10, ARMS_R=0,         # 3x2 small digits (weapons 2..7)
-    FACE_C=14, FACE_R=0,         # 3 x 4 tiles
+    FACE_C=14, FACE_R=0,         # 4 x 4 tiles: the 24 x 29 face is centred in 32 x 32, black round it, frame kept on top
+    FACE_W=4,
     KEYS_C=24, KEYS_R=0,         # 3 stacked tiles
     TABLE_C=26, TABLE_R=0,       # 4 rows: ammo current (3 digits) + maximum (3 digits)
 )
@@ -200,7 +201,8 @@ def build_images(lumps):
     L = LAYOUT
     panel_big = median_color(bar, L["HEALTH_C"] * 8, 0, (L["HEALTH_C"] + 3) * 8, 16)
     panel_small = median_color(bar, L["ARMS_C"] * 8, 0, (L["ARMS_C"] + 3) * 8, 16)
-    panel_face = median_color(bar, L["FACE_C"] * 8, 0, (L["FACE_C"] + 3) * 8, 32)
+    panel_face = (0, 0, 0)                                    # the face square is black
+    frame_face = median_color(bar, L["FACE_C"] * 8, 0, (L["FACE_C"] + L["FACE_W"]) * 8, 2)   # top frame line, kept above the face
     panel_key = median_color(bar, L["KEYS_C"] * 8, 0, (L["KEYS_C"] + 1) * 8, 24)
     # 2. widget glyph images
     def glyph(name, dw, dh, bg):
@@ -238,17 +240,21 @@ def build_images(lumps):
     for n in FACE_NAMES:
         g = rgb(n)
         w, h = P[n][0], P[n][1]
-        img = solid(24, 32, panel_face)
-        mask = [[False] * 24 for _ in range(32)]          # True = pixel belongs to the face art (False: flat panel colour)
-        ox, oy = (24 - w) // 2, (32 - h) // 2
+        FW = L["FACE_W"] * 8
+        img = solid(FW, 32, panel_face)
+        for y in range(2):
+            for x in range(FW):
+                img[y][x] = frame_face                       # the two top rows stay the HUD frame
+        mask = [[False] * FW for _ in range(32)]             # True = face art; False = flat (black, or the frame on the top rows)
+        ox, oy = (FW - w) // 2, min(2, 32 - h)               # centred; 2 px down so the frame above is not covered
         for y in range(h):
             for x in range(w):
-                if g[y][x] is not None and 0 <= ox + x < 24 and 0 <= oy + y < 32:
+                if g[y][x] is not None and 0 <= ox + x < FW and 0 <= oy + y < 32:
                     img[oy + y][ox + x] = g[y][x]
                     mask[oy + y][ox + x] = True
         faces.append(img)
         fmasks.append(mask)
-    return dict(bar=bar, big=big, ysm=ysm, gsm=gsm, keys=keys, faces=faces, fmasks=fmasks, panel_small=panel_small, panel_face=panel_face)
+    return dict(bar=bar, big=big, ysm=ysm, gsm=gsm, keys=keys, faces=faces, fmasks=fmasks, panel_small=panel_small, panel_face=panel_face, frame_face=frame_face)
 
 
 def quantise_palette(colours, k=15, iters=12):
@@ -299,13 +305,12 @@ def fs_dither(img, pal, mask=None, flat=None, strength=1.0):
     buf = [[[float(v) for v in px] for px in r] for r in img]
     out = [[None] * w for _ in range(h)]
     near = lambda c: min(pal, key=lambda p: (_dist(p, c), p))
-    flat_c = near(flat) if flat is not None else None
     for y in range(h):
         xs = range(w) if y % 2 == 0 else range(w - 1, -1, -1)
         d = 1 if y % 2 == 0 else -1
         for x in xs:
             if mask is not None and not mask[y][x]:
-                out[y][x] = flat_c
+                out[y][x] = near(flat[y][x]) if isinstance(flat, list) else near(flat)
                 continue
             old = tuple(0 if v < 0 else 255 if v > 255 else int(round(v)) for v in buf[y][x])
             new = near(old)
@@ -332,7 +337,7 @@ def build_assets(lumps):
     hist3 = {}
     for r in range(ROWS * 8):
         for c in range(COLS * 8):
-            if not (L["FACE_C"] * 8 <= c < (L["FACE_C"] + 3) * 8):
+            if not (L["FACE_C"] * 8 <= c < (L["FACE_C"] + L["FACE_W"]) * 8):
                 hist3[im["bar"][r][c]] = hist3.get(im["bar"][r][c], 0) + 1
     glyphs = list(im["big"].values()) + list(im["ysm"].values()) + list(im["gsm"].values()) + im["keys"]
     for gimg in glyphs:
@@ -376,7 +381,7 @@ def build_assets(lumps):
     for i in range(3):
         for rr in range(2):
             dyn_cells.add((L["ARMS_C"] + i, L["ARMS_R"] + rr))
-    for i in range(3):
+    for i in range(L["FACE_W"]):
         for rr in range(4):
             dyn_cells.add((L["FACE_C"] + i, L["FACE_R"] + rr))
     for rr in range(3):
@@ -401,15 +406,16 @@ def build_assets(lumps):
             for x in range(24):
                 if mask[y][x]:
                     fhist[img[y][x]] = fhist.get(img[y][x], 0) + 1
-    fcentres = quantise_palette(fhist, k=14)
-    fcentres.append(tuple(min(255, (im["panel_face"][i] >> 5) * 255 // 7) for i in range(3)))      # the flat face square
+    snap = lambda c: tuple(min(255, (c[i] >> 5) * 255 // 7) for i in range(3))
+    fcentres = quantise_palette(fhist, k=13) + [(0, 0, 0), snap(im["frame_face"])]     # + black square + frame line
     fpal = [(0, 0, 0)] + fcentres
     while len(fpal) < 16:
         fpal.append((0, 0, 0))
     face_tiles = []
     for img, mask in zip(im["faces"], im["fmasks"]):
-        d = fs_dither(img, fpal[1:], mask, fcentres[-1])
-        face_tiles.append([tile_of(d, tx, ty) for ty in range(4) for tx in range(3)])
+        flat = [[snap(im["frame_face"]) if y < 2 else (0, 0, 0) for x in range(L["FACE_W"] * 8)] for y in range(32)]
+        d = fs_dither(img, fpal[1:], mask, flat)
+        face_tiles.append([tile_of(d, tx, ty) for ty in range(4) for tx in range(L["FACE_W"])])
     dist = _dist
     cache = {}
     def nearest(c):
@@ -448,7 +454,7 @@ def emit_header(a):
     o.append("static const uint8_t hudw_keys[4] = {%s};" % ",".join(map(str, ids["keys"])))
     o.append("static const uint16_t hudw_pal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["palette"]))
     o.append("static const uint16_t hudw_fpal[16] = {%s};" % ",".join("0x%04X" % md_word(c) for c in a["fpalette"]))
-    assert len(a["tiles"]) + 12 <= 255, "tile ids no longer fit the uint8 tables"
+    assert len(a["tiles"]) + 16 <= 255, "tile ids no longer fit the uint8 tables"
     wide = False
     o.append("static const %s hudw_bgmap[%d][%d] = {" % ("uint16_t" if wide else "uint8_t", ROWS, COLS))
     for r in a["bgmap"]:
@@ -458,7 +464,7 @@ def emit_header(a):
     for t in a["tiles"]:
         o.append("  {" + ",".join("0x%08XUL" % w for w in t) + "},")
     o.append("};")
-    o.append("static const uint32_t hudw_faces[%d][12][8] = {" % len(a["faces"]))
+    o.append("static const uint32_t hudw_faces[%d][16][8] = {" % len(a["faces"]))
     for f in a["faces"]:
         o.append(" {")
         for t in f:
@@ -494,8 +500,8 @@ def model_rows(a, st):
         rows[L["KEYS_R"] + k][L["KEYS_C"]] = ids["keys"][k if st["keys"] >> k & 1 else 3]
     n = len(a["tiles"])
     for r in range(4):
-        for c in range(3):
-            rows[L["FACE_R"] + r][L["FACE_C"] + c] = n + r * 3 + c       # VRAM face slot, filled from hud_faces[face]
+        for c in range(L["FACE_W"]):
+            rows[L["FACE_R"] + r][L["FACE_C"] + c] = n + r * L["FACE_W"] + c       # VRAM face slot, filled from hud_faces[face]
     for t in range(4):
         for part, v in ((0, st["ammo"][t]), (1, st["maxammo"][t])):
             v = max(0, min(999, v))
