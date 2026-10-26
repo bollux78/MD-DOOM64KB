@@ -1,0 +1,329 @@
+# R71 GPT-owned 5-ROM matrix, user-authorized x360-linux tests. Trigger only changes to this workflow file on experimental branch.
+name: R71 ChatGPT OFS and B1b renderer A/B (BlastEm)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - exp-chatgpt-r71-implementation-20261026
+    paths:
+      - .github/workflows/r71-build.yml
+
+concurrency:
+  group: r71-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+
+jobs:
+  r71-ab:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify intended R71 source and record environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r71
+          expected_branch='exp-chatgpt-r71-implementation-20261026'
+          test "$GITHUB_REF" = "refs/heads/$expected_branch" || { echo "ERROR: must run on $expected_branch"; exit 1; }
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
+          { echo "branch=$GITHUB_REF"; echo "commit=$(git rev-parse HEAD)"; echo "baseline=f5a9daa7a0bd7225bbc227630defc73c67c34f1e"; uname -a; uptime; nproc; } | tee dist/r71/ENV.txt
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1
+          assert f.count('echo "READY: R35 4MiB linear')==1
+          assert f.count('if set -q DOOM_R60_BUILD')==1
+          assert f.count("set defs $defs '-DDOOM_R60_PAIR_ASM'")==1
+          assert f.count("'-DDOOM_R21_SEGLOOP_LOCALS'")==1 and f.count("'-DDOOM_R70A_INVARIANTS'")==1 and f.count("'-DDOOM_R71_OFS'")==1 and f.count("'-DDOOM_R71_B1B'")==1
+          print('fish structure PASS')
+          CHECK
+
+      - name: Toolchain, BlastEm and oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish; command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          test -x "$OBJDUMP"
+          test -x "$BLASTEM"
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r71/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r71/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r71/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          if not source.is_file():
+              raise SystemExit(f'Missing runner-local shareware WAD: {source}')
+          if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
+              raise SystemExit(f'Invalid runner-local shareware WAD: {source}')
+          target.parent.mkdir(exist_ok=True,parents=True)
+          shutil.copyfile(source,target)
+          print('Pinned shareware WAD verified:',source)
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r71/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r71/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r71/PREFLIGHT-color-report.json
+
+      - name: NumPy present (no dynamic installs) and Python preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import numpy;print("numpy",numpy.__version__)'
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r70.py scripts/lab/build_r71.py scripts/lab/test_r71_host.py scripts/lab/check_r71_inert.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py scripts/lab/r70_disasm_compare.py scripts/lab/test_r70_tools.py scripts/lab/test_r70a_segloop.py scripts/lab/check_r70_inert.py scripts/lab/r64a_rsp_capture.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: R71 host tests (differential seg loop, tooling) and inertness against the exact R66 base
+        shell: bash
+        run: |
+          set +e   # the Actions bash shell runs with -e; this step collects every result itself
+          set -u
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+          { gcc --version 2>&1 | sed -n 1p; python3 --version 2>&1; } > dist/r71/HOST.log
+          cat dist/r71/HOST.log
+          rm -rf "$RUNNER_TEMP/base66" && mkdir -p "$RUNNER_TEMP/base66"
+          git archive f5a9daa7a0bd7225bbc227630defc73c67c34f1e | tar -x -C "$RUNNER_TEMP/base66"
+          fail=0
+          for t in "scripts/lab/test_r71_host.py" "scripts/lab/test_r70a_segloop.py 20000" "scripts/lab/test_r70_tools.py" "scripts/lab/check_r71_inert.py $RUNNER_TEMP/base66 ."; do
+            echo "== $t" | tee -a dist/r71/HOST.log
+            python3 $t > dist/r71/HOST-last.txt 2>&1; rc=$?
+            cat dist/r71/HOST-last.txt | tee -a dist/r71/HOST.log
+            if [ "$rc" -ne 0 ]; then
+              echo "::error title=R71 host test failed::rc=$rc cmd=$t $(tail -n 25 dist/r71/HOST-last.txt | enc)"
+              fail=1
+            fi
+          done
+          echo "::notice title=R71 host test log::$(tail -n 60 dist/r71/HOST.log | enc)"
+          exit $fail
+
+      - name: Build the five variants, each in its own copy of the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          export R71_WORK="$RUNNER_TEMP/r70-work-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rc=0
+          python3 scripts/lab/build_r71.py 2>&1 | tee dist/r71/BUILD.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+            echo "::error title=R71 build failed (rc=$rc), first error lines::$(grep -nE 'error|Error|undefined reference|No such file|FAIL|Assertion' dist/r71/BUILD.log | head -n 12 | enc)"
+            echo "::error title=R71 build failed, last 30 lines::$(tail -n 30 dist/r71/BUILD.log | enc)"
+            exit "$rc"
+          fi
+          sha256sum dist/r71/*.bin | tee dist/r71/ROM-SHA256.txt
+
+      - name: Verify manifest (5 ROMs, sizes, BSS, hashes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r71')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert [r['variant'] for r in rows]==['r66-control','r70a12','r71ofs','r71b1b','r71both'] and len(list(d.glob('*.bin')))==5
+          lines=['| variant | ROM bytes | BSS bytes | SHA-256 |','|---|---:|---:|---|']
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920 and len(b)<=4*1024*1024,r
+              lines.append('| %s | %d | %d | %s |'%(r['variant'],r['bytes'],r['bss_bytes'],r['sha256']))
+          (d/'ROM-TABLE.md').write_text('\n'.join(lines)+'\n'); print('\n'.join(lines))
+          CHECK
+
+      - name: Comparative disassembly of the modified routines
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          miss=0
+          for v in r66-perf r70a12 r71ofs r71b1b r71both; do
+            [ -s "dist/r71/doom-md-r60-$v.elf" ] || { echo "MISSING ELF: dist/r71/doom-md-r60-$v.elf"; miss=1; }
+          done
+          if [ "$miss" -ne 0 ]; then
+            echo "SKIPPED - build/capture unavailable (not all five ELFs exist); disassembly not attempted." | tee dist/r71/DISASM-SKIPPED.txt
+            echo "::warning title=R71 disassembly::SKIPPED - build/capture unavailable"
+            exit 0
+          fi
+          mkdir -p dist/r71/disasm
+          python3 scripts/lab/r70_disasm_compare.py --objdump "$OBJDUMP" --func R_RenderSegLoop,R_StoreWallRange,R42_DrawPackedWall,R_DrawColumnFlat,R_DrawSegTextureColumn dist/r71/disasm \
+            r66-control=dist/r71/doom-md-r60-r66-perf.elf r70a12=dist/r71/doom-md-r60-r70a12.elf \
+            r71ofs=dist/r71/doom-md-r60-r71ofs.elf r71b1b=dist/r71/doom-md-r60-r71b1b.elf \
+            r71both=dist/r71/doom-md-r60-r71both.elf > dist/r71/disasm/run.log 2> dist/r71/disasm/stderr.log
+          rc=$?
+          tail -n 60 dist/r71/disasm/run.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=R71 disassembly failed::rc=$rc $(tail -n 30 dist/r71/disasm/stderr.log | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500)"
+            exit "$rc"
+          fi
+
+      - name: Require rebuilt R66 control byte-identical to the approved 7.21 FPS ROM (run 40231459814)
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r71/original-control
+
+      - name: Exact original R66 control ROM binary comparison (fails the workflow if different)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp dist/r71/doom-md-r60-r66-perf.bin dist/r71/original-control/doom-md-r60-r66-perf.bin
+          sha256sum dist/r71/doom-md-r60-r66-perf.bin
+          echo 'PASS original R66 ROM reproduced byte for byte.'
+
+      - name: Timedemo capture, r66-control
+        id: cap_control
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r66-perf.bin dist/r71/doom-md-r60-r66-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r66-control --rom dist/r71/doom-md-r60-r66-perf.bin --elf dist/r71/doom-md-r60-r66-perf.elf --out dist/r71/capture/r66-control --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Timedemo capture, r71ofs
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r71ofs.bin dist/r71/doom-md-r60-r71ofs.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r71ofs --rom dist/r71/doom-md-r60-r71ofs.bin --elf dist/r71/doom-md-r60-r71ofs.elf --out dist/r71/capture/r71ofs --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Timedemo capture, r71b1b
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r71b1b.bin dist/r71/doom-md-r60-r71b1b.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r71b1b --rom dist/r71/doom-md-r60-r71b1b.bin --elf dist/r71/doom-md-r60-r71b1b.elf --out dist/r71/capture/r71b1b --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Timedemo capture, r70a12
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r70a12.bin dist/r71/doom-md-r60-r70a12.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r70a12 --rom dist/r71/doom-md-r60-r70a12.bin --elf dist/r71/doom-md-r60-r70a12.elf --out dist/r71/capture/r70a12 --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Timedemo capture, r71both
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r71both.bin dist/r71/doom-md-r60-r71both.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label r71both --rom dist/r71/doom-md-r60-r71both.bin --elf dist/r71/doom-md-r60-r71both.elf --out dist/r71/capture/r71both --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Timedemo capture, r66-control repeat (run-to-run determinism)
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/doom-md-r60-r66-perf.bin dist/r71/doom-md-r60-r66-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)" | tee -a dist/r71/CAPTURE.log; exit 0; }; done
+          set -e
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --label repeat --rom dist/r71/doom-md-r60-r66-perf.bin --elf dist/r71/doom-md-r60-r66-perf.elf --out dist/r71/capture/repeat --max-emulated-frames 150000 --max-breaks 60000 --timeout 120 | tee -a dist/r71/CAPTURE.log
+
+      - name: Compare pixels and timing (fails if any variant differs in pixels)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          specs=()
+          for v in r66-control r70a12 r71ofs r71b1b r71both repeat; do
+            if [ -s "dist/r71/capture/$v/frames.jsonl" ]; then specs+=("$v=dist/r71/capture/$v"); else echo "MISSING capture: $v"; fi
+          done
+          if [ "${#specs[@]}" -ne 6 ] || [ "${specs[0]%%=*}" != r66-control ]; then
+            mkdir -p dist/r71/compare
+            echo "ERROR - six complete captures required." | tee dist/r71/compare/REPORT.md
+            echo "::error title=R71 compare::Missing mandatory capture"
+            exit 2
+          fi
+          python3 scripts/lab/r70_compare.py dist/r71/compare "${specs[@]}"
+          python3 scripts/lab/r70_compare.py dist/r71/compare-vs-a12 "r70a12=dist/r71/capture/r70a12" "r71ofs=dist/r71/capture/r71ofs" "r71b1b=dist/r71/capture/r71b1b" "r71both=dist/r71/capture/r71both"
+
+      - name: Publish report as annotations (readable without artifact download)
+        if: always()
+        shell: bash
+        run: |
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | head -c 14000; }
+          [ -f dist/r71/ROM-TABLE.md ] && echo "::notice title=R71 ROM table::$(cat dist/r71/ROM-TABLE.md | enc)"
+          if [ -f dist/r71/compare/REPORT.md ]; then
+            echo "::notice title=R71 A/B report part 1::$(sed -n '1,45p' dist/r71/compare/REPORT.md | enc)"
+            echo "::notice title=R71 A/B report part 2::$(sed -n '46,120p' dist/r71/compare/REPORT.md | enc)"
+          else
+            echo "::warning title=R71 A/B report::no compare/REPORT.md produced"
+          fi
+          if [ -f dist/r71/disasm/DISASM-COMPARE.md ]; then
+            echo "::notice title=R71 disassembly part 1::$(sed -n '1,40p' dist/r71/disasm/DISASM-COMPARE.md | enc)"
+            echo "::notice title=R71 disassembly part 2::$(sed -n '41,90p' dist/r71/disasm/DISASM-COMPARE.md | enc)"
+          fi
+          echo "::notice title=R71 capture log::$( (cat dist/r71/CAPTURE.log 2>/dev/null) | tr -s ' \n' ' ' | enc)"
+
+      - name: Upload R71 artifacts (including partial evidence on failure)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r71-round1
+          path: dist/r71/
+          retention-days: 90
+          if-no-files-found: warn
