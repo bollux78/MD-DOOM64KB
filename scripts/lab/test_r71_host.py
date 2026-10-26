@@ -178,7 +178,7 @@ int main(void) {
 }
 """
 for label, extra in [('b1b-only','#define R71_PixelByte R22_PixelByte\n'),('b1b-ofs','')]:
-    code=program+extra+(source_ofs if not extra else '')+source_ref+tail
+    code=program+extra+('#define DOOM_R71_OFS 1\n' if not extra else '')+(source_ofs if not extra else '')+source_ref+tail
     with tempfile.TemporaryDirectory(prefix='r71-'+label+'-') as td:
         f=Path(td)/'test.c'
         f.write_text(code)
