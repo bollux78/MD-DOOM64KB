@@ -700,6 +700,14 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R66_COLPAIR'
     end
+    # R70-A (exact, host-proven equivalent): DOOM_R70A_LOCALS=1 keeps the seg loop state in locals
+    # (existing DOOM_R21_SEGLOOP_LOCALS), DOOM_R70A_INVARIANTS=1 hoists loop invariants into locals.
+    if set -q DOOM_R70A_LOCALS; and test "$DOOM_R70A_LOCALS" = 1
+        set defs $defs '-DDOOM_R21_SEGLOOP_LOCALS'
+    end
+    if set -q DOOM_R70A_INVARIANTS; and test "$DOOM_R70A_INVARIANTS" = 1
+        set defs $defs '-DDOOM_R70A_INVARIANTS'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf

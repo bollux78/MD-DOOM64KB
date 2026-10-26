@@ -2767,6 +2767,43 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
 #define pixlowstep   r21_pixlowstep
 #define rw_stopx     r21_stopx
 #endif
+#if defined(DOOM_R70A_INVARIANTS)
+    /*
+     * R70-A2: values that are constant for the whole seg loop are copied once into locals.
+     * Every one of them is written only by R_StoreWallRange / R_Subsector / R_DrawMasked
+     * (audited with grep: no callee of this loop assigns them), so the copies are exact.
+     * Locals are reached with a 16-bit displacement instead of an absolute long address
+     * and cannot be reloaded after the out-of-line draw calls.
+     */
+    const int16_t r70_offset = rw_offset;
+    const int16_t r70_distance = rw_distance;
+    const angle16_t r70_centerangle = rw_centerangle;
+    const fixed_t r70_midtexturemid = rw_midtexturemid;
+    const fixed_t r70_toptexturemid = rw_toptexturemid;
+    const fixed_t r70_bottomtexturemid = rw_bottomtexturemid;
+    const int16_t r70_midtexture = midtexture;
+    const int16_t r70_toptexture = toptexture;
+    const int16_t r70_bottomtexture = bottomtexture;
+    const boolean r70_maskedtexture = maskedtexture;
+    int16_t *const r70_maskedtexturecol = maskedtexturecol;
+#if defined FLAT_SPAN
+    const int16_t r70_ceilingplane_color = ceilingplane_color;
+    const int16_t r70_floorplane_color = floorplane_color;
+#define ceilingplane_color r70_ceilingplane_color
+#define floorplane_color   r70_floorplane_color
+#endif
+#define rw_offset           r70_offset
+#define rw_distance         r70_distance
+#define rw_centerangle      r70_centerangle
+#define rw_midtexturemid    r70_midtexturemid
+#define rw_toptexturemid    r70_toptexturemid
+#define rw_bottomtexturemid r70_bottomtexturemid
+#define midtexture          r70_midtexture
+#define toptexture          r70_toptexture
+#define bottomtexture       r70_bottomtexture
+#define maskedtexture       r70_maskedtexture
+#define maskedtexturecol    r70_maskedtexturecol
+#endif
 
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
@@ -3106,6 +3143,23 @@ static void R_RenderSegLoop(int16_t rw_x, boolean segtextured, boolean markfloor
         floorclip[rw_x] = fc_rwx;
         ceilingclip[rw_x] = cc_rwx;
     }
+#if defined(DOOM_R70A_INVARIANTS)
+#undef rw_offset
+#undef rw_distance
+#undef rw_centerangle
+#undef rw_midtexturemid
+#undef rw_toptexturemid
+#undef rw_bottomtexturemid
+#undef midtexture
+#undef toptexture
+#undef bottomtexture
+#undef maskedtexture
+#undef maskedtexturecol
+#if defined FLAT_SPAN
+#undef ceilingplane_color
+#undef floorplane_color
+#endif
+#endif
 #if defined(DOOM_R21_SEGLOOP_LOCALS)
 #undef rw_scale
 #undef rw_scalestep
