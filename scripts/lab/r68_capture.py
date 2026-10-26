@@ -335,6 +335,9 @@ def capture(args):
                     if "exited" in str(e) or "EOF" in str(e):
                         print("BlastEm ended:", e, flush=True); break
                     raise
+                except TimeoutError:
+                    # no further frame mark: the demo is over (title/menu) -- keep what was captured
+                    print("no frame mark for %.0f s: demo over, keeping %d frames" % (args.timeout, len(frames)), flush=True); break
                 if ptr is None:
                     ptr = int.from_bytes(g.readmem(names["r68_ptr"], 4), "big") & 0xFFFFFF
                     if not ptr:

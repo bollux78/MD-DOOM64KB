@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 11 = run 10 plus stderr in CAPTURE.log; whole-DEMO3 capture: the maintainer lifted the emulated-frame cap on 2026-10-26, capture stops at demo end; hot spots disassembled from the function start; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 12 = run 11 plus: a reply timeout after the last frame ends the capture and keeps the frames; whole-DEMO3 capture: the maintainer lifted the emulated-frame cap on 2026-10-26, capture stops at demo end; hot spots disassembled from the function start; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
