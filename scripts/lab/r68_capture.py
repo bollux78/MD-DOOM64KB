@@ -8,7 +8,7 @@ frame-time distribution, share of time in the slowest frames, cycle cost per wor
 (least squares), and the PC profile overall and for slow vs fast frames.
 
 NOT a benchmark: the ROM carries sampler overhead (a few percent). It answers WHERE the time
-goes, never how fast the game is. Max 10_000 emulated frames per BlastEm process by default;
+goes, never how fast the game is. The 10_000 emulated-frame cap was lifted by the maintainer (2026-10-26) so whole-demo captures are possible; the capture stops when the demo ends;
 DEMO3 at ~8 vblanks per game frame reaches about tic 1000 inside that limit.
 """
 import re, argparse, bisect, collections, importlib.util, json, os, pathlib, shutil, struct, subprocess, sys
@@ -256,6 +256,24 @@ def objdump_exe():
     return str(p) if p.is_file() else shutil.which("m68k-elf-objdump")
 
 
+def parse_listing(txt):
+    """objdump -d (no raw bytes) -> [(address, 'mnemonic operands')] in address order."""
+    out = []
+    for l in txt.splitlines():
+        m = re.match(r"\s*([0-9a-f]+):\t(.*)$", l)
+        if m and m.group(2).strip():
+            out.append((int(m.group(1), 16), " ".join(m.group(2).split())))
+    return out
+
+
+def bucket_text(insns, a, width=8):
+    """Instructions that overlap the sampled 8-byte bucket [a, a+width): the one containing a plus those starting inside."""
+    starts = [x for x, _ in insns]
+    i = max(bisect.bisect_right(starts, a) - 1, 0)
+    sel = [t for x, t in insns[i:] if x < a + width]
+    return " ; ".join(sel) if sel else "(outside listing)"
+
+
 def hotspots(frames, code, elf, outdir, top_funcs=8, top_buckets=10):
     """Instruction-level view: for the busiest functions, the busiest 8-byte buckets with disassembly."""
     starts = [a for a, _ in code]
@@ -276,16 +294,18 @@ def hotspots(frames, code, elf, outdir, top_funcs=8, top_buckets=10):
         fend = code[i][0] if i < len(code) else fa + 4096
         L.append("## %s  [%#x..%#x)  %d samples (%.1f%%)" % (fn, fa, fend, fc, 100.0 * fc / total))
         bk = sorted(((a, c) for a, c in hist.items() if fa <= a < fend), key=lambda x: -x[1])[:top_buckets]
+        # Disassemble the WHOLE function from its first byte: starting objdump in the middle of an instruction
+        # (as the first version did) yields garbage ('.short', 'Address out of bounds').
+        insns = []
+        if od:
+            try:
+                txt = subprocess.run([od, "-d", "--no-show-raw-insn", "--start-address=%d" % fa, "--stop-address=%d" % fend,
+                                      str(elf)], check=True, capture_output=True, text=True).stdout
+                insns = parse_listing(txt)
+            except Exception:
+                insns = None
         for a, c in bk:
-            ins = ""
-            if od:
-                try:
-                    txt = subprocess.run([od, "-d", "--no-show-raw-insn", "--start-address=%d" % a, "--stop-address=%d" % (a + 8),
-                                          str(elf)], check=True, capture_output=True, text=True).stdout
-                    ins = " ; ".join(" ".join(l.split()[1:]) for l in txt.splitlines()
-                                     if re.match(r"\s*[0-9a-f]+:", l))
-                except Exception:
-                    ins = "(objdump failed)"
+            ins = "(no objdump)" if not od else ("(objdump failed)" if insns is None else bucket_text(insns, a))
             L.append("- %06x  %4d (%.1f%% of func)  %s" % (a, c, 100.0 * c / fc, ins))
         L.append("")
     (pathlib.Path(outdir) / "hot.md").write_text("\n".join(L) + "\n")
@@ -302,6 +322,7 @@ def capture(args):
     rsp = load_rsp()
     g = rsp.RSP(args.blastem, args.rom, args.max_emulated_frames, args.timeout)
     frames, seen = [], set()
+    max_tic, stalled = 0, 0
     try:
         g.req("qSupported")
         assert g.req("Z0,%x,2" % names["R68_FrameMark"]) == "OK"
@@ -322,6 +343,15 @@ def capture(args):
                 if f["frame"] in seen:
                     continue
                 seen.add(f["frame"])
+                # whole-demo captures: stop when the demo ends (tic restarts, or stops advancing for 300 frames)
+                if f["tic_end"] + 5 < max_tic:
+                    print("demo restarted at frame", f["frame"], flush=True); break
+                if f["tic_end"] > max_tic:
+                    max_tic, stalled = f["tic_end"], 0
+                else:
+                    stalled += 1
+                    if stalled >= 300:
+                        print("demo finished (tic stopped advancing)", flush=True); break
                 if f["tic_end"] < args.start_tic:
                     continue
                 frames.append(f)

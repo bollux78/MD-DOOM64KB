@@ -1,6 +1,6 @@
 # R68 profiling build and capture (diagnostic only; R66 remains the approved baseline).
 # Activated with explicit maintainer authorization: ativar r68-prof-build.yml na exp-claudio-r68-profiling-20261025.
-# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 9, SPLIT + phase marks + function groups, 18000-frame capture authorized by the maintainer; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
+# Triggers: push of this file on that branch and manual dispatch. Re-triggered (run 10, whole-DEMO3 capture: the maintainer lifted the emulated-frame cap on 2026-10-26, capture stops at demo end; hot spots disassembled from the function start; standing maintainer authorization for this workflow/branch) with explicit maintainer authorization after test-only fixes 3bdae48, 65fa676, c3f3fd6, e39b522 and dbe999e. Own concurrency group, no cancel-in-progress.
 name: R68 Claudio profiling build and capture (BlastEm only)
 
 on:
@@ -20,7 +20,7 @@ permissions:
 jobs:
   build-profile:
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 240
+    timeout-minutes: 420
     steps:
       - uses: actions/checkout@v6
         with:
@@ -191,8 +191,8 @@ jobs:
           sha256sum dist/r68/doom-md-r60-r66-perf.bin
           echo 'PASS original R66 ROM reproduced byte for byte.'
 
-      - name: R68 capture (18000 emulated frames, maintainer-authorized, diagnostic only)
-        timeout-minutes: 90
+      - name: R68 capture (whole DEMO3, frame cap lifted by the maintainer, diagnostic only)
+        timeout-minutes: 240
         shell: bash
         run: |
           set -euo pipefail
@@ -201,7 +201,7 @@ jobs:
           python3 scripts/lab/r68_capture.py --blastem "$exe" \
             --rom dist/r68/doom-md-r60-r68-prof-perf.bin \
             --elf dist/r68/doom-md-r60-r68-prof-perf.elf \
-            --out dist/r68/capture --max-emulated-frames 18000 --timeout 120 | tee dist/r68/CAPTURE.log
+            --out dist/r68/capture --max-emulated-frames 150000 --timeout 120 | tee dist/r68/CAPTURE.log
           head -n 40 dist/r68/capture/report.md
 
       - name: Publish capture report as annotations (readable without artifact download)
@@ -229,7 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r68-claudio-profiling-run9
+          name: doom-md-r68-claudio-profiling-run10
           path: dist/r68/
           retention-days: 90
           if-no-files-found: warn

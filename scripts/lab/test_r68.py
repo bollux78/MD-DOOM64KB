@@ -71,6 +71,17 @@ def pack(f):
                        f["vb_start"], f["vb_logic"], f["vb_end"], f["tic_start"], f["tic_end"], *[f["c"][k] for k in cap.COUNTERS], *f["marks"])
 
 
+def test_hotspot_listing():
+    txt = "\n00001000 <f>:\n    1000:\tlink %fp,#-4\n    1004:\tmovel %d0,%d1\n    1006:\taddql #1,%d1\n    1008:\tjsr 2000 <g>\n    100e:\trts\n"
+    ins = cap.parse_listing(txt)
+    assert [a for a, _ in ins] == [0x1000, 0x1004, 0x1006, 0x1008, 0x100e]
+    # a bucket that starts inside the 4-byte jsr operand: the containing instruction is shown, not garbage
+    assert cap.bucket_text(ins, 0x1010) == "rts"
+    assert cap.bucket_text(ins, 0x1008) == "jsr 2000 <g> ; rts" or cap.bucket_text(ins, 0x1008).startswith("jsr")
+    assert cap.bucket_text(ins, 0x100a).startswith("jsr")
+    print("hot spot listing OK (bucket mapped to the containing instruction)")
+
+
 def test_fit():
     code = [(0x200, "main"), (0x1000, "alpha"), (0x2000, "beta"), (0x3000, "gamma")]
     truth = dict(seg=9000, col=700, wall=1500, flat=300, bspnode=400, pta=250); fixed = 120000
@@ -176,7 +187,7 @@ def main():
     with tempfile.TemporaryDirectory() as d:
         d = pathlib.Path(d)
         (d / "a").mkdir(); (d / "b").mkdir()
-        test_layout(d / "a"); test_fit(); test_capture(d / "b")
+        test_layout(d / "a"); test_hotspot_listing(); test_fit(); test_capture(d / "b")
     print("PASS test_r68")
 
 
