@@ -1,0 +1,278 @@
+# R71 analysis (no new optimisation): builds R66 control and R70-A12 from commit 4668ca9 sources, dumps the real compiler output of the hot path and samples the PC over the whole DEMO3 (BlastEm GDB RSP, ROM untouched). Maintainer standing authorization: "autorizo compilação em todas as branchs e versões sempre"; the R71 request asks for bottlenecks in the real generated assembly.
+# Triggers: push of this file on branch exp-claudio-r71-analysis-20261026 (a new workflow cannot be dispatched before it exists on the default branch) and workflow_dispatch.
+name: R71 Claudio real-assembly profile (R66 control and R70-A12, BlastEm PC sampling)
+
+on:
+  push:
+    branches: [exp-claudio-r71-analysis-20261026]
+    paths: ['.github/workflows/r71-analysis.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: r71-analysis
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+
+jobs:
+  r71-analysis:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify intended R71 analysis source and record environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r70
+          expected_branch='exp-claudio-r71-analysis-20261026'
+          test "$GITHUB_REF" = "refs/heads/$expected_branch" || { echo "ERROR: must run on $expected_branch"; exit 1; }
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD || { echo 'ERROR: R66 baseline not an ancestor'; exit 1; }
+          { echo "branch=$GITHUB_REF"; echo "commit=$(git rev-parse HEAD)"; echo "baseline=f5a9daa7a0bd7225bbc227630defc73c67c34f1e"; uname -a; uptime; nproc; } | tee dist/r70/ENV.txt
+
+      - name: Preflight fish scripts syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 - <<'CHECK'
+          from pathlib import Path
+          f=Path('scripts/lab/build_r35_linear.fish').read_text()
+          assert f.count('set -gx DOOM_BUILD_ID $id')==1
+          assert f.count('echo "READY: R35 4MiB linear')==1
+          assert f.count('if set -q DOOM_R60_BUILD')==1
+          assert f.count("set defs $defs '-DDOOM_R60_PAIR_ASM'")==1
+          assert f.count("'-DDOOM_R21_SEGLOOP_LOCALS'")==1 and f.count("'-DDOOM_R70A_INVARIANTS'")==1
+          print('fish structure PASS')
+          CHECK
+
+      - name: Toolchain, BlastEm and oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v fish; command -v python3
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-size"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          test -x "$OBJDUMP"
+          test -x "$BLASTEM"
+          python3 scripts/lab/test_r47a_plane_pair.py | tee dist/r70/ORACLE-plane-pair.txt
+          python3 scripts/lab/test_r48_pair_v.py | tee dist/r70/ORACLE-pair-v.txt
+          python3 scripts/lab/r47b_vdp_oracle.py --frames 48 --out dist/r70/ORACLE-vdp.json
+
+      - name: Restore pinned E1M1 VGM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          data=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(data).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(data)
+          PY
+
+      - name: Verify existing pinned shareware WAD (no home scan or network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,pathlib,shutil
+          target=pathlib.Path('scripts/doom1.wad')
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          wanted='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          if not source.is_file():
+              raise SystemExit(f'Missing runner-local shareware WAD: {source}')
+          if source.stat().st_size!=4196020 or hashlib.sha256(source.read_bytes()).hexdigest()!=wanted:
+              raise SystemExit(f'Invalid runner-local shareware WAD: {source}')
+          target.parent.mkdir(exist_ok=True,parents=True)
+          shutil.copyfile(source,target)
+          print('Pinned shareware WAD verified:',source)
+          PY
+
+      - name: Color-table generation preflight (same as R59 v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py | tee dist/r70/PREFLIGHT-generator.txt
+          python3 scripts/lab/test_r49_colormix.py | tee dist/r70/PREFLIGHT-color-oracle.txt
+          cp src/r49_colormix_report.json dist/r70/PREFLIGHT-color-report.json
+
+      - name: NumPy present (no dynamic installs) and Python preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import numpy;print("numpy",numpy.__version__)'
+          python3 -m py_compile scripts/lab/gen_r57_colormatch.py scripts/lab/gen_r59_colorview.py scripts/lab/test_r59_colorview.py scripts/lab/build_r70.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py scripts/lab/r70_disasm_compare.py scripts/lab/test_r70_tools.py scripts/lab/test_r70a_segloop.py scripts/lab/check_r70_inert.py scripts/lab/r64a_rsp_capture.py scripts/lab/r71_pcsample.py scripts/lab/r71_asm_report.py scripts/lab/r71_annotate.py scripts/lab/test_r71_tools.py
+
+      - name: Host pixel clipping and DMA bounds oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r57_viewport.py
+          python3 scripts/lab/test_r57_viewmenu.py
+
+      - name: R70-A host tests (differential seg loop, tooling) and inertness against the exact R66 base
+        shell: bash
+        run: |
+          set +e   # the Actions bash shell runs with -e; this step collects every result itself
+          set -u
+          enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+          { gcc --version 2>&1 | sed -n 1p; python3 --version 2>&1; } > dist/r70/HOST.log
+          cat dist/r70/HOST.log
+          rm -rf "$RUNNER_TEMP/base66" && mkdir -p "$RUNNER_TEMP/base66"
+          git archive f5a9daa7a0bd7225bbc227630defc73c67c34f1e | tar -x -C "$RUNNER_TEMP/base66"
+          fail=0
+          for t in "scripts/lab/test_r71_tools.py" "scripts/lab/test_r70a_segloop.py 3000" "scripts/lab/test_r70_tools.py" "scripts/lab/check_r70_inert.py $RUNNER_TEMP/base66 ."; do
+            echo "== $t" | tee -a dist/r70/HOST.log
+            python3 $t > dist/r70/HOST-last.txt 2>&1; rc=$?
+            cat dist/r70/HOST-last.txt | tee -a dist/r70/HOST.log
+            if [ "$rc" -ne 0 ]; then
+              echo "::error title=R70 host test failed::rc=$rc cmd=$t $(tail -n 25 dist/r70/HOST-last.txt | enc)"
+              fail=1
+            fi
+          done
+          echo "::notice title=R70 host test log::$(tail -n 60 dist/r70/HOST.log | enc)"
+          exit $fail
+
+      - name: Build the control and r70a12, each in its own copy of the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          export R70_WORK="$RUNNER_TEMP/r70-work-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rc=0
+          R70_VARIANTS=r66-perf,r70a12 python3 scripts/lab/build_r70.py 2>&1 | tee dist/r70/BUILD.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            enc() { sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}' | tail -c 3500; }
+            echo "::error title=R70 build failed (rc=$rc), first error lines::$(grep -nE 'error|Error|undefined reference|No such file|FAIL|Assertion' dist/r70/BUILD.log | head -n 12 | enc)"
+            echo "::error title=R70 build failed, last 30 lines::$(tail -n 30 dist/r70/BUILD.log | enc)"
+            exit "$rc"
+          fi
+          sha256sum dist/r70/*.bin | tee dist/r70/ROM-SHA256.txt
+
+      - name: Verify manifest (2 ROMs, sizes, BSS, hashes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import hashlib,json,pathlib
+          d=pathlib.Path('dist/r70')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert [r['variant'] for r in rows]==['r66-control','r70a12'] and len(list(d.glob('*.bin')))==2
+          lines=['| variant | ROM bytes | BSS bytes | SHA-256 |','|---|---:|---:|---|']
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0<r['bss_bytes']<=57920 and len(b)<=4*1024*1024,r
+              lines.append('| %s | %d | %d | %s |'%(r['variant'],r['bytes'],r['bss_bytes'],r['sha256']))
+          (d/'ROM-TABLE.md').write_text('\n'.join(lines)+'\n'); print('\n'.join(lines))
+          CHECK
+
+      - name: Require rebuilt R66 control byte-identical to the approved 7.21 FPS ROM (run 40231459814)
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r66-cl-approx-colpair-perf-play
+          run-id: 40231459814
+          github-token: ${{ github.token }}
+          path: dist/r70/original-control
+
+      - name: Exact original R66 control ROM binary comparison (fails the workflow if different)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp dist/r70/doom-md-r60-r66-perf.bin dist/r70/original-control/doom-md-r60-r66-perf.bin
+          sha256sum dist/r70/doom-md-r60-r66-perf.bin
+          echo 'PASS original R66 ROM reproduced byte for byte.'
+
+      - name: Symbol sizes and real compiler output of the hot path
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p dist/r71
+          NM="${OBJDUMP%objdump}nm"
+          for v in r66-perf r70a12; do
+            if [ -s "dist/r70/doom-md-r60-$v.elf" ]; then
+              "$NM" -S --size-sort -C "dist/r70/doom-md-r60-$v.elf" 2> "dist/r71/nm-$v.err" | tail -n 70 > "dist/r71/nm-top-$v.txt"
+              "$OBJDUMP" -d -z "dist/r70/doom-md-r60-$v.elf" > "dist/r71/objdump-$v.txt" 2> "dist/r71/objdump-$v.err"; echo "objdump $v rc=$?"
+            else
+              echo "SKIPPED - build/capture unavailable (missing dist/r70/doom-md-r60-$v.elf)" | tee "dist/r71/SKIPPED-$v.txt"
+            fi
+          done
+
+      - name: PC profile, r66-control
+        if: always()
+        id: pc_control
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r66-perf.bin dist/r70/doom-md-r60-r66-perf.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)"; exit 0; }; done
+          python3 scripts/lab/r71_pcsample.py --blastem "$BLASTEM" --label r66-control --rom dist/r70/doom-md-r60-r66-perf.bin --elf dist/r70/doom-md-r60-r66-perf.elf --out dist/r71/pc/r66-control --lines 16 --max-samples 450000 --stop-tic 2134 --max-seconds 3000 2>&1 | tee dist/r71/pc-r66-control.log
+          python3 scripts/lab/r71_asm_report.py --objdump "$OBJDUMP" --elf dist/r70/doom-md-r60-r66-perf.elf --samples dist/r71/pc/r66-control/samples.json --out dist/r71/report-r66-control --label r66-control --top-funcs 30 --top-blocks 24 > dist/r71/report-r66-control.log 2>&1
+
+      - name: PC profile, r70a12
+        if: always()
+        id: pc_a12
+        continue-on-error: true
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r70/doom-md-r60-r70a12.bin dist/r70/doom-md-r60-r70a12.elf; do [ -s "$f" ] || { echo "SKIPPED - build/capture unavailable (missing $f)"; exit 0; }; done
+          python3 scripts/lab/r71_pcsample.py --blastem "$BLASTEM" --label r70a12 --rom dist/r70/doom-md-r60-r70a12.bin --elf dist/r70/doom-md-r60-r70a12.elf --out dist/r71/pc/r70a12 --lines 16 --max-samples 450000 --stop-tic 2134 --max-seconds 3000 2>&1 | tee dist/r71/pc-r70a12.log
+          python3 scripts/lab/r71_asm_report.py --objdump "$OBJDUMP" --elf dist/r70/doom-md-r60-r70a12.elf --samples dist/r71/pc/r70a12/samples.json --out dist/r71/report-r70a12 --label r70a12 --top-funcs 30 --top-blocks 28 > dist/r71/report-r70a12.log 2>&1
+
+      - name: Publish A12 profile (annotations part 1)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/pc-r70a12.log dist/r71/report-r70a12.log; do [ -f "$f" ] && python3 scripts/lab/r71_annotate.py --title "R71 log $(basename $f)" --file "$f" --chunk 3000 --max 1; done
+          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 12000 --max 9
+          [ -f dist/r71/nm-top-r70a12.txt ] && python3 scripts/lab/r71_annotate.py --title "R71 A12 symbol sizes" --file dist/r71/nm-top-r70a12.txt --chunk 6000 --max 1
+          exit 0
+
+      - name: Publish A12 profile (annotations part 2)
+        if: always()
+        shell: bash
+        run: |
+          python3 scripts/lab/r71_annotate.py --title "R71 A12 report" --file dist/r71/report-r70a12/REPORT.md --chunk 12000 --max 10 --skip 9
+          exit 0
+
+      - name: Publish control profile (annotations)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in dist/r71/pc-r66-control.log; do [ -f "$f" ] && python3 scripts/lab/r71_annotate.py --title "R71 log $(basename $f)" --file "$f" --chunk 3000 --max 1; done
+          python3 scripts/lab/r71_annotate.py --title "R71 control report" --file dist/r71/report-r66-control/REPORT.md --chunk 12000 --max 5
+          [ -f dist/r70/ROM-TABLE.md ] && python3 scripts/lab/r71_annotate.py --title "R71 ROM table" --file dist/r70/ROM-TABLE.md --max 1
+          exit 0
+
+      - name: Upload R71 artifacts (including partial evidence on failure)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r71-analysis
+          path: |
+            dist/r71/
+            dist/r70/*.bin
+            dist/r70/*.elf
+            dist/r70/MANIFEST.json
+            dist/r70/ROM-TABLE.md
+            dist/r70/BUILD.log
+          retention-days: 90
+          if-no-files-found: warn
