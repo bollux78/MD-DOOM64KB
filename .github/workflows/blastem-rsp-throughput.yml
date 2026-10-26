@@ -1,0 +1,110 @@
+# Benchmarks only the speed of BlastEm GDB remote framebuffer capture.
+# ROM/emulator settings unchanged; no WAD or ROM builds needed. No HUD branch modifications.
+name: BlastEm RSP throughput A/B - frame-identical fast capture
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - exp-chatgpt-blastem-fastcapture-20261026
+    paths:
+      - .github/workflows/blastem-rsp-throughput.yml
+concurrency:
+  group: blastem-rsp-throughput
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  capture-compare:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Acquire previously verified R71-A12MUL ROM and ELF
+        uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r71-mul
+          run-id: 40402139254
+          github-token: ${{ github.token }}
+          path: dist/rom-reference
+      - name: Preflight and known published ROM hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/rspbench
+          test -x /home/dan/Projetos/blastem64-1.0.0/blastem
+          test -f dist/rom-reference/doom-md-r60-r71a12mul.bin
+          test -f dist/rom-reference/doom-md-r60-r71a12mul.elf
+          echo '9d8764b9cad175e9455e0113453a019bcb62a289f974f31033b8a645b273b085  dist/rom-reference/doom-md-r60-r71a12mul.bin' | sha256sum -c
+          python3 -m py_compile scripts/lab/r64a_rsp_capture.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          p=Path('scripts/lab/r64a_rsp_capture.py')
+          text=p.read_text()
+          assert 'RSP_CHUNK=int(os.environ.get("BLASTEM_RSP_CHUNK", "192"))' in text
+          assert '1 <= RSP_CHUNK <= 254' in text
+          print('PASS configurable RSP GDB packets: 192 (old) and 252 (candidate)')
+          PY
+      - name: A/B/A/B - same ROM, first 400 rendered frames, real host-wall measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,time,json,subprocess,pathlib,hashlib
+          base=pathlib.Path('dist/rspbench')
+          runs=(('old1',192),('fast1',252),('old2',192),('fast2',252))
+          results=[]
+          for label,chunk in runs:
+              target=base/label
+              env=dict(os.environ,BLASTEM_RSP_CHUNK=str(chunk),SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+              cmd=['python3','scripts/lab/r70_capture.py','--blastem','/home/dan/Projetos/blastem64-1.0.0/blastem',
+                   '--label',label,'--rom','dist/rom-reference/doom-md-r60-r71a12mul.bin',
+                   '--elf','dist/rom-reference/doom-md-r60-r71a12mul.elf','--out',str(target),
+                   '--max-emulated-frames','8000','--max-breaks','400','--timeout','120']
+              started=time.perf_counter()
+              rc=subprocess.run(cmd,env=env,capture_output=True,text=True,timeout=240)
+              elapsed=time.perf_counter()-started
+              (base/(label+'.stdout')).write_text(rc.stdout)
+              (base/(label+'.stderr')).write_text(rc.stderr)
+              assert rc.returncode==0,(label,rc.returncode,rc.stdout[-1000:],rc.stderr[-1000:])
+              meta=json.loads((target/'CAPTURE.json').read_text())
+              assert meta['frames']==400 and meta['last_tic']>=400 and meta['status']=='max_breaks',(label,meta)
+              raw=(target/'frames.bin').read_bytes()
+              assert len(raw)==400*3344,(label,len(raw))
+              results.append(dict(name=label,chunk=chunk,wall_seconds=elapsed,frames=meta['frames'],
+                                  raw_sha256=hashlib.sha256(raw).hexdigest(),
+                                  records_sha256=hashlib.sha256((target/'frames.jsonl').read_bytes()).hexdigest()))
+              print('%s chunk=%s wall=%.2fs frames=%d fb-sha=%s'%(label,chunk,elapsed,meta['frames'],results[-1]['raw_sha256']),flush=True)
+          target=base/'old1'
+          for name,_ in runs[1:]:
+              d=base/name
+              assert (target/'frames.bin').read_bytes()==(d/'frames.bin').read_bytes(),('PIXEL DIVERGENCE',name)
+              assert (target/'frames.jsonl').read_bytes()==(d/'frames.jsonl').read_bytes(),('VBLANK/TIC DIVERGENCE',name)
+          old=sum(r['wall_seconds'] for r in results if r['chunk']==192)/2
+          fast=sum(r['wall_seconds'] for r in results if r['chunk']==252)/2
+          ratio=(1-fast/old)*100
+          result=dict(variants=results,mean_old_seconds=old,mean_fast_seconds=fast,wall_speedup_pct=ratio,
+                      pixel_and_vblank_equivalence='PASS',recommended_chunk=252 if fast<old else 192)
+          (base/'RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+          summary=['# BlastEm RSP throughput experiment','',
+                   'Both variants use exactly the same original NTSC 68000 clock, ROM, debugger and 400 tics.',
+                   'Capture paths and per-tic VBlank counts are byte-identical across all four runs.','',
+                   '| Capture | bytes / RSP read | Host seconds |','|---|---:|---:|']
+          summary+=['| %s | %d | %.2f |'%(x['name'],x['chunk'],x['wall_seconds']) for x in results]
+          summary+=['','Mean old %.2f s, mean candidate %.2f s, relative wall-time gain %+.2f%%.'%(old,fast,ratio),
+                    'Recommended RSP_CHUNK: %d (only if validation and observed mean are positive).'%result['recommended_chunk'],'']
+          (base/'RESULT.md').write_text('\n'.join(summary))
+          print('\n'.join(summary),flush=True)
+          PY
+      - name: Upload comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: blastem-rsp-throughput
+          path: dist/rspbench/
+          retention-days: 30
+          if-no-files-found: warn
