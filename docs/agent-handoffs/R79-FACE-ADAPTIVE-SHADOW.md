@@ -4,7 +4,7 @@ Base: R78 `827297b2248b1c84f5c57d8b63fa85e62f8a3c11`. Data: 27/10/2026.
 
 ## Rosto
 
-O rosto mantém o tamanho, a posição e os 42 quadros. As duas colunas externas de pixels de cada lado do bloco 32×32 ficam transparentes. BG_B recebe pedra do próprio HUD sob o bloco, compensando sua rolagem de +4 pixels com uma célula adicional. O preto dentro do retrato usa um índice opaco. Não se corta nem se estica a arte do rosto. São quatro pixels horizontais devolvidos ao fundo no total, sem novo estado permanente em WRAM.
+O rosto mantém o tamanho, a posição e os 42 quadros. As duas colunas externas de fundo de cada lado do bloco 32×32 ficam transparentes; eventuais pixels do rosto que avancem até essa margem são preservados. BG_B recebe pedra do próprio HUD sob o bloco, compensando sua rolagem de +4 pixels com uma célula adicional. O preto dentro do retrato usa um índice opaco. Não se corta nem se estica a arte do rosto. São quatro pixels horizontais devolvidos ao fundo no total, sem novo estado permanente em WRAM.
 
 ## ROMs
 
@@ -38,7 +38,7 @@ O alvo é a saída já quantizada da R77; este primeiro pós-processamento não 
 
 ## Verificação
 
-- Teste dos 42 quadros do rosto: exatamente 2 px transparentes por lado, interior totalmente opaco.
+- Teste dos 42 quadros do rosto: fundo transparente na margem de 2 px por lado, interior opaco e pixels da arte preservados inclusive quando avançam na margem; inclui fixture larga e WAD real.
 - Testes HUD existentes, inclusive compositor C contra modelo Python.
 - Teste do pós-processamento C real: quatro perfis, 14 paletas, blocos aleatórios, atributos, limites e preservação da linha superior.
 - Enumeração das 65.536 combinações de dois words por perfil/paleta; custos sem overflow no somatório em 32 bits.

@@ -464,11 +464,14 @@ def build_assets(lumps):
     # Only the outer two pixels are transparent. Interior black uses an
     # opaque duplicate, so the portrait silhouette stays intact on BG_B stone.
     packed_faces = [[fpack(t) for t in ft] for ft in face_tiles]
-    for frame in packed_faces:
-        for ty in range(4):
-            for y in range(8):
-                frame[ty * L["FACE_W"]][y] &= 0x00FFFFFF
-                frame[ty * L["FACE_W"] + L["FACE_W"] - 1][y] &= 0xFFFFFF00
+    for fi, frame in enumerate(packed_faces):
+        for y in range(32):
+            for x in (0, 1, 30, 31):
+                # A few turning frames extend into the nominal border.
+                # Reveal stone only where there is no original face artwork.
+                if not im["fmasks"][fi][y][x]:
+                    tile = (y // 8) * L["FACE_W"] + x // 8
+                    frame[tile][y % 8] &= ~(15 << (28 - 4*(x % 8)))
     return dict(palette=palette, fpalette=fpal, tiles=[pack(t) for t in tiles_rgb], tiles_rgb=tiles_rgb, ids=ids, bgmap=bg_ids,
                 faces=packed_faces, n_dynamic=n_dynamic)
 
@@ -573,7 +576,7 @@ def render_rows_rgb(a, rows, face, scale=1):
                     code = (t[y] >> (28 - 4 * x)) & 15
                     if isface and code == 0:
                         bg = a["tiles"][a["bgmap"][ty][tx]]
-                        img[ty * 8 + y][tx * 8 + x] = pal3[(bg[y] >> (28 - 4*x)) & 15]
+                        img[ty * 8 + y][tx * 8 + x] = pal3[(bg[y] >> (28 - 4*((x+4) % 8))) & 15]
                     else:
                         img[ty * 8 + y][tx * 8 + x] = pal[code]
     if scale > 1:
