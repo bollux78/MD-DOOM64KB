@@ -64,6 +64,14 @@ s=s.replace(needle,needle+'''
 #if defined(DOOM_R77_MENU)
     r77_last_palette=(uint8_t)p;
 #endif''')
+start=s.index('if(r59_color_dirty && r35_native_active<0')
+stop=s.index('        r59_color_dirty=0;',start)
+refresh=s[start:stop]
+for bank in ('pal0','pal1'):
+    old='R59_CURRENT.'+bank+'[0],16,CPU'
+    assert refresh.count(old)==1
+    refresh=refresh.replace(old,'R59_CURRENT.'+bank+'[r77_last_palette],16,CPU')
+s=s[:start]+refresh+s[stop:]
 needle='#include "hud_wad.inc"'
 assert s.count(needle)==1
 s=s.replace(needle,needle+'''
