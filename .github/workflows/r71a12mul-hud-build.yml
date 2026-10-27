@@ -1,0 +1,89 @@
+name: R71A12MUL HUD-WAD stone margins
+on:
+  push:
+    branches: ['exp-chatgpt-*']
+    paths:
+      - '.github/workflows/r71a12mul-hud-build.yml'
+      - '.github/triggers/r71a12mul-hud-build.trigger'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r71a12mul-hud
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build only R71A12MUL HUD PERF and PLAY
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          export HUD_WORK="$RUNNER_TEMP/r71a12mul-hud-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log
+          sha256sum dist/hud/*.bin | tee dist/hud/ROM-SHA256.txt
+      - name: Verify ROM sizes, BSS and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          d=pathlib.Path('dist/hud')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert [r['variant'] for r in rows]==['r71a12mul-hud-perf','r71a12mul-hud-play']
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0 < r['bss_bytes'] <= 57920
+              assert len(b)<=4*1024*1024
+              print(r)
+          PY
+      - name: Upload HUD ROMs and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r71a12mul-hud-stone
+          path: dist/hud/
+          retention-days: 90
+          if-no-files-found: warn
