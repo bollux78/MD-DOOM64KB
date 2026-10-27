@@ -225,6 +225,11 @@ for v in $variants
     # Doom game uses the episode-converted WAD. Original 240x160 bitmaps
     # are omitted by repack_wad in R30_NATIVE variants.
     cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1
+    # Fish variables are not automatically exported; the music generator needs
+    # both flags to select the XGM2 multi-track resource descriptor.
+    set -gx DOOM_R25_MUSIC $DOOM_R25_MUSIC
+    set -gx DOOM_R29_XGM2 $DOOM_R29_XGM2
+    set -gx DOOM_R29_MULTI $DOOM_R29_MULTI
     python3 scripts/lab/prepare_r25_music.py; or exit 1
     if set -q DOOM_R51_HW_WEAPON; and test "$DOOM_R51_HW_WEAPON" = 1
         if test "$v" != pixel4-play
