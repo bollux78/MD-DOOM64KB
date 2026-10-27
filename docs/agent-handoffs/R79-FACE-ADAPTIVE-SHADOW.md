@@ -40,6 +40,7 @@ O alvo é a saída já quantizada da R77; este primeiro pós-processamento não 
 
 - Teste dos 42 quadros do rosto: fundo transparente na margem de 2 px por lado, interior opaco e pixels da arte preservados inclusive quando avançam na margem; inclui fixture larga e WAD real.
 - Testes HUD existentes, inclusive compositor C contra modelo Python.
+- Teste do carregador nativo real com shadow: as duas artes continuam RGB exatas, S/H é desligado nas telas estáticas e a saída após tintas de dano sincroniza CRAM e seletor na paleta zero.
 - Teste do pós-processamento C real: quatro perfis, 14 paletas, blocos aleatórios, atributos, limites e preservação da linha superior.
 - Enumeração das 65.536 combinações de dois words por perfil/paleta; custos sem overflow no somatório em 32 bits.
 - CI: seis ROMs, BSS ≤57.920, ROM ≤4 MiB, 800 frames BlastEm em cada ROM (4.800 no total). O smoke não cobre visualmente menus/transições e não substitui benchmark completo.

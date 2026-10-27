@@ -24,6 +24,7 @@ on:
       - 'scripts/lab/gen_r79_shadow.py'
       - 'scripts/lab/test_r79_face.py'
       - 'scripts/lab/test_r79_shadow.py'
+      - 'scripts/lab/test_r79_native.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -87,6 +88,7 @@ jobs:
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
           export HUD_WORK="$RUNNER_TEMP/r79-shadow-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           python3 scripts/lab/apply_r79.py
+          python3 scripts/lab/test_r79_native.py
           python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log
           sha256sum dist/hud/*.bin | tee dist/hud/ROM-SHA256.txt
       - name: Verify ROM sizes, BSS and hashes

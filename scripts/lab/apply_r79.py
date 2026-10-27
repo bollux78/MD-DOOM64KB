@@ -39,6 +39,14 @@ s=s.replace('        R20_StopVideo();\n        VDP_setEnable(FALSE);','''       
         VDP_setHilightShadow(FALSE);
 #endif
         VDP_setEnable(FALSE);''')
+# Native exit synchronously restores palette zero. Keep the shadow mapper's
+# palette selector coherent even if the last gameplay frame had a damage tint.
+needle='    r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */'
+assert s.count(needle)==1
+s=s.replace(needle,'''#if defined(DOOM_R77_MENU)
+    r77_last_palette=0;
+#endif
+'''+needle)
 p.write_text(s)
 p=Path('scripts/lab/test_r59_colorview.py');s=p.read_text()
 for bank,offset in ((0,0),(1,16)):
