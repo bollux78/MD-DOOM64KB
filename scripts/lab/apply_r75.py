@@ -46,6 +46,9 @@ for key,profile,flat,hybrid in [
         v.append((name,mode,env,[]))
 s=s[:start]+'VARIANTS = '+repr(tuple(v))+s[stop:]
 s=s.replace('assert len(records) == 16','assert len(records) == 8')
+# Validate the menu fix is actually linked in all PERF/PLAY variants.
+s=s.replace("'DOOM_R73_R53_FIXED')","'DOOM_R73_R53_FIXED', '-DDOOM_R75_MENU_HOLD')")
+
 start=s.index('    for name in (\'r74-ac-pf\'')
 stop=s.index(':\n        contents=flags[name]',start)
 s=s[:start]+'    for name in '+repr(tuple(x[0] for x in v))+s[stop:]
