@@ -716,6 +716,19 @@ for v in $variants
         end
         set defs $defs '-DDOOM_R71_MUL_ASM'
     end
+    # HUD-WAD from Claudio's A12 H40 stone-margins build.
+    if set -q DOOM_HUD_WAD; and test "$DOOM_HUD_WAD" = 1
+        if not contains -- $v pixel4-perf pixel4-play
+            echo 'HUD WAD requires native pixel4'; exit 2
+        end
+        if not test -f src/hud_wad_assets.h
+            echo 'HUD WAD assets missing: generate from pinned IWAD'; exit 2
+        end
+        if not test "$DOOM_R57_VIEW_MENU" = 1; or not test "$DOOM_R57_NARROW256" = 1; or not test "$DOOM_R57_H32" = 1
+            echo 'HUD WAD requires R57 H32/H40 layout'; exit 2
+        end
+        set defs $defs '-DDOOM_HUD_WAD'
+    end
     set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)
     set -l id doom-md-r35d-$v
     if set -q DOOM_R37_BSP_PROFILE; and test "$DOOM_R37_BSP_PROFILE" = 1; and contains -- $v cell-play cell-perf
