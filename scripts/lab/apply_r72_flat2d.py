@@ -61,8 +61,7 @@ builder.write_text(b)
 silent=Path("scripts/build_silent.fish")
 z=silent.read_text()
 bad="""string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)? "$d"; or begin"""
-good="""string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)?
- "$d"; or begin"""
+good="string match -qr -- "+chr(39)+"^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)?$"+chr(39)+" "+chr(34)+"$d"+chr(34)+"; or begin"
 assert z.count(bad)==1, "unexpected build_silent pattern"
 z=z.replace(bad,good)
 tail="exit $rc\n"
