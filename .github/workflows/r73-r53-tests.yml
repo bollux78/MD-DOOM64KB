@@ -74,7 +74,7 @@ jobs:
           import pathlib,json,hashlib
           d=pathlib.Path('dist/hud')
           rows=json.loads((d/'MANIFEST.json').read_text())
-          assert [r['variant'] for r in rows]==['r73-r53-solid-perf','r73-r53-m25-perf','r73-r53-m25-flat2d-perf','r73-r53-solid-play','r73-r53-m25-play','r73-r53-m25-flat2d-play']
+          assert [r['variant'] for r in rows]==['r73-s-pf','r73-m-pf','r73-f-pf','r73-s-pl','r73-m-pl','r73-f-pl']
           for r in rows:
               b=(d/r['rom']).read_bytes()
               assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
