@@ -117,6 +117,14 @@ p.write_text(s)
 
 # R73 deliberately omitted R59 palette selector; restore only for R76.
 p=Path('src/m_text.c');s=p.read_text()
+# Cursor frame is 0/1 and its signed countdown stays in -1..10.
+# Keep <=0 behavior at zero while saving two bytes under the strict BSS guard.
+old='static int16_t skullAnimCounter;'
+assert s.count(old)==1
+s=s.replace(old,'static int8_t skullAnimCounter;')
+old='static int16_t whichSkull;'
+assert s.count(old)==1
+s=s.replace(old,'static uint8_t whichSkull;')
 old='#if defined(DOOM_R59_COLOR_VIEW) && !defined(DOOM_R73_R53_FIXED)'
 assert s.count(old)>=3
 s=s.replace(old,'#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))')
