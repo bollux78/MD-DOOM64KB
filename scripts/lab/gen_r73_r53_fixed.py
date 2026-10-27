@@ -21,9 +21,9 @@ for name in ("r53_partner_even","r53_partner_odd"):
 # and the sample values map directly to that index. Convert into a pair codebook
 # with code==CRAM index. Wall/flat/comp maps stay byte-identical to R52.
 def partner(name):
-    m=re.search(r"\\b"+name+r"\\[16\\]\\s*=\\s*\\{([^}]*)\\}",r53)
+    m=re.search(r"\b"+name+r"\[16\]\s*=\s*\{([^}]*)\}",r53)
     assert m,name
-    vals=[int(v) for v in re.findall(r"\\d+",m.group(1))]
+    vals=[int(v) for v in re.findall(r"\d+",m.group(1))]
     assert len(vals)==16 and vals[0]==0 and all(0<=v<=15 for v in vals)
     return vals
 pairs=[]
@@ -41,7 +41,7 @@ preamble="""
 #define r73_flat_odd r52_odd
 #define r73_comp_even ((const uint8_t (*)[256])r52_comp_even)
 #define r73_comp_odd ((const uint8_t (*)[256])r52_comp_odd)
-"""+"\\n".join(pairs)+"\\n"
+"""+"\n".join(pairs)+"\n"
 assert r59.count("static const R59ColorTables r59_color_tables")==1
 needle=" {"+", ".join("r56_"+field for field in
     ("pal0","pal1","pairs_even","pairs_odd","wall_even","wall_odd",
@@ -49,7 +49,7 @@ needle=" {"+", ".join("r56_"+field for field in
 replacement=needle.replace("r56_","r73_")
 assert r59.count(needle)==1,"R59 initializer contract changed"
 r59=r59.replace(needle,replacement)
-r59=r59.replace("static const R59ColorTables r59_color_tables",preamble+"\\nstatic const R59ColorTables r59_color_tables")
+r59=r59.replace("static const R59ColorTables r59_color_tables",preamble+"\nstatic const R59ColorTables r59_color_tables")
 assert r59.count(replacement)==1
 r59file.write_text(r59)
 print("R73 palette:",style,"fixed R52/R53 mode 0, partner pairs:",pairs,flush=True)
