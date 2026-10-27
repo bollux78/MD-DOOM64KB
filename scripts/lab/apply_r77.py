@@ -4,11 +4,23 @@ from pathlib import Path
 import subprocess
 subprocess.run(['python3','scripts/lab/apply_r76.py'],check=True)
 p=Path('src/r22_video.inc');s=p.read_text()
+needle='static uint8_t r59_color_mode;\nstatic uint8_t r59_color_dirty;'
+assert s.count(needle)==1
+s=s.replace(needle,'''#if defined(DOOM_R77_MENU)
+/* Keep byte state together rather than paying common-symbol alignment gaps.
+ * Full byte fields preserve R59 semantics; no per-pixel bitfield decoding. */
+static struct {uint8_t mode,dirty,palette;} r77_color_state;
+#define r59_color_mode (r77_color_state.mode)
+#define r59_color_dirty (r77_color_state.dirty)
+#define r77_last_palette (r77_color_state.palette)
+typedef char r77_color_state_size[(sizeof(r77_color_state)==3u)?1:-1];
+#else
+'''+needle+'''
+#endif''')
 needle='static uint8_t r22_overlay_dirty,r22_text_this_frame;'
 assert s.count(needle)==1
 s=s.replace(needle,needle+'''
 #if defined(DOOM_R77_MENU)
-static uint8_t r77_last_palette;
 static void R77_MenuEnter(void);
 static void R77_MenuLeave(void);
 static uint16_t R77_MenuWord(uint16_t x,uint8_t c);
