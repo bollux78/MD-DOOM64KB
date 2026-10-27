@@ -78,6 +78,12 @@ static void HUDW_WriteRows(const HudState *s)
         *ctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_A + (HUDW_ROW0 + row) * 128u + (h40 ? 0u : 3u * 2u));
         const uint16_t *src = h40 ? words : words + 4;
         for (uint8_t c = 0; c < (h40 ? 40u : 32u); c++) *data = src[c];
+        /* The face's two transparent side pixels reveal original HUD stone
+         * from PAL3 on B; the portrait keeps PAL2 and its existing VRAM slot. */
+        *ctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_B + (HUDW_ROW0 + row) * 128u +
+            (h40 ? 4u + HUDW_FACE_C - 1u : 3u + HUDW_FACE_C - 1u) * 2u);
+        for (uint8_t c = 0; c <= HUDW_FACE_W; c++)
+            *data = HUDW_WORD(hudw_bgmap[row][HUDW_FACE_C + (c % HUDW_FACE_W)]);
         R22_Unlock(sr);
     }
 }
@@ -126,3 +132,4 @@ void HUDW_Start(void)
     HUDW_FaceInit(&hudw_face, _g_player.mo ? _g_player.mo->health : _g_player.health, w);
     r57_hud_dirty = 1;
 }
+

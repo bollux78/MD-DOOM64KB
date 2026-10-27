@@ -24,7 +24,7 @@ LAYOUT = dict(
     HEALTH_C=5, HEALTH_R=0,      # 3 big digits + percent sign
     ARMOR_C=18, ARMOR_R=0,       # 3 big digits + percent sign
     BIG_Y=4,                     # big digits are drawn 4 px below the top of the bar (original: 3), over the dithered background
-    FACE_C=14, FACE_R=0,         # 4 x 4 tiles: the 24 x 29 face is centred in 32 x 32, black round it, frame kept on top
+    FACE_C=14, FACE_R=0,         # 4 x 4 tiles: the 24 x 29 face is centred in 32 x 32, 2 px transparent at each side, frame kept on top
     FACE_W=4,
     KEYS_C=24, KEYS_R=0,         # 3 stacked tiles
     TABLE_C=26, TABLE_R=0,       # 4 rows: ammo current (3 digits) + maximum (3 digits)
@@ -425,7 +425,7 @@ def build_assets(lumps):
     flat_face = tuple(tuple((0, 0, 0) for _ in range(8)) for _ in range(8))
     for i in range(L["FACE_W"]):
         for rr in range(4):
-            over_cells[(L["FACE_C"] + i, rr)] = flat_face
+            over_cells[(L["FACE_C"] + i, rr)] = stone[rr]
     for ty in range(ROWS):
         for tx in range(COLS):
             bg_ids[ty][tx] = add(over_cells[(tx, ty)] if (tx, ty) in over_cells else tile_of(bar, tx, ty))
@@ -457,12 +457,20 @@ def build_assets(lumps):
     fcache = {}
     def fnearest(c):
         if c not in fcache:
-            fcache[c] = min(range(16), key=lambda i: (dist(c, fpal[i]), i))
+            fcache[c] = min(range(1, 16), key=lambda i: (dist(c, fpal[i]), i))
         return fcache[c]
     def fpack(t):
         return [sum(fnearest(t[y][x]) << (28 - 4 * x) for x in range(8)) for y in range(8)]
+    # Only the outer two pixels are transparent. Interior black uses an
+    # opaque duplicate, so the portrait silhouette stays intact on BG_B stone.
+    packed_faces = [[fpack(t) for t in ft] for ft in face_tiles]
+    for frame in packed_faces:
+        for ty in range(4):
+            for y in range(8):
+                frame[ty * L["FACE_W"]][y] &= 0x00FFFFFF
+                frame[ty * L["FACE_W"] + L["FACE_W"] - 1][y] &= 0xFFFFFF00
     return dict(palette=palette, fpalette=fpal, tiles=[pack(t) for t in tiles_rgb], tiles_rgb=tiles_rgb, ids=ids, bgmap=bg_ids,
-                faces=[[fpack(t) for t in ft] for ft in face_tiles], n_dynamic=n_dynamic)
+                faces=packed_faces, n_dynamic=n_dynamic)
 
 
 def emit_header(a):
@@ -562,7 +570,12 @@ def render_rows_rgb(a, rows, face, scale=1):
             pal = pal2 if isface else pal3
             for y in range(8):
                 for x in range(8):
-                    img[ty * 8 + y][tx * 8 + x] = pal[(t[y] >> (28 - 4 * x)) & 15]
+                    code = (t[y] >> (28 - 4 * x)) & 15
+                    if isface and code == 0:
+                        bg = a["tiles"][a["bgmap"][ty][tx]]
+                        img[ty * 8 + y][tx * 8 + x] = pal3[(bg[y] >> (28 - 4*x)) & 15]
+                    else:
+                        img[ty * 8 + y][tx * 8 + x] = pal[code]
     if scale > 1:
         img = [[px for px in r for _ in range(scale)] for r in img for _ in range(scale)]
     return img
@@ -607,3 +620,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
