@@ -35,6 +35,9 @@ static uint16_t R77_MenuWord(uint16_t x,uint8_t c)
 static void R77_MenuEnter(void)
 {
     R20_StopVideo();VDP_waitDMACompletion();VDP_setEnable(FALSE);
+    /* Entering the menu from H32 switches to H40 and clears both planes.
+     * Rebuild the original HUD before the 22-row Window is enabled. */
+    HUDW_Frame(1);
     uint32_t tile[8],glyph[8];
     volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
     volatile uint16_t *data=(volatile uint16_t*)0xC00000;
