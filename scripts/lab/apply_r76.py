@@ -16,7 +16,12 @@ assert s.count(needle)==1
 # Insert helper after definitions of R40B occupancy pointers, before text functions.
 helper='''#if defined(DOOM_R76_MENU_STABLE)
 static inline uint8_t R76_InGameMenu(void){
+#if defined(DOOM_R50_MENU_FREEZE)
     return (_g_gamestate==GS_LEVEL && _g_menuactive && !_g_demoplayback);
+#else
+    /* PERF may still render during menu; framebuffer bitsets are not safe. */
+    return 0;
+#endif
 }
 #endif
 '''
