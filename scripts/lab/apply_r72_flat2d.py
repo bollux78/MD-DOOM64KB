@@ -57,4 +57,16 @@ b=b.replace("r71a12mul-hud-", "r72flat2d-hud-")
 b=b.replace("DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD'","DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R72_FLAT_2D'")
 b=b.replace("'-DDOOM_HUD_WAD'):","'-DDOOM_HUD_WAD'):")
 builder.write_text(b)
+# Fix inherited malformed fish regex: an unterminated quote swallowed the defines.
+silent=Path("scripts/build_silent.fish")
+z=silent.read_text()
+bad="""string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)? "$d"; or begin"""
+good="""string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)?
+ "$d"; or begin"""
+assert z.count(bad)==1, "unexpected build_silent pattern"
+z=z.replace(bad,good)
+tail="exit $rc\n"
+assert z.count(tail)>=2, "unexpected build_silent duplicate"
+z=z[:z.index(tail)+len(tail)]
+silent.write_text(z)
 print("R72 flat 2D source/build patch applied")
