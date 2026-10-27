@@ -87,7 +87,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r73-r53-six-roms
+          name: doom-md-r74-m50-flats-16-roms
           path: dist/hud/
           retention-days: 90
           if-no-files-found: warn
