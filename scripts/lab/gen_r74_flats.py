@@ -12,6 +12,14 @@ def main():
     p.add_argument('--profile',choices=['a','l'],required=True)
     p.add_argument('--policy',choices=['ctl','f1','f2','f3'],required=True)
     a=p.parse_args();root=Path(__file__).resolve().parents[2];src=root/'src'
+    palette_report=json.loads((src/'r52_ab_report.json').read_text())
+    micro_report=json.loads((src/'r53_micro_report.json').read_text())
+    expected_mode='near25' if a.profile=='a' else 'luma32'
+    expected_zero='allow' if a.profile=='a' else 'forbid'
+    assert palette_report['args']['mode']==expected_mode, (a.profile,'R52 wrong palette')
+    assert palette_report['args']['zero_policy']==expected_zero, (a.profile,'R52 wrong zero policy')
+    assert micro_report['ratio_percent']==50, 'R53 M50 companion ratio required'
+    assert micro_report['zero_policy']==expected_zero, 'R53 companion source mismatch'
     gp=runpy.run_path(str(root/'scripts/genpal.py'))
     g=runpy.run_path(str(root/'scripts/lab/gen_r52_claudio.py'))
     h=(src/'r52_ab_tables.h').read_text();m=(src/'r53_micro_tables.h').read_text()
