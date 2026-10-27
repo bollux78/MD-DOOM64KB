@@ -54,7 +54,17 @@ assert "#if defined(DOOM_R59_COLOR_VIEW)" in native
 assert "PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU)" in native
 assert "PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU)" in native
 assert "r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */" in native
-assert "if(r59_color_dirty && r35_native_active<0)" in video
+# R76 defers the existing refresh until Options closes. Match the complete
+# condition across preprocessor lines rather than an exact historical spelling.
+refresh = re.search(r"if\s*\(\s*r59_color_dirty\s*&&\s*r35_native_active\s*<\s*0"
+                    r"(?P<guard>.*?)\)\s*\{", video, re.S)
+assert refresh is not None, "missing coordinated profile refresh"
+guard = refresh.group("guard")
+assert not guard.strip() or re.fullmatch(
+    r"\s*#if defined\(DOOM_R76_PROFILES\)\s*&&\s*!_g_menuactive\s*#endif\s*",
+    guard), "unexpected profile refresh condition"
+if "R76_MenuOverlayFinish" in video:
+    assert "!_g_menuactive" in guard, "R76 must defer profile upload while menu is open"
 def nums(src,name):
     return list(map(int,re.findall(r"\d+",initializer(src,name)[1])))
 mode_names=("cm6","balanced","tolerant","accents","a4_tolerant","a4_accents")

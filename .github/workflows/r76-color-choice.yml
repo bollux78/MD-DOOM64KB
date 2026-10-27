@@ -7,6 +7,7 @@ on:
       - 'scripts/lab/apply_r76.py'
       - 'scripts/lab/gen_r76_profiles.py'
       - 'scripts/lab/test_r76_profiles.py'
+      - 'scripts/lab/test_r59_colorview.py'
   workflow_dispatch:
 permissions:
   contents: read
