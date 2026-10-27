@@ -11,7 +11,8 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('--profile',choices=['a','l'],required=True)
     p.add_argument('--policy',choices=['ctl','f1','f2','f3'],required=True)
-    a=p.parse_args();root=Path(__file__).resolve().parents[2];src=root/'src'
+    p.add_argument('--source-dir',default=None,help='optional isolated R52/R53 table directory')
+    a=p.parse_args();root=Path(__file__).resolve().parents[2];src=Path(a.source_dir).resolve() if a.source_dir else root/'src'
     palette_report=json.loads((src/'r52_ab_report.json').read_text())
     micro_report=json.loads((src/'r53_micro_report.json').read_text())
     expected_mode='near25' if a.profile=='a' else 'luma32'
