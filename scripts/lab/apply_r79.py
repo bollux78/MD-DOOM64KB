@@ -40,6 +40,14 @@ s=s.replace('        R20_StopVideo();\n        VDP_setEnable(FALSE);','''       
 #endif
         VDP_setEnable(FALSE);''')
 p.write_text(s)
+p=Path('scripts/lab/test_r59_colorview.py');s=p.read_text()
+for bank,offset in ((0,0),(1,16)):
+    old=f'assert "PAL_setColors({offset},R59_CURRENT.pal{bank}[0],16,CPU)" in native'
+    new=f'assert "PAL_setColors({offset},R79_PAL{bank}[0],16,CPU)" in native'
+    assert s.count(old)==1
+    s=s.replace(old,new+f'\nassert "#define R79_PAL{bank} (R59_CURRENT.pal{bank})" in video'+
+        f'\nassert "#define R79_PAL{bank} (r79_pal[r59_color_mode][{bank}])" in video')
+p.write_text(s)
 p=Path('src/r77_menu.inc');s=p.read_text()
 needle='    VDP_setHilightShadow(FALSE);'
 assert s.count(needle)==1
