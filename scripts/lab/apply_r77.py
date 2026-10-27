@@ -94,7 +94,19 @@ s=s.replace(needle,needle+'''
     VDP_setHilightShadow(FALSE);
 #endif''')
 p.write_text(s)
-p=Path('src/m_text.c');s=p.read_text().replace('"Hybrid Blue","A2 Full"','"Hybrid Blue+","A2 Full"');p.write_text(s)
+p=Path('src/m_text.c');s=p.read_text().replace('"Hybrid Blue","A2 Full"','"Hybrid Blue+","A2 Full"')
+needle='static boolean messageToPrint;'
+assert s.count(needle)==1
+s=s.replace(needle,'''/* All three fields are assigned only boolean values. */
+static struct {uint8_t print,previous,input;} r77_message_state;
+#define messageToPrint (r77_message_state.print)
+#define messageLastMenuActive (r77_message_state.previous)
+#define messageNeedsInput (r77_message_state.input)
+typedef char r77_message_size[(sizeof(r77_message_state)==3u)?1:-1];''')
+for needle in ('static boolean messageLastMenuActive;','static boolean messageNeedsInput;'):
+    assert s.count(needle)==1
+    s=s.replace(needle,'')
+p.write_text(s)
 p=Path('scripts/lab/build_r35_linear.fish');s=p.read_text()
 needle='                        python3 scripts/lab/test_r76_profiles.py; or exit 1'
 assert s.count(needle)==1
