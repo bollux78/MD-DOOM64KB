@@ -62,19 +62,19 @@ s=p.read_text()
 i=s.index("VARIANTS = (")
 j=s.index("\nLABEL =",i)
 replacement="""VARIANTS = (
-    ('r73-r53-solid-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
-    ('r73-r53-m25-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
-    ('r73-r53-m25-flat2d-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
-    ('r73-r53-solid-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
-    ('r73-r53-m25-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
-    ('r73-r53-m25-flat2d-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
+    ('r73-s-pf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-m-pf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-f-pf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
+    ('r73-s-pl', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-m-pl', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-f-pl', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
 )"""
 s=s[:i]+replacement+s[j:]
 s=s.replace("'DOOM_R52_AB_PROFILE': 'luma32'", "'DOOM_R52_AB_PROFILE': 'near25'")
 s=s.replace("assert len(records) == 2","assert len(records) == 6")
 start=s.index("    for name in ('r72flat2d-hud-perf',")
 end=s.index(":\n        contents=flags[name]",start)
-s=s[:start]+"""    for name in ('r73-r53-solid-perf','r73-r53-m25-perf','r73-r53-m25-flat2d-perf','r73-r53-solid-play','r73-r53-m25-play','r73-r53-m25-flat2d-play')"""+s[end:]
+s=s[:start]+"""    for name in ('r73-s-pf','r73-m-pf','r73-f-pf','r73-s-pl','r73-m-pl','r73-f-pl')"""+s[end:]
 s=s.replace("'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R72_FLAT_2D'","'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R73_R53_FIXED'")
 s=s.replace("print('PASS R71A12MUL HUD only: A12 + MUL + Claudio stone-margin HUD', flush=True)","print('PASS R73 R53 fixed palette triplet: R71A12MUL + HUD',flush=True)")
 p.write_text(s)
