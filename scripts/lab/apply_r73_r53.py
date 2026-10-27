@@ -56,7 +56,7 @@ s=s.replace(needle,needle+"""
             set defs $defs '-DDOOM_R73_R53_FIXED'
         end""")
 p.write_text(s)
-# The existing isolated three independent build trees prevent shared generated assets.
+# The existing isolated six independent build trees prevent shared generated assets.
 p=Path("scripts/lab/build_r71a12mul_hud.py")
 s=p.read_text()
 i=s.index("VARIANTS = (")
@@ -64,14 +64,18 @@ j=s.index("\nLABEL =",i)
 replacement="""VARIANTS = (
     ('r73-r53-solid-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
     ('r73-r53-m25-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-r53-m25-flat2d-perf', 'perf', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
+    ('r73-r53-solid-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'solid','DOOM_R72_FLAT_2D':'0'}, []),
+    ('r73-r53-m25-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25','DOOM_R72_FLAT_2D':'0'}, []),
     ('r73-r53-m25-flat2d-play', 'play', {'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25flat2d','DOOM_R72_FLAT_2D':'1'}, []),
 )"""
 s=s[:i]+replacement+s[j:]
-s=s.replace("assert len(records) == 2","assert len(records) == 3")
+s=s.replace("'DOOM_R52_AB_PROFILE': 'luma32'", "'DOOM_R52_AB_PROFILE': 'near25'")
+s=s.replace("assert len(records) == 2","assert len(records) == 6")
 start=s.index("    for name in ('r72flat2d-hud-perf',")
 end=s.index(":\n        contents=flags[name]",start)
-s=s[:start]+"""    for name in ('r73-r53-solid-perf','r73-r53-m25-perf','r73-r53-m25-flat2d-play')"""+s[end:]
+s=s[:start]+"""    for name in ('r73-r53-solid-perf','r73-r53-m25-perf','r73-r53-m25-flat2d-perf','r73-r53-solid-play','r73-r53-m25-play','r73-r53-m25-flat2d-play')"""+s[end:]
 s=s.replace("'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R72_FLAT_2D'","'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R73_R53_FIXED'")
 s=s.replace("print('PASS R71A12MUL HUD only: A12 + MUL + Claudio stone-margin HUD', flush=True)","print('PASS R73 R53 fixed palette triplet: R71A12MUL + HUD',flush=True)")
 p.write_text(s)
-print("PASS R73 source patch, fixed palette menu disabled, three build variants")
+print("PASS R73 source patch, fixed palette menu disabled, six build variants")
