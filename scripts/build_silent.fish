@@ -310,7 +310,72 @@ if set -q DOOM_R20_DEFINES
     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
         test -n "$d"; or continue
         # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
-        string match -qr -- '^-DDOOM_R[234567][0-9][A-Z]?_[A-Z0-9_]+(=[0-9]+)?$' "$d"; or begin
+        string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)? "$d"; or begin
+            echo "Invalid DOOM_R20_DEFINES entry: $d"
+            exit 1
+        end
+        set render_flags "$render_flags $d"
+    end
+end
+# R29 builds must carry their audio macros; reject mislabeled control/experiment ROMs.
+if set -q DOOM_BUILD_ID
+    if string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
+        if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
+            echo 'R29 build refused: no DOOM_R25_MUSIC macro'
+            exit 1
+        end
+        if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
+            if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
+                echo 'R29 build refused: no DOOM_R29_XGM2 macro'
+                exit 1
+            end
+        end
+    end
+end
+# R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
+if set -q DOOM_R22_PIXEL4; and test "$DOOM_R22_PIXEL4" = 1
+    set render_flags (string replace -- '-DVIEWWINDOWWIDTH=38' '-DVIEWWINDOWWIDTH=76' "$render_flags")
+    set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=22' '-DVIEWWINDOWHEIGHT=44' "$render_flags")
+    set render_flags (string replace -- '-DMAPWIDTH=38' '-DMAPWIDTH=76' "$render_flags")
+    set render_flags "$render_flags -DDOOM_R22_PIXEL4"
+end
+# Generate matching ROM header and on-screen timedemo title per build.
+# SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
+# No changes to shared SGDK files or boot code are required.
+set -l stamp_options "$render_flags"
+if set -q DOOM_BUILD_ID
+    python3 scripts/set_rom_identity.py --id "$DOOM_BUILD_ID"; or exit 1
+    set render_flags "$render_flags -DDOOM_BUILD_VARIANT"
+    set stamp_options "$render_flags $DOOM_BUILD_ID"
+end
+# Make can build silently; record real flags for laboratory verification.
+echo "BUILD_FLAGS: $render_flags"
+set -l stamp out/.render_options
+if test -f $stamp; and test (cat $stamp) != "$stamp_options"
+    rm -rf out
+end
+mkdir -p out
+printf '%s' "$stamp_options" > $stamp
+rm -f out/rom.bin
+set -l libgcc ($gcc -m68000 -print-libgcc-file-name)
+if test $status -ne 0; or not test -f "$libgcc"
+    echo 'Could not locate cross compiler libgcc.'
+    exit 1
+end
+make GDK=$gdk PREFIX=m68k-elf- JAVA=java \
+    EXTRA_FLAGS="-Isrc -Icompat -std=gnu11 $render_flags" \
+    LIBGCC="$libgcc -lgcc" $argv
+set -l rc $status
+if test $rc -eq 0; and test -f out/rom.bin
+    echo 'ROM created:' $root/out/rom.bin
+else
+    echo 'Build failed or ROM missing. Check output above.'
+    if test $rc -eq 0
+        set rc 1
+    end
+end
+exit $rc
+ "$d"; or begin
             echo "Invalid DOOM_R20_DEFINES entry: $d"
             exit 1
         end
