@@ -9,27 +9,32 @@ assert '#define R59_COLOR_MODES 4' in s
 assert 'static const R59ColorTables r59_color_tables[R59_COLOR_MODES]' in s
 gen=runpy.run_path(str(root/'scripts/lab/gen_r74_flats.py'))
 array=gen['array']
+def array2(name):
+    m=re.search(r'\\b'+re.escape(name)+r'\\[\\d+\\]\\[\\d+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S)
+    assert m,name
+    return [int(v) for v in re.findall(r'0x[0-9a-fA-F]+|\\d+',m.group(1))]
+
 for tag,orig in [('a',tmp),('l',src)]:
     h=(orig/'r52_ab_tables.h').read_text()
     m=(orig/'r53_micro_tables.h').read_text()
     for bank in (0,1):
         original=array(h,'r52_pal'+str(bank))
-        generated=array(s,'r76_'+tag+'_pal'+str(bank))
-        assert original.tolist()==generated.tolist() and len(original)==224
+        generated=array2('r76_'+tag+'_pal'+str(bank))
+        assert original.tolist()==generated and len(original)==224
         assert all(int(generated[k*16])==0 for k in range(14))
     for side in ('even','odd'):
         assert array(h,'r52_'+side).tolist()==array(s,'r76_'+tag+'_wall_'+side).tolist()
-        assert array(h,'r52_comp_'+side).tolist()==array(s,'r76_'+tag+'_comp_'+side).tolist()
+        assert array(h,'r52_comp_'+side).tolist()==array2('r76_'+tag+'_comp_'+side)
         original_partner=array(m,'r53_partner_'+side)
-        pairs=array(s,'r76_'+tag+'_pairs_'+side).reshape(16,2)
+        vals=array2('r76_'+tag+'_pairs_'+side)\n        pairs=[vals[i*2:i*2+2] for i in range(16)]
         assert all(int(pairs[n][0])==n and int(pairs[n][1])==int(original_partner[n]) for n in range(16))
-        assert pairs[0].tolist()==[0,0]
+        assert pairs[0]==[0,0]
 for tag in ('a','l','n','b'):
     for side in ('even','odd'):
         values=array(s,'r76_'+tag+'_flat_'+side)
         assert len(values)==256 and max(values)<=15 and min(values)>=0
 assert all(array(s,'r76_l_wall_'+side).shape==array(s,'r76_a_wall_'+side).shape for side in ('even','odd'))
-assert array(s,'r76_a_pal0').tolist()!=array(s,'r76_l_pal0').tolist(), 'A2 and L3 full CRAM palettes collapsed'
+assert array2('r76_a_pal0')!=array2('r76_l_pal0'), 'A2 and L3 full CRAM palettes collapsed'
 report=json.loads((src/'r76_profiles_report.json').read_text())
 assert len(report['modes'])==4
 assert report['generated_sha256']
