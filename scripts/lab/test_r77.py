@@ -27,7 +27,7 @@ c='''#include <stdint.h>
 #include <assert.h>
 #define HUDW_HEALTH_C 5
 #define R77_MENU_BASE 1206
-static uint16_t hudw_bgmap[1][8];
+static uint16_t hudw_bgmap[2][8];
 static uint16_t hudw_pal[16];
 static uint32_t hudw_tiles[1][8];
 '''+helpers+'''
@@ -90,3 +90,4 @@ if args.generated:
     assert len(sh['profiles'])==4 and all(v['candidate_pairs_per_mode']==225 for v in sh['profiles'].values())
     assert 'R77_MenuLeave' in (ROOT/'src/r22_video.inc').read_text()
 print('PASS R77 actual stone DAC equality, glyph priority/range, normal-shadow limits'+(' and generated profiles' if args.generated else ''))
+

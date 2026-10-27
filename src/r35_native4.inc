@@ -16,16 +16,25 @@
 extern const u8 r30_title_pack[],r30_inter_pack[],r30_final_pack[];
 extern const u16 r30_title_map[],r30_inter_map[],r30_final_map[];
 extern const u16 r30_title_pal[],r30_inter_pal[],r30_final_pal[];
+#if defined(DOOM_R78_ART)
+extern const u16 r30_title_mapb[],r30_inter_mapb[];
+#define R78_TITLE_MAPB r30_title_mapb
+#define R78_INTER_MAPB r30_inter_mapb
+#else
+#define R78_TITLE_MAPB 0
+#define R78_INTER_MAPB 0
+#endif
 typedef struct {
     const u8 *pixels;
     const u16 *map;
     const u16 *palette;
     u16 tile_count;
+    const u16 *back_map; /* Optional opaque base; map is sparse foreground. */
 } R35Native4;
 static const R35Native4 r35_native4[3]={
-    {r30_title_pack,r30_title_map,r30_title_pal,R30_TITLE_TILES},
-    {r30_inter_pack,r30_inter_map,r30_inter_pal,R30_INTER_TILES},
-    {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES}
+    {r30_title_pack,r30_title_map,r30_title_pal,R30_TITLE_TILES,R78_TITLE_MAPB},
+    {r30_inter_pack,r30_inter_map,r30_inter_pal,R30_INTER_TILES,R78_INTER_MAPB},
+    {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES,0}
 };
 static int16_t r35_native_active=-1;
 #if defined(DOOM_R50_STATIC_MENU)
@@ -174,8 +183,12 @@ static bool R35_DrawNative4(int16_t lump)
             for(u16 x=0;x<40;x++)row[x]=picture->map[y*40+x]+16;
             VDP_setTileMapDataRect(BG_A,row,0,y,40,1,40,CPU);
 #if defined(DOOM_R47_PLANE_PAIR)
+            if(picture->back_map)
+                for(u16 x=0;x<40;x++)row[x]=picture->back_map[y*40+x]+16;
             /* Mirror the native picture on B so transparent WINDOW glyphs
-             * reveal the complete static image, not odd scanline pairs. */
+             * reveal the complete static image, not odd scanline pairs.
+             * R78 user art instead puts its opaque base in B and exact sparse
+             * corrections in A. Native glyph retirement restores map A. */
             VDP_setTileMapDataRect(BG_B,row,0,y,40,1,40,CPU);
 #endif
         }
@@ -193,3 +206,6 @@ static bool R35_DrawNative4(int16_t lump)
 #endif
 
 #undef R35_FONT_TILE_LIMIT
+#undef R78_TITLE_MAPB
+#undef R78_INTER_MAPB
+

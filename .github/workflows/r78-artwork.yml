@@ -1,0 +1,123 @@
+name: R78 seamless stone menu and user title/intermission art 2 ROMs
+on:
+  push:
+    branches: ['exp-chatgpt-r78-artwork-*']
+    paths:
+      - '.github/workflows/r78-artwork.yml'
+      - 'scripts/lab/apply_r76.py'
+      - 'scripts/lab/gen_r76_profiles.py'
+      - 'scripts/lab/test_r76_profiles.py'
+      - 'scripts/lab/test_r59_colorview.py'
+      - 'scripts/lab/apply_r77.py'
+      - 'scripts/lab/gen_r77_profiles.py'
+      - 'scripts/lab/test_r77.py'
+      - 'src/r77_menu.inc'
+      - 'src/r35_native4.inc'
+      - 'scripts/lab/gen_r78_art.py'
+      - 'scripts/lab/apply_r78.py'
+      - 'scripts/lab/test_r78_native.py'
+      - 'assets/art/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r78-artwork
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          python3 -m py_compile scripts/lab/apply_r72_flat2d.py scripts/lab/apply_r73_r53.py scripts/lab/gen_r73_r53_fixed.py scripts/lab/apply_r74.py scripts/lab/gen_r74_flats.py scripts/lab/inject_r74_flats.py scripts/lab/apply_r75.py scripts/lab/gen_r75_hybrid.py scripts/lab/inject_r75_hybrid.py scripts/lab/apply_r76.py scripts/lab/gen_r76_profiles.py scripts/lab/test_r76_profiles.py scripts/lab/apply_r77.py scripts/lab/gen_r77_profiles.py scripts/lab/test_r77.py scripts/lab/gen_r78_art.py scripts/lab/apply_r78.py scripts/lab/test_r78_native.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build R78 clean stone and lossless user art
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          export HUD_WORK="$RUNNER_TEMP/r78-artwork-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 scripts/lab/apply_r78.py
+          python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log
+          sha256sum dist/hud/*.bin | tee dist/hud/ROM-SHA256.txt
+      - name: Verify ROM sizes, BSS and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          d=pathlib.Path('dist/hud')
+          rows=json.loads((d/'MANIFEST.json').read_text())
+          assert [r['variant'] for r in rows]==['r78-art-pf','r78-art-pl']
+          for r in rows:
+              b=(d/r['rom']).read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert 0 < r['bss_bytes'] <= 57920
+              assert len(b)<=4*1024*1024
+              print(r)
+          PY
+      - name: BlastEm 800 frame PERF boot smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,pathlib,shutil,subprocess
+          d=pathlib.Path('dist/hud').resolve()
+          exe=shutil.which('blastem') or next((str(p) for p in (pathlib.Path.home()/'Projetos').glob('**/blastem') if p.is_file() and os.access(p,os.X_OK)),None)
+          assert exe,'BlastEm unavailable'
+          env=os.environ.copy();env.update(SDL_VIDEODRIVER='dummy',SDL_AUDIODRIVER='dummy')
+          r=subprocess.run([exe,'-b','800',str(d/'doom-md-r60-r78-art-pf.bin')],env=env,cwd=d,capture_output=True,text=True,timeout=60)
+          (d/'BLASTEM-800.txt').write_text(r.stdout+r.stderr+'\\nexit='+str(r.returncode)+'\\n')
+          assert r.returncode==0,r.stderr
+          print('PASS BlastEm PERF boot 800 emulated frames (not full benchmark or menu QA)')
+          PY
+      - name: Upload HUD ROMs and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r78-artwork-2-roms
+          path: dist/hud/
+          retention-days: 90
+          if-no-files-found: warn
+
+

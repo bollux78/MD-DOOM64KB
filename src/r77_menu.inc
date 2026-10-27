@@ -15,7 +15,8 @@ static const uint16_t r77_menu_pal[16]={
 static uint32_t R77_StoneRow(uint16_t phase,uint16_t row,uint16_t shadow)
 {
     static const uint8_t shade_code[4]={1,3,5,6};
-    uint16_t id=hudw_bgmap[0][HUDW_HEALTH_C+1u+(phase&1u)];
+    /* Lower clean stone row: the top row contains the visible HUD seam. */
+    uint16_t id=hudw_bgmap[1][HUDW_HEALTH_C+1u+(phase&1u)];
     uint32_t source=hudw_tiles[id][row],result=0;
     for(uint16_t x=0;x<8u;x++){
         uint16_t shift=28u-4u*x;
@@ -85,3 +86,4 @@ static void R77_MenuLeave(void)
     VDP_setHorizontalScroll(BG_B,r57_h32_active?-20:4);
     r57_hud_dirty=1;
 }
+
