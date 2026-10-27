@@ -117,14 +117,22 @@ p.write_text(s)
 
 # R73 deliberately omitted R59 palette selector; restore only for R76.
 p=Path('src/m_text.c');s=p.read_text()
-# Cursor frame is 0/1 and its signed countdown stays in -1..10.
-# Keep <=0 behavior at zero while saving two bytes under the strict BSS guard.
-old='static int16_t skullAnimCounter;'
+# Keep bounded cursor fields together: separate byte globals can retain
+# word/common alignment gaps in the PLAY link. Countdown stays signed.
+old='''static int16_t itemOn;           // menu item skull is on (for Big Font menus)
+static int16_t skullAnimCounter; // skull animation counter
+static int16_t whichSkull;       // which skull to draw (he blinks)'''
+new='''static struct {
+    int16_t item;
+    int8_t countdown;
+    uint8_t frame;
+} r76_menu_cursor;
+#define itemOn (r76_menu_cursor.item)
+#define skullAnimCounter (r76_menu_cursor.countdown)
+#define whichSkull (r76_menu_cursor.frame)
+typedef char r76_cursor_size_check[(sizeof(r76_menu_cursor)==4u)?1:-1];'''
 assert s.count(old)==1
-s=s.replace(old,'static int8_t skullAnimCounter;')
-old='static int16_t whichSkull;'
-assert s.count(old)==1
-s=s.replace(old,'static uint8_t whichSkull;')
+s=s.replace(old,new)
 old='#if defined(DOOM_R59_COLOR_VIEW) && !defined(DOOM_R73_R53_FIXED)'
 assert s.count(old)>=3
 s=s.replace(old,'#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))')
