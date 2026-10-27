@@ -10,9 +10,9 @@ assert 'static const R59ColorTables r59_color_tables[R59_COLOR_MODES]' in s
 gen=runpy.run_path(str(root/'scripts/lab/gen_r74_flats.py'))
 array=gen['array']
 def array2(name):
-    m=re.search(r'\\b'+re.escape(name)+r'\\[\\d+\\]\\[\\d+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S)
+    m=re.search(r'\b'+re.escape(name)+r'\[\d+\]\[\d+\]\s*=\s*\{(.*?)\};',s,re.S)
     assert m,name
-    return [int(v) for v in re.findall(r'0x[0-9a-fA-F]+|\\d+',m.group(1))]
+    return [int(v) for v in re.findall(r'0x[0-9a-fA-F]+|\d+',m.group(1))]
 
 for tag,orig in [('a',tmp),('l',src)]:
     h=(orig/'r52_ab_tables.h').read_text()
@@ -26,7 +26,8 @@ for tag,orig in [('a',tmp),('l',src)]:
         assert array(h,'r52_'+side).tolist()==array(s,'r76_'+tag+'_wall_'+side).tolist()
         assert array(h,'r52_comp_'+side).tolist()==array2('r76_'+tag+'_comp_'+side)
         original_partner=array(m,'r53_partner_'+side)
-        vals=array2('r76_'+tag+'_pairs_'+side)\n        pairs=[vals[i*2:i*2+2] for i in range(16)]
+        vals=array2('r76_'+tag+'_pairs_'+side)
+        pairs=[vals[i*2:i*2+2] for i in range(16)]
         assert all(int(pairs[n][0])==n and int(pairs[n][1])==int(original_partner[n]) for n in range(16))
         assert pairs[0]==[0,0]
 for tag in ('a','l','n','b'):
