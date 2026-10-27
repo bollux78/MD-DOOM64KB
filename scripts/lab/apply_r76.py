@@ -130,6 +130,7 @@ assert s.count(needle)==1
 s=s.replace(needle,needle+'''
                     if set -q DOOM_R76_PROFILES
                         python3 scripts/lab/gen_r76_profiles.py; or exit 1
+                        python3 scripts/lab/test_r76_profiles.py; or exit 1
                     end''')
 needle="        set defs $defs '-DDOOM_R75_MENU_HOLD'"
 assert s.count(needle)==1
