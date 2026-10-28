@@ -164,7 +164,7 @@ jobs:
           mkdir -p dist/ab/stack
           for d in dist/ab/control dist/ab/c-sprites dist/ab/c-wallclip; do
             v=$(basename "$d"); rom=$(ls "$d"/*-pf.bin); elf="${rom%.bin}.elf"
-            python3 scripts/lab/r82_stack_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/stack/$v.json" --label "$v" --max-emulated-frames 8000 --stop-tic 640 > "dist/ab/stack/$v.log" 2>&1
+            python3 scripts/lab/r82_stack_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/stack/$v.json" --label "$v" --max-emulated-frames 8000 --stop-tic 128 > "dist/ab/stack/$v.log" 2>&1
             cat "dist/ab/stack/$v.json"
           done
       - name: Record SGDK makefile.gen compiler flags

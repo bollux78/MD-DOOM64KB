@@ -1,0 +1,60 @@
+name: R83 validate built A/B round and bounded stack samples
+on:
+  push:
+    branches: ['exp-chatgpt-r83-sprites-wallclip-*']
+    paths: ['.github/triggers/r83-validate.trigger']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r83-sprites-wallclip
+          path: dist/ab
+          run-id: 40691084814
+          github-token: ${{ github.token }}
+      - name: Validate ROM integrity, control identity and complete pixel comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          p=pathlib.Path('dist/ab');s=json.loads((p/'compare/summary.json').read_text())
+          assert s['common_tics']>=100
+          for v in ('c-sprites','c-wallclip'):assert s['variants'][v]['differing_frames']==0,s
+          refs={'r82-p1f1-pf':'cabdce1e8ad14ccdcd7f44db9a6377abd7b283a9dae94b093e8c1bb9519170ed','r82-p1f1-pl':'2c734fbbc2e97eb1a3dd3ea22f9f2fd08b767c64c9b1b0f163d5a8c1d9677e82'}
+          for variant in ('control','c-sprites','c-wallclip'):
+              for r in json.loads((p/variant/'MANIFEST.json').read_text()):
+                  assert hashlib.sha256((p/variant/r['rom']).read_bytes()).hexdigest()==r['sha256']
+                  assert r['bss_bytes']<=(57844 if r['variant'].endswith('-pf') else 57852)
+                  assert r['bytes']<=4*1024*1024
+                  if variant=='control':assert refs[r['variant']]==r['sha256']
+          print(json.dumps(s,indent=2))
+          PY
+      - name: Stack diagnostic with a reachable stop (128 tics, <=8000 frames)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/ab/stack128
+          for v in control c-sprites c-wallclip; do
+            rom=$(ls dist/ab/$v/*-pf.bin)
+            python3 scripts/lab/r82_stack_probe.py --blastem /home/dan/Projetos/blastem64-1.0.0/blastem --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/stack128/$v.json" --label "$v" --max-emulated-frames 8000 --stop-tic 128
+          done
+          python3 - <<'PY'
+          import json,pathlib
+          for p in pathlib.Path('dist/ab/stack128').glob('*.json'):
+              r=json.loads(p.read_text());assert r['status']=='ok' and r['headroom_bytes']>=128,r
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: doom-md-r83-validated
+          path: dist/ab/
+          retention-days: 90
