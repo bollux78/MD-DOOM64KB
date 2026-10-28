@@ -50,16 +50,17 @@ try:
  # SaveScratch uses only the first 2048 framebuffer bytes for object IDs.
  # The remaining buffer is idle while these calls keep gameplay paused.
  code=bytes.fromhex('48e7fffe')
- loop=len(code)
- # Every function may ignore the two extra ABI argument slots.
- code+=bytes.fromhex('2f3c')+word(1)+bytes.fromhex('2f3c')+word(2)
- targetoff=len(code)+2;code+=bytes.fromhex('4eb9')+word(sym('G_InitNew'))
- code+=bytes.fromhex('508f') # addq.l #8,sp
- code+=bytes.fromhex('23c0')+word(result)
- stop=codeaddr+len(code);code+=bytes.fromhex('4e71')
- code+=bytes.fromhex('4ef9')+word(codeaddr+loop)
+ loop=len(code);maparg=codeaddr+100;skillarg=codeaddr+104;targetarg=codeaddr+108
+ # Read call parameters from RAM on every iteration. Changing immediate
+ # operands through RSP does not invalidate BlastEm's translated RAM code.
+ code+=bytes.fromhex('13fc000000a130f1') # CPU disables SRAM before ROM calls
+ code+=bytes.fromhex('2f39')+word(maparg)+bytes.fromhex('2f39')+word(skillarg)
+ code+=bytes.fromhex('2079')+word(targetarg)+bytes.fromhex('4e90')
+ code+=bytes.fromhex('508f23c0')+word(result)
+ code+=bytes.fromhex('13fc000100a130f1') # CPU enables SRAM for host inspection
+ stop=codeaddr+len(code);code+=bytes.fromhex('4e714ef9')+word(codeaddr+loop)
  assert len(code)<100
- write(codeaddr,code);write(sp,word(codeaddr))
+ write(codeaddr,code);write(maparg,word(1));write(skillarg,word(2));write(targetarg,word(sym('G_InitNew')));write(sp,word(codeaddr))
  assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK';assert g.req('Z0,%x,2'%(stop&0xffffff))=='OK'
  calls=0
  def call(name,skill=2,map=1):
@@ -69,7 +70,7 @@ try:
    print('STEP',g.req('s'),g.req('g')[17*8:18*8],flush=True)
    print('STEP',g.req('s'),g.req('g')[17*8:18*8],flush=True)
   calls+=1
-  write(codeaddr+loop+2,word(map));write(codeaddr+loop+8,word(skill));write(codeaddr+targetoff,word(sym(name)))
+  write(maparg,word(map));write(skillarg,word(skill));write(targetarg,word(sym(name)))
   g.cont();regs=g.req('g');pc=int(regs[17*8:18*8],16)&0xffffff
   if pc==err&0xffffff:
    s=int(regs[15*8:16*8],16);raise AssertionError('I_Error: '+str(string(u32(s+4))))
