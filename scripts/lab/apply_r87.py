@@ -73,6 +73,7 @@ def main():
 \txc &= skywidthmask;''','''\tint16_t xc=r87_skyx[dcvars->x] & skywidthmask;''')
  if mode=='farwalls':
   wallcolors()
+  patch('src/r22_video.inc','#include "r64a_ctx.h"','#include "r64a_ctx.h"\n#include "r_main.h"')
   p=Path('src/r_draw.c');p.write_text('#include <stdint.h>\n#include "r87_wallcolors.h"\n'+p.read_text())
   patch('src/r_draw.c','''    R20_COUNT(tex->overlapped ? R20C_WALL_COMPOSITE :''','''    /* The source remains valid for R66's next-column reuse. */
     if(dcvars->fracstep>=4096u){
@@ -81,8 +82,7 @@ def main():
     }
     R20_COUNT(tex->overlapped ? R20C_WALL_COMPOSITE :''')
   patch('src/r22_video.inc','''static void R42_DrawPackedWall(const draw_column_vars_t *v)
-{''','''void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v);
-static void R42_DrawPackedWall(const draw_column_vars_t *v)
+{''','''static void R42_DrawPackedWall(const draw_column_vars_t *v)
 {
     if(v->fracstep>=4096u){
         uint8_t c=v->source[0];if(v->colormap)c=v->colormap[c];

@@ -65,6 +65,7 @@ return 0;}
    subprocess.run(['cc','-O2',str(c),'-o',str(Path(tmp)/'test-sky')],check=True)
    subprocess.run([str(Path(tmp)/'test-sky')],check=True)
   if mode=='farwalls':
+   subprocess.run(['python3','scripts/lab/test_r22_pixel4.py'],cwd=dst,check=True)
    # All constant origins must be a complete 128-byte texture window.
    import re
    colors=(dst/'src/r87_wallcolors.h').read_text()
