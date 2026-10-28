@@ -7,7 +7,7 @@
 #include "r81_save_codec.inc"
 #define R81_COUNT(a) (sizeof(a)/sizeof((a)[0]))
 static const r81_field_t r81_player_fields[]={
- R81_F(player_t,playerstate),R81_F(player_t,cmd.forwardmove),R81_F(player_t,cmd.sidemove),R81_F(player_t,cmd.angleturn),R81_F(player_t,cmd.buttons),
+ R81_F(player_t,playerstate),
  R81_F(player_t,viewz),R81_F(player_t,viewheight),R81_F(player_t,deltaviewheight),R81_F(player_t,bob),R81_F(player_t,momx),R81_F(player_t,momy),
  R81_F(player_t,health),R81_F(player_t,armorpoints),R81_F(player_t,armortype),R81_A(player_t,powers,NUMPOWERS),R81_A(player_t,cards,NUMCARDS),
  R81_F(player_t,backpack),R81_F(player_t,readyweapon),R81_F(player_t,pendingweapon),R81_A(player_t,weaponowned,NUMWEAPONS),

@@ -33,7 +33,7 @@ function('src/m_text.c','static void M_ReadSaveStrings(void)\n',' R81_UpdateSave
 function('src/g_game.c','void G_UpdateSaveGameStrings()',' R81_UpdateSaveStrings();')
 function('src/g_game.c','static void G_DoLoadGame(void)\n',' const char *error=R81_LoadGame();if(error)_g_player.message=error;_g_gameaction=ga_nothing;')
 function('src/g_game.c','static void G_DoSaveGame(void)\n',' const char *error=R81_SaveGame();if(error)_g_player.message=error;_g_gameaction=ga_nothing;')
-p=Path('src/g_game.c');s=p.read_text().replace('#include "r24_romthings.h"','#include "r24_romthings.h"\n#include "r81_save.h"');p.write_text(s+'\n#include "r81_save_core.inc"\n')
+p=Path('src/g_game.c');s=p.read_text().replace('static void G_InitNew(', 'static void __attribute__((noinline,used)) G_InitNew(').replace('#include "r24_romthings.h"','#include "r24_romthings.h"\n#include "r81_save.h"');p.write_text(s+'\n#include "r81_save_core.inc"\n')
 p=Path('src/r22_video.inc');s=p.read_text();s='#include "r81_menu_font.h"\n'+s
 needle='    /* Explicit solid tiles also guarantee transparent tile0 for Window.';assert needle in s
 s=s.replace(needle,'    VDP_loadTileData((const uint32_t*)r81_menu_font,TILE_FONT_INDEX,96,CPU);\n'+needle)
