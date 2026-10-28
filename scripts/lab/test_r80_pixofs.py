@@ -75,6 +75,9 @@ def main():
         for x in order:
             t = hook.EXPERIMENTS[x](t)
         assert "R80-F1" in t and "DOOM_R80_PIXOFS" in t, order
+        # the inline asm must keep C escapes (a real newline inside a C string literal is a compile error)
+        blk = t[t.index("R80-F1 (Claudio)"):t.index("dbra %[n],1b")]
+        assert '"1:\\n\\t"' in blk and '"move.b %[v],(%[d])\\n\\t"' in blk, blk
         try:
             hook.apply_f1(t); raise SystemExit("F1 applied twice")
         except AssertionError:
@@ -96,7 +99,16 @@ def main():
                     if n == 0xffff: break
             c2 &= 1
             assert (wc, d, c) == (w2, d2, c2), (count, start)
-    print("PASS R80-F1 anchor checks and DBRA loop model (count 0..44)")
+    # host C front-end parse of the generated F1 block (asm text is not assembled on the host)
+    f1 = hook.apply_f1(before)
+    i = f1.index("#if !defined(DOOM_R49_COLORMIX)\n    /* R80-F1")
+    k = f1.index(hook.FLAT_LOOP_OLD, i) + len(hook.FLAT_LOOP_OLD)
+    assert f1.startswith("#endif\n", k); j = k + len("#endif\n")
+    code = "#include <stdint.h>\nvoid f(uint8_t *dst,uint16_t count,const uint8_t pair){\n" + f1[i:j] + "(void)dst;(void)count;}\n"
+    with tempfile.TemporaryDirectory() as td:
+        c = pathlib.Path(td) / "f1.c"; c.write_text(code)
+        subprocess.run([cc, "-std=c11", "-fsyntax-only", "-Wall", "-Werror", str(c)], check=True)
+    print("PASS R80-F1 anchor checks, host C parse and DBRA loop model (count 0..44)")
 
 
 if __name__ == "__main__":

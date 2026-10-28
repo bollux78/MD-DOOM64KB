@@ -71,7 +71,7 @@ FLAT_LOOP_OLD = """    while(count>=2) {
 # post-loop pointer are computed with MULU.W #$98 (blocks @f1c8/@f1f0 of the R79
 # control).  DBRA writes the same bytes at the same addresses and leaves dst exactly
 # where the C loop leaves it (first byte after the last pair); count keeps its parity.
-FLAT_LOOP_NEW = """#if !defined(DOOM_R49_COLORMIX)
+FLAT_LOOP_NEW = r"""#if !defined(DOOM_R49_COLORMIX)
     /* R80-F1 (Claudio): same writes as the C loop, counted with DBRA (no MULU). */
     {
         uint16_t pairs=(uint16_t)(count>>1);
