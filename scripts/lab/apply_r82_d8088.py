@@ -30,7 +30,9 @@ PIXEL_PREFIX = "set -l pixel "
 
 
 def add_flags(s, flags):
-    assert s.count(EXTRA_OLD) == 2, "build_silent.fish EXTRA_FLAGS lines changed"
+    # raw checkout has 2 identical make invocations; apply_r72_flat2d.py (run by apply_r81.py)
+    # truncates the duplicate half, leaving 1
+    assert s.count(EXTRA_OLD) in (1, 2), "build_silent.fish EXTRA_FLAGS lines changed"
     return s.replace(EXTRA_OLD, EXTRA_OLD[:-1] + " " + flags + '"')
 
 

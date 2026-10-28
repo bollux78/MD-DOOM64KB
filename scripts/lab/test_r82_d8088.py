@@ -9,12 +9,15 @@ h = importlib.util.module_from_spec(spec); spec.loader.exec_module(h)
 bs = (ROOT / "scripts/build_silent.fish").read_text()
 lf = (ROOT / "scripts/lab/build_r35_linear.fish").read_text()
 
-for key in ("IVO", "D88"):
-    out = h.add_flags(bs, h.FLAGS[key])
-    assert out.count(h.FLAGS[key]) == 2, key
-    assert out.count("$render_flags " + h.FLAGS[key] + '"') == 2, key
-    diff = [(a, b) for a, b in zip(bs.split("\n"), out.split("\n")) if a != b]
-    assert len(diff) == 2 and all("EXTRA_FLAGS" in a for a, _ in diff), diff
+# as apply_r81.py leaves it: apply_r72_flat2d.py keeps only the text up to the first "exit $rc"
+truncated = bs[:bs.index("exit $rc\n") + len("exit $rc\n")]
+for src, n in ((bs, 2), (truncated, 1)):
+    assert src.count(h.EXTRA_OLD) == n
+    for key in ("IVO", "D88"):
+        out = h.add_flags(src, h.FLAGS[key])
+        assert out.count("$render_flags " + h.FLAGS[key] + '"') == n, key
+        diff = [(a, b) for a, b in zip(src.split("\n"), out.split("\n")) if a != b]
+        assert len(diff) == n and all("EXTRA_FLAGS" in a for a, _ in diff), diff
 
 out = h.drop_bsp_iterative(lf)
 assert "DOOM_R20_BSP_ITERATIVE" not in [l for l in out.split("\n") if l.startswith(h.PIXEL_PREFIX)][0]
