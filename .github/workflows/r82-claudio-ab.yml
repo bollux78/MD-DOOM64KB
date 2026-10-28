@@ -128,8 +128,18 @@ jobs:
             if [ "$set" = control ]; then v=control; else v="c-${set//+/_}"; fi
             specs="$specs $v=dist/ab/cap-$v"
             rom=$(ls dist/ab/$v/*-pf.bin); elf="${rom%.bin}.elf"
-            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/cap-$v" --label "$v-pf" --max-emulated-frames "$AB_FRAMES" --timeout 120 2>&1 | tail -n 5
+            mkdir -p "dist/ab/cap-$v"
+            set +e
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/cap-$v" --label "$v-pf" --max-emulated-frames "$AB_FRAMES" --timeout 120 > "dist/ab/cap-$v/capture.log" 2>&1
+            rc=$?
+            set -e
+            echo "capture $v rc=$rc"; tail -n 3 "dist/ab/cap-$v/capture.log"
+            if [ $rc -ne 0 ]; then
+              grep -a -m1 -A3 "BLASTEM STDERR" "dist/ab/cap-$v/capture.log" | head -c 900 | python3 -c "import sys;t=sys.stdin.read().replace('%','%25').replace('\n','%0A');print('::warning title=capture $v failed rc=$rc::'+t)" || true
+              failed=1
+            fi
           done
+          if [ "${failed:-0}" = 1 ]; then echo "at least one capture failed; see capture.log files"; exit 1; fi
           python3 scripts/lab/r70_compare.py dist/ab/compare $specs || echo "compare rc=$?"
           python3 - <<'PY'
           import json,pathlib
