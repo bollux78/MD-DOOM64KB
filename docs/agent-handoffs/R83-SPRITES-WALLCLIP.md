@@ -82,3 +82,23 @@ Depois: `python3 scripts/lab/build_r71a12mul_hud.py`, com os assets e o ambiente
 - PLAY: `2c734fbbc2e97eb1a3dd3ea22f9f2fd08b767c64c9b1b0f163d5a8c1d9677e82`.
 
 Resultados da rodada devem ser acrescentados após a execução efetiva, com o número do job e a faixa de tics comum.
+
+## Resultado efetivo desta rodada
+
+Build e comparação: [run 40691084814](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40691084814), código compilado `d7e4e5bf6506633755ea95e49726b778aff15253`. Validação do mesmo artefato e diagnóstico de pilha limitado: [run 40692869070](https://github.com/bollux78/MD-DOOM64KB/actions/runs/40692869070), aprovado.
+
+A primeira execução concluiu build, integridade, reprodução exata do controle e comparação de pixels. Somente o diagnóstico adicional de pilha, que tentava chegar ao tic 640, atingiu o teto de frames. A segunda execução reutilizou os mesmos BIN/ELF, sem recompilação, e concluiu o diagnóstico até o tic 128, mantendo o teto de 8000 frames por processo. O workflow de build foi corrigido para essa parada alcançável nas próximas rodadas.
+
+Faixa comum: **341 tics, 2 a 342**. Todas as comparações abaixo pertencem ao mesmo job de captura.
+
+| Variante | Vblanks na faixa comum | Delta vs R82 | Terços do trecho | Frames diferentes |
+|---|---:|---:|---|---:|
+| R82 controle | 3866 | 0 | 0 / 0 / 0 | — |
+| R83 sprites | 3837 | **−0,75%** | −0,43 / −0,93 / −1,04% | **0/341** |
+| R83 paredes | 3875 | **+0,23%** | +0,19 / +0,16 / +0,42% | **0/341** |
+
+O candidato de sprites foi mais rápido neste trecho. O de paredes não demonstrou ganho: o pequeno delta positivo é próximo do ruído de medição. Ambos são entregues para a rodada de benchmark do usuário; não se adota automaticamente o candidato de paredes.
+
+As seis ROMs possuem 2883584 bytes. BSS idêntico por modo: PERF 57844, PLAY 57852. Nenhum novo buffer permanente. Pilha medida até o tic128: controle pico1158/folga1404 B; sprites pico1182/folga1380 B; paredes pico1186/folga1376 B. Isso é um diagnóstico parcial, não um limite demonstrado para todos os mapas.
+
+O disassembly confirma a chamada ao kernel DBRA na função de sprites candidata e as mudanças na função de paredes. Multiplicações continuam presentes nos caminhos C de fallback; contar todas as instruções estáticas de uma função não equivale ao custo do caminho executado. Não repetir o benchmark completo automaticamente: a avaliação completa permanece com o usuário.
