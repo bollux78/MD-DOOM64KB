@@ -219,7 +219,7 @@ const char *R81_SaveGame(void){
  uint8_t header[16]={'R','8','1','S',1,io.map,io.skill,1,(uint8_t)(length>>8),(uint8_t)length,(uint8_t)(crc>>8),(uint8_t)crc,(uint8_t)(io.object_count>>8),(uint8_t)io.object_count,0x81,1};
  for(uint16_t i=4;i<16;i++)R81_SramWrite(R81_SAVE_BASE+i,header[i]);
  for(uint16_t i=0;i<4;i++)R81_SramWrite(R81_SAVE_BASE+i,header[i]);
- R81_UpdateSaveStrings();_g_player.message=GGSAVED;return NULL;
+ R81_UpdateSaveStrings();R81_ResyncInput();_g_player.message=GGSAVED;return NULL;
 }
 const char *R81_LoadGame(void){
  r81_io_t io;memset(&io,0,sizeof(io));int status=R81_Header(&io);

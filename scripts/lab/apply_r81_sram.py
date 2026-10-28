@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """R81 SRAM layout: 6-byte lines + 8-byte sides; reserve upper 6 KiB."""
 from pathlib import Path
+p=Path('src/doomdata.h');s=p.read_text()
+a='#define ML_MAPPED               256';assert s.count(a)==1
+s=s.replace(a,'''#if defined(DOOM_R81_SAVE)
+/* Runtime r_flags is separate from immutable line.flags (ML_DONTDRAW).
+ * Its mapped bit can therefore use bit7 without changing ROM map flags. */
+#define ML_MAPPED 128
+#else
+'''+a+'''
+#endif''');p.write_text(s)
 p=Path('src/r_defs.h');s=p.read_text()
 a='    int16_t r_flags;\n    int16_t special;'
 assert s.count(a)==1
@@ -23,6 +32,7 @@ typedef char r81_side_size[(sizeof(side_t)==16)?1:-1];
 #endif''')
 p.write_text(s)
 p=Path('src/r23_mapmem.c');s=p.read_text();s=s.replace('#include "r22_blocklinks.h"','#include "r22_blocklinks.h"\n#if defined(DOOM_R81_SAVE)\n#include "r81_save.h"\n#endif')
+s=s.replace('void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells){','void R23_MapMemoryInit(uint16_t lines,uint16_t sides,uint16_t cells){\n#if defined(DOOM_R81_SAVE) && defined(__m68k__)\n    typedef char r81_line_size[(sizeof(linedata_t)==6)?1:-1];\n#endif')
 s=s.replace('+(uint32_t)sides*sizeof(side_t);','+(uint32_t)sides*\n#if defined(DOOM_R81_SAVE)\n    8u;\n#else\n    sizeof(side_t);\n#endif')
 s=s.replace('if(end>30720UL)','if(end>\n#if defined(DOOM_R81_SAVE)\n    R81_SAVE_BASE\n#else\n    30720UL\n#endif\n    )')
 s=s.replace('node_capacity=(30720UL-end)/','node_capacity=(\n#if defined(DOOM_R81_SAVE)\n    R81_SAVE_BASE\n#else\n    30720UL\n#endif\n    -end)/')

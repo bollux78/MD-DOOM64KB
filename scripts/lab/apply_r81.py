@@ -16,6 +16,7 @@ patch('src/d_player.h','CF_GODMODE          = 2','CF_GODMODE          = 2,\n  CF
 p=Path('src/p_pspr.c');s=p.read_text();s=s.replace('if (ammo == am_noammo ||','if ((player->cheats&CF_INFAMMO) || ammo == am_noammo ||')
 s=s.replace('player->ammo[weaponinfo[player->readyweapon].ammo]--;','if(!(player->cheats&CF_INFAMMO))player->ammo[weaponinfo[player->readyweapon].ammo]--;')
 s=s.replace('if (!player->ammo[weaponinfo[player->readyweapon].ammo])','if (!(player->cheats&CF_INFAMMO) && !player->ammo[weaponinfo[player->readyweapon].ammo])');p.write_text(s)
+patch('src/globdata.h','extern char _g_savegamestrings[8][8];','extern char _g_savegamestrings[1][8];')
 p=Path('src/m_text.c');s=p.read_text().replace('#define DISABLE_SAVE_GAME','#if !defined(DOOM_R81_SAVE)\n#define DISABLE_SAVE_GAME\n#endif')
 s=s.replace('char _g_savegamestrings[8][8];','char _g_savegamestrings[1][8];\n#include "r81_save.h"')
 s=s.replace('  main_end\n','  r81_cheats,\n  main_end\n')
@@ -24,6 +25,7 @@ s=s.replace('  {1,"New Game",  M_NewGame},','  {1,"New Game",  M_NewGame},')
 s=s.replace('#if !defined DISABLE_QUIT_DOOM\n  {1,"Quit Game", M_QuitDOOM}\n#endif','#if !defined DISABLE_QUIT_DOOM\n  {1,"Quit Game", M_QuitDOOM},\n#endif\n  {1,"Cheats", R81_OpenCheats},')
 a=s.index('static const menu_t MainDef =');b=s.index('\n};',a)+3;s=s[:b]+'\n#include "r81_cheats.inc"\n'+s[b:]
 a=s.index('    load1,');b=s.index('    load_end',a);s=s[:a]+'    load1,\n'+s[b:]
+s=s.replace('(R22_TEXTWIDTH - 5) / 2,5,','(R22_TEXTWIDTH - 5) / 2,4,')
 s=s.replace('&MainDef,2,','&MainDef,loadgame,').replace('&MainDef,3,','&MainDef,savegame,');p.write_text(s)
 function('src/m_text.c','static void M_LoadSelect(int16_t choice)\n',' (void)choice;const char *error=R81_LoadGame();\n if(error)M_StartMessage(error,NULL);else M_ClearMenus();')
 function('src/m_text.c','static void M_DoSave(int16_t slot)\n',' (void)slot;const char *error=R81_SaveGame();\n if(error)M_StartMessage(error,NULL);else M_ClearMenus();')

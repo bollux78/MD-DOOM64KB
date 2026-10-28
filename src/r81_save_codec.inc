@@ -12,13 +12,17 @@ uint8_t R81_SramRead(uint16_t logical){
     uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");
     R22_SRAM_ENABLE();
     uint8_t v=R22_SRAM_BYTE(R22_SRAM_BASE+1u+2UL*logical);
+#if !defined(DOOM_R27_SRAM_FIXED)
     *(volatile uint8_t*)0x00A130F1UL=0;
+#endif
     __asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");return v;
 }
 void R81_SramWrite(uint16_t logical,uint8_t value){
     uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x700,%%sr":"=d"(sr)::"cc","memory");
     R22_SRAM_ENABLE();R22_SRAM_BYTE(R22_SRAM_BASE+1u+2UL*logical)=value;
+#if !defined(DOOM_R27_SRAM_FIXED)
     *(volatile uint8_t*)0x00A130F1UL=0;
+#endif
     __asm__ volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");
 }
 #endif
