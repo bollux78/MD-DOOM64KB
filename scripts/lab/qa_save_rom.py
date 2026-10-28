@@ -134,5 +134,6 @@ try:
   report['tests'].append(row);print('PASS',row,flush=True)
  report['status']='passed'
 finally:
+ print('EMU_EXIT',g.proc.poll(),flush=True)
  g.close();a.out.parent.mkdir(parents=True,exist_ok=True);a.out.write_text(json.dumps(report,indent=2)+'\n')
 assert report['status']=='passed'
