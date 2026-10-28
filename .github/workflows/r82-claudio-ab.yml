@@ -19,7 +19,7 @@ env:
   OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
   AB_FRAMES: '8000'
   # control first; P1F1 = R80 P1+F1 hook (apply_r80_performance.py), other tokens = apply_r82_d8088.py
-  AB_SETS: 'control P1F1 BSPR P1F1+BSPR'
+  AB_SETS: 'control P1F1'
 jobs:
   build:
     runs-on: [self-hosted, linux, x64]
@@ -96,7 +96,11 @@ jobs:
                 python3 scripts/lab/test_r80_pixofs.py --src src   # equivalence on the real post-R81 sources
                 R80_EXPERIMENTS="$r80" python3 scripts/lab/apply_r80_performance.py
               fi
-              if [ -n "$r82" ]; then R82_EXPERIMENTS="$r82" python3 scripts/lab/apply_r82_d8088.py; fi
+              # every candidate gets its own version name (ROM file, header title, benchmark screen)
+              if [ "$set" != control ]; then
+                tag=$(echo "$set" | tr 'A-Z+' 'a-z-')
+                R82_NAME="$tag" R82_EXPERIMENTS="$r82" python3 scripts/lab/apply_r82_d8088.py
+              fi
               HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
             mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
           done
@@ -107,7 +111,7 @@ jobs:
           python3 - <<'PY'
           import pathlib,json,hashlib,os
           sets=os.environ['AB_SETS'].split()
-          labs=[('control' if x=='control' else 'c-'+x.replace('+','_'),'r81-menu-') for x in sets]
+          labs=[('control','r81-menu-') if x=='control' else ('c-'+x.replace('+','_'),'r82-'+x.lower().replace('+','-')+'-') for x in sets]
           ref={'r81-menu-pf':'05a44dff31c03e221669324e5732e9bfa39d45ebf298c6c03559e781b59d512b','r81-menu-pl':'d9f12f0eca3efb4dcc5d1d5f936df25c6ba44338877152bc4eac64594e8b865c'}
           for v,prefix in labs:
               d=pathlib.Path('dist/ab')/v

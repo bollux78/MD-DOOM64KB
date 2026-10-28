@@ -1,1 +1,1 @@
-sets: control P1F1 BSPR P1F1+BSPR
+sets: control P1F1 (R82 version naming)

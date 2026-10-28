@@ -46,9 +46,31 @@ def drop_bsp_iterative(s):
     return "\n".join(lines)
 
 
+NAME_OLD = ("('r81-'+label+'-'+suffix", "for label,strength in (('menu',0),)")
+
+
+def rename(s, tag):
+    """ROM file name, ROM header title and benchmark screen all come from 'doom-md-r60-<variant>'.
+    R81's builder names every variant r81-menu-pf/pl; R82 candidates become r82-<tag>-pf/pl."""
+    import re
+    assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", tag), tag
+    assert len("doom-md-r60-r82-" + tag + "-pf") <= 48, tag
+    for old in NAME_OLD:
+        assert s.count(old) == 1, ("R81 builder naming changed", old)
+    return (s.replace(NAME_OLD[0], "('r82-'+label+'-'+suffix")
+             .replace(NAME_OLD[1], "for label,strength in (('%s',0),)" % tag))
+
+
 def main():
+    tag = os.environ.get("R82_NAME", "")
+    if tag:
+        bp = ROOT / "scripts/lab/build_r71a12mul_hud.py"
+        bp.write_text(rename(bp.read_text(), tag))
+        print("R82 ROM name: doom-md-r60-r82-%s-pf/pl" % tag)
     chosen = [x for x in os.environ.get("R82_EXPERIMENTS", "").replace("+", " ").split() if x]
-    assert chosen and len(set(chosen)) == len(chosen) and all(x in ("IVO", "D88", "BSPR") for x in chosen), chosen
+    if not chosen:
+        return 0
+    assert len(set(chosen)) == len(chosen) and all(x in ("IVO", "D88", "BSPR") for x in chosen), chosen
     bs = ROOT / "scripts/build_silent.fish"
     s = bs.read_text()
     assert "R82" not in s, "R82 already applied"
