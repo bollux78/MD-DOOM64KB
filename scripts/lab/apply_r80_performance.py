@@ -1,13 +1,80 @@
 #!/usr/bin/env python3
 """Candidate hook, called after apply_r79.py in a disposable checkout.
-Implement one performance experiment here, with explicit replacement guards.
-Keep this file inert until an experiment has been selected and tested.
+
+R80-P1 (Claudio): ROM offset tables for the Pair-V destination byte of the
+wall glue (R42_DrawPackedWall) and of R_DrawColumnFlat.
+
+Why (R79 control ELF, doom-md-r60-r79-base-pf.elf): both setups compute
+R22_PixelByte(p,x,y) = p+(y>>1)*152+(x&1)*76+(x>>1)*2+1 with two MULU.W
+(#$4c and #$98) plus zero extensions, once per drawn column.  Two 16-bit ROM
+lookups (column offset by x, row offset by y) give the same pointer.
+
+Scope: only those two call sites.  Sprites and every other R22_PixelByte user
+are untouched.  If the Pair-V layout macros are not active, the macro falls
+back to the original R22_PixelByte, so the fallback path is the old code.
+The address is identical for every valid (x,y): checked on the host by
+scripts/lab/test_r80_pixofs.py (all 76x44 coordinates, both formulas compiled).
+Tables: 44 + 76 uint16 = 240 bytes of ROM, 0 bytes of WRAM/BSS.
 """
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[2]
+import sys
+ROOT = Path(__file__).resolve().parents[2]
+W, H = 76, 44
+
+
+def tables():
+    row = [(y >> 1) * 152 for y in range(H)]
+    col = [(x & 1) * 76 + (x >> 1) * 2 + 1 for x in range(W)]
+    return row, col
+
+
+def block():
+    row, col = tables()
+    assert max(row) + max(col) == 3343
+    return (
+        "/* R80-P1 (Claudio): ROM offset tables for the Pair-V destination byte.\n"
+        " * Same pointer as R22_PixelByte for every 0<=x<76, 0<=y<44; removes the two\n"
+        " * MULU.W of the wall/flat column setup. 240 bytes of ROM, no WRAM. */\n"
+        "#define DOOM_R80_PIXOFS 1\n"
+        "#if defined(DOOM_R47_PLANE_PAIR) && defined(DOOM_R48_PAIR_V)\n"
+        "_Static_assert(R22_W == 76 && R22_H == 44, \"R80-P1 tables assume 76x44 Pair-V\");\n"
+        "static const uint16_t r80_row_ofs[R22_H] = {" + ",".join(map(str, row)) + "};\n"
+        "static const uint16_t r80_col_ofs[R22_W] = {" + ",".join(map(str, col)) + "};\n"
+        "#define R80_PIXEL_BYTE(p,x,y) ((p) + r80_col_ofs[(uint16_t)(x)] + r80_row_ofs[(uint16_t)(y)])\n"
+        "#else\n"
+        "#define R80_PIXEL_BYTE(p,x,y) R22_PixelByte((p),(uint16_t)(x),(uint16_t)(y))\n"
+        "#endif\n\n")
+
+
+ANCHOR = "static void R42_DrawPackedWall(const draw_column_vars_t *v)\n"
+WALL_OLD = ("    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)first);\n"
+            "    int16_t remaining=(int16_t)(y1-first+1);\n")
+WALL_NEW = ("    uint8_t *dst=R80_PIXEL_BYTE(r22_fb.pixels,x,first);\n"
+            "    int16_t remaining=(int16_t)(y1-first+1);\n")
+FLAT_OLD = "    uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);\n"
+FLAT_NEW = "    uint8_t *dst=R80_PIXEL_BYTE(r22_fb.pixels,x,y0);\n"
+
+
+def apply_text(s):
+    assert "DOOM_R80_PIXOFS" not in s, "R80-P1 already applied"
+    for old in (ANCHOR, WALL_OLD, FLAT_OLD):
+        assert s.count(old) == 1, ("R80-P1 anchor not unique", old)
+    # The wall site must be inside R42_DrawPackedWall and the flat site inside R_DrawColumnFlat.
+    wall_fn = s.index(ANCHOR)
+    flat_fn = s.index("void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){")
+    assert wall_fn < s.index(WALL_OLD) < flat_fn < s.index(FLAT_OLD)
+    s = s.replace(ANCHOR, block() + ANCHOR)
+    s = s.replace(WALL_OLD, WALL_NEW).replace(FLAT_OLD, FLAT_NEW)
+    return s
+
+
 def main():
-    # Example structure, not an optimization:
-    # p=ROOT/'src/r22_video.inc'; s=p.read_text()
-    # assert s.count(OLD)==1; p.write_text(s.replace(OLD,NEW))
-    print('R80 candidate hook is inert: no optimization implemented')
-if __name__=='__main__':main()
+    p = ROOT / "src/r22_video.inc"
+    s = p.read_text()
+    assert "R79_PAL0" in s, "R80 hook must run after the R79 chain"
+    p.write_text(apply_text(s))
+    print("R80-P1 applied: Pair-V offset tables in R42_DrawPackedWall and R_DrawColumnFlat (240 B ROM, 0 B WRAM)")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

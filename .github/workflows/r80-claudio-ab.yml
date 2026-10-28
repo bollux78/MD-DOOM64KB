@@ -1,0 +1,144 @@
+name: R80 Claudio A/B control vs candidate (partial, <=8000 frames per run)
+# Builds the R79 control and the R80 candidate (scripts/lab/apply_r80_performance.py) in two
+# disposable copies of the same checkout, checks the control is byte-identical to the R79
+# manifest, then captures both PERF ROMs in BlastEm (one run each, <=8000 emulated frames)
+# and compares the renderer framebuffer per tic and the vblanks per frame on the common tic
+# range. Partial diagnostic only: not a complete DEMO3 benchmark.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r80-claudio-ab.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r80-claudio-ab-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_FRAMES: '8000'
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/prepare_r80_performance.py scripts/lab/apply_r80_performance.py scripts/lab/test_r80_pixofs.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 scripts/lab/test_r80_pixofs.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r79_face.py
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for v in control candidate; do
+            w="$RUNNER_TEMP/r80-ab-$v-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/prepare_r80_performance.py --variant "$v"
+              python3 scripts/lab/test_r79_native.py
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$v"; cp -a "$w/dist/hud/." "dist/ab/$v/"
+          done
+      - name: Verify ROM sizes, BSS, hashes and control reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          ref={r['variant']:r['sha256'] for r in json.loads(pathlib.Path('docs/performance-r80/control-build/MANIFEST.json').read_text())}
+          for v,prefix in (('control','r79-base-'),('candidate','r80-perf-')):
+              d=pathlib.Path('dist/ab')/v
+              rows=json.loads((d/'MANIFEST.json').read_text())
+              assert [r['variant'] for r in rows]==[prefix+'pf',prefix+'pl'],rows
+              for r in rows:
+                  b=(d/r['rom']).read_bytes()
+                  assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+                  assert 0<r['bss_bytes']<=57920 and len(b)<=4*1024*1024
+                  flags=(d/('flags-'+r['rom'][:-4]+'.txt')).read_text().split()
+                  assert not any(x.startswith('-DDOOM_R79_SHADOW') for x in flags)
+                  print('::notice title=%s %s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(v,r['variant'],r['bytes'],r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
+              if v=='control':
+                  got={r['variant']:r['sha256'] for r in rows}
+                  assert got==ref,('control not reproducible',got,ref)
+                  print('::notice title=control reproducible::byte-identical to R79 manifest')
+          PY
+      - name: BlastEm capture A/B (one run per ROM, <=8000 emulated frames each)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in control candidate; do
+            rom=$(ls dist/ab/$v/*-pf.bin); elf="${rom%.bin}.elf"
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/cap-$v" --label "$v-pf" --max-emulated-frames "$AB_FRAMES" --timeout 120 2>&1 | tail -n 5
+          done
+          python3 scripts/lab/r70_compare.py dist/ab/compare control=dist/ab/cap-control candidate=dist/ab/cap-candidate || echo "compare rc=$?"
+          python3 - <<'PY'
+          import json,pathlib
+          s=json.loads(pathlib.Path('dist/ab/compare/summary.json').read_text())
+          txt=json.dumps(s)[:3500].replace('%','%25').replace('\n','%0A')
+          print('::notice title=A/B partial summary (<=8000 frames, not DEMO3 benchmark)::'+txt)
+          PY
+      - name: Disassembly of the changed functions
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          for v in control candidate; do
+            elf=$(ls dist/ab/$v/*-pf.elf); "$OBJDUMP" -d -z "$elf" > "dist/ab/objdump-$v-pf.txt" 2>/dev/null || true
+          done
+      - name: Upload A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r80-claudio-ab
+          path: dist/ab/
+          retention-days: 90
+          if-no-files-found: warn
