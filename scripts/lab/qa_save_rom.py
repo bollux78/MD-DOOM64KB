@@ -60,7 +60,7 @@ try:
  code+=bytes.fromhex('4ef9')+word(codeaddr+loop)
  assert len(code)<100
  write(codeaddr,code);write(sp,word(codeaddr))
- assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK'
+ assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK';assert g.req('Z0,%x,2'%(stop&0xffffff))=='OK'
  calls=0
  def call(name,skill=2,map=1):
   global calls
