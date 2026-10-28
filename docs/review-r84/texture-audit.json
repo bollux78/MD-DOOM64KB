@@ -1,0 +1,805 @@
+{
+  "wad_sha256": "249c2f185f0d53c65b1efc0fed017defa729fed8bfa62a627d23eded7cab226f",
+  "textures": 125,
+  "mode": "LOW_DETAIL: (texcolumn & 0xfffc) & widthmask",
+  "composite_textures": 79,
+  "sampled_columns": 1682,
+  "safe_columns": 1574,
+  "raw_full_window_bytes": 215296,
+  "unique_safe_bytes": 139008,
+  "dense_pointer_table_bytes": 6728,
+  "rows": [
+    {
+      "index": 0,
+      "name": "AASTINKY",
+      "width": 24,
+      "height": 72,
+      "sampled_columns": 4,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 224,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 1,
+      "name": "BIGDOOR1",
+      "width": 128,
+      "height": 96,
+      "sampled_columns": 32,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 1024,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 7,
+      "name": "BRNPOIS",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 8,
+      "name": "BRNPOIS2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 14,
+      "name": "BROWN1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 30
+    },
+    {
+      "index": 18,
+      "name": "BROWNHUG",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 19,
+      "name": "BROWNPIP",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 20,
+      "name": "COMP2",
+      "width": 256,
+      "height": 128,
+      "sampled_columns": 64,
+      "fully_defined_128": 64,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 64
+    },
+    {
+      "index": 21,
+      "name": "COMPSPAN",
+      "width": 32,
+      "height": 128,
+      "sampled_columns": 8,
+      "fully_defined_128": 8,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 2
+    },
+    {
+      "index": 22,
+      "name": "COMPSTA1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 23,
+      "name": "COMPSTA2",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 24,
+      "name": "COMPTALL",
+      "width": 256,
+      "height": 128,
+      "sampled_columns": 64,
+      "fully_defined_128": 64,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 64
+    },
+    {
+      "index": 25,
+      "name": "COMPTILE",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 23
+    },
+    {
+      "index": 26,
+      "name": "COMPUTE1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 28,
+      "name": "COMPUTE3",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 31,
+      "name": "DOORBLU",
+      "width": 8,
+      "height": 128,
+      "sampled_columns": 2,
+      "fully_defined_128": 2,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 2
+    },
+    {
+      "index": 32,
+      "name": "DOORRED",
+      "width": 8,
+      "height": 128,
+      "sampled_columns": 2,
+      "fully_defined_128": 2,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 2
+    },
+    {
+      "index": 35,
+      "name": "DOORYEL",
+      "width": 8,
+      "height": 128,
+      "sampled_columns": 2,
+      "fully_defined_128": 2,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 2
+    },
+    {
+      "index": 38,
+      "name": "GRAY4",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 39,
+      "name": "GRAY5",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 40,
+      "name": "GRAY7",
+      "width": 256,
+      "height": 128,
+      "sampled_columns": 64,
+      "fully_defined_128": 64,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 48
+    },
+    {
+      "index": 42,
+      "name": "LITE2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 43,
+      "name": "LITE3",
+      "width": 32,
+      "height": 128,
+      "sampled_columns": 8,
+      "fully_defined_128": 8,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 5
+    },
+    {
+      "index": 44,
+      "name": "LITE4",
+      "width": 16,
+      "height": 128,
+      "sampled_columns": 4,
+      "fully_defined_128": 4,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 4
+    },
+    {
+      "index": 45,
+      "name": "LITE5",
+      "width": 16,
+      "height": 128,
+      "sampled_columns": 4,
+      "fully_defined_128": 4,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 4
+    },
+    {
+      "index": 48,
+      "name": "LITEBLU3",
+      "width": 16,
+      "height": 128,
+      "sampled_columns": 4,
+      "fully_defined_128": 4,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 4
+    },
+    {
+      "index": 49,
+      "name": "LITEBLU4",
+      "width": 16,
+      "height": 128,
+      "sampled_columns": 4,
+      "fully_defined_128": 4,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 4
+    },
+    {
+      "index": 50,
+      "name": "METAL1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 52,
+      "name": "NUKEDGE1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 55,
+      "name": "PLANET1",
+      "width": 256,
+      "height": 128,
+      "sampled_columns": 64,
+      "fully_defined_128": 64,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 47
+    },
+    {
+      "index": 57,
+      "name": "REDWALL1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 5
+    },
+    {
+      "index": 60,
+      "name": "SLADPOIS",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 74,
+      "name": "STEP4",
+      "width": 32,
+      "height": 16,
+      "sampled_columns": 8,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 896,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 75,
+      "name": "STEP5",
+      "width": 32,
+      "height": 16,
+      "sampled_columns": 8,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 896,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 76,
+      "name": "STEP6",
+      "width": 32,
+      "height": 16,
+      "sampled_columns": 8,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 896,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 77,
+      "name": "STONE",
+      "width": 256,
+      "height": 128,
+      "sampled_columns": 64,
+      "fully_defined_128": 64,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 64
+    },
+    {
+      "index": 78,
+      "name": "STONE2",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 29
+    },
+    {
+      "index": 79,
+      "name": "STONE3",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 30
+    },
+    {
+      "index": 80,
+      "name": "STONPOIS",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 81,
+      "name": "SUPPORT2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 6
+    },
+    {
+      "index": 82,
+      "name": "SW1BRCOM",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 83,
+      "name": "SW1BRN1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 84,
+      "name": "SW1BRN2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 85,
+      "name": "SW1BRNGN",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 86,
+      "name": "SW1BROWN",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 87,
+      "name": "SW1COMM",
+      "width": 64,
+      "height": 72,
+      "sampled_columns": 16,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 896,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 88,
+      "name": "SW1COMP",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 14
+    },
+    {
+      "index": 89,
+      "name": "SW1DIRT",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 90,
+      "name": "SW1EXIT",
+      "width": 32,
+      "height": 72,
+      "sampled_columns": 8,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 448,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 91,
+      "name": "SW1GRAY",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 92,
+      "name": "SW1GRAY1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 93,
+      "name": "SW1METAL",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 94,
+      "name": "SW1PIPE",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 95,
+      "name": "SW1SLAD",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 96,
+      "name": "SW1STARG",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 19
+    },
+    {
+      "index": 97,
+      "name": "SW1STON1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 98,
+      "name": "SW1STON2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 99,
+      "name": "SW1STONE",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 100,
+      "name": "SW1STRTN",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 101,
+      "name": "SW2BRCOM",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 102,
+      "name": "SW2BRN1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 103,
+      "name": "SW2BRN2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 104,
+      "name": "SW2BRNGN",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 105,
+      "name": "SW2BROWN",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 106,
+      "name": "SW2COMM",
+      "width": 64,
+      "height": 72,
+      "sampled_columns": 16,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 896,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 107,
+      "name": "SW2COMP",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 14
+    },
+    {
+      "index": 108,
+      "name": "SW2DIRT",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 109,
+      "name": "SW2EXIT",
+      "width": 32,
+      "height": 72,
+      "sampled_columns": 8,
+      "fully_defined_128": 0,
+      "unassigned_bytes": 448,
+      "unique_complete_columns": 0
+    },
+    {
+      "index": 110,
+      "name": "SW2GRAY",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 111,
+      "name": "SW2GRAY1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 112,
+      "name": "SW2METAL",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 113,
+      "name": "SW2PIPE",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    },
+    {
+      "index": 114,
+      "name": "SW2SLAD",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 115,
+      "name": "SW2STARG",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 19
+    },
+    {
+      "index": 116,
+      "name": "SW2STON1",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 117,
+      "name": "SW2STON2",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 118,
+      "name": "SW2STONE",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 119,
+      "name": "SW2STRTN",
+      "width": 64,
+      "height": 128,
+      "sampled_columns": 16,
+      "fully_defined_128": 16,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 16
+    },
+    {
+      "index": 120,
+      "name": "TEKWALL1",
+      "width": 128,
+      "height": 128,
+      "sampled_columns": 32,
+      "fully_defined_128": 32,
+      "unassigned_bytes": 0,
+      "unique_complete_columns": 32
+    }
+  ],
+  "c_reference_verified": true,
+  "limitation": "Static coverage and size only; no runtime frequency or speed measured."
+}
