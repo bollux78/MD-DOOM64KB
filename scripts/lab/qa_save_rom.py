@@ -37,7 +37,8 @@ def slot():
  n=int.from_bytes(data[8:10],'big')
  return data[:16+n]
 def putslot(off,value):
- write(0xA130F1,b'\x01');write(0x200001+2*(26624+off),bytes([value]));write(0xA130F1,b'\x00')
+ call('_QA_WriteByte',0x200001+2*(26624+off),value)
+ assert g.readmem(0x200001+2*(26624+off),1)==bytes([value]),'CPU corruption write failed'
 try:
  g.req('qSupported');ifu=sym('I_FinishUpdate');err=sym('I_Error')
  assert g.req('Z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%err)=='OK'
@@ -59,38 +60,26 @@ try:
  code+=bytes.fromhex('508f23c0')+word(result)
  code+=bytes.fromhex('13fc000100a130f1') # CPU enables SRAM for host inspection
  stop=codeaddr+len(code);code+=bytes.fromhex('4e714ef9')+word(codeaddr+loop)
+ # SRAM corruption must be a CPU store: RSP writes bypass cartridge handlers.
+ helper=codeaddr+200
+ writer=bytes.fromhex('13fc000100a130f12079')+word(skillarg)+bytes.fromhex('2039')+word(maparg)+bytes.fromhex('10804e75')
+ write(helper,writer);sy['_QA_WriteByte']=helper
  assert len(code)<100
  write(codeaddr,code);write(maparg,word(1));write(skillarg,word(2));write(targetarg,word(sym('G_InitNew')));write(sp,word(codeaddr))
  assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK';assert g.req('Z0,%x,2'%(stop&0xffffff))=='OK'
- calls=0
  def call(name,skill=2,map=1):
-  global calls
-  print('CALL',calls,name,skill,map,'code',g.readmem(codeaddr,len(code)).hex(),flush=True)
-  if calls:
-   print('STEP',g.req('s'),g.req('g')[17*8:18*8],flush=True)
-   print('STEP',g.req('s'),g.req('g')[17*8:18*8],flush=True)
-  calls+=1
   write(maparg,word(map));write(skillarg,word(skill));write(targetarg,word(sym(name)))
   g.cont();regs=g.req('g');pc=int(regs[17*8:18*8],16)&0xffffff
   if pc==err&0xffffff:
    s=int(regs[15*8:16*8],16);raise AssertionError('I_Error: '+str(string(u32(s+4))))
   assert pc==stop&0xffffff,(hex(pc),hex(stop))
-  print('RETURN',name,hex(u32(result)),hex(int(regs[15*8:16*8],16)),flush=True)
   return u32(result)
  # The first injected call is G_InitNew at medium E1M1.
  write(sym('_g_demoplayback'),bytes(sizes['_g_demoplayback']));write(sym('_g_timingdemo'),bytes(sizes['_g_timingdemo']))
  for skill in (0,2,4):
   for map in range(1,10):
    call('G_InitNew',skill,map)
-   error=string(call('R81_SaveGame'))
-   if error:
-    print('SAVE ERROR',error,'map',g.readmem(sym('_g_gamemap'),2).hex(),'skill',g.readmem(sym('_g_gameskill'),4).hex(),flush=True)
-    regs=g.req('g');ss=int(regs[15*8:16*8],16);print('STACK',g.readmem(ss-128,128).hex(),flush=True)
-    cap=sym('_g_thinkerclasscap');th=u32(cap+4)
-    for index in range(512):
-     if th==cap:break
-     fn=u32(th+8);print('THINKER',index,hex(th),hex(fn),[k for k,v in sy.items() if v==fn],flush=True);th=u32(th+4)
-   assert error is None,(map,skill,error)
+   error=string(call('R81_SaveGame'));assert error is None,(map,skill,error)
    before=slot();player=sym('_g_player');mo=u32(player)
    healthoff=int.from_bytes(g.readmem(sym('r81_player_fields')+7*4,2),'big')
    oldhealth=g.readmem(player+healthoff,2);oldx=g.readmem(mo+12,4)
@@ -117,6 +106,32 @@ try:
    putslot(16,original)
    row={'map':map,'skill':skill,'payload_bytes':len(after)-16,'canonical_roundtrip':True,'corruption_rejected':True}
    report['tests'].append(row);print('PASS',row,flush=True)
+ # Exercise private archive adapters with live door/floor/platform thinkers.
+ for function,targetkind in [('EV_DoDoor','T_VerticalDoor'),('EV_DoFloor','T_MoveFloor'),('EV_DoPlat','T_PlatRaise')]:
+  call('G_InitNew',2,1)
+  ms=u32(sym('_g_mapsectors'));ns=int.from_bytes(g.readmem(sym('_g_numsectors'),2),'big')
+  tags={int.from_bytes(g.readmem(ms+i*12+10,2),'big',signed=True) for i in range(ns)}
+  lines=u32(sym('_g_maplines'));nl=int.from_bytes(g.readmem(sym('_g_numlines'),2),'big')
+  chosen=None
+  for index in range(nl):
+   tag=int.from_bytes(g.readmem(lines+31*index+26,2),'big',signed=True)
+   if tag>0 and tag in tags:chosen=(lines+31*index,tag);break
+  assert chosen,'No tagged test sector'
+  assert call(function,chosen[1] if function=='EV_DoFloor' else chosen[0],0),function
+  def count_kind():
+   cap=sym('_g_thinkerclasscap');th=u32(cap+4);count=0
+   for _ in range(1024):
+    if th==cap:return count
+    if u32(th+8)==sym(targetkind):count+=1
+    th=u32(th+4)
+   raise AssertionError('Thinker list cycle')
+  count=count_kind();assert count>0,function
+  assert string(call('R81_SaveGame')) is None;before=slot()
+  assert string(call('R81_LoadGame')) is None
+  assert count_kind()==count,function
+  assert string(call('R81_SaveGame')) is None;after=slot();assert before==after,function
+  row={'active_event':function,'thinkers':count,'canonical_roundtrip':True,'payload_bytes':len(after)-16}
+  report['tests'].append(row);print('PASS',row,flush=True)
  report['status']='passed'
 finally:
  g.close();a.out.parent.mkdir(parents=True,exist_ok=True);a.out.write_text(json.dumps(report,indent=2)+'\n')
