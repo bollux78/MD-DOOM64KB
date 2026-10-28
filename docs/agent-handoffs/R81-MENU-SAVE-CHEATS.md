@@ -8,7 +8,7 @@ Base de código: R79 `31807c0355298f35ec36ab0c42a847a2493d92e4`, variante sem sh
 
 - Fonte pequena original `STCFN` extraída do IWAD shareware fixado pelo CI, em máscara branca. Maiúsculas e minúsculas usam os mesmos desenhos. Glyphs maiores que 8×8 são reduzidos por vizinho mais próximo. 96 tiles no banco de fonte existente, sem framebuffer adicional.
 - Menus mantêm a pedra inferior sem emenda e seu shadow estático.
-- Um slot de save completo na SRAM de 32 KiB. Salva posição, inventário, saúde, cheats, objetos dinâmicos, alvos, setores, paredes alteradas, portas, pisos, plataformas, luzes, botões, itens removidos, contadores e RNG. Os ponteiros são convertidos em IDs e reconstruídos ao carregar.
+- Um slot de save completo na SRAM de 32 KiB. Salva posição, inventário, saúde, cheats, objetos dinâmicos, alvos, setores, paredes alteradas, portas, pisos, plataformas, luzes, rolagem de paredes, botões, itens removidos, contadores e RNG. Os ponteiros são convertidos em IDs e reconstruídos ao carregar.
 - Menu Cheats: IDDQD liga/desliga invencibilidade; IDKFA liga/desliga munição infinita e concede armas disponíveis no episódio, chaves, munição e armadura 200; IDCLIP liga/desliga colisão. Os switches exigem uma partida ativa com jogador vivo.
 - Load inválido ou corrompido deve apresentar mensagem e preservar a partida atual.
 

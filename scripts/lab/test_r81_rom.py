@@ -50,19 +50,20 @@ try:
  # SaveScratch uses only the first 2048 framebuffer bytes for object IDs.
  # The remaining buffer is idle while these calls keep gameplay paused.
  code=bytes.fromhex('48e7fffe')
- loop=len(code)
- # Every function may ignore the two extra ABI argument slots.
- code+=bytes.fromhex('2f3c')+word(1)+bytes.fromhex('2f3c')+word(2)
- targetoff=len(code)+2;code+=bytes.fromhex('4eb9')+word(sym('G_InitNew'))
- code+=bytes.fromhex('508f') # addq.l #8,sp
- code+=bytes.fromhex('23c0')+word(result)
- stop=codeaddr+len(code);code+=bytes.fromhex('4e71')
- code+=bytes.fromhex('4ef9')+word(codeaddr+loop)
+ loop=len(code);maparg=codeaddr+100;skillarg=codeaddr+104;targetarg=codeaddr+108
+ # Read call parameters from RAM on every iteration. Changing immediate
+ # operands through RSP does not invalidate BlastEm's translated RAM code.
+ code+=bytes.fromhex('13fc000000a130f1') # CPU disables SRAM before ROM calls
+ code+=bytes.fromhex('2f39')+word(maparg)+bytes.fromhex('2f39')+word(skillarg)
+ code+=bytes.fromhex('2079')+word(targetarg)+bytes.fromhex('4e90')
+ code+=bytes.fromhex('508f23c0')+word(result)
+ code+=bytes.fromhex('13fc000100a130f1') # CPU enables SRAM for host inspection
+ stop=codeaddr+len(code);code+=bytes.fromhex('4e714ef9')+word(codeaddr+loop)
  assert len(code)<100
- write(codeaddr,code);write(sp,word(codeaddr))
- assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK'
+ write(codeaddr,code);write(maparg,word(1));write(skillarg,word(2));write(targetarg,word(sym('G_InitNew')));write(sp,word(codeaddr))
+ assert g.req('z0,%x,2'%ifu)=='OK';assert g.req('Z0,%x,2'%stop)=='OK';assert g.req('Z0,%x,2'%(stop&0xffffff))=='OK'
  def call(name,skill=2,map=1):
-  write(codeaddr+loop+2,word(map));write(codeaddr+loop+8,word(skill));write(codeaddr+targetoff,word(sym(name)))
+  write(maparg,word(map));write(skillarg,word(skill));write(targetarg,word(sym(name)))
   g.cont();regs=g.req('g');pc=int(regs[17*8:18*8],16)&0xffffff
   if pc==err&0xffffff:
    s=int(regs[15*8:16*8],16);raise AssertionError('I_Error: '+str(string(u32(s+4))))
@@ -83,7 +84,15 @@ try:
    assert g.readmem(player+healthoff,2)==oldhealth
    assert g.readmem(u32(player)+12,4)==oldx
    assert g.readmem(u32(sym('_g_sectors')),4)==oldfloor
-   error=string(call('R81_SaveGame'));assert error is None,(map,skill,error)
+   error=string(call('R81_SaveGame'))
+   if error:
+    print('SAVE ERROR',error,'map',g.readmem(sym('_g_gamemap'),2).hex(),'skill',g.readmem(sym('_g_gameskill'),4).hex(),flush=True)
+    regs=g.req('g');ss=int(regs[15*8:16*8],16);print('STACK',g.readmem(ss-128,128).hex(),flush=True)
+    cap=sym('_g_thinkerclasscap');th=u32(cap+4)
+    for index in range(512):
+     if th==cap:break
+     fn=u32(th+8);print('THINKER',index,hex(th),hex(fn),[k for k,v in sy.items() if v==fn],flush=True);th=u32(th+4)
+   assert error is None,(map,skill,error)
    after=slot();assert before==after,(map,skill,'canonical save mismatch',len(before),len(after))
    # Corrupt the payload: load must reject it and retain the live player.
    original=after[16];putslot(16,original^1)

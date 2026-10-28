@@ -39,6 +39,7 @@ static uint16_t R81_Ref(r81_io_t *io,const mobj_t *p){
 }
 static uint8_t R81_Kind(const thinker_t *th){
  if(R81_PendingSpecial(th))return 8;
+ if(R81_IsScroll(th))return 9;
  if(R81_IsFloor(th))return 2;
  if(th->function==(think_t)T_VerticalDoor)return 3;
  if(R81_IsPlat(th))return 4;
@@ -168,6 +169,7 @@ static void R81_Stream(r81_io_t *io){
   else if(kind==3u)R81_DoorArchive(io,th);
   else if(kind==4u)R81_PlatArchive(io,th);
   else if(kind>=5u && kind<=7u)R81_LightArchive(io,th,(uint8_t)kind);
+  else if(kind==9u)R81_ScrollArchive(io,th);
   else if(kind==8u){if(io->mode==R81_LOAD){thinker_t *dead=Z_CallocLevel(sizeof(*dead));P_RemoveThinker(dead);P_AddThinker(dead);}}
   else io->error=1;
   if(io->mode<R81_LOAD)th=P_NextThinker(th);
@@ -219,7 +221,7 @@ const char *R81_SaveGame(void){
  uint8_t header[16]={'R','8','1','S',1,io.map,io.skill,1,(uint8_t)(length>>8),(uint8_t)length,(uint8_t)(crc>>8),(uint8_t)crc,(uint8_t)(io.object_count>>8),(uint8_t)io.object_count,0x81,1};
  for(uint16_t i=4;i<16;i++)R81_SramWrite(R81_SAVE_BASE+i,header[i]);
  for(uint16_t i=0;i<4;i++)R81_SramWrite(R81_SAVE_BASE+i,header[i]);
- R81_UpdateSaveStrings();R81_ResyncInput();_g_player.message=GGSAVED;return NULL;
+ R81_UpdateSaveStrings();memset(&netcmd,0,sizeof(netcmd));R81_ResyncInput();_g_player.message=GGSAVED;return NULL;
 }
 const char *R81_LoadGame(void){
  r81_io_t io;memset(&io,0,sizeof(io));int status=R81_Header(&io);
@@ -233,5 +235,5 @@ const char *R81_LoadGame(void){
  for(uint16_t i=0;i<io.object_count;i++){mobj_t *m=io.objects[i];m->target=R81_Resolve(&io,m->target);m->lastenemy=R81_Resolve(&io,m->lastenemy);}
  for(int16_t i=0;i<_g_numsectors;i++)_g_sectors[i].soundtarget=R81_Resolve(&io,_g_sectors[i].soundtarget);
  _g_player.mo=io.objects[io.player_id-1u];_g_player.attacker=R81_Resolve(&io,_g_player.attacker);_g_player.message="GAME LOADED";
- _g_usergame=true;_g_gameaction=ga_nothing;R81_ResyncInput();return NULL;
+ _g_usergame=true;_g_gameaction=ga_nothing;memset(&netcmd,0,sizeof(netcmd));R81_ResyncInput();return NULL;
 }

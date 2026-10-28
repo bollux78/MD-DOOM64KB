@@ -89,3 +89,10 @@ for k,typ,fn,fields in [(5,'lightflash_t','T_LightFlash','count maxlight minligh
 c+='io->error=1;\n}'
 append('p_lights.c',c)
 print('PASS generated R81 private archive adapters')
+
+append('p_spec.c','''int R81_IsScroll(const thinker_t *th){return th->function==(think_t)T_Scroll;}
+void R81_ScrollArchive(r81_io_t *io,thinker_t *th){
+ uint32_t side=R81_U(io,io->mode<R81_LOAD?(uint32_t)(((scroll_t*)th)->side-_g_sides):0);
+ if(side>=io->sides){io->error=1;return;}
+ if(io->mode==R81_LOAD){scroll_t *s=Z_CallocLevSpec(sizeof(*s));s->side=_g_sides+side;s->thinker.function=(think_t)T_Scroll;P_AddThinker(&s->thinker);}
+}''')

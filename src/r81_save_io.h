@@ -35,6 +35,8 @@ void R81_SetMobjFunction(mobj_t *mo,uint8_t kind);
 mobj_t *R81_AllocMobj(void);
 int R81_PendingThing(const thinker_t *th);
 int R81_PendingSpecial(const thinker_t *th);
+int R81_IsScroll(const thinker_t *th);
+void R81_ScrollArchive(r81_io_t *io,thinker_t *th);
 int R81_IsFloor(const thinker_t *th);
 int R81_IsPlat(const thinker_t *th);
 int R81_LightKind(const thinker_t *th);
