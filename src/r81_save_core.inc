@@ -51,6 +51,7 @@ static int R81_Map(r81_io_t *io,uint8_t map,uint8_t skill){
  char name[5]={'E','1','M',(char)('0'+map),0};int16_t lump=W_GetNumForName(name);
  if(lump<0)return 0;
  io->map=map;io->skill=skill;
+ /* Converted map format omits VERTEXES: SECTORS is lump+7. */
  io->maplines=W_GetLumpByNum(lump+2);io->mapsides=W_GetLumpByNum(lump+3);io->mapsectors=W_GetLumpByNum(lump+7);
  io->lines=W_LumpLength(lump+2)/sizeof(line_t);io->sides=W_LumpLength(lump+3)/sizeof(mapsidedef_t);io->sectors=W_LumpLength(lump+7)/sizeof(mapsector_t);
  char key[9]={'S',(char)('0'+map),'R','T','H','I','N','G',0};int16_t stat=W_GetNumForName(key);
