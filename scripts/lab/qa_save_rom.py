@@ -5,9 +5,22 @@ The CPU stays in this caller, so gameplay never renders over it during the test.
 All tests share one emulation capped at 10000 frames; this is not a benchmark.
 """
 from pathlib import Path
-import argparse,json,struct,time
+import argparse,json,struct,time,subprocess,sys
 from r64a_rsp_capture import RSP,symbols
-p=argparse.ArgumentParser();p.add_argument('--blastem',required=True);p.add_argument('--rom',type=Path,required=True);p.add_argument('--elf',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--blastem',required=True);p.add_argument('--rom',type=Path,required=True);p.add_argument('--elf',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--case',type=int,nargs=2,metavar=('MAP','SKILL'));a=p.parse_args()
+if a.case is None:
+ combined={'frames_cap_per_process':10000,'tests':[],'status':'running'}
+ cases=a.out.parent/'save-cases';cases.mkdir(parents=True,exist_ok=True)
+ try:
+  for skill in (0,2,4):
+   for map in range(1,10):
+    out=cases/f'map{map}-skill{skill}.json'
+    subprocess.run([sys.executable,__file__,'--blastem',a.blastem,'--rom',str(a.rom.resolve()),'--elf',str(a.elf.resolve()),'--out',str(out.resolve()),'--case',str(map),str(skill)],check=True)
+    case=json.loads(out.read_text());assert case['status']=='passed';combined['tests']+=case['tests']
+  combined['status']='passed'
+ finally:
+  a.out.parent.mkdir(parents=True,exist_ok=True);a.out.write_text(json.dumps(combined,indent=2)+'\n')
+ raise SystemExit(0)
 sy=symbols(a.elf)
 # Use ELF object sizes when writing booleans (GCC/SGDK may choose 1 or 4 bytes).
 b=a.elf.read_bytes();sizes={}
@@ -76,8 +89,8 @@ try:
   return u32(result)
  # The first injected call is G_InitNew at medium E1M1.
  write(sym('_g_demoplayback'),bytes(sizes['_g_demoplayback']));write(sym('_g_timingdemo'),bytes(sizes['_g_timingdemo']))
- for skill in (0,2,4):
-  for map in range(1,10):
+ for skill in (a.case[1],):
+  for map in (a.case[0],):
    call('G_InitNew',skill,map)
    error=string(call('R81_SaveGame'));assert error is None,(map,skill,error)
    before=slot();player=sym('_g_player');mo=u32(player)
@@ -107,7 +120,7 @@ try:
    row={'map':map,'skill':skill,'payload_bytes':len(after)-16,'canonical_roundtrip':True,'corruption_rejected':True}
    report['tests'].append(row);print('PASS',row,flush=True)
  # Exercise private archive adapters with live door/floor/platform thinkers.
- for function,targetkind in [('EV_DoDoor','T_VerticalDoor'),('EV_DoFloor','T_MoveFloor'),('EV_DoPlat','T_PlatRaise')]:
+ for function,targetkind in ([('EV_DoDoor','T_VerticalDoor'),('EV_DoFloor','T_MoveFloor'),('EV_DoPlat','T_PlatRaise')] if a.case==[1,2] else []):
   call('G_InitNew',2,1)
   ms=u32(sym('_g_mapsectors'));ns=int.from_bytes(g.readmem(sym('_g_numsectors'),2),'big')
   tags={int.from_bytes(g.readmem(ms+i*12+10,2),'big',signed=True) for i in range(ns)}
