@@ -95,7 +95,7 @@ int main(void){
   if(check(&v,trial++))return 1;
  }
  /* Full signed x domain for each supported context interval. */
- for(int mode=0;mode<7;mode++)for(int x=INT16_MIN;x<=INT16_MAX;x++){
+ for(int mode=0;mode<8;mode++)for(int x=INT16_MIN;x<=INT16_MAX;x++){
   int xmin=mode*2,xend=mode?76-mode*2:32767,end=xend<76?xend:76;
   int old=(uint16_t)x<76 && x<xend && x>=xmin;
   int now=(uint16_t)(x-xmin)<(uint16_t)(end-xmin);
