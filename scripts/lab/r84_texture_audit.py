@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 
-def audit(path, reference=None):
+def audit(path, reference=None, columns=None):
     b = Path(path).read_bytes()
     n = struct.unpack_from('>h', b, 4)[0]
     directory = struct.unpack_from('>I', b, 8)[0]
@@ -73,6 +73,7 @@ def audit(path, reference=None):
             if not missing:
                 complete += 1
                 uniq.add(bytes(pixels))
+                if columns is not None: columns.append((ti,x,bytes(pixels)))
         safe_columns += complete
         unique.update(uniq)
         rows.append(dict(index=ti, name=name, width=width, height=height,
