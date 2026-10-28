@@ -82,7 +82,15 @@ try:
  for skill in (0,2,4):
   for map in range(1,10):
    call('G_InitNew',skill,map)
-   error=string(call('R81_SaveGame'));assert error is None,(map,skill,error)
+   error=string(call('R81_SaveGame'))
+   if error:
+    print('SAVE ERROR',error,'map',g.readmem(sym('_g_gamemap'),2).hex(),'skill',g.readmem(sym('_g_gameskill'),4).hex(),flush=True)
+    regs=g.req('g');ss=int(regs[15*8:16*8],16);print('STACK',g.readmem(ss-128,128).hex(),flush=True)
+    cap=sym('_g_thinkerclasscap');th=u32(cap+4)
+    for index in range(512):
+     if th==cap:break
+     fn=u32(th+8);print('THINKER',index,hex(th),hex(fn),[k for k,v in sy.items() if v==fn],flush=True);th=u32(th+4)
+   assert error is None,(map,skill,error)
    before=slot();player=sym('_g_player');mo=u32(player)
    healthoff=int.from_bytes(g.readmem(sym('r81_player_fields')+7*4,2),'big')
    oldhealth=g.readmem(player+healthoff,2);oldx=g.readmem(mo+12,4)
@@ -92,7 +100,15 @@ try:
    assert g.readmem(player+healthoff,2)==oldhealth
    assert g.readmem(u32(player)+12,4)==oldx
    assert g.readmem(u32(sym('_g_sectors')),4)==oldfloor
-   error=string(call('R81_SaveGame'));assert error is None,(map,skill,error)
+   error=string(call('R81_SaveGame'))
+   if error:
+    print('SAVE ERROR',error,'map',g.readmem(sym('_g_gamemap'),2).hex(),'skill',g.readmem(sym('_g_gameskill'),4).hex(),flush=True)
+    regs=g.req('g');ss=int(regs[15*8:16*8],16);print('STACK',g.readmem(ss-128,128).hex(),flush=True)
+    cap=sym('_g_thinkerclasscap');th=u32(cap+4)
+    for index in range(512):
+     if th==cap:break
+     fn=u32(th+8);print('THINKER',index,hex(th),hex(fn),[k for k,v in sy.items() if v==fn],flush=True);th=u32(th+4)
+   assert error is None,(map,skill,error)
    after=slot();assert before==after,(map,skill,'canonical save mismatch',len(before),len(after))
    # Corrupt the payload: load must reject it and retain the live player.
    original=after[16];putslot(16,original^1)
