@@ -69,6 +69,34 @@ def main():
             print(label, r.stdout.strip())
             assert r.returncode == 0 and "checked=3344 mismatches=0" in r.stdout, r.stdout
     print("PASS R80-P1 pixel offset equivalence")
+    # R80-F1: anchors in both orders, and a model of the DBRA loop against the C loop.
+    for order in (("P1", "F1"), ("F1", "P1")):
+        t = before
+        for x in order:
+            t = hook.EXPERIMENTS[x](t)
+        assert "R80-F1" in t and "DOOM_R80_PIXOFS" in t, order
+        try:
+            hook.apply_f1(t); raise SystemExit("F1 applied twice")
+        except AssertionError:
+            pass
+    for count in range(0, 45):
+        for start in (0, 7):
+            # C loop (control)
+            d, c, wc = start, count, []
+            while c >= 2:
+                wc.append(d); d += 152; c -= 2
+            # DBRA model: dbra decrements the 16-bit counter and branches while it is not -1
+            d2, c2, w2 = start, count, []
+            pairs = c2 >> 1
+            if pairs:
+                n = pairs - 1
+                while True:
+                    w2.append(d2); d2 += 152
+                    n = (n - 1) & 0xffff
+                    if n == 0xffff: break
+            c2 &= 1
+            assert (wc, d, c) == (w2, d2, c2), (count, start)
+    print("PASS R80-F1 anchor checks and DBRA loop model (count 0..44)")
 
 
 if __name__ == "__main__":
