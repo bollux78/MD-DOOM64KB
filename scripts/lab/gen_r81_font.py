@@ -29,7 +29,10 @@ def generate(lumps):
   for row in rows:
    word=0
    for x,v in enumerate(row):
-    foreground=v>=0 and any(pal[v*3:v*3+3])
+    # Keep the bright letter face; the dark outline/shadow becomes
+    # transparent. Treating every non-black outline pixel as white fills
+    # the counters of these tiny glyphs and harms legibility.
+    foreground=v>=0 and max(pal[v*3:v*3+3])>=128
     word|=(15 if foreground else 0)<<(28-4*x)
    words.append(word)
   tiles.append(words);report.append(dict(character=code,source=key,width=w,height=h,scaled=w>8 or h>8))
@@ -40,7 +43,7 @@ def main():
  a=argparse.ArgumentParser();a.add_argument('--wad',required=True);a.add_argument('--out',required=True);a.add_argument('--preview');args=a.parse_args()
  lumps=G.read_iwad(Path(args.wad).read_bytes());assert 'STCFN065' in lumps,'Original Doom small font missing'
  tiles,report=generate(lumps)
- out='/* Original Doom small font, white mask; 96 tiles in existing font bank. */\n#ifndef R81_MENU_FONT_H\n#define R81_MENU_FONT_H\nstatic const uint32_t r81_menu_font[96][8]={\n'+',\n'.join('{'+','.join(f'0x{w:08X}UL' for w in t)+'}' for t in tiles)+'\n};\n#endif\n'
+ out='/* Original Doom small font, white mask; 96 tiles in existing font bank. */\n#ifndef R81_MENU_FONT_H\n#define R81_MENU_FONT_H\n#include <stdint.h>\nstatic const uint32_t r81_menu_font[96][8]={\n'+',\n'.join('{'+','.join(f'0x{w:08X}UL' for w in t)+'}' for t in tiles)+'\n};\n#endif\n'
  Path(args.out).write_text(out);Path(args.out).with_suffix('.json').write_text(json.dumps(report,indent=2)+'\n')
  if args.preview:
   img=[[(32,32,32)]*(16*8) for _ in range(6*8)]

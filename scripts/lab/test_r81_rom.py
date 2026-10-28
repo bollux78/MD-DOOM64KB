@@ -9,6 +9,16 @@ import argparse,json,struct,time
 from r64a_rsp_capture import RSP,symbols
 p=argparse.ArgumentParser();p.add_argument('--blastem',required=True);p.add_argument('--rom',type=Path,required=True);p.add_argument('--elf',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
 sy=symbols(a.elf)
+# Use ELF object sizes when writing booleans (GCC/SGDK may choose 1 or 4 bytes).
+b=a.elf.read_bytes();sizes={}
+shoff=struct.unpack_from('>I',b,32)[0];ents,n=struct.unpack_from('>HH',b,46)
+sections=[struct.unpack_from('>10I',b,shoff+i*ents) for i in range(n)]
+for h in sections:
+ if h[1]!=2:continue
+ st=sections[h[6]];names=b[st[4]:st[4]+st[5]]
+ for off in range(h[4],h[4]+h[5],h[9]):
+  name,value,size=struct.unpack_from('>III',b,off)
+  sizes[names[name:].split(b'\0',1)[0].decode()]=size
 def sym(name):
  if name in sy:return sy[name]
  match=[v for k,v in sy.items() if k.startswith(name+'.')]
@@ -59,7 +69,7 @@ try:
   assert pc==stop&0xffffff,(hex(pc),hex(stop))
   return u32(result)
  # The first injected call is G_InitNew at medium E1M1.
- write(sym('_g_demoplayback'),b'\0');write(sym('_g_timingdemo'),b'\0')
+ write(sym('_g_demoplayback'),bytes(sizes['_g_demoplayback']));write(sym('_g_timingdemo'),bytes(sizes['_g_timingdemo']))
  for skill in (0,2,4):
   for map in range(1,10):
    call('G_InitNew',skill,map)
