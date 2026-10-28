@@ -27,6 +27,7 @@ jobs:
           git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
           python3 -m py_compile scripts/lab/apply_r72_flat2d.py scripts/lab/apply_r73_r53.py scripts/lab/gen_r73_r53_fixed.py scripts/lab/apply_r74.py scripts/lab/gen_r74_flats.py scripts/lab/inject_r74_flats.py scripts/lab/apply_r75.py scripts/lab/gen_r75_hybrid.py scripts/lab/inject_r75_hybrid.py scripts/lab/apply_r76.py scripts/lab/gen_r76_profiles.py scripts/lab/test_r76_profiles.py scripts/lab/apply_r77.py scripts/lab/gen_r77_profiles.py scripts/lab/test_r77.py scripts/lab/gen_r78_art.py scripts/lab/apply_r78.py scripts/lab/test_r78_native.py scripts/lab/apply_r79.py scripts/lab/gen_r79_shadow.py scripts/lab/test_r79_shadow.py scripts/lab/test_r79_face.py
           python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r81_cheats.py
           python3 scripts/lab/test_r81_codec.py
           python3 scripts/lab/test_r77.py
           python3 scripts/lab/gen_r78_art.py --verify-only

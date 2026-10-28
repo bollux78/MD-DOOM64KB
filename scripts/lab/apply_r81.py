@@ -47,6 +47,7 @@ void R81_ResyncInput(void){
  memset(&_g_player.cmd,0,sizeof(_g_player.cmd));
 }
 ''';p.write_text(s)
+patch('scripts/build_silent.fish','|HUD_WAD)','|HUD_WAD|R81_SAVE)')
 patch('scripts/lab/build_r35_linear.fish',"            set defs $defs '-DDOOM_R78_ART'","            set defs $defs '-DDOOM_R78_ART' '-DDOOM_R81_SAVE'")
 p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text().replace("for label,strength in (('base',0),('sh1',1),('sh2',2))","for label,strength in (('menu',0),)").replace("'r79-'+label","'r81-'+label").replace('assert len(records) == 6','assert len(records) == 2');p.write_text(s)
 print('PASS R81 patches')
