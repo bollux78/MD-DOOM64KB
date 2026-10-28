@@ -1,2 +1,1 @@
-sets: control IVO D88 BSPR
-# rodada 3 (full capture logs)
+sets: control P1F1 BSPR P1F1+BSPR
