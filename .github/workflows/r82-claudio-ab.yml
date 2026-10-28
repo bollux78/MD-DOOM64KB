@@ -1,0 +1,165 @@
+name: R82 Claudio A/B on R81 (Doom8088 build experiments, partial <=8000 frames per run)
+# Builds R81 (control) and R81 + apply_r82_d8088.py experiment sets in disposable copies,
+# checks the control against the R81 run 40618609864 manifest, captures each PERF ROM once
+# in BlastEm (<=8000 emulated frames) and compares framebuffer per tic and vblanks per frame.
+# Partial diagnostic only: not a complete DEMO3 benchmark.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r82-claudio-ab.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r82-claudio-ab-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_FRAMES: '8000'
+  # control first, then each experiment set for apply_r82_d8088.py (R82_EXPERIMENTS)
+  AB_SETS: 'control IVO D88 BSPR'
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/apply_r81.py scripts/lab/apply_r82_d8088.py scripts/lab/test_r82_d8088.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 scripts/lab/test_r82_d8088.py
+          python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r81_font.py
+          python3 scripts/lab/test_r81_cheats.py
+          python3 scripts/lab/test_r81_codec.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r79_face.py
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then lab=control; else lab="c-${set//+/_}"; fi
+            w="$RUNNER_TEMP/r82-ab-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/apply_r81.py
+              if [ "$set" != control ]; then R82_EXPERIMENTS="$set" python3 scripts/lab/apply_r82_d8088.py; fi
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
+          done
+      - name: Verify ROM sizes, BSS, hashes and control reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib,os
+          sets=os.environ['AB_SETS'].split()
+          labs=[('control' if x=='control' else 'c-'+x.replace('+','_'),'r81-menu-') for x in sets]
+          ref={'r81-menu-pf':'05a44dff31c03e221669324e5732e9bfa39d45ebf298c6c03559e781b59d512b','r81-menu-pl':'d9f12f0eca3efb4dcc5d1d5f936df25c6ba44338877152bc4eac64594e8b865c'}
+          for v,prefix in labs:
+              d=pathlib.Path('dist/ab')/v
+              rows=json.loads((d/'MANIFEST.json').read_text())
+              assert [r['variant'] for r in rows]==[prefix+'pf',prefix+'pl'],rows
+              for r in rows:
+                  b=(d/r['rom']).read_bytes()
+                  assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+                  assert 0<r['bss_bytes']<=57920 and len(b)<=4*1024*1024
+                  flags=(d/('flags-'+r['rom'][:-4]+'.txt')).read_text().split()
+                  assert not any(x.startswith('-DDOOM_R79_SHADOW') for x in flags)
+                  print('::notice title=%s %s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(v,r['variant'],r['bytes'],r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
+              if v=='control':
+                  got={r['variant']:r['sha256'] for r in rows}
+                  ok=got==ref
+                  print('::notice title=control reproducible::'+('byte-identical to R81 run 40618609864' if ok else 'DIFFERS from R81 run 40618609864 %s'%got))
+          PY
+      - name: BlastEm capture A/B (one run per ROM, <=8000 emulated frames each)
+        shell: bash
+        run: |
+          set -euo pipefail
+          specs=""
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then v=control; else v="c-${set//+/_}"; fi
+            specs="$specs $v=dist/ab/cap-$v"
+            rom=$(ls dist/ab/$v/*-pf.bin); elf="${rom%.bin}.elf"
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" --out "dist/ab/cap-$v" --label "$v-pf" --max-emulated-frames "$AB_FRAMES" --timeout 120 2>&1 | tail -n 5
+          done
+          python3 scripts/lab/r70_compare.py dist/ab/compare $specs || echo "compare rc=$?"
+          python3 - <<'PY'
+          import json,pathlib
+          s=json.loads(pathlib.Path('dist/ab/compare/summary.json').read_text())
+          txt=json.dumps(s)[:3500].replace('%','%25').replace('\n','%0A')
+          print('::notice title=A/B partial summary (<=8000 frames, not DEMO3 benchmark)::'+txt)
+          PY
+      - name: Record SGDK makefile.gen compiler flags
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          g="${DOOM_MD_GDK:-$HOME/mars/m68k-elf}/makefile.gen"
+          grep -nE "FLAGS|flto|-O[0-3s]" "$g" > dist/ab/makefile-gen-flags.txt 2>&1 || true
+          head -c 3000 dist/ab/makefile-gen-flags.txt | python3 -c "import sys;t=sys.stdin.read().replace('%','%25').replace('\n','%0A');print('::notice title=SGDK makefile.gen flags::'+t)"
+      - name: Disassembly of the changed functions
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          for d in dist/ab/control dist/ab/c-*; do
+            v=$(basename "$d"); elf=$(ls $d/*-pf.elf); "$OBJDUMP" -d -z "$elf" > "dist/ab/objdump-$v-pf.txt" 2>/dev/null || true
+          done
+      - name: Upload A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r82-claudio-ab
+          path: dist/ab/
+          retention-days: 90
+          if-no-files-found: warn
