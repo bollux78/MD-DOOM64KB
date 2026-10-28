@@ -1,0 +1,15 @@
+/home/dan/Projetos/github-runner/actions-runner/_work/_temp/r79-shadow-40597005254-1/r79-base-pf/dist/r35/doom-md-r60-r79-base-pf.elf  :
+section              size         addr
+.text             2760596            0
+.data                 604   3774808064
+.bss                57896   3774808668
+.comment               18            0
+.debug_line           461            0
+.debug_line_str       117            0
+.debug_info           180            0
+.debug_abbrev         100            0
+.debug_aranges        160            0
+.debug_str            129            0
+Total             2820261
+
+

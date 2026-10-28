@@ -1,0 +1,746 @@
+--- original/scripts/build_silent.fish
++++ prepared/scripts/build_silent.fish
+@@ -310,7 +310,7 @@
+     for d in (string split ' ' -- "$DOOM_R20_DEFINES")
+         test -n "$d"; or continue
+         # R21: same explicit-flag rule, also for the DOOM_R21_* review blocks.
+-        string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)? "$d"; or begin
++        string match -qr -- '^-DDOOM_(R[234567][0-9][A-Z]?_[A-Z0-9_]+|HUD_WAD)(=[0-9]+)?$' "$d"; or begin
+             echo "Invalid DOOM_R20_DEFINES entry: $d"
+             exit 1
+         end
+@@ -375,68 +375,3 @@
+     end
+ end
+ exit $rc
+- "$d"; or begin
+-            echo "Invalid DOOM_R20_DEFINES entry: $d"
+-            exit 1
+-        end
+-        set render_flags "$render_flags $d"
+-    end
+-end
+-# R29 builds must carry their audio macros; reject mislabeled control/experiment ROMs.
+-if set -q DOOM_BUILD_ID
+-    if string match -q 'doom-md-r29-*' -- "$DOOM_BUILD_ID"
+-        if not string match -q '*-DDOOM_R25_MUSIC*' -- "$render_flags"
+-            echo 'R29 build refused: no DOOM_R25_MUSIC macro'
+-            exit 1
+-        end
+-        if string match -q 'doom-md-r29-xgm2-*' -- "$DOOM_BUILD_ID"
+-            if not string match -q '*-DDOOM_R29_XGM2*' -- "$render_flags"
+-                echo 'R29 build refused: no DOOM_R29_XGM2 macro'
+-                exit 1
+-            end
+-        end
+-    end
+-end
+-# R22 independent four-pixel renderer, not a scaled 38-column cell renderer.
+-if set -q DOOM_R22_PIXEL4; and test "$DOOM_R22_PIXEL4" = 1
+-    set render_flags (string replace -- '-DVIEWWINDOWWIDTH=38' '-DVIEWWINDOWWIDTH=76' "$render_flags")
+-    set render_flags (string replace -- '-DVIEWWINDOWHEIGHT=22' '-DVIEWWINDOWHEIGHT=44' "$render_flags")
+-    set render_flags (string replace -- '-DMAPWIDTH=38' '-DMAPWIDTH=76' "$render_flags")
+-    set render_flags "$render_flags -DDOOM_R22_PIXEL4"
+-end
+-# Generate matching ROM header and on-screen timedemo title per build.
+-# SGDK's makefile.gen compiles src/rom_header.c into out/rom_header.bin.
+-# No changes to shared SGDK files or boot code are required.
+-set -l stamp_options "$render_flags"
+-if set -q DOOM_BUILD_ID
+-    python3 scripts/set_rom_identity.py --id "$DOOM_BUILD_ID"; or exit 1
+-    set render_flags "$render_flags -DDOOM_BUILD_VARIANT"
+-    set stamp_options "$render_flags $DOOM_BUILD_ID"
+-end
+-# Make can build silently; record real flags for laboratory verification.
+-echo "BUILD_FLAGS: $render_flags"
+-set -l stamp out/.render_options
+-if test -f $stamp; and test (cat $stamp) != "$stamp_options"
+-    rm -rf out
+-end
+-mkdir -p out
+-printf '%s' "$stamp_options" > $stamp
+-rm -f out/rom.bin
+-set -l libgcc ($gcc -m68000 -print-libgcc-file-name)
+-if test $status -ne 0; or not test -f "$libgcc"
+-    echo 'Could not locate cross compiler libgcc.'
+-    exit 1
+-end
+-make GDK=$gdk PREFIX=m68k-elf- JAVA=java \
+-    EXTRA_FLAGS="-Isrc -Icompat -std=gnu11 $render_flags" \
+-    LIBGCC="$libgcc -lgcc" $argv
+-set -l rc $status
+-if test $rc -eq 0; and test -f out/rom.bin
+-    echo 'ROM created:' $root/out/rom.bin
+-else
+-    echo 'Build failed or ROM missing. Check output above.'
+-    if test $rc -eq 0
+-        set rc 1
+-    end
+-end
+-exit $rc
+--- original/scripts/lab/build_r35_linear.fish
++++ prepared/scripts/lab/build_r35_linear.fish
+@@ -69,6 +69,26 @@
+             end
+             python3 scripts/lab/gen_r59_colorview.py --cm6 src/r56_tables.h --out src/r59_color_tables.h --report src/r59_color_report.json; or exit 1
+             python3 scripts/lab/test_r59_colorview.py; or exit 1
++            if set -q DOOM_R73_STYLE
++                python3 scripts/lab/gen_r53_micro.py --repo . --out src --profile "$DOOM_R52_AB_PROFILE" --ratio 50; or exit 1
++                python3 scripts/lab/gen_r73_r53_fixed.py "$DOOM_R73_STYLE"; or exit 1
++                python3 scripts/lab/gen_r74_flats.py --profile "$DOOM_R74_PROFILE" --policy "$DOOM_R74_FLATS"; or exit 1
++                python3 scripts/lab/inject_r74_flats.py "$DOOM_R74_FLATS"; or exit 1
++                if set -q DOOM_R75_HYBRID
++                    python3 scripts/lab/gen_r75_hybrid.py "$DOOM_R75_HYBRID"; or exit 1
++                    python3 scripts/lab/inject_r75_hybrid.py; or exit 1
++                    if set -q DOOM_R76_PROFILES
++                        python3 scripts/lab/gen_r76_profiles.py; or exit 1
++                        python3 scripts/lab/test_r76_profiles.py; or exit 1
++                        python3 scripts/lab/gen_r77_profiles.py; or exit 1
++                        python3 scripts/lab/test_r77.py --generated; or exit 1
++                        if test "$DOOM_R79_SHADOW" != 0
++                            python3 scripts/lab/gen_r79_shadow.py --strength "$DOOM_R79_SHADOW"; or exit 1
++                            python3 scripts/lab/test_r79_shadow.py --generated; or exit 1
++                        end
++                    end
++                end
++            end
+         end
+         if set -q DOOM_R53_MICRO_RATIO
+             if contains -- "$DOOM_R53_MICRO_RATIO" 25 50
+@@ -222,6 +242,9 @@
+     # cannot accidentally read the converted/stripped WAD of the last build.
+     cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
+     python3 scripts/lab/gen_r30_native.py --dither "$dither" --storage raw > "$dest/art-$v.json"; or exit 1
++    if set -q DOOM_R78_ART
++        python3 scripts/lab/gen_r78_art.py; or exit 1
++    end
+     # Doom game uses the episode-converted WAD. Original 240x160 bitmaps
+     # are omitted by repack_wad in R30_NATIVE variants.
+     cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1
+@@ -720,6 +743,23 @@
+             echo 'R71 MUL requires R66 COLPAIR baseline'; exit 2
+         end
+         set defs $defs '-DDOOM_R71_MUL_ASM'
++        if set -q DOOM_R78_ART
++            set defs $defs '-DDOOM_R78_ART'
++            if test "$DOOM_R79_SHADOW" != 0
++                set defs $defs "-DDOOM_R79_SHADOW=$DOOM_R79_SHADOW"
++            end
++        end
++        set defs $defs '-DDOOM_R75_MENU_HOLD'
++        if set -q DOOM_R76_PROFILES
++            set defs $defs '-DDOOM_R76_PROFILES' '-DDOOM_R76_MENU_STABLE' '-DDOOM_R77_MENU'
++        end
++
++        if set -q DOOM_R73_STYLE
++            set defs $defs '-DDOOM_R73_R53_FIXED'
++        end
++        if set -q DOOM_R72_FLAT_2D; and test "$DOOM_R72_FLAT_2D" = 1
++            set defs $defs '-DDOOM_R72_FLAT_2D'
++        end
+     end
+     # HUD-WAD from Claudio's A12 H40 stone-margins build.
+     if set -q DOOM_HUD_WAD; and test "$DOOM_HUD_WAD" = 1
+--- original/scripts/lab/build_r71a12mul_hud.py
++++ prepared/scripts/lab/build_r71a12mul_hud.py
+@@ -12,10 +12,14 @@
+ import os, subprocess, shutil, hashlib, json
+ 
+ # The build name becomes DOOM_BUILD_ID inside the ROM, so the control MUST be built as 'r66-perf' to be byte-identical.
+-VARIANTS = (
+-    ('r71a12mul-hud-perf', 'perf', {'DOOM_HUD_WAD': '1'}, ['-DDOOM_HUD_WAD']),
+-    ('r71a12mul-hud-play', 'play', {'DOOM_HUD_WAD': '1'}, ['-DDOOM_HUD_WAD']),
++VARIANTS = tuple(
++    ('r79-'+label+'-'+suffix,mode,{'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25',
++        'DOOM_R72_FLAT_2D':'0','DOOM_R74_PROFILE':'l','DOOM_R74_FLATS':'f3',
++        'DOOM_R75_HYBRID':'near','DOOM_R76_PROFILES':'1','DOOM_R79_SHADOW':str(strength)},[])
++    for label,strength in (('base',0),('sh1',1),('sh2',2))
++    for suffix,mode in (('pf','perf'),('pl','play'))
+ )
++
+ LABEL = {}
+ A12_ENV = {'DOOM_R70A_LOCALS': '1', 'DOOM_R70A_INVARIANTS': '1'}
+ A12_FLAGS = ['-DDOOM_R21_SEGLOOP_LOCALS', '-DDOOM_R70A_INVARIANTS']
+@@ -24,7 +28,7 @@
+          'DOOM_R57_TABLES_DIR', 'DOOM_R58_BUILD', 'DOOM_R58_CM_VIEW', 'DOOM_R57_BUILD',
+          'DOOM_R59_BUILD', 'DOOM_R59_COLOR_VIEW', 'DOOM_R60_BUILD', 'DOOM_R60_PAIR_ASM',
+          'DOOM_R64_DIAG', 'DOOM_R64A_PROLOGUE', 'DOOM_R66_COLPAIR', 'DOOM_R68_PROF', 'DOOM_R68_SPLIT',
+-         'DOOM_R70A_LOCALS', 'DOOM_R70A_INVARIANTS', 'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD')
++         'DOOM_R70A_LOCALS', 'DOOM_R70A_INVARIANTS', 'DOOM_R71_MUL_ASM', 'DOOM_HUD_WAD', 'DOOM_R73_R53_FIXED', '-DDOOM_R75_MENU_HOLD')
+ 
+ 
+ def main():
+@@ -50,7 +54,7 @@
+             'DOOM_R45_VARIANT': 'asm', 'DOOM_R47_PLANE_PAIR': '1', 'DOOM_R47_FLAT_HOIST': '1',
+             'DOOM_R47_SPRITE_HOIST': '1', 'DOOM_R48_PAIR_V': '1', 'DOOM_R48_V_FAST': '1',
+             'DOOM_R49_COLORMIX': '0', 'DOOM_R49_COMPLUT': '0', 'DOOM_R49_RATIO': 'none',
+-            'DOOM_R52_AB': '1', 'DOOM_R52_CLAUDIO': '1', 'DOOM_R52_AB_PROFILE': 'luma32',
++            'DOOM_R52_AB': '1', 'DOOM_R52_CLAUDIO': '1', 'DOOM_R52_AB_PROFILE': 'near25',
+             'DOOM_R52_ZERO_POLICY': 'forbid', 'DOOM_R52_CPLUT': '1', 'DOOM_R56_DUAL_COLOR': '1',
+             'DOOM_R57_CROP16': '1',
+             'DOOM_R57_SIZE_MENU': '0',
+@@ -70,6 +74,12 @@
+         env.update(A12_ENV)
+         env['DOOM_R71_MUL_ASM'] = '1'
+         env.update(extra_env)
++        env['DOOM_R78_ART']='1'
++        env['DOOM_R52_AB_PROFILE']='near25' if extra_env['DOOM_R74_PROFILE']=='a' else 'luma32'
++        env['DOOM_R52_ZERO_POLICY']='allow' if extra_env['DOOM_R74_PROFILE']=='a' else 'forbid'
++        # FLAT_WALL would route walls through flat LUTs; reject unsafe combinations.
++        assert not any(x == '-DFLAT_WALL' for x in _extra_flags)
++
+         # Isolation: every variant is built from its own copy of the checkout (the fish script derives its root from its own
+         # location), so no intermediate file, generated table or dist/r35 output is shared between variants.
+         work = Path(os.environ.get('HUD_WORK', str(root / 'dist/hud-work'))).resolve() / name
+@@ -100,18 +110,35 @@
+         assert 0 < len(blob) <= 4 * 1024 * 1024
+         for table in ('r56_tables.h', 'r59_color_tables.h'):
+             shutil.copy2(work / 'src' / table, dest / (name + '-' + table))
++        shutil.copy2(work/'src/r74_flats_report.json',dest/(name+'-flat-report.json'))
++        if extra_env.get('DOOM_R76_PROFILES'):
++            shutil.copy2(work/'src/r76_profiles_report.json',dest/(name+'-profiles-report.json'))
++            for file in ('r77_profiles_report.json','r77_shadow_report.json','r77_shadow_pairs.csv','r77_blue_comparison.csv'):
++                shutil.copy2(work/'src'/file,dest/(name+'-'+file))
++        if extra_env.get('DOOM_R75_HYBRID'):
++            shutil.copy2(work/'src/r75_hybrid_report.json',dest/(name+'-hybrid-report.json'))
++        shutil.copy2(work/'res/r78-art-report.json',dest/(name+'-art-report.json'))
++        if extra_env['DOOM_R79_SHADOW']!='0':
++            assert '-DDOOM_R79_SHADOW='+extra_env['DOOM_R79_SHADOW'] in flags[name].split()
++            for file in ('r79_shadow_report.json','r79_shadow_pairs.csv'):
++                shutil.copy2(work/'src'/file,dest/(name+'-'+file))
+         report = json.loads((work / 'src/r58_colormatch_report.json').read_text())
+         assert report['preserved_flat_anchors'] == 6
+         assert report['palette_slots_from_8x8'] == [[41, 11, 43, 7, 2, 1, 32, 52, 10], [8, 22, 39, 16, 15, 35, 19, 40, 36]]
+         records.append(dict(variant=LABEL.get(name, name), rom=stem + '.bin', elf=stem + '.elf', bytes=len(blob), bss_bytes=bss,
+                             sha256=hashlib.sha256(blob).hexdigest()))
+         (dest / 'MANIFEST.json').write_text(json.dumps(records, indent=2) + '\n')
+-    assert len(records) == 2
+-    for name in ('r71a12mul-hud-perf', 'r71a12mul-hud-play'):
++    assert len(records) == 6
++    for name,mode,extra_env,_ in VARIANTS:
+         contents=flags[name]
++        assert '-DDOOM_R75_MENU_HOLD' in contents.split(),name
++        assert '-DDOOM_R76_PROFILES' in contents.split(),name
++        assert '-DDOOM_R76_MENU_STABLE' in contents.split(),name
++        assert '-DDOOM_R77_MENU' in contents.split(),name
++        assert '-DDOOM_R78_ART' in contents.split(),name
+         for flag in ('-DDOOM_R21_SEGLOOP_LOCALS', '-DDOOM_R70A_INVARIANTS', '-DDOOM_R71_MUL_ASM', '-DDOOM_HUD_WAD'):
+             assert flag in contents.split(), (name, flag)
+-    print('PASS R71A12MUL HUD only: A12 + MUL + Claudio stone-margin HUD', flush=True)
++    print('PASS R76 two HUD ROMs, four complete selectable palettes and persistent menu overlay',flush=True)
+ 
+ 
+ if __name__ == '__main__':
+--- original/scripts/lab/test_r59_colorview.py
++++ prepared/scripts/lab/test_r59_colorview.py
+@@ -51,8 +51,12 @@
+     assert key in menu,key
+ native=(d/"r35_native4.inc").read_text()
+ assert "#if defined(DOOM_R59_COLOR_VIEW)" in native
+-assert "PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU)" in native
+-assert "PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU)" in native
++assert "PAL_setColors(0,R79_PAL0[0],16,CPU)" in native
++assert "#define R79_PAL0 (R59_CURRENT.pal0)" in video
++assert "#define R79_PAL0 (r79_pal[r59_color_mode][0])" in video
++assert "PAL_setColors(16,R79_PAL1[0],16,CPU)" in native
++assert "#define R79_PAL1 (R59_CURRENT.pal1)" in video
++assert "#define R79_PAL1 (r79_pal[r59_color_mode][1])" in video
+ assert "r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */" in native
+ # R76 defers the existing refresh until Options closes. Match the complete
+ # condition across preprocessor lines rather than an exact historical spelling.
+--- original/src/d_main.c
++++ prepared/src/d_main.c
+@@ -278,9 +278,19 @@
+ 
+     // menus go directly to the screen
+     M_Drawer();          // menu is drawn even on top of everything
++#if defined(DOOM_R76_MENU_STABLE)
++    extern void R76_MenuOverlayFinish(void);
++    R76_MenuOverlayFinish();
++#endif
+ 
+     D_BuildNewTiccmds();
+-
++#if defined(DOOM_R75_MENU_HOLD)
++    /* Overlay writes are direct to VDP; hold the last rendered 3D VRAM tiles
++     * and do not queue a blank Pair-V frame while Start menu is open.
++     * First normal gameplay update on close restores the 3D background. */
++    if (_g_menuactive && !_g_demoplayback && _g_gamestate==GS_LEVEL)
++        return;
++#endif
+     if (wipe)
+         // wipe update
+         D_Wipe();
+--- original/src/m_text.c
++++ prepared/src/m_text.c
+@@ -98,21 +98,32 @@
+ 
+ uint16_t _g_gamma;
+ 
+-static boolean messageToPrint;  // true = message to be printed
++/* All three fields are assigned only boolean values. */
++static struct {uint8_t print,previous,input;} r77_message_state;
++#define messageToPrint (r77_message_state.print)
++#define messageLastMenuActive (r77_message_state.previous)
++#define messageNeedsInput (r77_message_state.input)
++typedef char r77_message_size[(sizeof(r77_message_state)==3u)?1:-1];  // true = message to be printed
+ 
+ static const char* messageString; // ...and here is the message string!
+ 
+-static boolean messageLastMenuActive;
++
+ 
+ 
+ static const menu_t* currentMenu; // current menudef
+ 
+-static int16_t itemOn;           // menu item skull is on (for Big Font menus)
+-static int16_t skullAnimCounter; // skull animation counter
+-static int16_t whichSkull;       // which skull to draw (he blinks)
++static struct {
++    int16_t item;
++    int8_t countdown;
++    uint8_t frame;
++} r76_menu_cursor;
++#define itemOn (r76_menu_cursor.item)
++#define skullAnimCounter (r76_menu_cursor.countdown)
++#define whichSkull (r76_menu_cursor.frame)
++typedef char r76_cursor_size_check[(sizeof(r76_menu_cursor)==4u)?1:-1];
+ 
+ boolean _g_menuactive;    // The menus are up
+-static boolean messageNeedsInput; // timed message = no input from user
++ // timed message = no input from user
+ 
+ char _g_savegamestrings[8][8];
+ 
+@@ -158,7 +169,7 @@
+ static void M_ChangeVideoMode(int16_t choice){R57_ChangeView(0,choice);}
+ static void M_ChangeHCrop(int16_t choice){R57_ChangeView(1,choice);}
+ static void M_ChangeVCrop(int16_t choice){R57_ChangeView(2,choice);}
+-#if defined(DOOM_R59_COLOR_VIEW)
++#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))
+ extern void R59_ChangeColor(int16_t right);
+ extern uint8_t R59_ColorMode(void);
+ static void M_ChangeColorMode(int16_t choice){R59_ChangeColor(choice);}
+@@ -588,7 +599,7 @@
+   video_mode,
+   h_crop,
+   v_crop,
+-#if defined(DOOM_R59_COLOR_VIEW)
++#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))
+   color_mode,
+ #endif
+ #endif
+@@ -621,7 +632,7 @@
+   {2,"Video mode:", M_ChangeVideoMode},
+   {2,"H crop:",     M_ChangeHCrop},
+   {2,"V crop:",     M_ChangeVCrop},
+-#if defined(DOOM_R59_COLOR_VIEW)
++#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))
+   {2,"Color mode:", M_ChangeColorMode},
+ #endif
+ #endif
+@@ -671,8 +682,12 @@
+     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*video_mode,12,r57_view.mode?"H32":"H40");
+     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*h_crop,12,crop_names[r57_view.hcrop/8]);
+     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*v_crop,12,crop_names[r57_view.vcrop/8]);
+-#if defined(DOOM_R59_COLOR_VIEW)
++#if defined(DOOM_R59_COLOR_VIEW) && (!defined(DOOM_R73_R53_FIXED) || defined(DOOM_R76_PROFILES))
++    #if defined(DOOM_R76_PROFILES)
++    static const char *const r59_names[4]={"Hybrid Blue+","A2 Full","L3 Detail","HN Smooth"};
++#else
+     static const char *const r59_names[6]={"CM6","Balanced","Tolerant","Accents","A4 Tolerant","A4 Accents"};
++#endif
+     V_DrawString(OptionsDef.x+13,OptionsDef.y+LINEHEIGHT*color_mode,12,r59_names[R59_ColorMode()]);
+ #endif
+     /* Fixed-width size label avoids stale digits after resizing. */
+--- original/src/r22_video.inc
++++ prepared/src/r22_video.inc
+@@ -39,9 +39,27 @@
+ #if defined(DOOM_R59_COLOR_VIEW)
+ #include "r59_color_tables.h"
+ /* One byte of mode state; all large LUTs and pair books stay in ROM. */
++#if defined(DOOM_R77_MENU)
++/* Keep byte state together rather than paying common-symbol alignment gaps.
++ * Full byte fields preserve R59 semantics; no per-pixel bitfield decoding. */
++static struct {uint8_t mode,dirty,palette;} r77_color_state;
++#define r59_color_mode (r77_color_state.mode)
++#define r59_color_dirty (r77_color_state.dirty)
++#define r77_last_palette (r77_color_state.palette)
++typedef char r77_color_state_size[(sizeof(r77_color_state)==3u)?1:-1];
++#else
+ static uint8_t r59_color_mode;
+ static uint8_t r59_color_dirty;
++#endif
+ #define R59_CURRENT (r59_color_tables[r59_color_mode])
++#if defined(DOOM_R79_SHADOW)
++#include "r79_shadow_tables.h"
++#define R79_PAL0 (r79_pal[r59_color_mode][0])
++#define R79_PAL1 (r79_pal[r59_color_mode][1])
++#else
++#define R79_PAL0 (R59_CURRENT.pal0)
++#define R79_PAL1 (R59_CURRENT.pal1)
++#endif
+ #endif
+ #if defined(DOOM_R53_MICRO) || defined(DOOM_R55_FLAT_SAFE)
+ #error R56 has its own Flat-Safe maps and dual-color patterns
+@@ -213,6 +231,11 @@
+ static uint16_t r22_next_bank;
+ static uint32_t r22_queued;
+ static uint8_t r22_overlay_dirty,r22_text_this_frame;
++#if defined(DOOM_R77_MENU)
++static void R77_MenuEnter(void);
++static void R77_MenuLeave(void);
++static uint16_t R77_MenuWord(uint16_t x,uint8_t c);
++#endif
+ #if defined(DOOM_R57_CROP16)
+ static uint8_t r57_queued_crop;
+ static uint8_t r57_was_level;
+@@ -292,6 +315,16 @@
+ static uint16_t r22_map[38*21] __attribute__((aligned(2)));
+ #define r40b_native_prev ((uint8_t*)(void*)r22_map)
+ #define r40b_native_seen (((uint8_t*)(void*)r22_map)+R40B_OCC_BYTES)
++#endif
++#if defined(DOOM_R76_MENU_STABLE)
++static inline uint8_t R76_InGameMenu(void){
++#if defined(DOOM_R50_MENU_FREEZE)
++    return (_g_gamestate==GS_LEVEL && _g_menuactive && !_g_demoplayback);
++#else
++    /* PERF may still render during menu; framebuffer bitsets are not safe. */
++    return 0;
++#endif
++}
+ #endif
+ static void R40B_ResetNativeText(void)
+ {
+@@ -338,11 +371,19 @@
+     volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
+     volatile uint16_t *data=(volatile uint16_t*)0xC00000;
+     VDP_setAutoInc(2);*ctrl=VDP_WRITE_VRAM_ADDR(plane+y*128+x*2);
+-    while(*s && x++<38){uint8_t c=(uint8_t)*s++;if(c<32 || c>127)c=' ';*data=0x8000u+(uint16_t)TILE_FONT_INDEX+c-32;}
++    while(*s && x++<38){uint8_t c=(uint8_t)*s++;if(c<32 || c>127)c=' ';*data=
++#if defined(DOOM_R77_MENU)
++        (plane==VDP_WINDOW && r22_overlay_dirty==2u && R76_InGameMenu())?
++            R77_MenuWord((uint16_t)(x-1u),c):
++#endif
++        (uint16_t)(0x8000u+(uint16_t)TILE_FONT_INDEX+c-32);}
+     R22_Unlock(sr);
+ }
+ static void R22_ClearOverlay(void){
+     R20_StopVideo();
++#if defined(DOOM_R77_MENU)
++    if(r22_overlay_dirty==2u)R77_MenuLeave();
++#endif
+     uint16_t sr=R22_Lock();
+     /* Only rows0..21: never touch the aliased SAT/HScroll at FC00. */
+     VDP_clearTileMap(VDP_WINDOW,0,64*22,TRUE);
+@@ -441,6 +482,29 @@
+     memcpy(r40b_native_prev,r40b_native_seen,R40B_OCC_BYTES);
+ }
+ 
++#if defined(DOOM_R76_MENU_STABLE)
++/* Keep the old text until replacements are drawn; retire only cells that
++ * were occupied last frame but not this frame. Uses aliased bitsets, no WRAM. */
++void R76_MenuOverlayFinish(void){
++    if(!R76_InGameMenu() || r22_overlay_dirty!=2u)return;
++    uint16_t sr=R22_Lock();
++    volatile uint32_t *ctrl=(volatile uint32_t*)0xC00004;
++    volatile uint16_t *data=(volatile uint16_t*)0xC00000;
++    VDP_setAutoInc(2);
++    for(uint16_t y=1;y<R40B_TEXT_H;y++){
++        for(uint16_t x=0;x<R40B_TEXT_W;x++){
++            uint16_t i=(uint16_t)(y*R40B_TEXT_W+x);
++            uint8_t bit=(uint8_t)(1u<<(i&7));
++            if((r40b_native_prev[i>>3]&bit) && !(r40b_native_seen[i>>3]&bit)){
++                *ctrl=VDP_WRITE_VRAM_ADDR(VDP_WINDOW+y*128u+x*2u);
++                *data=0u;
++            }
++        }
++    }
++    R22_Unlock(sr);
++    memcpy(r40b_native_prev,r40b_native_seen,R40B_OCC_BYTES);
++}
++#endif
+ static int8_t r22_newpal=100,r22_queued_pal=100;
+ #define R22_GUARD 0x2244AA55u
+ /* Reuse the established timedemo and diagnostics, not the old raster. */
+@@ -911,6 +975,16 @@
+     R48_COUNT(R48_FLAT_CALLS,1);
+     R48_COUNT(R48_FLAT_PIXELS,(uint16_t)(y1-y0+1));
+     uint8_t sample=(uint8_t)(r52map[c]&15u);
++#if defined(DOOM_R72_FLAT_2D)
++    const uint8_t *other_flat=
++#if defined(DOOM_R64A_PROLOGUE)
++        cx->flat[(x ^ 1u)&1u];
++#else
++        (x&1u)?R59_CURRENT.flat_even:R59_CURRENT.flat_odd;
++#endif
++    const uint8_t sample_odd=(uint8_t)(other_flat[c]&15u);
++#endif
++
+     uint8_t keep=(x&1)?0xf0u:0x0fu;
+     uint8_t put=(x&1)?sample:(uint8_t)(sample<<4);
+     uint8_t *dst=R22_PixelByte(r22_fb.pixels,(uint16_t)x,(uint16_t)y0);
+@@ -920,14 +994,26 @@
+     const uint8_t gate=r49_gate_current[c];
+ #endif
+     if((y0&1) && count) {
+-        *dst=(uint8_t)((*dst&0xf0u)|sample);
++        *dst=(uint8_t)((*dst&0xf0u)|
++#if defined(DOOM_R72_FLAT_2D)
++            sample_odd
++#else
++            sample
++#endif
++        );
+ #if defined(DOOM_R49_COLORMIX)
+         R49_WriteMixFlag(dst,y0,gate);
+ #endif
+         dst+=152; --count;
+     }
+ #if defined(DOOM_R48_V_FAST)
+-    const uint8_t pair=(uint8_t)(sample*0x11u);
++    const uint8_t pair=
++#if defined(DOOM_R72_FLAT_2D)
++        (uint8_t)((sample<<4)|sample_odd);
++#else
++        (uint8_t)(sample*0x11u);
++#endif
++
+     while(count>=2) {
+         *dst=pair;
+ #if defined(DOOM_R49_COLORMIX)
+@@ -964,10 +1050,13 @@
+ void V_SetSTPalette(void){}
+ static void R22_Palette(int8_t p){
+     if(p<0)p=0;if(p>13)p=13;
++#if defined(DOOM_R77_MENU)
++    r77_last_palette=(uint8_t)p;
++#endif
+ #if defined(DOOM_R56_DUAL_COLOR)
+ #if defined(DOOM_R59_COLOR_VIEW)
+-    PAL_setColors(0,R59_CURRENT.pal0[(uint8_t)p],16,DMA);
+-    PAL_setColors(16,R59_CURRENT.pal1[(uint8_t)p],16,DMA);
++    PAL_setColors(0,R79_PAL0[(uint8_t)p],16,DMA);
++    PAL_setColors(16,R79_PAL1[(uint8_t)p],16,DMA);
+ #else
+     PAL_setColors(0,r56_pal0[(uint8_t)p],16,DMA);
+     PAL_setColors(16,r56_pal1[(uint8_t)p],16,DMA);
+@@ -1018,11 +1107,21 @@
+ #if defined(DOOM_R56_DUAL_COLOR)
+ /* Each pair CODE owns two CRAM slots; each opaque 4px half is ABAB.
+  * Plane B is the same left-opaque tile shifted right by 4px (Pair-V). */
+-static inline uint32_t R56_PairRow(uint8_t code,const uint8_t pairs[16][2])
++static inline uint32_t R56_PairRow(uint8_t code,const uint8_t pairs[16][2],uint16_t row)
+ {
+     if(code==0u)return 0u;
+     uint32_t a=pairs[code][0],b=pairs[code][1];
++#if defined(DOOM_R73_R53_FIXED)
++    uint32_t result=0;
++    for(uint16_t x=0;x<4u;x++){
++        uint8_t nib=(((x+row)&1u)==0u)?(uint8_t)b:(uint8_t)a;
++        result|=(uint32_t)nib<<(28u-4u*x);
++    }
++    return result;
++#else
++    (void)row;
+     return (a<<28)|(b<<24)|(a<<20)|(b<<16);
++#endif
+ }
+ #endif
+ static void R47_LoadPairTiles(void)
+@@ -1036,9 +1135,9 @@
+ #if defined(DOOM_R56_DUAL_COLOR)
+         for(uint16_t y=0;y<8;y++)
+             #if defined(DOOM_R59_COLOR_VIEW)
+-            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_even);
+-#else
+-            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_even);
++            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_even,y);
++#else
++            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_even,y);
+ #endif
+ #elif defined(DOOM_R53_MICRO)
+         for(uint16_t y=0;y<8;y++){
+@@ -1076,9 +1175,9 @@
+ #if defined(DOOM_R56_DUAL_COLOR)
+         for(uint16_t y=0;y<8;y++)
+             #if defined(DOOM_R59_COLOR_VIEW)
+-            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_odd);
+-#else
+-            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_odd);
++            tile[y]=R56_PairRow((y<4u)?hi:lo,R59_CURRENT.pairs_odd,y);
++#else
++            tile[y]=R56_PairRow((y<4u)?hi:lo,r56_pairs_odd,y);
+ #endif
+         VDP_loadTileData(tile,(uint16_t)(R22_PAIR_TILE_BASE+256u+p),1,CPU);
+ #elif defined(DOOM_R53_MICRO)
+@@ -1262,6 +1361,38 @@
+     }
+ #endif
+     if(x<0||x>=38||y<0||y>=22)return;
++#if defined(DOOM_R76_MENU_STABLE)
++    if(y>0 && R76_InGameMenu()){
++        /* Clear only once on first entry; later changes retire stale glyphs.
++         * No repeated VDP DMA blackout of top rows while user navigates. */
++        if(r22_overlay_dirty!=2u){
++            R22_ClearOverlay();
++            R40B_ResetNativeText();
++#if defined(DOOM_R77_MENU)
++            R77_MenuEnter();
++#endif
++            r22_overlay_dirty=2u; /* 2 marks gameplay persistent overlay */
++        }
++        uint16_t col=(uint16_t)x;
++        const char *scan=s;
++        while(*scan && col<R40B_TEXT_W){
++            uint16_t i=(uint16_t)(y*R40B_TEXT_W+col++);
++            r40b_native_seen[i>>3]|=(uint8_t)(1u<<(i&7));
++            ++scan;
++        }
++        r22_text_this_frame=1u;
++        R20_StopVideo();
++        uint16_t sr=R22_Lock();
++        #if defined(DOOM_R77_MENU)
++        VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,22);
++#else
++        VDP_setWindowHPos(TRUE,0);VDP_setWindowVPos(FALSE,0);
++#endif
++        R22_Unlock(sr);
++        R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
++        return;
++    }
++#endif
+     /* Window is independently addressable at F000. Plane B intentionally
+        mirrors A at E000: transparent Window pixels reveal the same raster.
+        Window rows24..31 contain SAT/HScroll at FC00, never text. */
+@@ -1285,19 +1416,31 @@
+     /* Complete the old flip before VDP use, retaining the displayed menu
+        throughout title/raster work. Text replacement happens just-in-time. */
+     R20_StopVideo();r22_text_this_frame=0;
++#if defined(DOOM_R77_MENU)
++    /* Restore SH/CRAM before title art, mode changes or gameplay touch VRAM. */
++    if(r22_overlay_dirty==2u && !R76_InGameMenu())R22_ClearOverlay();
++#endif
++#if defined(DOOM_R76_MENU_STABLE)
++    if(R76_InGameMenu() && r22_overlay_dirty==2u)
++        memset(r40b_native_seen,0,R40B_OCC_BYTES);
++#endif
+ #if defined(DOOM_R59_COLOR_VIEW)
+     /* When a TITLEPIC/HELP2 native picture owns the pattern bank, do not
+      * overwrite its artwork just to preview a gameplay color profile.
+      * R35_LeaveNative4 restores the selected profile on gameplay entry. */
+-    if(r59_color_dirty && r35_native_active<0){
++    if(r59_color_dirty && r35_native_active<0
++#if defined(DOOM_R76_PROFILES)
++       && !_g_menuactive
++#endif
++    ){
+         /* A profile changes pair patterns AND CRAM. Blank display while
+          * replacing all 512 shared VRAM patterns. No second framebuffer.
+          * Synchronous CRAM writes avoid SGDK deferred DMA palette mismatch. */
+         VDP_setEnable(FALSE);
+         VDP_waitDMACompletion();
+         R47_LoadPairTiles();
+-        PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU);
+-        PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU);
++        PAL_setColors(0,R79_PAL0[r77_last_palette],16,CPU);
++        PAL_setColors(16,R79_PAL1[r77_last_palette],16,CPU);
+         VDP_waitDMACompletion();
+         r59_color_dirty=0;
+         VDP_setEnable(TRUE);
+@@ -1338,6 +1481,9 @@
+     if(r22_overlay_dirty && !r22_text_this_frame)R22_ClearOverlay();
+ }
+ void V_ClearViewWindow(void){
++#if defined(DOOM_R76_MENU_STABLE)
++    if(R76_InGameMenu() && r22_overlay_dirty==2u) return;
++#endif
+ #if defined(DOOM_R50_STATIC_MENU) && defined(DOOM_R35_ART_RAW)
+     /* R40b reuses the otherwise idle Pair-V framebuffer as the two glyph
+      * occupancy bitsets (prev + seen). M_Drawer calls I_InitScreenPage()
+@@ -1383,6 +1529,9 @@
+ static void R22_Num3(uint16_t x,uint16_t y,int32_t v){if(v<0)v=0;if(v>999)v=999;char s[4]={(char)('0'+v/100),(char)('0'+v/10%10),(char)('0'+v%10),0};R22_DrawText(R51_HUD_TEXT_PLANE,s,x,y);}
+ #if defined(DOOM_HUD_WAD)
+ #include "hud_wad.inc"
++#if defined(DOOM_R77_MENU)
++#include "r77_menu.inc"
++#endif
+ #endif
+ static void R22_HUD(void){
+ #if defined(DOOM_R51_HW_HUD)
+@@ -1445,6 +1594,9 @@
+ #endif
+         0);frames=0;vb=_g_vblankCount;}
+ }
++#if defined(DOOM_R79_SHADOW)
++#include "r79_shadow.inc"
++#endif
+ void I_FinishUpdate(void){
+ #if defined(DOOM_R35_ART_RAW)
+     if(r35_native_active>=0){
+@@ -1479,6 +1631,15 @@
+ #endif
+ #if defined(DOOM_R47_PLANE_PAIR)
+     if(_g_gamestate==GS_LEVEL)R22_HUD();
++#if defined(DOOM_R79_SHADOW)
++    if(_g_gamestate==GS_LEVEL && !R76_InGameMenu()){
++        uint8_t p=r22_newpal==100?r77_last_palette:(uint8_t)r22_newpal;
++        if(p>13u)p=0;
++        R79_Convert((uint16_t *)(void *)r22_fb.pixels,
++            r79_map[r59_color_mode][p],r79_cost[r59_color_mode][p]);
++        VDP_setHilightShadow(TRUE);
++    }
++#endif
+     r22_next_bank=0;r22_queued_pal=r22_newpal;r22_newpal=100;r22_queued=_g_vblankCount;
+ #else
+     uint16_t back=r22_front^1;R22_UploadBack(back);
+@@ -1495,6 +1656,9 @@
+ }
+ void I_InitGraphicsHardwareSpecificCode(void){
+     R20_StopVideo();VDP_setScreenWidth320();VDP_setPlaneSize(64,32,FALSE);
++#if defined(DOOM_R77_MENU)
++    VDP_setHilightShadow(FALSE);
++#endif
+ #if defined(DOOM_R57_VIEW_MENU)
+     r57_h32_active=0;r57_hud_dirty=1;r57_was_level=0;
+ #endif
+--- original/src/r35_native4.inc
++++ prepared/src/r35_native4.inc
+@@ -94,8 +94,11 @@
+ #if defined(DOOM_R59_COLOR_VIEW)
+     /* R59 must restore the SELECTED CRAM alongside the selected Pair-V
+      * patterns above. The historical A6 modes do not use CM6 colors. */
+-    PAL_setColors(0,R59_CURRENT.pal0[0],16,CPU);
+-    PAL_setColors(16,R59_CURRENT.pal1[0],16,CPU);
++    PAL_setColors(0,R79_PAL0[0],16,CPU);
++    PAL_setColors(16,R79_PAL1[0],16,CPU);
++#if defined(DOOM_R77_MENU)
++    r77_last_palette=0;
++#endif
+     r59_color_dirty=0; /* native exit rebuilt selected tiles and CRAM */
+ #else
+     PAL_setColors(0,r56_pal0[0],16,CPU);
+@@ -154,6 +157,9 @@
+ #endif
+         const R35Native4 *picture=&r35_native4[i];
+         R20_StopVideo();
++#if defined(DOOM_R79_SHADOW)
++        VDP_setHilightShadow(FALSE);
++#endif
+         VDP_setEnable(FALSE);
+         VDP_clearPlane(BG_A,TRUE);
+ #if defined(DOOM_R47_PLANE_PAIR)
+--- original/src/r77_menu.inc
++++ prepared/src/r77_menu.inc
+@@ -81,7 +81,11 @@
+ }
+ static void R77_MenuLeave(void)
+ {
++#if defined(DOOM_R79_SHADOW)
++    VDP_setHilightShadow(TRUE);
++#else
+     VDP_setHilightShadow(FALSE);
++#endif
+     R22_Palette((int8_t)r77_last_palette);VDP_waitDMACompletion();
+     VDP_setHorizontalScroll(BG_B,r57_h32_active?-20:4);
+     r57_hud_dirty=1;

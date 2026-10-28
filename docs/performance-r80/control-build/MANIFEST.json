@@ -1,0 +1,18 @@
+[
+  {
+    "variant": "r79-base-pf",
+    "rom": "doom-md-r60-r79-base-pf.bin",
+    "elf": "doom-md-r60-r79-base-pf.elf",
+    "bytes": 2883584,
+    "bss_bytes": 57896,
+    "sha256": "79048065b608972c5ebfa7595be68f29f943adc3c36a0e5a984381384ba170fc"
+  },
+  {
+    "variant": "r79-base-pl",
+    "rom": "doom-md-r60-r79-base-pl.bin",
+    "elf": "doom-md-r60-r79-base-pl.elf",
+    "bytes": 2883584,
+    "bss_bytes": 57910,
+    "sha256": "9eb88159fef0747a48741b12fb2a5855e921f0be50b2a1f537fa50c21a8ac403"
+  }
+]

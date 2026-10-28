@@ -1,0 +1,9 @@
+{
+  "repository": "bollux78/MD-DOOM64KB",
+  "source_commit": "31807c0355298f35ec36ab0c42a847a2493d92e4",
+  "workflow_run": 40597005254,
+  "artifact_id": 12776668748,
+  "artifact_sha256": "9b2da1aaa4dc448bc240a3b69b77bde92360da627171fd2933b29eb77a70d346",
+  "new_benchmarks_performed": false,
+  "new_optimizations_implemented": false
+}

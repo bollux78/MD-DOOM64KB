@@ -1,0 +1,4 @@
+variant,frames,average_fps,minimum_1s_fps,maximum_1s_fps,total_seconds,source
+R79 base,2134,7.32,2.9,13.5,291.68,user-provided screenshot; execution environment not identified
+SH1,2134,5.82,2.6,9.2,366.38,user-provided screenshot; execution environment not identified
+SH2,2134,5.82,2.6,9.2,366.48,user-provided screenshot; execution environment not identified

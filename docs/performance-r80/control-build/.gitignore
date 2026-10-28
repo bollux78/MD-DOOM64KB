@@ -1,0 +1,8 @@
+*
+!.gitignore
+!MANIFEST.json
+!SIZE-r79-base-pf.txt
+!SIZE-r79-base-pl.txt
+!flags-doom-md-r60-r79-base-pf.txt
+!flags-doom-md-r60-r79-base-pl.txt
+!SHA256SUMS-CONTROLS.txt
