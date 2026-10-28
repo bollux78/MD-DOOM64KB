@@ -1,0 +1,33 @@
+name: R81 save QA on existing ROMs
+on:
+  push:
+    branches: ['exp-chatgpt-r81-menu-save-*']
+    paths: ['scripts/lab/qa_save_rom.py', '.github/workflows/r81-qa.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qa:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doom-md-r81-menu-save-cheats
+          path: dist/hud
+          run-id: 40616372317
+          github-token: ${{ github.token }}
+      - name: Save/load on the actual ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=$(command -v blastem || find /home/dan/Projetos -type f -name blastem -executable -print -quit)
+          python3 scripts/lab/qa_save_rom.py --blastem "$exe" --rom dist/hud/doom-md-r60-r81-menu-pf.bin --elf dist/hud/doom-md-r60-r81-menu-pf.elf --out dist/hud/SAVE-ROUNDTRIP.json 2>&1 | tee dist/hud/QA.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: r81-save-qa
+          path: dist/hud/*ROUNDTRIP*
