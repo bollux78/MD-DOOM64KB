@@ -436,11 +436,71 @@ def main3(a):
                  f("walls", "bright"), f("sprites", "all"), f("flats", "all"), f("walls", "col"), f("flats", "col")))
     (out / "ROUND3.md").write_text("\n".join(L) + "\n"); print("\n".join(L)); print("total %.0fs" % (time.time() - t0))
 
+
+def refit_flats(tset, pal8, dac, lf):
+    """R90 round 4: keep CRAM, M50 pairs, walls and sprites; choose for every colour the (even, odd) code pair,
+    codes 1..15 only (no transparent black), minimising dE(target, column average) + lf * dE(even, odd)."""
+    ce = code_lin(tset["pal0"], tset["pairs_even"], dac)[1:]; co = code_lin(tset["pal1"], tset["pairs_odd"], dac)[1:]
+    le, lo = lab_from_lin(ce), lab_from_lin(co)
+    mix = lab_from_lin((ce[:, None] + co[None]) / 2)                      # 15 x 15
+    contrast = np.sqrt(((le[:, None] - lo[None]) ** 2).sum(-1))           # 15 x 15
+    tgt = to_lab(pal8)
+    cost = np.sqrt(((mix[None] - tgt[:, None, None]) ** 2).sum(-1)) + lf * contrast[None]
+    arg = cost.reshape(256, -1).argmin(1)
+    out = dict(tset); out["flat_even"] = arg // 15 + 1; out["flat_odd"] = arg % 15 + 1
+    return out
+
+def main4(a):
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True); t0 = time.time()
+    w = Wad(a.wad)
+    pal8 = np.frombuffer(w.lump("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(float)
+    cm = np.frombuffer(w.lump("COLORMAP"), np.uint8)[:34 * 256].reshape(34, 256)
+    tex = texture_hists(w); frep = flat_rep(w, pal8); spr = {}
+    modes = parse_tables(a.tables)
+    maps = [m for m in a.maps.split(",") if m]
+    W = {m: map_weights(w, m, tex, frep, spr) for m in maps}
+    names = ["R89 0 Hybrid Blue", "R89 1 A2", "R89 2 L3", "R89 3 HN"]
+    rep_ = {"candidates": {}, "luts": {}}
+    def score(ts):
+        agg = {}
+        for m in maps:
+            r = breakdown(ts, pal8, cm, W[m][2], DAC["HW"])
+            agg.setdefault("flats", []).append(r["flats"]["all"]); agg.setdefault("col_flats", []).append(r["flats"]["col"])
+            agg.setdefault("walls", []).append(r["walls"]["all"]); agg.setdefault("sprites", []).append(r["sprites"]["all"])
+            for b in ("bright", "mid", "dark"):
+                if r["flats"][b] is not None: agg.setdefault("flats_" + b, []).append(r["flats"][b])
+            agg.setdefault("overall", []).append(evaluate(ts, pal8, cm, W[m][0], W[m][1], DAC["HW"])["mean"])
+        return {k: float(np.mean(v)) for k, v in agg.items()}
+    for i, md in enumerate(modes):
+        rep_["candidates"][names[i] + " (shipped)"] = score(md)
+        for lf in (0.25, 0.5, 1.0, 1.5, 2.5):
+            ts = refit_flats(md, pal8, DAC["HW"], lf)
+            key = "%s flats lf%.2f" % (names[i], lf)
+            sc = score(ts); sc["changed_entries"] = int((ts["flat_even"] != md["flat_even"]).sum() + (ts["flat_odd"] != md["flat_odd"]).sum())
+            rep_["candidates"][key] = sc
+            rep_["luts"][key] = {"flat_even": list(map(int, ts["flat_even"])), "flat_odd": list(map(int, ts["flat_odd"]))}
+        print(names[i], "%.0fs" % (time.time() - t0), flush=True)
+    (out / "round4.json").write_text(json.dumps(rep_, indent=1))
+    hdr = ["candidate", "flats dE", "flats dark", "flats mid", "flats bright", "col flats", "walls", "sprites", "overall", "changed"]
+    L = ["# R90 round 4: flat LUTs only (CRAM, M50 pairs, walls and sprites of each R89 mode unchanged)", "",
+         "Mean over E1M1-E1M9, measured MD DAC. flats dE = weighted CIELAB dE76 vs Doom colour (lower = more faithful); "
+         "col flats = dE between even and odd columns on floors/ceilings (higher = more vertical striping). "
+         "lf = striping weight in the refit; codes 1..15 only (never transparent black). changed = LUT entries that differ from R89 (of 512).", "",
+         "| " + " | ".join(hdr) + " |", "|---|" + "---:|" * (len(hdr) - 1)]
+    for key, d in rep_["candidates"].items():
+        g = lambda k: ("%.1f" % d[k]) if k in d else "-"
+        L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (key, g("flats"), g("flats_dark"), g("flats_mid"), g("flats_bright"),
+                 g("col_flats"), g("walls"), g("sprites"), g("overall"), d.get("changed_entries", "-")))
+    (out / "ROUND4.md").write_text("\n".join(L) + "\n"); print("\n".join(L)); print("total %.0fs" % (time.time() - t0))
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--wad", required=True); ap.add_argument("--tables", required=True)
     ap.add_argument("--out", required=True); ap.add_argument("--refine", type=int, default=1)
     ap.add_argument("--maps", default=",".join(MAPS)); ap.add_argument("--round3", action="store_true")
+    ap.add_argument("--round4", action="store_true")
     a = ap.parse_args(); out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    if a.round4:
+        return main4(a)
     if a.round3:
         return main3(a)
     t0 = time.time()

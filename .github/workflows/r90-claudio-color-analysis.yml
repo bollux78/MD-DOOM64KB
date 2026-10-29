@@ -46,8 +46,8 @@ jobs:
           set -euo pipefail
           mkdir -p dist/r90
           python3 scripts/lab/r90_color_analysis.py --wad /home/dan/Projetos/doom-md/assets/wads/doom1.wad \
-            --tables docs/analysis-r90/input/r89-r59_color_tables.h --out dist/r90 --refine 1 --round3 2>&1 | tee dist/r90/run.log
-          head -c 3500 dist/r90/ROUND3.md | python3 -c "import sys;t=sys.stdin.read().replace('%','%25').replace('\n','%0A');print('::notice title=R90 colour analysis::'+t)"
+            --tables docs/analysis-r90/input/r89-r59_color_tables.h --out dist/r90 --refine 1 --round4 2>&1 | tee dist/r90/run.log
+          head -c 3500 dist/r90/ROUND4.md | python3 -c "import sys;t=sys.stdin.read().replace('%','%25').replace('\n','%0A');print('::notice title=R90 colour analysis::'+t)"
       - name: Upload analysis
         if: always()
         uses: actions/upload-artifact@v6
