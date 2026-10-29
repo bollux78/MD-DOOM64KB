@@ -252,13 +252,18 @@ def evaluate(tset, pal8, cm, Ww, Wf, dac):
     ce = code_lin(tset["pal0"], tset["pairs_even"], dac); co = code_lin(tset["pal1"], tset["pairs_odd"], dac)
     tgt = to_lab(pal8)
     errs, wts, per_c = [], [], np.zeros(256); per_w = np.zeros(256)
+    colw = {"walls": [0.0, 0.0], "flats": [0.0, 0.0]}   # weighted sum of even/odd column dE, weight
     for l in range(34):
         if Ww[l].sum() > 0:
+            le, lo = lab_from_lin(ce[tset["comp_even"][l]]), lab_from_lin(co[tset["comp_odd"][l]])
+            colw["walls"][0] += float((np.sqrt(((le - lo) ** 2).sum(-1)) * Ww[l]).sum()); colw["walls"][1] += float(Ww[l].sum())
             shown = lab_from_lin((ce[tset["comp_even"][l]] + co[tset["comp_odd"][l]]) / 2)
             e = np.sqrt(((shown - tgt[cm[l]]) ** 2).sum(-1))
             errs.append(e); wts.append(Ww[l]); np.add.at(per_c, cm[l], e * Ww[l]); np.add.at(per_w, cm[l], Ww[l])
         if Wf[l].sum() > 0:
             c = cm[l]
+            le, lo = lab_from_lin(ce[tset["flat_even"][c]]), lab_from_lin(co[tset["flat_odd"][c]])
+            colw["flats"][0] += float((np.sqrt(((le - lo) ** 2).sum(-1)) * Wf[l]).sum()); colw["flats"][1] += float(Wf[l].sum())
             shown = lab_from_lin((ce[tset["flat_even"][c]] + co[tset["flat_odd"][c]]) / 2)
             e = np.sqrt(((shown - tgt[c]) ** 2).sum(-1))
             errs.append(e); wts.append(Wf[l]); np.add.at(per_c, c, e * Wf[l]); np.add.at(per_w, c, Wf[l])
@@ -268,7 +273,8 @@ def evaluate(tset, pal8, cm, Ww, Wf, dac):
     with np.errstate(invalid="ignore", divide="ignore"):
         pc = np.where(per_w > 0, per_c / per_w, 0)
     worst = sorted(((float(per_w[c] / per_w.sum()) * pc[c], c) for c in range(256) if per_w[c] > 0), reverse=True)[:6]
-    return dict(mean=float((e * w).sum()), p90=p90, over10=float(w[e > 10].sum()), over20=float(w[e > 20].sum()),
+    return dict(mean=float((e * w).sum()), p90=p90,
+                col_walls=colw["walls"][0] / max(colw["walls"][1], 1e-12), col_flats=colw["flats"][0] / max(colw["flats"][1], 1e-12), over10=float(w[e > 10].sum()), over20=float(w[e > 20].sum()),
                 worst=[dict(c=int(c), dE=round(float(pc[c]), 1), weight=round(float(per_w[c] / per_w.sum()), 4)) for _, c in worst])
 
 # ------------------------------------------------------------------ generator (R52 objective + R53-style M50)
@@ -357,16 +363,22 @@ def main():
     cur_words = sorted({word_of(pal8[c]) for c in range(256)} - {0})
     all_words = [((b << 9) | (g << 5) | (r << 1)) for b in range(8) for g in range(8) for r in range(8)][1:]
     print("weights ready %.0fs; textures %d flats %d" % (time.time() - t0, len(tex), len(frep)), flush=True)
-    sets = {"GEN-global": build_set(pal8, cm, Hep, cur_words, "LIN", a.refine)}
-    print("global set %.0fs" % (time.time() - t0), flush=True)
+    sets = {"GEN-global": build_set(pal8, cm, Hep, cur_words, "LIN", a.refine),
+            "GEN-global-HW": build_set(pal8, cm, Hep, all_words, "HW", a.refine)}
+    folds = {"odd": [m for m in maps if int(m[-1]) % 2 == 1], "even": [m for m in maps if int(m[-1]) % 2 == 0]}
+    cv = {}
+    for k, train in folds.items():   # trained WITHOUT the maps it is evaluated on
+        Ht = sum(post(cm, W[m][0]) + post(cm, W[m][1]) for m in train)
+        cv[k] = build_set(pal8, cm, Ht, all_words, "HW", a.refine)
+    print("global + cross-validation sets %.0fs" % (time.time() - t0), flush=True)
     rep = {"model": {"dac": {k: list(map(float, v)) for k, v in DAC.items()}, "shares": SHARE,
                      "metric": "CIELAB dE76 vs original 8-bit PLAYPAL, weighted by per-map screen proxy",
                      "caveat": "screen weights and light spread are proxies; DAC HW = commonly measured MD levels, not this user's TV"},
            "maps": {}}
     for m in maps:
         Ww, Wf = W[m]; Hm = post(cm, Ww) + post(cm, Wf)
-        sm = {"GEN-map": build_set(pal8, cm, Hm, cur_words, "LIN", a.refine),
-              "GEN-map-HW": build_set(pal8, cm, Hm, all_words, "HW", a.refine)}
+        held = cv["even"] if int(m[-1]) % 2 == 1 else cv["odd"]
+        sm = {"GEN-heldout-HW": held, "GEN-map-HW": build_set(pal8, cm, Hm, all_words, "HW", a.refine)}
         r = {}
         for dacn in ("HW", "LIN"):
             for i, md in enumerate(modes):
@@ -379,7 +391,7 @@ def main():
             r["R89 2 L3 L32F-M50 @HW"]["mean"], r["GEN-map-HW @HW"]["mean"]), flush=True)
     rep["global_palettes"] = {k: {"pal0": list(map(int, s["pal0"])), "pal1": list(map(int, s["pal1"]))} for k, s in sets.items()}
     (out / "report.json").write_text(json.dumps(rep, indent=1))
-    rows = ["R89 0 Hybrid Blue", "R89 1 A2 N25A-M50", "R89 2 L3 L32F-M50", "R89 3 HN L32F near flats", "GEN-global", "GEN-map", "GEN-map-HW"]
+    rows = ["R89 0 Hybrid Blue", "R89 1 A2 N25A-M50", "R89 2 L3 L32F-M50", "R89 3 HN L32F near flats", "GEN-global", "GEN-global-HW", "GEN-heldout-HW", "GEN-map-HW"]
     L = ["# R90 colour analysis (offline, no ROM)", "", "Weighted mean CIELAB dE76 vs Doom's 8-bit colours (lower is better); "
          "evaluated with the measured MD DAC (HW). Per-map screen proxy: walls 50%, flats 40%, sprites 10%.", "",
          "| map | " + " | ".join(rows) + " |", "|---|" + "---:|" * len(rows)]
@@ -390,6 +402,11 @@ def main():
     for m in maps:
         r = rep["maps"][m]
         L.append("| %s | " % m + " | ".join("%.0f / %.0f%%" % (r[k + " @HW"]["p90"], 100 * r[k + " @HW"]["over10"]) for k in rows) + " |")
+    L += ["", "Column contrast (weighted dE between even and odd sample columns: higher = more vertical striping), walls / flats, HW:", "",
+          "| map | " + " | ".join(rows) + " |", "|---|" + "---:|" * len(rows)]
+    for m in maps:
+        r = rep["maps"][m]
+        L.append("| %s | " % m + " | ".join("%.1f / %.1f" % (r[k + " @HW"]["col_walls"], r[k + " @HW"]["col_flats"]) for k in rows) + " |")
     L += ["", "Same table evaluated with the linear DAC the current generators assume (LIN):", "",
           "| map | " + " | ".join(rows) + " |", "|---|" + "---:|" * len(rows)]
     for m in maps:
