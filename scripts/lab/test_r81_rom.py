@@ -121,7 +121,17 @@ try:
   for index in range(nl):
    tag=int.from_bytes(g.readmem(lines+31*index+26,2),'big',signed=True)
    if tag>0 and tag in tags:chosen=(lines+31*index,tag);break
-  assert chosen,'No tagged test sector'
+  if not chosen:
+   line_tags=[int.from_bytes(g.readmem(lines+31*i+26,2),'big',signed=True) for i in range(nl)]
+   probe={'map':a.case[0],'skill':a.case[1],'numlines':nl,'numsectors':ns,
+          'maplines':hex(lines),'mapsectors':hex(ms),
+          'sector_tag_sample':sorted(tags)[:20],
+          'line_tag_sample':line_tags[:20],
+          'positive_line_tags':sorted(set(t for t in line_tags if t>0))[:20],
+          'matching_tags':sorted(set(t for t in line_tags if t>0)&tags)[:20],
+          'first_line_bytes':g.readmem(lines, min(64,nl*31)).hex() if nl else ''}
+   report['map_probe']=probe
+   raise AssertionError('No tagged test sector: '+json.dumps(probe))
   assert call(function,chosen[1] if function=='EV_DoFloor' else chosen[0],0),function
   def count_kind():
    cap=sym('_g_thinkerclasscap');th=u32(cap+4);count=0
