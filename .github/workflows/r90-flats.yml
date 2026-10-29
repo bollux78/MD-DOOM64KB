@@ -1,4 +1,4 @@
-name: R90 flats on approved R89-all
+name: R90 safe flats round 5 on R89-all
 # Approved R89 base; isolated renderer, ROM layout, spatial and VDP candidates.
 # PLAY only: full E1M1/E1M7 benchmarks are run by the user.
 on:
@@ -171,7 +171,7 @@ jobs:
           from zipfile import ZipFile,ZIP_DEFLATED
           roms=sorted(Path('dist/ab').glob('*/*-pl.bin'))
           assert len(roms)==2,len(roms)
-          with ZipFile('dist/ab/R90-ROMs.zip','w',ZIP_DEFLATED) as z:
+          with ZipFile('dist/ab/R90-SAFE-ROMs.zip','w',ZIP_DEFLATED) as z:
               for p in roms:z.write(p,p.name)
               z.write('docs/agent-handoffs/R90-FLATS-INTEGRATION.md','LEIA-ME.md')
           PYZIP
@@ -179,7 +179,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: doom-md-r90-flats
+          name: doom-md-r90-flats-safe-round5
           path: dist/ab/
           retention-days: 90
           if-no-files-found: warn

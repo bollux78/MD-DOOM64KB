@@ -1,4 +1,4 @@
-# R90 flats — integração sobre R89-all
+# R90 flats SAFE — rodada 5 sobre R89-all
 
 Duas ROMs PLAY: `r90-control-pl` e `r90-flats-pl`.
 Ambas usam todas as sete otimizações aprovadas da R89-all, AI Normal por padrão
@@ -36,5 +36,14 @@ portanto o relatório NÃO certifica automaticamente que toda diferença de imag
 estrutural automatizada é de que somente os oito arrays autorizados mudaram.
 Não se alega ganho ou ausência de perda de FPS antes dos benchmarks.
 
-O pacote R90-ROMs.zip contém as duas ROMs e este guia. O artefato completo inclui
+O pacote R90-SAFE-ROMs.zip contém as duas ROMs e este guia. O artefato completo inclui
 headers gerados, hashes, relatórios de memória, save/load e capturas.
+
+## Correção da rodada 5
+
+A versão lf050 foi retirada: o critério anti-faixa favorecia cinza claro para
+cores não cinzas. Esta execução usa exclusivamente `r90-flat-luts-safe.json`,
+fornecido pelo Claudio na rodada 5 (run 40927837303). O arquivo antigo foi
+removido desta branch. Descarte os binários da primeira execução R90.
+Os nomes internos r90-control/r90-flats foram mantidos conforme o handoff;
+identifique a entrega corrigida pelo ZIP R90-SAFE-ROMs.zip e pelo hash do artefato.

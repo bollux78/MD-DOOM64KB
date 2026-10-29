@@ -5,7 +5,7 @@ from r90_inject_flats import NAMES,EXPECTED,replace_arrays
 base=Path('dist/ab');a=base/'control';b=base/'c-flats'
 x=next(a.glob('*-r59_color_tables.h')).read_text();y=next(b.glob('*-r59_color_tables.h')).read_text()
 assert hashlib.sha256(x.encode()).hexdigest()==EXPECTED
-payload=json.loads(Path('assets/r90-flat-luts-lf050.json').read_text())
+payload=json.loads(Path('assets/r90-flat-luts-safe.json').read_text())
 assert replace_arrays(x,payload['arrays'])==y,'Unexpected table changes'
 ma=json.loads((a/'MANIFEST.json').read_text())[0];mb=json.loads((b/'MANIFEST.json').read_text())[0]
 assert ma['bss_bytes']==mb['bss_bytes'],'BSS changed'

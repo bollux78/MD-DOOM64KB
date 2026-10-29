@@ -1,1 +1,1 @@
-R90 flats: approved R89-all, original four-mode Options, AI Normal.
+R90 SAFE round 5: replace withdrawn lf050 tables; rebuild both PLAY ROMs.

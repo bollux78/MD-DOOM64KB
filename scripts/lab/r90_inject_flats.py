@@ -23,8 +23,8 @@ if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--verify-only',action='store_true');a=p.parse_args()
  path=Path('src/r59_color_tables.h');original=path.read_bytes();sha=hashlib.sha256(original).hexdigest()
  assert sha==EXPECTED,('STOP: generated palette tables differ from Claudio analysis; new analysis required',sha)
- payload=json.loads(Path('assets/r90-flat-luts-lf050.json').read_text());assert payload['r89_tables_sha256']==EXPECTED
+ payload=json.loads(Path('assets/r90-flat-luts-safe.json').read_text());assert payload['r89_tables_sha256']==EXPECTED
  updated=replace_arrays(original.decode(),payload['arrays']).encode()
  if not a.verify_only:path.write_bytes(updated)
- report={'source_sha256':sha,'result_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'changed_arrays':[] if a.verify_only else list(NAMES),'non_flat_bytes_identical':True}
+ report={'payload_sha256':hashlib.sha256(Path('assets/r90-flat-luts-safe.json').read_bytes()).hexdigest(),'payload_source':payload['source'],'source_sha256':sha,'result_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'changed_arrays':[] if a.verify_only else list(NAMES),'non_flat_bytes_identical':True}
  Path('src/r90_flats_report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report))

@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json,os,subprocess,tempfile,shutil,sys
 from r90_inject_flats import NAMES,EXPECTED,replace_arrays
 ROOT=Path(__file__).resolve().parents[2]
-payload=json.loads((ROOT/'assets/r90-flat-luts-lf050.json').read_text());assert payload['r89_tables_sha256']==EXPECTED
+payload=json.loads((ROOT/'assets/r90-flat-luts-safe.json').read_text());assert payload['r89_tables_sha256']==EXPECTED
 original='// unchanged header\n'+''.join('static const uint8_t '+n+'[256]={'+','.join(['1']*256)+'};\n' for n in NAMES)+'static const int wall=123;\n'
 result=replace_arrays(original,payload['arrays']);assert result.endswith('static const int wall=123;\n')
 for bad in (original+original,original.replace(NAMES[0],'missing')):
