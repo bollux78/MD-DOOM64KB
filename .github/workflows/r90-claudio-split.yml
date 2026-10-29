@@ -103,7 +103,8 @@ jobs:
               python3 - <<'PY2'
           from pathlib import Path
           p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text();a="(('pl','play'),)"
-          assert s.count(a)==1;p.write_text(s.replace(a,"(('pl','play'),('pf','perf'))"))
+          assert s.count(a)==1;s=s.replace(a,"(('pl','play'),('pf','perf'))")
+          a="    assert len(records) == 1\n";assert s.count(a)==1;p.write_text(s.replace(a,"    assert len(records) == 2\n"))
           PY2
               HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
             mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
