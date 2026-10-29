@@ -493,12 +493,93 @@ def main4(a):
                  g("col_flats"), g("walls"), g("sprites"), g("overall"), d.get("changed_entries", "-")))
     (out / "ROUND4.md").write_text("\n".join(L) + "\n"); print("\n".join(L)); print("total %.0fs" % (time.time() - t0))
 
+
+def refit_flats_safe(tset, pal8, dac, lam=0.25, min_gain=1.0, dl_max=6.0, chroma_keep=0.7):
+    """R90 round 5 (fix for the light-grey floors of round 4): per-colour guarded refit.
+    An entry only changes if, for THAT colour, the new (even, odd) pair is better than R89 in target error by
+    >= min_gain, does not add column contrast beyond max(R89's, 3), keeps lightness within max(R89's |dL|, dl_max)
+    of the target and keeps at least chroma_keep of the target chroma (or R89's chroma). Codes 1..15 only."""
+    ce = code_lin(tset["pal0"], tset["pairs_even"], dac); co = code_lin(tset["pal1"], tset["pairs_odd"], dac)
+    le, lo = lab_from_lin(ce), lab_from_lin(co)
+    mix = lab_from_lin((ce[:, None] + co[None]) / 2)
+    con = np.sqrt(((le[:, None] - lo[None]) ** 2).sum(-1))
+    tgt = to_lab(pal8); fe = np.array(tset["flat_even"]).copy(); fo = np.array(tset["flat_odd"]).copy(); changed = []
+    for c in range(256):
+        e0, o0 = fe[c], fo[c]
+        err = np.sqrt(((mix - tgt[c]) ** 2).sum(-1)); dl = np.abs(mix[..., 0] - tgt[c, 0]); ch = np.hypot(mix[..., 1], mix[..., 2])
+        tch = float(np.hypot(*tgt[c, 1:]))
+        ok = (err <= err[e0, o0] - min_gain) & (con <= max(con[e0, o0], 3.0)) & (dl <= max(dl[e0, o0], dl_max))
+        if tch > 10:
+            ok &= ch >= min(ch[e0, o0], chroma_keep * tch)
+        ok[0, :] = False; ok[:, 0] = False
+        if not (tgt[c, 0] > 55 and tch < 12):   # never turn a colour into light grey unless Doom's colour is light grey
+            ok &= ~((mix[..., 0] > 55) & (ch < 12))
+        if not ok.any(): continue
+        score = np.where(ok, err + lam * con, np.inf); i, j = np.unravel_index(np.argmin(score), score.shape)
+        changed.append(dict(c=c, old=[int(e0), int(o0)], new=[int(i), int(j)], err=[round(float(err[e0, o0]), 1), round(float(err[i, j]), 1)],
+                            contrast=[round(float(con[e0, o0]), 1), round(float(con[i, j]), 1)]))
+        fe[c], fo[c] = i, j
+    out = dict(tset); out["flat_even"] = fe; out["flat_odd"] = fo
+    return out, changed
+
+def light_grey(tset, dac):
+    ce = code_lin(tset["pal0"], tset["pairs_even"], dac); co = code_lin(tset["pal1"], tset["pairs_odd"], dac)
+    lab = lab_from_lin((ce[np.array(tset["flat_even"])] + co[np.array(tset["flat_odd"])]) / 2)
+    return int(((lab[:, 0] > 55) & (np.hypot(lab[:, 1], lab[:, 2]) < 12)).sum())
+
+def main5(a):
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True); t0 = time.time()
+    w = Wad(a.wad)
+    pal8 = np.frombuffer(w.lump("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(float)
+    cm = np.frombuffer(w.lump("COLORMAP"), np.uint8)[:34 * 256].reshape(34, 256)
+    tex = texture_hists(w); frep = flat_rep(w, pal8); spr = {}
+    modes = parse_tables(a.tables); maps = [m for m in a.maps.split(",") if m]
+    W = {m: map_weights(w, m, tex, frep, spr) for m in maps}
+    names = ["R89 0 Hybrid Blue", "R89 1 A2", "R89 2 L3", "R89 3 HN"]; arrays = ["r77_h_flat", "r76_a_flat", "r76_l_flat", "r76_n_flat"]
+    tgt = to_lab(pal8)
+    rep_ = {"candidates": {}, "luts": {}, "changes": {}}
+    def score(ts):
+        agg = {}
+        for m in maps:
+            r = breakdown(ts, pal8, cm, W[m][2], DAC["HW"])
+            agg.setdefault("flats", []).append(r["flats"]["all"]); agg.setdefault("col_flats", []).append(r["flats"]["col"])
+        return {k: float(np.mean(v)) for k, v in agg.items()}
+    for i, md in enumerate(modes):
+        ts, ch = refit_flats_safe(md, pal8, DAC["HW"])
+        s0, s1 = score(md), score(ts)
+        # per-colour guarantee over all 256 colours (not weighted): no colour gets worse in error or contrast
+        ce = code_lin(md["pal0"], md["pairs_even"], DAC["HW"]); co = code_lin(md["pal1"], md["pairs_odd"], DAC["HW"])
+        def per(t):
+            e_, o_ = np.array(t["flat_even"]), np.array(t["flat_odd"])
+            lab = lab_from_lin((ce[e_] + co[o_]) / 2)
+            return np.sqrt(((lab - tgt) ** 2).sum(-1)), np.sqrt(((lab_from_lin(ce[e_]) - lab_from_lin(co[o_])) ** 2).sum(-1))
+        e0, k0 = per(md); e1, k1 = per(ts)
+        rep_["candidates"][names[i]] = dict(shipped=s0, safe=s1, changed=len(ch), light_grey=[light_grey(md, DAC["HW"]), light_grey(ts, DAC["HW"])],
+                                           worse_error=int((e1 > e0 + 1e-9).sum()), worse_contrast=int((k1 > np.maximum(k0, 3.0) + 1e-9).sum()),
+                                           unweighted_mean_error=[float(e0.mean()), float(e1.mean())])
+        rep_["luts"][arrays[i] + "_even"] = list(map(int, ts["flat_even"])); rep_["luts"][arrays[i] + "_odd"] = list(map(int, ts["flat_odd"]))
+        rep_["changes"][names[i]] = ch
+    (out / "round5.json").write_text(json.dumps(rep_, indent=1))
+    L = ["# R90 round 5: guarded flat LUT refit (fix for the light-grey floors of round 4)", "",
+         "Per colour, an entry changes only if it beats R89 in target error by >= 1 dE without adding column contrast, "
+         "without moving lightness and without washing out colour. Weighted numbers are the screen proxy (E1M1-E1M9, measured DAC); "
+         "the guarantee columns count all 256 colours, unweighted.", "",
+         "| mode | flats dE R89 -> safe | col flats R89 -> safe | changed (of 256) | light-grey entries R89 -> safe | colours worse in error | colours worse in contrast | unweighted mean dE |",
+         "|---|---|---|---:|---|---:|---:|---|"]
+    for k, d in rep_["candidates"].items():
+        L.append("| %s | %.1f -> %.1f | %.1f -> %.1f | %d | %d -> %d | %d | %d | %.1f -> %.1f |" % (k, d["shipped"]["flats"], d["safe"]["flats"],
+                 d["shipped"]["col_flats"], d["safe"]["col_flats"], d["changed"], d["light_grey"][0], d["light_grey"][1],
+                 d["worse_error"], d["worse_contrast"], d["unweighted_mean_error"][0], d["unweighted_mean_error"][1]))
+    (out / "ROUND5.md").write_text("\n".join(L) + "\n"); print("\n".join(L)); print("total %.0fs" % (time.time() - t0))
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--wad", required=True); ap.add_argument("--tables", required=True)
     ap.add_argument("--out", required=True); ap.add_argument("--refine", type=int, default=1)
     ap.add_argument("--maps", default=",".join(MAPS)); ap.add_argument("--round3", action="store_true")
-    ap.add_argument("--round4", action="store_true")
+    ap.add_argument("--round4", action="store_true"); ap.add_argument("--round5", action="store_true")
     a = ap.parse_args(); out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    if a.round5:
+        return main5(a)
     if a.round4:
         return main4(a)
     if a.round3:

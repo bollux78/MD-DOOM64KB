@@ -1,2 +1,2 @@
 r90 colour analysis
-# rodada 4: flat LUTs only
+# rodada 5: guarded flat refit (light-grey fix)
