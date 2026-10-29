@@ -1,7 +1,9 @@
 # R90 — Handoff do Cláudio para o Werk: novas LUTs de flats (chão/teto)
 
 **Branch:** `exp-claudio-r90-palmap-analysis-20261029` (base R89 `542501f`)
-**Tabelas para integrar:** [`R90-FLAT-LUTS-lf050.json`](R90-FLAT-LUTS-lf050.json)
+**Tabelas para integrar:** [`R90-FLAT-LUTS-safe.json`](R90-FLAT-LUTS-safe.json) (rodada 5, versão protegida)
+
+> **Atenção (29/10):** a primeira versão (`R90-FLAT-LUTS-lf050.json`, rodada 4) foi **retirada**. No teste do usuário ela deixou muitos chãos em cinza claro: em A2, L3 e HN existe um par de cinza claro idêntico nas duas paletas, e o termo anti-faixa puxou cores não cinzas para ele (entradas de cinza claro: A2 26→48, L3 32→53, HN 26→53). A rodada 5 substitui essa versão.
 **Análise completa:** `scripts/lab/r90_color_analysis.py` (rodadas 1–4); resultado da rodada 4 no run 40923525509 do Actions.
 
 ## O que mudar
@@ -27,22 +29,26 @@ As LUTs foram calculadas sobre as tabelas da R89 com SHA-256 `38b4319bce37ac3116
 
 Faça isso como hook pós-geração numa cópia descartável, como nas rodadas anteriores. Não edite os geradores R74/R76/R77.
 
-## Como foi escolhido
+## Como foi escolhido (rodada 5, protegida)
 
-Para cada cor e cada modo, mantendo a CRAM e os pares M50 da R89, escolhe-se o par (código da coluna par, código da coluna ímpar) que minimiza:
+Para cada cor e cada modo, mantendo a CRAM e os pares M50 da R89, uma entrada só muda se o novo par (coluna par, coluna ímpar), **para aquela cor**:
+- errar pelo menos 1 dE a menos que a R89 (CIELAB dE76, DAC medido do MD);
+- não aumentar o contraste entre colunas (faixas) além de max(o da R89, 3);
+- não mudar a luminosidade além de max(o desvio da R89, 6) nem perder saturação (pelo menos 70% da cor do Doom, ou a da R89);
+- nunca virar cinza claro, a menos que a cor do Doom seja cinza claro.
 
-`dE(cor do Doom, média das duas colunas) + 0,5 × dE(coluna par, coluna ímpar)`
+Garantia verificada nas 256 cores, sem peso: nenhuma cor fica pior que na R89, nem em erro nem em faixas.
 
-A métrica é CIELAB dE76 com o DAC medido do Mega Drive. Os níveis de luz vêm da COLORMAP. O segundo termo limita as faixas verticais.
+## Resultado esperado (rodada 5; paredes e sprites inalterados)
 
-## Resultado esperado (média E1M1–E1M9; paredes e sprites inalterados)
+| Modo | Erro chão/teto (média E1M1–E1M9) | Faixas chão/teto | Entradas alteradas (de 256) | Cinza claro R89 → R90 | Cores piores |
+|---|---|---|---:|---|---:|
+| Hybrid Blue | 20,4 → 14,2 | 2,6 → 0,0 | 60 | 0 → 0 | 0 |
+| A2 | 19,8 → 12,9 | 7,7 → 6,3 | 56 | 26 → 27 | 0 |
+| L3 | 18,5 → 13,1 | 6,8 → 5,3 | 62 | 32 → 31 | 0 |
+| HN | 20,0 → 13,9 | 5,5 → 2,8 | 61 | 26 → 27 | 0 |
 
-| Modo | Erro chão/teto | Faixas chão/teto | Erro geral |
-|---|---|---|---|
-| Hybrid Blue | 20,4 → 13,7 | 2,6 → 0,3 | 14,9 → 12,2 |
-| A2 | 19,8 → 12,3 | 7,7 → 1,9 | 12,4 → 9,4 |
-| L3 | 18,5 → 13,7 | 6,8 → 0,6 | 13,3 → 11,4 |
-| HN | 20,0 → 13,7 | 5,5 → 0,6 | 14,0 → 11,4 |
+A única entrada que passou a cinza claro em A2 e em HN é de uma cor que já é cinza claro no Doom.
 
 ## Validação da ROM
 
