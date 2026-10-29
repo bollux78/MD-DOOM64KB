@@ -117,12 +117,12 @@ try:
   ms=u32(sym('_g_mapsectors'));ns=int.from_bytes(g.readmem(sym('_g_numsectors'),2),'big')
   tags={int.from_bytes(g.readmem(ms+i*12+10,2),'big',signed=True) for i in range(ns)}
   lines=u32(sym('_g_maplines'));nl=int.from_bytes(g.readmem(sym('_g_numlines'),2),'big')
-  chosen=None
+  chosen=None;line_tags=[]
   for index in range(nl):
    tag=int.from_bytes(g.readmem(lines+31*index+26,2),'big',signed=True)
+   line_tags.append(tag)
    if tag>0 and tag in tags:chosen=(lines+31*index,tag);break
   if not chosen:
-   line_tags=[int.from_bytes(g.readmem(lines+31*i+26,2),'big',signed=True) for i in range(nl)]
    probe={'map':a.case[0],'skill':a.case[1],'numlines':nl,'numsectors':ns,
           'maplines':hex(lines),'mapsectors':hex(ms),
           'sector_tag_sample':sorted(tags)[:20],
