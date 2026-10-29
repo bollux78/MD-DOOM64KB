@@ -4,7 +4,7 @@
 **Tabelas para integrar:** [`R90-FLAT-LUTS-safe.json`](R90-FLAT-LUTS-safe.json) (rodada 5, versão protegida)
 
 > **Atenção (29/10):** a primeira versão (`R90-FLAT-LUTS-lf050.json`, rodada 4) foi **retirada**. No teste do usuário ela deixou muitos chãos em cinza claro: em A2, L3 e HN existe um par de cinza claro idêntico nas duas paletas, e o termo anti-faixa puxou cores não cinzas para ele (entradas de cinza claro: A2 26→48, L3 32→53, HN 26→53). A rodada 5 substitui essa versão.
-**Análise completa:** `scripts/lab/r90_color_analysis.py` (rodadas 1–4); resultado da rodada 4 no run 40923525509 do Actions.
+**Análise completa:** `scripts/lab/r90_color_analysis.py` (rodadas 1–5); resultado da rodada 5 no run 40927837303 do Actions.
 
 ## O que mudar
 
