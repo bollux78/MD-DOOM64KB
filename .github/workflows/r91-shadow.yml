@@ -103,12 +103,6 @@ jobs:
               R91_CANDIDATE="$set" python3 scripts/lab/apply_r91.py
               HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
             mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
-            if [ "$set" = control ] || [ "$set" = sh1 ] || [ "$set" = sh2 ]; then
-              rom=$(ls "dist/ab/$lab/"*-pl.bin)
-              for map in 1 7; do
-                python3 "$w/scripts/lab/test_r81_rom.py" --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/$lab/save-map$map.json" --case "$map" 2
-              done
-            fi
           done
       - name: Verify ROM sizes, BSS, hashes and PLAY-only variants
         shell: bash
@@ -133,6 +127,19 @@ jobs:
                   else:assert any(x.startswith('-DDOOM_R79_SHADOW=') for x in flags)
                   print('::notice title=%s %s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(v,r['variant'],r['bytes'],r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
           PY
+      - name: Package ROMs and benchmark guide
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYZIP'
+          from pathlib import Path
+          from zipfile import ZipFile,ZIP_DEFLATED
+          roms=sorted(Path('dist/ab').glob('*/*-pl.bin'))
+          assert len(roms)==3,len(roms)
+          with ZipFile('dist/ab/R91-SHADOW-ROMs.zip','w',ZIP_DEFLATED) as z:
+              for p in roms:z.write(p,p.name)
+              z.write('docs/agent-handoffs/R91-SHADOW.md','LEIA-ME.md')
+          PYZIP
       - name: PLAY initialization smoke (not a menu benchmark)
         shell: bash
         run: |
@@ -152,8 +159,13 @@ jobs:
           headers=[next(d.glob('*-r59_color_tables.h')).read_bytes() for d in ds]
           assert headers[0]==headers[1]==headers[2]
           rows=[json.loads((d/'MANIFEST.json').read_text())[0] for d in ds]
-          assert len({r['bss_bytes'] for r in rows})==1,rows
-          print('PASS unchanged base LUTs, equal BSS; S/H CRAM and output mapping intentionally differ')
+          # R79 enables the existing S/H state; this can add 4 B of BSS.
+          # R91's 512 KiB joint lookup itself lives in ROM, not WRAM.
+          assert rows[1]['bss_bytes']==rows[2]['bss_bytes'],rows
+          assert 0 <= rows[1]['bss_bytes']-rows[0]['bss_bytes'] <= 4,rows
+          print('PASS unchanged base LUTs, shadow BSS delta',
+                rows[1]['bss_bytes']-rows[0]['bss_bytes'],
+                'B; S/H CRAM and output mapping intentionally differ')
           PYREPORT
       - name: Record SGDK makefile.gen compiler flags
         if: always()
@@ -173,19 +185,19 @@ jobs:
           for d in dist/ab/control dist/ab/c-*; do
             v=$(basename "$d"); elf=$(ls $d/*-pl.elf); "$OBJDUMP" -d -z "$elf" > "dist/ab/objdump-$v-pf.txt" 2>/dev/null || true
           done
-      - name: Package ROMs and benchmark guide
+      - name: Save/load regression on all generated ROMs
         shell: bash
+        if: always()
         run: |
           set -euo pipefail
-          python3 - <<'PYZIP'
-          from pathlib import Path
-          from zipfile import ZipFile,ZIP_DEFLATED
-          roms=sorted(Path('dist/ab').glob('*/*-pl.bin'))
-          assert len(roms)==3,len(roms)
-          with ZipFile('dist/ab/R91-SHADOW-ROMs.zip','w',ZIP_DEFLATED) as z:
-              for p in roms:z.write(p,p.name)
-              z.write('docs/agent-handoffs/R91-SHADOW.md','LEIA-ME.md')
-          PYZIP
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then lab=control; else lab="c-$set"; fi
+            rom=$(find "dist/ab/$lab" -maxdepth 1 -name '*-pl.bin' -print -quit)
+            if [ -z "$rom" ]; then echo "No ROM for $set"; exit 1; fi
+            for map in 1 7; do
+              python3 scripts/lab/test_r81_rom.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/$lab/save-map$map.json" --case "$map" 2
+            done
+          done
       - name: Upload A/B evidence
         if: always()
         uses: actions/upload-artifact@v6
