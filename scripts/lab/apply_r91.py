@@ -12,6 +12,11 @@ patch(f,'''    if(right)r59_color_mode=(uint8_t)((r59_color_mode+1u)%R59_COLOR_M
     else r59_color_mode=(uint8_t)((r59_color_mode+R59_COLOR_MODES-1u)%R59_COLOR_MODES);''','''    (void)right;
     r59_color_mode=(r59_color_mode==1u)?2u:1u;''')
 patch('src/m_text.c','static const char *const r59_names[4]={"Hybrid Blue+","A2 Full","L3 Detail","HN Smooth"};','static const char *const r59_names[2]={"A2 Full  ","L3 Detail"};')
+# R59 regression test expects the six-mode circular selector. R91 deliberately
+# replaces it with an A2/L3 toggle; assert the actual R91 contract instead.
+patch('scripts/lab/test_r59_colorview.py',
+      'assert "R59_COLOR_MODES-1u)%R59_COLOR_MODES" in video',
+      'assert "r59_color_mode=(r59_color_mode==1u)?2u:1u;" in video')
 patch('scripts/lab/build_r71a12mul_hud.py',"'r90-'","'r91-'")
 patch('scripts/lab/build_r71a12mul_hud.py',"('control', 0)",repr((mode,0 if mode=='control' else int(mode[-1]))))
 if mode!='control':
