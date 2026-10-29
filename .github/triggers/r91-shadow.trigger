@@ -4,3 +4,4 @@ Rebuild: retain all R76 palette validation and check R91 A2/L3-only menu.
 Rebuild R91: package verified ROMs before runtime tests, diagnose map tag lookup and bound shadow BSS delta.
 Rebuild after SRAM bank overlay fix in live map tag regression.
 Retry after CPU-driven SRAM mapper switching for RSP map event tests.
+claudio save-test fix 2026-10-29T22:25:52Z
