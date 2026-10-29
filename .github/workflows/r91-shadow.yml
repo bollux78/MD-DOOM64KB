@@ -195,7 +195,8 @@ jobs:
             rom=$(find "dist/ab/$lab" -maxdepth 1 -name '*-pl.bin' -print -quit)
             if [ -z "$rom" ]; then echo "No ROM for $set"; exit 1; fi
             for map in 1 7; do
-              python3 scripts/lab/test_r81_rom.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/$lab/save-map$map.json" --case "$map" 2
+              w="$RUNNER_TEMP/r91-shadow-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+              python3 "$w/scripts/lab/test_r81_rom.py" --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/$lab/save-map$map.json" --case "$map" 2
             done
           done
       - name: Upload A/B evidence
