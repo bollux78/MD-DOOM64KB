@@ -52,29 +52,35 @@ void R64A_FrameEnd(void){ r64a_ctx.comp[0]=0; r64a_ctx_b.comp[0]=0; }
 patch(V, '    if(r64a_ctx.comp[0]) return &r64a_ctx;\n',
          '    if(r90_s.region){ if(r64a_ctx_b.comp[0]) return &r64a_ctx_b; }\n    else if(r64a_ctx.comp[0]) return &r64a_ctx;\n')
 
-# (d) split wrappers around the three column drawers
-SPLIT = '''{
+# (d) split wrappers around the three column drawers. The original definitions keep their text (the
+# R22 host test extracts them by name); a macro renames each one to its core, the wrapper follows it.
+SPLIT = """{
     if(!r90_s.live || v->yh<R90_SPLIT_ROW){ %(core)s(%(pre)sv); return; }
     if(v->yl>=R90_SPLIT_ROW){ r90_s.region=1; %(core)s(%(pre)sv); r90_s.region=0; return; }
     draw_column_vars_t t=*v; t.yh=R90_SPLIT_ROW-1; %(core)s(%(pre)s&t);
     t.yh=v->yh; t.yl=R90_SPLIT_ROW; r90_s.region=1; %(core)s(%(pre)s&t); r90_s.region=0;
 }
-'''
-def wrap(old, core, newdef, proto, sig, pre=''):
+"""
+def wrap(sig, name, core, wsig, pre=''):
+    s = Path(V).read_text(); assert s.count(sig) == 1, sig
+    a = s.index(sig); b = s.index('{', a); d = 0
+    for i in range(b, len(s)):
+        d += (s[i] == '{') - (s[i] == '}')
+        if d == 0: end = i + 1; break
     body = SPLIT % dict(core=core, pre=pre)
-    patch(V, old, proto + ';\n' + sig + body + newdef)
-wrap('static void R42_DrawPackedWall(const draw_column_vars_t *v)\n{',
-     'R90_DrawPackedWallCore', 'static void R90_DrawPackedWallCore(const draw_column_vars_t *v)\n{',
-     'static void R90_DrawPackedWallCore(const draw_column_vars_t *v)',
+    s = (s[:a] + '#define %s %s\n' % (name, core) + s[a:end] + '\n#undef %s\n' % name + wsig + body + s[end:])
+    Path(V).write_text(s)
+wrap('static void R42_DrawPackedWall(const draw_column_vars_t *v)\n{', 'R42_DrawPackedWall', 'R90_DrawPackedWallCore',
      'static void R42_DrawPackedWall(const draw_column_vars_t *v)\n')
-wrap('void R_DrawColumnSprite(const draw_column_vars_t *v) {',
-     'R90_DrawColumnSpriteCore', 'static void R90_DrawColumnSpriteCore(const draw_column_vars_t *v) {',
-     'static void R90_DrawColumnSpriteCore(const draw_column_vars_t *v)',
+wrap('void R_DrawColumnSprite(const draw_column_vars_t *v) {', 'R_DrawColumnSprite', 'R90_DrawColumnSpriteCore',
      'void R_DrawColumnSprite(const draw_column_vars_t *v)\n')
-wrap('void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){',
-     'R90_DrawColumnFlatCore', 'static void R90_DrawColumnFlatCore(uint8_t c,const draw_column_vars_t *v){',
-     'static void R90_DrawColumnFlatCore(uint8_t c,const draw_column_vars_t *v)',
+wrap('void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){', 'R_DrawColumnFlat', 'R90_DrawColumnFlatCore',
      'void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v)\n', pre='c,')
+
+# R59 source test: palettes for CRAM are the explicit top tables now
+patch('scripts/lab/test_r59_colorview.py', '"R59_CURRENT.pal0","R59_CURRENT.pal1",', '"R59_TOP.pal0","R59_TOP.pal1",')
+patch('scripts/lab/test_r59_colorview.py', 'assert "#define R79_PAL0 (R59_CURRENT.pal0)" in video', 'assert "#define R79_PAL0 (R59_TOP.pal0)" in video')
+patch('scripts/lab/test_r59_colorview.py', 'assert "#define R79_PAL1 (R59_CURRENT.pal1)" in video', 'assert "#define R79_PAL1 (R59_TOP.pal1)" in video')
 
 # (e) attribute bits follow the clear
 patch(V, 'static void R47_ClearPairBuffer(void)\n{',
