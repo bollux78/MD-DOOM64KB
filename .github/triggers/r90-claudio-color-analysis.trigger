@@ -1,2 +1,2 @@
 r90 colour analysis
-# rodada 2: cross-validation, column contrast, global HW
+# rodada 3: fidelity vs column contrast, dark weighting, held-out

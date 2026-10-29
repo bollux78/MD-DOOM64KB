@@ -210,10 +210,11 @@ def map_weights(w, m, tex, frep, spr_cache):
         if h is not None:
             lv, lw = wall_levels(160)
             sprites[lv] += np.outer(lw, h)
-    out = np.zeros((34, 256)); outf = np.zeros((34, 256))
+    out = np.zeros((34, 256)); outf = np.zeros((34, 256)); cats = {}
     for arr, key, dst in ((walls, "walls", out), (sprites, "sprites", out), (flats, "flats", outf)):
-        if arr.sum() > 0: dst += SHARE[key] * arr / arr.sum()
-    return out, outf
+        cats[key] = SHARE[key] * arr / arr.sum() if arr.sum() > 0 else np.zeros((34, 256))
+        dst += cats[key]
+    return out, outf, cats
 
 def post(cm, W):
     h = np.zeros(256)
@@ -279,15 +280,20 @@ def evaluate(tset, pal8, cm, Ww, Wf, dac):
 
 # ------------------------------------------------------------------ generator (R52 objective + R53-style M50)
 class Gen:
-    def __init__(self, pal8, H, cand_words, dac, tau_l=32.0, mu_l=0.10):
+    def __init__(self, pal8, H, cand_words, dac, tau_l=32.0, mu_l=0.10, lam=0.0):
         self.T = to_lab(pal8); self.W = H / H.sum(); self.words = np.array(cand_words)
         self.rgb = word_rgb(self.words, dac); self.lin = srgb2lin(self.rgb); self.lum = luma(self.rgb)
-        self.tau_l, self.mu_l = tau_l, mu_l
-    def cost(self, p0, p1):
+        self.lab = lab_from_lin(self.lin)
+        self.tau_l, self.mu_l, self.lam = tau_l, mu_l, lam
+    def pair_cost(self, p0, p1, lam):
         A, B = self.lin[p0], self.lin[p1]
         lab = lab_from_lin((A[:, None] + B[None]) / 2)
         pen = self.mu_l * np.maximum(0, np.abs(self.lum[p0][:, None] - self.lum[p1][None]) - self.tau_l) ** 2
-        c = np.sqrt(((lab[None] - self.T[:, None, None]) ** 2).sum(-1)) + pen[None]
+        if lam:   # R90: even/odd column contrast (vertical striping) as part of the objective
+            pen = pen + lam * np.sqrt(((self.lab[p0][:, None] - self.lab[p1][None]) ** 2).sum(-1))
+        return np.sqrt(((lab[None] - self.T[:, None, None]) ** 2).sum(-1)) + pen[None]
+    def cost(self, p0, p1):
+        c = self.pair_cost(p0, p1, self.lam)
         flat = c.reshape(256, -1); arg = flat.argmin(1)
         return float((flat[np.arange(256), arg] * self.W).sum()), arg, len(p1)
     def run(self, slots=15, refine=1):
@@ -317,6 +323,7 @@ class Gen:
                     ch[k][pos] = keep
         _, arg, nB = self.cost(*ch)
         even = arg // nB + 1; odd = arg % nB + 1
+        self.chosen = ch
         pal0 = np.zeros(16, int); pal1 = np.zeros(16, int)
         pal0[1:] = self.words[ch[0]]; pal1[1:] = self.words[ch[1]]
         return pal0, pal1, even, odd
@@ -345,11 +352,97 @@ def build_set(pal8, cm, H, cand, gdac, refine):
     return dict(pal0=pal0, pal1=pal1, pairs_even=pe, pairs_odd=po, wall_even=even, wall_odd=odd,
                 flat_even=even, flat_odd=odd, comp_even=comp_e, comp_odd=comp_o)
 
+def build_set3(pal8, cm, H, cand, gdac, lam_w, lam_f, refine):
+    """R90 round 3: palettes chosen with the wall contrast weight; flats get their own maps with lam_f."""
+    g = Gen(pal8, H, cand, DAC[gdac], lam=lam_w); pal0, pal1, even, odd = g.run(refine=refine)
+    fc = g.pair_cost(g.chosen[0], g.chosen[1], lam_f).reshape(256, -1).argmin(1)
+    feven = fc // len(g.chosen[1]) + 1; fodd = fc % len(g.chosen[1]) + 1
+    pe = companions(pal0, even, pal8, H, DAC[gdac]); po = companions(pal1, odd, pal8, H, DAC[gdac])
+    return dict(pal0=pal0, pal1=pal1, pairs_even=pe, pairs_odd=po, wall_even=even, wall_odd=odd,
+                flat_even=feven, flat_odd=fodd,
+                comp_even=np.stack([even[cm[l]] for l in range(34)]), comp_odd=np.stack([odd[cm[l]] for l in range(34)]))
+
+BANDS = {"bright": range(0, 8), "mid": range(8, 20), "dark": range(20, 34)}
+
+def breakdown(tset, pal8, cm, cats, dac):
+    """weighted dE per category (walls, sprites, flats) and light band, plus even/odd column contrast."""
+    ce = code_lin(tset["pal0"], tset["pairs_even"], dac); co = code_lin(tset["pal1"], tset["pairs_odd"], dac)
+    tgt = to_lab(pal8); res = {}
+    for cat in ("walls", "sprites", "flats"):
+        W = cats[cat]; acc = {b: [0.0, 0.0] for b in BANDS}; col = [0.0, 0.0]
+        for l in range(34):
+            if W[l].sum() <= 0: continue
+            if cat == "flats":
+                c = cm[l]; we = ce[tset["flat_even"][c]]; wo = co[tset["flat_odd"][c]]; target = tgt[c]
+            else:
+                we = ce[tset["comp_even"][l]]; wo = co[tset["comp_odd"][l]]; target = tgt[cm[l]]
+            e = np.sqrt(((lab_from_lin((we + wo) / 2) - target) ** 2).sum(-1))
+            k = np.sqrt(((lab_from_lin(we) - lab_from_lin(wo)) ** 2).sum(-1))
+            b = next(n for n, r in BANDS.items() if l in r)
+            acc[b][0] += float((e * W[l]).sum()); acc[b][1] += float(W[l].sum())
+            col[0] += float((k * W[l]).sum()); col[1] += float(W[l].sum())
+        res[cat] = {b: (v[0] / v[1] if v[1] else None) for b, v in acc.items()}
+        res[cat]["all"] = sum(v[0] for v in acc.values()) / max(sum(v[1] for v in acc.values()), 1e-12)
+        res[cat]["col"] = col[0] / max(col[1], 1e-12)
+    return res
+
+def main3(a):
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True); t0 = time.time()
+    w = Wad(a.wad)
+    pal8 = np.frombuffer(w.lump("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(float)
+    cm = np.frombuffer(w.lump("COLORMAP"), np.uint8)[:34 * 256].reshape(34, 256)
+    tex = texture_hists(w); frep = flat_rep(w, pal8); spr = {}
+    modes = parse_tables(a.tables)
+    maps = [m for m in a.maps.split(",") if m]
+    W = {m: map_weights(w, m, tex, frep, spr) for m in maps}
+    all_words = [((b << 9) | (g << 5) | (r << 1)) for b in range(8) for g in range(8) for r in range(8)][1:]
+    def train_hist(train, beta):
+        boost = np.ones(34); boost[20:] += beta
+        return sum(post(cm, W[m][0] * boost[:, None]) + post(cm, W[m][1] * boost[:, None]) for m in train)
+    folds = {"odd": [m for m in maps if int(m[-1]) % 2 == 1], "even": [m for m in maps if int(m[-1]) % 2 == 0]}
+    configs = [(lw, lf, b) for (lw, lf, b) in
+               [(0.0, 1.0, 0.0), (0.15, 1.0, 0.0), (0.3, 1.0, 0.0), (0.6, 1.0, 0.0),
+                (0.0, 1.0, 1.5), (0.15, 1.0, 1.5), (0.3, 1.0, 1.5), (0.6, 1.0, 1.5), (1.0, 1.5, 1.5)]]
+    names = ["R89 0 Hybrid Blue", "R89 1 A2", "R89 2 L3", "R89 3 HN"]
+    cand = {names[i]: {m: md for m in maps} for i, md in enumerate(modes)}
+    for lw, lf, b in configs:
+        key = "GEN lw%.2f lf%.1f dark+%.1f" % (lw, lf, b)
+        sets = {k: build_set3(pal8, cm, train_hist(tr, b), all_words, "HW", lw, lf, a.refine) for k, tr in folds.items()}
+        cand[key] = {m: (sets["even"] if int(m[-1]) % 2 == 1 else sets["odd"]) for m in maps}   # held-out
+        cand[key]["_pal"] = {k: {"pal0": list(map(int, s["pal0"])), "pal1": list(map(int, s["pal1"]))} for k, s in sets.items()}
+        print(key, "%.0fs" % (time.time() - t0), flush=True)
+    rep_ = {"bands": {k: [r.start, r.stop - 1] for k, r in BANDS.items()}, "dac": "HW", "candidates": {}}
+    for key, per in cand.items():
+        agg = {}
+        for m in maps:
+            r = breakdown(per[m], pal8, cm, W[m][2], DAC["HW"])
+            for cat, d in r.items():
+                for k, v in d.items():
+                    if v is not None: agg.setdefault(cat, {}).setdefault(k, []).append(v)
+            ov = evaluate(per[m], pal8, cm, W[m][0], W[m][1], DAC["HW"])
+            agg.setdefault("overall", {}).setdefault("mean", []).append(ov["mean"])
+        rep_["candidates"][key] = {c: {k: float(np.mean(v)) for k, v in d.items()} for c, d in agg.items()}
+        if "_pal" in per: rep_["candidates"][key]["palettes"] = per["_pal"]
+    (out / "round3.json").write_text(json.dumps(rep_, indent=1))
+    hdr = ["candidate", "overall", "walls dark", "walls mid", "walls bright", "sprites", "flats", "col walls", "col flats"]
+    L = ["# R90 round 3: fidelity vs column contrast (held-out, measured MD DAC)", "",
+         "Mean over E1M1-E1M9 of weighted CIELAB dE76 vs Doom colours (lower = more faithful); generated sets are "
+         "always evaluated on maps they were NOT trained on. col = dE between even and odd columns (higher = more vertical striping).",
+         "Bands: bright = COLORMAP 0-7, mid = 8-19, dark = 20-33. lw/lf = contrast weight walls/flats, dark+ = extra weight on dark levels.", "",
+         "| " + " | ".join(hdr) + " |", "|---|" + "---:|" * (len(hdr) - 1)]
+    for key, d in rep_["candidates"].items():
+        f = lambda c, k: ("%.1f" % d[c][k]) if c in d and k in d[c] else "-"
+        L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (key, f("overall", "mean"), f("walls", "dark"), f("walls", "mid"),
+                 f("walls", "bright"), f("sprites", "all"), f("flats", "all"), f("walls", "col"), f("flats", "col")))
+    (out / "ROUND3.md").write_text("\n".join(L) + "\n"); print("\n".join(L)); print("total %.0fs" % (time.time() - t0))
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--wad", required=True); ap.add_argument("--tables", required=True)
     ap.add_argument("--out", required=True); ap.add_argument("--refine", type=int, default=1)
-    ap.add_argument("--maps", default=",".join(MAPS))
+    ap.add_argument("--maps", default=",".join(MAPS)); ap.add_argument("--round3", action="store_true")
     a = ap.parse_args(); out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    if a.round3:
+        return main3(a)
     t0 = time.time()
     w = Wad(a.wad)
     pal8 = np.frombuffer(w.lump("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(float)
