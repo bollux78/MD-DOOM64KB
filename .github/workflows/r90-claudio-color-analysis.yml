@@ -1,0 +1,58 @@
+name: R90 Claudio colour analysis (offline, no ROM)
+# Reads the pinned shareware IWAD and the R89 colour tables, builds per-map screen proxies and
+# compares R89's four colour modes with global and per-map generated palettes (LIN and HW DAC).
+# Does NOT build or change any ROM.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r90-claudio-color-analysis.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r90-claudio-color-analysis-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  analyse:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          python3 -m py_compile scripts/lab/r90_color_analysis.py
+          python3 -c 'import numpy;print("numpy",numpy.__version__)'
+      - name: Pinned shareware WAD (read in place, not copied into the workspace)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          print('WAD ok')
+          PY
+      - name: Colour analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/r90
+          python3 scripts/lab/r90_color_analysis.py --wad /home/dan/Projetos/doom-md/assets/wads/doom1.wad \
+            --tables docs/analysis-r90/input/r89-r59_color_tables.h --out dist/r90 --refine 1 2>&1 | tee dist/r90/run.log
+          head -c 3500 dist/r90/REPORT.md | python3 -c "import sys;t=sys.stdin.read().replace('%','%25').replace('\n','%0A');print('::notice title=R90 colour analysis::'+t)"
+      - name: Upload analysis
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r90-claudio-color-analysis
+          path: dist/r90/
+          retention-days: 90
+          if-no-files-found: warn
