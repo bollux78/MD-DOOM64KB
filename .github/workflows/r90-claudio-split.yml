@@ -151,7 +151,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          r=$(ls dist/ab/c-split/*-r90-split-report.json)
+          r=$(ls dist/ab/c-split/*-pl-r90-split-report.json)
           python3 -c "import json,sys;r=json.load(open(sys.argv[1]));[print('::notice title=R90 bottom mode %d::slots %d, walls %.1f->%.1f dE, floors %.1f->%.1f dE, regressions %d/%d, new grey %d, fallback %d'%(m['mode'],m['replaced_slots'],m['top_mean_err_w'],m['mean_err_w'],m['top_mean_err_f'],m['mean_err_f'],m['regress_w'],m['regress_f'],m['grey_new'],m['fallback'])) for m in r['modes']]" "$r"
       - name: Record SGDK makefile.gen compiler flags
         if: always()
