@@ -99,6 +99,12 @@ jobs:
               R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
               python3 scripts/lab/apply_r89.py
               if [ "$set" = split ]; then R90_NAME=split python3 scripts/lab/apply_r90_split.py; fi
+              # Verification only: a PERF (timedemo DEMO3) twin of each ROM; the deliverable is the PLAY ROM.
+              python3 - <<'PY2'
+          from pathlib import Path
+          p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text();a="(('pl','play'),)"
+          assert s.count(a)==1;p.write_text(s.replace(a,"(('pl','play'),('pf','perf'))"))
+          PY2
               HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
             mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
           done
@@ -114,7 +120,7 @@ jobs:
           for v,prefix in labs:
               d=pathlib.Path('dist/ab')/v
               rows=json.loads((d/'MANIFEST.json').read_text())
-              assert [r['variant'] for r in rows]==[prefix+'pl'],rows
+              assert [r['variant'] for r in rows]==[prefix+'pl',prefix+'pf'],rows
               for r in rows:
                   b=(d/r['rom']).read_bytes()
                   assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
@@ -122,20 +128,24 @@ jobs:
                   assert r['bss_bytes'] <= 57920, 'WRAM gate'
                   flags=(d/('flags-'+r['rom'][:-4]+'.txt')).read_text().split()
                   assert not any(x.startswith('-DDOOM_R79_SHADOW') for x in flags)
-                  if v=='control' and r['sha256']!='699c37b8639fc93b8fde88da0bd41f3e9b4cbbed64bfe02d0528439a2d595576': print('::warning title=control::control ROM differs from the published R89 build')
+                  if v=='control' and r['variant'].endswith('-pl') and r['sha256']!='699c37b8639fc93b8fde88da0bd41f3e9b4cbbed64bfe02d0528439a2d595576': print('::warning title=control::control ROM differs from the published R89 build')
                   print('::notice title=%s %s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(v,r['variant'],r['bytes'],r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
           PY
       - name: Same-job capture and split comparison
         shell: bash
         run: |
           set -euo pipefail
+          AB_FRAMES=8000
           for v in control c-split; do
-            rom=$(ls dist/ab/$v/*-pl.bin)
+            rom=$(ls dist/ab/$v/*-pf.bin)
             python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/cap-$v" --label "$v" --max-emulated-frames "$AB_FRAMES" --max-breaks 3000 --timeout 600 > "dist/ab/cap-$v.log" 2>&1 || { cat "dist/ab/cap-$v.log"; exit 1; }
             tail -n 3 "dist/ab/cap-$v.log"
           done
           python3 scripts/lab/r90_split_compare.py dist/ab/r90-split-compare.json dist/ab/cap-control dist/ab/cap-c-split
-          python3 -c "import json;r=json.load(open('dist/ab/r90-split-compare.json'));print('::notice title=R90 split A/B::'+json.dumps(r))"
+          python3 -c "import json;r=json.load(open('dist/ab/r90-split-compare.json'));print('::notice title=R90 split A/B (PERF DEMO3)::'+json.dumps(r))"
+          rom=$(ls dist/ab/c-split/*-pl.bin)
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/smoke-c-split --label split-play --max-emulated-frames 800 --max-breaks 600 --timeout 120 > dist/ab/smoke-c-split.log 2>&1 || { cat dist/ab/smoke-c-split.log; exit 1; }
+          tail -n 2 dist/ab/smoke-c-split.log
       - name: Bottom palette report
         shell: bash
         run: |
