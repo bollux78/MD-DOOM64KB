@@ -116,7 +116,9 @@ try:
   call('G_InitNew',2,1)
   ms=u32(sym('_g_mapsectors'));ns=int.from_bytes(g.readmem(sym('_g_numsectors'),2),'big')
   # ROM map data is banked at 0x200000; SRAM must be disabled for RSP reads.
-  write(0xA130F1,b'\x00')
+  # BlastEm RSP writes to mapper registers may not update cartridge state.
+  # Read ROM through a CPU-driven mapper write, as done by slot()/putslot().
+  call('_QA_WriteByte',0xA130F1,0)
   tags={int.from_bytes(g.readmem(ms+i*12+10,2),'big',signed=True) for i in range(ns)}
   lines=u32(sym('_g_maplines'));nl=int.from_bytes(g.readmem(sym('_g_numlines'),2),'big')
   chosen=None;line_tags=[]
@@ -124,9 +126,9 @@ try:
    tag=int.from_bytes(g.readmem(lines+31*index+26,2),'big',signed=True)
    line_tags.append(tag)
    if tag>0 and tag in tags:chosen=(lines+31*index,tag);break
-  write(0xA130F1,b'\x01')
+  call('_QA_WriteByte',0xA130F1,1)
   if not chosen:
-   write(0xA130F1,b'\x00')
+   call('_QA_WriteByte',0xA130F1,0)
    probe={'map':a.case[0],'skill':a.case[1],'numlines':nl,'numsectors':ns,
           'maplines':hex(lines),'mapsectors':hex(ms),
           'sector_tag_sample':sorted(tags)[:20],
@@ -135,7 +137,7 @@ try:
           'matching_tags':sorted(set(t for t in line_tags if t>0)&tags)[:20],
           'first_line_bytes':g.readmem(lines, min(64,nl*31)).hex() if nl else ''}
    report['map_probe']=probe
-   write(0xA130F1,b'\x01')
+   call('_QA_WriteByte',0xA130F1,1)
    raise AssertionError('No tagged test sector: '+json.dumps(probe))
   assert call(function,chosen[1] if function=='EV_DoFloor' else chosen[0],0),function
   def count_kind():
