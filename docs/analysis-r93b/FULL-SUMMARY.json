@@ -1,0 +1,801 @@
+{
+ "status": "OFFLINE_STUDY_NOT_VISUALLY_VALIDATED",
+ "model": "R79 sRGB/Lab proxy, M50 effective colours; not measured DAC/CRT",
+ "weights": "DEMO3 Shadow On captures, p=0 frames, transferred rectangle",
+ "guard_min_sample_share": 0.001,
+ "modes": [
+  {
+   "mode": "A2",
+   "capture": {
+    "frames": 703,
+    "frames_p0_shadow_on": 691,
+    "blocks": 387651
+   },
+   "replica_mismatches": 0,
+   "replica_samples": 224400,
+   "sh1": {
+    "mean_dE": 5.5591,
+    "mean_absdC": 1.9496,
+    "mean_dH": 2.6091,
+    "mean_dL": -0.6147,
+    "mean_L": 30.0766,
+    "beige_share": 0.005,
+    "shadow_share": 0.633
+   },
+   "round2": {
+    "mean_dE": 1.0967,
+    "mean_absdC": 0.4656,
+    "mean_dH": 0.7278,
+    "mean_dL": -0.2814,
+    "mean_L": 30.4099,
+    "beige_share": 0.0003,
+    "shadow_share": 0.646
+   },
+   "J_sh1": 7.0557,
+   "J_round2": 1.4751,
+   "round2_dE_vs_sh1_look": 5.462,
+   "search": {
+    "neighborhood": 0,
+    "only_flagged": false
+   },
+   "werk_r93": {
+    "mean_dE": 5.1006,
+    "mean_absdC": 2.2302,
+    "mean_dH": 4.8104,
+    "mean_dL": 0.6265,
+    "mean_L": 31.3178,
+    "beige_share": 0.0007,
+    "shadow_share": 0.5934
+   },
+   "werk_r93_dE_vs_sh1_look": 4.881,
+   "werk_r93_guard_violations": [
+    "chroma",
+    "hue",
+    "lightness"
+   ],
+   "slots_changed": [
+    {
+     "bank": 0,
+     "slot": 1,
+     "sh1": [
+      1,
+      1,
+      0
+     ],
+     "round2": [
+      3,
+      3,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 2,
+     "sh1": [
+      4,
+      3,
+      1
+     ],
+     "round2": [
+      5,
+      3,
+      1
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 4,
+     "sh1": [
+      3,
+      0,
+      0
+     ],
+     "round2": [
+      6,
+      4,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 7,
+     "sh1": [
+      5,
+      1,
+      0
+     ],
+     "round2": [
+      1,
+      1,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 8,
+     "sh1": [
+      1,
+      4,
+      1
+     ],
+     "round2": [
+      0,
+      0,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 9,
+     "sh1": [
+      0,
+      0,
+      3
+     ],
+     "round2": [
+      2,
+      2,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 10,
+     "sh1": [
+      5,
+      4,
+      3
+     ],
+     "round2": [
+      4,
+      1,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 11,
+     "sh1": [
+      0,
+      0,
+      5
+     ],
+     "round2": [
+      6,
+      6,
+      6
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 12,
+     "sh1": [
+      3,
+      3,
+      1
+     ],
+     "round2": [
+      3,
+      3,
+      3
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 13,
+     "sh1": [
+      5,
+      5,
+      5
+     ],
+     "round2": [
+      3,
+      2,
+      1
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 14,
+     "sh1": [
+      7,
+      3,
+      3
+     ],
+     "round2": [
+      4,
+      3,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 15,
+     "sh1": [
+      7,
+      4,
+      1
+     ],
+     "round2": [
+      7,
+      5,
+      3
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 1,
+     "sh1": [
+      3,
+      1,
+      1
+     ],
+     "round2": [
+      2,
+      1,
+      1
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 4,
+     "sh1": [
+      4,
+      0,
+      0
+     ],
+     "round2": [
+      6,
+      4,
+      3
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 6,
+     "sh1": [
+      1,
+      3,
+      1
+     ],
+     "round2": [
+      4,
+      2,
+      1
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 7,
+     "sh1": [
+      5,
+      3,
+      1
+     ],
+     "round2": [
+      6,
+      4,
+      2
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 8,
+     "sh1": [
+      0,
+      0,
+      1
+     ],
+     "round2": [
+      0,
+      0,
+      3
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 9,
+     "sh1": [
+      0,
+      0,
+      4
+     ],
+     "round2": [
+      6,
+      6,
+      6
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 10,
+     "sh1": [
+      3,
+      0,
+      0
+     ],
+     "round2": [
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 11,
+     "sh1": [
+      5,
+      5,
+      5
+     ],
+     "round2": [
+      3,
+      0,
+      0
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 13,
+     "sh1": [
+      3,
+      5,
+      1
+     ],
+     "round2": [
+      2,
+      4,
+      2
+     ]
+    }
+   ],
+   "no_acceptable_solution": [
+    {
+     "bank": 0,
+     "slot": 5,
+     "flagged_codes": [
+      12
+     ],
+     "best_compromise": [
+      2,
+      2,
+      2
+     ],
+     "compromise_J": 1.526,
+     "violates": [
+      "lightness",
+      "shadow_share"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 12,
+     "flagged_codes": [
+      12,
+      14
+     ],
+     "best_compromise": [
+      3,
+      2,
+      1
+     ],
+     "compromise_J": 1.324,
+     "violates": [
+      "hue"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 14,
+     "flagged_codes": [
+      14
+     ],
+     "best_compromise": [
+      2,
+      0,
+      2
+     ],
+     "compromise_J": 1.195,
+     "violates": [
+      "chroma",
+      "hue",
+      "shadow_share"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 15,
+     "flagged_codes": [
+      1
+     ],
+     "best_compromise": [
+      3,
+      2,
+      1
+     ],
+     "compromise_J": 1.539,
+     "violates": [
+      "hue",
+      "lightness"
+     ]
+    }
+   ]
+  },
+  {
+   "mode": "L3",
+   "capture": {
+    "frames": 703,
+    "frames_p0_shadow_on": 691,
+    "blocks": 387651
+   },
+   "replica_mismatches": 0,
+   "replica_samples": 224400,
+   "sh1": {
+    "mean_dE": 4.0671,
+    "mean_absdC": 0.9563,
+    "mean_dH": 3.2249,
+    "mean_dL": -0.9892,
+    "mean_L": 29.8331,
+    "beige_share": 0.0045,
+    "shadow_share": 0.6279
+   },
+   "round2": {
+    "mean_dE": 0.6028,
+    "mean_absdC": 0.2542,
+    "mean_dH": 0.1812,
+    "mean_dL": 0.2081,
+    "mean_L": 31.0303,
+    "beige_share": 0.0005,
+    "shadow_share": 0.6109
+   },
+   "J_sh1": 5.1902,
+   "J_round2": 0.7661,
+   "round2_dE_vs_sh1_look": 4.642,
+   "search": {
+    "neighborhood": 0,
+    "only_flagged": false
+   },
+   "werk_r93": {
+    "mean_dE": 4.1281,
+    "mean_absdC": 1.6012,
+    "mean_dH": 4.4793,
+    "mean_dL": -0.2396,
+    "mean_L": 30.5827,
+    "beige_share": 0.0028,
+    "shadow_share": 0.6076
+   },
+   "werk_r93_dE_vs_sh1_look": 2.411,
+   "werk_r93_guard_violations": [
+    "chroma",
+    "hue",
+    "lightness"
+   ],
+   "slots_changed": [
+    {
+     "bank": 0,
+     "slot": 4,
+     "sh1": [
+      7,
+      0,
+      0
+     ],
+     "round2": [
+      2,
+      4,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 5,
+     "sh1": [
+      4,
+      0,
+      0
+     ],
+     "round2": [
+      5,
+      0,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 6,
+     "sh1": [
+      1,
+      5,
+      1
+     ],
+     "round2": [
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 8,
+     "sh1": [
+      0,
+      0,
+      3
+     ],
+     "round2": [
+      6,
+      0,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 9,
+     "sh1": [
+      5,
+      4,
+      1
+     ],
+     "round2": [
+      3,
+      1,
+      3
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 11,
+     "sh1": [
+      3,
+      1,
+      1
+     ],
+     "round2": [
+      2,
+      0,
+      0
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 13,
+     "sh1": [
+      0,
+      0,
+      5
+     ],
+     "round2": [
+      7,
+      5,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 14,
+     "sh1": [
+      5,
+      5,
+      5
+     ],
+     "round2": [
+      6,
+      4,
+      2
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 15,
+     "sh1": [
+      3,
+      0,
+      0
+     ],
+     "round2": [
+      0,
+      0,
+      4
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 3,
+     "sh1": [
+      0,
+      0,
+      7
+     ],
+     "round2": [
+      6,
+      6,
+      6
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 6,
+     "sh1": [
+      7,
+      3,
+      0
+     ],
+     "round2": [
+      6,
+      2,
+      0
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 7,
+     "sh1": [
+      1,
+      4,
+      1
+     ],
+     "round2": [
+      4,
+      4,
+      3
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 8,
+     "sh1": [
+      5,
+      5,
+      5
+     ],
+     "round2": [
+      5,
+      3,
+      2
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 9,
+     "sh1": [
+      0,
+      1,
+      0
+     ],
+     "round2": [
+      2,
+      3,
+      2
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 11,
+     "sh1": [
+      5,
+      0,
+      0
+     ],
+     "round2": [
+      0,
+      3,
+      3
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 14,
+     "sh1": [
+      4,
+      3,
+      1
+     ],
+     "round2": [
+      6,
+      4,
+      2
+     ]
+    }
+   ],
+   "no_acceptable_solution": [
+    {
+     "bank": 0,
+     "slot": 1,
+     "flagged_codes": [
+      11
+     ],
+     "best_compromise": [
+      0,
+      2,
+      3
+     ],
+     "compromise_J": 0.893,
+     "violates": [
+      "lightness",
+      "shadow_share"
+     ]
+    },
+    {
+     "bank": 0,
+     "slot": 2,
+     "flagged_codes": [
+      2,
+      9
+     ],
+     "best_compromise": [
+      3,
+      2,
+      2
+     ],
+     "compromise_J": 0.757,
+     "violates": []
+    },
+    {
+     "bank": 0,
+     "slot": 10,
+     "flagged_codes": [
+      10
+     ],
+     "best_compromise": [
+      2,
+      4,
+      0
+     ],
+     "compromise_J": 0.74,
+     "violates": [
+      "hue"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 1,
+     "flagged_codes": [
+      12
+     ],
+     "best_compromise": [
+      2,
+      2,
+      2
+     ],
+     "compromise_J": 0.88,
+     "violates": [
+      "chroma",
+      "lightness",
+      "shadow_share"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 12,
+     "flagged_codes": [
+      12
+     ],
+     "best_compromise": [
+      2,
+      2,
+      1
+     ],
+     "compromise_J": 0.789,
+     "violates": [
+      "chroma"
+     ]
+    },
+    {
+     "bank": 1,
+     "slot": 13,
+     "flagged_codes": [
+      13
+     ],
+     "best_compromise": [
+      2,
+      2,
+      2
+     ],
+     "compromise_J": 0.739,
+     "violates": [
+      "shadow_share"
+     ]
+    }
+   ]
+  }
+ ]
+}
