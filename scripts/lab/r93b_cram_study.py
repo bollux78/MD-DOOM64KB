@@ -145,6 +145,12 @@ class Eval:
     @staticmethod
     def J(r): return r["mean_dE"] + 0.5 * r["mean_absdC"] + 0.2 * r["mean_dH"]
 
+    @staticmethod
+    def vs(r, ref):
+        """weighted mean dE between what r shows and what ref (SH1) shows for the same input code."""
+        d = np.linalg.norm(r["shown"] - ref["shown"], axis=-1)
+        return float((r["N"] * d).sum() / r["N"].sum())
+
 
 def guards(r, ref):
     """Return list of violated guard names (empty = acceptable)."""
@@ -165,15 +171,19 @@ def neutral_guard(mode, r, ref):
     return bool((~(live & nt) | (c <= np.maximum(8, c0) + 1e-9)).all())
 
 
-def optimise(mode, ev, w0, sweeps=3):
+def optimise(mode, ev, w0, sweeps=3, hood=0, only=None):
     ref = ev.run(w0); words = w0.copy(); cur = ref; J0 = Eval.J(ref)
-    allw = np.array([(r << 1) | (g << 5) | (b << 9) for r in range(8) for g in range(8) for b in range(8)])
+    grid = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
+    allw0 = (grid[:, 0] << 1) | (grid[:, 1] << 5) | (grid[:, 2] << 9)
     best_any = {}
     for _ in range(sweeps):
         changed = False
         for b in (0, 1):
             for slot in range(1, 16):
-                keep = words[b, slot]; bestJ, bestw = Eval.J(cur), None; anyJ, anyw, anyv = np.inf, None, None
+                if only is not None and (b, slot) not in only: continue
+                c0 = np.array([(w0[b, slot] >> 1) & 7, (w0[b, slot] >> 5) & 7, (w0[b, slot] >> 9) & 7])
+                allw = allw0 if not hood else allw0[np.abs(grid - c0).max(1) <= hood]
+                keep = words[b, slot]; bestJ, bestw = Eval.J(cur), None; anyJ, anyw, anyv = np.inf, keep, ["none"]
                 for w in allw:
                     if w == keep: continue
                     words[b, slot] = w; r = ev.run(words)
@@ -198,6 +208,8 @@ def main():
     ap.add_argument("--cap-a2", type=Path, required=True); ap.add_argument("--cap-l3", type=Path, required=True)
     ap.add_argument("--werk", type=Path); ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--sweeps", type=int, default=3)
+    ap.add_argument("--neighborhood", type=int, default=0, help="0 = all 512 words; N = each channel within +-N of SH1")
+    ap.add_argument("--only-flagged", action="store_true", help="only slots used by codes flagged in SH1 (beige or chroma off by >6)")
     a = ap.parse_args(); a.out.mkdir(parents=True, exist_ok=False)
     text = a.tables.read_text(); text79 = a.r79.read_text()
     werk = json.loads(a.werk.read_text())["palettes"] if a.werk else None
@@ -218,15 +230,21 @@ def main():
             st = sh.astype(int)
             pa = (code[0, st, ka >> 4] << 4) | code[0, st, ka & 15]; pb = (code[1, st, kb >> 4] << 4) | code[1, st, kb & 15]
             bad += int(((oa & 255) != pa).sum() + ((ob & 255) != pb).sum() + (((oa >> 15) & 1) != (1 - st)).sum()); tot += len(ka)
-        words, ref, cur, best_any, J0 = optimise(mode, ev, w0, a.sweeps)
+        only = None
+        if a.only_flagged:
+            r0 = ev.run(w0); fl0 = (r0["frac"] >= GUARD_W) & (r0["beige"] | (np.abs(r0["dC"]) > 6))
+            only = {(b, s) for b in (0, 1) for s in range(1, 16) if any(fl0[b, :, c].any() for c in range(1, 16) if c == s or mode.part[b][c] == s)}
+        np.save(a.out / ("keys-" + name + ".npy"), keys.astype(np.float32))
+        words, ref, cur, best_any, J0 = optimise(mode, ev, w0, a.sweeps, a.neighborhood, only)
         cand_w = None
         if werk:
             cand_w = np.array([np.array(werk[mi - 1][b][0]) for b in (0, 1)])
             rw = ev.run(cand_w)
         def met(r): return {k: round(r[k], 4) for k in ("mean_dE", "mean_absdC", "mean_dH", "mean_dL", "mean_L", "beige_share", "shadow_share")}
         entry = {"mode": name, "capture": capinfo, "replica_mismatches": bad, "replica_samples": tot,
-                 "sh1": met(ref), "round2": met(cur), "J_sh1": round(J0, 4), "J_round2": round(Eval.J(cur), 4)}
-        if werk: entry["werk_r93"] = met(rw); entry["werk_r93_guard_violations"] = guards(rw, ref) + ([] if neutral_guard(mode, rw, ref) else ["neutral"])
+                 "sh1": met(ref), "round2": met(cur), "J_sh1": round(J0, 4), "J_round2": round(Eval.J(cur), 4),
+                 "round2_dE_vs_sh1_look": round(Eval.vs(cur, ref), 3), "search": {"neighborhood": a.neighborhood, "only_flagged": a.only_flagged}}
+        if werk: entry["werk_r93"] = met(rw); entry["werk_r93_dE_vs_sh1_look"] = round(Eval.vs(rw, ref), 3); entry["werk_r93_guard_violations"] = guards(rw, ref) + ([] if neutral_guard(mode, rw, ref) else ["neutral"])
         changed = [(b, s) for b in (0, 1) for s in range(16) if words[b, s] != w0[b, s]]
         entry["slots_changed"] = [{"bank": b, "slot": s, "sh1": word_t(w0[b, s]), "round2": word_t(words[b, s])} for b, s in changed]
         # flagged slots in SH1: any live code using the slot (directly or as partner) beige or chroma off by >6
@@ -239,7 +257,7 @@ def main():
                 ideal = to_lab(np.minimum(255, rgb(mode.base[b, 0, s]) * GAIN)); idealS = to_lab(np.minimum(255, rgb(mode.base[b, 0, s]) * GAIN) * .5)
                 status = "changed" if (b, s) in changed else ("no_acceptable_solution" if fl else "kept")
                 if status == "no_acceptable_solution":
-                    aw, aj, av = best_any[(b, s)]
+                    aw, aj, av = best_any.get((b, s), (int(w0[b, s]), float("nan"), ["not_searched"]))
                     no_sol.append({"bank": b, "slot": s, "flagged_codes": fl, "best_compromise": word_t(aw), "compromise_J": round(float(aj), 3), "violates": av})
                 rows.append({"mode": name, "bank": b, "slot": s, "base": word_t(mode.base[b, 0, s]), "sh1": word_t(w0[b, s]),
                              "round2": word_t(words[b, s]), "werk_r93": word_t(cand_w[b, s]) if cand_w is not None else "",

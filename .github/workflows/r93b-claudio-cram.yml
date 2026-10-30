@@ -142,9 +142,13 @@ jobs:
           python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$s"
           cp dist/ab/c-toggle/r92-toggle-pf-r59_color_tables.h "$s/src/r59_color_tables.h"
           ( cd "$s" && python3 scripts/lab/gen_r79_shadow.py --strength 1 && python3 scripts/lab/gen_r91_shadow.py )
-          python3 scripts/lab/r93b_cram_study.py --tables "$s/src/r59_color_tables.h" --r79 "$s/src/r79_shadow_tables.h" \
-            --cap-a2 dist/ab/cap-mode1 --cap-l3 dist/ab/cap-mode2 --werk docs/analysis-r93/CRAM-CANDIDATE.json --out dist/ab/study 2>&1 | tee dist/ab/study.log
-          python3 -c "import json;r=json.load(open('dist/ab/study/SUMMARY.json'));[print('::notice title=R93b '+m['mode']+'::'+json.dumps({k:m[k] for k in ('replica_mismatches','sh1','round2','werk_r93')})) for m in r['modes']]"
+          mkdir -p dist/ab/study
+          for v in full minimal; do
+            extra=""; [ "$v" = minimal ] && extra="--neighborhood 1 --only-flagged"
+            python3 scripts/lab/r93b_cram_study.py --tables "$s/src/r59_color_tables.h" --r79 "$s/src/r79_shadow_tables.h" \
+              --cap-a2 dist/ab/cap-mode1 --cap-l3 dist/ab/cap-mode2 --werk docs/analysis-r93/CRAM-CANDIDATE.json --out dist/ab/study/$v $extra 2>&1 | tee dist/ab/study-$v.log
+            python3 -c "import json,sys;r=json.load(open(sys.argv[1]));[print('::notice title=R93b '+sys.argv[2]+' '+m['mode']+'::'+json.dumps({k:m.get(k) for k in ('replica_mismatches','sh1','round2','round2_dE_vs_sh1_look','werk_r93','werk_r93_dE_vs_sh1_look')})) for m in r['modes']]" dist/ab/study/$v/SUMMARY.json $v
+          done
       - name: Upload study
         if: always()
         uses: actions/upload-artifact@v6
