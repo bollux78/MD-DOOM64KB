@@ -48,7 +48,7 @@ THINGS = {
     1: ('Player 1 start', ''), 2: ('Player 2 start', ''), 3: ('Player 3 start', ''), 4: ('Player 4 start', ''),
     11: ('Deathmatch start', ''), 14: ('Teleport destination', ''),
 }
-ALWAYS = 'PLAY PUFF BLUD TFOG IFOG PUNG PISG PISF'.split()
+ALWAYS = 'PLAY PUFF BLUD TFOG PUNG PISG PISF'.split()
 LIMIT_ROM = 4 * 1024 * 1024
 SHADOW = {'full': 0, 'r79': 0x80000, 'off': 0x80000 + 0x1C000}   # bytes freed vs the current Shadow build
 
