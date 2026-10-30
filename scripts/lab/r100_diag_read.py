@@ -3,7 +3,7 @@
 Breaks on I_FinishUpdate, reads the counters every frame (last value kept), stops at --stop-tic or when
 the emulator ends (<= 10,000 emulated frames). Read-only."""
 import argparse, importlib.util, json, pathlib
-FIELDS = ("cols", "mid_cols", "mid_wall", "r60", "r96_single", "r96_fallback", "r96_empty")
+FIELDS = ("cols", "mid_cols", "mid_wall", "r60", "r96_single", "r96_fallback", "r96_empty", "two_cols")
 def load_rsp():
     here = pathlib.Path(__file__).resolve().parent
     spec = importlib.util.spec_from_file_location("r64a_rsp_capture", here / "r64a_rsp_capture.py")
@@ -32,6 +32,7 @@ finally:
 r = dict(last or {}, status=status)
 if last and last["cols"]:
     r["share_mid_cols"] = round(last["mid_cols"] / last["cols"], 4)
+    r["share_two_cols"] = round(last["two_cols"] / last["cols"], 4)
     r["share_mid_wall_of_cols"] = round(last["mid_wall"] / last["cols"], 4)
     w = last["r60"] + last["r96_single"] + last["r96_fallback"]
     r["wall_calls"] = w
