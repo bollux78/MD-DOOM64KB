@@ -14,6 +14,8 @@ patch('src/r92_shadow.inc', '''    const uint16_t maps[2][2][256],const uint16_t
 {
 ''', '''    const uint16_t maps[2][2][256],const uint16_t costs[2][2][256],uint8_t palette)
 {
+#if defined(__m68k__)
+    /* Host regression tests compile this file natively: they keep the C path below. */
     if(!palette){
         if(r92_rect.y1>r92_rect.y0 && r92_rect.x1>r92_rect.x0){
             register uint16_t *a0 __asm__("a0")=pixels+(uint16_t)r92_rect.y0*76u+r92_rect.x0;
@@ -24,6 +26,7 @@ patch('src/r92_shadow.inc', '''    const uint16_t maps[2][2][256],const uint16_t
         }
         return;
     }
+#endif
 ''')
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
 assert "'r96-'" in s
