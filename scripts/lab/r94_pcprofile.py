@@ -30,6 +30,21 @@ def text_symbols(elf):
     syms.sort(); return syms
 
 
+def return_sites(elf):
+    """Addresses that follow a JSR/BSR in .text: valid return addresses for the stack scan."""
+    od = os.environ.get("M68K_OBJDUMP") or str(pathlib.Path.home() / "mars/m68k-elf/bin/m68k-elf-objdump")
+    out = subprocess.run([od, "-d", str(elf)], check=True, capture_output=True, text=True).stdout
+    rs, prev = set(), None
+    for line in out.splitlines():
+        p = line.split("\t")
+        if len(p) >= 3 and p[0].strip().endswith(":"):
+            try: a = int(p[0].strip()[:-1], 16)
+            except ValueError: continue
+            if prev is not None: rs.add(a)
+            prev = a if p[2].startswith(("jsr", "bsr")) else None
+    return rs
+
+
 def find(syms, addrs, pc):
     i = bisect.bisect_right(addrs, pc) - 1
     return syms[i][1] if i >= 0 else "?"
@@ -49,6 +64,7 @@ def main():
         m = [v for k, v in allsyms.items() if k.startswith(n + ".")]; assert len(m) == 1, (n, m); return m[0]
     tic_a = sym("_g_gametic")
     text = text_symbols(a.elf); addrs = [s[0] for s in text]
+    retset = return_sites(a.elf)
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=False)
     rng = random.Random(a.seed)
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, 120)
@@ -70,8 +86,10 @@ def main():
             except TimeoutError:
                 status = "timeout"; break
             regs = g.req("g"); sp = int(regs[15 * 8:16 * 8], 16) & 0xFFFFFF
-            frame = g.readmem(sp, 10)
-            pc = int.from_bytes(frame[2:6], "big") & 0xFFFFFF; ret = int.from_bytes(frame[6:10], "big") & 0xFFFFFF
+            frame = g.readmem(sp, 70)
+            pc = int.from_bytes(frame[2:6], "big") & 0xFFFFFF
+            stack = [int.from_bytes(frame[i:i + 4], "big") & 0xFFFFFF for i in range(6, 70, 2)]
+            ret = next((v for v in stack if v in retset), 0)
             tic = int.from_bytes(g.readmem(tic_a, 4), "big")
             if tic < last_tic - 5: status = "demo_restarted"; break
             stall = stall + 1 if tic == last_tic else 0; last_tic = max(last_tic, tic)
@@ -88,7 +106,7 @@ def main():
     pairs = [{"function": f, "caller_guess": cl, "samples": c, "share": round(c / n, 4)} for (f, cl), c in caller.most_common(60)]
     res = {"rom": a.rom, "shadow": a.shadow, "mode": a.mode, "samples": len(samples), "status": status,
            "tic_range": [samples[0][0], samples[-1][0]] if samples else None, "top": top, "top_with_caller_guess": pairs,
-           "note": "one sample per emulated VBlank (exception frame PC); caller_guess is the long word above the frame, unreliable"}
+           "note": "one sample per emulated VBlank (exception frame PC); caller = first stack word above the frame that follows a JSR/BSR (nearest caller of the sampled leaf)"}
     (out / "PROFILE.json").write_text(json.dumps(res, indent=1) + "\n")
     lines = ["%6.2f%%  %6d  %s" % (100 * t["share"], t["samples"], t["function"]) for t in top]
     (out / "PROFILE.txt").write_text("\n".join(lines) + "\n")
