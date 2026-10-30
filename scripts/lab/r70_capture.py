@@ -64,6 +64,7 @@ def main():
     ap.add_argument("--blastem", required=True); ap.add_argument("--rom", required=True)
     ap.add_argument("--elf", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--label", default="")
+    ap.add_argument("--break-symbol",default="I_FinishUpdate")
     ap.add_argument("--max-emulated-frames", type=int, default=150000)
     ap.add_argument("--max-breaks", type=int, default=60000)
     ap.add_argument("--timeout", type=float, default=120.0)
@@ -75,6 +76,7 @@ def main():
     missing = [k for k in ("I_FinishUpdate", "r22_fb", "_g_gametic", "_g_vblankCount") if k not in syms]
     if missing:
         raise SystemExit("ELF missing symbols: %s" % missing)
+    syms["I_FinishUpdate"]=syms[a.break_symbol]
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     records, status = [], "error"
     try:
