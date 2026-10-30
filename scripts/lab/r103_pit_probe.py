@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--max-bad", type=int, default=8)
     ap.add_argument("--max-breaks", type=int, default=400000)
     ap.add_argument("--norender", type=int, default=1)
+    ap.add_argument("--shadow", type=int, default=0, help="1=A2, 2=L3: Shadow On from the first tic")
     ap.add_argument("--render-from", type=int, default=0, help="with --norender 1: render again from this tic")
     a = ap.parse_args()
     assert 1 <= a.max_emulated_frames <= 10000
@@ -60,8 +61,15 @@ def main():
                 regs = g.req("g"); pc = int(regs[17 * 8:18 * 8], 16) & 0xFFFFFF; sp = int(regs[15 * 8:16 * 8], 16) & 0xFFFFFF
                 tic = be(g.readmem(tic_a, 4))
                 if pc == fin:
+                    if armed is False and a.shadow:
+                        on_a = sym(syms, "r92_shadow_on"); col_a = sym(syms, "r77_color_state")
+                        assert g.req("M%x,1:01" % (on_a & 0xFFFFFF)) == "OK"
+                        assert g.req("M%x,2:%02x01" % (col_a & 0xFFFFFF, a.shadow)) == "OK"
+                        res["shadow_mode"] = a.shadow
                     if not armed and a.norender:
                         assert g.req("M%x,1:01" % (nr & 0xFFFFFF)) == "OK"; armed = True
+                    elif armed is False:
+                        armed = 0
                     if armed and a.render_from and tic >= a.render_from:
                         assert g.req("M%x,1:00" % (nr & 0xFFFFFF)) == "OK"; armed = None; res["render_from_tic"] = tic
                     if tic < res["last_tic"] - 5: res["end"] = "demo_restarted"; break
