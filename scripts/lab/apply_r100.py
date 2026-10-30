@@ -51,6 +51,11 @@ static uint8_t *r96_fb;''', 1)
     for k in ('r100_diag.r96_fallback++', 'r100_diag.r96_empty++', 'r100_diag.r60++', 'r100_diag.r96_single++'):
         assert s.count(k) == 1, k
 Path(D).write_text(s)
+# R15 source preflight counts the four tangent products of ONE loop body; F1 generates two copies.
+t = Path('scripts/lab/test_r15_wallmul.py'); u = t.read_text()
+old = 'assert src.count("R15_TAN_PRODUCT(rw_distance, tan)") == 4'
+assert u.count(old) == 1
+t.write_text(u.replace(old, 'assert src.count("R15_TAN_PRODUCT(rw_distance, tan)") == 8  # R100 F1: two generated loop copies'))
 p = Path('scripts/lab/build_r71a12mul_hud.py'); t = p.read_text()
 assert "'r98-'" in t and "('sprmul', 1)" in t
 p.write_text(t.replace("'r98-'", "'r100-'").replace("('sprmul', 1)", repr((name, 1))))
