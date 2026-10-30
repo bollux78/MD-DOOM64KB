@@ -166,7 +166,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          for d in dist/ab/control dist/ab/c-*; do
+          for d in dist/ab/c-*; do
             v=$(basename "$d"); elf=$(ls $d/*-pl.elf); "$OBJDUMP" -d -z "$elf" > "dist/ab/objdump-$v-pf.txt" 2>/dev/null || true
           done
       - name: Save/load regression on all generated ROMs

@@ -24,7 +24,7 @@ void R92_SetShadow(uint8_t on){
        Also request refresh for callers outside the menu. */
     r59_color_dirty=1;
 }
-void __attribute__((noinline,used)) R92_AfterPass(void){__asm__ volatile("":::"memory");}
+void __attribute__((noinline,noipa,used)) R92_AfterPass(void){__asm__ volatile("nop":::"memory");}
 static void R92_ShadowPass(uint16_t *pixels,const uint32_t *table,
     const uint16_t maps[2][2][256],const uint16_t costs[2][2][256],uint8_t palette)
 {
