@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--max-emulated-frames", type=int, default=9800)
     ap.add_argument("--max-bad", type=int, default=8)
     ap.add_argument("--max-breaks", type=int, default=400000)
+    ap.add_argument("--norender", type=int, default=1)
     a = ap.parse_args()
     assert 1 <= a.max_emulated_frames <= 10000
     rsp = load_rsp(); syms = rsp.symbols(a.elf)
@@ -44,6 +45,33 @@ def main():
     calls_per_tic = {}
     try:
         g.req("qSupported")
+        diag = "R103_Bad" in syms
+        if diag:
+            # diag ROM: skip rendering (r103_norender=1) to reach late tics; stop at R103_Bad.
+            badf = syms["R103_Bad"] & 0xFFFFFF; fin = sym(syms, "I_FinishUpdate") & 0xFFFFFF
+            nr = syms["r103_norender"]; res["diag"] = True; armed = False
+            assert g.req("Z0,%x,2" % badf) == "OK" and g.req("Z0,%x,2" % fin) == "OK"
+            for _ in range(a.max_breaks):
+                try:
+                    g.cont()
+                except (RuntimeError, TimeoutError) as e:
+                    res["end"] = "emulator: %s" % e; break
+                regs = g.req("g"); pc = int(regs[17 * 8:18 * 8], 16) & 0xFFFFFF; sp = int(regs[15 * 8:16 * 8], 16) & 0xFFFFFF
+                tic = be(g.readmem(tic_a, 4))
+                if pc == fin:
+                    if not armed and a.norender:
+                        assert g.req("M%x,1:01" % (nr & 0xFFFFFF)) == "OK"; armed = True
+                    if tic < res["last_tic"] - 5: res["end"] = "demo_restarted"; break
+                    res["last_tic"] = max(res["last_tic"], tic); continue
+                if pc == badf:
+                    st = g.readmem(sp, 20)
+                    bad = {"tic": tic, "gamemap": be(g.readmem(map_a, 2)) if map_a else None, "ret": hex(be(st[0:4])),
+                           "thing": hex(be(st[4:8])), "cell": be(st[8:12]) & 0xFFFF, "head": hex(be(st[12:16])), "prev": hex(be(st[16:20]))}
+                    pv = be(st[16:20]) & 0xFFFFFF
+                    if pv: bad["prev_mobj_hex"] = g.readmem(pv, 0x50).hex()
+                    res["bad"].append(bad); print(json.dumps(bad), flush=True); res["end"] = "r103_bad"; break
+            res.setdefault("end", "max_breaks"); res["status"] = "ok"
+            raise StopIteration
         assert g.req("Z0,%x,2" % pit) == "OK"
         for _ in range(a.max_breaks):
             try:
@@ -72,6 +100,8 @@ def main():
                 if len(res["bad"]) >= a.max_bad: res["end"] = "max_bad"; break
         res.setdefault("end", "max_breaks")
         res["status"] = "ok"
+    except StopIteration:
+        pass
     except Exception as e:
         res["status"] = "error: %s" % e
     finally:

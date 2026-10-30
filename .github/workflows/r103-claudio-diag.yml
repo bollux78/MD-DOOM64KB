@@ -1,0 +1,158 @@
+name: R103 Claudio diag ROM - blockmap thing pointer check (on R100 F1)
+# Control = R92 toggle (SH1, Shadow Off default). Candidate = R92 toggle + R95 fast flats.
+# PERF twins for a same-job DEMO3 framebuffer/timing A/B; PLAY ROMs for the user benchmark.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r103-claudio-diag.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r103-claudio-diag-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_SETS: 'diag'
+  R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/apply_r83.py scripts/lab/test_r83.py scripts/lab/apply_r81.py scripts/lab/apply_r82_d8088.py scripts/lab/test_r82_d8088.py scripts/lab/apply_r80_performance.py scripts/lab/test_r80_pixofs.py scripts/lab/r82_stack_probe.py scripts/lab/r82_bsp_depth.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 scripts/lab/test_r83.py
+          python3 scripts/lab/test_r88.py
+          python3 scripts/lab/test_r89.py
+          python3 scripts/lab/test_r89_routes.py
+          python3 scripts/lab/test_r90.py
+          python3 scripts/lab/test_r91.py
+          python3 scripts/lab/test_r92.py
+          python3 -m py_compile scripts/lab/apply_r95.py scripts/lab/apply_r96.py scripts/lab/apply_r97.py scripts/lab/apply_r98.py scripts/lab/apply_r99.py scripts/lab/apply_r100.py scripts/lab/r100_diag_read.py scripts/lab/r100_asm_metrics.py scripts/lab/r82_stack_probe.py scripts/lab/apply_r102.py scripts/lab/apply_r103.py scripts/lab/r103_pit_probe.py
+          cc -O2 -Iscripts/lab/r99 scripts/lab/r99/test_r99_recip.c -o "$RUNNER_TEMP/r99recip" && "$RUNNER_TEMP/r99recip"
+          python3 -m py_compile scripts/lab/apply_r87.py scripts/lab/r87_compare.py
+          python3 -m py_compile scripts/lab/apply_r85.py scripts/lab/apply_r84.py scripts/lab/gen_r84_columns.py scripts/lab/r84_texture_audit.py
+          python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r81_font.py
+          python3 scripts/lab/test_r81_cheats.py
+          python3 scripts/lab/test_r81_codec.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r79_face.py
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then lab=control; else lab="c-${set//+/_}"; fi
+            w="$RUNNER_TEMP/r92-shadow-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/apply_r81.py
+              python3 scripts/lab/test_r80_pixofs.py --src src
+              R80_EXPERIMENTS="P1+F1" python3 scripts/lab/apply_r80_performance.py
+              R83_CANDIDATE=sprites python3 scripts/lab/apply_r83.py
+              R85_CANDIDATE=all python3 scripts/lab/apply_r85.py
+              R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
+              python3 scripts/lab/apply_r89.py
+              R90_CANDIDATE=control python3 scripts/lab/apply_r90.py
+              R91_CANDIDATE=sh1 python3 scripts/lab/apply_r91.py
+              R92_CANDIDATE=toggle python3 scripts/lab/apply_r92.py
+              R95_NAME=flat python3 scripts/lab/apply_r95.py
+              R96_NAME=wall python3 scripts/lab/apply_r96.py
+              R97_NAME=shasm python3 scripts/lab/apply_r97.py
+              R98_CANDIDATE=sprmul python3 scripts/lab/apply_r98.py
+              python3 scripts/lab/apply_r100.py
+              python3 scripts/lab/apply_r103.py
+              python3 - <<'PY2'
+          from pathlib import Path
+          p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text()
+          a="(('pl','play'),)";assert s.count(a)==1;s=s.replace(a,"(('pl','play'),('pf','perf'))")
+          a="    assert len(records) == 1\n";assert s.count(a)==1;s=s.replace(a,"    assert len(records) == 2\n")
+          p.write_text(s)
+          PY2
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
+          done
+      - name: Verify ROM sizes and BSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          for v,pre in (('c-diag','r103-diag-'),):
+              d=pathlib.Path('dist/ab')/v;rows=json.loads((d/'MANIFEST.json').read_text())
+              assert [r['variant'] for r in rows]==[pre+'pl',pre+'pf'],rows
+              for r in rows:
+                  b=(d/r['rom']).read_bytes()
+                  assert hashlib.sha256(b).hexdigest()==r['sha256'] and len(b)<=4*1024*1024 and r['bss_bytes']<=57920
+                  print('::notice title=%s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(r['variant'],len(b),r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
+          PY
+      - name: Probe DEMO3 with the diag PERF ROM (render skipped, then rendered)
+        shell: bash
+        run: |
+          set -uo pipefail
+          rom=$(ls dist/ab/c-diag/*-pf.bin)
+          python3 scripts/lab/r103_pit_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/probe-norender.json --label diag-norender --norender 1 > dist/ab/probe-norender.log 2>&1; echo rc=$?
+          tail -5 dist/ab/probe-norender.log
+          python3 scripts/lab/r103_pit_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/probe-render.json --label diag-render --norender 0 > dist/ab/probe-render.log 2>&1; echo rc=$?
+          tail -5 dist/ab/probe-render.log
+      - name: Upload A/B
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r103-diag
+          path: |
+            dist/ab/c-diag/
+            dist/ab/probe-*.json
+            dist/ab/*.log
+          retention-days: 90
+          if-no-files-found: warn
