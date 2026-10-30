@@ -49,7 +49,7 @@ def main():
         diag = "R103_Bad" in syms
         if diag:
             # diag ROM: skip rendering (r103_norender=1) to reach late tics; stop at R103_Bad.
-            badf = syms["R103_Bad"] & 0xFFFFFF; fin = sym(syms, "I_FinishUpdate") & 0xFFFFFF
+            badf = syms["R103_Bad"] & 0xFFFFFF; fin = sym(syms, "G_Ticker") & 0xFFFFFF  # one stop per game tic
             nr = syms["r103_norender"]; res["diag"] = True; armed = False
             assert g.req("Z0,%x,2" % badf) == "OK" and g.req("Z0,%x,2" % fin) == "OK"
             for _ in range(a.max_breaks):

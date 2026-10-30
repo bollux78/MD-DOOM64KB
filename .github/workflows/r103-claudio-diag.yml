@@ -143,7 +143,7 @@ jobs:
           rom=$(ls dist/ab/c-diag/*-pf.bin)
           python3 scripts/lab/r103_pit_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/probe-norender.json --label diag-norender --norender 1 > dist/ab/probe-norender.log 2>&1; echo rc=$?
           tail -5 dist/ab/probe-norender.log
-          for f in 550 1100 1600; do
+          for f in 550 1000 1400 1750 2000; do
             python3 scripts/lab/r103_pit_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/probe-from$f.json --label diag-from$f --norender 1 --render-from $f > dist/ab/probe-from$f.log 2>&1; echo rc=$?
             tail -3 dist/ab/probe-from$f.log
           done
