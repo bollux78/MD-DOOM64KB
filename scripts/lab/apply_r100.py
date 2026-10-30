@@ -13,8 +13,8 @@ R100_DIAG=1   Diagnostic build only (never delivered): per-COLUMN counters in BS
 from pathlib import Path
 import os
 mode = os.environ.get('R100_MODE', 'f1'); diag = os.environ.get('R100_DIAG') == '1'
-assert mode == 'f1'
-name = os.environ.get('R100_NAME', 'f1diag' if diag else 'f1')
+assert mode in ('f1', 'f1b')
+name = os.environ.get('R100_NAME', mode + ('diag' if diag else ''))
 D = 'src/r_draw.c'
 s = Path(D).read_text()
 assert 'R98 sprmul' in s, 'R98 sprmul chain first'
@@ -37,11 +37,24 @@ if diag:
     loop_g = loop.replace('        R37_HIT(R37_COLUMNS);', '        R37_HIT(R37_COLUMNS); r100_diag.cols++;', 1)
 else:
     loop_g = loop
-new = '    if (midtexture)\n    {\n' + spec + '\n    }\n    else\n    {\n' + loop_g + '\n    }'
+MASK = '            if (maskedtexture)\n                maskedtexturecol[rw_x] = texturecolumn;'
+two = None
+if mode == 'f1b':
+    # F1b: second generated copy for two-sided segs without a masked mid texture.
+    assert loop.count(MASK) == 1
+    two = loop.replace(TIER, '        if (0) /* R101 F1b: two-sided, midtexture == 0 */\n        {\n\n            dcvars.yl = yl;     // single sided line')
+    two = two.replace(MASK, '            if (0) /* R101 F1b: maskedtexture == 0 */\n                maskedtexturecol[rw_x] = texturecolumn;')
+    if diag:
+        two = two.replace('        R37_HIT(R37_COLUMNS);', '        R37_HIT(R37_COLUMNS); r100_diag.cols++; r100_diag.two_cols++;', 1)
+if two is None:
+    new = '    if (midtexture)\n    {\n' + spec + '\n    }\n    else\n    {\n' + loop_g + '\n    }'
+else:
+    new = ('    if (midtexture)\n    {\n' + spec + '\n    }\n    else if (!maskedtexture)\n    {\n' + two +
+           '\n    }\n    else\n    {\n' + loop_g + '\n    }')
 s = s[:a] + new + s[j + 1:]
 if diag:
     s = s.replace('static uint8_t *r96_fb;', '''/* R100 diagnostic counters (diagnostic build only). */
-volatile struct { uint32_t cols, mid_cols, mid_wall, r60, r96_single, r96_fallback, r96_empty; } r100_diag;
+volatile struct { uint32_t cols, mid_cols, mid_wall, r60, r96_single, r96_fallback, r96_empty, two_cols; } r100_diag;
 static uint8_t *r96_fb;''', 1)
     s = s.replace('    if (!fb || v->colormap != r96_cmap) { R_DrawColumnWall(v); return; }',
                   '    if (!fb || v->colormap != r96_cmap) { r100_diag.r96_fallback++; R_DrawColumnWall(v); return; }', 1)
@@ -55,8 +68,10 @@ Path(D).write_text(s)
 t = Path('scripts/lab/test_r15_wallmul.py'); u = t.read_text()
 old = 'assert src.count("R15_TAN_PRODUCT(rw_distance, tan)") == 4'
 assert u.count(old) == 1
-t.write_text(u.replace(old, 'assert src.count("R15_TAN_PRODUCT(rw_distance, tan)") == 8  # R100 F1: two generated loop copies'))
+copies = 3 if mode == 'f1b' else 2
+t.write_text(u.replace(old, 'assert src.count("R15_TAN_PRODUCT(rw_distance, tan)") == %d  # R100/R101: generated loop copies' % (4 * copies)))
 p = Path('scripts/lab/build_r71a12mul_hud.py'); t = p.read_text()
 assert "'r98-'" in t and "('sprmul', 1)" in t
-p.write_text(t.replace("'r98-'", "'r100-'").replace("('sprmul', 1)", repr((name, 1))))
-print('R100', mode, 'diag' if diag else 'release', 'name r100-' + name)
+prefix = os.environ.get('R100_PREFIX', 'r100')
+p.write_text(t.replace("'r98-'", "'%s-'" % prefix).replace("('sprmul', 1)", repr((name, 1))))
+print('R100', mode, 'diag' if diag else 'release', 'name %s-%s' % (prefix, name))
