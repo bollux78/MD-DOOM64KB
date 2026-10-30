@@ -1,0 +1,32 @@
+name: R106 Claudio episode WAD audit (calibration on the pinned shareware WAD)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r106-claudio-audit.trigger']
+permissions:
+  contents: read
+concurrency:
+  group: r106-claudio-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit shareware WAD (read-only, report only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          wad=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          test "$(sha256sum "$wad" | cut -d' ' -f1)" = 1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771
+          mkdir -p dist
+          python3 scripts/lab/audit_episode_wad.py --wad "$wad" --src src --json dist/audit-shareware.json | tee dist/audit-shareware.md
+      - uses: actions/upload-artifact@v6
+        with:
+          name: r106-audit
+          path: dist/
