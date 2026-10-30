@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--max-bad", type=int, default=8)
     ap.add_argument("--max-breaks", type=int, default=400000)
     ap.add_argument("--norender", type=int, default=1)
+    ap.add_argument("--render-from", type=int, default=0, help="with --norender 1: render again from this tic")
     a = ap.parse_args()
     assert 1 <= a.max_emulated_frames <= 10000
     rsp = load_rsp(); syms = rsp.symbols(a.elf)
@@ -61,6 +62,8 @@ def main():
                 if pc == fin:
                     if not armed and a.norender:
                         assert g.req("M%x,1:01" % (nr & 0xFFFFFF)) == "OK"; armed = True
+                    if armed and a.render_from and tic >= a.render_from:
+                        assert g.req("M%x,1:00" % (nr & 0xFFFFFF)) == "OK"; armed = None; res["render_from_tic"] = tic
                     if tic < res["last_tic"] - 5: res["end"] = "demo_restarted"; break
                     res["last_tic"] = max(res["last_tic"], tic); continue
                 if pc == badf:
