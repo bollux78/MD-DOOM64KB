@@ -1,0 +1,65 @@
+name: R103 Claudio PIT_AddThingIntercepts bad-pointer probe (DEMO3, existing PERF ROMs)
+# Read-only BlastEm probe of already-built PERF ROMs (no build). Real hardware: ADDRESS ERROR in
+# PIT_AddThingIntercepts with thing=0xBCFCFFFF at a fixed point of the demo, in several R versions.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r103-claudio-pitprobe.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r103-claudio-pitprobe-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          test -x "$BLASTEM"
+          python3 -m py_compile scripts/lab/r103_pit_probe.py scripts/lab/r64a_rsp_capture.py
+      - uses: actions/download-artifact@v6
+        with:
+          name: doom-md-r100-f1
+          path: roms/r100
+          run-id: 41081061207
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v6
+        with:
+          name: doom-md-r98-three
+          path: roms/r98
+          run-id: 41054560663
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v6
+        with:
+          name: doom-md-r95-flat
+          path: roms/r95
+          run-id: 41002332452
+          github-token: ${{ github.token }}
+      - name: Probe
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p dist/r103
+          for rom in roms/r100/c-f1/doom-md-r60-r100-f1-pf.bin roms/r98/c-sprmul/doom-md-r60-r98-sprmul-pf.bin roms/r95/c-flat/doom-md-r60-r95-flat-pf.bin; do
+            n=$(basename "$rom" .bin)
+            python3 scripts/lab/r103_pit_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/r103/$n.json" --label "$n" > "dist/r103/$n.log" 2>&1
+            echo "rc=$?" >> "dist/r103/$n.log"; tail -12 "dist/r103/$n.log"
+          done
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r103-pitprobe
+          path: dist/r103/
+          if-no-files-found: warn
