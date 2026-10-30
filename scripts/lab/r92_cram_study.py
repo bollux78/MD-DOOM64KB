@@ -26,7 +26,7 @@ def main():
      # Guard hue against the continuous ideal; for near neutrals constrain chroma.
      chroma=np.linalg.norm(targetN[1:]);valid=(hd(hue(ln),hue(targetN))<=max(8.,float(hd(hue(oldlab),hue(targetN))))) if chroma>8 else (np.linalg.norm(ln[:,1:],axis=1)<=max(8.,np.linalg.norm(oldlab[1:])))
      valid&=np.abs(ln[:,0]-targetN[0])<=max(6.,abs(oldlab[0]-targetN[0]))
-     if slot==0:k=int(np.argmin(np.sum((cn-original)**2,axis=1)))
+     if slot==0:k=int(np.argmin(np.sum((grid-oldgrid)**2,axis=1)))
      else:k=int(np.argmin(np.where(valid,score,np.inf))) if valid.any() else int(np.argmin(score))
      out[effect,slot]=words[k]
      rows.append(dict(mode=mode,bank=bank,effect=effect,slot=slot,original=int(old[effect,slot]),channel_round=int((int(oldgrid[0])<<1)|(int(oldgrid[1])<<5)|(int(oldgrid[2])<<9)),candidate=int(words[k]),old_L=float(oldlab[0]),new_L=float(ln[k,0]),ideal_L=float(targetN[0]),old_hue=float(hue(oldlab)),new_hue=float(hue(ln[k])),ideal_hue=float(hue(targetN)),old_chroma=float(np.linalg.norm(oldlab[1:])),new_chroma=float(np.linalg.norm(ln[k,1:]))))
