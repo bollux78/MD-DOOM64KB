@@ -13,7 +13,7 @@ R104_NAME selects the build label (mask | maskdiag).
 import os
 from pathlib import Path
 
-name = os.environ.get('R104_NAME', 'mask'); assert name in ('mask', 'maskdiag')
+name = os.environ.get('R104_NAME', 'mask'); prefix = os.environ.get('R104_PREFIX', 'r104')
 
 
 def rep(f, a, b, n=1):
@@ -38,8 +38,10 @@ rep('src/r22_blocklinks.c', 'uint16_t r22_block_cells;', 'uint16_t r22_block_cel
 rep('src/r22_blocklinks.c', '    R22_SRAM_ENABLE();\n    for(uint16_t i=0;i<count;i++)saved', '    R25_SRAM_BEGIN();\n    for(uint16_t i=0;i<count;i++)saved')
 rep('src/r23_mapmem.c', '    node_used=0;node_free=NULL;end=32768UL;\n    R22_SRAM_ENABLE();', '    node_used=0;node_free=NULL;end=32768UL;\n    R25_SRAM_BEGIN();')
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
-old_pre = "'r103-'" if "'r103-'" in s else "'r100-'"
-old_set = "('diag', 1)" if "('diag', 1)" in s else "('f1', 1)"
-assert s.count(old_pre) >= 1 and s.count(old_set) == 1, (old_pre, old_set)
-p.write_text(s.replace(old_pre, "'r104-'").replace(old_set, repr((name, 1))))
+import re
+pres = [x for x in ("'r100-'", "'r102-'", "'r103-'") if x in s]
+sets = re.findall(r"\(\('([a-z0-9]+)', 1\),\)", s)
+assert len(pres) == 1 and len(sets) == 1, (pres, sets)
+s = s.replace(pres[0], repr(prefix + '-')).replace("(('%s', 1),)" % sets[0], "((%r, 1),)" % name)
+p.write_text(s)
 print('R104', name, 'SRAM windows mask interrupts')
