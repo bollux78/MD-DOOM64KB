@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """R94 (Claudio): statistical PC profiler for an unmodified PERF ROM in BlastEm (GDB RSP over stdio).
 
-The emulator runs freely; the host interrupts it (0x03) at random wall-clock intervals, reads PC and
-the long word at SP (return address, to attribute leaf helpers), and continues. Samples are taken only
+A breakpoint on the level-6 (VBlank) interrupt handler gives one sample per emulated frame, uniform in
+EMULATED time: the interrupted PC is read from the exception frame (SR word, PC long) at SP. Interrupts
+masked by the program (ori #0x700) delay the sample to the instruction after unmasking (small bias).
+The long word above the frame is kept as a caller hint (not reliable, no frame pointer). Samples are taken only
 while DEMO3 is running (gametic advancing). Optional one-time RAM writes at the first stop
 (--shadow 0/1, --mode 1/2). <= 10,000 emulated frames per BlastEm process (AGENTS.md).
 Not a hardware measurement: wall-clock sampling of an emulator; relative shares only.
@@ -49,7 +51,7 @@ def main():
     text = text_symbols(a.elf); addrs = [s[0] for s in text]
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=False)
     rng = random.Random(a.seed)
-    g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, 30)
+    g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, 120)
     samples, status, last_tic, stall = [], "max_samples", -1, 0
     try:
         g.req("qSupported")
@@ -58,21 +60,18 @@ def main():
         assert g.req("Z0,%x,2" % fin) == "OK"; g.cont(); assert g.req("z0,%x,2" % fin) == "OK"
         if a.shadow is not None: assert g.req("M%x,1:%02x" % (sym("r92_shadow_on"), a.shadow)) == "OK"
         if a.mode is not None: assert g.req("M%x,2:%02x01" % (sym("r77_color_state"), a.mode)) == "OK"
+        vint = int.from_bytes(open(a.rom, "rb").read()[0x78:0x7C], "big") & 0xFFFFFF
+        assert g.req("Z0,%x,2" % vint) == "OK"
         while len(samples) < a.max_samples:
-            g.send("c")
-            time.sleep(a.interval_ms / 1000 * (0.5 + rng.random()))
-            g.proc.stdin.write(b"\x03"); g.proc.stdin.flush()
             try:
-                r = g.recv(timeout=10)
-            except TimeoutError:
-                status = "interrupt_unsupported" if not samples else "timeout"; break
+                g.cont()
             except RuntimeError as e:
                 status = "emulator_ended" if ("EOF" in str(e) or "exited" in str(e)) else "error: " + str(e); break
-            if not (r.startswith("S") or r.startswith("T")):
-                status = "unexpected " + r[:40]; break
-            regs = g.req("g")
-            pc = int(regs[17 * 8:18 * 8], 16) & 0xFFFFFF; sp = int(regs[15 * 8:16 * 8], 16) & 0xFFFFFF
-            ret = int.from_bytes(g.readmem(sp, 4), "big") & 0xFFFFFF if 0xFF0000 <= sp < 0xFFFFFC else 0
+            except TimeoutError:
+                status = "timeout"; break
+            regs = g.req("g"); sp = int(regs[15 * 8:16 * 8], 16) & 0xFFFFFF
+            frame = g.readmem(sp, 10)
+            pc = int.from_bytes(frame[2:6], "big") & 0xFFFFFF; ret = int.from_bytes(frame[6:10], "big") & 0xFFFFFF
             tic = int.from_bytes(g.readmem(tic_a, 4), "big")
             if tic < last_tic - 5: status = "demo_restarted"; break
             stall = stall + 1 if tic == last_tic else 0; last_tic = max(last_tic, tic)
@@ -89,7 +88,7 @@ def main():
     pairs = [{"function": f, "caller_guess": cl, "samples": c, "share": round(c / n, 4)} for (f, cl), c in caller.most_common(60)]
     res = {"rom": a.rom, "shadow": a.shadow, "mode": a.mode, "samples": len(samples), "status": status,
            "tic_range": [samples[0][0], samples[-1][0]] if samples else None, "top": top, "top_with_caller_guess": pairs,
-           "note": "wall-clock sampling of BlastEm; caller_guess is the long word at SP (exact only for leaf functions)"}
+           "note": "one sample per emulated VBlank (exception frame PC); caller_guess is the long word above the frame, unreliable"}
     (out / "PROFILE.json").write_text(json.dumps(res, indent=1) + "\n")
     lines = ["%6.2f%%  %6d  %s" % (100 * t["share"], t["samples"], t["function"]) for t in top]
     (out / "PROFILE.txt").write_text("\n".join(lines) + "\n")
