@@ -36,6 +36,8 @@ body = body.replace('source[frac>>9]', 'source[frac>>10]').replace(call,
 s = s[:a] + body + s[b:]
 Path(V).write_text(s)
 
+# Host regression for the sprite column: the reference samples half texels too.
+rep('scripts/lab/test_r22_pixel4.py', '   unsigned c=source[f>>9];if(d.colormap)c=map[c];c&=15;', '   unsigned c=source[f>>10];if(d.colormap)c=map[c];c&=15;')
 F = 'scripts/lab/build_r35_linear.fish'
 rep(F, '    cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1\n    python3 scripts/lab/r89_align_maps.py scripts/doom64.wad; or exit 1\n',
        '    cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1\n    python3 scripts/lab/r89_align_maps.py scripts/doom64.wad; or exit 1\n'
