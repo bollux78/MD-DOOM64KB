@@ -1,0 +1,233 @@
+name: R107 Claudio direct baked wall columns (control R105 twoface)
+# Control = R92 toggle (SH1, Shadow Off default). Candidate = R92 toggle + R95 fast flats.
+# PERF twins for a same-job DEMO3 framebuffer/timing A/B; PLAY ROMs for the user benchmark.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r107-claudio-direct.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r107-claudio-direct-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_SETS: 'twoface direct'
+  R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/apply_r83.py scripts/lab/test_r83.py scripts/lab/apply_r81.py scripts/lab/apply_r82_d8088.py scripts/lab/test_r82_d8088.py scripts/lab/apply_r80_performance.py scripts/lab/test_r80_pixofs.py scripts/lab/r82_stack_probe.py scripts/lab/r82_bsp_depth.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 scripts/lab/test_r83.py
+          python3 scripts/lab/test_r88.py
+          python3 scripts/lab/test_r89.py
+          python3 scripts/lab/test_r89_routes.py
+          python3 scripts/lab/test_r90.py
+          python3 scripts/lab/test_r91.py
+          python3 scripts/lab/test_r92.py
+          python3 -m py_compile scripts/lab/apply_r95.py scripts/lab/apply_r96.py scripts/lab/apply_r97.py scripts/lab/apply_r98.py scripts/lab/apply_r99.py scripts/lab/apply_r100.py scripts/lab/r100_diag_read.py scripts/lab/r100_asm_metrics.py scripts/lab/r82_stack_probe.py scripts/lab/apply_r104.py scripts/lab/apply_r107.py
+          cc -O2 -Iscripts/lab/r99 scripts/lab/r99/test_r99_recip.c -o "$RUNNER_TEMP/r99recip" && "$RUNNER_TEMP/r99recip"
+          python3 -m py_compile scripts/lab/apply_r87.py scripts/lab/r87_compare.py
+          python3 -m py_compile scripts/lab/apply_r85.py scripts/lab/apply_r84.py scripts/lab/gen_r84_columns.py scripts/lab/r84_texture_audit.py
+          python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r81_font.py
+          python3 scripts/lab/test_r81_cheats.py
+          python3 scripts/lab/test_r81_codec.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r79_face.py
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then lab=control; else lab="c-${set//+/_}"; fi
+            w="$RUNNER_TEMP/r92-shadow-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/apply_r81.py
+              python3 scripts/lab/test_r80_pixofs.py --src src
+              R80_EXPERIMENTS="P1+F1" python3 scripts/lab/apply_r80_performance.py
+              R83_CANDIDATE=sprites python3 scripts/lab/apply_r83.py
+              R85_CANDIDATE=all python3 scripts/lab/apply_r85.py
+              R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
+              python3 scripts/lab/apply_r89.py
+              R90_CANDIDATE=control python3 scripts/lab/apply_r90.py
+              R91_CANDIDATE=sh1 python3 scripts/lab/apply_r91.py
+              R92_CANDIDATE=toggle python3 scripts/lab/apply_r92.py
+              R95_NAME=flat python3 scripts/lab/apply_r95.py
+              R96_NAME=wall python3 scripts/lab/apply_r96.py
+              R97_NAME=shasm python3 scripts/lab/apply_r97.py
+              R98_CANDIDATE=sprmul python3 scripts/lab/apply_r98.py
+              R100_MODE=f1t R100_PREFIX=r102 R100_NAME=twoface python3 scripts/lab/apply_r100.py; R104_PREFIX=r105 R104_NAME=twoface python3 scripts/lab/apply_r104.py
+              if [ "$set" = direct ]; then python3 scripts/lab/apply_r107.py; fi
+              python3 - <<'PY2'
+          from pathlib import Path
+          p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text()
+          a="(('pl','play'),)";assert s.count(a)==1;s=s.replace(a,"(('pl','play'),('pf','perf'))")
+          a="    assert len(records) == 1\n";assert s.count(a)==1;s=s.replace(a,"    assert len(records) == 2\n")
+          p.write_text(s)
+          PY2
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
+          done
+      - name: Verify ROM sizes and BSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          for v,pre in (('c-twoface','r105-twoface-'),('c-direct','r107-direct-')):
+              d=pathlib.Path('dist/ab')/v;rows=json.loads((d/'MANIFEST.json').read_text())
+              assert [r['variant'] for r in rows]==[pre+'pl',pre+'pf'],rows
+              for r in rows:
+                  b=(d/r['rom']).read_bytes()
+                  assert hashlib.sha256(b).hexdigest()==r['sha256'] and len(b)<=4*1024*1024 and r['bss_bytes']<=57920
+                  print('::notice title=%s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(r['variant'],len(b),r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
+          PY
+      - name: Shadow Off A/B (PERF, framebuffer per tic)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in c-twoface c-direct; do
+            rom=$(ls dist/ab/$v/*-pf.bin)
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/cap-$v" --label "$v" --max-emulated-frames 9000 --max-breaks 6000 --timeout 600 > "dist/ab/cap-$v.log" 2>&1 || { cat "dist/ab/cap-$v.log"; exit 1; }
+          done
+          python3 scripts/lab/r70_compare.py dist/ab/compare-off control=dist/ab/cap-c-twoface direct=dist/ab/cap-c-direct | tee dist/ab/compare-off.log
+          python3 -c "t=open('dist/ab/compare-off.log').read();i=t.find('## Timing');print('::notice title=R107 Shadow Off A/B::'+t[i:i+2500].replace('%','%25').replace('\n','%0A'))"
+      - name: Shadow On A/B (PERF, framebuffer after the pass, A2 and L3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for m in 1 2; do
+            for v in c-twoface c-direct; do
+              rom=$(ls dist/ab/$v/*-pf.bin)
+              python3 scripts/lab/r93b_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/on$m-$v" --mode $m --max-emulated-frames 9000 > "dist/ab/on$m-$v.log" 2>&1 || { cat "dist/ab/on$m-$v.log"; exit 1; }
+            done
+          done
+          python3 - <<'PY' | tee dist/ab/compare-on.log
+          import json,pathlib
+          P=3344
+          def load(d):
+              d=pathlib.Path(d);r=[json.loads(l) for l in (d/'frames.jsonl').read_text().splitlines() if l.strip()]
+              post=(d/'post.bin').read_bytes();first={};prev=None;cost={}
+              for i,x in enumerate(r):
+                  if x['tic'] not in first:first[x['tic']]=i;cost[x['tic']]=None if prev is None else x['vb']-prev
+                  prev=x['vb']
+              return post,first,cost
+          out={}
+          for cand in ('c-direct',):
+            for m,name in ((1,'A2'),(2,'L3')):
+              a=load(f'dist/ab/on{m}-c-twoface');b=load(f'dist/ab/on{m}-{cand}');tics=sorted(set(a[1])&set(b[1]))
+              diff=sum(1 for t in tics if a[0][a[1][t]*P:(a[1][t]+1)*P]!=b[0][b[1][t]*P:(b[1][t]+1)*P])
+              va=sum(a[2][t] for t in tics if a[2][t] is not None);vb=sum(b[2][t] for t in tics if b[2][t] is not None)
+              out[cand+'-'+name]=dict(common_tics=len(tics),tic_range=[tics[0],tics[-1]],post_pass_frames_differing=diff,vblanks_control=va,vblanks_cand=vb,delta_pct=round((vb/va-1)*100,2))
+          print(json.dumps(out))
+          assert all(v['post_pass_frames_differing']==0 for v in out.values())
+          PY
+          python3 -c "print('::notice title=R107 Shadow On A/B (post-pass)::'+open('dist/ab/compare-on.log').read().strip())"
+      - name: Stack peak
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p dist/ab/stack
+          for v in c-twoface c-direct; do
+            rom=$(ls dist/ab/$v/*-pf.bin)
+            python3 scripts/lab/r82_stack_probe.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/stack/$v.json" --label "$v" --max-emulated-frames 8000 --stop-tic 400 > "dist/ab/stack/$v.log" 2>&1
+            python3 -c "import json,sys;r=json.load(open(sys.argv[1]));print('::notice title=stack %s::'%sys.argv[2]+' '.join('%s=%s'%(k,r.get(k)) for k in ('status','reserve_bytes','peak_stack_bytes','headroom_bytes','tic_read')))" "dist/ab/stack/$v.json" "$v" || cat "dist/ab/stack/$v.log"
+          done
+      - name: Code metrics and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in c-twoface c-direct; do
+            "$OBJDUMP" -d $(ls dist/ab/$v/*-pf.elf) > dist/ab/objdump-$v.txt
+            fns=$(grep -oE '^[0-9a-f]{8} <(R_Subsector[^>]*|R_RenderSegLoop[^>]*|R_StoreWallRange[^>]*|R_DrawSegTextureColumn[^>]*)>' dist/ab/objdump-$v.txt | sed -E 's/.*<(.*)>/\1/' | sort -u | tr '\n' ' ')
+            python3 scripts/lab/r100_asm_metrics.py dist/ab/objdump-$v.txt $fns > dist/ab/metrics-$v.json
+          done
+          python3 - <<'PY'
+          import json,os,pathlib,hashlib
+          m={'base_branch':'exp-claudio-r99-three-20261030','base_sha':os.environ['R100_BASE_SHA'],'workflow_sha':os.environ['GITHUB_SHA'],
+             'chain':'apply_r81 > r80 P1+F1 > r83 sprites > r85 all > r88 ai > r89 > r90 control > r91 sh1 > r92 toggle > r95 flat > r96 wall > r97 shasm > r98 sprmul > r100 mode f1t > r104 (control R105 twoface) [direct: > apply_r107]',
+             'roms':{},'metrics':{v:json.load(open(f'dist/ab/metrics-{v}.json')) for v in ('c-twoface','c-direct')},
+             'compare_on':json.loads(open('dist/ab/compare-on.log').read().strip().splitlines()[0])}
+          for v in ('c-twoface','c-direct'):
+              for r in json.loads((pathlib.Path('dist/ab')/v/'MANIFEST.json').read_text()):m['roms'][r['variant']]={k:r[k] for k in ('rom','bytes','bss_bytes','sha256')}
+          pathlib.Path('dist/ab/R107-MANIFEST.json').write_text(json.dumps(m,indent=1)+'\n')
+          print('::notice title=R107 metrics::'+json.dumps(m['metrics']))
+          PY
+      - name: PLAY smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in c-direct; do
+            rom=$(ls dist/ab/$v/*-pl.bin)
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/smoke-$v --label $v-play --max-emulated-frames 800 --max-breaks 600 --timeout 120 > dist/ab/smoke-$v.log 2>&1 || { cat dist/ab/smoke-$v.log; exit 1; }
+          done
+      - name: Upload A/B
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r107-direct
+          path: |
+            dist/ab/c-twoface/*.bin
+            dist/ab/c-direct/
+            dist/ab/R107-MANIFEST.json
+            dist/ab/metrics-*.json
+            dist/ab/stack/
+            dist/ab/compare-off/
+            dist/ab/compare/
+            dist/ab/*.log
+          retention-days: 90
+          if-no-files-found: warn
