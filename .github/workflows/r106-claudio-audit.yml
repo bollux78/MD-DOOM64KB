@@ -1,4 +1,4 @@
-name: R106 Claudio episode WAD audit (calibration on the pinned shareware WAD)
+name: R106 Claudio episode WAD audit (shareware calibration + private full WAD, report only)
 on:
   workflow_dispatch:
   push:
@@ -26,6 +26,13 @@ jobs:
           test "$(sha256sum "$wad" | cut -d' ' -f1)" = 1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771
           mkdir -p dist
           python3 scripts/lab/audit_episode_wad.py --wad "$wad" --src src --json dist/audit-shareware.json | tee dist/audit-shareware.md
+      - name: Audit private full WAD (read-only; only numbers and lump names leave the runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          full=/home/dan/Projetos/Personal/DOOM.WAD
+          test "$(sha256sum "$full" | cut -d' ' -f1)" = ff2c301b8719465a6e386a512bfa319931b7f64ea517d337c5a47afe03951902
+          python3 scripts/lab/audit_episode_wad.py --wad "$full" --src src --json dist/audit-full.json | tee dist/audit-full.md
       - uses: actions/upload-artifact@v6
         with:
           name: r106-audit
