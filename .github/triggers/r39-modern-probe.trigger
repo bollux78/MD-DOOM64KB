@@ -1,1 +1,1 @@
-Diagnose actual stop PC and return stack on compiled ROM, 2026-11-01
+Probe 3: account for cold start in emulation frame budget; verify initial PC and VB

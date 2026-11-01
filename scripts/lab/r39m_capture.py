@@ -12,7 +12,7 @@ def symbol(s,name):
 
 ap=argparse.ArgumentParser();ap.add_argument('--blastem',required=True);ap.add_argument('--rom',required=True)
 ap.add_argument('--elf',required=True);ap.add_argument('--out',required=True);ap.add_argument('--max-emulated-frames',type=int,default=7000)
-a=ap.parse_args();assert 1<=a.max_emulated_frames<=10000
+a=ap.parse_args();assert 1<=a.max_emulated_frames<=100000
 rsp=module();s=rsp.symbols(a.elf);out=pathlib.Path(a.out);out.mkdir(parents=True,exist_ok=False);summaries=[]
 for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_solid'),
                        (1,'Checker','doom_colormap_cells','r39d_colorcell_checker'),
@@ -37,7 +37,10 @@ for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_sol
         assert g.req('Z0,%x,2'%begin)=='OK'
         g.cont()
         check_error()
-        print('First real scene',name,'tic',int.from_bytes(g.readmem(symbol(s,'_g_gametic'),4),'big'),flush=True)
+        regs=g.req('g');first_pc=int(regs[17*8:18*8],16)&0xffffff
+        assert first_pc==begin,('not the scene breakpoint',hex(first_pc),hex(begin))
+        print('First real scene',name,'tic',int.from_bytes(g.readmem(symbol(s,'_g_gametic'),4),'big'),
+              'vb',int.from_bytes(g.readmem(symbol(s,'_g_vblankCount'),4),'big'),flush=True)
         assert g.req('z0,%x,2'%begin)=='OK'
         for sym,value,size in (('r39f_dither_mode',mode,2),('r39d_active_colormap',symbol(s,mt),4),('colorcell',symbol(s,ct),4)):
             assert g.req('M%x,%x:%s'%(symbol(s,sym),size,value.to_bytes(size,'big').hex()))=='OK'
