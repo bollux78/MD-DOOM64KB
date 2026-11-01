@@ -5,7 +5,7 @@
 static void R39M_HudPalette(void){
     PAL_setColors(32,hudw_fpal,16,CPU);PAL_setColors(48,hudw_pal,16,CPU);
 }
-static void R39M_HInt(void){
+static HINTERRUPT_CALLBACK R39M_HInt(void){
     VDP_setHInterrupt(FALSE);
     if(!r39m_scene_active || _g_gamestate!=GS_LEVEL || _g_menuactive || r35_native_active>=0)return;
     /* The scene has ended; all pixels here are in the reserved black gap. */

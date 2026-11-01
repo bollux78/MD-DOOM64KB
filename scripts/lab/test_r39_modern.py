@@ -11,6 +11,7 @@ if '--source' in sys.argv:
     assert '{2,"Shadow:"' not in m and '{2,"Color mode:"' not in m
     assert 'r39f_mode_names' in m and 'Dithering:' in m
     assert 'r104_sr' in (r/'src/r22_blocklinks.h').read_text()
+    assert 'static HINTERRUPT_CALLBACK R39M_HInt(void)' in (r/'src/r39m_raster.inc').read_text()
     print('PASS R39 original colour path, one word/tile DMA, tri-dither menu, protected SRAM')
     sys.exit()
 code=r'''

@@ -36,7 +36,8 @@ Não declarar estabilidade em hardware com base apenas no emulador.
 
 O teste de host compara 40 mil colunas com um oráculo de palavras de tile,
 incluindo bits de todas as paletas, clipping, fase de textura e sentinelas.
-O runner compila PLAY e uma PERF interna. Capturas parciais da PERF verificam
+O runner compila PLAY e uma PERF interna e verifica no disassembly que o
+callback HInt retorna com RTE (ABI de interrupção do SGDK). Capturas parciais da PERF verificam
 os índices e os quatro bancos de paleta nos três modos de dithering.
 Isso não é benchmark completo nem validação visual do hardware.
 
