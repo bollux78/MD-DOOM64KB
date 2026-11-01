@@ -1,1 +1,1 @@
-R39f modern: capture begins at real scene, not startup printing; attempt 2
+R39f modern: activate raster only after real scene; DMA admission before CRAM, attempt 3

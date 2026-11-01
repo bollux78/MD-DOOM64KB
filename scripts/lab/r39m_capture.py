@@ -22,10 +22,21 @@ for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_sol
     try:
         g.req('qSupported')
         begin=symbol(s,'R39M_BeginScene')&0xffffff
+        error_pc=s.get('I_Error',0)&0xffffff
+        if error_pc:assert g.req('Z0,%x,2'%error_pc)=='OK'
+        def check_error():
+            regs=g.req('g');pc=int(regs[17*8:18*8],16)&0xffffff
+            if error_pc and pc==error_pc:
+                sp=int(regs[15*8:16*8],16)&0xffffff
+                stack=g.readmem(sp,32);msg_ptr=int.from_bytes(stack[4:8],'big')&0xffffff
+                try:msg=g.readmem(msg_ptr,160).split(b'\0')[0].decode(errors='replace')
+                except Exception:msg='unreadable'
+                raise RuntimeError('ROM I_Error: '+msg+' stack='+stack.hex())
         # Startup progress printing also calls I_FinishUpdate with gametic=0.
         # Wait for the actual renderer before changing mode or counting frames.
         assert g.req('Z0,%x,2'%begin)=='OK'
         g.cont()
+        check_error()
         print('First real scene',name,'tic',int.from_bytes(g.readmem(symbol(s,'_g_gametic'),4),'big'),flush=True)
         assert g.req('z0,%x,2'%begin)=='OK'
         for sym,value,size in (('r39f_dither_mode',mode,2),('r39d_active_colormap',symbol(s,mt),4),('colorcell',symbol(s,ct),4)):
@@ -33,7 +44,7 @@ for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_sol
         assert g.req('Z0,%x,2'%(symbol(s,'I_FinishUpdate')&0xffffff))=='OK'
         armed=True
         for _ in range(900):
-            try:g.cont()
+            try:g.cont();check_error()
             except RuntimeError as e:
                 if 'EOF' in str(e) or 'exited' in str(e):status='emulator_ended';break
                 raise

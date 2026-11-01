@@ -39,8 +39,9 @@ rep(D,'#include "r57_viewport.h"','''#include "r57_viewport.h"
 #include "r39m_draw.h"
 extern uint8_t *R39M_Framebuffer(void);
 extern uint16_t R39M_FlatCell(uint8_t c);
+extern void R39M_EnableScene(void);
 extern void R39M_DrawFast(const draw_column_vars_t *v,const uint16_t *map);''')
-rep(D,'void R_RenderPlayerView (player_t* player)\n{','''void __attribute__((noinline,used)) R39M_BeginScene(void){__asm__ volatile("nop":::"memory");}
+rep(D,'void R_RenderPlayerView (player_t* player)\n{','''void __attribute__((noinline,noipa,used)) R39M_BeginScene(void){R39M_EnableScene();__asm__ volatile("nop":::"memory");}
 void R_RenderPlayerView (player_t* player)
 {
     R39M_BeginScene();''')
@@ -82,10 +83,13 @@ body(V,'static void R22_Palette(int8_t p)', '''    if(p<0)p=0;if(p>=GENPAL_NSUB)
     VDP_setHilightShadow(FALSE);R22_Unlock(sr);''')
 
 # One tile-word DMA per row, no second scene plane, no Pair-V conversion or attributes.
-body(V,'void R20_VBlankVideo(void)', '''    if(r22_ready && r22_queued_pal!=100)R22_Palette(r22_queued_pal);
+body(V,'void R20_VBlankVideo(void)', '''    uint16_t line=(*(volatile uint16_t*)0xC00008)>>8;
+    if(r22_ready && r22_queued_pal!=100){
+        int8_t p=r22_queued_pal;if(p<0)p=0;if(p>=GENPAL_NSUB)p=GENPAL_NSUB-1;r39m_palette=(uint8_t)p;
+    }
     R39M_FramePalette();
     if(!r22_ready)return;
-    uint16_t line=(*(volatile uint16_t*)0xC00008)>>8;if(line<224||line>232)return;
+    if(line<224||line>232)return;
     uint16_t sr=R22_Lock();bool bus=Z80_getAndRequestBus(TRUE);VDP_setAutoInc(2);
     volatile uint16_t *ctrl=(volatile uint16_t *)0xC00004;
     const uint16_t *src=(const uint16_t *)(const void *)r22_fb.pixels;
@@ -109,7 +113,8 @@ rep('src/r77_menu.inc','static void R77_MenuEnter(void)\n{',
 rep('src/r35_native4.inc','static bool R35_DrawNative4(int16_t lump)\n{',
     'static bool R35_DrawNative4(int16_t lump)\n{\n    VDP_setHInterrupt(FALSE);')
 rep(V,'    VDP_setHInterrupt(FALSE);','    r39m_scene_active=0;VDP_setHInterrupt(FALSE);')
-rep(V,'void I_FinishUpdate(void){','void I_FinishUpdate(void){\n    r39m_scene_active=(_g_gamestate==GS_LEVEL);')
+rep(V,'void I_FinishUpdate(void){','void I_FinishUpdate(void){\n    if(_g_gamestate!=GS_LEVEL)r39m_scene_active=0;')
+rep(V,'void I_InitGraphicsHardwareSpecificCode(void){','void I_InitGraphicsHardwareSpecificCode(void){\n    r39m_scene_active=0;VDP_setHInterrupt(FALSE);')
 # The nominal Pair-V capability flag remains for shared UI storage guards, never for drawing.
 rep(V,'VDP_setHorizontalScroll(BG_B,desired?-20:4);','VDP_setHorizontalScroll(BG_B,desired?-24:0);')
 rep(V,'VDP_setHorizontalScroll(BG_B,4);','VDP_setHorizontalScroll(BG_B,0);')

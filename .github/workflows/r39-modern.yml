@@ -140,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           rom=dist/hud/doom-md-r60-r105-r39modern-pf.bin
-          python3 scripts/lab/r39m_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/r39m-captures --max-emulated-frames 7000 > dist/hud/r39modern-capture.log 2>&1
+          python3 scripts/lab/r39m_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/r39m-captures --max-emulated-frames 7000 > dist/hud/r39modern-capture.log 2>&1 || { cat dist/hud/r39modern-capture.log; exit 1; }
           cat dist/hud/r39modern-capture.log
       - name: Package playable ROM
         shell: bash
@@ -166,9 +166,16 @@ jobs:
         with:
           name: r105-r39modern-failure
           path: |
-            dist/hud/*.bin
-            dist/hud/*.elf
             dist/hud/*.log
             dist/hud/SIZE-*.txt
             dist/r39m-captures/
           retention-days: 14
+      - name: Upload debug binaries on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r39-modern-debug-binaries
+          path: |
+            dist/hud/*.bin
+            dist/hud/*.elf
+          retention-days: 7

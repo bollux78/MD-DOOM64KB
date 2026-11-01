@@ -11,6 +11,7 @@ static uint16_t r39f_dither_mode=R39F_CHECKER;
 static uint8_t r39m_palette,r39m_scene_active;
 static void R39M_FramePalette(void);
 static void R39M_HudPalette(void);
+void R39M_EnableScene(void){r39m_scene_active=1;}
 uint16_t R39F_DitherMode(void){return r39f_dither_mode;}
 void __attribute__((noinline,used)) R39F_SetDitherMode(uint16_t mode){
     if(mode>R39F_VERTICAL)return;
