@@ -1,1 +1,1 @@
-Original R39f tile-word renderer with R105 features, 2026-11-01
+R39f modern: capture begins at real scene, not startup printing; attempt 2

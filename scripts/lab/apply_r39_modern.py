@@ -40,6 +40,10 @@ rep(D,'#include "r57_viewport.h"','''#include "r57_viewport.h"
 extern uint8_t *R39M_Framebuffer(void);
 extern uint16_t R39M_FlatCell(uint8_t c);
 extern void R39M_DrawFast(const draw_column_vars_t *v,const uint16_t *map);''')
+rep(D,'void R_RenderPlayerView (player_t* player)\n{','''void __attribute__((noinline,used)) R39M_BeginScene(void){__asm__ volatile("nop":::"memory");}
+void R_RenderPlayerView (player_t* player)
+{
+    R39M_BeginScene();''')
 # Preserve four original scene palettes and two HUD palettes with a bottom-gap raster switch.
 rep('src/r57_viewport.h','result.hcrop=h;result.vcrop=v;','v=v<8?8:v; /* reserve the scene/HUD palette-switch gap */\n    result.hcrop=h;result.vcrop=v;')
 rep(V,'static volatile uint16_t r22_ready;','static volatile uint16_t r22_ready;\n#include "r39m_scene.inc"')

@@ -20,7 +20,18 @@ for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_sol
     g=rsp.RSP(a.blastem,a.rom,a.max_emulated_frames,600)
     rows=[];seen=set();palettes=set();status='break_limit';armed=False
     try:
-        g.req('qSupported');assert g.req('Z0,%x,2'%(symbol(s,'I_FinishUpdate')&0xffffff))=='OK'
+        g.req('qSupported')
+        begin=symbol(s,'R39M_BeginScene')&0xffffff
+        # Startup progress printing also calls I_FinishUpdate with gametic=0.
+        # Wait for the actual renderer before changing mode or counting frames.
+        assert g.req('Z0,%x,2'%begin)=='OK'
+        g.cont()
+        print('First real scene',name,'tic',int.from_bytes(g.readmem(symbol(s,'_g_gametic'),4),'big'),flush=True)
+        assert g.req('z0,%x,2'%begin)=='OK'
+        for sym,value,size in (('r39f_dither_mode',mode,2),('r39d_active_colormap',symbol(s,mt),4),('colorcell',symbol(s,ct),4)):
+            assert g.req('M%x,%x:%s'%(symbol(s,sym),size,value.to_bytes(size,'big').hex()))=='OK'
+        assert g.req('Z0,%x,2'%(symbol(s,'I_FinishUpdate')&0xffffff))=='OK'
+        armed=True
         for _ in range(900):
             try:g.cont()
             except RuntimeError as e:

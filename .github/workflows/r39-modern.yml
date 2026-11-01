@@ -166,6 +166,8 @@ jobs:
         with:
           name: r105-r39modern-failure
           path: |
+            dist/hud/*.bin
+            dist/hud/*.elf
             dist/hud/*.log
             dist/hud/SIZE-*.txt
             dist/r39m-captures/
