@@ -1,0 +1,36 @@
+name: R39 Modern execution probe (existing ROM)
+on:
+  push:
+    branches: ['exp-chatgpt-r39-modern-20261101']
+    paths: ['.github/triggers/r39-modern-probe.trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v6
+        with:
+          name: r39-modern-debug-binaries
+          run-id: 41352925828
+          github-token: ${{ github.token }}
+          path: dist/probe
+      - name: Capture execution details
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/r39m_capture.py --blastem /home/dan/Projetos/blastem64-1.0.0/blastem --rom dist/probe/doom-md-r60-r105-r39modern-pf.bin --elf dist/probe/doom-md-r60-r105-r39modern-pf.elf --out dist/probe-capture --max-emulated-frames 7000 2>&1 | tee dist/probe.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: r39-modern-probe
+          path: |
+            dist/probe.log
+            dist/probe-capture/
+          retention-days: 14

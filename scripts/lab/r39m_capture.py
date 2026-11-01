@@ -43,8 +43,17 @@ for mode,name,mt,ct in ((0,'Off','r39d_colormap_cells_solid','r39d_colorcell_sol
             assert g.req('M%x,%x:%s'%(symbol(s,sym),size,value.to_bytes(size,'big').hex()))=='OK'
         assert g.req('Z0,%x,2'%(symbol(s,'I_FinishUpdate')&0xffffff))=='OK'
         armed=True
-        for _ in range(900):
-            try:g.cont();check_error()
+        for iteration in range(900):
+            try:
+                stop=g.cont();check_error()
+                regs=g.req('g');pc=int(regs[17*8:18*8],16)&0xffffff
+                sp=int(regs[15*8:16*8],16)&0xffffff
+                if iteration<8:
+                    print('STOP',iteration,stop,'PC',hex(pc),'SP',hex(sp),'stack',g.readmem(sp,24).hex(),
+                          'tic',int.from_bytes(g.readmem(symbol(s,'_g_gametic'),4),'big'),
+                          'vb',int.from_bytes(g.readmem(symbol(s,'_g_vblankCount'),4),'big'),flush=True)
+                if pc!=(symbol(s,'I_FinishUpdate')&0xffffff):
+                    raise RuntimeError('Unexpected debugger stop '+stop+' PC='+hex(pc)+' stack='+g.readmem(sp,48).hex())
             except RuntimeError as e:
                 if 'EOF' in str(e) or 'exited' in str(e):status='emulator_ended';break
                 raise
