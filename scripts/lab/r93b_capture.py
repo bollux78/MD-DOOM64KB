@@ -44,6 +44,8 @@ def main():
     try: rect_a = sym(syms, "r92_rect")
     except AssertionError: rect_a = None
     fin = sym(syms, "I_FinishUpdate") & 0xFFFFFF; after = sym(syms, "R92_AfterPass") & 0xFFFFFF
+    dk = [k for k in syms if k == "r115_draw" or k.startswith("r115_draw.")]
+    draw_a = (syms[dk[0]] & 0xFFFFFF) if dk else None
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=False)
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     status, n, armed, pre, max_tic, stalled = "max_breaks", 0, False, None, 0, 0
@@ -65,6 +67,8 @@ def main():
                     assert g.req("M%x,2:%02x01" % (col_a, a.mode)) == "OK"   # mode, dirty
                     armed = True
                     continue
+                if draw_a is not None:   # R115 double buffer: follow the buffer being finished
+                    fb = int.from_bytes(g.readmem(draw_a, 4), "big") & 0xFFFFFF
                 if pc == fin:
                     pre = g.readmem(fb, PIXELS); continue
                 if pc != after or pre is None: continue

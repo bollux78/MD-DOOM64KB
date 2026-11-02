@@ -50,7 +50,9 @@ def capture_loop(g, syms, out, max_breaks, stall_breaks=300):
                 stalled += 1
                 if stalled >= stall_breaks:
                     status = "demo_finished"; break
-            fb = g.readmem(syms["r22_fb"] + 4, PIXELS)
+            dk = [k for k in syms if k == "r115_draw" or k.startswith("r115_draw.")]
+            fbaddr = (int.from_bytes(g.readmem(syms[dk[0]] & 0xFFFFFF, 4), "big") & 0xFFFFFF) if dk else syms["r22_fb"] + 4
+            fb = g.readmem(fbaddr, PIXELS)  # R115: the buffer being finished
             fb_file.write(fb)
             rec = {"i": i, "tic": tic, "vb": vb, "sha256": hashlib.sha256(fb).hexdigest()}
             records.append(rec)
