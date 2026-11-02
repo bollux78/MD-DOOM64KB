@@ -27,7 +27,7 @@ G = 'src/g_game.c'
 rep(G, '''void G_Ticker (void)
 {
     static gamestate_t prevgamestate = 0;
-''', '''uint16_t r114_min_total[9], r114_min_largest[9];
+''', '''volatile uint8_t r114_norender = 1; /* .data: keeps the renderer linked */\nuint16_t r114_min_total[9], r114_min_largest[9];
 static uint16_t r114_tics;
 extern void R114_ZoneStat(uint16_t *total, uint16_t *largest);
 void __attribute__((noipa,noinline)) R114_Done(void){ __asm__ volatile("nop":::"memory"); for(;;){} }
@@ -50,7 +50,7 @@ void G_Ticker (void)
 ''')
 D = 'src/d_main.c'
 rep(D, '            if (viewactive)\n                R_RenderPlayerView (&_g_player);\n',
-       '            if (0 && viewactive)\n                R_RenderPlayerView (&_g_player);\n')
+       '            extern volatile uint8_t r114_norender;\n            if (viewactive && !r114_norender)\n                R_RenderPlayerView (&_g_player);\n')
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
 assert "'r113-'" in s and "('hilut', 1)" in s
 p.write_text(s.replace("'r113-'", "'r114-'").replace("('hilut', 1)", "('zone', 1)"))
