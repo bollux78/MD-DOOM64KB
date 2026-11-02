@@ -16,17 +16,26 @@ def main():
     a = ap.parse_args(); assert a.max_emulated_frames <= 10000
     rsp = load_rsp(); syms = rsp.symbols(a.elf)
     done = syms["R114_Done"] & 0xFFFFFF
+    initnew = [v for k, v in syms.items() if k == "G_InitNew" or k.startswith("G_InitNew.")]
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, 900)
-    res = {"rom": a.rom}
-    try:
-        g.req("qSupported"); assert g.req("Z0,%x,2" % done) == "OK"
-        try:
-            g.cont(); res["end"] = "done"
-        except (RuntimeError, TimeoutError) as e:
-            res["end"] = "emulator: %s" % e
+    res = {"rom": a.rom, "snapshots": []}
+    def snap(tag):
         tot = g.readmem(syms["r114_min_total"] & 0xFFFFFF, 18); lar = g.readmem(syms["r114_min_largest"] & 0xFFFFFF, 18)
+        mp = int.from_bytes(g.readmem(syms["_g_gamemap"] & 0xFFFFFF, 2), "big")
         res["maps"] = [dict(map="E1M%d" % (i + 1), min_total_free=int.from_bytes(tot[2*i:2*i+2], "big"),
                             min_largest_free=int.from_bytes(lar[2*i:2*i+2], "big")) for i in range(9)]
+        res["snapshots"].append([tag, mp]); res["last_map"] = mp
+    try:
+        g.req("qSupported"); assert g.req("Z0,%x,2" % done) == "OK"
+        for v in initnew: assert g.req("Z0,%x,2" % (v & 0xFFFFFF)) == "OK"
+        while True:
+            try:
+                g.cont()
+            except (RuntimeError, TimeoutError) as e:
+                res["end"] = "emulator: %s" % e; break
+            pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xFFFFFF
+            snap("done" if pc == done else "initnew")
+            if pc == done: res["end"] = "done"; break
         res["framebuffer_bytes"] = 3352
     except Exception as e:
         res["error"] = str(e)

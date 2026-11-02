@@ -3,7 +3,7 @@
 
 Measures whether a second framebuffer (3,352 B) could come from the Doom zone. At each G_Ticker
 in a level it records the minimum total-free and minimum largest-free-block of the zone.
-After 140 tics on a map it starts the next one with G_InitNew(sk_hard, map+1) (UV: most things),
+After 70 tics on a map it starts the next one with G_InitNew(sk_hard, map+1) (UV: most things),
 demo playback off, rendering skipped (zone use does not depend on rendering). After E1M9 it
 calls R114_Done() (noipa; BlastEm breakpoint) and stops. BSS: 2*9*2+2 = 38 B (margin 44).
 """
@@ -39,7 +39,7 @@ void G_Ticker (void)
         uint16_t m = (uint16_t)(_g_gamemap - 1);
         if (!r114_min_total[m] || t < r114_min_total[m]) r114_min_total[m] = t;
         if (!r114_min_largest[m] || l < r114_min_largest[m]) r114_min_largest[m] = l;
-        if (++r114_tics >= 140) {
+        if (++r114_tics >= 70) {
             r114_tics = 0;
             if (_g_gamemap >= 9) R114_Done();
             _g_demoplayback = 0;
