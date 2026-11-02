@@ -1,0 +1,109 @@
+name: R115 combine depth + subiv (R113 and identical singles)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-r115-combo-*']
+    paths: ['.github/triggers/r115-combo.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r115-combo-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  PYTHONUNBUFFERED: '1'
+jobs:
+  exact:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight and exact integer-domain validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-chatgpt-r115-combo-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor e35345b HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/apply_r114.py scripts/lab/test_r114.py scripts/lab/r114_build.py scripts/lab/r114_capture.py scripts/lab/r114_battery.py
+          python3 scripts/lab/test_r114.py
+          python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r92.py
+          fish -n scripts/lab/build_r35_linear.fish
+      - name: Restore pinned shareware WAD and generate unchanged artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Identical R113 control and full E1M1/E1M7 worst-window profiles
+        id: baseline
+        shell: bash
+        run: python3 scripts/lab/r114_battery.py --candidate control
+      - name: Exact sprite-projection division tables
+        if: ${{ !cancelled() && steps.baseline.outcome == 'success' }}
+        shell: bash
+        run: python3 scripts/lab/r114_battery.py --candidate depth
+      - name: R_Subsector disable ivopts only
+        if: ${{ !cancelled() && steps.baseline.outcome == 'success' }}
+        shell: bash
+        run: python3 scripts/lab/r114_battery.py --candidate subiv
+      - name: Combined depth and no-ivopts candidate
+        if: ${{ !cancelled() && steps.baseline.outcome == 'success' }}
+        shell: bash
+        run: python3 scripts/lab/r114_battery.py --candidate combo
+      - name: Publish review summary
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib
+          out=pathlib.Path('dist/r114');out.mkdir(parents=True,exist_ok=True)
+          reports={p.stem:json.loads(p.read_text()) for p in out.glob('*-SUMMARY.json')}
+          (out/'MANIFEST.json').write_text(json.dumps({'workflow_sha':os.environ['GITHUB_SHA'],'reports':reports},indent=1)+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('R113 reference; isolated experiments. Hardware approval pending.\n\n')
+              for name,r in reports.items():
+                  f.write(f"* **{name}**: {r['status']}\n")
+                  if 'error' in r:f.write(f"  {r['error']}\n")
+                  if r['candidate']!='control':
+                      for k,v in r['cases'].items():f.write(f"  * {k}: time {v['delta_pct']:+.3f}%, pixels differing {v['post_pass_frames_differing']}; min {v['benchmark_min_control']} -> {v['benchmark_min_candidate']}\n")
+          PY
+      - name: Upload validated PLAY ROMs and complete review evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: doom-md-r115-combo
+          path: |
+            dist/r114/play/
+            dist/r114/*SUMMARY.json
+            dist/r114/MANIFEST.json
+            dist/r114/logs/
+            dist/r114/captures/
+            dist/r114/builds/*/MANIFEST.json
+            dist/r114/builds/*/metrics.json
+            dist/r114/builds/*/BUILD.log
+            dist/r114/builds/*/*.elf
+            dist/r114/builds/*/flags-*.txt
+            dist/r114/builds/*/SIZE-*.txt
+            docs/agent-handoffs/R115-COMBINED-PERFORMANCE.md
+          retention-days: 90
+          if-no-files-found: warn
