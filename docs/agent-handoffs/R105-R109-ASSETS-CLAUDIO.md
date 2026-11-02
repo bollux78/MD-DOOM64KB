@@ -37,3 +37,12 @@ Branch `exp-claudio-r107-direct-20261031`. Cadeia: … R98 sprmul → R100 (modo
 - R111 colsrc (busca de coluna inline no loop): +3.3% (spills; pilha 1724 B). Variante noinline: +0.6%. Descartadas.
 - R112 onemul (uma MULS no prólogo sprite/R42): +0.02%, empate. Descartada.
 - **R107 direct fechada como base final do E1 shareware.** A espera do VBlank (~4%) só cai com 2º framebuffer (+3,3 KB RAM).
+
+## R113 hilut: base final do E1 (2026-11-02)
+- Kernel de parede R113 = R60 sem `LSL.B #4` por par de pixels: o nibble alto vem de uma cópia pré-deslocada das seis
+  tabelas `X_comp_even/odd` (tabela[34..67] = valor<<4; a3 = LUT + 8704, salvo dentro do kernel). +52 KB de ROM.
+  Só as paredes do loop (R96); sprites/R42 continuam no R60. Imagem idêntica.
+- A/B BlastEm: −0,66% Off, −0,64% On. **Console: Off 250,52 s (8,52 FPS), On 269,90 s (7,91 FPS)**,
+  contra R107 On 273,17 s (−1,2%).
+- Branch `exp-claudio-r113-hilut-20261102`, run 41464372009. Cadeia: … R107 direct → apply_r113 (passo
+  `r113_shift_luts.py` logo antes da compilação, depois de todos os geradores de cor).
