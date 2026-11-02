@@ -118,6 +118,9 @@ rep(M, '''    if (_g_gameskill == sk_baby || _g_gameskill == sk_easy ?
     if (r115_spawnskill == sk_baby || r115_spawnskill == sk_easy ?
             !(mthing->options & MTF_EASY) :
             r115_spawnskill == sk_hard || r115_spawnskill == sk_nightmare ?''')
+# Host test harness extracts R22_Plot/R_DrawColumnSprite with its own r22_fb.
+rep('scripts/lab/test_r22_pixel4.py', 'static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;\n',
+    'static struct {uint32_t before;uint8_t pixels[R22_FB_BYTES];uint32_t after;} r22_fb;\n#define r115_draw (r22_fb.pixels)\n')
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
 assert "'r113-'" in s and "('hilut', 1)" in s
 p.write_text(s.replace("'r113-'", "'r115-'").replace("('hilut', 1)", "('dbuf', 1)"))
