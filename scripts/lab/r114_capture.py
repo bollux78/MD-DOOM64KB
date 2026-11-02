@@ -29,7 +29,7 @@ def capture(a):
     def state():return dict(bench_frame=read('bench_frames'),window=read('bench_windows',2),
                            window_vb=read('bench_window_vb'),start_vb=read('bench_start_vb'))
     g=RSP(a.blastem,a.rom,a.max_emulated_frames,a.timeout)
-    rows=[];samples=[];status='max_breaks';armed=False;end=None;stack=None
+    rows=[];samples=[];status='max_breaks';armed=False;end=None;stack=None;duplicate_stops=0
     try:
         g.req('qSupported')
         for n,p in pcad.items():assert g.req('Z0,%x,2'%p)=='OK'
@@ -73,6 +73,13 @@ def capture(a):
             fb=g.readmem(ad['r22_fb']+4,PIXELS)
             r=dict(i=len(rows),tic=tic,vb=read('_g_vblankCount'),mode=st[0],palette=st[2],map=mp,
                    shadow=read('r92_shadow_on',1),sha256=hashlib.sha256(fb).hexdigest(),**state())
+            if rows and (r['tic'],r['bench_frame'])==(rows[-1]['tic'],rows[-1]['bench_frame']):
+                # IRQ can resume at the same marker PC. It is not a new rendered frame.
+                # Coalesce ONLY identical pixels/state, keeping the first stop's timing.
+                for key in ('sha256','mode','palette','map','shadow','window','window_vb','start_vb'):
+                    assert r[key]==rows[-1][key],('nonidentical repeated frame',key,r,rows[-1])
+                duplicate_stops+=1
+                continue
             rows.append(r)
             with open(out/'post.bin','ab') as f:f.write(fb)
             with open(out/'frames.jsonl','a') as f:f.write(json.dumps(r)+'\n')
@@ -80,7 +87,7 @@ def capture(a):
     with open(out/'samples.tsv','w') as f:
         for t,v,p in samples:f.write('%d\t%d\t%06x\n'%(t,v,p))
     result=dict(status=status,rom=a.rom,shadow=a.shadow,mode=a.mode,map=a.map,
-                stack=stack,frames=len(rows),first_tic=rows[0]['tic'] if rows else None,
+                stack=stack,duplicate_marker_stops=duplicate_stops,frames=len(rows),first_tic=rows[0]['tic'] if rows else None,
                 last_tic=rows[-1]['tic'] if rows else None,end=end,profile_samples=len(samples))
     # Read the true window transitions, which become observable at the next post-pass stop.
     windows=[];prev_window=0;prev_frame=0;prev_vb=rows[0]['start_vb'] if rows else 0
@@ -104,6 +111,7 @@ def capture(a):
             c=collections.Counter(fun(p) for p in hit)
             w['pc_samples']=len(hit)
             w['profile']=[dict(function=f,samples=n,share=n/max(1,len(hit))) for f,n in c.most_common(15)]
+            w['contains_level_reload_samples']=any(f.startswith('G_DoLoadLevel') for f in c)
         cnt=collections.Counter(fun(p) for _,_,p in samples)
         result['profile']=[dict(function=f,samples=n,share=n/max(1,len(samples))) for f,n in cnt.most_common(30)]
     result['worst_windows']=worst
