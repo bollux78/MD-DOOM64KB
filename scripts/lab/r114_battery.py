@@ -45,7 +45,7 @@ def compare(base,cand):
                 timing_note='Emulated VBlanks, not hardware. Aligned windows use post-pass boundaries; game MIN uses its own counters.')
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--candidate',choices=('control','depth','sprite','subos','subiv'),required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--candidate',choices=('control','depth','sprite','subos','subiv','combo'),required=True);a=p.parse_args()
     OUT.mkdir(parents=True,exist_ok=True);cand=a.candidate
     summary=dict(candidate=cand,base_commit='e35345b',status='running',cases={},hardware_validation='pending')
     report=OUT/(cand+'-SUMMARY.json')
@@ -70,6 +70,19 @@ def main():
             print('::notice title=R114 %s %s::%s'%(cand,name,json.dumps(summary['cases'][name] if cand!='control' else {k:summary['cases'][name][k] for k in ('frames','last_tic','end','stack')})),flush=True)
         if cand!='control':
             assert all(r['post_pass_frames_differing']==0 for r in summary['cases'].values()),'REJECTED: pixels differ'
+        if cand=='combo':
+            depth=json.loads((OUT/'depth-SUMMARY.json').read_text())
+            subiv=json.loads((OUT/'subiv-SUMMARY.json').read_text())
+            summary['interaction']={}
+            for name,c in summary['cases'].items():
+                d=depth['cases'][name];v=subiv['cases'][name];base=c['vblanks_control']
+                assert base==d['vblanks_control']==v['vblanks_control']
+                independent=d['vblanks_candidate']+v['vblanks_candidate']-base
+                summary['interaction'][name]=dict(control_vblanks=base,depth_vblanks=d['vblanks_candidate'],
+                    subiv_vblanks=v['vblanks_candidate'],combined_vblanks=c['vblanks_candidate'],
+                    independent_savings_prediction_vblanks=independent,
+                    interaction_vblanks=c['vblanks_candidate']-independent,
+                    combined_delta_pct=c['delta_pct'])
         summary['status']='baseline_complete' if cand=='control' else 'pixels_equivalent_hardware_pending'
         play=OUT/'play';play.mkdir(exist_ok=True)
         for rom in (OUT/'builds'/('%s-m1'%cand)).glob('*-pl.bin'):shutil.copy2(rom,play/rom.name)
