@@ -11,7 +11,8 @@ How:
   - Renderer writes go to r115_draw; the VBlank DMA reads r115_show (set when the frame is
     posted). After posting, the draw pointer flips to the other buffer, whose DMA has already
     completed (I_FinishUpdate waits for it). R22_BeginFrame no longer waits in that case.
-  - Double buffering runs only in GS_LEVEL without menu/overlay/native art/colour reload. On
+  - Double buffering runs only in GS_LEVEL without menu/persistent overlay/native art/colour reload
+    (gameplay text such as pickup messages is VDP-only and IRQ-locked, so it does not stop it). On
     entering it, the primary buffer (with its pair attribute words) is copied to the second one;
     on leaving it, the last shown frame is copied back, so menus, Shadow toggles, crop changes and
     saves keep using the single primary buffer as before.
@@ -53,7 +54,7 @@ rep(V, '''void R22_BeginFrame(void){
     R20_StopVideo();r22_text_this_frame=0;''', '''void R22_BeginFrame(void){
     /* R115: in plain gameplay with a second buffer the draw buffer is never the pending one. */
     const uint8_t r115_want=(uint8_t)(r115_fb2 && _g_gamestate==GS_LEVEL && !_g_menuactive
-        && r35_native_active<0 && !r59_color_dirty && !r22_overlay_dirty);
+        && r35_native_active<0 && !r59_color_dirty && r22_overlay_dirty!=2u);
     if(!(r115_want && r115_db)){
     /* Complete the old flip before VDP use, retaining the displayed menu
        throughout title/raster work. Text replacement happens just-in-time. */
