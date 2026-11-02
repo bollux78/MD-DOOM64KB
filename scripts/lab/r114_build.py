@@ -12,7 +12,7 @@ CHAIN=[('apply_r81.py',{}),('apply_r80_performance.py',{'R80_EXPERIMENTS':'P1+F1
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--candidate',choices=('control','depth','sprite','subos','subiv'),required=True)
+    p=argparse.ArgumentParser();p.add_argument('--candidate',choices=('control','depth','sprite','subos','subiv','combo'),required=True)
     p.add_argument('--map',type=int,choices=(1,7),required=True);a=p.parse_args()
     root=pathlib.Path(__file__).resolve().parents[2]
     label='%s-m%d'%(a.candidate,a.map)
@@ -53,6 +53,9 @@ def main():
         expected={'r113-hilut-pl':'3106d4ede3c1c441ac5905ec181c9babba691dd5e245413c68d97192230c25c8',
                   'r113-hilut-pf':'e181c87742426e65bac78b14e061fba21d8834b27689c2b6c45cc1b84bfd4a48'}
         for r in records:assert r['sha256']==expected[r['variant']],('R113 baseline is not identical',r)
+    if a.candidate in ('depth','subiv') and a.map==1:
+        references=json.loads((root/'assets/r115-r114-references.json').read_text())
+        for r in records:assert r['sha256']==references[r['variant']],('single candidate changed',r)
     od=os.environ['OBJDUMP']
     for r in records:
         assert r['bss_bytes']<=57920 and r['bytes']<=4194304,r
