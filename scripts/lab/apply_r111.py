@@ -8,7 +8,9 @@ resolved inline in the seg loop from the R84 ROM tables already in the build:
   - composite with a baked column: r84_pixels + r84_offsets[...] with the R107 bookkeeping.
 Everything else still calls R_DrawSegTextureColumn. Same source pointers -> identical pixels.
 """
+import os
 from pathlib import Path
+mode = os.environ.get('R111_MODE', 'inline'); assert mode in ('inline', 'call')
 
 
 def rep(f, a, b, n=1):
@@ -18,7 +20,7 @@ def rep(f, a, b, n=1):
 rep('src/r_draw.c', '''#else
 #define R20_WALLCOL(w, tex, texture, col, dc) R_DrawSegTextureColumn((tex), (texture), (col), (dc))
 #endif''', '''#else
-static inline __attribute__((always_inline)) void R111_WallCol(const texture_t __far* tex, int16_t texture,
+static %s void R111_WallCol(const texture_t __far* tex, int16_t texture,
                                                                int16_t texcolumn, draw_column_vars_t* dc)
 {
     const int16_t pn = r84_patches[texture];
@@ -42,8 +44,8 @@ static inline __attribute__((always_inline)) void R111_WallCol(const texture_t _
     R_DrawSegTextureColumn(tex, texture, texcolumn, dc);
 }
 #define R20_WALLCOL(w, tex, texture, col, dc) R111_WallCol((tex), (texture), (col), (dc))
-#endif''')
+#endif'''.replace('static %s void', 'static ' + ('inline __attribute__((always_inline))' if mode == 'inline' else '__attribute__((noinline))') + ' void'))
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
 assert "'r107-'" in s and "('direct', 1)" in s
-p.write_text(s.replace("'r107-'", "'r111-'").replace("('direct', 1)", "('colsrc', 1)"))
+p.write_text(s.replace("'r107-'", "'r111-'").replace("('direct', 1)", "(%r, 1)" % ('colsrc' if mode == 'inline' else 'colcall')))
 print('R111 colsrc')
