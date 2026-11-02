@@ -30,3 +30,10 @@ Branch `exp-claudio-r107-direct-20261031`. Cadeia: … R98 sprmul → R100 (modo
 - Auditoria do WAD completo (R106): E2M7 tem 323 setores e E3M5 tem 268 (limite 254); o E2 usa 196 texturas
   e o E3 158 (limite 127); faltam no motor Cacodemon, Lost Soul, Cyberdemon, Spider, Plasma/BFG, chaves de
   caveira e várias decorações. O WAD completo fica fora do git, no runner; workflows só publicam números.
+
+## R110–R112: fechamento da R107 (2026-11-02)
+- R110 profile (R107 PERF, E1M1 início): R_Subsector 35/32%, R60 12/11%, R_DrawSegTextureColumn 10.6/9.9% (inclui o preparo
+  inline da parede R96), D_DoomLoop 7.8% (~4% espera do VBlank), R97 6% (On), ângulos/escala 5.7%, sprites ~8%.
+- R111 colsrc (busca de coluna inline no loop): +3.3% (spills; pilha 1724 B). Variante noinline: +0.6%. Descartadas.
+- R112 onemul (uma MULS no prólogo sprite/R42): +0.02%, empate. Descartada.
+- **R107 direct fechada como base final do E1 shareware.** A espera do VBlank (~4%) só cai com 2º framebuffer (+3,3 KB RAM).
