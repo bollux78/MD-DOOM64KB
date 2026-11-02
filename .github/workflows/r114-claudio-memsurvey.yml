@@ -110,7 +110,7 @@ jobs:
               R104_PREFIX=r105 R104_NAME=twoface python3 scripts/lab/apply_r104.py
               python3 scripts/lab/apply_r107.py
               python3 scripts/lab/apply_r113.py
-              python3 scripts/lab/apply_r114diag.py
+              R114_SKILL=sk_medium python3 scripts/lab/apply_r114diag.py
               python3 - <<'PY2'
           from pathlib import Path
           p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text();a="(('pl','play'),)"

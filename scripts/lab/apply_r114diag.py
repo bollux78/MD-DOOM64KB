@@ -7,7 +7,9 @@ After 70 tics on a map it starts the next one with G_InitNew(sk_hard, map+1) (UV
 demo playback off, rendering skipped (zone use does not depend on rendering). After E1M9 it
 calls R114_Done() (noipa; BlastEm breakpoint) and stops. BSS: 2*9*2+2 = 38 B (margin 44).
 """
+import os
 from pathlib import Path
+SKILL = os.environ.get('R114_SKILL', 'sk_hard'); assert SKILL in ('sk_hard', 'sk_medium')
 
 
 def rep(f, a, b, n=1):
@@ -27,7 +29,7 @@ G = 'src/g_game.c'
 rep(G, '''void G_Ticker (void)
 {
     static gamestate_t prevgamestate = 0;
-''', '''volatile uint8_t r114_norender = 1; /* .data: keeps the renderer linked */\nuint16_t r114_min_total[9], r114_min_largest[9];
+''', '''volatile uint8_t r114_norender = 1; /* .data: keeps the renderer linked */\n#define R114_SKILL ''' + SKILL + '''\nuint16_t r114_min_total[9], r114_min_largest[9];
 static uint16_t r114_tics;
 extern void R114_ZoneStat(uint16_t *total, uint16_t *largest);
 void __attribute__((noipa,noinline)) R114_Done(void){ __asm__ volatile("nop":::"memory"); for(;;){} }
@@ -43,7 +45,7 @@ void G_Ticker (void)
             r114_tics = 0;
             if (_g_gamemap >= 9) R114_Done();
             _g_demoplayback = 0;
-            G_InitNew(sk_hard, (int16_t)(_g_gamemap + 1));
+            G_InitNew(R114_SKILL, (int16_t)(_g_gamemap + 1));
             return;
         }
     }
