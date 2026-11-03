@@ -1,0 +1,123 @@
+name: R121 Claudio E1M7 min-FPS diagnosis + strict A/B (no build; uses the private R120 ROMs)
+# 1) Pinned BlastEm configuration (68000 divider 7) for every probe: the R120 "+167%" came from control runs whose
+#    68000 ran exactly 7x faster (BlastEm clocks.m68k_divider). 2) A/A determinism. 3) R120 re-timing with the strict
+#    r118_ab.py. 4) E1M7 profile of R119 both (= R120 control) around tics 296 and 425: worst windows, spike frames,
+#    hot PCs on the disassembly. Only reports are uploaded (no ROM, ELF or demo data).
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r121-claudio-e1m7.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r121-claudio-e1m7-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  M68K_NM: /home/dan/mars/m68k-elf/bin/m68k-elf-nm
+  R120_ROMS: /home/dan/Projetos/Personal/r120-sight-collision/run-41726158554-1
+jobs:
+  diag:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Preflight (private ROMs present, scripts compile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          test -x "$BLASTEM"; test -x "$OBJDUMP"; test -x "$M68K_NM"
+          for v in c-control c-sight c-collision c-both; do ls "$R120_ROMS/$v/"*-pf.bin "$R120_ROMS/$v/"*-pf.elf >/dev/null; done
+          python3 -m py_compile scripts/lab/r117_profile.py scripts/lab/r118_ab.py scripts/lab/r121_hotpcs.py
+          ( cd "$R120_ROMS" && sha256sum c-*/*-pf.bin ) | tee r121-rom-sha256.txt
+      - name: Pin BlastEm configuration (68000 divider 7) for this job
+        shell: bash
+        run: |
+          set -euo pipefail
+          d=$(dirname "$BLASTEM"); ls "$d" | head -40
+          h="$RUNNER_TEMP/r121-home"; mkdir -p "$h/.config/blastem"
+          src="$d/default.cfg"; [ -f "$src" ] || src="$HOME/.config/blastem/blastem.cfg"; test -f "$src"; echo "config source: $src"
+          cp "$src" "$h/.config/blastem/blastem.cfg"
+          if grep -q 'm68k_divider' "$h/.config/blastem/blastem.cfg"; then
+            sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$h/.config/blastem/blastem.cfg"
+          fi
+          echo "pinned: $(grep -n 'm68k_divider' "$h/.config/blastem/blastem.cfg" || echo 'no m68k_divider key (default 7)')"
+          u="$HOME/.config/blastem/blastem.cfg"
+          if [ -f "$u" ]; then echo "::notice title=R121 user BlastEm config::$(stat -c '%y' "$u") $(grep -n 'm68k_divider' "$u" || echo 'no m68k_divider key')"; else echo "no user config"; fi
+          { echo "HOME=$h"; echo "XDG_CONFIG_HOME=$h/.config"; } >> "$GITHUB_ENV"
+      - name: A/A determinism (R119 both, E1M7, render after 150 tics, two processes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rom=$(ls "$R120_ROMS"/c-control/*-pf.bin); mkdir -p dist/aa
+          for i in 1 2; do
+            python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo 7 --skip 150 --norender 0 --out dist/aa/run$i/d7-ab > dist/aa/run$i.log 2>&1
+          done
+          cmp dist/aa/run1/d7-ab/frames.tsv dist/aa/run2/d7-ab/frames.tsv && echo "frames.tsv identical"
+          python3 scripts/lab/r118_ab.py dist/aa/AA.json a=dist/aa/run1 b=dist/aa/run2 | tee dist/aa/AA.log
+          echo "::notice title=R121 A/A::$(tr '\n' ' ' < dist/aa/AA.log) boot_vb=$(python3 -c "import json;print(json.load(open('dist/aa/run1/d7-ab/PROFILE.json')).get('boot_vb'))")"
+      - name: R120 re-timing with pinned emulator and strict checks
+        shell: bash
+        run: |
+          set -uo pipefail
+          for v in c-control c-sight c-collision c-both; do
+            rom=$(ls "$R120_ROMS/$v/"*-pf.bin); mkdir -p dist/r120/time-$v
+            for k in 3 7 9 10; do
+              python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --skip 150 --norender 0 \
+                --out dist/r120/time-$v/d$k-ab > dist/r120/time-$v/d$k-ab.log 2>&1 || echo "::warning title=R121 r120 timing d$k $v::$(tail -1 dist/r120/time-$v/d$k-ab.log)"
+            done
+          done
+          python3 scripts/lab/r118_ab.py dist/r120/R120-AB-STRICT.json control=dist/r120/time-c-control sight=dist/r120/time-c-sight collision=dist/r120/time-c-collision both=dist/r120/time-c-both | tee dist/r120/R120-AB-STRICT.log; rc=${PIPESTATUS[0]}
+          echo "::notice title=R121 R120 strict A/B (rc=$rc)::$(tr '\n' ' ' < dist/r120/R120-AB-STRICT.log)"
+      - name: E1M7 deep profile of R119 both (logic only; render after 150, 270, 400 tics) + E1M3 after 270
+        shell: bash
+        run: |
+          set -uo pipefail
+          rom=$(ls "$R120_ROMS"/c-control/*-pf.bin); mkdir -p dist/e1m7
+          for cfg in "7 0 1 logic" "7 150 0 r150" "7 270 0 r270" "7 400 0 r400" "3 270 0 r270"; do
+            set -- $cfg
+            python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $1 --skip $2 --norender $3 \
+              --out dist/e1m7/d$1-$4 > dist/e1m7/d$1-$4.log 2>&1 || echo "::warning title=R121 profile d$1-$4::$(tail -1 dist/e1m7/d$1-$4.log)"
+          done
+          python3 - <<'PY'
+          import json,glob
+          for p in sorted(glob.glob('dist/e1m7/*/PROFILE.json')):
+              r=json.load(open(p)); n=p.split('/')[-2]
+              ww=r.get('worst_windows_detail') or []; sp=r.get('spike_frames') or []
+              s1=' || '.join('%.2ffps tic%s %s'%(w['fps'],w['gametic'],' '.join('%s=%.0f%%'%(k,100*v) for k,v in list(w['categories'].items())[:4])) for w in ww[:3])
+              s2=' || '.join('tic%d %dVB %s'%(x['gametic'],x['vblanks'],' '.join('%s=%d'%(k.strip(),v) for k,v in list(x['functions'].items())[:5])) for x in sp[:4])
+              print('::notice title=R121 %s::status=%s boot_vb=%s VB/frame=%s median=%s max=%s | worst: %s | spikes: %s'%(n,r['status'],r.get('boot_vb'),r.get('vblanks_per_frame'),r.get('median_frame_vb'),r.get('frame_cost_max'),s1,s2))
+          PY
+      - name: Hot PCs on the disassembly (R119 both)
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf=$(ls "$R120_ROMS"/c-control/*-pf.elf)
+          python3 scripts/lab/r121_hotpcs.py --elf "$elf" --out dist/e1m7/HOTPCS-e1m7-render.txt --top 10 dist/e1m7/d7-r150/samples.tsv dist/e1m7/d7-r270/samples.tsv dist/e1m7/d7-r400/samples.tsv > /dev/null
+          python3 scripts/lab/r121_hotpcs.py --elf "$elf" --out dist/e1m7/HOTPCS-e1m7-logic.txt --top 10 dist/e1m7/d7-logic/samples.tsv > /dev/null
+          python3 scripts/lab/r121_hotpcs.py --elf "$elf" --out dist/e1m7/HOTPCS-e1m3-render.txt --top 10 dist/e1m7/d3-r270/samples.tsv > /dev/null
+          for f in dist/e1m7/HOTPCS-*.txt; do echo "::notice title=R121 $(basename $f)::$(sed -n '3,14p' $f | tr '\n' ';')"; done
+      - name: Upload reports only (no ROM, no ELF, no demo data)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r121-e1m7-reports
+          path: |
+            r121-rom-sha256.txt
+            dist/aa/
+            dist/r120/**/PROFILE.json
+            dist/r120/**/frames.tsv
+            dist/r120/*.json
+            dist/r120/*.log
+            dist/r120/**/*.log
+            dist/e1m7/
+          retention-days: 90
+          if-no-files-found: warn

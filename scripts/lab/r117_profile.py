@@ -86,12 +86,14 @@ def main():
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=False)
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     samples, frames, status, tics, sampling = [], [], "frame_limit", 0, False
+    calib = {}   # R121: VBlank count at the first G_Ticker (boot + map load) and at the end of the skip (emulator-speed check)
     be = lambda b: int.from_bytes(b, "big")
     try:
         g.req("qSupported")
         for bp in (tk, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
         armed = False
         def start_sampling():
+            calib["skip_end_vb"] = be(g.readmem(vb_a, 4)); calib["skip_end_tic"] = be(g.readmem(tic_a, 4))
             assert g.req("M%x,1:%02x" % (sym("r116_norender"), a.norender)) == "OK"
             assert g.req("z0,%x,2" % tk) == "OK"
             assert g.req("Z0,%x,2" % vint) == "OK"
@@ -108,6 +110,7 @@ def main():
                 if not armed:
                     assert g.req("M%x,1:%02x" % (sym("r116_sel"), a.demo)) == "OK"
                     assert g.req("M%x,1:01" % sym("r116_norender")) == "OK"; armed = True
+                    calib["boot_vb"] = be(g.readmem(vb_a, 4))
                 tics += 1
                 if tics > a.skip and not sampling:
                     sampling = True; start_sampling()
@@ -121,13 +124,13 @@ def main():
                 ipc = be(fr[2:6]) & 0xFFFFFF
                 stack = [be(fr[i:i + 4]) & 0xFFFFFF for i in range(6, 70, 2)]
                 ret = next((v for v in stack if v in retset), 0)
-                samples.append((be(g.readmem(tic_a, 4)), be(g.readmem(lt_a, 4)), ipc, ret))
+                samples.append((be(g.readmem(tic_a, 4)), be(g.readmem(lt_a, 4)), ipc, ret, be(g.readmem(vb_a, 4))))
     except Exception as e:
         status = "probe_error: %s" % e
     finally:
         g.close()
     with open(out / "samples.tsv", "w") as f:
-        for t, lt, p, r in samples: f.write("%d\t%d\t%06x\t%06x\n" % (t, lt, p, r))
+        for t, lt, p, r, v in samples: f.write("%d\t%d\t%06x\t%06x\t%d\n" % (t, lt, p, r, v))
     with open(out / "frames.tsv", "w") as f:
         for vb, t, lt in frames: f.write("%d\t%d\t%d\n" % (vb, t, lt))
     # LOAD detection: runs of >= 90 consecutive samples on one tic.
@@ -139,41 +142,77 @@ def main():
             for k in range(i, j): load[k] = True
         i = j
     byf, byc, byc_play = collections.Counter(), collections.Counter(), collections.Counter()
-    for (t, lt, p, r), ld in zip(samples, load):
+    for (t, lt, p, r), ld in zip([x[:4] for x in samples], load):
         f = fn(p); byf[f] += 1
         c = category(fn(r)) if is_helper(f) and r else category(f)
         if ld: c = "LOAD"
         byc[c] += 1
         if not ld: byc_play[c] += 1
     n = max(len(samples), 1); npl = max(sum(byc_play.values()), 1)
-    play_tics = sorted({t for (t, lt, p, r), ld in zip(samples, load) if not ld})
-    res = {"rom": a.rom, "demo": a.demo, "skip": a.skip, "norender": a.norender, "status": status, "samples": len(samples),
+    play_tics = sorted({t for (t, lt, p, r), ld in zip([x[:4] for x in samples], load) if not ld})
+    res = {"rom": a.rom, "demo": a.demo, "skip": a.skip, "norender": a.norender, "status": status, "samples": len(samples), **calib,
            "load_samples": sum(load), "tic_range": [samples[0][0], samples[-1][0]] if samples else None,
            "vblanks_per_tic_excl_load": round(npl / max(len(play_tics) - 1, 1), 3) if play_tics else None,
            "categories_excl_load": {k: round(v / npl, 4) for k, v in byc_play.most_common()},
            "categories_all": {k: round(v / n, 4) for k, v in byc.most_common()},
            "top_functions": [{"function": f, "samples": c, "share": round(c / n, 4)} for f, c in byf.most_common(40)]}
     if len(frames) > 2:
+        # R121: a frame is a LOAD (excluded) when leveltime does not advance by exactly 1 (death reload, map change);
+        # long frames with continuous leveltime are real spikes and stay in (R117/R118 dropped every frame >= 60 VB).
+        isload = lambda i: frames[i][2] != frames[i - 1][2] + 1
         cost = [frames[i][0] - frames[i - 1][0] for i in range(2, len(frames))]   # drop the first frame after the skip
-        cost_ok = [c for c in cost if c < 60]                                    # a load inside a frame is not a frame cost
+        cost_ok = [frames[i][0] - frames[i - 1][0] for i in range(2, len(frames)) if not isload(i)]
         res["frames"] = len(cost); res["vblanks_per_frame"] = round(sum(cost_ok) / max(len(cost_ok), 1), 3)
         res["frame_cost_p99"] = sorted(cost_ok)[int(0.99 * (len(cost_ok) - 1))] if cost_ok else None
         res["frame_cost_max"] = max(cost_ok) if cost_ok else None
-        res["frames_over_60vb"] = len(cost) - len(cost_ok)
+        res["frames_over_60vb"] = sum(1 for c in cost_ok if c >= 60); res["load_frames"] = len(cost) - len(cost_ok)
         # Slowest 1 s windows (>= 60 VBlanks of consecutive frames without a load).
         wins = []; i0 = 1
         for i in range(2, len(frames)):
-            if frames[i][0] - frames[i - 1][0] >= 60: i0 = i; continue
+            if isload(i): i0 = i; continue
             while frames[i][0] - frames[i0][0] >= 60:
                 el = frames[i][0] - frames[i0][0]
                 wins.append((round((i - i0) * 60 / el, 2), frames[i0][1], frames[i0][2], el)); i0 += 1
         wins.sort()
         res["worst_windows"] = [{"fps": w[0], "gametic": w[1], "leveltime": w[2], "vblanks": w[3]} for w in wins[:8]]
+        # R121: up to 10 NON-overlapping slowest windows, each with categories and top functions.
+        chosen = []
+        for w in wins:
+            t0 = w[1]; t1 = t0 + max(1, round(w[3] * w[0] / 60))
+            if all(t1 < c[0] or t0 > c[1] for c in chosen): chosen.append((t0, t1, w))
+            if len(chosen) == 10: break
+        det = []
+        for t0, t1, w in chosen:
+            cw, fw = collections.Counter(), collections.Counter()
+            for (t, lt, p, r), ld in zip([x[:4] for x in samples], load):
+                if t0 <= t <= t1 and not ld:
+                    f = fn(p); fw[f] += 1; cw[category(fn(r)) if is_helper(f) and r else category(f)] += 1
+            tot = max(sum(cw.values()), 1)
+            det.append({"fps": w[0], "gametic": [t0, t1], "leveltime": w[2], "vblanks": w[3], "samples": tot,
+                        "categories": {k: round(v / tot, 3) for k, v in cw.most_common(8)},
+                        "functions": {k: round(v / tot, 3) for k, v in fw.most_common(10)}})
+        res["worst_windows_detail"] = det
+        # R121: spike frames (cost >= max(40, 2 x median)); samples taken inside the frame's VBlank interval.
+        med = sorted(cost_ok)[len(cost_ok) // 2] if cost_ok else 0
+        idx = sorted((i for i in range(2, len(frames)) if not isload(i)), key=lambda i: frames[i][0] - frames[i - 1][0], reverse=True)
+        spikes = []
+        for i in idx[:15]:
+            c = frames[i][0] - frames[i - 1][0]
+            if c < max(40, 2 * med): break
+            v0, v1 = frames[i - 1][0], frames[i][0]
+            fw, cw = collections.Counter(), collections.Counter()
+            for (t, lt, p, r, v) in samples:
+                if v0 <= v < v1:
+                    f = fn(p); fw[f] += 1; cw[category(fn(r)) if is_helper(f) and r else category(f)] += 1
+                    if is_helper(f) and r: fw["  (caller of %s) %s" % (f.split(".")[0], fn(r))] += 1
+            spikes.append({"gametic": frames[i][1], "leveltime": frames[i][2], "vblanks": c, "samples": sum(cw.values()),
+                           "categories": dict(cw.most_common(8)), "functions": dict(fw.most_common(14))})
+        res["median_frame_vb"] = med; res["spike_frames"] = spikes
         if wins:
             # Category shares inside the worst window.
             w = wins[0]; t0 = w[1]; t1 = t0 + max(1, round(w[3] * w[0] / 60))
             cw = collections.Counter()
-            for (t, lt, p, r), ld in zip(samples, load):
+            for (t, lt, p, r), ld in zip([x[:4] for x in samples], load):
                 if t0 <= t <= t1 and not ld:
                     f = fn(p); cw[category(fn(r)) if is_helper(f) and r else category(f)] += 1
             tot = max(sum(cw.values()), 1)
