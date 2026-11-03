@@ -40,8 +40,7 @@ struct mobj_s *R119_NodeThingAndNext(struct msecnode_s *p,
     p.write_text(s)
 
     p=Path("src/r23_mapmem.c");s=p.read_text()
-    anchor='''#endif
-uint32_t R23_MapRead(const void *p,uint16_t offset,uint16_t size){'''
+    anchor='uint32_t R23_MapRead(const void *p,uint16_t offset,uint16_t size){'
     assert s.count(anchor)==1
     extra='''#if defined(DOOM_R24_EPISODE)
 /* Each helper holds only one node's read/write operations inside a single,
@@ -74,8 +73,7 @@ mobj_t *R119_NodeThingAndNext(msecnode_t *p,msecnode_t **next){
 }
 #endif
 '''
-    s=s.replace(anchor,'''#endif
-'''+extra+'''uint32_t R23_MapRead(const void *p,uint16_t offset,uint16_t size){''')
+    s=s.replace(anchor,extra+anchor)
     p.write_text(s)
 
     rep("src/p_map.c",'''    if (R23_GET(node,m_sector) == s)   // Already have a node for this sector?
