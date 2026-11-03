@@ -63,6 +63,7 @@ rep(G, '''    ExtractFileBase(defdemoname,basename);           // killough
         memset(&r116_res,0,sizeof(r116_res));
         r116_res.exit_time=-1;r116_res.zmin_total=0xFFFFu;r116_res.zmin_largest=0xFFFFu;r116_res.sel=r116_sel;
         r116_stop=0; /* Keep Options AI mode Normal/Low untouched. */
+        if(r116_seq_on && r116_seq_completed)I_BenchmarkWindowReset(); /* after load */
     }else
     ExtractFileBase(defdemoname,basename);           // killough
     basename[8] = 0;''')
@@ -105,6 +106,7 @@ rep(G, '''void G_CheckDemoStatus (void)
 {
     if(r116_seq_pending)return; /* A demo may notify more than once per tic. */
     if(r116_seq_on && r116_active){
+        I_BenchmarkWindowReset(); /* discard partial window before map load */
         R116_Zone();
         if(r116_res.zmin_total<r116_seq_min_total)r116_seq_min_total=r116_res.zmin_total;
         if(r116_res.zmin_largest<r116_seq_min_largest)r116_seq_min_largest=r116_res.zmin_largest;
@@ -214,6 +216,19 @@ rep('src/r22_benchmark.inc',
 rep('src/r22_benchmark.inc',
     'uint32_t seconds_x100 = (elapsed * 100u + 30u) / 60u;',
     'uint32_t seconds_x100 = (uint32_t)(((uint64_t)elapsed * 100u + 30u) / 60u);')
+
+# Keep overall FPS wall-clock based; discard partial 1-second windows
+# crossing map transitions so min/max measure gameplay only.
+rep('src/r22_benchmark.inc',
+    'static void I_BenchmarkFrame(void)',
+    '''void I_BenchmarkWindowReset(void)
+{
+    if (!bench_active) return;
+    bench_window_vb = _g_vblankCount;
+    bench_window_frames = 0;
+}
+
+static void I_BenchmarkFrame(void)''')
 
 B = 'src/r22_benchmark.inc'
 rep(B, '''    VDP_drawText(D_R88_BenchmarkMap()==7?"DEMO3 E1M7 / NTSC 60HZ":"DEMO3 E1M1 / NTSC 60HZ", 3, 5);''',
