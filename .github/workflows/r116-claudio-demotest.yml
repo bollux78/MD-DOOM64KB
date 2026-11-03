@@ -44,7 +44,7 @@ jobs:
           python3 scripts/lab/test_r90.py
           python3 scripts/lab/test_r91.py
           python3 scripts/lab/test_r92.py
-          python3 -m py_compile scripts/lab/apply_r95.py scripts/lab/apply_r96.py scripts/lab/apply_r97.py scripts/lab/apply_r98.py scripts/lab/apply_r99.py scripts/lab/apply_r100.py scripts/lab/r100_diag_read.py scripts/lab/r100_asm_metrics.py scripts/lab/r82_stack_probe.py scripts/lab/apply_r104.py scripts/lab/apply_r107.py scripts/lab/apply_r111.py scripts/lab/apply_r112.py scripts/lab/apply_r113.py scripts/lab/r113_shift_luts.py scripts/lab/apply_r115.py scripts/lab/apply_r116.py scripts/lab/r116_add_demos.py scripts/lab/r116_demo_probe.py
+          python3 -m py_compile scripts/lab/apply_r95.py scripts/lab/apply_r96.py scripts/lab/apply_r97.py scripts/lab/apply_r98.py scripts/lab/apply_r99.py scripts/lab/apply_r100.py scripts/lab/r100_diag_read.py scripts/lab/r100_asm_metrics.py scripts/lab/r82_stack_probe.py scripts/lab/apply_r104.py scripts/lab/apply_r107.py scripts/lab/apply_r111.py scripts/lab/apply_r112.py scripts/lab/apply_r113.py scripts/lab/r113_shift_luts.py scripts/lab/apply_r115.py scripts/lab/apply_r116.py scripts/lab/r116_add_demos.py scripts/lab/r116_demo_probe.py scripts/lab/r116_sequence_smoke.py
           test -d "$R116_DEMO_DIR"
           cc -O2 -Iscripts/lab/r99 scripts/lab/r99/test_r99_recip.c -o "$RUNNER_TEMP/r99recip" && "$RUNNER_TEMP/r99recip"
           python3 -m py_compile scripts/lab/apply_r87.py scripts/lab/r87_compare.py
@@ -165,6 +165,18 @@ jobs:
           for r in R:
               print('::notice title=R116 safety %s %s::end=%s tics=%s zone_min_total=%s largest=%s emulator_rc=%s note=%s'%(r['lump'],r['status'],r['end'],r.get('ticks_seen'),r.get('zone_min_total'),r.get('zone_min_largest'),r.get('emulator_returncode'),r.get('memory_warning','')))
           PY
+      - name: Run All sequence handoff safety smoke (PERF + Options AI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rom=$(ls dist/ab/c-demotest/*-pf.bin)
+          python3 scripts/lab/r116_sequence_smoke.py \
+            --blastem "$BLASTEM" \
+            --rom "$rom" \
+            --elf "${rom%.bin}.elf" \
+            --out dist/ab/r116-sequence-smoke.json \
+            --max-emulated-frames 9950 \
+            --timeout 900
       - name: PLAY smoke
         shell: bash
         run: |
@@ -180,6 +192,7 @@ jobs:
           path: |
             dist/ab/r116-probe.json
             dist/ab/r116-probe.log
+            dist/ab/r116-sequence-smoke.json
             dist/ab/smoke-pl.log
             dist/ab/c-demotest/MANIFEST.json
             dist/ab/c-demotest/BUILD.log
