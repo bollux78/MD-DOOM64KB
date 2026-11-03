@@ -9,3 +9,5 @@ R116 debug smoke 4: optional results breakpoint when LTO erases symbol.
 R116 debug smoke 5: capture G_CheckDemoStatus/R116_End/G_ReloadDefaults breakpoints and sequence flags.
 
 R116 PLAY-only sequence smoke: verify actual outer-loop handoff for menu-enabled ROM.
+
+R116 Run All smoke v6: rebuilt PERF ROM with common safe handoff and duplicate-event guard.
