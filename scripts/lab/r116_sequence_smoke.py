@@ -50,12 +50,18 @@ def main():
     def put(name, val):
         if rsp_g.req("M%x,1:%02x" % (symbol(syms, name), val)) != "OK":
             raise RuntimeError("cannot write " + name)
-    record = {"status": "INCONCLUSIVE", "armed": False, "saw_8": False, "saw_9": False, "ticker_hits": 0, "forced_stop": False}
+    record = {"status": "INCONCLUSIVE", "armed": False, "saw_8": False, "saw_9": False, "ticker_hits": 0, "forced_stop": False, "events": []}
+    dbg = {}
+    for name in ("R116_End", "R116_Done", "G_CheckDemoStatus", "G_ReloadDefaults", "R116_SequenceContinue"):
+        matches = [v for k,v in syms.items() if k == name or k.startswith(name+".")]
+        if len(matches) == 1:
+            dbg[matches[0] & 0xffffff] = name
     rsp_g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     try:
         rsp_g.req("qSupported")
         record["handoff_symbol_found"] = bool(handoff_names)
-        for bp in ((tk, err, results) if results is not None else (tk, err)):
+        record["debug_symbols"] = list(dbg.values())
+        for bp in (set(dbg) | {tk, err} | ({results} if results is not None else set())):
             if rsp_g.req("Z0,%x,2" % bp) != "OK":
                 raise RuntimeError("cannot set breakpoint " + hex(bp))
         while True:
@@ -77,6 +83,17 @@ def main():
                 record["status"] = "FAIL_RUNTIME"
                 record["reason"] = "I_Error breakpoint"
                 break
+            if pc in dbg:
+                label = dbg[pc]
+                record["events"].append({
+                    "at_ticker": record["ticker_hits"], "symbol": label,
+                    "on": get("r116_seq_on"), "active": get("r116_active"),
+                    "completed": get("r116_seq_completed"),
+                    "pending": get("r116_seq_pending")
+                })
+                if len(record["events"]) > 15:
+                    record["events"] = record["events"][-15:]
+                continue
             if results is not None and pc == results:
                 record["status"] = "FAIL_PREMATURE_RESULTS"
                 record["reason"] = "Results screen reached before automatic handoff"
