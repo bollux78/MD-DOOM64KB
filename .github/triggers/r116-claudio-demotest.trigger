@@ -9,3 +9,5 @@ R116 test gate v2: stable G_Ticker breakpoint + explicit r116_active verificatio
 R116 safety pass: allow gameplay deviations; check live ticker progress, zone, I_Error, return code and bounded completion.
 
 R116 direct Benchmark Run All sequence, 10 demos, unchanged H32/H40 crop Shadow palette and AI Options; aggregate FPS.
+
+R116 Run All hardening: common safe PERF+PLAY handoff, repeated-demo-end guard, noipa symbol for RSP smoke.
