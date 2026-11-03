@@ -5,3 +5,5 @@ R116 sequence probe v2: forcibly retire demo 8 at 256 ticker entries, verify nex
 R116 debug smoke: inspect unexpected I_BenchmarkShowResults and sequence state after controlled demo stop.
 
 R116 debug smoke 4: optional results breakpoint when LTO erases symbol.
+
+R116 debug smoke 5: capture G_CheckDemoStatus/R116_End/G_ReloadDefaults breakpoints and sequence flags.
