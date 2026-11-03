@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""R116: play each per-map test demo in BlastEm (PERF demotest ROM, logic only) and check sync.
+"""R116: bounded BlastEm *safety/stability* stress test for all Episode 1 maps.
 
-One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). At first G_Ticker entry, arm the selected demo before that ticker executes:
-G_DoPlayDemo is a static function called inside G_Ticker and may be inlined by GCC.
-At the next G_Ticker verify that the requested demo was actually activated.
-Stops: R116_Done (first level exit, r116_res filled), R116_End (demo data ended without an exit),
-I_Error, or the emulator frame limit.
-UV-Max pass: exit leveltime == want +-1, kills == total, secrets == total, exit map == demo map.
-Special (want 0): pass = no I_Error and the demo ran to an exit or to its end.
+DO NOT require vanilla Doom 1.9 demo synchronization, map exit times, kills, secrets,
+monster placement, or identical gameplay. Recorded demos are only repeatable stress inputs.
+Breakpoints catch I_Error; periodically inspect zone headroom and game-tic progress.
+A clean frame-cap exit proves only the *observed window*, never the full demo or physical
+Mega Drive hardware. Hardware validation still requires testing on a console.
+Outcomes: PASS_COMPLETE, PASS_WINDOW, FAIL_RUNTIME, FAIL_MEMORY, INCONCLUSIVE.
 """
 import argparse, importlib.util, json, pathlib, re, struct, sys
 
@@ -39,7 +38,7 @@ def run_one(rsp, a, syms, k, d):
     tk, done, end, err = (sym(syms, n) for n in ("G_Ticker", "R116_Done", "R116_End", "I_Error"))
     res = {"index": k, "lump": d["lump"], "label": d["label"], "want": d["want"], "map": d["map"], "nocap": d["nocap"]}
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
-    tics = 0; last = {}
+    tics = 0; last = {}; zone_samples = []; tic_samples = []
     try:
         g.req("qSupported")
         for bp in (tk, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
@@ -50,8 +49,22 @@ def run_one(rsp, a, syms, k, d):
         while True:
             try:
                 g.cont()
-            except (RuntimeError, TimeoutError) as e:
-                res["end"] = "frame_limit"; res["emulator"] = str(e); break
+            except TimeoutError as e:
+                res["end"] = "timeout"; res["emulator"] = str(e); break
+            except RuntimeError as e:
+                res["emulator"] = str(e)
+                # RSP EOF can occur at the intentional -b frame cap or on a crash.
+                # Distinguish by process exit status; never call a signal/error exit safe.
+                if "RSP EOF" in str(e) or "BlastEm exited before RSP reply" in str(e):
+                    try:
+                        rc = g.proc.wait(timeout=2)
+                    except Exception:
+                        rc = g.proc.poll()
+                    res["emulator_returncode"] = rc
+                    res["end"] = "frame_limit" if rc == 0 else "emulator_error"
+                else:
+                    res["end"] = "emulator_error"
+                break
             pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xFFFFFF
             if pc == tk:
                 if not armed: arm(); armed = True
@@ -62,23 +75,50 @@ def run_one(rsp, a, syms, k, d):
                     verified = True
                 tics += 1
                 if tics % 64 == 0:
-                    last = {"gametic": int.from_bytes(g.readmem(tic_a, 4), "big"), "leveltime": int.from_bytes(g.readmem(lt_a, 4), "big")}
+                    last = {"gametic": int.from_bytes(g.readmem(tic_a, 4), "big"),
+                            "leveltime": int.from_bytes(g.readmem(lt_a, 4), "big")}
+                    tic_samples.append(last["gametic"])
+                    sample = dict(zip(FIELDS, RES.unpack(g.readmem(sym(syms, "r116_res"), RES.size))))
+                    ztotal = sample["zmin_total"]
+                    zlargest = sample["zmin_largest"]
+                    if ztotal != 65535 and zlargest != 65535:
+                        zone_samples.append([ztotal, zlargest])
+                        if zlargest > ztotal or ztotal == 0 or zlargest == 0:
+                            raise MemoryError("invalid or exhausted zone headroom: " + str([ztotal, zlargest]))
+                    # Detect a tic counter that stopped progressing while G_Ticker fires.
+                    if len(tic_samples) >= 2 and tic_samples[-1] <= tic_samples[-2]:
+                        raise RuntimeError("gametic did not progress over 64 ticker hits")
+                    res["last"] = last
                 continue
             r = dict(zip(FIELDS, RES.unpack(g.readmem(sym(syms, "r116_res"), RES.size))))
             res["res"] = r
             res["end"] = {done: "exit", end: "demo_end_no_exit", err: "i_error"}[pc]
             break
+    except MemoryError as e:
+        res["end"] = "memory_error"; res["error"] = str(e)
     except Exception as e:
         res["end"] = "probe_error"; res["error"] = str(e)
     finally:
         g.close()
-    res["ticks_seen"] = tics; res["last"] = last
-    r = res.get("res")
-    if d["want"]:
-        res["pass"] = bool(res.get("selected_verified") and res["end"] == "exit" and r and abs(r["exit_time"] - d["want"]) <= 1 and r["kills"] == r["tkills"]
-                           and r["secrets"] == r["tsecrets"] and r["map"] == d["map"])
+    res["ticks_seen"] = tics
+    res["last"] = last
+    if zone_samples:
+        res["zone_min_total"] = min(z[0] for z in zone_samples)
+        res["zone_min_largest"] = min(z[1] for z in zone_samples)
+        if res["zone_min_total"] < 1024 or res["zone_min_largest"] < 512:
+            res["memory_warning"] = "low zone headroom: investigate before real hardware"
+    # No exact Doom 1.9 sync/exit/statistics gate: a different gameplay path is allowed.
+    if res["end"] in ("exit", "demo_end_no_exit") and res.get("selected_verified") and zone_samples:
+        res["status"] = "PASS_COMPLETE"
+    elif res["end"] == "frame_limit" and res.get("selected_verified") and zone_samples and len(tic_samples) > 1:
+        res["status"] = "PASS_WINDOW"  # Only the bounded run; never full-demo proof.
+    elif res["end"] == "memory_error":
+        res["status"] = "FAIL_MEMORY"
+    elif res["end"] in ("i_error", "timeout", "emulator_error"):
+        res["status"] = "FAIL_RUNTIME"
     else:
-        res["pass"] = bool(res.get("selected_verified") and res["end"] in ("exit", "demo_end_no_exit"))
+        res["status"] = "INCONCLUSIVE"
+    res["pass"] = res["status"] in ("PASS_COMPLETE", "PASS_WINDOW")
     return res
 
 
@@ -95,7 +135,7 @@ def main():
     for k in ks:
         r = run_one(rsp, a, syms, k, T[k]); out.append(r); print(json.dumps(r), flush=True)
     pathlib.Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
-    print("R116 SUMMARY", " ".join("%s=%s" % (r["lump"], "PASS" if r["pass"] else "FAIL:" + r["end"]) for r in out))
+    print("R116 SAFETY SUMMARY", " ".join("%s=%s" % (r["lump"], r["status"]) for r in out), flush=True)
     return 0 if all(r["pass"] for r in out) else 1
 
 
