@@ -95,7 +95,7 @@ jobs:
           export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
           mkdir -p dist/ab
           for set in $AB_SETS; do
-            if [ "$set" = control ]; then lab=control; else lab="c-${set//+/_}"; fi
+            lab="c-${set//+/_}"
             w="$RUNNER_TEMP/r92-shadow-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             test ! -e "$w"
             python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
