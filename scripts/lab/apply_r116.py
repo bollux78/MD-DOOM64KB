@@ -4,7 +4,7 @@
 - scripts/lab/r116_add_demos.py appends DTE1M1..DTE1M9 (DSDA UV-Max, v1.9) and the generated
   DTE1M6S special to the converted WAD (build step, needs R116_DEMO_DIR) and writes src/r116_demos.h.
 - r116_sel (1..10) replaces DEMO3 in G_DoPlayDemo; the header map is used as recorded (no E1M1/E1M7
-  forcing), AI is forced to Normal for the run and restored after.
+  forcing), AI follows the Normal/Low selection from Options.
 - r116_nocap (from the table) disables the R115 E1M6 UV->HMP spawn cap: needed by the human E1M6
   UV-Max demo (index 6). The special (index 10) runs with the cap.
 - At the first G_DoCompleted the exit stats are stored in r116_res and the demo stops on the next tic
@@ -12,7 +12,7 @@
   Sync check (UV-Max): exit leveltime == round(DSDA time * 35) +-1, kills == total, secrets == total.
 - Zone minimum (total / largest free) sampled every 4 tics in GS_LEVEL.
 - r116_norender (probe only) skips D_Display entirely: logic-only playback.
-- Menu: Benchmark > Demo tests > 10 entries. Results screen shows the test block.
+- Menu: Benchmark directly lists Run All Demos in Sequence and 10 individual demos.
 All new state is in .data (BSS unchanged).
 """
 from pathlib import Path
@@ -29,12 +29,23 @@ rep(G, '#include "r81_save.h"\n', '''#include "r81_save.h"
 #define R116_D __attribute__((section(".data")))
 volatile uint8_t r116_sel R116_D = 0;       /* menu/probe selection, 0 = DEMO3 */
 volatile uint8_t r116_norender R116_D = 0;  /* probe: skip D_Display */
-uint8_t r116_active R116_D = 0, r116_stop R116_D = 0, r116_nocap R116_D = 0, r116_ai R116_D = 0;
+uint8_t r116_active R116_D = 0, r116_stop R116_D = 0, r116_nocap R116_D = 0;
+volatile uint8_t r116_seq_on R116_D = 0, r116_seq_pending R116_D = 0;
+uint8_t r116_seq_completed R116_D = 0;
+uint16_t r116_seq_min_total R116_D = 0xffffu, r116_seq_min_largest R116_D = 0xffffu;
 r116_res_t r116_res R116_D = {-1};
 extern uint32_t R115_ZoneTotal(void);
 extern uint32_t R115_ZoneLargest(void);
 void __attribute__((noipa,noinline)) R116_Done(void){ __asm__ volatile("":::"memory"); }
 void __attribute__((noipa,noinline)) R116_End(void){ __asm__ volatile("":::"memory"); }
+/* Deferred handoff at the outer game loop, never inside demo decoder. */
+void R116_SequenceContinue(void){
+    if(!r116_seq_pending)return;
+    r116_seq_pending=0;
+    r116_active=0;r116_stop=0;r116_nocap=0;
+    G_ReloadDefaults(); /* Only clears demo flags; Options remain unchanged. */
+    G_DeferedPlayDemo("demo3");
+}
 static void R116_Zone(void){
     uint32_t t=R115_ZoneTotal(), l=R115_ZoneLargest();
     if(t<r116_res.zmin_total)r116_res.zmin_total=(uint16_t)t;
@@ -51,7 +62,7 @@ rep(G, '''    ExtractFileBase(defdemoname,basename);           // killough
         r116_active=r116_sel;r116_nocap=d->nocap;
         memset(&r116_res,0,sizeof(r116_res));
         r116_res.exit_time=-1;r116_res.zmin_total=0xFFFFu;r116_res.zmin_largest=0xFFFFu;r116_res.sel=r116_sel;
-        r116_stop=0;r116_ai=R89_AIMode();R89_SetAIMode(0);
+        r116_stop=0; /* Keep Options AI mode Normal/Low untouched. */
     }else
     ExtractFileBase(defdemoname,basename);           // killough
     basename[8] = 0;''')
@@ -98,10 +109,18 @@ rep(G, '''void G_CheckDemoStatus (void)
 rep(G, '''            G_ReloadDefaults();
             D_R50_BenchmarkRequestReturn();
             return;''', '''            G_ReloadDefaults();
-            if(r116_active){R89_SetAIMode(r116_ai);r116_active=0;r116_stop=0;r116_nocap=0;}
+            if(r116_active){r116_active=0;r116_stop=0;r116_nocap=0;}
+            r116_seq_on=0;r116_seq_pending=0;r116_seq_completed=0;
             D_R50_BenchmarkRequestReturn();
             return;''')
 rep(G, '#include "r116_demos.h"\n', '#include "r116_demos.h"\nextern uint8_t R89_AIMode(void);\nextern void R89_SetAIMode(uint8_t low);\n')
+
+/* R116 Run All keeps FPS counters across all 10 map demos and skips the
+   demo-command ticker immediately after setting deferred handoff. */
+rep(G, '    if (_g_timingdemo) I_BenchmarkReset();',
+       '    if (_g_timingdemo && !(r116_seq_on && r116_seq_completed)) I_BenchmarkReset();')
+rep(G, 'if(D_R50_BenchmarkReturnPending())return;',
+       'if(D_R50_BenchmarkReturnPending() || r116_seq_pending)return;')
 
 P = 'src/p_setup.c'
 rep(P, 'r115_spawnskill=(uint8_t)((map==6 && _g_gameskill>=sk_hard)?sk_medium:_g_gameskill);',
