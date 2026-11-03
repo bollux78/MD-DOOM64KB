@@ -150,10 +150,10 @@ jobs:
           mkdir -p "$out"
           cp dist/ab/c-demotest/*.bin dist/ab/c-demotest/*.elf dist/ab/c-demotest/MANIFEST.json "$out/"
           echo "::notice title=R116 private ROMs::$out ($(ls "$out" | tr '\n' ' '))"
-      - name: Demo sync probe (BlastEm, logic only, one run per demo)
+      - name: Demo stability and zone safety (BlastEm, bounded run per map)
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           rom=$(ls dist/ab/c-demotest/*-pf.bin)
           hdr="$RUNNER_TEMP/r116_demos.h"; cp scripts/doom64.wad "$RUNNER_TEMP/r116-hdr.wad"
           python3 scripts/lab/r116_add_demos.py --wad "$RUNNER_TEMP/r116-hdr.wad" --dir "$R116_DEMO_DIR" --manifest assets/r116-demos.json --header "$hdr"
@@ -163,8 +163,7 @@ jobs:
           import json
           R=json.load(open('dist/ab/r116-probe.json'))
           for r in R:
-              x=r.get('res') or {}
-              print('::notice title=R116 %s %s::%s end=%s exit=%s want=%s kills=%s/%s secrets=%s/%s zone_min=%s/%s deaths=%s last=%s'%(r['lump'],'PASS' if r['pass'] else 'FAIL',r['label'],r['end'],x.get('exit_time'),r['want'],x.get('kills'),x.get('tkills'),x.get('secrets'),x.get('tsecrets'),x.get('zmin_total'),x.get('zmin_largest'),x.get('deaths'),r.get('last')))
+              print('::notice title=R116 safety %s %s::end=%s tics=%s zone_min_total=%s largest=%s emulator_rc=%s note=%s'%(r['lump'],r['status'],r['end'],r.get('ticks_seen'),r.get('zone_min_total'),r.get('zone_min_largest'),r.get('emulator_returncode'),r.get('memory_warning','')))
           PY
       - name: PLAY smoke
         shell: bash
@@ -177,7 +176,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: r116-demotest-reports
+          name: r116-safety-reports
           path: |
             dist/ab/r116-probe.json
             dist/ab/r116-probe.log
