@@ -7,3 +7,5 @@ R116 probe fix experiment: configure selected demo before G_DoPlayDemo and rejec
 R116 test gate v2: stable G_Ticker breakpoint + explicit r116_active verification; no missing optimized symbol.
 
 R116 safety pass: allow gameplay deviations; check live ticker progress, zone, I_Error, return code and bounded completion.
+
+R116 direct Benchmark Run All sequence, 10 demos, unchanged H32/H40 crop Shadow palette and AI Options; aggregate FPS.
