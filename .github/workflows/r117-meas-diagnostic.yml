@@ -30,6 +30,7 @@ jobs:
       - name: Compare boot of BASE and MEAS PLAY (each isolated)
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           mkdir -p dist/diag
           for v in c-base c-meas; do
@@ -46,6 +47,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e
           for v in c-base c-meas; do
             rom=$(find "$PRIV/$v" -maxdepth 1 -name '*-pf.bin' -print -quit)
             python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" \
