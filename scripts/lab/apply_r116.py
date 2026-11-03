@@ -39,7 +39,7 @@ extern uint32_t R115_ZoneLargest(void);
 void __attribute__((noipa,noinline)) R116_Done(void){ __asm__ volatile("":::"memory"); }
 void __attribute__((noipa,noinline)) R116_End(void){ __asm__ volatile("":::"memory"); }
 /* Deferred handoff at the outer game loop, never inside demo decoder. */
-void R116_SequenceContinue(void){
+void __attribute__((noipa,noinline)) R116_SequenceContinue(void){
     if(!r116_seq_pending)return;
     r116_seq_pending=0;
     r116_active=0;r116_stop=0;r116_nocap=0;
@@ -103,6 +103,7 @@ rep(G, '''void G_CheckDemoStatus (void)
 {
 ''', '''void G_CheckDemoStatus (void)
 {
+    if(r116_seq_pending)return; /* A demo may notify more than once per tic. */
     if(r116_seq_on && r116_active){
         R116_Zone();
         if(r116_res.zmin_total<r116_seq_min_total)r116_seq_min_total=r116_res.zmin_total;
@@ -131,6 +132,8 @@ rep(G, '    if (_g_timingdemo) I_BenchmarkReset();',
        '    if (_g_timingdemo && !(r116_seq_on && r116_seq_completed)) I_BenchmarkReset();')
 rep(G, 'if(D_R50_BenchmarkReturnPending())return;',
        'if(D_R50_BenchmarkReturnPending() || r116_seq_pending)return;')
+rep(G, '    if (!_g_demoplayback && _g_menuactive)',
+       '    if (r116_seq_pending)return; /* wait until outer loop handles handoff */\n    if (!_g_demoplayback && _g_menuactive)')
 
 P = 'src/p_setup.c'
 rep(P, 'r115_spawnskill=(uint8_t)((map==6 && _g_gameskill>=sk_hard)?sk_medium:_g_gameskill);',
@@ -152,13 +155,19 @@ rep(D, 'void D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:
 }''')
 
 # After nested G_Ticker returns, switch WAD/demo at the outer loop boundary.
-rep(D, 'if(r50_bench_return_pending)D_R50_BenchmarkFinish();',
-       '''if(r50_bench_return_pending)D_R50_BenchmarkFinish();
+rep(D, '''        if(r50_bench_return_pending)D_R50_BenchmarkFinish();
+#endif
+
+#if defined(DOOM_PROFILE)''', '''        if(r50_bench_return_pending)D_R50_BenchmarkFinish();
+#endif
+        /* Common to PLAY and PERF: safe handoff after G_Ticker has returned. */
         {
             extern volatile uint8_t r116_seq_pending;
             extern void R116_SequenceContinue(void);
             if(r116_seq_pending)R116_SequenceContinue();
-        }''')
+        }
+
+#if defined(DOOM_PROFILE)''')
 
 M = 'src/m_text.c'
 rep(M, '''static const menuitem_t R88BenchItems[]={
