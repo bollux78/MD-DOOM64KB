@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """R116: play each per-map test demo in BlastEm (PERF demotest ROM, logic only) and check sync.
 
-One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). The probe arms the selection at the first G_Ticker or G_DoPlayDemo, whichever occurs
-first (G_DoPlayDemo may be invoked inside G_Ticker). On the following ticker it
-verifies that the requested demo was actually activated.
+One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). At first G_Ticker entry, arm the selected demo before that ticker executes:
+G_DoPlayDemo is a static function called inside G_Ticker and may be inlined by GCC.
+At the next G_Ticker verify that the requested demo was actually activated.
 Stops: R116_Done (first level exit, r116_res filled), R116_End (demo data ended without an exit),
 I_Error, or the emulator frame limit.
 UV-Max pass: exit leveltime == want +-1, kills == total, secrets == total, exit map == demo map.
@@ -36,14 +36,14 @@ FIELDS = 'exit_time exit_gametic kills tkills items titems secrets tsecrets zmin
 
 def run_one(rsp, a, syms, k, d):
     tic_a, lt_a = sym(syms, "_g_gametic"), sym(syms, "_g_leveltime")
-    tk, play, done, end, err = (sym(syms, n) for n in ("G_Ticker", "G_DoPlayDemo", "R116_Done", "R116_End", "I_Error"))
+    tk, done, end, err = (sym(syms, n) for n in ("G_Ticker", "R116_Done", "R116_End", "I_Error"))
     res = {"index": k, "lump": d["lump"], "label": d["label"], "want": d["want"], "map": d["map"], "nocap": d["nocap"]}
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     tics = 0; last = {}
     try:
         g.req("qSupported")
-        for bp in (tk, play, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
-        armed = False; play_seen = False; verified = False
+        for bp in (tk, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
+        armed = False; verified = False
         def arm():
             assert g.req("M%x,1:%02x" % (sym(syms, "r116_sel"), k)) == "OK"
             assert g.req("M%x,1:01" % sym(syms, "r116_norender")) == "OK"
@@ -53,14 +53,9 @@ def run_one(rsp, a, syms, k, d):
             except (RuntimeError, TimeoutError) as e:
                 res["end"] = "frame_limit"; res["emulator"] = str(e); break
             pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xFFFFFF
-            if pc == play:
-                if not armed: arm(); armed = True
-                assert g.req("z0,%x,2" % play) == "OK"
-                play_seen = True
-                continue
             if pc == tk:
                 if not armed: arm(); armed = True
-                if play_seen and not verified:
+                elif not verified:
                     selected = int.from_bytes(g.readmem(sym(syms, "r116_active"), 1), "big")
                     assert selected == k, ("demo selection not active", selected, k)
                     res["selected_verified"] = True
