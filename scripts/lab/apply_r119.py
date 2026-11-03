@@ -32,7 +32,7 @@ struct msecnode_s;
 struct sector_s;
 struct mobj_s;
 struct msecnode_s *R119_NodeClearAndNext(struct msecnode_s *p);
-int R119_NodeFindOrMark(struct msecnode_s *p,struct sector_s *s,
+int R119_NodeFindOrMark(struct msecnode_s *p,void *s,
                        struct mobj_s *thing,struct msecnode_s **next);
 struct mobj_s *R119_NodeThingAndNext(struct msecnode_s *p,
                                      struct msecnode_s **next);
@@ -53,7 +53,7 @@ msecnode_t *R119_NodeClearAndNext(msecnode_t *p){
     R25_SRAM_END();
     return next;
 }
-int R119_NodeFindOrMark(msecnode_t *p,sector_t *s,mobj_t *thing,msecnode_t **next){
+int R119_NodeFindOrMark(msecnode_t *p,void *s,mobj_t *thing,msecnode_t **next){
     R25_SRAM_BEGIN();
     uint32_t found=node_read(p,offsetof(msecnode_t,m_sector));
     if(found==(uint32_t)(uintptr_t)s){
