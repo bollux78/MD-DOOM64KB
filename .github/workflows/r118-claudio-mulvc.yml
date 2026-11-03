@@ -1,0 +1,251 @@
+name: R118 Claudio exact logic speed-ups (mul, vc) vs R117 meas
+# Control = R117 lowmem meas. Candidates: R118 mul, vc, mulvc. Logic must be bit-identical (r118_logic_check), pixels identical (r70/r93b). Demos come from a private runner folder
+# (sha256-pinned in assets/r116-demos.json). ROMs/ELFs embed third-party demos: they are copied to a
+# private runner folder and NOT uploaded. Only reports are uploaded.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r118-claudio-mulvc.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r118-claudio-mulvc-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_SETS: 'meas mul vc mulvc'
+  R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
+  R116_PRIVATE_OUT: /home/dan/Projetos/Personal/r118-mulvc
+  R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          git merge-base --is-ancestor f5a9daa7a0bd7225bbc227630defc73c67c34f1e HEAD
+          test -x "$BLASTEM"; test -x "$OBJDUMP"
+          python3 -m py_compile scripts/lab/apply_r83.py scripts/lab/test_r83.py scripts/lab/apply_r81.py scripts/lab/apply_r82_d8088.py scripts/lab/test_r82_d8088.py scripts/lab/apply_r80_performance.py scripts/lab/test_r80_pixofs.py scripts/lab/r82_stack_probe.py scripts/lab/r82_bsp_depth.py scripts/lab/r70_capture.py scripts/lab/r70_compare.py
+          python3 scripts/lab/test_r83.py
+          python3 scripts/lab/test_r88.py
+          python3 scripts/lab/test_r89.py
+          python3 scripts/lab/test_r89_routes.py
+          python3 scripts/lab/test_r90.py
+          python3 scripts/lab/test_r91.py
+          python3 scripts/lab/test_r92.py
+          python3 -m py_compile scripts/lab/apply_r95.py scripts/lab/apply_r96.py scripts/lab/apply_r97.py scripts/lab/apply_r98.py scripts/lab/apply_r99.py scripts/lab/apply_r100.py scripts/lab/r100_diag_read.py scripts/lab/r100_asm_metrics.py scripts/lab/r82_stack_probe.py scripts/lab/apply_r104.py scripts/lab/apply_r107.py scripts/lab/apply_r111.py scripts/lab/apply_r112.py scripts/lab/apply_r113.py scripts/lab/r113_shift_luts.py scripts/lab/apply_r115.py scripts/lab/apply_r116.py scripts/lab/r116_add_demos.py scripts/lab/r116_demo_probe.py scripts/lab/r116_sequence_smoke.py scripts/lab/apply_r117.py scripts/lab/r117_profile.py scripts/lab/apply_r118.py scripts/lab/r118_logic_check.py scripts/lab/r118_ab.py
+          python3 scripts/lab/test_r118_mul.py
+          test -d "$R116_DEMO_DIR"
+          cc -O2 -Iscripts/lab/r99 scripts/lab/r99/test_r99_recip.c -o "$RUNNER_TEMP/r99recip" && "$RUNNER_TEMP/r99recip"
+          python3 -m py_compile scripts/lab/apply_r87.py scripts/lab/r87_compare.py
+          python3 -m py_compile scripts/lab/apply_r85.py scripts/lab/apply_r84.py scripts/lab/gen_r84_columns.py scripts/lab/r84_texture_audit.py
+          python3 scripts/lab/test_r81_sram.py
+          python3 scripts/lab/test_r81_font.py
+          python3 scripts/lab/test_r81_cheats.py
+          python3 scripts/lab/test_r81_codec.py
+          python3 scripts/lab/test_r77.py
+          python3 scripts/lab/gen_r78_art.py --verify-only
+          python3 scripts/lab/test_r78_native.py
+          fish -n scripts/build_silent.fish
+          fish -n scripts/lab/build_r35_linear.fish
+          python3 scripts/lab/test_r79_face.py
+          python3 scripts/lab/test_gen_hud_wad.py
+          python3 scripts/lab/test_hud_wad_logic.py
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for set in $AB_SETS; do
+            if [ "$set" = control ]; then lab=control; else lab="c-${set//+/_}"; fi
+            w="$RUNNER_TEMP/r92-shadow-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/apply_r81.py
+              python3 scripts/lab/test_r80_pixofs.py --src src
+              R80_EXPERIMENTS="P1+F1" python3 scripts/lab/apply_r80_performance.py
+              R83_CANDIDATE=sprites python3 scripts/lab/apply_r83.py
+              R85_CANDIDATE=all python3 scripts/lab/apply_r85.py
+              R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
+              python3 scripts/lab/apply_r89.py
+              R90_CANDIDATE=control python3 scripts/lab/apply_r90.py
+              R91_CANDIDATE=sh1 python3 scripts/lab/apply_r91.py
+              R92_CANDIDATE=toggle python3 scripts/lab/apply_r92.py
+              R95_NAME=flat python3 scripts/lab/apply_r95.py
+              R96_NAME=wall python3 scripts/lab/apply_r96.py
+              R97_NAME=shasm python3 scripts/lab/apply_r97.py
+              R98_CANDIDATE=sprmul python3 scripts/lab/apply_r98.py
+              R100_MODE=f1t R100_PREFIX=r102 R100_NAME=twoface python3 scripts/lab/apply_r100.py; R104_PREFIX=r105 R104_NAME=twoface python3 scripts/lab/apply_r104.py
+              python3 scripts/lab/apply_r107.py
+              python3 scripts/lab/apply_r113.py
+              python3 scripts/lab/apply_r115.py
+              python3 scripts/lab/apply_r116.py
+              python3 scripts/lab/apply_r117.py
+              if [ "$set" != meas ]; then R118_MODE="$set" python3 scripts/lab/apply_r118.py; fi
+              python3 - <<'PY2'
+          from pathlib import Path
+          p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text()
+          a="(('pl','play'),)";assert s.count(a)==1;s=s.replace(a,"(('pl','play'),('pf','perf'))")
+          a="    assert len(records) == 1\n";assert s.count(a)==1;s=s.replace(a,"    assert len(records) == 2\n")
+          p.write_text(s)
+          PY2
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
+          done
+      - name: Verify ROM sizes and BSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          for v,pre in (('c-meas','r117-meas-'),('c-mul','r118-mul-'),('c-vc','r118-vc-'),('c-mulvc','r118-mulvc-')):
+              d=pathlib.Path('dist/ab')/v;rows=json.loads((d/'MANIFEST.json').read_text())
+              assert [r['variant'] for r in rows]==[pre+'pl',pre+'pf'],rows
+              for r in rows:
+                  b=(d/r['rom']).read_bytes()
+                  assert hashlib.sha256(b).hexdigest()==r['sha256'] and len(b)<=4*1024*1024 and r['bss_bytes']<=57920
+                  print('::notice title=%s::ROM %d B, BSS %d B (margin %d), sha256 %s'%(r['variant'],len(b),r['bss_bytes'],57920-r['bss_bytes'],r['sha256'][:16]))
+          PY
+          # RAM must not grow: .data and .bss sizes of every candidate equal the control's.
+          for v in c-mul c-vc c-mulvc; do
+            for k in pl pf; do
+              a=$(ls dist/ab/c-meas/*-$k.elf); b=$(ls dist/ab/$v/*-$k.elf)
+              sa=$(/home/dan/mars/m68k-elf/bin/m68k-elf-size -A "$a" | awk '$1==".data"||$1==".bss"{print $1,$2}' | tr '\n' ' ')
+              sb=$(/home/dan/mars/m68k-elf/bin/m68k-elf-size -A "$b" | awk '$1==".data"||$1==".bss"{print $1,$2}' | tr '\n' ' ')
+              echo "$v $k control[$sa] cand[$sb]"; test "$sa" = "$sb"
+            done
+          done
+      - name: Keep test ROMs private (runner folder only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$R116_PRIVATE_OUT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          for v in c-meas c-mul c-vc c-mulvc; do mkdir -p "$out/$v"; cp dist/ab/$v/*.bin dist/ab/$v/*.elf dist/ab/$v/MANIFEST.json "$out/$v/"; done
+          echo "::notice title=R118 private ROMs::$out"
+      - name: Logic identity (10 demos, logic only, fingerprints every 100 tics)
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p dist/ab/logic; fail=0
+          for k in 1 2 3 4 5 6 7 8 9 10; do
+            for v in c-meas c-mul c-vc c-mulvc; do
+              rom=$(ls dist/ab/$v/*-pf.bin)
+              python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --every 100 \
+                --out dist/ab/logic/d$k-$v.json > dist/ab/logic/d$k-$v.log 2>&1 || { echo "::error title=R118 logic run d$k $v::$(tail -2 dist/ab/logic/d$k-$v.log)"; fail=1; }
+            done
+            if python3 scripts/lab/r118_logic_check.py --compare dist/ab/logic/d$k-c-meas.json dist/ab/logic/d$k-c-mul.json dist/ab/logic/d$k-c-vc.json dist/ab/logic/d$k-c-mulvc.json > dist/ab/logic/d$k-compare.json; then
+              echo "::notice title=R118 logic d$k::IDENTICAL $(python3 -c "import json;print([(r['run'].split('-c-')[-1],r['common_checkpoints'],r['last_common_tic']) for r in json.load(open('dist/ab/logic/d$k-compare.json'))])")"
+            else
+              echo "::error title=R118 logic d$k::MISMATCH $(tr -d '\n ' < dist/ab/logic/d$k-compare.json)"; fail=1
+            fi
+          done
+          exit $fail
+      - name: Pixels and DEMO3 timing (Shadow Off), A2/L3 post-pass (Shadow On)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in c-meas c-mul c-vc c-mulvc; do
+            rom=$(ls dist/ab/$v/*-pf.bin)
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/cap-$v" --label "$v" --max-emulated-frames 9000 --max-breaks 6000 --timeout 600 > "dist/ab/cap-$v.log" 2>&1 || { cat "dist/ab/cap-$v.log"; exit 1; }
+          done
+          python3 scripts/lab/r70_compare.py dist/ab/compare-off control=dist/ab/cap-c-meas mul=dist/ab/cap-c-mul vc=dist/ab/cap-c-vc mulvc=dist/ab/cap-c-mulvc | tee dist/ab/compare-off.log
+          python3 -c "t=open('dist/ab/compare-off.log').read();i=t.find('## Timing');print('::notice title=R118 DEMO3 Shadow Off A/B::'+t[i:i+2500].replace('%','%25').replace('\n','%0A'))"
+          for m in 1 2; do
+            for v in c-meas c-mulvc; do
+              rom=$(ls dist/ab/$v/*-pf.bin)
+              python3 scripts/lab/r93b_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out "dist/ab/on$m-$v" --mode $m --max-emulated-frames 9000 > "dist/ab/on$m-$v.log" 2>&1 || { cat "dist/ab/on$m-$v.log"; exit 1; }
+            done
+            python3 - "$m" <<'PY'
+          import json,pathlib,sys
+          m=sys.argv[1];P=3344
+          def load(d):
+              d=pathlib.Path(d);r=[json.loads(l) for l in (d/'frames.jsonl').read_text().splitlines() if l.strip()]
+              post=(d/'post.bin').read_bytes();first={}
+              for i,x in enumerate(r): first.setdefault(x['tic'],i)
+              return post,first
+          a=load(f'dist/ab/on{m}-c-meas');b=load(f'dist/ab/on{m}-c-mulvc');tics=sorted(set(a[1])&set(b[1]))
+          diff=sum(1 for t in tics if a[0][a[1][t]*P:(a[1][t]+1)*P]!=b[0][b[1][t]*P:(b[1][t]+1)*P])
+          print('::notice title=R118 Shadow On mode %s post-pass::common tics %d, differing frames %d'%(m,len(tics),diff))
+          assert diff==0 and len(tics)>50
+          PY
+          done
+      - name: Rendered timing on the heavy demos (E1M3, E1M7, E1M9, special; render after 150 tics)
+        shell: bash
+        run: |
+          set -uo pipefail
+          for v in c-meas c-mul c-vc c-mulvc; do
+            rom=$(ls dist/ab/$v/*-pf.bin); mkdir -p dist/ab/time-$v
+            for k in 3 7 9 10; do
+              python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --skip 150 --norender 0 \
+                --out dist/ab/time-$v/d$k-ab > dist/ab/time-$v/d$k-ab.log 2>&1 || echo "::warning title=R118 timing d$k $v::$(tail -1 dist/ab/time-$v/d$k-ab.log)"
+            done
+          done
+          python3 scripts/lab/r118_ab.py dist/ab/R118-AB.json meas=dist/ab/time-c-meas mul=dist/ab/time-c-mul vc=dist/ab/time-c-vc mulvc=dist/ab/time-c-mulvc | tee dist/ab/R118-AB.log
+          echo "::notice title=R118 heavy-demo rendered A/B (VBlanks, same tic range)::$(tr '\n' ' ' < dist/ab/R118-AB.log)"
+      - name: PLAY smoke (mulvc)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rom=$(ls dist/ab/c-mulvc/*-pl.bin)
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --out dist/ab/smoke-pl --label mulvc-play --max-emulated-frames 800 --max-breaks 600 --timeout 120 > dist/ab/smoke-pl.log 2>&1 || { cat dist/ab/smoke-pl.log; exit 1; }
+          rm -rf dist/ab/smoke-pl/*.bin
+      - name: Upload reports only (no ROM, no ELF, no demo data)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r118-mulvc-reports
+          path: |
+            dist/ab/R118-AB.json
+            dist/ab/R118-AB.log
+            dist/ab/logic/
+            dist/ab/compare-off/REPORT.md
+            dist/ab/compare-off/summary.json
+            dist/ab/compare-off.log
+            dist/ab/time-*/**/PROFILE.json
+            dist/ab/time-*/**/frames.tsv
+            dist/ab/smoke-pl.log
+            dist/ab/c-*/MANIFEST.json
+            dist/ab/c-*/BUILD.log
+          retention-days: 90
+          if-no-files-found: warn
