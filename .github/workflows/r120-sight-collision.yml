@@ -173,8 +173,30 @@ jobs:
           for k in 1 2 3 4 5 6 7 8 9 10; do
             for v in c-control c-sight c-collision c-both; do
               rom=$(ls dist/ab/$v/*-pf.bin)
-              python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --every 100 \
-                --out dist/ab/logic/d$k-$v.json > dist/ab/logic/d$k-$v.log 2>&1 || { echo "::error title=R118 logic run d$k $v::$(tail -2 dist/ab/logic/d$k-$v.log)"; fail=1; }
+              # Retry only a transient debugger EOF with zero checkpoints.
+              # Never retry/mask state divergence or legitimate in-game errors.
+              ok=0
+              for attempt in 1 2 3; do
+                if python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --every 100 \
+                    --out dist/ab/logic/d$k-$v.json > dist/ab/logic/d$k-$v.log 2>&1; then
+                  ok=1; break
+                fi
+                if python3 - "dist/ab/logic/d$k-$v.json" <<'PYRETRY'
+          import json,sys
+          p=json.load(open(sys.argv[1]))
+          sys.exit(0 if p.get('end','').startswith('probe_error: BlastEm RSP EOF') and not p.get('checkpoints') else 1)
+          PYRETRY
+                then
+                  echo "::warning title=R120 transient RSP EOF::demo $k $v attempt $attempt"
+                  sleep 1
+                else
+                  break
+                fi
+              done
+              if [ "$ok" -ne 1 ]; then
+                echo "::error title=R120 logic run d$k $v::$(tail -2 dist/ab/logic/d$k-$v.log)"
+                fail=1
+              fi
             done
             if python3 scripts/lab/r118_logic_check.py --compare dist/ab/logic/d$k-c-control.json dist/ab/logic/d$k-c-sight.json dist/ab/logic/d$k-c-collision.json dist/ab/logic/d$k-c-both.json > dist/ab/logic/d$k-compare.json; then
               echo "::notice title=R120 logic d$k::IDENTICAL $(python3 -c "import json;print([(r['run'].split('-c-')[-1],r['common_checkpoints'],r['last_common_tic']) for r in json.load(open('dist/ab/logic/d$k-compare.json'))])")"
