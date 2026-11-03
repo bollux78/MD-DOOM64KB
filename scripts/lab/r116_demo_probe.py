@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """R116: play each per-map test demo in BlastEm (PERF demotest ROM, logic only) and check sync.
 
-One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). Before G_DoPlayDemo executes, the probe writes r116_sel=k and r116_norender=1
-(D_Display skipped). At the first G_Ticker it verifies that the selected demo is active.
+One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). The probe arms the selection at the first G_Ticker or G_DoPlayDemo, whichever occurs
+first (G_DoPlayDemo may be invoked inside G_Ticker). On the following ticker it
+verifies that the requested demo was actually activated.
 Stops: R116_Done (first level exit, r116_res filled), R116_End (demo data ended without an exit),
 I_Error, or the emulator frame limit.
 UV-Max pass: exit leveltime == want +-1, kills == total, secrets == total, exit map == demo map.
@@ -42,7 +43,10 @@ def run_one(rsp, a, syms, k, d):
     try:
         g.req("qSupported")
         for bp in (tk, play, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
-        armed = False
+        armed = False; play_seen = False; verified = False
+        def arm():
+            assert g.req("M%x,1:%02x" % (sym(syms, "r116_sel"), k)) == "OK"
+            assert g.req("M%x,1:01" % sym(syms, "r116_norender")) == "OK"
         while True:
             try:
                 g.cont()
@@ -50,18 +54,17 @@ def run_one(rsp, a, syms, k, d):
                 res["end"] = "frame_limit"; res["emulator"] = str(e); break
             pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xFFFFFF
             if pc == play:
-                assert not armed, "unexpected repeated G_DoPlayDemo entry"
-                assert g.req("M%x,1:%02x" % (sym(syms, "r116_sel"), k)) == "OK"
-                assert g.req("M%x,1:01" % sym(syms, "r116_norender")) == "OK"
+                if not armed: arm(); armed = True
                 assert g.req("z0,%x,2" % play) == "OK"
-                armed = True
+                play_seen = True
                 continue
             if pc == tk:
-                assert armed, "G_Ticker ran before G_DoPlayDemo; demo was not selected"
-                if tics == 0:
+                if not armed: arm(); armed = True
+                if play_seen and not verified:
                     selected = int.from_bytes(g.readmem(sym(syms, "r116_active"), 1), "big")
                     assert selected == k, ("demo selection not active", selected, k)
                     res["selected_verified"] = True
+                    verified = True
                 tics += 1
                 if tics % 64 == 0:
                     last = {"gametic": int.from_bytes(g.readmem(tic_a, 4), "big"), "leveltime": int.from_bytes(g.readmem(lt_a, 4), "big")}
@@ -77,10 +80,10 @@ def run_one(rsp, a, syms, k, d):
     res["ticks_seen"] = tics; res["last"] = last
     r = res.get("res")
     if d["want"]:
-        res["pass"] = bool(res["end"] == "exit" and r and abs(r["exit_time"] - d["want"]) <= 1 and r["kills"] == r["tkills"]
+        res["pass"] = bool(res.get("selected_verified") and res["end"] == "exit" and r and abs(r["exit_time"] - d["want"]) <= 1 and r["kills"] == r["tkills"]
                            and r["secrets"] == r["tsecrets"] and r["map"] == d["map"])
     else:
-        res["pass"] = res["end"] in ("exit", "demo_end_no_exit")
+        res["pass"] = bool(res.get("selected_verified") and res["end"] in ("exit", "demo_end_no_exit"))
     return res
 
 
