@@ -41,6 +41,8 @@ def main():
     syms = rsp.symbols(a.elf)
     tk = symbol(syms, "G_Ticker")
     err = symbol(syms, "I_Error")
+    results = symbol(syms, "I_BenchmarkShowResults")
+    handoff_names = [n for n in syms if n == "R116_SequenceContinue" or n.startswith("R116_SequenceContinue.")]
     def get(name):
         return rsp_g.readmem(symbol(syms, name), 1)[0]
     def put(name, val):
@@ -50,7 +52,8 @@ def main():
     rsp_g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     try:
         rsp_g.req("qSupported")
-        for bp in (tk, err):
+        record["handoff_symbol_found"] = bool(handoff_names)
+        for bp in (tk, err, results):
             if rsp_g.req("Z0,%x,2" % bp) != "OK":
                 raise RuntimeError("cannot set breakpoint " + hex(bp))
         while True:
@@ -59,11 +62,27 @@ def main():
             except (RuntimeError, TimeoutError) as e:
                 record["status"] = "INCONCLUSIVE"
                 record["reason"] = str(e)
+                record["emulator_returncode"] = rsp_g.proc.poll()
+                if record["armed"]:
+                    record["last_seq_state"] = {
+                        "on": get("r116_seq_on"), "active": get("r116_active"),
+                        "completed": get("r116_seq_completed"),
+                        "pending": get("r116_seq_pending")
+                    } if rsp_g.proc.poll() is None else None
                 break
             pc = int(rsp_g.req("g")[17 * 8:18 * 8], 16) & 0xffffff
             if pc == err:
                 record["status"] = "FAIL_RUNTIME"
                 record["reason"] = "I_Error breakpoint"
+                break
+            if pc == results:
+                record["status"] = "FAIL_PREMATURE_RESULTS"
+                record["reason"] = "Results screen reached before automatic handoff"
+                record["state_at_results"] = {
+                    "on": get("r116_seq_on"), "active": get("r116_active"),
+                    "completed": get("r116_seq_completed"),
+                    "pending": get("r116_seq_pending")
+                }
                 break
             if pc != tk:
                 continue
@@ -83,6 +102,11 @@ def main():
                 if record["ticker_hits"] >= 256 and not record["forced_stop"]:
                     # Simulate a demo-ending condition (as on a map exit).
                     # The outer-loop handoff must not run inside G_Ticker.
+                    record["state_at_stop"] = {
+                        "on": get("r116_seq_on"), "active": active,
+                        "completed": get("r116_seq_completed"),
+                        "pending": get("r116_seq_pending")
+                    }
                     put("r116_stop", 1)
                     record["forced_stop"] = True
             if active == 9:
