@@ -1,4 +1,4 @@
-name: R116 sequence handoff smoke (private ROM, no rebuild)
+name: R116 PLAY sequence handoff smoke (private ROM, no rebuild)
 on:
   push:
     branches: ['exp-chatgpt-r116-demo-sequence-20261102']
@@ -22,18 +22,18 @@ jobs:
         run: |
           set -euo pipefail
           test -x "$BLASTEM"
-          test -s "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pf.bin"
-          test -s "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pf.elf"
+          test -s "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pl.bin"
+          test -s "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pl.elf"
           python3 -m py_compile scripts/lab/r116_sequence_smoke.py
-      - name: Verify automatic E1M8-to-E1M9 handoff and AI Normal persistence
+      - name: Verify PLAY automatic E1M8-to-E1M9 handoff and AI Normal persistence
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist/ab
           python3 scripts/lab/r116_sequence_smoke.py \
             --blastem "$BLASTEM" \
-            --rom "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pf.bin" \
-            --elf "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pf.elf" \
+            --rom "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pl.bin" \
+            --elf "$R116_PRIVATE_DIR/doom-md-r60-r116-demotest-pl.elf" \
             --out dist/ab/r116-sequence-smoke.json \
             --max-emulated-frames 9950 \
             --timeout 900
