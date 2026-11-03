@@ -127,7 +127,7 @@ rep(G, '''            G_ReloadDefaults();
             r116_seq_on=0;r116_seq_pending=0;r116_seq_completed=0;
             D_R50_BenchmarkRequestReturn();
             return;''')
-rep(G, '#include "r116_demos.h"\n', '#include "r116_demos.h"\nextern uint8_t R89_AIMode(void);\nextern void R89_SetAIMode(uint8_t low);\n')
+rep(G, '#include "r116_demos.h"\n', '#include "r116_demos.h"\nextern uint8_t R89_AIMode(void);\nextern void R89_SetAIMode(uint8_t low);\nextern void I_BenchmarkWindowReset(void);\n')
 
 # R116 Run All keeps benchmark FPS counters and uses deferred transitions.
 rep(G, '    if (_g_timingdemo) I_BenchmarkReset();',
