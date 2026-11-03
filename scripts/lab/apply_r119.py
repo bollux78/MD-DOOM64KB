@@ -117,7 +117,7 @@ if mode in ("collision", "both"):
     p=Path("src/p_maputl.c");s=p.read_text()
     assert "#define DOOM_R47_MUL_LOGIC 1" in s, "R118 mulvc must run first"
     original="y*_g_bmapwidth+x"
-    assert s.count(original)==2, ("expected 2 blockmap iterator indices",s.count(original))
+    assert s.count(original)==3, ("expected 3 blockmap iterator indices (including inactive #else)",s.count(original))
     # R47_Muls16 returns the exact signed 32-bit product of two 16-bit operands.
     s=s.replace(original,"R47_Muls16(y,_g_bmapwidth)+x")
     p.write_text(s)
