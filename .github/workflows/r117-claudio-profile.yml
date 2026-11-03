@@ -1,4 +1,4 @@
-name: R117 Claudio per-map profile of the R116 demos + benchmark accuracy (meas)
+name: R117 low-memory meas build and boot validation
 # R116 base (control) and R117 meas (benchmark accuracy). Profile = R116 base PERF, one BlastEm run per demo and mode. Demos come from a private runner folder
 # (sha256-pinned in assets/r116-demos.json). ROMs/ELFs embed third-party demos: they are copied to a
 # private runner folder and NOT uploaded. Only reports are uploaded.
@@ -152,36 +152,6 @@ jobs:
           mkdir -p "$out"
           for v in c-base c-meas; do mkdir -p "$out/$v"; cp dist/ab/$v/*.bin dist/ab/$v/*.elf dist/ab/$v/MANIFEST.json "$out/$v/"; done
           echo "::notice title=R117 private ROMs::$out"
-      - name: Profile R116 base per map (logic-only from start; render after 150 and after 450 tics)
-        shell: bash
-        run: |
-          set -uo pipefail
-          rom=$(ls dist/ab/c-base/*-pf.bin); mkdir -p dist/ab/prof
-          for k in 1 2 3 4 5 6 7 8 9 10; do
-            for cfg in "logic 0 1" "r150 150 0" "r450 450 0"; do
-              set -- $cfg
-              python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --skip $2 --norender $3 \
-                --out dist/ab/prof/d$k-$1 > dist/ab/prof/d$k-$1.log 2>&1 || echo "::warning title=R117 profile d$k-$1::$(tail -1 dist/ab/prof/d$k-$1.log)"
-            done
-          done
-          python3 - <<'PY'
-          import json,pathlib
-          rows=[]
-          def top(x,key='categories_excl_load',n=5): return ' '.join('%s=%.0f%%'%(a,100*b) for a,b in list((x or {}).get(key,{}).items())[:n])
-          for k in range(1,11):
-              r={}
-              for c in ('logic','r150','r450'):
-                  p=pathlib.Path('dist/ab/prof/d%d-%s/PROFILE.json'%(k,c))
-                  r[c]=json.loads(p.read_text()) if p.exists() else None
-              L,A,B=(r[c] or {} for c in ('logic','r150','r450'))
-              print('::notice title=R117 demo %d::logic VB/tic=%s [%s] | r150 VB/frame=%s p99=%s worst=%s [%s] | r450 VB/frame=%s worst=%s [%s] | worst window r150 [%s]'%(
-                  k,L.get('vblanks_per_tic_excl_load'),top(L),A.get('vblanks_per_frame'),A.get('frame_cost_p99'),
-                  (A.get('worst_windows') or [{}])[0].get('fps'),top(A),B.get('vblanks_per_frame'),(B.get('worst_windows') or [{}])[0].get('fps'),
-                  top(B),top(A,'worst_window_categories')))
-              rows.append(dict(demo=k,runs={c:({kk:vv for kk,vv in r[c].items() if kk!='top_functions'} if r[c] else None) for c in r},
-                               top_functions={c:(r[c] or {}).get('top_functions',[])[:25] for c in r}))
-          pathlib.Path('dist/ab/R117-PROFILE-SUMMARY.json').write_text(json.dumps(rows,indent=1)+'\n')
-          PY
       - name: meas smoke (PERF demo 1 rendered + PLAY boot)
         shell: bash
         run: |
