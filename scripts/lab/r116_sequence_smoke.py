@@ -41,7 +41,9 @@ def main():
     syms = rsp.symbols(a.elf)
     tk = symbol(syms, "G_Ticker")
     err = symbol(syms, "I_Error")
-    results = symbol(syms, "I_BenchmarkShowResults")
+    # Build uses LTO: result renderer may be fully inlined/elided from ELF symbols.
+    result_syms = [k for k in syms if k == "I_BenchmarkShowResults" or k.startswith("I_BenchmarkShowResults.")]
+    results = syms[result_syms[0]] & 0xffffff if len(result_syms) == 1 else None
     handoff_names = [n for n in syms if n == "R116_SequenceContinue" or n.startswith("R116_SequenceContinue.")]
     def get(name):
         return rsp_g.readmem(symbol(syms, name), 1)[0]
@@ -53,7 +55,7 @@ def main():
     try:
         rsp_g.req("qSupported")
         record["handoff_symbol_found"] = bool(handoff_names)
-        for bp in (tk, err, results):
+        for bp in ((tk, err, results) if results is not None else (tk, err)):
             if rsp_g.req("Z0,%x,2" % bp) != "OK":
                 raise RuntimeError("cannot set breakpoint " + hex(bp))
         while True:
@@ -75,7 +77,7 @@ def main():
                 record["status"] = "FAIL_RUNTIME"
                 record["reason"] = "I_Error breakpoint"
                 break
-            if pc == results:
+            if results is not None and pc == results:
                 record["status"] = "FAIL_PREMATURE_RESULTS"
                 record["reason"] = "Results screen reached before automatic handoff"
                 record["state_at_results"] = {
