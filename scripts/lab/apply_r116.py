@@ -187,6 +187,17 @@ static const menuitem_t R88BenchItems[]={
 };
 static const menu_t R88BenchDef={11,R88BenchItems,M_R116Draw,5,5,&MainDef,0};''')
 
+# The displayed average and displayed seconds must be derived from the SAME
+# frozen VBlank delta. Use 64-bit intermediates at result time only; this
+# costs no cycles in the renderer and avoids silent 32-bit wraparound.
+# Add a second independent rounded-time cross-check to the result screen.
+rep('src/r22_benchmark.inc',
+    'uint32_t avg_x100 = (bench_frames * 6000u + elapsed / 2) / elapsed;',
+    'uint32_t avg_x100 = (uint32_t)(((uint64_t)bench_frames * 6000u + elapsed / 2) / elapsed);')
+rep('src/r22_benchmark.inc',
+    'uint32_t seconds_x100 = (elapsed * 100u + 30u) / 60u;',
+    'uint32_t seconds_x100 = (uint32_t)(((uint64_t)elapsed * 100u + 30u) / 60u);')
+
 B = 'src/r22_benchmark.inc'
 rep(B, '''    VDP_drawText(D_R88_BenchmarkMap()==7?"DEMO3 E1M7 / NTSC 60HZ":"DEMO3 E1M1 / NTSC 60HZ", 3, 5);''',
        '''    {
