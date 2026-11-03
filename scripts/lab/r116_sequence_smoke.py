@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """R116 Run All: verify an automatic E1M8 -> E1M9 transition in BlastEm.
 
-Arms sequence at G_Ticker with E1M8 as current (completed=7) so that one
-automatic handoff can be tested within the per-process 10000-frame limit.
+Arms sequence at G_Ticker with E1M8 as current (completed=7), then requests
+a controlled demo stop after 256 ticker hits. This deliberately exercises the
+safe automatic handoff without relying on the demo's full recording length.
 This is a smoke test, NOT a proof that all ten demos finished on hardware.
 Checks that AI Normal stays selected even though R116 used to force Normal.
 No third-party LMP or ROM is uploaded.
@@ -45,7 +46,7 @@ def main():
     def put(name, val):
         if rsp_g.req("M%x,1:%02x" % (symbol(syms, name), val)) != "OK":
             raise RuntimeError("cannot write " + name)
-    record = {"status": "INCONCLUSIVE", "armed": False, "saw_8": False, "saw_9": False, "ticker_hits": 0}
+    record = {"status": "INCONCLUSIVE", "armed": False, "saw_8": False, "saw_9": False, "ticker_hits": 0, "forced_stop": False}
     rsp_g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     try:
         rsp_g.req("qSupported")
@@ -79,13 +80,18 @@ def main():
             active = get("r116_active")
             if active == 8:
                 record["saw_8"] = True
+                if record["ticker_hits"] >= 256 and not record["forced_stop"]:
+                    # Simulate a demo-ending condition (as on a map exit).
+                    # The outer-loop handoff must not run inside G_Ticker.
+                    put("r116_stop", 1)
+                    record["forced_stop"] = True
             if active == 9:
                 record["saw_9"] = True
                 record["seq_completed"] = get("r116_seq_completed")
                 record["seq_pending"] = get("r116_seq_pending")
                 record["ai_mode_low"] = get("r89_ai_low")
                 record["status"] = ("PASS_TRANSITION"
-                                    if record["saw_8"] and record["seq_completed"] == 8
+                                    if record["saw_8"] and record["forced_stop"] and record["seq_completed"] == 8
                                     and record["seq_pending"] == 0
                                     and record["ai_mode_low"] == 0
                                     else "FAIL_STATE")
