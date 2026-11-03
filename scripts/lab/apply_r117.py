@@ -29,15 +29,12 @@ rep(B, '''static boolean bench_active;
 ''', '''static boolean bench_active;
 /* R117 measurement (forced into .data: BSS unchanged). */
 #define R117_D __attribute__((section(".data")))
-static uint16_t r117_hist[64] R117_D = {0};
-static uint32_t r117_last_vb R117_D = 0;
 static uint32_t r117_load_total R117_D = 0;
 static uint16_t r117_loads R117_D = 0, r117_load_max R117_D = 0;
 static uint8_t  r117_min_map R117_D = 0;
 static int32_t  r117_min_lt R117_D = 0;
 static void R117_Clear(void){
-    for(uint16_t i=0;i<64;i++)r117_hist[i]=0;
-    r117_last_vb=0;r117_load_total=0;r117_loads=0;r117_load_max=0;r117_min_map=0;r117_min_lt=0;
+r117_load_total=0;r117_loads=0;r117_load_max=0;r117_min_map=0;r117_min_lt=0;
 }
 ''', 1)
 rep(B, '''    bench_windows = 0;
@@ -57,7 +54,6 @@ rep(B, '''void I_BenchmarkWindowReset(void)
     if (!bench_active) return;
     bench_window_vb = _g_vblankCount;
     bench_window_frames = 0;
-    r117_last_vb = 0;
 }
 /* Called at the end of G_DoLoadLevel with the VBlank count taken at its start. */
 void R117_LoadDone(uint32_t t0)
@@ -68,7 +64,6 @@ void R117_LoadDone(uint32_t t0)
     if (dt > r117_load_max) r117_load_max = (uint16_t)(dt > 0xffffu ? 0xffffu : dt);
     bench_window_vb = _g_vblankCount;
     bench_window_frames = 0;
-    r117_last_vb = 0;
 }
 ''')
 rep(B, '''    bench_frames++;
@@ -80,15 +75,6 @@ rep(B, '''    bench_frames++;
         if (fps_x10 < bench_min_x10) bench_min_x10 = fps_x10;
 ''', '''    bench_frames++;
     bench_window_frames++;
-    {
-        const uint32_t now = _g_vblankCount;
-        if (r117_last_vb) {
-            uint32_t c = now - r117_last_vb;
-            if (c > 63u) c = 63u;
-            r117_hist[c]++;
-        }
-        r117_last_vb = now ? now : 1u;
-    }
     uint32_t elapsed = _g_vblankCount - bench_window_vb;
     if (elapsed >= 60)
     {
@@ -100,30 +86,11 @@ rep(B, '''    bench_frames++;
         if (fps_x10 < bench_min_x10) bench_min_x10 = fps_x10;
 ''')
 rep(B, '''    VDP_drawText("TOTAL FRAMES", 5, 15);''', '''    {
-        /* R117: 1% low, worst/P99 frame, location of the slowest window, loads. */
-        uint32_t n = 0;
-        for (uint16_t i = 0; i < 64; i++) n += r117_hist[i];
-        uint32_t want = n / 100u; if (!want && n) want = 1;
-        uint32_t got = 0, cost = 0; uint16_t p99 = 0, worst = 0;
-        for (int16_t i = 63; i >= 0; i--) {
-            const uint32_t h = r117_hist[i];
-            if (h && !worst) worst = (uint16_t)i;
-            if (got < want && h) {
-                uint32_t t = want - got; if (t > h) t = h;
-                got += t; cost += t * (uint32_t)i; p99 = (uint16_t)i;
-            }
-        }
-        VDP_drawText("1% LOW FPS", 5, 9);
-        if (cost) { bench_fixed(buffer, (got * 6000u + cost / 2u) / cost, 2); } else { buffer[0] = '-'; buffer[1] = 0; }
-        VDP_drawText(buffer, 24, 9);
+        /* Low memory: show only minimum window and load statistics. */
         VDP_drawText("MIN AT E1M", 5, 11);
         bench_u32(buffer, r117_min_map); VDP_drawText(buffer, 15, 11);
         VDP_drawText("TIC", 17, 11);
         bench_u32(buffer, (uint32_t)(r117_min_lt < 0 ? 0 : r117_min_lt)); VDP_drawText(buffer, 24, 11);
-        VDP_drawText("WORST/P99 FRAME VB", 5, 13);
-        bench_u32(buffer, worst); VDP_drawText(buffer, 24, 13);
-        VDP_drawText("/", 27, 13);
-        bench_u32(buffer, p99); VDP_drawText(buffer, 28, 13);
         VDP_drawText("LOADS / LONGEST S", 5, 16);
         bench_u32(buffer, r117_loads); VDP_drawText(buffer, 24, 16);
         VDP_drawText("/", 27, 16);
