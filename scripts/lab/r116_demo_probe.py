@@ -90,12 +90,19 @@ def run_one(rsp, a, syms, k, d):
                         raise RuntimeError("gametic did not progress over 64 ticker hits")
                     res["last"] = last
                 continue
+            if pc == err:
+                # Reading game structs at the error handler may itself fail.
+                res["end"] = "i_error"
+                break
             r = dict(zip(FIELDS, RES.unpack(g.readmem(sym(syms, "r116_res"), RES.size))))
             res["res"] = r
-            res["end"] = {done: "exit", end: "demo_end_no_exit", err: "i_error"}[pc]
+            res["end"] = {done: "exit", end: "demo_end_no_exit"}[pc]
             break
     except MemoryError as e:
         res["end"] = "memory_error"; res["error"] = str(e)
+    except RuntimeError as e:
+        res["end"] = "stall" if "gametic did not progress" in str(e) else "probe_error"
+        res["error"] = str(e)
     except Exception as e:
         res["end"] = "probe_error"; res["error"] = str(e)
     finally:
@@ -114,7 +121,7 @@ def run_one(rsp, a, syms, k, d):
         res["status"] = "PASS_WINDOW"  # Only the bounded run; never full-demo proof.
     elif res["end"] == "memory_error":
         res["status"] = "FAIL_MEMORY"
-    elif res["end"] in ("i_error", "timeout", "emulator_error"):
+    elif res["end"] in ("i_error", "timeout", "emulator_error", "stall"):
         res["status"] = "FAIL_RUNTIME"
     else:
         res["status"] = "INCONCLUSIVE"
