@@ -103,6 +103,17 @@ rep(G, '''void G_CheckDemoStatus (void)
 {
 ''', '''void G_CheckDemoStatus (void)
 {
+    if(r116_seq_on && r116_active){
+        R116_Zone();
+        if(r116_res.zmin_total<r116_seq_min_total)r116_seq_min_total=r116_res.zmin_total;
+        if(r116_res.zmin_largest<r116_seq_min_largest)r116_seq_min_largest=r116_res.zmin_largest;
+        r116_seq_completed++;
+        if(r116_seq_completed<R116_DEMO_COUNT){
+            r116_sel=(uint8_t)(r116_seq_completed+1);
+            r116_seq_pending=1;
+            return; /* start next demo at safe outer loop handoff */
+        }
+    }
     if(r116_active){ r116_res.done=1; R116_End(); }
 ''')
 # After the results (menu benchmark return path and the generic path): leave test mode.
@@ -115,8 +126,7 @@ rep(G, '''            G_ReloadDefaults();
             return;''')
 rep(G, '#include "r116_demos.h"\n', '#include "r116_demos.h"\nextern uint8_t R89_AIMode(void);\nextern void R89_SetAIMode(uint8_t low);\n')
 
-/* R116 Run All keeps FPS counters across all 10 map demos and skips the
-   demo-command ticker immediately after setting deferred handoff. */
+# R116 Run All keeps benchmark FPS counters and uses deferred transitions.
 rep(G, '    if (_g_timingdemo) I_BenchmarkReset();',
        '    if (_g_timingdemo && !(r116_seq_on && r116_seq_completed)) I_BenchmarkReset();')
 rep(G, 'if(D_R50_BenchmarkReturnPending())return;',
@@ -131,32 +141,42 @@ rep(D, '    if (nodrawers)                    // for comparative timing / profil
        '    extern volatile uint8_t r116_norender;\n    if (nodrawers || r116_norender)   // for comparative timing / profiling (R116 probe)\n')
 rep(D, 'void D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:1;}',
        'extern volatile uint8_t r116_sel;\nvoid D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:1;r116_sel=0;}\n'
-       'void D_R116_SelectDemo(int16_t choice){r116_sel=(uint8_t)(choice+1);}')
+       'void D_R116_SelectDemo(int16_t choice){
+    extern volatile uint8_t r116_seq_on, r116_seq_pending;
+    extern uint8_t r116_seq_completed;
+    extern uint16_t r116_seq_min_total, r116_seq_min_largest;
+    r116_seq_on=(choice==0);
+    r116_seq_pending=0;r116_seq_completed=0;
+    r116_seq_min_total=0xffffu;r116_seq_min_largest=0xffffu;
+    r116_sel=(uint8_t)(choice==0?1:choice);
+}')
+
+# After nested G_Ticker returns, switch WAD/demo at the outer loop boundary.
+rep(D, 'if(r50_bench_return_pending)D_R50_BenchmarkFinish();',
+       '''if(r50_bench_return_pending)D_R50_BenchmarkFinish();
+        {
+            extern volatile uint8_t r116_seq_pending;
+            extern void R116_SequenceContinue(void);
+            if(r116_seq_pending)R116_SequenceContinue();
+        }''')
 
 M = 'src/m_text.c'
 rep(M, '''static const menuitem_t R88BenchItems[]={
     {1,"E1M1 Hangar",M_R88RunSelected},
     {1,"E1M7 Computer Station",M_R88RunSelected}
 };
-static const menu_t R88BenchDef={2,R88BenchItems,M_R88DrawBenchmark,6,8,&MainDef,0};''', '''static void M_R116Open(int16_t choice);
-static const menuitem_t R88BenchItems[]={
-    {1,"E1M1 Hangar",M_R88RunSelected},
-    {1,"E1M7 Computer Station",M_R88RunSelected},
-    {1,"Demo tests",M_R116Open}
-};
-static const menu_t R88BenchDef={3,R88BenchItems,M_R88DrawBenchmark,6,8,&MainDef,0};
-/* R116 demo tests: DSDA UV-Max demo per map + E1M6 special (UV header, cap on). */
+static const menu_t R88BenchDef={2,R88BenchItems,M_R88DrawBenchmark,6,8,&MainDef,0};''', '''/* Direct Benchmark list: no old DEMO3 benchmarks or demo submenu. */
 extern void D_R116_SelectDemo(int16_t choice);
 static void M_R116Run(int16_t choice){ D_R116_SelectDemo(choice); M_ClearMenus(); D_R50_BenchmarkStart(); }
-static void M_R116Draw(void){V_DrawString(10,2,12,"DEMO TESTS");}
-static const menuitem_t R116Items[]={
+static void M_R116Draw(void){V_DrawString(10,2,12,"BENCHMARK");}
+static const menuitem_t R88BenchItems[]={
+    {1,"Run All Demos in Sequence",M_R116Run},
     {1,"E1M1 UV-Max",M_R116Run},{1,"E1M2 UV-Max",M_R116Run},{1,"E1M3 UV-Max",M_R116Run},
     {1,"E1M4 UV-Max",M_R116Run},{1,"E1M5 UV-Max",M_R116Run},{1,"E1M6 UV-Max no cap",M_R116Run},
     {1,"E1M7 UV-Max",M_R116Run},{1,"E1M8 UV-Max",M_R116Run},{1,"E1M9 UV-Max",M_R116Run},
     {1,"E1M6 Special cap",M_R116Run}
 };
-static const menu_t R116Def={10,R116Items,M_R116Draw,6,5,&R88BenchDef,0};
-static void M_R116Open(int16_t choice){UNUSED(choice);M_SetupNextMenu(&R116Def);itemOn=0;}''')
+static const menu_t R88BenchDef={11,R88BenchItems,M_R116Draw,5,5,&MainDef,0};''')
 
 B = 'src/r22_benchmark.inc'
 rep(B, '''    VDP_drawText(D_R88_BenchmarkMap()==7?"DEMO3 E1M7 / NTSC 60HZ":"DEMO3 E1M1 / NTSC 60HZ", 3, 5);''',
