@@ -11,3 +11,5 @@ R116 safety pass: allow gameplay deviations; check live ticker progress, zone, I
 R116 direct Benchmark Run All sequence, 10 demos, unchanged H32/H40 crop Shadow palette and AI Options; aggregate FPS.
 
 R116 Run All hardening: common safe PERF+PLAY handoff, repeated-demo-end guard, noipa symbol for RSP smoke.
+
+R116 benchmark accuracy v2: 64-bit consistent FPS/time, runtime invariant, exclude map transitions from 1-second min/max.
