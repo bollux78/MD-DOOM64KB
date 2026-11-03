@@ -1,0 +1,68 @@
+name: R117 diagnostic only - BASE vs MEAS boot
+on:
+  push:
+    branches: ['exp-claudio-r117-perf-20261103']
+    paths: ['.github/triggers/r117-meas-diagnostic.trigger']
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    env:
+      BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+      PRIV: /home/dan/Projetos/Personal/r117-profile/run-41665591138-1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check private ROMs and BlastEm
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$BLASTEM"
+          for v in c-base c-meas; do
+            for mode in pl pf; do
+              test -s "$PRIV/$v/doom-md-r60-"*-"$mode.bin"
+            done
+          done
+          python3 -m py_compile scripts/lab/r70_capture.py scripts/lab/r117_profile.py
+      - name: Compare boot of BASE and MEAS PLAY (each isolated)
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p dist/diag
+          for v in c-base c-meas; do
+            rom=$(find "$PRIV/$v" -maxdepth 1 -name '*-pl.bin' -print -quit)
+            python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" \
+              --elf "${rom%.bin}.elf" --out "dist/diag/$v-play" --label "$v" \
+              --max-emulated-frames 800 --max-breaks 600 --timeout 120 \
+              > "dist/diag/$v-play.log" 2>&1
+            echo "$v PLAY exit=$?" | tee -a dist/diag/summary.txt
+            grep -E 'KDEBUG|I_Error|fatal|error|Traceback|PASS' "dist/diag/$v-play.log" | tail -15 || true
+          done
+          rm -f dist/diag/*-play/*.bin
+      - name: Compare BASE and MEAS PERF profile (one demo)
+        shell: bash
+        run: |
+          set -uo pipefail
+          for v in c-base c-meas; do
+            rom=$(find "$PRIV/$v" -maxdepth 1 -name '*-pf.bin' -print -quit)
+            python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" \
+              --elf "${rom%.bin}.elf" --demo 1 --skip 0 --norender 0 \
+              --max-emulated-frames 3000 --out "dist/diag/$v-prof" \
+              > "dist/diag/$v-prof.log" 2>&1
+            echo "$v PERF exit=$?" | tee -a dist/diag/summary.txt
+            grep -E 'KDEBUG|fatal|error|Traceback|samples|frame_limit' "dist/diag/$v-prof.log" | tail -15 || true
+          done
+      - name: Upload logs and profile metadata only
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r117-meas-boot-diagnostic
+          path: |
+            dist/diag/*.log
+            dist/diag/summary.txt
+            dist/diag/*-prof/PROFILE.json
+          if-no-files-found: warn
+          retention-days: 30
