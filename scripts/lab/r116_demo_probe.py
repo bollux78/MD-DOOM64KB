@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """R116: play each per-map test demo in BlastEm (PERF demotest ROM, logic only) and check sync.
 
-One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). At the first G_Ticker the
-probe writes r116_sel=k and r116_norender=1 (D_Display skipped), then follows every tic.
+One BlastEm run per demo (<= 10,000 emulated frames each, AGENTS.md). Before G_DoPlayDemo executes, the probe writes r116_sel=k and r116_norender=1
+(D_Display skipped). At the first G_Ticker it verifies that the selected demo is active.
 Stops: R116_Done (first level exit, r116_res filled), R116_End (demo data ended without an exit),
 I_Error, or the emulator frame limit.
 UV-Max pass: exit leveltime == want +-1, kills == total, secrets == total, exit map == demo map.
@@ -35,13 +35,13 @@ FIELDS = 'exit_time exit_gametic kills tkills items titems secrets tsecrets zmin
 
 def run_one(rsp, a, syms, k, d):
     tic_a, lt_a = sym(syms, "_g_gametic"), sym(syms, "_g_leveltime")
-    tk, done, end, err = sym(syms, "G_Ticker"), sym(syms, "R116_Done"), sym(syms, "R116_End"), sym(syms, "I_Error")
+    tk, play, done, end, err = (sym(syms, n) for n in ("G_Ticker", "G_DoPlayDemo", "R116_Done", "R116_End", "I_Error"))
     res = {"index": k, "lump": d["lump"], "label": d["label"], "want": d["want"], "map": d["map"], "nocap": d["nocap"]}
     g = rsp.RSP(a.blastem, a.rom, a.max_emulated_frames, a.timeout)
     tics = 0; last = {}
     try:
         g.req("qSupported")
-        for bp in (tk, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
+        for bp in (tk, play, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
         armed = False
         while True:
             try:
@@ -49,10 +49,19 @@ def run_one(rsp, a, syms, k, d):
             except (RuntimeError, TimeoutError) as e:
                 res["end"] = "frame_limit"; res["emulator"] = str(e); break
             pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xFFFFFF
+            if pc == play:
+                assert not armed, "unexpected repeated G_DoPlayDemo entry"
+                assert g.req("M%x,1:%02x" % (sym(syms, "r116_sel"), k)) == "OK"
+                assert g.req("M%x,1:01" % sym(syms, "r116_norender")) == "OK"
+                assert g.req("z0,%x,2" % play) == "OK"
+                armed = True
+                continue
             if pc == tk:
-                if not armed:
-                    assert g.req("M%x,1:%02x" % (sym(syms, "r116_sel"), k)) == "OK"
-                    assert g.req("M%x,1:01" % sym(syms, "r116_norender")) == "OK"; armed = True
+                assert armed, "G_Ticker ran before G_DoPlayDemo; demo was not selected"
+                if tics == 0:
+                    selected = int.from_bytes(g.readmem(sym(syms, "r116_active"), 1), "big")
+                    assert selected == k, ("demo selection not active", selected, k)
+                    res["selected_verified"] = True
                 tics += 1
                 if tics % 64 == 0:
                     last = {"gametic": int.from_bytes(g.readmem(tic_a, 4), "big"), "leveltime": int.from_bytes(g.readmem(lt_a, 4), "big")}
@@ -89,7 +98,7 @@ def main():
         r = run_one(rsp, a, syms, k, T[k]); out.append(r); print(json.dumps(r), flush=True)
     pathlib.Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
     print("R116 SUMMARY", " ".join("%s=%s" % (r["lump"], "PASS" if r["pass"] else "FAIL:" + r["end"]) for r in out))
-    return 0
+    return 0 if all(r["pass"] for r in out) else 1
 
 
 if __name__ == "__main__":
