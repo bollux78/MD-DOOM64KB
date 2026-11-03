@@ -141,7 +141,7 @@ rep(D, '    if (nodrawers)                    // for comparative timing / profil
        '    extern volatile uint8_t r116_norender;\n    if (nodrawers || r116_norender)   // for comparative timing / profiling (R116 probe)\n')
 rep(D, 'void D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:1;}',
        'extern volatile uint8_t r116_sel;\nvoid D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:1;r116_sel=0;}\n'
-       'void D_R116_SelectDemo(int16_t choice){
+       '''void D_R116_SelectDemo(int16_t choice){
     extern volatile uint8_t r116_seq_on, r116_seq_pending;
     extern uint8_t r116_seq_completed;
     extern uint16_t r116_seq_min_total, r116_seq_min_largest;
@@ -149,7 +149,7 @@ rep(D, 'void D_R88_SelectBenchmarkMap(int16_t choice){r88_bench_map=choice==1?7:
     r116_seq_pending=0;r116_seq_completed=0;
     r116_seq_min_total=0xffffu;r116_seq_min_largest=0xffffu;
     r116_sel=(uint8_t)(choice==0?1:choice);
-}')
+}''')
 
 # After nested G_Ticker returns, switch WAD/demo at the outer loop boundary.
 rep(D, 'if(r50_bench_return_pending)D_R50_BenchmarkFinish();',
