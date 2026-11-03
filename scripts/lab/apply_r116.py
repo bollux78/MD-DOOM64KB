@@ -191,6 +191,23 @@ static const menu_t R88BenchDef={11,R88BenchItems,M_R116Draw,5,5,&MainDef,0};'''
 # frozen VBlank delta. Use 64-bit intermediates at result time only; this
 # costs no cycles in the renderer and avoids silent 32-bit wraparound.
 # Add a second independent rounded-time cross-check to the result screen.
+# Both values are computed at the results boundary, never per-frame.
+rep('src/r22_benchmark.inc',
+    '    char buffer[16];\n',
+    '''    char buffer[16];
+    /* Display invariant: average FPS must agree with FRAMES / TIME.
+       Independently recompute from rounded seconds (2 decimal places). */
+    uint32_t fps_check_x100 = seconds_x100
+        ? (uint32_t)(((uint64_t)bench_frames * 10000u + seconds_x100 / 2) / seconds_x100)
+        : 0;
+    uint8_t fps_consistent = fps_check_x100 <= avg_x100 + 1u
+                         && avg_x100 <= fps_check_x100 + 1u;
+''')
+rep('src/r22_benchmark.inc',
+    '    VDP_drawText("TOTAL FRAMES", 5, 15);',
+    '''    VDP_drawText(fps_consistent?"FPS CHECK OK":"FPS CHECK ERROR", 5, 14);
+    VDP_drawText("TOTAL FRAMES", 5, 15);''')
+
 rep('src/r22_benchmark.inc',
     'uint32_t avg_x100 = (bench_frames * 6000u + elapsed / 2) / elapsed;',
     'uint32_t avg_x100 = (uint32_t)(((uint64_t)bench_frames * 6000u + elapsed / 2) / elapsed);')
