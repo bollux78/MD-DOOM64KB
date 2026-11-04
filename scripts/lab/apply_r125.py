@@ -9,7 +9,7 @@ def rep(a,b):
     global s
     assert s.count(a)==1,(a[:100],s.count(a))
     s=s.replace(a,b)
-rep('static boolean R_CheckBBox(const int16_t __far* bspcoord, const R125_Rays* rays)\n{',
+rep('static boolean R_CheckBBox(const int16_t __far* bspcoord)\n{',
 '''/* R125: two outward-facing rays conservatively reject a BSP bbox
    wholly outside the FOV before the expensive R_PointToAngle16 calls.
    Direction components quantized to 1/512 of fixed-point unit; ray
@@ -47,9 +47,13 @@ rep('''    R37_HIT(R37_BBOX);
     if(R125_BBoxOutsideRays(bspcoord,rays)) return false;
     // Find the corners of the box''')
 # Pass the stack-local ray state down the iterative BSP walk. Neither BSS nor DATA grows.
-rep('''static void R_RenderBSPNode(int16_t bspnum)
+rep('''#define MAX_BSP_DEPTH 64
+
+static void R_RenderBSPNode(int16_t bspnum)
 {
-    R20_PROBE();''', '''static void R_RenderBSPNode(int16_t bspnum)
+    R20_PROBE();''', '''#define MAX_BSP_DEPTH 64
+
+static void R_RenderBSPNode(int16_t bspnum)
 {
     R125_Rays rays;
     R125_UpdateRays(&rays);
