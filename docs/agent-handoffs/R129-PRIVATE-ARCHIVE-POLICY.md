@@ -78,3 +78,32 @@ A saída **não** significa backup remoto completo; precisa confirmar push/recup
 - Existe um teste de recuperação local do código (SHA do commit + inputs privados + ferramentas).
 - O backup não altera renderer, lógica, áudio Z80 (< 2 MiB), `.data`, `.bss` nem desempenho dos jogos.
 - Antes de declarar "protegido contra perda de SSD", manter também uma segunda cópia independente (outro armazenamento físico/nuvem). Um repositório GitHub privado sozinho não substitui backup completo.
+
+## 6. Implementação do Cláudio (04/11/2026)
+- **`scripts/lab/r129_push_private.py`:** envia um stage do `r129_archive_private.py` para `bollux78/MD-DOOM-PRIVATE` e confere o resultado.
+  - **Falha fechado:**
+    - se a API anônima do GitHub enxergar o repositório (HTTP 200 = público), aborta sem enviar nada;
+    - aborta se a deploy key não existir (`$R129_KEY`, padrão `~/.ssh/md_doom_private_deploy`) ou não estiver com permissão 0600;
+    - nunca sobrescreve um arquivo já arquivado com conteúdo diferente.
+  - **Verificação:** depois do push, faz um fetch novo e compara o blob id remoto de cada arquivo com o local. Só então grava `remote_backup_verified: true` no `MANIFEST-PRIVATE.json`.
+  - Opcionalmente gera um catálogo público com hashes e ids, sem caminhos e sem binários.
+  - Não apaga os originais nem o stage.
+- **`.github/workflows/r129-claudio-backfill.yml`:** arquiva R119 both, R122 layout e R126b early, usando as pastas privadas do runner:
+
+  | Item | Caminho |
+  |---|---|
+  | stage | `$P/md-doom-private-stage/builds/<nome>/run-…` |
+  | clone do repositório privado | `$P/md-doom-private-repo` |
+  | `$P` | `/home/dan/Projetos/Personal` |
+
+  O commit de origem vem da API do run. No repositório público sobe só o artefato `r129-private-catalog`.
+- **Passo único do usuário, na máquina do runner:**
+  ```fish
+  ssh-keygen -t ed25519 -N "" -C md-doom-runner -f ~/.ssh/md_doom_private_deploy
+  chmod 600 ~/.ssh/md_doom_private_deploy
+  cat ~/.ssh/md_doom_private_deploy.pub
+  ```
+  No GitHub: **MD-DOOM-PRIVATE → Settings → Deploy keys → Add deploy key**. Colar o `.pub`, marcar **Allow write access** e salvar. A chave só vale para esse repositório.
+- **Como disparar** (Werk): `date -u > .github/triggers/r129-claudio-backfill.trigger`, depois commit e push.
+- **Volume:** cada run arquiva `.bin` e `.elf` de todas as variantes, cerca de 8 MB por variante (pl + pf). Arquivar só runs aprovados ou decisivos. O Git LFS fica para quando o repositório passar de ~1 GB.
+- **Segunda cópia:** continua necessária. O GitHub privado sozinho não substitui um backup físico.

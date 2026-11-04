@@ -1,0 +1,61 @@
+name: R129 Claudio private archive backfill (ROM/ELF -> bollux78/MD-DOOM-PRIVATE, verified)
+# Archives the private runner folders of the key runs into the PRIVATE repository with a deploy key.
+# Fail-closed: aborts if the private repo is publicly visible or the key is missing; verifies blob hashes after push.
+# Uploads to this public repo only the sanitized catalog (hashes and ids, no paths, no binaries).
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/triggers/r129-claudio-backfill.trigger']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r129-claudio-backfill
+  cancel-in-progress: false
+env:
+  P: /home/dan/Projetos/Personal
+jobs:
+  archive:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Archive and verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          case "$GITHUB_REF" in refs/heads/exp-claudio-*|refs/heads/exp-chatgpt-*) ;; *) exit 1;; esac
+          mkdir -p dist/r129; fail=0
+          # name | private run folder | workflow | run id | attempt
+          while IFS='|' read -r name dir wf run att; do
+            [ -z "$name" ] && continue
+            src="$P/$dir/run-$run-$att"
+            if [ ! -d "$src" ]; then echo "::warning title=R129 $name::folder not found, skipped"; continue; fi
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" -q .head_sha 2>/dev/null || echo 0000000)
+            stage="$P/md-doom-private-stage/builds/$name/run-$run-$att"
+            if python3 scripts/lab/r129_archive_private.py --run-dir "$src" --stage-dir "$stage" --source-commit "$sha" --workflow "$wf" --run-id "$run" --attempt "$att" \
+               && python3 scripts/lab/r129_push_private.py --stage "$stage" --clone "$P/md-doom-private-repo" --dest "builds/$name/run-$run-$att" --catalog "dist/r129/$name.json"; then
+              echo "::notice title=R129 $name::archived and verified (run $run-$att)"
+            else
+              echo "::error title=R129 $name::archive FAILED (originals untouched)"; fail=1
+            fi
+          done <<'LIST'
+          r119-both|r119-sram|r119-secnodes-collision.yml|41708926876|1
+          r122-layout|r122-claudio-audio|r122-claudio-audio.yml|41754303448|1
+          r126b-early|r126-claudio-early|r126-claudio-early.yml|41882892479|1
+          LIST
+          exit $fail
+      - name: Upload public catalog (hashes only)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r129-private-catalog
+          path: dist/r129/*.json
+          retention-days: 90
+          if-no-files-found: warn
