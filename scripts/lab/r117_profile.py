@@ -112,7 +112,8 @@ def main():
                     assert g.req("M%x,1:01" % sym("r116_norender")) == "OK"; armed = True
                     calib["boot_vb"] = be(g.readmem(vb_a, 4))
                 tics += 1
-                if tics > a.skip and not sampling:
+                # R123 fix: use the game's gametic (a breakpoint can be reported twice when a VBlank is taken on resume).
+                if be(g.readmem(tic_a, 4)) >= a.skip and not sampling:
                     sampling = True; start_sampling()
                 continue
             if pc == end: status = "demo_end"; break

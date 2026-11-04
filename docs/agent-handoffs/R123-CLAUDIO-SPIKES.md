@@ -86,3 +86,20 @@ git add .github/triggers/r123-claudio-spikes.trigger; and git commit -m "R123: t
 - **Juntas:** algo como 2–4% de média e talvez 5–15% nos picos.
 - Os picos são feitos de muitos traços de tiro (cada um com até 64 blocos do blockmap, janelas de SRAM e proxies R24). Não existe alteração exata que os elimine.
 - Se a `all` não mostrar ganho material no A/B estrito e no Run All do usuário, recomendo **parar a otimização do E1 e fixar a R122 layout** (com o som corrigido) como base final.
+
+## 5. Falha do primeiro run (41768847652): diagnóstico e correção
+- Não é divergência de lógica. Os checkpoints caíram em tics diferentes:
+
+  | Run | Checkpoints | Controle e demais |
+  |---|---|---|
+  | d1 `shoot` | 98, 198, …, 2598 | 99, 199, …, 2599 |
+  | d9 `flags` | 99, 198, 298, … | 99, 199, 299, … |
+
+  Onde os tics coincidem, não há diferença: a d1 `shoot` bate com o controle no fim da demo (tic 2600), e a d9 `flags` no tic 99.
+- **Causa:** o `r118_logic_check.py` contava *paradas no breakpoint* de `G_Ticker`, não tics. Quando um VBlank é atendido exatamente ao retomar no breakpoint, o ISR volta para o mesmo PC e o breakpoint é reportado de novo. A contagem então escorrega um tic. Isso depende do timing, por isso variou entre as variantes.
+- **Correção:**
+  - `r118_logic_check.py`: o checkpoint passa a ser decidido pelo **`_g_gametic` do próprio jogo** (múltiplos de `--every`, um por gametic).
+  - `r117_profile.py`: o pulo inicial usa o gametic.
+
+  A igualdade do estado continua exigida do mesmo jeito, e o critério ≥ 2 checkpoints comuns continua. A validação não foi relaxada.
+- **Próximo passo:** rodar o mesmo workflow de novo (atualizar `.github/triggers/r123-claudio-spikes.trigger`).

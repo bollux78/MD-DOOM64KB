@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """R118: game-logic fingerprints of one R116 demo, logic only (r116_norender=1), for an exact A/B.
 
-One BlastEm process (<= 10,000 emulated frames). Breakpoint on G_Ticker; every --every tics (and at
-R116_Done / R116_End) it records a fingerprint of the game state:
+One BlastEm process (<= 10,000 emulated frames). Breakpoint on G_Ticker; time the game's gametic is a multiple of --every
+(once per gametic; and at R116_Done / R116_End) it records a fingerprint of the game state:
   gametic, leveltime, P_Random indices (rndindex/prndindex when the symbols exist),
   every mobj thinker (function == P_MobjThinker): x, y, z (mobj bytes 12..23) in list order -> sha1,
   the thinker count, the player mobj x/y/z.
@@ -67,7 +67,7 @@ def main():
     try:
         g.req("qSupported")
         for bp in (tk, done, end, err): assert g.req("Z0,%x,2" % bp) == "OK"
-        armed = False; tics = 0
+        armed = False; seen = set()
         while True:
             try:
                 g.cont()
@@ -80,8 +80,12 @@ def main():
                 if not armed:
                     assert g.req("M%x,1:%02x" % (sym("r116_sel"), a.demo)) == "OK"
                     assert g.req("M%x,1:01" % sym("r116_norender")) == "OK"; armed = True
-                tics += 1
-                if tics % a.every == 0: res["checkpoints"].append(fingerprint())
+                # R123 fix: key checkpoints on the game's own gametic, not on the number of breakpoint stops.
+                # A VBlank taken exactly when resuming at the G_Ticker breakpoint returns to the same PC and
+                # reports the breakpoint twice; the stop count then drifts by one tic (timing dependent).
+                t = be(g.readmem(tic_a, 4))
+                if t and t % a.every == 0 and t not in seen:
+                    seen.add(t); res["checkpoints"].append(fingerprint())
                 continue
             res["end"] = {done: "exit", end: "demo_end", err: "i_error"}[pc]
             if pc != err: res["checkpoints"].append(fingerprint())
