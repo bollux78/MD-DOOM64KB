@@ -124,7 +124,7 @@ jobs:
               R118_MODE=mulvc python3 scripts/lab/apply_r118.py
               R119_MODE=both python3 scripts/lab/apply_r119.py
               python3 scripts/lab/apply_r122.py
-              if [ "$set" = segangle ]; then python3 scripts/lab/apply_r125.py; fi
+              if [ "$set" = raybbox ]; then python3 scripts/lab/apply_r125.py; fi
               python3 - <<'PY2'
           from pathlib import Path
           p=Path('scripts/lab/build_r71a12mul_hud.py');s=p.read_text()
@@ -293,7 +293,7 @@ jobs:
           done
           python3 scripts/lab/r118_ab.py dist/ab/R125-AB.json control=dist/ab/time-c-control raybbox=dist/ab/time-c-raybbox | tee dist/ab/R125-AB.log
           echo "::notice title=R125 heavy-demo rendered A/B (VBlanks, same tic range)::$(tr '\n' ' ' < dist/ab/R125-AB.log)"
-      - name: PLAY smoke (R125 segangle)
+      - name: PLAY smoke (R125 raybbox)
         shell: bash
         run: |
           set -euo pipefail
