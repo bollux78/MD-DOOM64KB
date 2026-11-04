@@ -71,3 +71,30 @@ Amostragem de lógica, estimativas percentuais: `P_CheckSight` 18,5%, `P_MobjThi
 ## Resultado esperado do Cláudio
 
 **Primeiro**: diagnóstico reproduzível de por que o A/B R120 apresentou falsos +167%, com correção validada contra a R119. **Depois**: experimento R121 que ataque efetivamente as piores janelas de gameplay da E1M7, com demonstração de ganho em vez de especulação. Se não existir otimização segura com ganho material, recomendar parar: R119 BOTH permanece candidata final.
+
+## ATUALIZAÇÃO — ANOMALIAS DE ÁUDIO NO MEGA DRIVE REAL (03/11/2026)
+
+**Nova evidência comunicada pelo usuário, investigar em paralelo ao FPS mínimo — não assumir que é efeito da R118/R119:**
+
+- **Sintoma:** durante a música aparecem sons anormais semelhantes a *buzinas* / **notas de instrumento presas** por alguns segundos; depois desaparecem espontaneamente, enquanto **o restante da música continua normalmente**, sem interromper a execução do jogo.
+- **Ambiente:** reproduz no **Mega Drive físico** com EverDrive V1 clone chinês; **não reproduz no BlastEm** nos testes do usuário.
+- **Histórico corrigido:** o usuário confirmou que **o defeito ocorre ocasionalmente desde a R116**. Não afirmar que a R116 é limpa ou que surgiu na R118/R119; a R119 apresentou sintomas claros, mas versões anteriores também.
+- **Correlação com IA:** na **R118**, mudar para AI Low aparentemente reduz bastante a frequência, e voltar para AI Normal no mesmo mapa fez o defeito voltar. **Porém AI Low NÃO elimina o problema**: também pode surgir esporadicamente. Trata-se de correlação com carga/processamento, **não de demonstração causal**.
+- **SFX:** desativar os efeitos sonoros **não parece ajudar**. Prioridade menor para hipótese simples de competição música/SFX, mas não está totalmente excluída.
+- **Hardware do flashcart:** o EverDrive V1 clone também tem um problema **distinto** de travamentos durante 'gravando...' ROMs grandes (>512 KiB com muito mais frequência), inclusive com cartões SD diferentes que funcionam em outros aparelhos. Não atribuir automaticamente o defeito de áudio a esse problema de gravação; testar áudio isoladamente para separar o hardware do cartucho, o código e a temporização.
+
+### Hipóteses técnicas (não confirmadas)
+
+1. Perda/atraso de atualização de **key-off / estado de canal FM** no **XGM2 / Z80 / YM2612** sob determinadas condições de carga. O evento musical posterior pode restaurar o canal.
+2. Disputa temporária de barramento, acesso concorrente ao Z80, interrupções/VDP/DMA e/ou **janelas de SRAM**, provocando atualização tardia ou perdida do driver no hardware real, mas não no BlastEm. Verificar primeiro a implementação concreta do SGDK/XGM2, não supor um mecanismo inexistente.
+3. Condição específica da música/driver ou de compatibilidade do clone/console. Repetir na mesma faixa para identificar se é determinístico no tempo musical.
+
+### Experimentos recomendados ao Cláudio
+
+1. **Verificar configuração e pontos de integração do driver XGM2**: chamadas de reprodução/pausa/troca, controle de Z80, estado do bus request, interrupções, processamento a cada VBlank, DMA e uso da SRAM. Procurar períodos críticos em que o Z80 possa ficar impedido de atender aos comandos; instrumentação leve, sem alterar o som.
+2. Fazer **três ROMs diagnósticas** em branch separada: (a) música isolada, sem lógica do DOOM nem SFX; (b) mesma música + carga artificial ajustável de CPU/VDP, sem SFX; (c) jogo normal + música, com AI Normal/Low e SFX ligados/desligados. Medir tempo até nota presa, persistência e se música prossegue. Manter mesmas músicas e condições no hardware.
+3. Conferir reprodução com driver XGM2 padrão/integração SGDK, se possível com ROM de referência que reproduza o mesmo fluxo musical. Se o defeito não surgir na música isolada, investigar interação com engine e carga; se surgir, concentrar análise em driver, dados ou hardware.
+4. **Não usar key-off forçado periódico** como primeira correção: mascararia o defeito e cortaria notas legítimas. Não modificar a R119 principal nem comprometer desempenho, imagem ou lógica sem testes A/B aprovados.
+5. **Reportar apenas achados medidos**; o teste no console físico é indispensável, já que BlastEm não reproduz a anomalia. Entregar parâmetros de reprodução fáceis para o usuário, que está testando no EverDrive V1.
+
+**Prioridades em paralelo:** (A) investigar a anomalia de medição da R120 e otimizar os piores FPS da E1M7; (B) rastrear e corrigir a corrupção intermitente do áudio presente desde a R116. Não misturar mudanças de áudio e desempenho na mesma ROM experimental sem variantes separadas.
