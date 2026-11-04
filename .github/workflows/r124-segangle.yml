@@ -1,5 +1,5 @@
-name: R124 exact seg-angle cache vs R124 layout
-# Control = R124 layout; candidate = R124 layout plus exact adjacent-segment angle reuse. Logic must be bit-identical (r118_logic_check), pixels identical (r70/r93b). Demos come from a private runner folder
+name: R124 exact seg-angle cache vs R122 layout
+# Control = R122 layout; candidate = R122 layout plus exact adjacent-segment angle reuse. Logic must be bit-identical (r118_logic_check), pixels identical (r70/r93b). Demos come from a private runner folder
 # (sha256-pinned in assets/r116-demos.json). ROMs/ELFs embed third-party demos: they are copied to a
 # private runner folder and NOT uploaded. Only reports are uploaded.
 on:
@@ -270,7 +270,7 @@ jobs:
           done
           python3 scripts/lab/r118_ab.py dist/ab/R124-AB.json control=dist/ab/time-c-control segangle=dist/ab/time-c-segangle | tee dist/ab/R124-AB.log
           echo "::notice title=R124 heavy-demo rendered A/B (VBlanks, same tic range)::$(tr '\n' ' ' < dist/ab/R124-AB.log)"
-      - name: PLAY smoke (layout R122)
+      - name: PLAY smoke (R124 segangle)
         shell: bash
         run: |
           set -euo pipefail
