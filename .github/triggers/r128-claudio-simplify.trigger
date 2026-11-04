@@ -1,0 +1,1 @@
+R128 simplify experiment (2026-11-04): compile control R126b and stairs/corpses/sight/far/all separately on self-hosted runner. Preserve overflow protection, RAM and Z80 music layout. Reports only publicly, ROM/ELF private.
