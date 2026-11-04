@@ -264,8 +264,31 @@ jobs:
           for v in c-control c-segangle; do
             rom=$(ls dist/ab/$v/*-pf.bin); mkdir -p dist/ab/time-$v
             for k in 3 7 9 10; do
-              python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --skip 150 --norender 0 \
-                --out dist/ab/time-$v/d$k-ab > dist/ab/time-$v/d$k-ab.log 2>&1 || echo "::warning title=R118 timing d$k $v::$(tail -1 dist/ab/time-$v/d$k-ab.log)"
+              # Retry only a debugger EOF before ANY frame was sampled. Do not mask invalid game states.
+              ok=0
+              for attempt in 1 2 3; do
+                if python3 scripts/lab/r117_profile.py --blastem "$BLASTEM" --rom "$rom" --elf "${rom%.bin}.elf" --demo $k --skip 150 --norender 0 \
+                    --out dist/ab/time-$v/d$k-ab > dist/ab/time-$v/d$k-ab.log 2>&1; then
+                  ok=1; break
+                fi
+                if python3 - "dist/ab/time-$v/d$k-ab/PROFILE.json" <<'PYRETRY'
+          import json,sys,pathlib
+          p=pathlib.Path(sys.argv[1])
+          if not p.is_file(): sys.exit(1)
+          r=json.loads(p.read_text())
+          sys.exit(0 if str(r.get('status','')).startswith('probe_error: BlastEm RSP EOF') and not r.get('frames') and not r.get('spike_frames') else 1)
+          PYRETRY
+                then
+                  echo "::warning title=R124 transient debugger EOF::demo $k $v attempt $attempt; retry"
+                  sleep 1
+                else
+                  break
+                fi
+              done
+              if [ "$ok" -ne 1 ]; then
+                echo "::error title=R124 rendered timing failed::demo $k $v: $(tail -2 dist/ab/time-$v/d$k-ab.log)"
+                exit 1
+              fi
             done
           done
           python3 scripts/lab/r118_ab.py dist/ab/R124-AB.json control=dist/ab/time-c-control segangle=dist/ab/time-c-segangle | tee dist/ab/R124-AB.log
