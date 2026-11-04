@@ -66,8 +66,8 @@ static void R_RenderBSPNode(int16_t bspnum)
 static void R_RenderBSPNodeInner(int16_t bspnum, const R125_Rays* rays)
 {
     R20_PROBE();''')
-rep('''    R_RenderBSPNode(bsp->children[side]); // recursively divide front space''','''    R_RenderBSPNodeInner(bsp->children[side],rays); // recursively divide front space''')
-rep('''        R_RenderBSPNode(bsp->children[side ^ 1]);''','''        R_RenderBSPNodeInner(bsp->children[side ^ 1],rays);''')
+rep('''\tR_RenderBSPNode(bsp->children[side]); // recursively divide front space''','''    R_RenderBSPNodeInner(bsp->children[side],rays); // recursively divide front space''')
+rep('''\t\tR_RenderBSPNode(bsp->children[side ^ 1]);''','''        R_RenderBSPNodeInner(bsp->children[side ^ 1],rays);''')
 rep('''}
 #endif
 
