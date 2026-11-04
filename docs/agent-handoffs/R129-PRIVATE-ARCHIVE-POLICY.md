@@ -6,7 +6,7 @@
 ## 0. Estado real
 - Este documento e o preparador local `scripts/lab/r129_archive_private.py` ficam no GitHub **público**.
 - O repositório público `bollux78/MD-DOOM64KB` não muda de visibilidade.
-- **`bollux78/MD-DOOM-PRIVATE` ainda PRECISA ser criado como repositório PRIVATE.** O conector disponível ao Werk não oferece criação de repositórios; não afirmar que foi criado.
+- **`bollux78/MD-DOOM-PRIVATE` foi criado pelo usuário e verificado como PRIVATE pelo Werk em 04/11/2026.** O README privado está inicializado; o upload de ROMs ainda NÃO foi configurado.
 - Nenhum upload de ROM/WAD/ELF ao GitHub privado foi realizado ainda. Até implementar e validar a sincronização, o runner local é a única cópia dessas builds.
 - Não fazer merge na `main` nem alterar as políticas de upload público sem aprovação do usuário.
 
@@ -47,7 +47,7 @@ MD-DOOM-PRIVATE/
 O arquivo de manifesto deve indicar `source_repo`, `source_commit`, `workflow`, `run_id`, `attempt`, `variant`, `sha256`, `size`, `status` e ferramentas/versões. Usar nomes de caminho relativos, **não** nomes de diretórios da home, tokens ou informações privadas em relatórios públicos. Os hashes e commits podem ser publicados.
 
 ## 3. Integração no runner (implementação do Cláudio)
-1. **Usuário cria manualmente `bollux78/MD-DOOM-PRIVATE` com visibilidade PRIVATE**, e confirma no GitHub. Não presumir sucesso.
+1. **CONCLUÍDO:** usuário criou `bollux78/MD-DOOM-PRIVATE` com visibilidade PRIVATE; Werk verificou `visibility=private` e permissão de escrita em 04/11/2026.
 2. Configurar credencial **de escopo mínimo** no runner para escrever exclusivamente nesse repositório privado: preferir chave SSH deploy key com escrita, guardada fora do checkout público, permissões 0600. Nunca imprimir chave/token ou copiá-los para `dist/`; não reutilizar `GITHUB_TOKEN` do repositório público (por padrão não acessa outro repo).
 3. Validar a visibilidade privada via API/UI antes de qualquer push; se não for privada, **falhar fechado e não fazer upload**.
 4. Fluxo de backup seguro: após build e gates de ROM/BSS/Z80, copiar binários para `/home/dan/Projetos/Personal/.../` e executar `r129_archive_private.py` para um staging local **fora de `GITHUB_WORKSPACE` e fora do checkout público**; comparar SHA-256; só então sincronizar com o repositório privado. Para WADs, arquivar separadamente com checksum, nunca via artifact público.
