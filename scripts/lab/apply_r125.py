@@ -40,7 +40,7 @@ static boolean R125_BBoxOutsideRays(const int16_t __far* b, const R125_Rays* ray
     const int32_t maxright=(int32_t)rays->rx*yhi-(int32_t)rays->ry*xhi;
     return maxright < -1024;
 }
-static boolean R_CheckBBox(const int16_t __far* bspcoord)
+static boolean R_CheckBBox(const int16_t __far* bspcoord, const R125_Rays* rays)
 {''')
 rep('''    R37_HIT(R37_BBOX);
     // Find the corners of the box''','''    R37_HIT(R37_BBOX);
