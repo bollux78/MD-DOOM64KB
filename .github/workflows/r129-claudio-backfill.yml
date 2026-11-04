@@ -1,5 +1,5 @@
 name: R129 Claudio private archive backfill (ROM/ELF -> bollux78/MD-DOOM-PRIVATE, verified)
-# Archives the private runner folders of the key runs into the PRIVATE repository with a deploy key.
+# Archives ONLY APPROVED builds (user decision 2026-11-04): add a line to the list when a build is approved. into the PRIVATE repository with a deploy key.
 # Fail-closed: aborts if the private repo is publicly visible or the key is missing; verifies blob hashes after push.
 # Uploads to this public repo only the sanitized catalog (hashes and ids, no paths, no binaries).
 on:
@@ -46,7 +46,6 @@ jobs:
               echo "::error title=R129 $name::archive FAILED (originals untouched)"; fail=1
             fi
           done <<'LIST'
-          r119-both|r119-sram|r119-secnodes-collision.yml|41708926876|1
           r122-layout|r122-claudio-audio|r122-claudio-audio.yml|41754303448|1
           r126b-early|r126-claudio-early|r126-claudio-early.yml|41882892479|1
           LIST

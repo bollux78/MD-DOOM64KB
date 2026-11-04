@@ -107,3 +107,8 @@ A saída **não** significa backup remoto completo; precisa confirmar push/recup
 - **Como disparar** (Werk): `date -u > .github/triggers/r129-claudio-backfill.trigger`, depois commit e push.
 - **Volume:** cada run arquiva `.bin` e `.elf` de todas as variantes, cerca de 8 MB por variante (pl + pf). Arquivar só runs aprovados ou decisivos. O Git LFS fica para quando o repositório passar de ~1 GB.
 - **Segunda cópia:** continua necessária. O GitHub privado sozinho não substitui um backup físico.
+- **Regra do usuário (04/11/2026):** só vão para o repositório privado os builds **aprovados**. Hoje são dois:
+  - **R122 layout:** som validado no console.
+  - **R126b early:** aprovada no Run All; falta o teste de jogabilidade no console.
+
+  A R119 saiu da lista. Cada nova aprovação entra como uma linha na lista do `r129-claudio-backfill.yml`. O script não sobrescreve nada e só adiciona o que for novo.
