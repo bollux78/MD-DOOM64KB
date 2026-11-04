@@ -64,6 +64,32 @@ static int8_t R126_VisitPending(traverser_t func)
 
 ''' + s[i:]
 Path(U).write_text(s)
+
+# R126b: no I_Error on drawseg/opening overflow (PIXEL4 keeps only 64 drawsegs to save RAM).
+# Vanilla behaviour: skip the extra wall for that frame instead of stopping the game. Seen on the console:
+# E1M2 demo, "Drawsegs overflow." -> halt. This is a latent crash of the base too (any view with > 64 segs).
+R = 'src/r_draw.c'
+rep(R, """    if (ds_p == &_s_drawsegs[MAXDRAWSEGS])
+    {
+#if defined(RANGECHECK) || defined(DOOM_R22_PIXEL4)
+        I_Error("Drawsegs overflow.");
+#endif
+        return;
+    }""", """    if (ds_p == &_s_drawsegs[MAXDRAWSEGS])
+    {
+#if defined(RANGECHECK)
+        I_Error("Drawsegs overflow.");
+#endif
+        return; /* R126b: drop the extra wall for this frame */
+    }""")
+rep(R, """#if defined(RANGECHECK) || defined(DOOM_R22_PIXEL4)
+    if(need > MAXOPENINGS)
+        I_Error("Openings overflow. Need = %ld", need);
+#endif""", """#if defined(RANGECHECK)
+    if(need > MAXOPENINGS)
+        I_Error("Openings overflow. Need = %ld", need);
+#endif""")
+
 p = Path('scripts/lab/build_r71a12mul_hud.py'); s = p.read_text()
 assert s.count("'r122-'") == 1 and s.count("('layout', 1)") == 1
 p.write_text(s.replace("'r122-'", "'r126-'").replace("('layout', 1)", "('early', 1)"))
