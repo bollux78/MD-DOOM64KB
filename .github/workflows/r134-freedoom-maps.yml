@@ -8,6 +8,7 @@ on:
       - 'scripts/lab/apply_r133.py'
       - 'scripts/lab/r134_freedoom_pack.py'
       - 'scripts/lab/apply_r134.py'
+      - 'scripts/lab/apply_r135.py'
       - '.github/triggers/r134-freedoom-maps.trigger'
 env:
   R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
@@ -87,6 +88,7 @@ jobs:
           R128_MODE=all python3 scripts/lab/apply_r128.py
           python3 scripts/lab/apply_r133.py
           python3 scripts/lab/apply_r134.py
+          python3 scripts/lab/apply_r135.py
           python3 - <<'PY'
           from pathlib import Path
           p=Path('scripts/lab/build_r71a12mul_hud.py')
