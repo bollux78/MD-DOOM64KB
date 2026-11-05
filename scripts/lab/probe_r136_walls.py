@@ -56,7 +56,13 @@ def main():
         game.check_map(10, 182)
         player = game.sym('_g_player')
         viewz = player + int.from_bytes(game.read(game.sym('r81_player_fields') + 4, 2), 'big')
-        camera = game.sym('R_RenderPlayerView')
+        names = ('R_RenderPlayerView', 'D_Display', 'R22_BeginFrame')
+        available = [name for name in names if any(s == name or s.startswith(name + '.') for s in game.syms)]
+        print('render entry candidates:', available, flush=True)
+        print('renderer symbols:', [s for s in game.syms if s.startswith(
+            ('D_DoomLoop', 'viewx', 'viewy', 'viewz', 'ds_p', 'lastopening', 'openings', 'r115_draw')
+        )], flush=True)
+        camera = game.sym(available[0])
         ds_base = game.sym('_s_drawsegs')
 
         def write(address, data):
@@ -81,6 +87,8 @@ def main():
             game.breakpoint(game.frame)
             game.next(game.frame)
             game.breakpoint(game.frame, False)
+            assert game.number('viewx', 4) == (x << 16) & 0xffffffff
+            assert game.number('viewy', 4) == (y << 16) & 0xffffffff
             write(mobj + 12, old_xy)
             write(mobj + 32, old_angle)
             write(viewz, old_z)
