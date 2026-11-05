@@ -184,11 +184,13 @@ def run(args, rom, elf, candidate, report):
         game.step(0, 24)
         original = {'maplines': game.check_map(1, 85), 'start': game.position()}
         original['frame'] = game.picture(args.out.parent / ('original.bin' if candidate else 'r128-original.bin'))
-        original['movement_trace'] = game.forward_trace()
         report['original'] = original
         if not candidate:
+            original['movement_trace'] = game.forward_trace()
             report['stage'] = 'complete'
             return
+        game.step(UP, 35)
+        game.step(0, 4)
 
         # Extra Maps is the last entry. Use the real menu to start the banked map.
         report['stage'] = 'Freedoom selection'
@@ -246,6 +248,7 @@ def run(args, rom, elf, candidate, report):
         game.step(0, 24)
         assert game.position() == tuple(original['start'])
         report['original_save_load'] = 'PASS'
+        original['movement_trace'] = game.forward_trace()
         report['stage'] = 'complete'
     except (RuntimeError, TimeoutError) as exc:
         report['probe_error'] = str(exc)
