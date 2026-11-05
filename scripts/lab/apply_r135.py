@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R135 (after apply_r133/r134 sources): map-state "SRAM" on the extended SSF mapper ("SEGA SSF" header).
+"""R135/R135b (after apply_r133/r134 sources): map-state "SRAM" on the extended SSF mapper ("SEGA SSF" header).
 
 Cause of R134 "SRAM MAP STATE UNAVAILABLE": with "SEGA SSF" in the header, BlastEm (and Mega EverDrive
 X3/X5/X7/Pro) use the *extended* SSF mapper (BlastEm MAPPER_SEGA_MED_V2). There, $A130F1 is NOT an SRAM
@@ -43,4 +43,45 @@ rep(G, '    *(volatile uint8_t*)0x00A130F1UL=0;\n', '''#if defined(DOOM_R133_SSF
     *(volatile uint8_t*)0x00A130F1UL=0;
 #endif
 ''')
-print('R135 MED SRAM page', PAGE)
+
+# R135b: every other place that opens/closes the window must use the R135 macros. A raw $A130F1 write is
+# ignored by the extended mapper, so a raw "disable" left page 10 + write-enable in slot 4 for good: ROM
+# $200000-$27FFFF (WAD lumps such as TEXTURE1) then read as map-state RAM -> "SKY1 not found".
+C = 'src/r81_save_codec.inc'          # save/load codec: enable via macro, disable raw (2x) -> the SKY1 bug
+rep(C, """#if !defined(DOOM_R27_SRAM_FIXED)
+    *(volatile uint8_t*)0x00A130F1UL=0;
+#endif""", """#if defined(DOOM_R133_SSF_BOOT)
+    R22_SRAM_DISABLE(); /* R135b */
+#elif !defined(DOOM_R27_SRAM_FIXED)
+    *(volatile uint8_t*)0x00A130F1UL=0;
+#endif""", 2)
+D = 'src/r_draw.c'                    # SRAM column cache init: raw enable (ignored) -> probe failed silently
+rep(D, "    *control = 1; /* enable SRAM; writable, do not disable during demo */\n",
+    """#if defined(DOOM_R133_SSF_BOOT)
+    (void)control; R22_SRAM_ENABLE(); /* R135b */
+#else
+    *control = 1; /* enable SRAM; writable, do not disable during demo */
+#endif
+""")
+# Fail closed for configurations that keep the window open or write $A130F1 raw.
+rep(H, '#ifndef R22_SRAM_ENABLE\n', """#if defined(DOOM_R133_SSF_BOOT) && (defined(DOOM_R27_SRAM_FIXED) || !defined(DOOM_R25_MUSIC))
+#error R135: extended SSF needs SRAM windows (page 10 would hide ROM $200000-$27FFFF permanently)
+#endif
+#ifndef R22_SRAM_ENABLE
+""")
+rep('src/r21_prof.c', '    *(volatile uint8_t *)0xA130F1 = 1;     /* SRAM_enable(): read/write */\n',
+    """#if defined(DOOM_R133_SSF_BOOT)
+#error R135: R21 profiler writes $A130F1 directly; not valid on the extended SSF mapper
+#endif
+    *(volatile uint8_t *)0xA130F1 = 1;     /* SRAM_enable(): read/write */
+""")
+# Audit: every raw A130F1 write left must sit in a non-SSF branch (whitelist by file and count).
+import re
+seen = {}
+for f in Path('src').rglob('*'):
+    if f.suffix in ('.c', '.h', '.inc', '.s'):
+        n = len(re.findall(r'0x(?:00)?A130F1', f.read_text(errors='replace'), re.I))
+        if n: seen[str(f)] = n
+allowed = {'src/r22_blocklinks.h': 2, 'src/i_genesis.c': 1, 'src/r81_save_codec.inc': 2, 'src/r_draw.c': 1, 'src/r21_prof.c': 1}
+assert seen == allowed, ('R135 audit: unexpected raw $A130F1 users', seen)
+print('R135b MED SRAM page', PAGE, 'audit ok')
