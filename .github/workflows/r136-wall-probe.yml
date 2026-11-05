@@ -1,0 +1,43 @@
+name: R136 Freedoom wall probe
+on:
+  push:
+    branches: ['exp-chatgpt-r136b-freedoom']
+    paths: ['.github/workflows/r136-wall-probe.yml', 'scripts/lab/probe_r136_walls.py']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Inspect pinned R136 renderer in BlastEm
+        shell: bash
+        env:
+          M68K_NM: /home/dan/mars/m68k-elf/bin/m68k-elf-nm
+          M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+          BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          work="$(mktemp -d "$RUNNER_TEMP/r136-walls.XXXXXX")"
+          trap 'rm -rf "$work"' EXIT
+          export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
+          mkdir -p "$XDG_CONFIG_HOME/blastem" "$XDG_DATA_HOME"
+          cfg="$(dirname "$BLASTEM")/default.cfg"
+          if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
+          src=/home/dan/Projetos/Personal/r136-freedoom/run-42035063354-1/doom-md-r136-freedoom-e1m1-5m
+          cp "$src.bin" "$work/"
+          rom="$work/doom-md-r136-freedoom-e1m1-5m.bin"
+          echo "b0e3914cda57a459bfecc237fba02ad93a0135dae99fe0d6e4c23a75b538d33e  $rom" | sha256sum -c
+          for attempt in 1 2 3 4 5; do
+            if python3 -u scripts/lab/probe_r136_walls.py --blastem "$BLASTEM" --rom "$rom" --elf "$src.elf" > "$work/probe.log" 2>&1; then
+              cat "$work/probe.log"
+              exit 0
+            fi
+            cat "$work/probe.log"
+            grep -q 'out of range of a 32-bit displacement' "$work/probe.log" || exit 1
+          done
+          exit 1
