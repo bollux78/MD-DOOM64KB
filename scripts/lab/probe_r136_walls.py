@@ -61,12 +61,9 @@ def main():
         assembly = subprocess.check_output(
             [os.environ['M68K_OBJDUMP'], '-d', f'--disassemble={loop}', args.elf], text=True
         ).splitlines()
-        stores = [i for i, line in enumerate(assembly)
-                  if re.search(r'\bmovel\s+.+,<*\w+ <viewx[.>]', line)]
-        for i in stores:
-            print('camera setup:', '\n'.join(assembly[i - 12:i + 18]), flush=True)
-        i, = stores
-        camera = int(assembly[i].split(':')[0], 16)
+        store, = [line for line in assembly
+                  if re.search(r'\bmovel\s+%a[0-7]@\(12\),[0-9a-f]+ <viewx[.>]', line)]
+        camera = int(store.split(':')[0], 16)
         ds_base = game.sym('_s_drawsegs')
 
         def write(address, data):
@@ -76,6 +73,7 @@ def main():
 
         def draw(x, y, z, yaw, fill=None):
             game.next(camera)
+            game.breakpoint(camera, False)
             mobj = game.number('_g_player', 4) & 0xffffff
             old_xy = game.read(mobj + 12, 8)
             old_angle = game.read(mobj + 32, 4)
@@ -91,6 +89,7 @@ def main():
             game.breakpoint(game.frame)
             game.next(game.frame)
             game.breakpoint(game.frame, False)
+            game.breakpoint(camera)
             assert game.number('viewx', 4) == (x << 16) & 0xffffffff
             assert game.number('viewy', 4) == (y << 16) & 0xffffffff
             write(mobj + 12, old_xy)
