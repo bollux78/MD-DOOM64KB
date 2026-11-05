@@ -1,0 +1,142 @@
+name: R136 Playable Freedoom E1M1
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-r136-freedoom']
+    paths:
+      - '.github/workflows/r136-freedoom.yml'
+      - 'scripts/lab/apply_r136.py'
+      - 'scripts/lab/r136_freedoom.py'
+      - 'scripts/lab/convert_r24_episode.py'
+env:
+  R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
+  M68K_NM: /home/dan/mars/m68k-elf/bin/m68k-elf-nm
+  R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
+permissions:
+  contents: read
+concurrency:
+  group: r134-freedoom-maps
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Restore pinned private shareware WAD and original VGM (never publish)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and isolate R128 All candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+          work="$RUNNER_TEMP/r136-doom5m-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$work"
+          python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$work"
+          echo "R136_WORK=$work" >> "$GITHUB_ENV"
+      - name: Apply R128 All, audited R135b SRAM and R136 banked map
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$R136_WORK"
+          python3 scripts/lab/apply_r81.py
+          python3 scripts/lab/test_r80_pixofs.py --src src
+          R80_EXPERIMENTS="P1+F1" python3 scripts/lab/apply_r80_performance.py
+          R83_CANDIDATE=sprites python3 scripts/lab/apply_r83.py
+          R85_CANDIDATE=all python3 scripts/lab/apply_r85.py
+          R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
+          python3 scripts/lab/apply_r89.py
+          R90_CANDIDATE=control python3 scripts/lab/apply_r90.py
+          R91_CANDIDATE=sh1 python3 scripts/lab/apply_r91.py
+          R92_CANDIDATE=toggle python3 scripts/lab/apply_r92.py
+          R95_NAME=flat python3 scripts/lab/apply_r95.py
+          R96_NAME=wall python3 scripts/lab/apply_r96.py
+          R97_NAME=shasm python3 scripts/lab/apply_r97.py
+          R98_CANDIDATE=sprmul python3 scripts/lab/apply_r98.py
+          R100_MODE=f1t R100_PREFIX=r102 R100_NAME=twoface python3 scripts/lab/apply_r100.py
+          R104_PREFIX=r105 R104_NAME=twoface python3 scripts/lab/apply_r104.py
+          python3 scripts/lab/apply_r107.py
+          python3 scripts/lab/apply_r113.py
+          python3 scripts/lab/apply_r115.py
+          python3 scripts/lab/apply_r116.py
+          python3 scripts/lab/apply_r117.py
+          R118_MODE=mulvc python3 scripts/lab/apply_r118.py
+          R119_MODE=both python3 scripts/lab/apply_r119.py
+          python3 scripts/lab/apply_r122.py
+          python3 scripts/lab/apply_r126.py
+          R128_MODE=all python3 scripts/lab/apply_r128.py
+          python3 scripts/lab/apply_r133.py
+          python3 scripts/lab/apply_r135.py
+          python3 scripts/lab/apply_r136.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/lab/build_r71a12mul_hud.py')
+          s=p.read_text()
+          for needle in ("(('pl','play'),('pf','perf'))","(('pl','play'),)"):
+              if needle in s:
+                  s=s.replace(needle,"(('pl','play'),)")
+                  break
+          else: raise AssertionError('Cannot isolate play build')
+          if "    assert len(records) == 2\n" in s:
+              s=s.replace("    assert len(records) == 2\n","    assert len(records) == 1\n")
+          p.write_text(s)
+          # Mark the new boot test for isolated PLAY build only
+          p=Path('scripts/lab/build_r71a12mul_hud.py')
+          s=p.read_text()
+          anchor="        env.update(extra_env)"
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+"\n        env['DOOM_R133_SSF_BOOT'] = '1'")
+          p.write_text(s)
+          PY
+      - name: Compile R136 using the R128 All PLAY profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$R136_WORK"
+          export DOOM_R20_BGM_VGM="$R136_WORK/res/e1m1.vgm"
+          HUD_WORK="$R136_WORK-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee "$RUNNER_TEMP/r136-build-$GITHUB_RUN_ID.log"
+          python3 - <<'PY'
+          import json,pathlib
+          rows=json.loads(pathlib.Path('dist/hud/MANIFEST.json').read_text())
+          assert len(rows)==1 and rows[0]['variant']=='r128-all-pl', rows
+          assert pathlib.Path('dist/hud',rows[0]['rom']).stat().st_size<=4*1024*1024
+          PY
+      - name: Verify linked layout and package the ROM privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$R136_WORK"
+          out="/home/dan/Projetos/Personal/r136-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          source=dist/hud/doom-md-r60-r128-all-pl
+          "$M68K_NM" "$source.elf" | awk '$3=="_etext" { found=1; if (tolower($1)>="00200000") exit 1 } END { if(!found) exit 1 }'
+          python3 scripts/lab/r122_z80_layout.py "$source.elf" --require
+          "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary "$source.elf" "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin"
+          python3 scripts/lab/r136_freedoom.py --input "$source.bin" \
+            --linked-size "$(stat -c %s "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin")" \
+            --iwad scripts/doom1.wad --base scripts/doom64.wad \
+            --output "$out/doom-md-r136-freedoom-e1m1-5m.bin" --report "$out/R136-MANIFEST.json"
+          rm "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin"
+          cp "$source.elf" "$out/doom-md-r136-freedoom-e1m1-5m.elf"
+          cp docs/licenses/Freedoom-BSD-3-Clause.txt "$out/"
+          echo "::notice title=R136 build PASS::$out"

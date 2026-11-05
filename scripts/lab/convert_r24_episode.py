@@ -40,6 +40,10 @@ def convert(payload,base):
  bd=dict(base);assert hashlib.sha256(bd['TEXTURE1']).hexdigest()==payload['base_textures_sha256']
  m={k:zlib.decompress(base64.b64decode(v)) for k,v in payload['raw'].items()}
  for k,v in m.items():assert hashlib.sha256(v).hexdigest()==payload['raw_sha256'][k]
+ return convert_map(m,base,payload['flat_colors'],payload['map'])
+
+def convert_map(m,base,flat_colors,mapname):
+ bd=dict(base)
  vertices=recs(m['VERTEXES'],'<hh');lines=recs(m['LINEDEFS'],'<7H');sides=recs(m['SIDEDEFS'],'<hh8s8s8sH');sectors=recs(m['SECTORS'],'<hh8s8s3h')
  assert len(sectors)<255 and len(lines)<2048
  tx={n:i for i,n in enumerate(texnames(bd['TEXTURE1']))};tx['-']=0
@@ -66,7 +70,7 @@ def convert(payload,base):
  out['SEGS']=b''.join(segout)
  for name in ['SSECTORS','NODES','BLOCKMAP']:
   words=recs(m[name],'<H');out[name]=b''.join(struct.pack('>H',x[0]) for x in words)
- out['SECTORS']=b''.join(struct.pack('>hhhhBbh',s[0],s[1],f,c,s[4],s[5],s[6]) for s,(f,c) in zip(sectors,payload['flat_colors']))
+ out['SECTORS']=b''.join(struct.pack('>hhhhBbh',s[0],s[1],f,c,s[4],s[5],s[6]) for s,(f,c) in zip(sectors,flat_colors))
  out['REJECT']=m['REJECT'];things=[];types=collections.Counter()
  for x,y,a,t,op in recs(m['THINGS'],'<5h'):
   if t in [2,3,4,11] or op&16:continue
@@ -78,7 +82,7 @@ def convert(payload,base):
  for i,ln in enumerate(lines):
   z=struct.unpack_from('>hhhhHhhHHhhhhhBbb',out['LINEDEFS'],i*31);assert z[:4]==(*vertices[ln[0]],*vertices[ln[1]]) and z[4]==i and z[-1]==ln[3]
  for a,b in zip(recs(out['SEGS'],'>hhhhHHHHBB'),recs(m['SEGS'],'<6H')):assert a[:4]==(*vertices[b[0]],*vertices[b[1]]) and a[4]==b[5] and a[5]==((b[2]+16384)&65535) and a[7]==b[3]
- report=dict(map=payload['map'],things=len(things),linedefs=len(lines),sidedefs=len(dedup),sectors=len(sectors),segs=len(segout),subsectors=len(out['SSECTORS'])//4,nodes=len(out['NODES'])//28,thing_types=dict(types),skill_counts=[sum(t[2]==1 or (t[4]&bit)!=0 for t in recs(out['THINGS'],'>hhhbb')) for bit in [1,2,4]],blockmap=list(struct.unpack_from('>4h',out['BLOCKMAP'])),lumps={k:dict(bytes=len(v),sha256=hashlib.sha256(v).hexdigest()) for k,v in out.items()})
+ report=dict(map=mapname,things=len(things),linedefs=len(lines),sidedefs=len(dedup),sectors=len(sectors),segs=len(segout),subsectors=len(out['SSECTORS'])//4,nodes=len(out['NODES'])//28,thing_types=dict(types),skill_counts=[sum(t[2]==1 or (t[4]&bit)!=0 for t in recs(out['THINGS'],'>hhhbb')) for bit in [1,2,4]],blockmap=list(struct.unpack_from('>4h',out['BLOCKMAP'])),lumps={k:dict(bytes=len(v),sha256=hashlib.sha256(v).hexdigest()) for k,v in out.items()})
  return out,report
 
 def associations(m):
