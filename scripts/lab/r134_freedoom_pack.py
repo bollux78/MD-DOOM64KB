@@ -9,6 +9,9 @@ import argparse
 import hashlib
 import json
 import struct
+import subprocess
+import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -43,7 +46,17 @@ def main():
     p.add_argument('--report',required=True,type=Path)
     p.add_argument('--cache',type=Path,default=None)
     a=p.parse_args()
-    b=bytearray(a.input.read_bytes())
+    initial=a.input.read_bytes()
+    if len(initial)<=4*1024*1024:
+        with tempfile.TemporaryDirectory(prefix='r134-base-') as tmp:
+            rom=Path(tmp)/'r133-ssf2.bin'
+            manifest=Path(tmp)/'r133.json'
+            subprocess.run([sys.executable,str(Path(__file__).with_name('r133_pack.py')),
+                '--input',str(a.input),'--output',str(rom),'--report',str(manifest)],
+                check=True,stdout=subprocess.DEVNULL)
+            b=bytearray(rom.read_bytes())
+    else:
+        b=bytearray(initial)
     assert len(b)==ROM_SIZE and b[0x100:0x108]==b'SEGA SSF'
     rows=[]
     for name,bank,offset,size,gitsha in MAPS:
