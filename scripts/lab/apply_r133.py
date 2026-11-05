@@ -70,4 +70,9 @@ anchor="    set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)"
 assert fs.count(anchor)==1
 fs=fs.replace(anchor,"    if set -q DOOM_R133_SSF_BOOT; and test \"$DOOM_R133_SSF_BOOT\" = 1\\n        set defs $defs '-DDOOM_R133_SSF_BOOT'\\n    end\\n".replace('\\n','\n')+anchor)
 f.write_text(fs)
+f=Path("scripts/build_silent.fish")
+fs=f.read_text()
+anchor="|HUD_WAD)(=[0-9]+)?"
+assert fs.count(anchor)==1
+f.write_text(fs.replace(anchor,"|R133_SSF_BOOT|HUD_WAD)(=[0-9]+)?"))
 print("R133 boot mapper integration applied.")
