@@ -2,6 +2,7 @@
 """Measure actual renderer pressure and unpainted samples in pinned R136."""
 import argparse
 import os
+import re
 import struct
 import subprocess
 from pathlib import Path
@@ -56,13 +57,16 @@ def main():
         game.check_map(10, 182)
         player = game.sym('_g_player')
         viewz = player + int.from_bytes(game.read(game.sym('r81_player_fields') + 4, 2), 'big')
-        names = ('R_RenderPlayerView', 'D_Display', 'R22_BeginFrame')
-        available = [name for name in names if any(s == name or s.startswith(name + '.') for s in game.syms)]
-        print('render entry candidates:', available, flush=True)
-        print('renderer symbols:', [s for s in game.syms if s.startswith(
-            ('D_DoomLoop', 'viewx', 'viewy', 'viewz', 'ds_p', 'lastopening', 'openings', 'r115_draw')
-        )], flush=True)
-        camera = game.sym(available[0])
+        loop, = [s for s in game.syms if s.split('.')[0] == 'D_DoomLoop']
+        assembly = subprocess.check_output(
+            [os.environ['M68K_OBJDUMP'], '-d', f'--disassemble={loop}', args.elf], text=True
+        ).splitlines()
+        stores = [i for i, line in enumerate(assembly)
+                  if re.search(r'\bmovel\s+.+,<*\w+ <viewx[.>]', line)]
+        for i in stores:
+            print('camera setup:', '\n'.join(assembly[i - 12:i + 18]), flush=True)
+        i, = stores
+        camera = int(assembly[i].split(':')[0], 16)
         ds_base = game.sym('_s_drawsegs')
 
         def write(address, data):
