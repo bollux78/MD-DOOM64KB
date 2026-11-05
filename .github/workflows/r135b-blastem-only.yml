@@ -35,7 +35,7 @@ jobs:
           assert hashlib.sha256(rom.read_bytes()).hexdigest()==manifest['sha256']
           print('::notice title=R135b pinned ROM verified::'+manifest['sha256'])
           PY
-      - name: Emulate: rendered startup/PLAY, demos 1-4, I_Error breakpoint
+      - name: 'Emulate: rendered startup/PLAY, demos 1-4, I_Error breakpoint'
         shell: bash
         run: |
           set -euo pipefail
