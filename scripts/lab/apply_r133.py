@@ -64,4 +64,10 @@ needle="    I_InitGraphics();"
 assert s.count(needle)==1
 s=s.replace(needle,needle+"\n#if defined(DOOM_R133_SSF_BOOT)\n    R133_TestAndShow();\n#endif")
 p.write_text(s)
+f=Path("scripts/lab/build_r35_linear.fish")
+fs=f.read_text()
+anchor="    set -gx DOOM_R20_DEFINES (string join ' ' -- $defs)"
+assert fs.count(anchor)==1
+fs=fs.replace(anchor,"    if set -q DOOM_R133_SSF_BOOT; and test \"$DOOM_R133_SSF_BOOT\" = 1\\n        set defs $defs '-DDOOM_R133_SSF_BOOT'\\n    end\\n".replace('\\n','\n')+anchor)
+f.write_text(fs)
 print("R133 boot mapper integration applied.")
