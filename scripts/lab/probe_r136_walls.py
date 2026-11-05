@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--blastem', required=True)
     parser.add_argument('--rom', type=Path, required=True)
     parser.add_argument('--elf', type=Path, required=True)
+    parser.add_argument('--require-painted', action='store_true')
     args = parser.parse_args()
     lumps = dict(read_wad(args.rom.read_bytes()[0x450000:0x47fff0], True))
     nodes = recs(lumps['NODES'], '>hhhh8hHH')
@@ -111,17 +112,31 @@ def main():
                 rows.append((ds, op, x, y, z, yaw))
         rows.sort(reverse=True)
         print('views', len(rows), 'drawseg usage / 64, openings words / 1216:', rows[:16], flush=True)
-        for _, _, x, y, z, yaw in rows[:8]:
+        print('views at drawseg capacity:', sum(row[0] == 64 for row in rows), flush=True)
+        xmin, xend, ymin, yend = game.read(game.sym('r57_view') + 3, 4)
+        assert 0 <= xmin < xend <= 76 and 0 <= ymin < yend <= 44
+        print('visible viewport:', xmin, xend, ymin, yend, flush=True)
+        # Fixed problem views from the baseline sweep, plus an ordinary start-room view.
+        cases = [(848, 1056, -87, 0), (2192, 576, 177, 1 << 29),
+                 (2192, 576, 177, 3 << 29), (2192, 576, 177, 2 << 29),
+                 (848, 1056, -87, 7 << 29), (928, -896, 41, 1 << 29),
+                 (2680, 980, 193, 4 << 29), (928, -896, 41, 2 << 29),
+                 (-416, 256, 41 + floor_at(-416, 256, nodes, sectors, subsectors, segs), 0)]
+        counts = []
+        for x, y, z, yaw in cases:
             *_, frame_a = draw(x, y, z, yaw, 0x11)
             *_, frame_b = draw(x, y, z, yaw, 0xee)
             holes = []
-            for py in range(1, 44):
+            for py in range(ymin, yend):
                 shift = 0 if py & 1 else 4
-                for px in range(1, 76):
+                for px in range(xmin, xend):
                     byte = (py // 2) * 152 + (px & 1) * 76 + (px // 2) * 2 + 1
                     if ((frame_a[byte] >> shift) & 15, (frame_b[byte] >> shift) & 15) == (1, 14):
                         holes.append((px, py))
-            print('view', x, y, z, yaw, 'unpainted', len(holes), holes[:20], flush=True)
+            counts.append(len(holes))
+            print('view', x, y, z, yaw, 'unpainted', len(holes), holes[:8], flush=True)
+        if args.require_painted:
+            assert max(counts) == 0, ('viewport samples retained from old frames', counts)
     finally:
         game.g.close()
 

@@ -149,4 +149,66 @@ replace(BOOT, '    VDP_setScreenWidth320();\n    VDP_clearPlane(BG_A,TRUE);', ''
     VDP_clearPlane(BG_A,TRUE);''')
 replace(BOOT, '    VDP_drawText("STARTING DOOM...",10,22);', '''    VDP_drawText(map_ok ? "FREEDOOM E1M1: PASS" : "FREEDOOM E1M1: FAIL", 2, 21);
     VDP_drawText("STARTING DOOM...",10,24);''')
+# R136b: the 64-entry list is needed after the BSP pass for sprites and
+# masked textures. Opaque geometry and planes must still cover the frame.
+renderer = Path('src/r_draw.c')
+source = renderer.read_text()
+start = source.index('static void R_StoreWallRange(')
+end = source.index('static void R_RecalcLineFlags(', start)
+wall = source[start:end]
+wall = wall.replace('ds_p->', 'ds->')
+assert wall.count("    // don't overflow and crash\n") == 1
+wall = wall.replace("    // don't overflow and crash\n", '''    const boolean extra_map = _g_gamemap == R136_EXTRA_MAP;
+    drawseg_t overflow_drawseg;
+    drawseg_t *ds = ds_p;
+''')
+old = '''    if (ds_p == &_s_drawsegs[MAXDRAWSEGS])
+    {
+#if defined(RANGECHECK)
+        I_Error("Drawsegs overflow.");
+#endif
+        return; /* R126b: drop the extra wall for this frame */
+    }'''
+new = '''    if (ds == &_s_drawsegs[MAXDRAWSEGS])
+    {
+        if (!extra_map)
+        {
+#if defined(RANGECHECK)
+            I_Error("Drawsegs overflow.");
+#endif
+            return;
+        }
+        ds = &overflow_drawseg;
+    }'''
+assert wall.count(old) == 1
+wall = wall.replace(old, new)
+old = '''    //Openings overflow. Nevermind.
+    if(!R_CheckOpenings(start))
+        return;'''
+new = '''    boolean keep_drawseg = ds != &overflow_drawseg;
+    if (extra_map)
+    {
+        /* Worst case: one masked column and both sprite clips per column. */
+        if (lastopening - openings + 3 * (rw_stopx - start) > MAXOPENINGS)
+            keep_drawseg = false;
+    }
+    else if (!R_CheckOpenings(start))
+        return;'''
+assert wall.count(old) == 1
+wall = wall.replace(old, new)
+old = 'if (R27_SIDE(sidedef,midtexture))    // masked midtexture'
+assert wall.count(old) == 1
+wall = wall.replace(old, 'if (keep_drawseg && R27_SIDE(sidedef,midtexture))')
+old = '    R_RenderSegLoop(rw_x, segtextured, markfloor, markceiling);'
+assert wall.count(old) == 1
+wall = wall.replace(old, old + '''
+    if (!keep_drawseg)
+        return;
+''')
+old = '    ds_p++;'
+assert wall.count(old) == 1
+wall = wall.replace(old, '''    /* Invisible to both consumers of the list: reuse the entry. */
+    if (!extra_map || ds->silhouette || ds->maskedtexturecol)
+        ds_p++;''')
+renderer.write_text(source[:start] + wall + source[end:])
 print('R136 banked level loader and Extra Maps applied')

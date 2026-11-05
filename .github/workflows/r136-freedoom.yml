@@ -1,8 +1,8 @@
-name: R136 Playable Freedoom E1M1
+name: R136b Freedoom E1M1 Wall Rendering
 on:
   workflow_dispatch:
   push:
-    branches: ['exp-chatgpt-r136-freedoom']
+    branches: ['exp-chatgpt-r136b-freedoom']
     paths:
       - '.github/workflows/r136-freedoom.yml'
       - 'scripts/lab/apply_r136.py'
@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$R136_WORK"
-          out="/home/dan/Projetos/Personal/r136-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="/home/dan/Projetos/Personal/r136b-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           source=dist/hud/doom-md-r60-r128-all-pl
           "$M68K_NM" "$source.elf" | awk '$3=="_etext" { found=1; if (tolower($1)>="00200000") exit 1 } END { if(!found) exit 1 }'
@@ -137,9 +137,9 @@ jobs:
           python3 scripts/lab/r136_freedoom.py --input "$source.bin" \
             --linked-size "$(stat -c %s "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin")" \
             --iwad scripts/doom1.wad --base scripts/doom64.wad \
-            --output "$out/doom-md-r136-freedoom-e1m1-5m.bin" --report "$out/R136-MANIFEST.json"
+            --output "$out/doom-md-r136b-freedoom-e1m1-5m.bin" --report "$out/R136-MANIFEST.json"
           rm "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin"
-          cp "$source.elf" "$out/doom-md-r136-freedoom-e1m1-5m.elf"
+          cp "$source.elf" "$out/doom-md-r136b-freedoom-e1m1-5m.elf"
           cp docs/licenses/Freedoom-BSD-3-Clause.txt "$out/"
           echo "::notice title=R136 build PASS::$out"
       - name: 'BlastEm: real menus, movement, lift, audio path, map switch and R128 comparison'
@@ -149,13 +149,13 @@ jobs:
           R128_REF: /home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all
         run: |
           set -euo pipefail
-          out="/home/dan/Projetos/Personal/r136-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="/home/dan/Projetos/Personal/r136b-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           work="$(mktemp -d "$RUNNER_TEMP/r136-play.XXXXXX")"
           export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
           mkdir -p "$XDG_CONFIG_HOME/blastem" "$XDG_DATA_HOME" "$out/blastem"
           cfg="$(dirname "$BLASTEM")/default.cfg"
           if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
-          rom=doom-md-r136-freedoom-e1m1-5m
+          rom=doom-md-r136b-freedoom-e1m1-5m
           ref=doom-md-r60-r128-all-pl
           python3 - "$out" "$R128_REF" "$rom" "$ref" <<'PY'
           from hashlib import sha256
@@ -183,3 +183,39 @@ jobs:
             grep -q 'out of range of a 32-bit displacement' "$log" || exit 1
           done
           exit 1
+
+      - name: 'BlastEm: compare distant-wall views against pinned R136'
+        shell: bash
+        env:
+          BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          work="$(mktemp -d "$RUNNER_TEMP/r136b-walls.XXXXXX")"
+          trap 'rm -rf "$work"' EXIT
+          export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
+          mkdir -p "$XDG_CONFIG_HOME/blastem" "$XDG_DATA_HOME"
+          cfg="$(dirname "$BLASTEM")/default.cfg"
+          if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
+          out="/home/dan/Projetos/Personal/r136b-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          baseline=/home/dan/Projetos/Personal/r136-freedoom/run-42035063354-1/doom-md-r136-freedoom-e1m1-5m
+          candidate="$out/doom-md-r136b-freedoom-e1m1-5m"
+          cp "$baseline.bin" "$candidate.bin" "$work/"
+          echo "b0e3914cda57a459bfecc237fba02ad93a0135dae99fe0d6e4c23a75b538d33e  $work/$(basename "$baseline").bin" | sha256sum -c
+          probe() {
+            local src="$1"
+            shift
+            for attempt in 1 2 3 4 5; do
+              local log="$out/blastem/walls-$(basename "$src")-$attempt.log"
+              if python3 -u scripts/lab/probe_r136_walls.py --blastem "$BLASTEM" \
+                    --rom "$work/$(basename "$src").bin" --elf "$src.elf" "$@" > "$log" 2>&1; then
+                cat "$log"
+                return 0
+              fi
+              cat "$log"
+              grep -q 'out of range of a 32-bit displacement' "$log" || return 1
+            done
+            return 1
+          }
+          probe "$baseline"
+          probe "$candidate" --require-painted
