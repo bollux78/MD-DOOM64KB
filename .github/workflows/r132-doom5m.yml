@@ -1,0 +1,55 @@
+name: R132 Doom R128 All 5MiB SSF2 boot compatibility
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths:
+      - '.github/workflows/r132-doom5m.yml'
+      - '.github/triggers/r132-doom5m.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: r132-doom5m
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Repackage proven R128 All play ROM from private runner storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="/home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all"
+          test -d "$src"
+          python3 - "$src" <<'PY'
+          import pathlib, json, hashlib, sys
+          folder=pathlib.Path(sys.argv[1])
+          rows=json.loads((folder/'MANIFEST.json').read_text())
+          play=[r for r in rows if r.get('variant')=='r128-all-pl']
+          assert len(play)==1, rows
+          record=play[0]
+          p=folder / record['rom']
+          assert p.is_file()
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==record['sha256']
+          assert p.stat().st_size<=4*1024*1024
+          print('::notice title=R132 input verified::R128 All PLAY source sha256 '+record['sha256'])
+          (pathlib.Path('/home/dan/Projetos/Personal')/'r132-input-filename.txt').write_text(str(p))
+          PY
+          input="$(cat /home/dan/Projetos/Personal/r132-input-filename.txt)"
+          out="/home/dan/Projetos/Personal/r132-doom5m/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out" dist/r132
+          python3 scripts/lab/r132_doom5m.py --input "$input" --output "$out/doom-md-r128-all-ssf2-5m.bin" --report "$out/R132-MANIFEST.json"
+          cp "$out/R132-MANIFEST.json" dist/r132/R132-MANIFEST.json
+          echo "::notice title=R132 private ROM::$out/doom-md-r128-all-ssf2-5m.bin"
+      - name: Upload sanitized manifest only (no ROM/WAD/ELF)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r132-doom5m-catalog
+          path: dist/r132/R132-MANIFEST.json
+          if-no-files-found: warn
+          retention-days: 90
