@@ -54,6 +54,8 @@ class Play:
                 sp = int(regs[15 * 8:16 * 8], 16)
                 pointer = int.from_bytes(self.read(sp + 4, 4), 'big')
                 msg = self.read(pointer, 100).split(b'\0', 1)[0].decode(errors='replace')
+                if msg.startswith('Z_Malloc'):
+                    msg %= struct.unpack('>III', self.read(sp + 8, 12))
                 raise AssertionError('I_Error: ' + msg)
             if pc == self.sound:
                 self.pcm += 1
@@ -84,6 +86,7 @@ class Play:
         self.tap(START)
         if self.number('currentMenu', 4) & 0xFFFFFF == self.sym('LevelDef'):
             self.tap(FIRE)
+        assert self.number('_g_menuactive', 4), 'Start did not open a menu'
         assert self.number('currentMenu', 4) & 0xFFFFFF == self.sym('MainDef')
         assert self.number('r76_menu_cursor') == 0, 'main menu cursor was not reset'
         for _ in range(row):
@@ -144,10 +147,11 @@ def run(args, rom, elf, candidate, report):
             report['boot_bits'] = game.number('r136_boot_result', 1)
             assert report['boot_bits'] == 31
         assert game.number('r89_ai_low', 1) == 0
+        game.step(0, 24)  # Let the title loop process its initial advance.
         report['stage'] = 'original E1M1'
         game.menu(0)
         game.tap(USE)
-        game.step(0, 6)
+        game.step(0, 24)
         original = {'maplines': game.check_map(1, 85), 'start': game.position()}
         original['frame'] = game.picture(args.out.parent / ('original.bin' if candidate else 'r128-original.bin'))
         game.step(UP, 35)
@@ -164,7 +168,7 @@ def run(args, rom, elf, candidate, report):
         assert game.number('currentMenu', 4) & 0xFFFFFF == game.sym('ExtraMapDef')
         game.tap(USE)
         game.tap(USE)
-        game.step(0, 6)
+        game.step(0, 24)
         extra = report['extra'] = {'maplines': game.check_map(10, 182), 'start': game.position()}
         assert extra['start'][:2] == (-416 << 16, 256 << 16), extra
         extra['start_frame'] = game.picture(args.out.parent / 'freedoom-start.bin')
@@ -194,7 +198,7 @@ def run(args, rom, elf, candidate, report):
         report['stage'] = 'return to original E1M1'
         game.menu(0)
         game.tap(USE)
-        game.step(0, 6)
+        game.step(0, 24)
         extra['return_maplines'] = game.check_map(1, 85)
         assert extra['return_maplines'] == original['maplines']
         assert game.position() == tuple(original['start'])
@@ -211,7 +215,7 @@ def run(args, rom, elf, candidate, report):
         assert game.position() != tuple(original['start'])
         game.menu(4)
         game.tap(USE)
-        game.step(0, 6)
+        game.step(0, 24)
         assert game.position() == tuple(original['start'])
         report['original_save_load'] = 'PASS'
         report['stage'] = 'complete'

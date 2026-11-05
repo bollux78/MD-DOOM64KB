@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Apply playable Freedoom support to the isolated R128 + R133 + R135b build."""
+import re
 from pathlib import Path
 
 
@@ -70,7 +71,7 @@ for file in ('src/p_setup.c', 'src/r24_romthings.c'):
         ('W_GetNumForName', 'W_GetLevelNumForName'), ('W_LumpLength', 'W_LevelLumpLength'),
         ('W_GetLumpByNum', 'W_GetLevelLumpByNum'), ('W_GetLumpByName', 'W_GetLevelLumpByName'),
     ):
-        source = source.replace(name + '(', level_name + '(')
+        source = re.sub(rf'\b{name}(?=\s*\()', level_name, source)
     path.write_text(source)
 
 SETUP = 'src/p_setup.c'
