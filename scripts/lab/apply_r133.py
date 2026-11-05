@@ -72,7 +72,12 @@ fs=fs.replace(anchor,"    if set -q DOOM_R133_SSF_BOOT; and test \"$DOOM_R133_SS
 f.write_text(fs)
 f=Path("scripts/build_silent.fish")
 fs=f.read_text()
-anchor="|HUD_WAD)(=[0-9]+)?"
+anchor='        test -n "$d"; or continue'
 assert fs.count(anchor)==1
-f.write_text(fs.replace(anchor,"|R133_SSF_BOOT|HUD_WAD)(=[0-9]+)?"))
+fs=fs.replace(anchor,anchor+"""
+        if test "$d" = '-DDOOM_R133_SSF_BOOT'
+            set render_flags "$render_flags $d"
+            continue
+        end""")
+f.write_text(fs)
 print("R133 boot mapper integration applied.")
