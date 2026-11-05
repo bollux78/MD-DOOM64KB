@@ -27,7 +27,7 @@ class Play:
         self.error = self.sym('I_Error')
         self.frame = self.sym('I_FinishUpdate')
         self.sound = self.sym('XGM2_playPCMEx')
-        self.g = RSP(blastem, rom, 4200, 60)
+        self.g = RSP(blastem, rom, 30000, 60)
 
     def sym(self, name):
         if name in self.syms:
@@ -45,7 +45,7 @@ class Play:
     def breakpoint(self, addr, enable=True):
         assert self.g.req(f"{'Z' if enable else 'z'}0,{addr:x},2") == 'OK'
 
-    def next(self, target):
+    def next(self, *targets):
         for _ in range(1000):
             self.g.cont()
             regs = self.g.req('g')
@@ -59,10 +59,10 @@ class Play:
                 raise AssertionError('I_Error: ' + msg)
             if pc == self.sound:
                 self.pcm += 1
-            elif pc == target:
-                return
+            elif pc in targets:
+                return pc
             else:
-                raise AssertionError(f'unexpected BlastEm stop at {pc:06x}, wanted {target:06x}')
+                raise AssertionError(f'unexpected BlastEm stop at {pc:06x}, wanted {targets}')
         raise AssertionError('excessive breakpoint stops')
 
     def boot(self):
@@ -73,10 +73,40 @@ class Play:
 
     def step(self, mask, count=1):
         for _ in range(count):
-            # Set the cached JOY_1 word after JOY_update and before JOY_readJoypad.
-            # Doom's edge detection and responder still consume the input normally.
-            assert self.g.req(f'M{self.joy:x},2:{mask:04x}') == 'OK'
+            self.pad(mask)
             self.next(self.poll)
+
+    def pad(self, mask):
+        # Write JOY_1 after JOY_update and before Doom consumes the word.
+        assert self.g.req(f'M{self.joy:x},2:{mask:04x}') == 'OK'
+
+    def forward_trace(self, count=24):
+        # Joystick polling can run ahead of G_Ticker. Compare positions on actual
+        # game tics, from the first movement, instead of counting input polls.
+        ticker = self.sym('G_Ticker')
+        start = self.position()
+        points = []
+        last_tic = None
+        self.breakpoint(ticker)
+        self.pad(UP)
+        for _ in range(500):
+            if self.next(self.poll, ticker) == self.poll:
+                self.pad(UP)
+                continue
+            tic = self.number('_g_leveltime', 4)
+            if tic == last_tic:
+                continue
+            last_tic = tic
+            pos = self.position()
+            if points or pos != start:
+                points.append(pos)
+            if len(points) == count:
+                break
+        assert len(points) == count, points
+        self.breakpoint(ticker, False)
+        self.next(self.poll)
+        self.step(0, 4)
+        return hashlib.sha256(b''.join(struct.pack('>iii', *xyz) for xyz in points)).hexdigest()
 
     def tap(self, button):
         self.step(button, 2)
@@ -154,13 +184,13 @@ def run(args, rom, elf, candidate, report):
         game.step(0, 24)
         original = {'maplines': game.check_map(1, 85), 'start': game.position()}
         original['frame'] = game.picture(args.out.parent / ('original.bin' if candidate else 'r128-original.bin'))
-        game.step(UP, 35)
-        game.step(0, 4)
-        original['after_forward'] = game.position()
         report['original'] = original
         if not candidate:
+            original['movement_trace'] = game.forward_trace()
             report['stage'] = 'complete'
             return
+        game.step(UP, 35)
+        game.step(0, 4)
 
         # Extra Maps is the last entry. Use the real menu to start the banked map.
         report['stage'] = 'Freedoom selection'
@@ -218,7 +248,13 @@ def run(args, rom, elf, candidate, report):
         game.step(0, 24)
         assert game.position() == tuple(original['start'])
         report['original_save_load'] = 'PASS'
+        original['movement_trace'] = game.forward_trace()
         report['stage'] = 'complete'
+    except (RuntimeError, TimeoutError) as exc:
+        report['probe_error'] = str(exc)
+        if 'EOF' in str(exc) or 'exited' in str(exc):
+            report['emulator_exit'] = game.g.proc.wait(timeout=4)
+        raise
     finally:
         game.g.close()
 
@@ -234,8 +270,8 @@ def main():
         run(args, args.rom, args.elf, True, result['candidate'])
         run(args, args.reference_rom, args.reference_elf, False, result['r128_all'])
         a, b = (result[key]['original'] for key in ('candidate', 'r128_all'))
-        assert all(a[key] == b[key] for key in ('start', 'frame', 'after_forward')), (a, b)
-        result['r128_original_e1m1'] = 'PASS'
+        assert all(a[key] == b[key] for key in ('start', 'frame', 'movement_trace')), (a, b)
+        result['r128_original_e1m1'] = {'status': 'PASS', 'movement_tics': 24}
         result['blastem'] = 'PASS'
     except AssertionError as exc:
         result['blastem'] = 'FAIL'
