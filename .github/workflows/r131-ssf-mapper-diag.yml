@@ -1,0 +1,53 @@
+name: R131 SSF2 mapper diagnostic (4MiB standard + 5/8/12/15MiB)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths:
+      - '.github/workflows/r131-ssf-mapper-diag.yml'
+      - '.github/triggers/r131-ssf-mapper-diag.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: r131-ssf-mapper-diag
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build mapper diagnostic ROMs (no Doom assets)
+        shell: bash
+        env:
+          GDK: /home/dan/mars/m68k-elf
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/lab/r131_pack.py scripts/lab/r131_build.py
+          out="/home/dan/Projetos/Personal/r131-ssf-mapper-diag/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 scripts/lab/r131_build.py --output "$out"
+          mkdir -p dist/r131
+          cp "$out/R131-MANIFEST.json" dist/r131/R131-MANIFEST.json
+          python3 - "$out" <<'PY'
+          import hashlib, json, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          rows = json.loads((root / "R131-MANIFEST.json").read_text())
+          assert len(rows) == 5
+          for rec in rows:
+              p = root / rec["rom"]
+              assert p.is_file() and p.stat().st_size == rec["bytes"]
+              assert hashlib.sha256(p.read_bytes()).hexdigest() == rec["sha256"]
+              assert p.name.endswith('.bin')
+              print("::notice title=R131 ROM ready::%s %d bytes sha256 %s" % (p.name, rec["bytes"], rec["sha256"]))
+          PY
+          echo "::notice title=R131 output directory::$out"
+      - name: Upload public-safe hash catalog only
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r131-mapper-catalog
+          path: dist/r131/R131-MANIFEST.json
+          if-no-files-found: warn
+          retention-days: 90
