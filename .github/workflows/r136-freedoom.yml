@@ -12,6 +12,7 @@ on:
 env:
   R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
   M68K_NM: /home/dan/mars/m68k-elf/bin/m68k-elf-nm
+  M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
   R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
 permissions:
   contents: read
@@ -171,7 +172,10 @@ jobs:
           cp "$out/$rom.bin" "$R128_REF/$ref.bin" "$work/"
           for attempt in 1 2 3 4 5; do
             log="$out/blastem/play-$attempt.log"
-            if python3 scripts/lab/test_r136_play.py --blastem "$BLASTEM"                 --rom "$work/$rom.bin" --elf "$out/$rom.elf"                 --reference-rom "$work/$ref.bin" --reference-elf "$R128_REF/$ref.elf"                 --out "$out/blastem/R136-BLASTEM.json" > "$log" 2>&1; then
+            if python3 scripts/lab/test_r136_play.py --blastem "$BLASTEM" \
+                --rom "$work/$rom.bin" --elf "$out/$rom.elf" \
+                --reference-rom "$work/$ref.bin" --reference-elf "$R128_REF/$ref.elf" \
+                --out "$out/blastem/R136-BLASTEM.json" > "$log" 2>&1; then
               cat "$log"
               exit 0
             fi

@@ -125,6 +125,11 @@ replace('src/s_sound.c', '    mnum = mus_e1m1 + _g_gamemap-1;', '    mnum = _g_g
 replace('src/r81_save_core.inc', ' r81_io_t io;memset(&io,0,sizeof(io));io.objects=R81_SaveScratch();',
         ' if(_g_gamemap==R136_EXTRA_MAP)return "SAVE UNAVAILABLE IN EXTRA MAPS";\n r81_io_t io;memset(&io,0,sizeof(io));io.objects=R81_SaveScratch();')
 
+# A 182-sector REJECT matrix already exceeds INT16_MAX in bit indices.
+# The engine's <255-sector limit keeps the full index in an unsigned word.
+replace('src/p_sight.c', '  int16_t pnum = (s1-_g_sectors)*_g_numsectors + (s2-_g_sectors);',
+        '  uint16_t pnum = (uint16_t)(s1-_g_sectors) * (uint16_t)_g_numsectors + (uint16_t)(s2-_g_sectors);')
+
 BOOT = 'src/d_main.c'
 replace(BOOT, '/* The first 4MiB hold the Doom engine/data. Slot 7 is remapped\n'
         '   ONLY during this boot check, before title/gameplay begins.\n'
