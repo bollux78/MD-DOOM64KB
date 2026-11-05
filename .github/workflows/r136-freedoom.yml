@@ -7,6 +7,7 @@ on:
       - '.github/workflows/r136-freedoom.yml'
       - 'scripts/lab/apply_r136.py'
       - 'scripts/lab/r136_freedoom.py'
+      - 'scripts/lab/test_r136_play.py'
       - 'scripts/lab/convert_r24_episode.py'
 env:
   R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
@@ -140,3 +141,41 @@ jobs:
           cp "$source.elf" "$out/doom-md-r136-freedoom-e1m1-5m.elf"
           cp docs/licenses/Freedoom-BSD-3-Clause.txt "$out/"
           echo "::notice title=R136 build PASS::$out"
+      - name: 'BlastEm: real menus, movement, lift, audio path, map switch and R128 comparison'
+        shell: bash
+        env:
+          BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+          R128_REF: /home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all
+        run: |
+          set -euo pipefail
+          out="/home/dan/Projetos/Personal/r136-freedoom/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          work="$(mktemp -d "$RUNNER_TEMP/r136-play.XXXXXX")"
+          export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
+          mkdir -p "$XDG_CONFIG_HOME/blastem" "$XDG_DATA_HOME" "$out/blastem"
+          cfg="$(dirname "$BLASTEM")/default.cfg"
+          if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
+          rom=doom-md-r136-freedoom-e1m1-5m
+          ref=doom-md-r60-r128-all-pl
+          python3 - "$out" "$R128_REF" "$rom" "$ref" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json, sys
+
+          out, ref = map(Path, sys.argv[1:3])
+          candidate = json.loads((out/'R136-MANIFEST.json').read_text())
+          reference, = [r for r in json.loads((ref/'MANIFEST.json').read_text())
+                        if r['variant'] == 'r128-all-pl']
+          for directory, name, manifest in ((out,sys.argv[3],candidate), (ref,sys.argv[4],reference)):
+              assert sha256((directory/(name+'.bin')).read_bytes()).hexdigest() == manifest['sha256']
+          PY
+          cp "$out/$rom.bin" "$R128_REF/$ref.bin" "$work/"
+          for attempt in 1 2 3 4 5; do
+            log="$out/blastem/play-$attempt.log"
+            if python3 scripts/lab/test_r136_play.py --blastem "$BLASTEM"                 --rom "$work/$rom.bin" --elf "$out/$rom.elf"                 --reference-rom "$work/$ref.bin" --reference-elf "$R128_REF/$ref.elf"                 --out "$out/blastem/R136-BLASTEM.json" > "$log" 2>&1; then
+              cat "$log"
+              exit 0
+            fi
+            cat "$log"
+            grep -q 'out of range of a 32-bit displacement' "$log" || exit 1
+          done
+          exit 1

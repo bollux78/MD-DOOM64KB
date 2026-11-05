@@ -42,10 +42,11 @@ WALL_FAMILIES = {
     'AQSUPP': 'SUPPORT2', 'MCSTAT': 'COMPSTA1',
 }
 FLATS = {
-    'FWATER1': 'NUKAGE1', 'SLIME14': 'NUKAGE1', 'GRASS1': 'MFLR8_4',
-    'RROCK17': 'MFLR8_3', 'RROCK18': 'MFLR8_4',
+    'FWATER1': 'NUKAGE1', 'SLIME14': 'NUKAGE1', 'GRASS1': 'FLOOR7_1',
+    'RROCK17': 'MFLR8_1', 'RROCK18': 'FLOOR7_2',
     'CRATOP1': 'FLAT5_4', 'CRATOP2': 'FLAT5_4', 'FLAT1': 'FLOOR0_1',
-    'FLAT20': 'FLOOR4_8', 'FLAT4': 'FLOOR4_8',
+    'MFLR8_3': 'MFLR8_1', 'MFLR8_4': 'MFLR8_1', 'CEIL4_1': 'CEIL4_2',
+    'FLOOR0_5': 'FLOOR0_6', 'FLAT20': 'FLOOR4_8', 'FLAT4': 'FLOOR4_8',
 }
 # Substitutes for gameplay items whose sprites/logic are absent from this port.
 THINGS = {2004: 2002, 2047: 2048, 2023: 2012}
