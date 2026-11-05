@@ -1,0 +1,87 @@
+name: R135b BlastEm runtime validation (no rebuild, private ROM)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-claudio-*', 'exp-chatgpt-*']
+    paths: ['.github/workflows/r135b-blastem-only.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 90
+    env:
+      BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+      M68K_NM: /home/dan/mars/m68k-elf/bin/m68k-elf-nm
+      M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+      ROM_DIR: /home/dan/Projetos/Personal/r134-freedoom-maps/run-42025552684-1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify exactly which compiled R135b ROM and ELF will run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$BLASTEM"; test -x "$M68K_NM"; test -x "$M68K_OBJDUMP"
+          test -s "$ROM_DIR/doom-md-r134-freedoom-extra-5m.bin"
+          test -s "$ROM_DIR/doom-md-r135b-source.elf"
+          python3 - <<'PY'
+          import os,json,hashlib,pathlib
+          root=pathlib.Path(os.environ['ROM_DIR'])
+          manifest=json.loads((root/'R134-MANIFEST.json').read_text())
+          rom=root/'doom-md-r134-freedoom-extra-5m.bin'
+          assert rom.stat().st_size==5242880
+          assert hashlib.sha256(rom.read_bytes()).hexdigest()==manifest['sha256']
+          print('::notice title=R135b pinned ROM verified::'+manifest['sha256'])
+          PY
+      - name: Emulate: rendered startup/PLAY, demos 1-4, I_Error breakpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/r135b-runtime-home"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          mkdir -p "$XDG_CONFIG_HOME/blastem" "$ROM_DIR/blastem-validation" dist/r135b
+          cfg="$(dirname "$BLASTEM")/default.cfg"
+          if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
+          rom="$ROM_DIR/doom-md-r134-freedoom-extra-5m.bin"
+          elf="$ROM_DIR/doom-md-r135b-source.elf"
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+            --out "$ROM_DIR/blastem-validation/render" --label r135b-render \
+            --max-emulated-frames 3500 --max-breaks 500 --timeout 360 \
+            | tee "$ROM_DIR/blastem-validation/render.log"
+          for k in 1 2 3 4; do
+            python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+              --out "$ROM_DIR/blastem-validation/demo-$k.json" --demo "$k" --every 100 \
+              --max-emulated-frames 9999 --timeout 600 \
+              | tee "$ROM_DIR/blastem-validation/demo-$k.log"
+          done
+      - name: Evaluate actual BlastEm results
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['ROM_DIR'])/'blastem-validation'
+          cap=json.loads((root/'render/CAPTURE.json').read_text())
+          ds=[json.loads((root/f'demo-{i}.json').read_text()) for i in range(1,5)]
+          data={
+            'build':'PASS',
+            'blastem':'PASS' if cap['frames']>=20 and all(d.get('end') in ('demo_end','exit') and len(d.get('checkpoints',[]))>=2 for d in ds) else 'FAIL',
+            'rendered_frames':cap['frames'],
+            'render_status':cap['status'],
+            'demos':[{'demo':d['demo'],'end':d.get('end'),'checkpoints':len(d.get('checkpoints',[]))} for d in ds],
+            'limits':'4 demo runs; NOT 10-demo logic comparison; no controller-driven menu/PLAY check'
+          }
+          pathlib.Path('dist/r135b/BLASTEM-RESULT.json').write_text(json.dumps(data,indent=2)+'\n')
+          print(json.dumps(data,indent=2))
+          if data['blastem']!='PASS':raise SystemExit('BlastEm tests did not satisfy full-completion criteria')
+          PY
+      - name: Publish only safe execution results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r135b-blastem-only-results
+          path: dist/r135b/BLASTEM-RESULT.json
+          if-no-files-found: warn
+          retention-days: 90
