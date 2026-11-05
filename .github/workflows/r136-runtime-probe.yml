@@ -1,0 +1,27 @@
+name: R136 private runtime probe
+on:
+  push:
+    branches: ['exp-chatgpt-r136-freedoom']
+    paths: ['.github/workflows/r136-runtime-probe.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Locate controller and audio symbols in both private builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mars=/home/dan/mars/m68k-elf/bin
+          r136=/home/dan/Projetos/Personal/r136-freedoom/run-42032406839-1/doom-md-r136-freedoom-e1m1-5m.elf
+          r128=/home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pl.elf
+          for elf in "$r136" "$r128"; do
+            echo "${elf##*/}"
+            "$mars/m68k-elf-nm" -S "$elf" | grep -Ei 'StartTic|PostEvent|joyState|JOY_|XGM2_playPCM|I_FinishUpdate|r115_draw|_g_usergame|r81_player_fields|currentMenu|MainDef'
+            "$mars/m68k-elf-objdump" -d --disassemble=I_StartTic "$elf"
+          done
