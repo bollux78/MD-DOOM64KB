@@ -5,6 +5,8 @@ on:
     branches: ['exp-claudio-*', 'exp-chatgpt-*']
     paths:
       - '.github/workflows/r131-ssf-mapper-diag.yml'
+      - 'scripts/lab/r131_*.py'
+      - 'scripts/lab/r131_main.c'
       - '.github/triggers/r131-ssf-mapper-diag.trigger'
 permissions:
   contents: read
