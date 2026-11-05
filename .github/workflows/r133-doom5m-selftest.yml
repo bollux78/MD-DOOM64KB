@@ -8,6 +8,9 @@ on:
       - 'scripts/lab/apply_r133.py'
       - 'scripts/lab/r133_pack.py'
       - '.github/triggers/r133-doom5m-selftest.trigger'
+env:
+  R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
+  R100_BASE_SHA: 'bac4df171ecb774cd298d65e186e1d3d03b74ebb'
 permissions:
   contents: read
 concurrency:
