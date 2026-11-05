@@ -46,15 +46,38 @@ jobs:
           if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
           rom="$ROM_DIR/doom-md-r134-freedoom-extra-5m.bin"
           elf="$ROM_DIR/doom-md-r135b-source.elf"
-          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
-            --out "$ROM_DIR/blastem-validation/render" --label r135b-render \
-            --max-emulated-frames 3500 --max-breaks 500 --timeout 360 \
-            | tee "$ROM_DIR/blastem-validation/render.log"
+          # Some x86_64 ASLR placements cause BlastEm's JIT to abort with
+          # "jmp ... out of range" before the RSP debugger starts. Retry only
+          # that startup crash with a fresh process; never count it as a Doom pass.
+          for attempt in 1 2 3 4 5; do
+            if python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+              --out "$ROM_DIR/blastem-validation/render" --label r135b-render \
+              --max-emulated-frames 3500 --max-breaks 500 --timeout 360 \
+              > "$ROM_DIR/blastem-validation/render-attempt-$attempt.log" 2>&1; then
+              cat "$ROM_DIR/blastem-validation/render-attempt-$attempt.log"
+              break
+            fi
+            cat "$ROM_DIR/blastem-validation/render-attempt-$attempt.log"
+            if ! grep -q 'out of range of a 32-bit displacement' "$ROM_DIR/blastem-validation/render-attempt-$attempt.log"; then
+              echo 'Non-JIT failure; no retry'; exit 1
+            fi
+            if test "$attempt" -eq 5; then echo 'BlastEm JIT failed five times'; exit 1; fi
+          done
           for k in 1 2 3 4; do
-            python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
-              --out "$ROM_DIR/blastem-validation/demo-$k.json" --demo "$k" --every 100 \
-              --max-emulated-frames 9999 --timeout 600 \
-              | tee "$ROM_DIR/blastem-validation/demo-$k.log"
+            for attempt in 1 2 3 4 5; do
+              if python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+                --out "$ROM_DIR/blastem-validation/demo-$k.json" --demo "$k" --every 100 \
+                --max-emulated-frames 9999 --timeout 600 \
+                > "$ROM_DIR/blastem-validation/demo-$k-attempt-$attempt.log" 2>&1; then
+                cat "$ROM_DIR/blastem-validation/demo-$k-attempt-$attempt.log"
+                break
+              fi
+              cat "$ROM_DIR/blastem-validation/demo-$k-attempt-$attempt.log"
+              if ! grep -q 'out of range of a 32-bit displacement' "$ROM_DIR/blastem-validation/demo-$k-attempt-$attempt.log"; then
+                echo 'Non-JIT failure; no retry'; exit 1
+              fi
+              if test "$attempt" -eq 5; then echo "BlastEm JIT failed five times on demo $k"; exit 1; fi
+            done
           done
       - name: Evaluate actual BlastEm results
         shell: bash
