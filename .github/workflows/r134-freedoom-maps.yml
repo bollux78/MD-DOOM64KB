@@ -135,6 +135,10 @@ jobs:
           row=json.loads(pathlib.Path('dist/hud/MANIFEST.json').read_text())[0]
           source=pathlib.Path('dist/hud')/row['rom']
           assert hashlib.sha256(source.read_bytes()).hexdigest()==row['sha256']
+          elf=source.with_suffix('.elf')
+          assert elf.is_file(), ('ELF not found',elf)
+          import shutil
+          shutil.copy2(elf,output/'doom-md-r135b-source.elf')
           dst=output/'doom-md-r134-freedoom-extra-5m.bin'
           manifest=output/'R134-MANIFEST.json'
           subprocess.run([sys.executable,str(packer),'--input',str(source),'--output',str(dst),'--report',str(manifest)],check=True)
@@ -145,6 +149,59 @@ jobs:
           PY
           cp "$out/R134-MANIFEST.json" "$GITHUB_WORKSPACE/dist/r134/R134-MANIFEST.json"
           echo "::notice title=R134 output directory::$out"
+      - name: R135b BlastEm startup + demos 1-4 (real execution, I_Error guarded)
+        shell: bash
+        env:
+          BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+        run: |
+          set -euo pipefail
+          test -x "$BLASTEM"
+          out="/home/dan/Projetos/Personal/r134-freedoom-maps/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rom="$out/doom-md-r134-freedoom-extra-5m.bin"
+          elf="$out/doom-md-r135b-source.elf"
+          test -s "$rom"; test -s "$elf"
+          mkdir -p "$out/blastem" "$GITHUB_WORKSPACE/dist/r134"
+          export HOME="$RUNNER_TEMP/r135b-blastem-home"
+          mkdir -p "$HOME/.config/blastem"
+          src="$(dirname "$BLASTEM")/default.cfg"
+          if test -f "$src"; then cp "$src" "$HOME/.config/blastem/blastem.cfg"; fi
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          import pathlib
+          for s in ('scripts/lab/r118_logic_check.py','scripts/lab/r70_capture.py','scripts/lab/r64a_rsp_capture.py'):
+              assert pathlib.Path(s).is_file()
+          PY
+          python3 scripts/lab/r70_capture.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+            --out "$out/blastem/play-capture" --label r135b-5m-play \
+            --max-emulated-frames 2400 --max-breaks 400 --timeout 240 \
+            | tee "$out/blastem/play-capture.log"
+          for k in 1 2 3 4; do
+            python3 scripts/lab/r118_logic_check.py --blastem "$BLASTEM" --rom "$rom" --elf "$elf" \
+              --out "$out/blastem/demo-$k.json" --demo "$k" --every 100 \
+              --max-emulated-frames 9900 --timeout 600 \
+              | tee "$out/blastem/demo-$k.log"
+          done
+          python3 - "$out" "$GITHUB_WORKSPACE/dist/r134/R135B-BLASTEM.json" <<'PY'
+          import pathlib,json,sys
+          root=pathlib.Path(sys.argv[1]); dst=pathlib.Path(sys.argv[2])
+          cap=json.loads((root/'blastem/play-capture/CAPTURE.json').read_text())
+          demos=[json.loads((root/f'blastem/demo-{i}.json').read_text()) for i in range(1,5)]
+          result={'build':'PASS','blastem':'PASS' if cap['frames']>=20 and all(d['end'] in ('demo_end','exit') and len(d['checkpoints'])>=2 for d in demos) else 'FAIL',
+            'play_capture_frames':cap['frames'],
+            'demos':[{'demo':d['demo'],'end':d.get('end'),'checkpoints':len(d.get('checkpoints',[]))} for d in demos],
+            'note':'R135b test only: four demos + rendered capture; 10-demo logic comparison and menu controller test not performed'}
+          dst.write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2))
+          if result['blastem']!='PASS':raise SystemExit('R135b BlastEm validation failed')
+          PY
+      - name: Upload R135b sanitized execution report (never ROM/ELF)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r135b-blastem-execution-report
+          path: dist/r134/R135B-BLASTEM.json
+          if-no-files-found: warn
+          retention-days: 90
       - name: Publish sanitized hash catalog only
         if: always()
         uses: actions/upload-artifact@v6
