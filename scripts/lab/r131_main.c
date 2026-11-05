@@ -1,6 +1,9 @@
 /* R131 SSF2 mapper diagnostic -- synthetic test only, no Doom/WAD assets. */
 #include <genesis.h>
-#include <stdint.h>
+/* SGDK defines u8/u16/u32; Marsdev bare-metal lacks libc stdint.h. */
+#define uint8_t u8
+#define uint16_t u16
+#define uint32_t u32
 
 #ifndef R131_PAGES
 #define R131_PAGES 8
@@ -35,13 +38,13 @@ static void show_page(uint16_t p, uint16_t ok, uint16_t row)
 
 static uint32_t read_identity(uint16_t p)
 {
-    volatile const uint32_t *a = (volatile const uint32_t *)(uintptr_t)((uint32_t)p * PAGE_BYTES + PROBE_OFF);
+    volatile const uint32_t *a = (volatile const uint32_t *)(u32)((uint32_t)p * PAGE_BYTES + PROBE_OFF);
     return *a;
 }
 
 static uint32_t read_slot7(void)
 {
-    volatile const uint32_t *a = (volatile const uint32_t *)(uintptr_t)SLOT7_ADDR;
+    volatile const uint32_t *a = (volatile const uint32_t *)(u32)SLOT7_ADDR;
     return *a;
 }
 
