@@ -37,4 +37,4 @@ jobs:
           assert wad.startswith(b"IWAD")
           (out / "reference.wad").write_bytes(wad)
           PY
-          python3 experiments/DOOM_SCD_03E/tools/profile_level.py "$out/reference.wad" | tee "$out/budget.txt"
+          python3 experiments/DOOM_SCD_03E/tools/profile_level.py "$out/reference.wad" --source src | tee "$out/budget.txt"
