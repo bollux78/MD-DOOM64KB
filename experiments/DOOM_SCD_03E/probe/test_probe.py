@@ -127,17 +127,6 @@ def main():
             profile_native.spawn(game, sampler, FRAMES)
             set_byte(game, "scd_available", 1)
 
-            set_byte(game, "scd_verify", 2)
-            profile_frames = 8
-            for route in (0, 1, 2, 3, 5, 6, 8, 16, 24, 29):
-                set_byte(game, "scd_route", route)
-                vblanks, (batches, columns, copy, wait, sub, pack) = frame_window(
-                    game, profile_frames, METRICS)
-                if route in (0, 8, 16, 24):
-                    assert batches >= profile_frames and min(copy, sub, pack) > 0
-                print(f"PERF stopwatch {ROUTES[route]}: {profile_frames} frames / {vblanks} VBlanks, "
-                      f"{batches} batches, {columns} columns, "
-                      f"compose={copy}, wait={wait}, sub={sub}, pack={pack} ticks", flush=True)
             set_byte(game, "scd_route", 24)
 
         # Pixel comparison runs separately while playing the game.
@@ -158,6 +147,25 @@ def main():
     finally:
         game.g.close()
     if mode == "on":
+        # Give the stopwatch pass its own emulator frame budget.
+        game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
+        try:
+            game.boot()
+            assert game.number("scd_available", 1) == 1
+            enter_level(game)
+            set_byte(game, "scd_verify", 2)
+            profile_frames = 8
+            for route in ROUTES:
+                set_byte(game, "scd_route", route)
+                vblanks, (batches, columns, copy, wait, sub, pack) = frame_window(
+                    game, profile_frames, METRICS)
+                if route in (0, 8, 16, 24):
+                    assert batches >= profile_frames and min(copy, sub, pack) > 0
+                print(f"PERF stopwatch {ROUTES[route]}: {profile_frames} frames / {vblanks} VBlanks, "
+                      f"{batches} batches, {columns} columns, "
+                      f"compose={copy}, wait={wait}, sub={sub}, pack={pack} ticks", flush=True)
+        finally:
+            game.g.close()
         measure_prior(blastem)
         reference = None
         for route in (None, *ROUTES):
