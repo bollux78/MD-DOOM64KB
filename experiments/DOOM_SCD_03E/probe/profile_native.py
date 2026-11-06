@@ -106,6 +106,7 @@ def demo(game, sampler):
     ticker, finish = game.sym("G_Ticker"), game.frame
     game.boot()
     assert game.g.req(f"M{game.sym('scd_available'):x},1:00") == "OK"
+    game.step(0, 24)  # Let the title finish before sending menu input.
     game.menu(3)  # Benchmark
     assert game.number("currentMenu", 4) & 0xffffff == game.sym("R88BenchDef")
     game.tap(play.DOWN)  # E1M1 UV-Max
