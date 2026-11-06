@@ -4,7 +4,7 @@ Base de código: `3811ee9b5602f69c04a590949ebdd436ea9a7fe7` na branch `exp-chatg
 
 ## Evidência
 
-Daniel rodou as cinco instâncias simultaneamente no BlastEm. A tela final mostra E1M1 Robin Woehler, AI NORMAL, SHADOW OFF, 2.600 quadros e FPS CHECK OK em todos os casos. As cinco telas mostram DEMO FINISHED / NO EXIT. A tabela registra o fim da reprodução, sem indicar conclusão do mapa.
+Daniel rodou as cinco instâncias simultaneamente no BlastEm, todas com **a demo individual E1M1**. A opção **Run All** do benchmark ficou fora da bateria. O nome `all` na tabela identifica a ROM com as três tarefas no Sega CD (visão, som e raios). A tela final mostra E1M1 Robin Woehler, AI NORMAL, SHADOW OFF, 2.600 quadros e FPS CHECK OK em todos os casos. As cinco telas mostram DEMO FINISHED / NO EXIT. A tabela registra o fim da reprodução, sem indicar conclusão do mapa.
 
 | Variante | Média FPS | Mínimo de 1 s | Tic do mínimo | Tempo (s) |
 |---|---:|---:|---:|---:|
@@ -28,7 +28,7 @@ Na [bateria curta automatizada](https://github.com/bollux78/MD-DOOM64KB/actions/
 
 ## Pedido ao Cláudio
 
-1. Diagnosticar a diferença entre o ganho curto de som e a regressão na demo inteira. Repetir **native × sound × rays** em série, na mesma configuração, separando o trecho 200–260, a região dos piores tics (~294–299) e a reprodução completa. Se a divergência persistir, comparar estado do jogo, recargas e atividade dos núcleos por janela.
+1. Diagnosticar a diferença entre o ganho curto de som e a regressão na demo inteira. Repetir **native × sound × rays** em série, na mesma configuração, separando o trecho 200–260, a região dos piores tics (~294–299) e a reprodução completa da demo individual E1M1. Se a divergência persistir, comparar estado do jogo, recargas e atividade dos núcleos por janela.
 2. Medir **tempo bloqueado do MD, bytes e trocas por janela**, separando preparação, cálculo remoto e aplicação do resultado. Considerar um controle local que use a mesma estrutura de dados e o mesmo algoritmo do núcleo candidato, especialmente para som e ordenação. Isso ajuda a separar ganho algorítmico de ganho do segundo processador.
 3. Propor uma divisão que conclua uma tarefa útil na expansão. Hipóteses: som com atualizações de abertura e retorno compacto, visão completa em lote com retorno de bits e fallback para consultas inválidas ou atrasadas, raio inteiro com lista curta de eventos em ordem. Identificar qual merece um protótipo e como refutá-la. A redução de comunicação é uma orientação, e o tempo total decide se uma troca ou pacote maior compensa.
 
