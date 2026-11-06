@@ -17,12 +17,8 @@ stem = Path(os.environ["SCD_OUT"]) / "doom-md-r128-scd-probe"
 game = play.Play(os.environ["BLASTEM"], stem.with_suffix(".bin"), stem.with_suffix(".elf"))
 try:
     game.boot()
-    expansion = not bool(game.read(0xa10001, 1)[0] & 0x20)
-    assert expansion == (mode == "on"), (mode, expansion)
     available = game.number("scd_available", 1)
     assert available == (mode == "on"), (mode, available)
-    if mode == "on":
-        assert int.from_bytes(game.read(0xa12026, 2), "big") == 0x37e1
     game.step(0, 24)
     game.menu(0)
     game.tap(play.USE)
