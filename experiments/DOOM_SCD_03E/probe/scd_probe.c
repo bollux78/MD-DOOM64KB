@@ -27,7 +27,7 @@ volatile uint8_t scd_verify;
 volatile uint32_t scd_copy_ticks, scd_wait_ticks, scd_sub_ticks, scd_pack_ticks;
 volatile uint8_t scd_route;
 
-enum { SCD_VERIFY_PIXELS = 1, SCD_PROFILE = 2 };
+enum { SCD_VERIFY_PIXELS = 1, SCD_PROFILE = 2, SCD_TEST_TIMEOUT = 4 };
 static uint8_t in_world;
 static uint8_t pending;
 static uint16_t sequence;
@@ -239,7 +239,9 @@ static void exchange(void)
         mark = CD_TIMER;
     CD_REQUEST = id;
     sequence = id;
-    if (!wait_word(&CD_ACK, id) || (CD_MODE & 5u) != expected_mode)
+    /* The debugger can withhold the expected ACK to exercise the real timeout. */
+    const uint16_t expected_ack = flags & SCD_TEST_TIMEOUT ? id ^ 0x8000u : id;
+    if (!wait_word(&CD_ACK, expected_ack) || (CD_MODE & 5u) != expected_mode)
     {
         fail_render(1);
         return;

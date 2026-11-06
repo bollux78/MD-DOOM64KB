@@ -146,6 +146,14 @@ def main():
                     print(f"PASS route={route}: all eight DEMO1 framebuffers match native", flush=True)
             finally:
                 game.g.close()
+        game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
+        try:
+            captured = profile_native.demo(game, sampler, route=0, force_timeout=True)
+            assert captured == reference, [tic for tic, frame in captured.items() if frame != reference[tic]]
+            print("PASS timeout: same-frame native redraw at tic 211 and matching subsequent checkpoints",
+                  flush=True)
+        finally:
+            game.g.close()
 
 
 if __name__ == "__main__":

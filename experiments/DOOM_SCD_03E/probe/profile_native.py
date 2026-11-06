@@ -100,7 +100,7 @@ def spawn(game, sampler, frames):
     game.next(game.poll)
 
 
-def demo(game, sampler, route=None):
+def demo(game, sampler, route=None, force_timeout=False):
     """Use the same DEMO1 gametic range as the 03D capture script."""
     sampler.reset()
     ticker, finish = game.sym("G_Ticker"), game.frame
@@ -144,6 +144,16 @@ def demo(game, sampler, route=None):
         if tic in checkpoints:
             draw = game.number("r115_draw", 4)
             captures[tic] = game.read(draw, 3344)
+        if force_timeout and tic == 210:
+            assert game.g.req(f"M{game.sym('scd_verify'):x},1:04") == "OK"
+        if force_timeout and tic == 211:
+            assert game.number("scd_available", 1) == 0
+            assert game.number("scd_render_fault") == 1
+            draw = game.number("r115_draw", 4)
+            captures[tic] = game.read(draw, 3344)
+        if route is None and tic == 211:
+            draw = game.number("r115_draw", 4)
+            captures[tic] = game.read(draw, 3344)
         if start is None:
             assert (tic, game.number("_g_gamemap"), game.number("r116_active", 1)) == (200, 1, 1), (
                 tic, game.number("_g_gamemap"), game.number("r116_active", 1))
@@ -155,13 +165,14 @@ def demo(game, sampler, route=None):
         frames += 1
         if tic >= 260:
             assert tic == 260 and game.number("_g_gamemap") == 1, tic
-            assert game.number("scd_available", 1) == (route is not None)
-            assert game.number("scd_render_fault") == 0
-            assert captures.keys() == checkpoints and frames == 60
+            assert game.number("scd_available", 1) == (route is not None and not force_timeout)
+            assert game.number("scd_render_fault") == int(force_timeout)
+            expected = checkpoints | ({211} if route is None or force_timeout else set())
+            assert captures.keys() == expected and frames == 60
             vblanks = game.number("ticcount", 4) - start
             if route is None:
                 sampler.report("DEMO1 gametics 200-260", frames, vblanks)
-            else:
+            elif not force_timeout:
                 print(f"PERF SPLIT-ALT route={route} DEMO1: {frames} frames / {vblanks} VBlanks"
                       f" = {frames * 60 / vblanks:.2f} fps", flush=True)
             return captures
