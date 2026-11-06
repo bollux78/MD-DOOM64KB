@@ -74,7 +74,8 @@ batches = bytearray()
 for offset in range(0, len(queries), 64):
     vectors = bytearray()
     width = 0
-    for _, x1, y1, x2, y2, visible in queries[offset:offset + 64]:
+    for query in queries[offset:offset + 64]:
+        _, x1, y1, x2, y2, visible = query[:6]
         x1, x2 = [(x - min_x * 65536) // 65536 for x in (x1, x2)]
         y1, y2 = [(y - min_y * 65536) // 65536 for y in (y1, y2)]
         # In 13.3 coordinates one map unit is one eighth pixel at this scale.
@@ -99,3 +100,4 @@ print(f"Packed {len(stamps)} stamps and 256 native E1M1 sight calls ({len(assets
       f"Selection {selection}, tics {queries[0][0]}–{queries[-1][0]}, "
       f"{sum(q[5] for q in queries)} visible out of {sum(q[5] for q in recorded)} in capture.")
 output.with_suffix(".json").write_text(json.dumps(queries) + "\n")
+output.with_suffix(".h").write_text(f"#define RAY_ORIGIN_X ({min_x})\n#define RAY_ORIGIN_Y ({min_y})\n")
