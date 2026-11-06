@@ -28,6 +28,17 @@ jobs:
           ref="$HOME/Projetos/Personal/scd-03d/run-42245721084-1/reference"
           original="$HOME/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pf"
           python3 "$replay/tools/pack_trace.py" "$ref" "$original.bin" "$original.elf" "$gdk/bin/m68k-elf-nm"
+          # Keep frame zero and its shared texture/LUT tables in one PRG RAM bank.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build/fixture.bin")
+          data = p.read_bytes()
+          start = int.from_bytes(data[8:12], "big")
+          end = int.from_bytes(data[12:16], "big")
+          assert 0 < start < end < len(data)
+          p.write_bytes(data[:12] + bytes(28) + data[40:end])
+          print("Fixed-scene fixture:", end, "bytes")
+          PY
           cp "$replay/src/replay_asm.s" src/
           cp "$replay/shared/replay.c" src/
           m68k-elf-as -m68000 subcpu/boot.s -o build/sub.o
