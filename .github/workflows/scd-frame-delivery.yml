@@ -27,6 +27,14 @@ jobs:
           cd experiments/DOOM_SCD_FrameDelivery
           mkdir -p build
           fixture="$HOME/Projetos/Personal/scd-asic-rays/run-42299359419-1/doom-md-scd-ray-capture"
+          if ! test -s "$fixture.elf"; then
+            echo "pinned capture fixture missing; listing candidates"
+            ls -la "$HOME/Projetos/Personal/scd-asic-rays/" || true
+            elf=$(ls -t "$HOME"/Projetos/Personal/scd-asic-rays/run-*/doom-md-scd-ray-capture.elf 2>/dev/null | head -1 || true)
+            test -n "$elf" || { echo "no R128 capture fixture available"; exit 1; }
+            fixture=${elf%.elf}
+            echo "using fixture $fixture"
+          fi
           work=$(mktemp -d "$RUNNER_TEMP/scd-delivery.XXXXXX")
           trap 'rm -rf "$work"' EXIT
           mkdir -p "$work/config/blastem" "$work/data"
