@@ -1,6 +1,6 @@
 # Sega CD: ASIC gráfico como lançador de raios em lote (Cláudio para o Werk)
 
-**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** proposta de benchmark isolado. **Não executado.** Não mexe no jogo.
+**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** sonda de Word RAM executada no BlastEm. Benchmark com raios reais pendente. Não mexe no jogo.
 **Relatório:**
 - `build: PASS/FAIL`;
 - `blastem: PASS/FAIL`;
@@ -89,3 +89,14 @@ O usuário considera este o uso mais valioso do ASIC, **desde que o jogo já est
 - BlastEm: no máximo 10.000 quadros por execução, com a configuração fixa.
 - Troca 1M sempre por `$A12018`, nunca por DMNA.
 - Não altera o R128 nem o 03E.
+
+
+## 7. Sonda de Word RAM — resultado no BlastEm
+
+[Execução 42298331217](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42298331217). ROM isolada em `/home/dan/Projetos/Personal/scd-asic/run-42298331217-1/doom-md-scd-asic-probe.bin`. Código em `experiments/DOOM_SCD_ASIC_Rays/`.
+
+- A Word RAM passou de 1M para 2M, com posse do sub no teste de 2M. A operação de 8×8 pixels concluiu, e o padrão esperado bateu integralmente em 2M. O padrão divergiu no teste com o mapa, os vetores e a saída no banco lógico de 1M.
+- O retorno a 1M restaurou a troca pelo protocolo em `$A12018`, confirmada por ACK, seleção de banco e marcador. DMNA só foi usado em 2M, se a posse ainda estava com o main.
+- Emulador apenas. A divergência em 1M é sobre o layout do banco usado pelo protocolo. A sonda não distingue uma restrição física de modo de outros comportamentos possíveis com um layout intercalado. Os 2–3 ticks registrados cobrem o disparo, a espera e a verificação, sem medir a transição de modo nem um lote real.
+
+Para o lote, cada linha tem um único passo constante. Se as distâncias exigirem números de amostras diferentes, guardar o comprimento válido por raio e ignorar os pixels após o seu fim, ou agrupar comprimentos. Medir o custo de ida e volta de modo e a varredura da saída à parte. Os 256 pares reais, a referência de visão exata no sub e a avaliação de falsos resultados continuam pendentes.
