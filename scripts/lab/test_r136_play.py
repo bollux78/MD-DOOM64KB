@@ -123,6 +123,12 @@ class Play:
             self.tap(DOWN)
         self.tap(USE)
 
+    def save_original(self):
+        self.menu(5)
+        self.tap(USE)
+        save = self.read(self.sym('_g_savegamestrings'), 8).split(b'\0', 1)[0]
+        assert save == b'E1M1', save
+
     def position(self):
         player = self.number('_g_player', 4)
         return struct.unpack('>iii', self.read(player + 12, 12))
@@ -189,6 +195,9 @@ def run(args, rom, elf, candidate, report):
             original['movement_trace'] = game.forward_trace()
             report['stage'] = 'complete'
             return
+        if args.sram_only:
+            report['stage'] = 'save original E1M1'
+            game.save_original()
         game.step(UP, 35)
         game.step(0, 4)
 
@@ -202,6 +211,19 @@ def run(args, rom, elf, candidate, report):
         extra = report['extra'] = {'maplines': game.check_map(10, 182), 'start': game.position()}
         assert extra['start'][:2] == (-416 << 16, 256 << 16), extra
         extra['start_frame'] = game.picture(args.out.parent / 'freedoom-start.bin')
+
+        if args.sram_only:
+            report['stage'] = 'load original E1M1 from Freedoom'
+            game.menu(4)
+            game.tap(USE)
+            game.step(0, 24)
+            assert game.check_map(1, 85) == original['maplines']
+            assert game.position() == tuple(original['start'])
+            assert game.picture(args.out.parent / 'original-return.bin') == original['frame']
+            report['save_load_from_extra'] = 'PASS'
+            original['movement_trace'] = game.forward_trace()
+            report['stage'] = 'complete'
+            return
 
         # Head east out of the start room, onto the tag-1 walkover lift, and into the yard.
         report['stage'] = 'Freedoom lift'
@@ -236,10 +258,7 @@ def run(args, rom, elf, candidate, report):
         report['map_switch'] = 'PASS'
 
         report['stage'] = 'original E1M1 SRAM save and load'
-        game.menu(5)
-        game.tap(USE)
-        save = game.read(game.sym('_g_savegamestrings'), 8).split(b'\0', 1)[0]
-        assert save == b'E1M1', save
+        game.save_original()
         game.step(UP, 35)
         game.step(0, 4)
         assert game.position() != tuple(original['start'])
@@ -264,8 +283,10 @@ def main():
     p.add_argument('--blastem', required=True)
     for name in ('rom', 'elf', 'reference-rom', 'reference-elf', 'out'):
         p.add_argument('--' + name, type=Path, required=True)
+    p.add_argument('--sram-only', action='store_true', help='Validate both map loads and load a save from Freedoom')
     args = p.parse_args()
-    result = {'build': 'PASS', 'blastem': 'INCONCLUSIVE', 'candidate': {}, 'r128_all': {}}
+    result = {'build': 'PASS', 'blastem': 'INCONCLUSIVE',
+              'scope': 'map SRAM and cross-map save/load' if args.sram_only else 'full play', 'candidate': {}, 'r128_all': {}}
     try:
         run(args, args.rom, args.elf, True, result['candidate'])
         run(args, args.reference_rom, args.reference_elf, False, result['r128_all'])

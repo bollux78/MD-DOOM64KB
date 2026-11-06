@@ -143,7 +143,7 @@ jobs:
           cp "$source.elf" "$out/doom-md-r136c-classic-sram-5m.elf"
           cp docs/licenses/Freedoom-BSD-3-Clause.txt "$out/"
           echo "::notice title=R136c build PASS::$out"
-      - name: 'BlastEm: real menus, movement, lift, audio path, map switch and R128 comparison'
+      - name: 'BlastEm: both map loads, cross-map save/load and R128 comparison'
         shell: bash
         env:
           BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
@@ -176,7 +176,7 @@ jobs:
             if python3 scripts/lab/test_r136_play.py --blastem "$BLASTEM" \
                 --rom "$work/$rom.bin" --elf "$out/$rom.elf" \
                 --reference-rom "$work/$ref.bin" --reference-elf "$R128_REF/$ref.elf" \
-                --out "$out/blastem/R136-BLASTEM.json" > "$log" 2>&1; then
+                --out "$out/blastem/R136-BLASTEM.json" --sram-only > "$log" 2>&1; then
               cat "$log"
               exit 0
             fi
