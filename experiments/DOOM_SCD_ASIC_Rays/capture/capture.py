@@ -41,9 +41,9 @@ try:
         if pc == end:
             break
         sp = int(game.g.req("g")[15 * 8:16 * 8], 16)
-        tic, x1, y1, x2, y2, visible = struct.unpack(">IiiiiI", game.read(sp + 4, 24))
-        assert 200 <= tic <= 2600 and visible in (0, 1), (tic, visible)
-        queries.append([tic, x1, y1, x2, y2, visible])
+        tic, x1, y1, x2, y2, visible, route = struct.unpack(">IiiiiII", game.read(sp + 4, 28))
+        assert 200 <= tic <= 2600 and visible in (0, 1) and route in range(4), (tic, visible)
+        queries.append([tic, x1, y1, x2, y2, visible, route])
         if tic > 300 and len(queries) % 128 == 0 and sum(q[5] for q in queries) >= 128:
             break
 finally:
@@ -54,3 +54,9 @@ print(f"Captured {len(queries)} calls, {sum(q[0] <= 300 for q in queries)} in ti
       f"First 256 span tics {queries[0][0]}–{queries[255][0]}.")
 print(f"Native visible: {sum(q[5] for q in queries)} total; "
       f"{sum(q[5] for q in queries if q[0] <= 300)} within tics 200–300.")
+
+for label, window in (("200-300", [q for q in queries if q[0] <= 300]), ("full capture", queries)):
+    counts = {name: {"visible": sum(q[5] == 1 and q[6] == route for q in window),
+                     "blocked": sum(q[5] == 0 and q[6] == route for q in window)}
+              for route, name in enumerate(("cache", "reject", "same_subsector", "bsp"))}
+    print("SIGHT_ROUTE " + json.dumps({"window": label, "counts": counts}), flush=True)
