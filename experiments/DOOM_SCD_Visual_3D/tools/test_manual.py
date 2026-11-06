@@ -107,6 +107,7 @@ try:
     assert position() == (656, 2176, 0), position()
     hold(0, 8)
     assert position() == (784, 2176, 0), position()
+    assert largest_interval <= 6, f"manual frame took {largest_interval} VBlanks"
     print(f"blastem manual: PASS ({read(at('scd_frames'), 4)} frames, "
           f"largest frame interval {largest_interval} VBlanks)")
 except RuntimeError as error:

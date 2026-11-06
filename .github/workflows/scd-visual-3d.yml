@@ -108,14 +108,6 @@ jobs:
         shell: bash
         run: |
           PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 "$SCD_WORK/tools/test_manual.py"
-      - name: Compare the original ROM on the same manual route
-        shell: bash
-        run: |
-          old="$HOME/Projetos/Personal/scd-visual-3d/run-42248112261-1"
-          if test -f "$old/visual.elf"; then
-            PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" SCD_OUT="$old" \
-              python3 "$SCD_WORK/tools/test_manual.py" || true
-          fi
       - name: Remove isolated scratch
         if: always()
         shell: bash
