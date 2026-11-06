@@ -65,6 +65,24 @@
   - Problema: sem colormap, seria preciso guardar cópias das texturas por nível de luz, e a Word RAM tem 256 KB.
 - **Chão e teto texturizados:** encaixe perfeito (afim por linha), mas a R128 desenha chão sólido. Seria ganho de qualidade, não de velocidade.
 
+## 5b. Chão e teto texturizados pelo ASIC: prioridade de qualidade (usuário, 2026-11-06)
+O usuário considera este o uso mais valioso do ASIC, **desde que o jogo já esteja bom sem ele**. É uma camada opcional sobre a base:
+- **Pré-requisito:** a ROM única, com Sega CD e fallback, estável e não mais lenta que o nativo. Chão sólido continua sendo o padrão e o fallback.
+- **Encaixe:** no DOOM, chão e teto têm distância constante em cada linha da tela, então cada span é afim. Uma linha do ASIC = um span, com início (u, v) e passo (du, dv) por linha, e o flat no stamp map.
+- **Luz:** em vez do colormap, poucas faixas de luz por distância (por exemplo 4), com cópias do flat por nível, ou só o flat escurecido em degraus. Medir o espaço na Word RAM.
+- **Composição:**
+  - o ASIC desenha os spans de chão e teto numa imagem;
+  - as paredes e os sprites sobrepõem, como o chão sólido faz hoje;
+  - a ordem e a preservação de nibble seguem as regras do SPLIT-ALT.
+- **Primeiro teste, isolado:**
+  - só o chão do spawn do E1M1, com um flat;
+  - medir o tempo do ASIC por quadro e o custo de montar a tabela de traço;
+  - fazer uma comparação visual.
+- **Critério:**
+  - o custo para o MD é ~0 (o ASIC e o sub fazem o trabalho);
+  - o quadro não fica mais lento que com chão sólido;
+  - se piorar, fica como opção de menu ("chão texturizado"), desligada por padrão.
+
 ## 6. Restrições
 - ROM e dados só em `/home/dan/Projetos/Personal/`.
 - Nome do arquivo no header e na tela.
