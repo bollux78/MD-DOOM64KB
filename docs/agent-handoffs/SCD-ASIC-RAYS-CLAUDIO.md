@@ -127,3 +127,27 @@ A reprodução exata da IA deixou de ser condição para experimentar a visão a
 Próximo experimento: variante identificada de visão aproximada, comparável a um controle nativo. Quando houver um resultado de raster válido e disponível, o modo experimental pode aceitar o bloqueio indicado pelo ASIC. Consultas livres, indisponíveis ou fora do raster ainda usam a visão nativa para preservar o tratamento de alturas, portas e janelas nesses casos. A decisão autoriza testar o comportamento em jogo. A escolha de habilitá-lo por padrão depende do resultado.
 
 Medir o quadro inteiro, incluindo montagem, leitura e transições de Word RAM. Jogar cenas de quinas, portas e combate e registrar se inimigos deixam de reagir de maneira aceitável na prática. O objetivo é um ganho perceptível com comportamento aceitável para o port.
+
+## 10. Cláudio: leitura dos resultados e ajustes antes do protótipo em jogo
+**Os números:**
+- **Velocidade, amostra mista:** o ASIC ganhou do DDA no sub-CPU por **6×** (3.261 × 19.620 ticks), com 0 divergências entre os dois. Ele faz bem o trabalho dele.
+- **Custo por raio:** 3.261 / 256 ≈ 12,7 ticks ≈ **0,39 ms do sub-CPU**. O MD não paga nada disso; com a visão assíncrona, ele só paga a troca.
+- **Falsos bloqueados:** **7 de 27 visíveis (26%)**. Com essa taxa, um em cada quatro monstros que deveriam te ver te ignora naquela checagem. Aceitável para o port, mas dá para reduzir bastante, de graça (abaixo).
+
+**Ajustes baratos no raster, a testar no mesmo replay antes de ir para o jogo:**
+1. **Ignorar as pontas do raio:** descartar as amostras a menos de ~32 unidades (4 px) do monstro e do jogador.
+   - Suspeita: boa parte dos falsos bloqueios vem de quem está encostado numa parede. A célula de 2 px dessa parede cobre a posição dele, e o raio já nasce "dentro" dela.
+   - Custo zero: o início e o comprimento do traço já são calculados.
+2. **Espessura 1 célula com DDA conservador na rasterização:** marcar todas as células que o segmento toca (supercover), em vez de 2 px fixos. Assim as diagonais não vazam e a parede não engorda.
+3. **Por raio, registrar a distância até o primeiro bloqueio.** Nos falsos, ver se o bloqueio está perto das pontas (ajuste 1 resolve) ou no meio (quinas ou portas, o ajuste 2 ou dados de porta resolvem).
+
+**Atenção ao REJECT:**
+- O `P_CheckSight` nativo **já começa pela tabela REJECT**, que decide boa parte dos casos bloqueados de graça.
+- Na captura, separar quantas das consultas bloqueadas foram resolvidas pelo REJECT ou pelo cache.
+- O ASIC só economiza tempo do MD nas consultas que **passam** do REJECT e iriam ao traçado BSP. É esse o número que define o ganho real.
+- **Regra no protótipo:** REJECT primeiro (no MD, como hoje), ASIC só para o resto.
+
+**Protótipo em jogo** (conforme a §9, com estes ajustes):
+- O resultado ASIC vem em lote, um tic atrasado, junto da visão assíncrona (V1). "Bloqueado" é aceito, enquanto "livre", indisponível ou fora do raster cai no nativo.
+- **Medidas por janela:** VBlanks do quadro inteiro contra o controle nativo, tempo do MD em `P_CheckSight`, número de consultas que o ASIC decidiu e as trocas 1M↔2M por lote. A troca de modo ainda não foi medida e pode ser o custo dominante.
+- **Refuta se:** o tempo do MD em `P_CheckSight` não cair de forma mensurável depois do REJECT, ou se as trocas de modo comerem o ganho.
