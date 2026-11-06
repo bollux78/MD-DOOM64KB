@@ -1,7 +1,7 @@
-#include <genesis.h>
 #include "scd_probe.h"
-#include "scd_probe_sub.h"
 #include "packet.h"
+#include <genesis.h>
+#include "scd_probe_sub.h"
 
 #define HW_VERSION (*(volatile const u8 *)0xa10001)
 #define CD_BIOS (*(volatile const u32 *)0x400100)
