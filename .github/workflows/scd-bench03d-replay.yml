@@ -1,0 +1,97 @@
+name: Sega CD 03D R128 kernel replay
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_Bench03D_Replay/**', '.github/workflows/scd-bench03d-replay.yml']
+permissions:
+  contents: read
+env:
+  GDK: /home/dan/mars/m68k-elf
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  R128_REF: /home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all
+jobs:
+  verify:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Isolate ROM output and pin BlastEm divider
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/scd03d.XXXXXX")"
+          out="$HOME/Projetos/Personal/scd-03d-replay/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out" "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if ! test -f "$cfg"; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          echo "SCD_WORK=$work" >> "$GITHUB_ENV"
+          echo "SCD_OUT=$out" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$work/config" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$work/data" >> "$GITHUB_ENV"
+      - name: Build R128 kernel replay from the private fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a experiments/DOOM_SCD_Bench03D_Replay/. "$SCD_WORK/"
+          cd "$SCD_WORK"
+          rom=doom-md-r60-r128-all-pf
+          reference="$HOME/Projetos/Personal/scd-03d/run-42245721084-1/reference"
+          python3 tools/pack_trace.py "$reference" "$R128_REF/$rom.bin" "$R128_REF/$rom.elf" "$GDK/bin/m68k-elf-nm"
+          fish build.fish
+          elf="$(find out -name rom.out -print -quit)"
+          test -n "$elf"
+          cp "$elf" "$SCD_OUT/replay.elf"
+          cp build/doom-scd-03d-replay.bin "$SCD_OUT/"
+          sha256sum "$SCD_OUT/doom-scd-03d-replay.bin"
+          echo 'build: PASS (kernel replay)'
+      - name: BlastEm correctness and 64-frame comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 - <<'PY'
+          import os
+          import json
+          from pathlib import Path
+          from r64a_rsp_capture import RSP, symbols
+
+          out = Path(os.environ["SCD_OUT"])
+          syms = symbols(out / "replay.elf")
+          def at(name):
+              address, = [v for k, v in syms.items() if k.split('.')[0] == name]
+              return address & 0xffffff
+          target, fail = at("replay_pass"), at("scd_replay_fail")
+          g = RSP(os.environ["BLASTEM"], out / "doom-scd-03d-replay.bin", 3000, 60)
+          try:
+              g.req("qSupported")
+              for addr in (target, fail):
+                  assert g.req(f"Z0,{addr:x},2") == "OK"
+              g.cont()
+              regs = g.req("g")
+              pc = int(regs[17*8:18*8], 16) & 0xffffff
+              if pc == fail:
+                  sp = int(regs[15*8:16*8], 16) & 0xffffff
+                  ptr = int.from_bytes(g.readmem(sp + 4, 4), "big") & 0xffffff
+                  reason = g.readmem(ptr, 40).split(b'\0', 1)[0]
+                  raise AssertionError(f"replay ROM stopped: {reason!r}")
+              assert pc == target
+              values = {name: int.from_bytes(g.readmem(at(name), 4), "big") for name in (
+                  "main_ticks", "sub_ticks", "swap_ticks", "dma_ticks",
+                  "display_vblanks", "useful", "stale", "timeouts")}
+              assert values["stale"] == values["timeouts"] == 0
+              assert values["main_ticks"] and values["sub_ticks"]
+              (out / "metrics.json").write_text(json.dumps(values, indent=2) + "\n")
+              print("blastem: PASS (eight replayed composites matched, 64 timing samples each)")
+              print("SCD03D METRICS", json.dumps(values), flush=True)
+          finally:
+              g.close()
+          PY
+      - name: Remove isolated scratch
+        if: always()
+        shell: bash
+        run: |
+          if test -n "${SCD_WORK:-}"; then rm -rf -- "$SCD_WORK"; fi
