@@ -151,3 +151,34 @@ Medir o quadro inteiro, incluindo montagem, leitura e transições de Word RAM. 
 - O resultado ASIC vem em lote, um tic atrasado, junto da visão assíncrona (V1). "Bloqueado" é aceito, enquanto "livre", indisponível ou fora do raster cai no nativo.
 - **Medidas por janela:** VBlanks do quadro inteiro contra o controle nativo, tempo do MD em `P_CheckSight`, número de consultas que o ASIC decidiu e as trocas 1M↔2M por lote. A troca de modo ainda não foi medida e pode ser o custo dominante.
 - **Refuta se:** o tempo do MD em `P_CheckSight` não cair de forma mensurável depois do REJECT, ou se as trocas de modo comerem o ganho.
+
+
+## 11. Execução da §10 — resultado
+
+**Replay corrigido:** mesmos 256 pares da amostra mista. Supercover de uma célula com os contatos na borda incluídos, descarte de ~32 unidades nas pontas e registro da primeira amostra ocupada. ASIC e DDA concordaram no índice da primeira amostra nos 256 raios.
+
+| Raster | Falsos bloqueados (27 visíveis) | Falsos livres (229 bloqueados) | Preparo | ASIC | Leitura | Total ASIC | DDA |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Duas células | 7 | 6 | 162 | 2.699 | 400 | 3.261 | 19.620 |
+| Supercover e pontas cortadas | 6 | 6 | 170 | 2.652 | 558 | 3.380 | 18.621 |
+
+Tempos em ticks do stopwatch. Os seis falsos bloqueios restantes vieram de dois tics, três chamadas em cada um: 426 a ~1.598 unidades do monstro e 1531 a ~387 unidades. A coleta privada inclui as 256 distâncias. [Replay e logs](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42300630341).
+
+**Captura com classificação nativa:** no E1M1, tics 200–300, 341 chamadas: 283 bloqueadas pelo REJECT, 37 bloqueadas pelo cache, 20 bloqueadas no BSP e 1 visível no BSP. Em toda a captura, 405 de 7.386 chamadas chegaram ao BSP. [Captura e logs](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42300693560).
+
+**ROMs jogáveis:** ambas com Sega CD presente para comparação e a mesma build base. ASIC só atua no E1M1, depois do cache, REJECT e atalho de mesmo subsetor. As consultas vão em lote no fim do tic. O retorno só vale para o tic seguinte e quando as pontas permanecem nas mesmas células. Sem bloqueio reaproveitável, usa o nativo. A transição ocorre em cada lote e o MD não espera em loop.
+
+| E1M1, 200–300 | Controle nativo | ASIC assíncrono |
+|---|---:|---:|
+| VBlanks sem instrumentar visão | 1.340 | 1.341 |
+| Pior quadro, VBlanks | 22 | 22 |
+| `P_CheckSight` na rodada instrumentada, ticks | 4.411 | 4.972 |
+| Consultas enfileiradas / lotes devolvidos | 0 / 0 | 21 / 20 |
+| Bloqueios aceitos | 0 | 0 |
+| Transições acumuladas, ticks | — | 1 sem instrumentação de visão, 9 com |
+
+Os ticks de transição somam a medida ao redor das duas escritas do modo pelo sub. A resolução é grosseira para eventos tão curtos. Essa medida não inclui o lote inteiro nem latência de retorno observada pelo MD.
+
+Build PASS, BlastEm PASS, BSS 57.912. **Critério de desempenho reprovado nessa janela:** nenhum bloqueio aproveitado e ~13% a mais em `P_CheckSight`. Os VBlanks ficaram praticamente empatados. O teste automatizado cobre a demo, sem avaliação manual das reações em quinas, portas e combate. Nenhuma promoção a padrão.
+
+ROMs em `/home/dan/Projetos/Personal/scd-asic-game/run-42301743563-1/`: `doom-md-scd-sight-native.bin` e `doom-md-scd-sight-asic.bin`. Nome exato no header e na tela final. [Build e teste no BlastEm](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42301743563).
