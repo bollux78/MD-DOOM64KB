@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['exp-chatgpt-scd-bench03b']
-    paths: ['experiments/DOOM_SCD_03E/logic/**', '.github/workflows/scd-logic.yml']
+    paths: ['experiments/DOOM_SCD_03E/logic/**', 'experiments/DOOM_SCD_03E/rom_identity.py', 'src/r22_benchmark.inc', '.github/workflows/scd-logic.yml']
 permissions:
   contents: read
 env:

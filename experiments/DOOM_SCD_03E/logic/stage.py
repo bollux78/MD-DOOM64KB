@@ -4,6 +4,9 @@ import struct
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from rom_identity import write_title
+
 rom_path, elf, out = map(Path, sys.argv[1:])
 nm = Path.home() / "mars/m68k-elf/bin/m68k-elf-nm"
 symbols = subprocess.check_output([nm, elf], text=True).splitlines()
@@ -20,5 +23,6 @@ for label, mask in (("native", 0), ("sight", 1), ("sound", 2), ("rays", 4), ("al
     checksum = sum(word for word, in struct.iter_unpack(">H", memoryview(rom)[0x200:]))
     rom[0x18E:0x190] = struct.pack(">H", checksum & 0xFFFF)
     target = out / f"doom-md-scd-logic-{label}.bin"
+    write_title(rom, target.name)
     target.write_bytes(rom)
     print(target)

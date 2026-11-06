@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['exp-chatgpt-scd-bench03b']
-    paths: ['experiments/DOOM_SCD_03E/probe/**', '.github/workflows/scd-03e-probe.yml']
+    paths: ['experiments/DOOM_SCD_03E/probe/**', 'experiments/DOOM_SCD_03E/rom_identity.py', '.github/workflows/scd-03e-probe.yml']
 permissions:
   contents: read
 env:
@@ -98,6 +98,7 @@ jobs:
           python3 scripts/lab/r122_z80_layout.py "$elf" --require
           cp "$elf" "$out/doom-md-r128-scd-probe.elf"
           python3 experiments/DOOM_SCD_Bench03D_Transport/tools/mark_mode1.py "$rom" "$out/doom-md-r128-scd-probe.bin"
+          python3 experiments/DOOM_SCD_03E/rom_identity.py "$out/doom-md-r128-scd-probe.bin"
           echo "SCD_OUT=$out" >> "$GITHUB_ENV"
       - name: Play E1M1 with Sega CD and exercise the fallback
         shell: bash

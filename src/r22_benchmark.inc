@@ -173,6 +173,23 @@ void I_BenchmarkShowResults(void)
 #endif
     VDP_setTextPalette(PAL0);
     PAL_setColor(15, 0x0EEE);
+    /* Staged cartridges carry their exact filename in the international title. */
+    const volatile char *const rom_title = (const volatile char *)0x150;
+    char filename[41];
+    uint16_t title_length = 40;
+    for (uint16_t i = 0; i < title_length; ++i)
+        filename[i] = rom_title[i];
+    while (title_length && filename[title_length - 1] == ' ')
+        --title_length;
+    filename[title_length] = '\0';
+    if (title_length >= 4 && filename[title_length - 4] == '.' &&
+        filename[title_length - 3] == 'b' && filename[title_length - 2] == 'i' &&
+        filename[title_length - 1] == 'n')
+    {
+        VDP_drawText(filename, (40 - title_length) / 2, 2);
+    }
+    else
+    {
 #if defined(DOOM_BUILD_VARIANT)
     /* Same exact variant name used for the ROM title and artifact filename. */
     VDP_drawText(DOOM_BUILD_TITLE, 4, 2);
@@ -181,6 +198,7 @@ void I_BenchmarkShowResults(void)
 #else
     VDP_drawText("DOOM MD - TIMEDEMO 3.0", 5, 2);
 #endif
+    }
     VDP_drawText("DEMO3 / NTSC 60HZ", 5, 5);
 
     VDP_drawText("AVERAGE FPS", 5, 8);
