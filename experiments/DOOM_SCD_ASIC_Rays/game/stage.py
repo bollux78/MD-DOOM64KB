@@ -4,7 +4,7 @@ import struct
 import subprocess
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "DOOM_SCD_03E"))
 from rom_identity import write_title
 
 rom_path, elf, out = map(Path, sys.argv[1:])
