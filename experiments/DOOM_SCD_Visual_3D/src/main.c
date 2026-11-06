@@ -15,6 +15,8 @@
 #define CD_SUB_SIG (*(volatile const u16 *)0xA12020)
 #define CD_SUB_READY (*(volatile const u16 *)0xA12028)
 #define CD_SUB_ACK (*(volatile const u16 *)0xA12026)
+#define CD_SUB_STAGE (*(volatile const u16 *)0xA12022)
+#define CD_SUB_MODE (*(volatile const u16 *)0xA12024)
 #define CD_PRGRAM ((volatile u16 *)0x420000)
 
 #define SUB_READY 0x5343u
@@ -244,7 +246,15 @@ int main(bool hard)
     for (u16 wait = 0; CD_SUB_SIG != SUB_READY || (CD_MEMCTRL & 7u) != 4u; wait++)
     {
         if (wait == TIMEOUT_VBLANKS)
+        {
+            /* Diagnostic: tells sub hang/crash apart from a different 1M register state. */
+            char line[40];
+            sprintf(line, "SIG %04X STAGE %04X", CD_SUB_SIG, CD_SUB_STAGE);
+            VDP_drawText(line, 2, 5);
+            sprintf(line, "MAIN MEM %04X SUB MEM %04X", CD_MEMCTRL, CD_SUB_MODE);
+            VDP_drawText(line, 2, 6);
             scd_gate_fail("WORD RAM 1M INIT TIMEOUT");
+        }
         SYS_doVBlankProcess();
     }
 

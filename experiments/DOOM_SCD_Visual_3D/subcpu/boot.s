@@ -10,12 +10,16 @@ subcpu_vectors:
 
 entry:
     move.w  #0x2700, %sr
+    move.w  #0x5301, 0xff8022  /* diag stage 1: sub entered */
     clr.w   0xff8026         /* acknowledged swap */
     clr.w   0xff8028         /* completed frame */
     jsr     scd_prepare_textures
+    move.w  #0x5302, 0xff8022  /* diag stage 2: textures done */
     moveq   #0, %d1
     moveq   #4, %d4          /* 1M, RET = 0 */
     move.w  %d4, 0xff8002
+    move.w  0xff8002, 0xff8024 /* diag: memory mode as seen by sub after 1M switch */
+    move.w  #0x5303, 0xff8022  /* diag stage 3: 1M requested */
     move.w  #0x5343, 0xff8020
 loop:
     move.w  0xff8010, %d2
@@ -42,5 +46,6 @@ wait_swap:
     move.w  %d2, %d1
     bra.s   loop
 fault:
+    move.w  #0x53ff, 0xff8022  /* diag: exception */
     move.w  #0xdead, 0xff8020
     bra.s   fault
