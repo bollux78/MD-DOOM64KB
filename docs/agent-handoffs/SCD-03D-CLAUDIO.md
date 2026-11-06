@@ -65,7 +65,7 @@ Só fazer se o 03D passar.
 - **Arquitetura final:**
   - Mega Drive: lógica, entrada, áudio e DMA;
   - Sega CD: renderer.
-- **Bônus para depois:** música do CD controlada pelo sub, o que tira a música da ROM e do Z80.
+- **Sem disco:** tudo roda do cartucho em Mode 1. O código do sub e os dados (mapa, texturas) saem da ROM e são copiados pelo principal para a Program RAM, como no 03B. Não usar CD-DA nem leitura de disco, ao menos por enquanto (decisão do usuário).
 
 ## 5. ASIC (rodada seguinte ao 03E)
 O ASIC desenha uma linha horizontal de destino por vez, com ponto inicial e incremento. Isso é um span de chão ou teto do DOOM, cuja distância é constante na linha. Paredes não encaixam.
