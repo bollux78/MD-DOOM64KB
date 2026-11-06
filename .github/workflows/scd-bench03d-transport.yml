@@ -79,7 +79,7 @@ jobs:
           finally:
               g.close()
           PY
-      - name: Capture eight R128 reference framebuffers privately
+      - name: Capture eight R128 framebuffers and assembly column calls privately
         if: ${{ !cancelled() }}
         shell: bash
         run: |
@@ -87,7 +87,7 @@ jobs:
           rom=doom-md-r60-r128-all-pf
           cp "$R128_REF/$rom.bin" "$SCD_WORK/$rom.bin"
           python3 scripts/lab/capture_scd_03d_reference.py --blastem "$BLASTEM" \
-            --rom "$SCD_WORK/$rom.bin" --elf "$R128_REF/$rom.elf" --out "$SCD_OUT/reference"
+            --rom "$SCD_WORK/$rom.bin" --elf "$R128_REF/$rom.elf" --out "$SCD_OUT/reference" --columns
       - name: Remove isolated scratch
         if: always()
         shell: bash
