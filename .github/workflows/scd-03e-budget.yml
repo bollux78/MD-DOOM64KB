@@ -1,0 +1,40 @@
+name: Sega CD 03E resource budget
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_03E/**', '.github/workflows/scd-03e-budget.yml']
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Profile the IWAD embedded in the reference R128 All ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="$HOME/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pf"
+          out="$HOME/Projetos/Personal/scd-03e/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S "$ref.elf" > "$out/symbols.txt"
+          python3 - "$ref.bin" "$out" <<'PY'
+          import sys
+          from pathlib import Path
+
+          out = Path(sys.argv[2])
+          matches = [line.split()[:2] for line in (out / "symbols.txt").read_text().splitlines()
+                     if line.split() and line.split()[-1].split(".")[0] == "doom_iwad"]
+          (address, size), = matches
+          address, size = int(address, 16), int(size, 16)
+          rom = Path(sys.argv[1]).read_bytes()
+          assert size >= 12 and address + size <= len(rom)
+          wad = rom[address:address + size]
+          assert wad.startswith(b"IWAD")
+          (out / "reference.wad").write_bytes(wad)
+          PY
+          python3 experiments/DOOM_SCD_03E/tools/profile_level.py "$out/reference.wad" | tee "$out/budget.txt"
