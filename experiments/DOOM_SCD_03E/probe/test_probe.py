@@ -57,7 +57,7 @@ def show_rate(label, vblanks):
 
 
 def measure_prior(blastem):
-    root = Path.home() / "Projetos/Personal/scd-03e-probe/run-42272149436-1"
+    root = Path.home() / "Projetos/Personal/scd-03e-probe/run-42274512230-1"
     stem = root / "doom-md-r128-scd-probe"
     if not stem.with_suffix(".bin").is_file() or not stem.with_suffix(".elf").is_file():
         print("PERF: prior ROM absent on runner", flush=True)
@@ -67,7 +67,7 @@ def measure_prior(blastem):
         game.boot()
         assert game.number("scd_available", 1) == 1
         enter_level(game)
-        show_rate("prior Sega CD", frame_window(game))
+        show_rate("serial Sega CD", frame_window(game))
         assert game.number("scd_render_fault") == 0
     finally:
         game.g.close()
@@ -87,8 +87,14 @@ def main():
         if available:
             # Speed runs exclude the software pixel verifier.
             before = game.number("scd_rendered_batches")
-            show_rate("optimized Sega CD", frame_window(game))
+            for route in range(3):
+                set_byte(game, "scd_route", route)
+                start_cols = game.number("scd_textured_columns")
+                show_rate(f"SPLIT-ALT route={route}", frame_window(game))
+                print(f"PERF route={route} spawn columns={game.number('scd_textured_columns') - start_cols}",
+                      flush=True)
             assert game.number("scd_rendered_batches") > before
+            set_byte(game, "scd_route", 0)
             set_byte(game, "scd_available", 0)
             sampler = profile_native.Sampler(Path(sys.argv[2]), stem.with_suffix(".elf"))
             profile_native.spawn(game, sampler, FRAMES)
@@ -103,10 +109,10 @@ def main():
             copy = game.number("scd_copy_ticks", 4)
             wait = game.number("scd_wait_ticks", 4)
             sub = game.number("scd_sub_ticks", 4)
-            assert 0 < sub <= wait and copy > 0, (copy, wait, sub)
-            print(f"PERF stopwatch: {profile_frames} sampled frames, {batches} batches, "
-                  f"{copy} framebuffer copy ticks, "
-                  f"{wait} wait ticks including {sub} sub-CPU drawing ticks", flush=True)
+            pack = game.number("scd_pack_ticks", 4)
+            assert min(copy, wait, sub, pack) > 0, (copy, wait, sub, pack)
+            print(f"PERF SPLIT-ALT stopwatch: {profile_frames} sampled frames, {batches} batches, "
+                  f"compose={copy}, wait={wait}, sub={sub}, pack={pack} ticks", flush=True)
 
         # Pixel comparison runs separately while playing the game.
         set_byte(game, "scd_verify", 1)
@@ -127,11 +133,19 @@ def main():
         game.g.close()
     if mode == "on":
         measure_prior(blastem)
-        game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
-        try:
-            profile_native.demo(game, sampler)
-        finally:
-            game.g.close()
+        reference = None
+        for route in (None, 0, 1, 2):
+            game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
+            try:
+                captured = profile_native.demo(game, sampler, route)
+                if route is None:
+                    reference = captured
+                else:
+                    mismatches = [tic for tic, frame in captured.items() if frame != reference[tic]]
+                    assert not mismatches, (route, mismatches)
+                    print(f"PASS route={route}: all eight DEMO1 framebuffers match native", flush=True)
+            finally:
+                game.g.close()
 
 
 if __name__ == "__main__":

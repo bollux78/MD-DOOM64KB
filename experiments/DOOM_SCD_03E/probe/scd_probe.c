@@ -11,6 +11,7 @@
 #define CD_DRAW_TICKS (*(volatile const u16 *)0xa12024)
 #define CD_REQUEST (*(volatile u16 *)0xa12018)
 #define CD_READY (*(volatile const u16 *)0xa12020)
+#define CD_DONE (*(volatile const u16 *)0xa12028)
 #define CD_STATUS (*(volatile const u16 *)0xa1202a)
 #define CD_ACK (*(volatile const u16 *)0xa12026)
 #define CD_PRG ((volatile u16 *)0x420000)
@@ -23,11 +24,13 @@ volatile uint16_t scd_rendered_batches;
 volatile uint16_t scd_textured_columns;
 volatile uint16_t scd_render_fault;
 volatile uint8_t scd_verify;
-volatile uint32_t scd_copy_ticks, scd_wait_ticks, scd_sub_ticks;
+volatile uint32_t scd_copy_ticks, scd_wait_ticks, scd_sub_ticks, scd_pack_ticks;
+volatile uint8_t scd_route;
 
 enum { SCD_VERIFY_PIXELS = 1, SCD_PROFILE = 2 };
 static uint8_t in_world;
-static uint16_t textured_in_batch;
+static uint8_t pending;
+static uint16_t sequence;
 static volatile ScdPacket *const packet = (volatile ScdPacket *)0x600000;
 
 _Static_assert(SUB_PROGRAM_WORDS > 0 && SUB_PROGRAM_WORDS < 65536u,
@@ -105,6 +108,7 @@ void SCD_Probe(void)
     if ((HW_VERSION & 0x20u) || CD_BIOS != 0x53454741UL)
         return;
     scd_available = boot_sub() && round_trip();
+    sequence = COOKIE;
     if (!scd_available)
         CD_CTRL = 0;
 }
@@ -116,41 +120,60 @@ static void fail_render(uint16_t error)
     CD_CTRL = 0;
 }
 
+static void clear_packet(void)
+{
+    packet->columns = 0;
+    packet->luts = 0;
+}
+
 void SCD_BeginWorld(void)
 {
     in_world = scd_available;
     if (in_world)
-    {
-        packet->columns = 0;
-        packet->luts = 0;
-        textured_in_batch = 0;
-    }
+        clear_packet();
 }
 
-/* Used by the emulator test to compare returned pixels against an
- * independent reference with the exact same input framebuffer. */
-static void verify_batch(uint8_t *fb)
+/* The BSP gives each wall its own rows. Merge edge nibbles so native
+ * floors and ceilings can share bytes with the returned wall pixels. */
+static int compose(uint8_t *fb, bool verify)
 {
+    const volatile uint8_t *frame = (const volatile uint8_t *)packet->frame;
     for (uint16_t i = 0; i < packet->columns; ++i)
     {
         const volatile ScdColumn *column = &packet->column[i];
-        uint16_t phase = column->phase;
-        uint16_t lut = column->lut;
         uint8_t *dst = fb + column->offset;
-        for (uint16_t row = column->odd; row < column->rows + column->odd; ++row)
+        const volatile uint8_t *src = frame + column->offset;
+        uint16_t rows = column->rows;
+
+        if (verify)
         {
-            uint8_t shade = lut == SCD_FLAT ? column->step :
-                packet->lut[lut][column->source[phase >> 9]];
-            if (row & 1u)
+            uint16_t phase = column->phase;
+            for (uint16_t row = column->odd; row < rows + column->odd; ++row)
             {
-                *dst = (*dst & 0xf0u) | shade;
-                dst += SCD_STRIDE;
+                uint8_t pair = src[(row >> 1) * SCD_STRIDE];
+                uint8_t pixel = row & 1u ? pair & 15u : pair >> 4;
+                if (pixel != packet->lut[column->lut][column->source[phase >> 9]])
+                    return 0;
+                phase += column->step;
             }
-            else
-                *dst = (*dst & 0x0fu) | (shade << 4);
-            phase += column->step;
         }
+        if (column->odd)
+        {
+            *dst = (*dst & 0xf0u) | (*src & 0x0fu);
+            dst += SCD_STRIDE;
+            src += SCD_STRIDE;
+            --rows;
+        }
+        for (uint16_t pairs = rows >> 1; pairs; --pairs)
+        {
+            *dst = *src;
+            dst += SCD_STRIDE;
+            src += SCD_STRIDE;
+        }
+        if (rows & 1u)
+            *dst = (*dst & 0x0fu) | (*src & 0xf0u);
     }
+    return 1;
 }
 
 /* Word RAM and these buffers are word-aligned. Each MOVE.L on the
@@ -175,66 +198,85 @@ static uint16_t elapsed(uint16_t start)
     return (CD_TIMER - start) & 0xfffu;
 }
 
-void SCD_Flush(void)
+static bool wait_word(volatile const uint16_t *reg, uint16_t id)
 {
-    if (!in_world || !scd_available || !packet->columns)
-        return;
-
-    uint16_t *fb = (uint16_t *)SCD_DrawBuffer();
-    const uint8_t flags = scd_verify;
-    uint16_t mark = flags & SCD_PROFILE ? CD_TIMER : 0;
-    copy_bursts(packet->frame, fb, SCD_FRAME_BYTES / 16);
-    if (flags & SCD_PROFILE)
-    {
-        scd_copy_ticks += elapsed(mark);
-        mark = CD_TIMER;
-    }
-
-    const uint16_t id = CD_ACK + 1u;
-    packet->sequence = id;
-    CD_REQUEST = id;
     for (uint32_t tries = 0; tries < 240000UL; ++tries)
     {
-        if (CD_READY == 0xdead)
+        if (*reg == id)
+            return TRUE;
+        if (CD_READY == 0xdeadu)
             break;
-        if (CD_ACK != id || (CD_MODE & 5u) != 5u)
-            continue;
-        if (CD_STATUS || packet->sequence != id)
-            break;
+    }
+    return FALSE;
+}
 
+/* Exchange banks once. The sub starts the new batch as soon as it owns
+ * it, while the main CPU composes the completed batch in the other bank. */
+static void exchange(void)
+{
+    const uint8_t flags = scd_verify;
+    const uint16_t previous = sequence;
+    const bool submitted = packet->columns != 0;
+    uint16_t mark = flags & SCD_PROFILE ? CD_TIMER : 0;
+    if (pending)
+    {
+        if (!wait_word(&CD_DONE, previous) || CD_STATUS)
+        {
+            fail_render(1);
+            return;
+        }
         if (flags & SCD_PROFILE)
         {
             scd_wait_ticks += elapsed(mark);
             scd_sub_ticks += CD_DRAW_TICKS;
         }
-        if (flags & SCD_VERIFY_PIXELS)
+    }
+
+    const uint16_t id = previous + 1u;
+    const uint16_t expected_mode = (CD_MODE & 5u) ^ 1u;
+    packet->sequence = id;
+    if (flags & SCD_PROFILE)
+        mark = CD_TIMER;
+    CD_REQUEST = id;
+    sequence = id;
+    if (!wait_word(&CD_ACK, id) || (CD_MODE & 5u) != expected_mode)
+    {
+        fail_render(1);
+        return;
+    }
+    if (flags & SCD_PROFILE)
+        scd_wait_ticks += elapsed(mark);
+
+    if (pending)
+    {
+        if (packet->sequence != previous || !packet->columns ||
+            packet->columns > SCD_MAX_COLUMNS)
         {
-            verify_batch((uint8_t *)fb);
-            for (uint16_t i = 0; i < SCD_FRAME_BYTES / 2; ++i)
-                if (fb[i] != packet->frame[i])
-                {
-                    fail_render(2);
-                    return;
-                }
+            fail_render(1);
+            return;
         }
         if (flags & SCD_PROFILE)
             mark = CD_TIMER;
-        copy_bursts(fb, packet->frame, SCD_FRAME_BYTES / 16);
+        if (!compose(SCD_DrawBuffer(), flags & SCD_VERIFY_PIXELS))
+        {
+            fail_render(2);
+            return;
+        }
         if (flags & SCD_PROFILE)
             scd_copy_ticks += elapsed(mark);
         scd_rendered_batches++;
-        scd_textured_columns += textured_in_batch;
-        packet->columns = 0;
-        packet->luts = 0;
-        textured_in_batch = 0;
-        return;
+        scd_textured_columns += packet->columns;
     }
-    fail_render(1);
+    pending = submitted;
+    clear_packet();
 }
 
 int SCD_EndWorld(void)
 {
-    SCD_Flush();
+    if (in_world && scd_available && packet->columns)
+        exchange();
+    if (in_world && scd_available && pending)
+        exchange();  /* empty handoff retrieves the final batch before sprites */
     const int complete = !in_world || scd_available;
     in_world = 0;
     return complete;
@@ -271,16 +313,52 @@ int SCD_Column(uint8_t *fb, uint8_t *dst, const uint8_t *source,
     uint32_t offset = (uintptr_t)dst - (uintptr_t)fb;
     if (!rows || rows > SCD_MAX_ROWS || odd > 1 || offset >= SCD_FRAME_BYTES ||
         offset + SCD_STRIDE * ((rows + odd - 1u) >> 1) >= SCD_FRAME_BYTES)
+        return 0;
+
+    /* Dispatch early enough to leave BSP work for the other CPU to overlap. */
+    if (packet->columns == SCD_BATCH_COLUMNS || packet->luts == SCD_MAX_LUTS)
     {
-        SCD_Flush();
+        exchange();
+        if (!scd_available)
+            return 0;
+    }
+
+    const uint8_t profile = scd_verify & SCD_PROFILE;
+    const uint16_t mark = profile ? CD_TIMER : 0;
+    const uint32_t end = (uint32_t)phase + (uint32_t)step * (rows - 1u);
+    uint16_t min_sample = phase >> 9;
+    uint16_t max_sample = end >> 9;
+    if (end > 0xffffu)
+    {
+        max_sample = min_sample;
+        for (uint16_t i = 1, f = phase; i < rows; ++i)
+        {
+            f += step;
+            if ((f >> 9) > max_sample)
+                max_sample = f >> 9;
+            if ((f >> 9) < min_sample)
+                min_sample = f >> 9;
+        }
+    }
+    min_sample &= ~1u;
+    const uint16_t bytes = max_sample - min_sample + 1u;
+    const uint8_t route = scd_route;
+    if (route && bytes > (route == 1 ? rows : rows >> 1))
+    {
+        if (profile)
+            scd_pack_ticks += elapsed(mark);
         return 0;
     }
 
-    if (packet->columns == SCD_MAX_COLUMNS || packet->luts == SCD_MAX_LUTS)
+    uint16_t slot = 0;
+    const uint32_t key = (uintptr_t)lut;
+    while (slot < packet->luts && packet->lut_key[slot] != key)
+        ++slot;
+    if (slot == packet->luts)
     {
-        SCD_Flush();
-        if (!scd_available)
-            return 0;
+        packet->lut_key[slot] = key;
+        copy_bytes(packet->lut[slot], lut, 256);
+        packet->luts++;
     }
 
     volatile ScdColumn *column = &packet->column[packet->columns];
@@ -289,42 +367,10 @@ int SCD_Column(uint8_t *fb, uint8_t *dst, const uint8_t *source,
     column->step = step;
     column->rows = rows;
     column->odd = odd;
-    column->lut = SCD_FLAT;
-    if (source)
-    {
-        uint16_t slot = 0;
-        const uint32_t key = (uintptr_t)lut;
-        while (slot < packet->luts && packet->lut_key[slot] != key)
-            ++slot;
-        if (slot == packet->luts)
-        {
-            packet->lut_key[slot] = key;
-            copy_bytes(packet->lut[slot], lut, 256);
-            packet->luts++;
-        }
-        column->lut = slot;
-        /* A patch post can be shorter than 128 bytes. Copy only the range
-         * the real kernel can sample, including columns that wrap phase. */
-        const uint32_t end = (uint32_t)phase + (uint32_t)step * (rows - 1u);
-        uint16_t min_sample = phase >> 9;
-        uint16_t max_sample = end >> 9;
-        if (end > 0xffffu)
-        {
-            max_sample = min_sample;
-            for (uint16_t i = 1, f = phase; i < rows; ++i)
-            {
-                f += step;
-                if ((f >> 9) > max_sample)
-                    max_sample = f >> 9;
-                if ((f >> 9) < min_sample)
-                    min_sample = f >> 9;
-            }
-        }
-        min_sample &= ~1u;
-        copy_bytes(column->source + min_sample, source + min_sample,
-                   max_sample - min_sample + 1u);
-        textured_in_batch++;
-    }
+    column->lut = slot;
+    copy_bytes(column->source + min_sample, source + min_sample, bytes);
     packet->columns++;
+    if (profile)
+        scd_pack_ticks += elapsed(mark);
     return 1;
 }

@@ -42,10 +42,6 @@ video = "src/r22_video.inc"
 replace(draw, 'static inline __attribute__((always_inline)) void R95_Fill',
         '#include "scd_probe.h"\n'
         'static inline __attribute__((always_inline)) void R95_Fill')
-replace(draw, '    uint16_t count = (uint16_t)(y1 - y0 + 1);\n    if (y0 & 1)',
-        '    uint16_t count = (uint16_t)(y1 - y0 + 1);\n'
-        '    if (scd_available && SCD_Column(fb, dst, 0, 0, 0, s, count, y0 & 1)) return;\n'
-        '    if (y0 & 1)')
 replace(draw, '    if (count >= 2) { R113_WallDraw',
         '    if (scd_available && SCD_Column(fb, dst, v->source, lut, f, v->fracstep, count, yl & 1)) return;\n'
         '    if (count >= 2) { R113_WallDraw')
@@ -65,20 +61,4 @@ path.write_text(s[:a] + '    do\n    {\n        SCD_BeginWorld();\n' + world +
 replace(video, 'void R_DrawColumnSprite(const draw_column_vars_t *v) {',
         '#include "scd_probe.h"\n'
         'uint8_t *SCD_DrawBuffer(void) { return r115_draw; }\n'
-        'void R_DrawColumnSprite(const draw_column_vars_t *v) {\n'
-        '#ifdef SCD_PROBE_H\n'
-        '    if (scd_available) SCD_Flush();\n'
-        '#endif')
-replace(video, 'void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){',
-        'void R_DrawColumnFlat(uint8_t c,const draw_column_vars_t *v){\n'
-        '#ifdef SCD_PROBE_H\n'
-        '    if (scd_available) SCD_Flush();\n'
-        '#endif')
-replace(video, '    if(!colormap && count>=2){\n        R60_WallDraw',
-        '#ifdef SCD_PROBE_H\n'
-        '    if (scd_available) {\n'
-        '        if (!colormap && SCD_Column(r115_draw, dst, source, r52map, f, step, count, first & 1)) return;\n'
-        '        SCD_Flush();\n'
-        '    }\n'
-        '#endif\n'
-        '    if(!colormap && count>=2){\n        R60_WallDraw')
+        'void R_DrawColumnSprite(const draw_column_vars_t *v) {')

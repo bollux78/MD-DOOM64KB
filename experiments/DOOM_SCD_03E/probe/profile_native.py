@@ -100,12 +100,16 @@ def spawn(game, sampler, frames):
     game.next(game.poll)
 
 
-def demo(game, sampler):
+def demo(game, sampler, route=None):
     """Use the same DEMO1 gametic range as the 03D capture script."""
     sampler.reset()
     ticker, finish = game.sym("G_Ticker"), game.frame
     game.boot()
-    assert game.g.req(f"M{game.sym('scd_available'):x},1:00") == "OK"
+    if route is None:
+        assert game.g.req(f"M{game.sym('scd_available'):x},1:00") == "OK"
+    else:
+        assert game.number("scd_available", 1) == 1
+        assert game.g.req(f"M{game.sym('scd_route'):x},1:{route:02x}") == "OK"
     game.step(0, 24)  # Let the title finish before sending menu input.
     game.menu(3)  # Benchmark
     assert game.number("currentMenu", 4) & 0xffffff == game.sym("R88BenchDef")
@@ -121,6 +125,8 @@ def demo(game, sampler):
     sampling = False
     frames = 0
     start = None
+    captures = {}
+    checkpoints = {200, 210, 220, 230, 237, 245, 252, 260}
     while True:
         pc, regs = registers_at_stop(game.g)
         if pc == sampler.vector and sampling:
@@ -135,16 +141,27 @@ def demo(game, sampler):
         tic = game.number("_g_gametic", 4)
         if tic < 200:
             continue
+        if tic in checkpoints:
+            draw = game.number("r115_draw", 4)
+            captures[tic] = game.read(draw, 3344)
         if start is None:
             assert (tic, game.number("_g_gamemap"), game.number("r116_active", 1)) == (200, 1, 1), (
                 tic, game.number("_g_gamemap"), game.number("r116_active", 1))
             start = game.number("ticcount", 4)
-            game.breakpoint(sampler.vector)
-            sampling = True
+            if route is None:
+                game.breakpoint(sampler.vector)
+                sampling = True
             continue
         frames += 1
         if tic >= 260:
             assert tic == 260 and game.number("_g_gamemap") == 1, tic
-            assert game.number("scd_available", 1) == 0
-            sampler.report("DEMO1 gametics 200-260", frames, game.number("ticcount", 4) - start)
-            break
+            assert game.number("scd_available", 1) == (route is not None)
+            assert game.number("scd_render_fault") == 0
+            assert captures.keys() == checkpoints and frames == 60
+            vblanks = game.number("ticcount", 4) - start
+            if route is None:
+                sampler.report("DEMO1 gametics 200-260", frames, vblanks)
+            else:
+                print(f"PERF SPLIT-ALT route={route} DEMO1: {frames} frames / {vblanks} VBlanks"
+                      f" = {frames * 60 / vblanks:.2f} fps", flush=True)
+            return captures

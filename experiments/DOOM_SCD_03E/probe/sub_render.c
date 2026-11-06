@@ -3,7 +3,7 @@
 
 uint32_t scd_render_world(ScdPacket *packet, uint32_t sequence)
 {
-    if (packet->sequence != sequence || !packet->columns ||
+    if (packet->sequence != sequence ||
         packet->columns > SCD_MAX_COLUMNS || packet->luts > SCD_MAX_LUTS)
         return 1;
 
