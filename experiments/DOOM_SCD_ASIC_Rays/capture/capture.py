@@ -35,18 +35,22 @@ try:
     while True:
         pc = game.next(hook, ticker, end)
         if pc == ticker:
-            if game.number("_g_gametic", 4) > 440:
+            if game.number("_g_gametic", 4) > 2600:
                 break
             continue
         if pc == end:
             break
         sp = int(game.g.req("g")[15 * 8:16 * 8], 16)
         tic, x1, y1, x2, y2, visible = struct.unpack(">IiiiiI", game.read(sp + 4, 24))
-        assert 200 <= tic <= 440 and visible in (0, 1), (tic, visible)
+        assert 200 <= tic <= 2600 and visible in (0, 1), (tic, visible)
         queries.append([tic, x1, y1, x2, y2, visible])
+        if tic > 300 and len(queries) % 128 == 0 and sum(q[5] for q in queries) >= 128:
+            break
 finally:
     game.g.close()
 assert len(queries) >= 256, ("fewer than 256 monster-to-player calls", len(queries))
 output.write_text(json.dumps(queries, indent=1) + "\n")
 print(f"Captured {len(queries)} calls, {sum(q[0] <= 300 for q in queries)} in tics 200–300. "
       f"First 256 span tics {queries[0][0]}–{queries[255][0]}.")
+print(f"Native visible: {sum(q[5] for q in queries)} total; "
+      f"{sum(q[5] for q in queries if q[0] <= 300)} within tics 200–300.")

@@ -19,7 +19,7 @@ void __attribute__((noipa)) SCD_RayCapture(uint32_t tic, int32_t x1, int32_t y1,
 boolean P_CheckSight(mobj_t __far* t1, mobj_t __far* t2)
 {
     const boolean visible = P_CheckSightNative(t1, t2);
-    if (_g_gamemap == 1 && _g_gametic >= 200 && _g_gametic <= 440 &&
+    if (_g_gamemap == 1 && _g_gametic >= 200 && _g_gametic <= 2600 &&
         t2 == _g_player.mo && (t1->flags & MF_COUNTKILL))
         SCD_RayCapture(_g_gametic, t1->x, t1->y, t2->x, t2->y, !!visible);
     return visible;
