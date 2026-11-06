@@ -1,0 +1,95 @@
+name: Sega CD 03D transport gate and R128 references
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_Bench03D_Transport/**', '.github/workflows/scd-bench03d-transport.yml', 'scripts/lab/capture_scd_03d_reference.py']
+permissions:
+  contents: read
+env:
+  GDK: /home/dan/mars/m68k-elf
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  R128_REF: /home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all
+jobs:
+  verify:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Isolate ROM output and pin BlastEm divider
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/scd03d.XXXXXX")"
+          out="$HOME/Projetos/Personal/scd-03d/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out" "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if ! test -f "$cfg"; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          echo "SCD_WORK=$work" >> "$GITHUB_ENV"
+          echo "SCD_OUT=$out" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$work/config" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$work/data" >> "$GITHUB_ENV"
+      - name: Build the transport ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a experiments/DOOM_SCD_Bench03D_Transport/. "$SCD_WORK/"
+          cd "$SCD_WORK"
+          fish build.fish
+          elf="$(find out -name rom.out -print -quit)"
+          test -n "$elf"
+          cp "$elf" "$SCD_OUT/transport.elf"
+          cp build/doom-scd-03d-transport.bin "$SCD_OUT/"
+          sha256sum "$SCD_OUT/doom-scd-03d-transport.bin"
+          echo 'build: PASS (transport)'
+      - name: BlastEm 1M swaps and full VRAM readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from r64a_rsp_capture import RSP, symbols
+
+          out = Path(os.environ["SCD_OUT"])
+          syms = symbols(out / "transport.elf")
+          def at(name):
+              address, = [v for k, v in syms.items() if k.split('.')[0] == name]
+              return address & 0xffffff
+          target, fail = at("gate_pass"), at("scd_gate_fail")
+          g = RSP(os.environ["BLASTEM"], out / "doom-scd-03d-transport.bin", 3000, 60)
+          try:
+              g.req("qSupported")
+              for addr in (target, fail):
+                  assert g.req(f"Z0,{addr:x},2") == "OK"
+              g.cont()
+              regs = g.req("g")
+              pc = int(regs[17*8:18*8], 16) & 0xffffff
+              if pc == fail:
+                  sp = int(regs[15*8:16*8], 16) & 0xffffff
+                  ptr = int.from_bytes(g.readmem(sp + 4, 4), "big") & 0xffffff
+                  reason = g.readmem(ptr, 40).split(b'\0', 1)[0]
+                  raise AssertionError(f"transport ROM stopped: {reason!r}")
+              assert pc == target
+              print("blastem: PASS (16 swaps, matching IDs and all 8,192 VRAM words per frame)")
+          finally:
+              g.close()
+          PY
+      - name: Capture eight R128 reference framebuffers privately
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rom=doom-md-r60-r128-all-pf
+          cp "$R128_REF/$rom.bin" "$SCD_WORK/$rom.bin"
+          python3 scripts/lab/capture_scd_03d_reference.py --blastem "$BLASTEM" \
+            --rom "$SCD_WORK/$rom.bin" --elf "$R128_REF/$rom.elf" --out "$SCD_OUT/reference"
+      - name: Remove isolated scratch
+        if: always()
+        shell: bash
+        run: |
+          if test -n "${SCD_WORK:-}"; then rm -rf -- "$SCD_WORK"; fi
