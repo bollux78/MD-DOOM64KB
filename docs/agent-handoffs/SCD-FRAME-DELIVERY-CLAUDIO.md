@@ -36,6 +36,17 @@
 ### M5. Remover a verificação do caminho cronometrado
 A leitura de VRAM fica só na rodada de correção, como já é. Manter assim em todos os novos modos.
 
+### M6. Sem amarras da SGDK no caminho de apresentação (usuário, 2026-11-06)
+O layout e o protocolo de vídeo são nossos. A SGDK só serve onde não atrapalha.
+- **DMA por registrador:** escrever os registradores 19–23 (comprimento, origem) e o comando de destino direto em `$C00004`, sem `DMA_doDma`/`VDP_waitDMACompletion`. Durante a DMA para a VRAM o 68000 fica parado de qualquer jeito, então esperar a conclusão por software não acrescenta nada.
+- **Handler de VBlank próprio e mínimo** para a entrega: troca de banco, DMA única e flip de plano. Nada de `SYS_doVBlankProcess` no caminho crítico.
+- **Layout de VRAM livre:**
+  - escolher o tamanho do plano (64×32 basta para 42 linhas, metade da VRAM de 64×64);
+  - escolher onde fica cada name table (para o double buffer da M3);
+  - usar scroll horizontal/vertical para posicionar a cena em vez de copiar colunas de borda.
+- **O formato do quadro no sub segue o VRAM, não o contrário:** o sub escreve exatamente os bytes que a DMA vai depositar, com as colunas fixas pré-gravadas no banco.
+- Medir M1/M2 já com essa via direta. É ela que vai para o jogo.
+
 ## Ordem e critérios
 1. **M4** (só medição).
 2. **M1 + M2** no mesmo teste isolado:
