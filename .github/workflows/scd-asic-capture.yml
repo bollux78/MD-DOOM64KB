@@ -1,0 +1,110 @@
+name: Sega CD real sight ray capture
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_ASIC_Rays/capture/**', '.github/workflows/scd-asic-capture.yml']
+permissions:
+  contents: read
+env:
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+  M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+  AB_SETS: all
+  R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Restore VGM and pinned shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,hashlib,lzma,shutil
+          v=lzma.decompress(pathlib.Path('assets/r18-e1m1.vgm.xz').read_bytes())
+          assert hashlib.sha256(v).hexdigest()=='64a7a0748953a4bd35b75735b9f4b7c1c89c0f3f4aa43395485cadd7e88a8226'
+          pathlib.Path('res/e1m1.vgm').write_bytes(v)
+          source=pathlib.Path('/home/dan/Projetos/doom-md/assets/wads/doom1.wad')
+          assert source.is_file() and source.stat().st_size==4196020
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771'
+          pathlib.Path('scripts').mkdir(exist_ok=True)
+          shutil.copyfile(source,'scripts/doom1.wad')
+          PY
+      - name: Generate artwork and preflight renderer palettes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/lab/test_r79_face.py --wad scripts/doom1.wad
+          mkdir -p dist/hud
+          python3 scripts/lab/gen_r81_font.py --wad scripts/doom1.wad --out src/r81_menu_font.h --preview dist/hud/font-preview.png
+          python3 scripts/lab/gen_r22_pixel4.py
+          python3 scripts/lab/gen_r49_colormix.py
+          python3 scripts/lab/test_r49_colormix.py
+          python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
+      - name: Build control and candidate in separate disposable copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOOM_R20_BGM_VGM="$GITHUB_WORKSPACE/res/e1m1.vgm"
+          mkdir -p dist/ab
+          for set in $AB_SETS; do
+            lab="c-${set//+/_}"
+            w="$RUNNER_TEMP/scd-asic-capture-$lab-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            test ! -e "$w"
+            python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$w"
+            mkdir -p "$w/dist/hud"
+            ( cd "$w"
+              python3 scripts/lab/apply_r81.py
+              python3 scripts/lab/test_r80_pixofs.py --src src
+              R80_EXPERIMENTS="P1+F1" python3 scripts/lab/apply_r80_performance.py
+              R83_CANDIDATE=sprites python3 scripts/lab/apply_r83.py
+              R85_CANDIDATE=all python3 scripts/lab/apply_r85.py
+              R88_CANDIDATE=ai python3 scripts/lab/apply_r88.py
+              python3 scripts/lab/apply_r89.py
+              R90_CANDIDATE=control python3 scripts/lab/apply_r90.py
+              R91_CANDIDATE=sh1 python3 scripts/lab/apply_r91.py
+              R92_CANDIDATE=toggle python3 scripts/lab/apply_r92.py
+              R95_NAME=flat python3 scripts/lab/apply_r95.py
+              R96_NAME=wall python3 scripts/lab/apply_r96.py
+              R97_NAME=shasm python3 scripts/lab/apply_r97.py
+              R98_CANDIDATE=sprmul python3 scripts/lab/apply_r98.py
+              R100_MODE=f1t R100_PREFIX=r102 R100_NAME=twoface python3 scripts/lab/apply_r100.py; R104_PREFIX=r105 R104_NAME=twoface python3 scripts/lab/apply_r104.py
+              python3 scripts/lab/apply_r107.py
+              python3 scripts/lab/apply_r113.py
+              python3 scripts/lab/apply_r115.py
+              python3 scripts/lab/apply_r116.py
+              python3 scripts/lab/apply_r117.py
+              R118_MODE=mulvc python3 scripts/lab/apply_r118.py
+              R119_MODE=both python3 scripts/lab/apply_r119.py
+              python3 scripts/lab/apply_r122.py
+              python3 scripts/lab/apply_r126.py
+              if [ "$set" != control ]; then R128_MODE="$set" python3 scripts/lab/apply_r128.py; fi
+              python3 experiments/DOOM_SCD_ASIC_Rays/capture/install_capture.py
+              HUD_WORK="$w-work" python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee dist/hud/BUILD.log )
+            mkdir -p "dist/ab/$lab"; cp -a "$w/dist/hud/." "dist/ab/$lab/"
+          done
+      - name: Capture native visibility decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$HOME/Projetos/Personal/scd-asic-rays/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          elf=$(ls dist/ab/c-all/*-pl.elf)
+          rom=$(ls dist/ab/c-all/*-pl.bin)
+          cp "$elf" "$out/doom-md-scd-ray-capture.elf"
+          cp "$rom" "$out/doom-md-scd-ray-capture.bin"
+          python3 experiments/DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-ray-capture.bin"
+          work=$(mktemp -d "$RUNNER_TEMP/scd-asic-capture.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_ASIC_Rays/capture/capture.py "$out/doom-md-scd-ray-capture.bin" "$out/doom-md-scd-ray-capture.elf" "$out/e1m1-sight.json"
+          echo "Private capture: $out/e1m1-sight.json"
