@@ -1,0 +1,51 @@
+name: R136c flashcart loader header A/B
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-r136c-classic-sram']
+    paths: ['.github/workflows/r136c-loader-ab.yml']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Package two private 5 MiB ROMs with identical classic SRAM code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json
+          import os
+
+          private = Path.home() / 'Projetos/Personal'
+          source = private / 'r136c-classic-sram/run-42228591370-1/doom-md-r136c-classic-sram-5m.bin'
+          data = source.read_bytes()
+          assert len(data) == 5 * 1024 * 1024
+          assert sha256(data).hexdigest() == 'a3c45a1f67a8211fa903968211c8cda25675748c55a1a527c75da7560a185fa8'
+          assert data[0x100:0x110] == b'SEGA MEGA DRIVE '
+          assert int.from_bytes(data[0x1a4:0x1a8], 'big') == 0x3fffff
+
+          ssf = bytearray(data)
+          ssf[0x100:0x110] = b'SEGA SSF        '
+          ssf[0x1a4:0x1a8] = (len(ssf) - 1).to_bytes(4, 'big')
+          assert ssf[:0x100] == data[:0x100]
+          assert ssf[0x110:0x1a4] == data[0x110:0x1a4]
+          assert ssf[0x1a8:] == data[0x1a8:]
+
+          run = os.environ['GITHUB_RUN_ID']
+          attempt = os.environ['GITHUB_RUN_ATTEMPT']
+          out = private / 'r136c-loader-ab' / f'run-{run}-{attempt}'
+          out.mkdir(parents=True)
+          report = {}
+          for name, rom in (('r136c-md.bin', data), ('r136c-ssf.bin', ssf)):
+              path = out / name
+              path.write_bytes(rom)
+              report[name] = {'file': str(path), 'bytes': len(rom), 'sha256': sha256(rom).hexdigest()}
+          manifest = json.dumps(report, indent=2)
+          (out / 'MANIFEST.json').write_text(manifest + '\n')
+          print(manifest)
+          PY
