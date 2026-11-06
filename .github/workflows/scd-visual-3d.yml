@@ -104,6 +104,10 @@ jobs:
           finally:
               g.close()
           PY
+      - name: BlastEm manual camera at scene boundaries
+        shell: bash
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 "$SCD_WORK/tools/test_manual.py"
       - name: Remove isolated scratch
         if: always()
         shell: bash
