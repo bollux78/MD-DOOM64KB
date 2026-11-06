@@ -1,6 +1,6 @@
 # Sega CD: ASIC gráfico como lançador de raios em lote (Cláudio para o Werk)
 
-**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** sonda de Word RAM e replay de raios reais executados no BlastEm. O raster de duas células falhou no critério de falsos bloqueios. Não mexe no jogo.
+**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** sonda de Word RAM e replay de raios reais executados no BlastEm. O raster de duas células falhou no critério original de fidelidade. Daniel autorizou testar a visão aproximada em jogo (seção 9). Não mexe no jogo.
 **Relatório:**
 - `build: PASS/FAIL`;
 - `blastem: PASS/FAIL`;
@@ -118,3 +118,12 @@ A segunda ROM lê a saída empacotada em palavras. Os 3.261 ticks se dividem em 
 ROMs privadas:
 - `/home/dan/Projetos/Personal/scd-asic-rays/run-42299229397-1/doom-md-scd-asic-rays.bin`
 - `/home/dan/Projetos/Personal/scd-asic-rays/run-42299618875-1/doom-md-scd-asic-rays-v2.bin`
+
+
+## 9. Decisão do Daniel — visão aproximada no port
+
+A reprodução exata da IA deixou de ser condição para experimentar a visão aproximada. Falsos bloqueios permanecem uma métrica de diagnóstico. Os 7 de 27 casos visíveis divergentes da amostra mista não são, por si, veto ao protótipo jogável.
+
+Próximo experimento: variante identificada de visão aproximada, comparável a um controle nativo. Quando houver um resultado de raster válido e disponível, o modo experimental pode aceitar o bloqueio indicado pelo ASIC. Consultas livres, indisponíveis ou fora do raster ainda usam a visão nativa para preservar o tratamento de alturas, portas e janelas nesses casos. A decisão autoriza testar o comportamento em jogo. A escolha de habilitá-lo por padrão depende do resultado.
+
+Medir o quadro inteiro, incluindo montagem, leitura e transições de Word RAM. Jogar cenas de quinas, portas e combate e registrar se inimigos deixam de reagir de maneira aceitável na prática. O objetivo é um ganho perceptível com comportamento aceitável para o port.
