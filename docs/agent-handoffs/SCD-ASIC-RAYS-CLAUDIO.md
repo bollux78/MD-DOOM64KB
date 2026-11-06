@@ -1,6 +1,6 @@
 # Sega CD: ASIC gráfico como lançador de raios em lote (Cláudio para o Werk)
 
-**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** sonda de Word RAM executada no BlastEm. Benchmark com raios reais pendente. Não mexe no jogo.
+**Branch:** `exp-chatgpt-scd-bench03b`. **Estado:** sonda de Word RAM e replay de raios reais executados no BlastEm. O raster de duas células falhou no critério de falsos bloqueios. Não mexe no jogo.
 **Relatório:**
 - `build: PASS/FAIL`;
 - `blastem: PASS/FAIL`;
@@ -100,3 +100,21 @@ O usuário considera este o uso mais valioso do ASIC, **desde que o jogo já est
 - Emulador apenas. A divergência em 1M é sobre o layout do banco usado pelo protocolo. A sonda não distingue uma restrição física de modo de outros comportamentos possíveis com um layout intercalado. Os 2–3 ticks registrados cobrem o disparo, a espera e a verificação, sem medir a transição de modo nem um lote real.
 
 Para o lote, cada linha tem um único passo constante. Se as distâncias exigirem números de amostras diferentes, guardar o comprimento válido por raio e ignorar os pixels após o seu fim, ou agrupar comprimentos. Medir o custo de ida e volta de modo e a varredura da saída à parte. Os 256 pares reais, a referência de visão exata no sub e a avaliação de falsos resultados continuam pendentes.
+
+
+## 8. Replay de raios reais — resultado no BlastEm
+
+Captura com hook no R128 All nativo, dados privados. Foram 341 chamadas monstro→jogador nos tics 200–300, com apenas um resultado visível nessa janela. A [captura ampliada](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42299359419) coletou 7.387 chamadas, das quais 27 visíveis. A ROM usa o resultado observado de `P_CheckSight`, incluindo os atalhos e o cache já existentes no jogo. O raster vem das paredes de um lado só do WAD original de E1M1, com duas células de espessura e 8 unidades de mapa por pixel.
+
+| Replay | Consultas visíveis / bloqueadas | ASIC + setup + leitura (ticks) | Sub DDA (ticks) | Falsos bloqueados | Falsos livres | ASIC ≠ DDA |
+|---|---:|---:|---:|---:|---:|---:|
+| [Primeiras 256, tics 200–276](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42299229397) | 0 / 256 | 10.826 | 16.498 | 0 de 0 | 6 de 256 | 0 |
+| [Amostra mista, tics 200–2479](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42299618875) | 27 / 229 | 3.261 | 19.620 | 7 de 27 | 6 de 229 | 0 |
+
+A segunda ROM lê a saída empacotada em palavras. Os 3.261 ticks se dividem em 162 de preparo, 2.699 de operação gráfica e 400 de leitura. A comparação justa é dentro de cada linha da tabela. As amostras diferem entre as duas versões. O tempo reportado exclui carga de assets, troca de modo por lote e lógica completa de visão. O controle DDA lê o mesmo mapa de stamps e usa o mesmo passo quantizado, com saída antecipada ao encontrar uma célula ocupada.
+
+**Decisão:** o ASIC acelerou a amostragem sobre o DDA, mas a rasterização de duas células reprovou como filtro que descarta visão. Sete decisões nativas visíveis seriam descartadas. A visão exata no sub ainda não foi portada ou cronometrada. Antes desse investimento, uma nova representação precisa demonstrar ausência de falsos bloqueios numa amostra com casos visíveis e teste de bordas. O plano separado de chão texturizado continua condicionado à ROM única estável e ao orçamento de desempenho.
+
+ROMs privadas:
+- `/home/dan/Projetos/Personal/scd-asic-rays/run-42299229397-1/doom-md-scd-asic-rays.bin`
+- `/home/dan/Projetos/Personal/scd-asic-rays/run-42299618875-1/doom-md-scd-asic-rays-v2.bin`
