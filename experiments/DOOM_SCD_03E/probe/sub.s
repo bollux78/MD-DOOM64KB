@@ -28,9 +28,14 @@ wait_packet:
     move.w #4,0xff8002
     move.l %d2,-(%sp)
     move.l #0x000c0000,-(%sp)
+    move.w 0xff800c,%d3
     jsr scd_render_world
     addq.l #8,%sp
     move.w %d0,0xff802a
+    move.w 0xff800c,%d1
+    sub.w %d3,%d1
+    andi.w #0x0fff,%d1
+    move.w %d1,0xff8024
     move.w #5,0xff8002
     move.w %d2,0xff8026
     bra.s wait_packet

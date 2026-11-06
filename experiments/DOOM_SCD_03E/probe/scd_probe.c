@@ -7,6 +7,8 @@
 #define CD_BIOS (*(volatile const u32 *)0x400100)
 #define CD_CTRL (*(volatile u8 *)0xa12001)
 #define CD_MODE (*(volatile u16 *)0xa12002)
+#define CD_TIMER (*(volatile const u16 *)0xa1200c)
+#define CD_DRAW_TICKS (*(volatile const u16 *)0xa12024)
 #define CD_REQUEST (*(volatile u16 *)0xa12018)
 #define CD_READY (*(volatile const u16 *)0xa12020)
 #define CD_STATUS (*(volatile const u16 *)0xa1202a)
@@ -21,6 +23,9 @@ volatile uint16_t scd_rendered_batches;
 volatile uint16_t scd_textured_columns;
 volatile uint16_t scd_render_fault;
 volatile uint8_t scd_verify;
+volatile uint32_t scd_copy_ticks, scd_wait_ticks, scd_sub_ticks;
+
+enum { SCD_VERIFY_PIXELS = 1, SCD_PROFILE = 2 };
 static uint8_t in_world;
 static uint16_t textured_in_batch;
 static volatile ScdPacket *const packet = (volatile ScdPacket *)0x600000;
@@ -148,14 +153,42 @@ static void verify_batch(uint8_t *fb)
     }
 }
 
+/* Word RAM and these buffers are word-aligned. Each MOVE.L on the
+ * 68000 is two 16-bit bus transfers, so this also works at address 2 mod 4. */
+static void copy_bursts(volatile void *dst, const volatile void *src, uint16_t bursts)
+{
+    if (!bursts)
+        return;
+    --bursts;
+    __asm__ volatile (
+        "1: move.l (%[src])+,(%[dst])+\n\t"
+        "move.l (%[src])+,(%[dst])+\n\t"
+        "move.l (%[src])+,(%[dst])+\n\t"
+        "move.l (%[src])+,(%[dst])+\n\t"
+        "dbra %[n],1b"
+        : [src] "+a"(src), [dst] "+a"(dst), [n] "+d"(bursts)
+        : : "cc", "memory");
+}
+
+static uint16_t elapsed(uint16_t start)
+{
+    return (CD_TIMER - start) & 0xfffu;
+}
+
 void SCD_Flush(void)
 {
     if (!in_world || !scd_available || !packet->columns)
         return;
 
     uint16_t *fb = (uint16_t *)SCD_DrawBuffer();
-    for (uint16_t i = 0; i < SCD_FRAME_BYTES / 2; ++i)
-        packet->frame[i] = fb[i];
+    const uint8_t flags = scd_verify;
+    uint16_t mark = flags & SCD_PROFILE ? CD_TIMER : 0;
+    copy_bursts(packet->frame, fb, SCD_FRAME_BYTES / 16);
+    if (flags & SCD_PROFILE)
+    {
+        scd_copy_ticks += elapsed(mark);
+        mark = CD_TIMER;
+    }
 
     const uint16_t id = CD_ACK + 1u;
     packet->sequence = id;
@@ -169,18 +202,26 @@ void SCD_Flush(void)
         if (CD_STATUS || packet->sequence != id)
             break;
 
-        if (scd_verify)
-            verify_batch((uint8_t *)fb);
-        for (uint16_t i = 0; i < SCD_FRAME_BYTES / 2; ++i)
+        if (flags & SCD_PROFILE)
         {
-            uint16_t word = packet->frame[i];
-            if (scd_verify && fb[i] != word)
-            {
-                fail_render(2);
-                return;
-            }
-            fb[i] = word;
+            scd_wait_ticks += elapsed(mark);
+            scd_sub_ticks += CD_DRAW_TICKS;
         }
+        if (flags & SCD_VERIFY_PIXELS)
+        {
+            verify_batch((uint8_t *)fb);
+            for (uint16_t i = 0; i < SCD_FRAME_BYTES / 2; ++i)
+                if (fb[i] != packet->frame[i])
+                {
+                    fail_render(2);
+                    return;
+                }
+        }
+        if (flags & SCD_PROFILE)
+            mark = CD_TIMER;
+        copy_bursts(fb, packet->frame, SCD_FRAME_BYTES / 16);
+        if (flags & SCD_PROFILE)
+            scd_copy_ticks += elapsed(mark);
         scd_rendered_batches++;
         scd_textured_columns += textured_in_batch;
         packet->columns = 0;
@@ -199,11 +240,23 @@ int SCD_EndWorld(void)
     return complete;
 }
 
+typedef uint16_t __attribute__((may_alias)) SourceWord;
+
 static void copy_bytes(volatile uint8_t *dst, const uint8_t *src, uint16_t bytes)
 {
     uint16_t i = 0;
-    for (; i + 1u < bytes; i += 2)
-        *(volatile uint16_t *)(dst + i) = ((uint16_t)src[i] << 8) | src[i + 1u];
+    if (!((uintptr_t)src & 1u))
+    {
+        copy_bursts(dst, src, bytes >> 4);
+        i = bytes & ~15u;
+        for (; i + 1u < bytes; i += 2)
+            *(volatile uint16_t *)(dst + i) = *(const SourceWord *)(src + i);
+    }
+    else
+    {
+        for (; i + 1u < bytes; i += 2)
+            *(volatile uint16_t *)(dst + i) = ((uint16_t)src[i] << 8) | src[i + 1u];
+    }
     if (i < bytes)
         *(volatile uint16_t *)(dst + i) = (uint16_t)src[i] << 8;
 }
@@ -253,18 +306,23 @@ int SCD_Column(uint8_t *fb, uint8_t *dst, const uint8_t *source,
         /* A patch post can be shorter than 128 bytes. Copy only the range
          * the real kernel can sample, including columns that wrap phase. */
         const uint32_t end = (uint32_t)phase + (uint32_t)step * (rows - 1u);
+        uint16_t min_sample = phase >> 9;
         uint16_t max_sample = end >> 9;
         if (end > 0xffffu)
         {
-            max_sample = phase >> 9;
+            max_sample = min_sample;
             for (uint16_t i = 1, f = phase; i < rows; ++i)
             {
                 f += step;
                 if ((f >> 9) > max_sample)
                     max_sample = f >> 9;
+                if ((f >> 9) < min_sample)
+                    min_sample = f >> 9;
             }
         }
-        copy_bytes(column->source, source, max_sample + 1u);
+        min_sample &= ~1u;
+        copy_bytes(column->source + min_sample, source + min_sample,
+                   max_sample - min_sample + 1u);
         textured_in_batch++;
     }
     packet->columns++;
