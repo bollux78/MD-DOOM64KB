@@ -25,7 +25,7 @@ jobs:
           export PATH="$gdk/bin:$PATH"
           cd experiments/DOOM_SCD_ASIC_Rays
           mkdir -p build
-          m68k-elf-as -m68000 sub.s -o build/sub.o
+          m68k-elf-as -m68000 subcpu/boot.s -o build/sub.o
           m68k-elf-ld -Ttext=0 -e subcpu_vectors -o build/sub.elf build/sub.o
           m68k-elf-objcopy -O binary build/sub.elf build/sub.bin
           python3 "$tools/make_sub_header.py" build/sub.bin src/scd_probe_sub.h
@@ -33,7 +33,7 @@ jobs:
           rom=out/rom.bin
           if [ -f out/release/rom.bin ]; then rom=out/release/rom.bin; fi
           elf=${rom%.bin}.elf
-          if [ ! -f "$elf" ]; then elf=$(find out -name '*.elf' -print -quit); fi
+          if [ ! -f "$elf" ]; then elf=${rom%.bin}.out; fi
           test -f "$elf"
           out="$HOME/Projetos/Personal/scd-asic/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
