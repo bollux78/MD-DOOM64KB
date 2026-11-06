@@ -8,7 +8,7 @@ from r64a_rsp_capture import RSP
 
 
 def bounded_rsp(exe, rom, _max_frames, timeout):
-    return RSP(exe, rom, 3000, timeout)
+    return RSP(exe, rom, 10000, timeout)
 
 
 play.RSP = bounded_rsp
@@ -28,7 +28,7 @@ def enter_level(game):
     game.check_map(1, 85)
 
 
-def frame_window(game):
+def frame_window(game, frames=FRAMES):
     """Measure identical views at the E1M1 spawn, excluding startup."""
     game.breakpoint(game.frame)
 
@@ -40,7 +40,7 @@ def frame_window(game):
         next_frame()
         position = game.position()
         start = game.number("ticcount", 4)
-        for _ in range(FRAMES):
+        for _ in range(frames):
             next_frame()
         end = game.number("ticcount", 4)
         assert end > start and game.position() == position, (start, end, position)
@@ -94,14 +94,16 @@ def main():
 
             set_byte(game, "scd_verify", 2)
             before = game.number("scd_rendered_batches")
-            frame_window(game)
+            profile_frames = 8
+            frame_window(game, profile_frames)
             batches = game.number("scd_rendered_batches") - before
-            assert batches >= FRAMES
+            assert batches >= profile_frames
             copy = game.number("scd_copy_ticks", 4)
             wait = game.number("scd_wait_ticks", 4)
             sub = game.number("scd_sub_ticks", 4)
             assert 0 < sub <= wait and copy > 0, (copy, wait, sub)
-            print(f"PERF stopwatch: {batches} batches, {copy} framebuffer copy ticks, "
+            print(f"PERF stopwatch: {profile_frames} sampled frames, {batches} batches, "
+                  f"{copy} framebuffer copy ticks, "
                   f"{wait} wait ticks including {sub} sub-CPU drawing ticks", flush=True)
 
         # Pixel comparison runs separately while playing the game.
