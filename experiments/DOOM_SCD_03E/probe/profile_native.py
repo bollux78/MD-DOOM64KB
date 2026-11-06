@@ -5,6 +5,7 @@ import json
 
 import r94_pcprofile as r94
 import r117_profile as r117
+import test_r136_play as play
 
 
 def classify(function):
@@ -103,12 +104,19 @@ def demo(game, sampler):
     """Use the same DEMO1 gametic range as the 03D capture script."""
     sampler.reset()
     ticker, finish = game.sym("G_Ticker"), game.frame
-    game.g.req("qSupported")
+    game.boot()
+    assert game.g.req(f"M{game.sym('scd_available'):x},1:00") == "OK"
+    game.menu(3)  # Benchmark
+    assert game.number("currentMenu", 4) & 0xffffff == game.sym("R88BenchDef")
+    game.tap(play.DOWN)  # E1M1 UV-Max
+    game.tap(play.USE)
+    assert game.number("r116_sel", 1) == 1
+    game.breakpoint(game.poll, False)
+    game.breakpoint(game.sound, False)
     game.breakpoint(ticker)
     game.breakpoint(finish)
-    game.breakpoint(game.error)
     game.breakpoint(game.sym("R116_End"))
-    armed = False
+    assert game.g.req(f"M{game.sym('r116_norender'):x},1:01") == "OK"
     sampling = False
     frames = 0
     start = None
@@ -118,10 +126,6 @@ def demo(game, sampler):
             sampler.sample(game.g, regs)
             continue
         if pc == ticker:
-            if not armed:
-                for name, value in (("scd_available", 0), ("r116_sel", 1), ("r116_norender", 1)):
-                    assert game.g.req(f"M{game.sym(name):x},1:{value:02x}") == "OK"
-                armed = True
             if game.number("_g_gametic", 4) >= 190:
                 assert game.g.req(f"M{game.sym('r116_norender'):x},1:00") == "OK"
                 game.breakpoint(ticker, False)
@@ -131,7 +135,8 @@ def demo(game, sampler):
         if tic < 200:
             continue
         if start is None:
-            assert tic == 200 and game.number("_g_gamemap") == 1, tic
+            assert (tic, game.number("_g_gamemap"), game.number("r116_active", 1)) == (200, 1, 1), (
+                tic, game.number("_g_gamemap"), game.number("r116_active", 1))
             start = game.number("ticcount", 4)
             game.breakpoint(sampler.vector)
             sampling = True
