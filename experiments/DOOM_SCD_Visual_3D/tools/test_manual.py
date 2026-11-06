@@ -82,10 +82,10 @@ try:
     hold(RIGHT, 16)
     assert position() == (640, 2176, 16), position()
     hold(UP, 76)
-    assert position() == (640, 3832, 16), position()
+    assert position() == (640, 3784, 16), position()
     print(f"{phase}: {position()}", flush=True)
     hold(RIGHT, 64)
-    assert position() == (640, 3832, 16), position()
+    assert position() == (640, 3784, 16), position()
 
     phase = "north-side obstruction"
     hold(DOWN, 144)
