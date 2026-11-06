@@ -29,6 +29,25 @@ static unsigned wall_color(char material, unsigned u, unsigned v, unsigned side)
     }
 }
 
+/* Store each texture column already packed as two identical 4bpp pixels. */
+static unsigned char wall_columns[3][2][32][32];
+
+void scd_prepare_textures(void)
+{
+    for (unsigned material = 0; material < 3; ++material)
+        for (unsigned side = 0; side < 2; ++side)
+            for (unsigned u = 0; u < 32; ++u)
+                for (unsigned v = 0; v < 32; ++v)
+                    wall_columns[material][side][u][v] =
+                        wall_color('1' + material, u, v, side) * 17u;
+}
+
+static inline void write_pair(unsigned char *pixel, unsigned char pair)
+{
+    pixel[0] = pair;
+    pixel[4] = pair;
+}
+
 void scd_render(unsigned char *tiles, int camera_x, int camera_y, unsigned heading)
 {
     const int forward_x = cosine[heading];
@@ -81,25 +100,21 @@ void scd_render(unsigned char *tiles, int camera_x, int camera_y, unsigned headi
         const unsigned u = ((side ? camera_x + (((int)depth * dx) >> 8)
                                   : camera_y + (((int)depth * dy) >> 8)) >> 3) & 31u;
         const unsigned texture_step = divide(32u * 256u, height);
-        unsigned texture_v = top < 0 ? -top * texture_step : 0;
+        const int first = top < 0 ? 0 : top;
+        const int last = bottom > VIEW_HEIGHT ? VIEW_HEIGHT : bottom;
+        unsigned texture_v = (first - top) * texture_step;
+        const unsigned char *texels = wall_columns[material - '1'][side][u];
         unsigned char *column = tiles + (x / 4) * 32 + (x & 3);
+        int y = 0;
 
-        for (int y = 0; y < VIEW_HEIGHT; ++y)
+        for (; y < first; ++y)
+            write_pair(column + row[y], y < 12 ? 0x22 : 0x11);
+        for (; y < last; ++y)
         {
-            unsigned color;
-            if (y < top)
-                color = y < 12 ? 2 : 1;
-            else if (y >= bottom)
-                color = y >= 45 ? 8 : (y >= 35 ? 7 : 3);
-            else
-            {
-                color = wall_color(material, u, texture_v >> 8, side);
-                texture_v += texture_step;
-            }
-            const unsigned char pair = color * 17u;
-            unsigned char *pixel = column + row[y];
-            pixel[0] = pair;
-            pixel[4] = pair;
+            write_pair(column + row[y], texels[texture_v >> 8]);
+            texture_v += texture_step;
         }
+        for (; y < VIEW_HEIGHT; ++y)
+            write_pair(column + row[y], y >= 45 ? 0x88 : (y >= 35 ? 0x77 : 0x33));
     }
 }

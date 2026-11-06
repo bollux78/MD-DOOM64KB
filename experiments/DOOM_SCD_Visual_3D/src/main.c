@@ -20,6 +20,8 @@
 #define SUB_READY 0x5343u
 #define SUB_FAULT 0xDEADu
 #define TIMEOUT_VBLANKS 60u
+#define RENDER_TIMEOUT_VBLANKS 12u
+#define SWAP_TIMEOUT_VBLANKS 6u
 #define WORD_ID (*(volatile const u16 *)0x600000)
 #define WORD_DATA ((volatile const u16 *)0x600020)
 #define VDP_CTRL (*(volatile u32 *)0xc00004)
@@ -110,6 +112,7 @@ static void scd_gate_fail(const char *message)
 static void await_frame(u16 id, bool swap, u16 next_bank)
 {
     const u32 start = vtimer;
+    const u16 limit = swap ? SWAP_TIMEOUT_VBLANKS : RENDER_TIMEOUT_VBLANKS;
     for (;;)
     {
         if (CD_SUB_SIG == SUB_FAULT)
@@ -118,10 +121,8 @@ static void await_frame(u16 id, bool swap, u16 next_bank)
             return;
         if (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 7u) == (4u | next_bank))
             return;
-        if (vtimer - start >= 6u)
-        {
+        if (vtimer - start >= limit)
             scd_gate_fail(swap ? "SWAP TIMEOUT" : "FRAME TIMEOUT");
-        }
     }
 }
 

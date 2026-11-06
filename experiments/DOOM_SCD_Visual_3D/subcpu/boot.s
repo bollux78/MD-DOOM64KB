@@ -12,6 +12,7 @@ entry:
     move.w  #0x2700, %sr
     clr.w   0xff8026         /* acknowledged swap */
     clr.w   0xff8028         /* completed frame */
+    jsr     scd_prepare_textures
     moveq   #0, %d1
     moveq   #4, %d4          /* 1M, RET = 0 */
     move.w  %d4, 0xff8002
