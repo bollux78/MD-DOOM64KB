@@ -46,3 +46,13 @@
 - `blastem: PASS/FAIL` (tem de continuar passando);
 - `gpgx: PASS/FAIL` (opcional);
 - foto da tela do console com as duas linhas de diagnóstico.
+
+## Resultado no console (2026-11-06) e correção
+- **Tela:** `SIG 5343 STAGE 5303`, `MAIN MEM 0006 SUB MEM 0006`.
+- **Leitura:** o sub rodou e trocou para 1M (MODE=1, RET=0). No hardware real, porém, **DMNA fica em 1 logo depois da troca 2M→1M**. O BlastEm e o GPGX mostram 0. O principal exigia `& 7 == 4` e nunca saía do laço.
+- **Problema seguinte, que apareceria logo depois:** o sub usava DMNA=1 como "pedido de troca", então trocaria de banco sem o principal pedir.
+- **Correção:** o protocolo deixa de depender de DMNA.
+  - **Início:** o principal confere só `MODE` e `RET` (`& 5 == 4`).
+  - **Pedido de troca:** o principal escreve o ID do quadro na palavra de comunicação `$A12018`. O sub espera `$FF8018 == id`, alterna RET e confirma em `$FF8026`. O principal confere a confirmação e `RET` (`& 5`).
+  - O principal não escreve mais em `$A12003` dentro do laço.
+- O diagnóstico continua na ROM.

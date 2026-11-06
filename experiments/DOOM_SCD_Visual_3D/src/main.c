@@ -12,6 +12,7 @@
 #define CD_MAIN_X (*(volatile u16 *)0xA12012)
 #define CD_MAIN_Y (*(volatile u16 *)0xA12014)
 #define CD_MAIN_HEADING (*(volatile u16 *)0xA12016)
+#define CD_MAIN_SWAP (*(volatile u16 *)0xA12018)
 #define CD_SUB_SIG (*(volatile const u16 *)0xA12020)
 #define CD_SUB_READY (*(volatile const u16 *)0xA12028)
 #define CD_SUB_ACK (*(volatile const u16 *)0xA12026)
@@ -77,6 +78,7 @@ static const char *boot_sub(void)
     CD_MAIN_X = 0;
     CD_MAIN_Y = 0;
     CD_MAIN_HEADING = 0;
+    CD_MAIN_SWAP = 0;
     for (u32 i = 0; i < SUB_PROGRAM_WORDS; i++)
         CD_PRGRAM[i] = sub_program[i];
     for (u32 i = 0; i < SUB_PROGRAM_WORDS; i++)
@@ -121,7 +123,7 @@ static void await_frame(u16 id, bool swap, u16 next_bank)
             scd_gate_fail("SUB CPU EXCEPTION");
         if (!swap && CD_SUB_READY == id)
             return;
-        if (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 7u) == (4u | next_bank))
+        if (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 5u) == (4u | next_bank))
             return;
         if (vtimer - start >= limit)
             scd_gate_fail(swap ? "SWAP TIMEOUT" : "FRAME TIMEOUT");
@@ -243,7 +245,7 @@ int main(bool hard)
     const char *failure = boot_sub();
     if (failure)
         scd_gate_fail(failure);
-    for (u16 wait = 0; CD_SUB_SIG != SUB_READY || (CD_MEMCTRL & 7u) != 4u; wait++)
+    for (u16 wait = 0; CD_SUB_SIG != SUB_READY || (CD_MEMCTRL & 5u) != 4u; wait++)
     {
         if (wait == TIMEOUT_VBLANKS)
         {
@@ -275,7 +277,9 @@ int main(bool hard)
     {
         await_frame(id, FALSE, 0);
         const u16 next_bank = (CD_MEMCTRL ^ 1u) & 1u;
-        CD_MEMCTRL = 0;
+        /* Swap request through a comm word, not DMNA: on the console DMNA reads 1
+           right after the 2M->1M switch (MEM 0006), so it cannot signal a request. */
+        CD_MAIN_SWAP = id;
         await_frame(id, TRUE, next_bank);
         if (WORD_ID != id)
             scd_gate_fail("STALE WORD RAM FRAME");
