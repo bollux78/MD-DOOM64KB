@@ -26,7 +26,7 @@ try:
     for i, label in enumerate(labels):
         values = [int.from_bytes(raw[j:j + 4], "big") for j in range(i * 24, i * 24 + 24, 4)]
         print(label, dict(zip(("frames", "swap_ticks", "dma_ticks", "total_ticks", "bad", "late"), values)),
-              "ms/frame=%.3f" % (values[3] * 0.03072 / max(values[0], 1))))
+              "ms/frame=%.3f" % (values[3] * 0.03072 / max(values[0], 1)))
         assert values[0] == 32 and not values[4], (state, values)
     assert state == 2
 finally:
