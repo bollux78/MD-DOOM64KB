@@ -143,7 +143,7 @@ static void transfer_and_check(u16 id)
 
     /* The Mega-CD manual compensates for a one-word DMA read delay.
      * The source lies within one 128 KiB window, including its guard word. */
-    DMA_doDma(DMA_VRAM, 0x600022, dest, WORD_COUNT, 2);
+    DMA_doDma(DMA_VRAM, (void *)0x600022, dest, WORD_COUNT, 2);
     VDP_waitDMACompletion();
     SYS_disableInts();
     VDP_CTRL = vram_command(dest) | 0x40000000UL;
