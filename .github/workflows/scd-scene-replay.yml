@@ -48,6 +48,8 @@ jobs:
           m68k-elf-gcc -m68000 -nostdlib -Wl,-Ttext=0,-e,subcpu_vectors -o build/sub.elf build/sub.o build/replay-asm.o build/scene.o build/replay.o -lgcc
           m68k-elf-objcopy -O binary build/sub.elf build/sub.bin
           python3 "$replay/tools/make_sub_header.py" build/sub.bin src/sub_program.h
+          # SGDK's freestanding toolchain has no hosted stdint.h.
+          sed -i 's/^#include <stdint.h>/#include <genesis.h>/' src/scene.c src/replay.c
           make GDK="$gdk" PREFIX=m68k-elf- -j1
           rom=out/release/rom.bin
           if [ ! -f "$rom" ]; then rom=out/rom.bin; fi
