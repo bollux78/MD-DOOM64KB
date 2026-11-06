@@ -146,6 +146,7 @@ def main():
     for name in ('input', 'output', 'report', 'iwad', 'base'):
         p.add_argument('--' + name, required=True, type=Path)
     p.add_argument('--freedoom', type=Path)
+    p.add_argument('--classic-sram', action='store_true')
     p.add_argument('--linked-size', type=int, required=True)
     args = p.parse_args()
     initial = args.input.read_bytes()
@@ -173,13 +174,20 @@ def main():
     for page in (8, 9):
         struct.pack_into('>I', rom, page * BANK + SIGNATURE, sig(page))
     struct.pack_into('>H', rom, 0x18E, sum(w[0] for w in struct.iter_unpack('>H', rom[0x200:])) & 0xFFFF)
-    assert len(rom) == ROM_SIZE and rom[0x100:0x110] == b'SEGA SSF        '
-    assert struct.unpack_from('>I', rom, 0x1A4)[0] == ROM_SIZE - 1
+    system = b'SEGA MEGA DRIVE ' if args.classic_sram else b'SEGA SSF        '
+    # The classic >4 MiB mapper on BlastEm uses the CPU-visible address range
+    # here, while the file still contains both extra SSF pages.
+    rom_end = 0x3FFFFF if args.classic_sram else ROM_SIZE - 1
+    rom[0x100:0x110] = system
+    struct.pack_into('>I', rom, 0x1A4, rom_end)
+    assert len(rom) == ROM_SIZE and rom[0x100:0x110] == system
+    assert struct.unpack_from('>I', rom, 0x1A4)[0] == rom_end
     assert rom[EXTRA:EXTRA + MAP_OFFSET] == rom[SLOT:SLOT + MAP_OFFSET]
     assert rom[start:start + len(wad)] == wad
     args.output.write_bytes(rom)
     result = dict(file=str(args.output), bytes=len(rom), sha256=hashlib.sha256(rom).hexdigest(),
-                  base_bytes=len(initial), map_rom_offset=hex(start), map_bytes=len(wad),
+                  base_bytes=len(initial), mapper='classic' if args.classic_sram else 'extended',
+                  header_rom_end=hex(rom_end), map_rom_offset=hex(start), map_bytes=len(wad),
                   map_sha256=hashlib.sha256(wad).hexdigest(), map_source=FREEDOOM_COMMIT,
                   license='BSD-3-Clause', conversion=report)
     args.report.write_text(json.dumps(result, indent=2) + '\n')

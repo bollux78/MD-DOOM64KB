@@ -18,7 +18,12 @@ Order matters: page first, then write-enable; write-protect first, then page bac
 writable. Active only with DOOM_R133_SSF_BOOT (the 5 MiB SSF builds); 4 MiB builds unchanged.
 Slot 0 stays page 0 (low 5 bits of $A130F0 = 0). No RAM added.
 """
+import argparse
 from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--classic-sram", action="store_true")
+classic_sram = parser.parse_args().classic_sram
 
 PAGE = 10
 
@@ -28,7 +33,8 @@ def rep(f, a, b, n=1):
 
 
 H = 'src/r22_blocklinks.h'
-rep(H, '#ifndef R22_SRAM_ENABLE\n', '''#if defined(DOOM_R133_SSF_BOOT)
+if not classic_sram:
+    rep(H, '#ifndef R22_SRAM_ENABLE\n', '''#if defined(DOOM_R133_SSF_BOOT)
 /* R135: extended SSF mapper (header "SEGA SSF"): page %d in slot 4, cartridge write-enable. */
 #define R22_SRAM_ENABLE() do { *(volatile uint8_t*)0x00A130F9UL=%d; *(volatile uint16_t*)0x00A130F0UL=0xA000u; } while(0)
 #define R22_SRAM_DISABLE() do { *(volatile uint16_t*)0x00A130F0UL=0x8000u; *(volatile uint8_t*)0x00A130F9UL=4; } while(0)
@@ -36,8 +42,8 @@ rep(H, '#ifndef R22_SRAM_ENABLE\n', '''#if defined(DOOM_R133_SSF_BOOT)
 #ifndef R22_SRAM_ENABLE
 ''' % (PAGE, PAGE))
 
-G = 'src/i_genesis.c'
-rep(G, '    *(volatile uint8_t*)0x00A130F1UL=0;\n', '''#if defined(DOOM_R133_SSF_BOOT)
+    G = 'src/i_genesis.c'
+    rep(G, '    *(volatile uint8_t*)0x00A130F1UL=0;\n', '''#if defined(DOOM_R133_SSF_BOOT)
     *(volatile uint16_t*)0x00A130F0UL=0x8000u; *(volatile uint8_t*)0x00A130F9UL=4; /* R135 */
 #else
     *(volatile uint8_t*)0x00A130F1UL=0;
@@ -84,4 +90,14 @@ for f in Path('src').rglob('*'):
         if n: seen[str(f)] = n
 allowed = {'src/r22_blocklinks.h': 2, 'src/i_genesis.c': 1, 'src/r81_save_codec.inc': 2, 'src/r_draw.c': 1, 'src/r21_prof.c': 1}
 assert seen == allowed, ('R135 audit: unexpected raw $A130F1 users', seen)
-print('R135b MED SRAM page', PAGE, 'audit ok')
+if classic_sram:
+    # Report which part of the unchanged map-memory probe failed on hardware.
+    M = 'src/r23_mapmem.c'
+    rep(M, '#if defined(DOOM_R39C_MOVEP_MAP)\n    /* Verify MOVEP lane order',
+        '    const int byte_ok = ok;\n    ok = 1;\n#if defined(DOOM_R39C_MOVEP_MAP)\n    /* Verify MOVEP lane order')
+    rep(M, '    if(!ok)I_Error("SRAM MAP STATE UNAVAILABLE");',
+        '    if(!byte_ok)I_Error("SRAM CLASSIC BYTE TEST FAILED");\n'
+        '    if(!ok)I_Error("SRAM CLASSIC MOVEP TEST FAILED");')
+    print('R135b classic SRAM audit ok')
+else:
+    print('R135b MED SRAM page', PAGE, 'audit ok')
