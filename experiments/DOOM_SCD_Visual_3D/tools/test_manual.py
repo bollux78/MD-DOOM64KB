@@ -26,8 +26,11 @@ asm = subprocess.check_output(
      "-d", f"--disassemble={main}", elf],
     text=True,
 )
-reads = re.findall(r"^\s*([0-9a-f]+):.*\bmovew\s+[0-9a-f]+ <joyState[^>]*>,%d[0-7]$",
-                   asm, re.MULTILINE)
+# LTO can emit a direct load or load the joyState address into a register first.
+reads = re.findall(
+    r"^\s*([0-9a-f]+):.*\b(?:movew|lea)\s+[0-9a-f]+ <joyState[^>]*>,%[ad][0-7]$",
+    asm, re.MULTILINE,
+)
 assert len(reads) == 1, (main, [line for line in asm.splitlines() if "joyState" in line])
 poll = int(reads[0], 16)
 fail, joy = at("scd_gate_fail"), at("joyState")
