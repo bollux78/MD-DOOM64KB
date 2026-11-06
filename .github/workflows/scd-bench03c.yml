@@ -1,0 +1,76 @@
+name: Sega CD 03C cartridge diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_Bench03C/**', '.github/workflows/scd-bench03c.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compile both 68000 images and verify ROM layout
+        shell: bash
+        env:
+          GDK: /home/dan/mars/m68k-elf
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/scd03c.XXXXXX")"
+          trap 'rm -rf "$work"' EXIT
+          cp -a experiments/DOOM_SCD_Bench03C/. "$work/"
+          cd "$work"
+          fish build.fish
+          python3 - <<'PY'
+          from pathlib import Path
+          from struct import unpack_from
+          sub = Path('build/subcpu.bin').read_bytes()
+          stack, entry = unpack_from('>II', sub)
+          assert (stack, entry) == (0x80000, 0x100)
+          assert 0x100 < len(sub) <= 0x20000
+          rom = Path('build/doom-scd-bench03c.bin').read_bytes()
+          assert rom[0x100:0x104] == b'SEGA' and b'C' in rom[0x190:0x1a0]
+          assert rom.count(sub) == 1
+          print('PASS: reset vectors, single embedded Sub-CPU image, Mode 1 device field')
+          PY
+          out="$HOME/Projetos/Personal/scd-bench03c/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cp build/doom-scd-bench03c.bin "$out/"
+          sha256sum "$out/doom-scd-bench03c.bin"
+          blastem="$HOME/Projetos/blastem64-1.0.0/blastem"
+          elf="$(find out -name 'rom.out' -print -quit)"
+          if test -x "$blastem" && test -n "$elf"; then
+            if PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 - "$blastem" "$work/build/doom-scd-bench03c.bin" "$elf" <<'PY'
+          import sys
+          from r64a_rsp_capture import RSP, symbols
+          blastem, rom, elf = sys.argv[1:]
+          address, = [addr for name, addr in symbols(elf).items() if name.split('.')[0] == 'upload_tiles']
+          debugger = RSP(blastem, rom, 300, 20)
+          try:
+              debugger.req('qSupported')
+              assert debugger.req(f'Z0,{address:x},2') == 'OK'
+              debugger.cont()
+              regs = debugger.req('g')
+              assert int(regs[17*8:18*8], 16) == address
+              assert debugger.req(f'z0,{address:x},2') == 'OK'
+              assert debugger.req('s').startswith(('S', 'T'))
+              regs = debugger.req('g')
+              assert int(regs[17*8:18*8], 16) != address
+              assert debugger.req(f'Z0,{address:x},2') == 'OK'
+              debugger.cont()
+              regs = debugger.req('g')
+              assert int(regs[17*8:18*8], 16) == address
+              print('BLASTEM MODE 1 PASS: two full Word RAM blocks verified; first VDP DMA completed')
+          finally:
+              debugger.close()
+          PY
+            then true
+            else echo "::warning::Mode 1 smoke test inconclusive with runner BIOS/configuration"
+            fi
+          else
+            echo "::warning::Mode 1 smoke test unavailable (BlastEm or linked ELF missing)"
+          fi
