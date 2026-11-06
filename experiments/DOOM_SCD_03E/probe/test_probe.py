@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import sys
 
+import profile_native
 import test_r136_play as play
 from r64a_rsp_capture import RSP
 
@@ -89,7 +90,8 @@ def main():
             show_rate("optimized Sega CD", frame_window(game))
             assert game.number("scd_rendered_batches") > before
             set_byte(game, "scd_available", 0)
-            show_rate("native renderer, same ROM and emulator", frame_window(game))
+            sampler = profile_native.Sampler(Path(sys.argv[2]), stem.with_suffix(".elf"))
+            profile_native.spawn(game, sampler, FRAMES)
             set_byte(game, "scd_available", 1)
 
             set_byte(game, "scd_verify", 2)
@@ -125,6 +127,11 @@ def main():
         game.g.close()
     if mode == "on":
         measure_prior(blastem)
+        game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
+        try:
+            profile_native.demo(game, sampler)
+        finally:
+            game.g.close()
 
 
 if __name__ == "__main__":
