@@ -1,0 +1,63 @@
+name: Sega CD visible scene replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [exp-chatgpt-scd-bench03b]
+    paths: ['experiments/DOOM_SCD_SceneReplay/**', '.github/workflows/scd-scene-replay.yml']
+permissions:
+  contents: read
+jobs:
+  scene:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    env:
+      BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build from private E1M1 capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdk="$HOME/mars/m68k-elf"
+          export PATH="$gdk/bin:$PATH"
+          replay="$GITHUB_WORKSPACE/experiments/DOOM_SCD_Bench03D_Replay"
+          cd experiments/DOOM_SCD_SceneReplay
+          mkdir -p build
+          ref="$HOME/Projetos/Personal/scd-03d/run-42245721084-1/reference"
+          original="$HOME/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pf"
+          python3 "$replay/tools/pack_trace.py" "$ref" "$original.bin" "$original.elf" "$gdk/bin/m68k-elf-nm"
+          cp "$replay/src/replay_asm.s" src/
+          cp "$replay/shared/replay.c" src/
+          m68k-elf-as -m68000 subcpu/boot.s -o build/sub.o
+          m68k-elf-as -m68000 src/replay_asm.s -o build/replay-asm.o
+          m68k-elf-gcc -m68000 -O2 -ffreestanding -fno-builtin -c src/scene.c -o build/scene.o
+          m68k-elf-gcc -m68000 -O2 -ffreestanding -fno-builtin -c src/replay.c -o build/replay.o
+          m68k-elf-gcc -m68000 -nostdlib -Wl,-Ttext=0,-e,subcpu_vectors -o build/sub.elf build/sub.o build/replay-asm.o build/scene.o build/replay.o -lgcc
+          m68k-elf-objcopy -O binary build/sub.elf build/sub.bin
+          python3 "$replay/tools/make_sub_header.py" build/sub.bin src/sub_program.h
+          make GDK="$gdk" PREFIX=m68k-elf- -j1
+          rom=out/release/rom.bin
+          if [ ! -f "$rom" ]; then rom=out/rom.bin; fi
+          elf=${rom%.bin}.out
+          out="$HOME/Projetos/Personal/scd-scene-replay/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          python3 "$replay/tools/mark_mode1.py" "$rom" "$out/doom-md-scd-scene-replay.bin"
+          python3 ../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-scene-replay.bin"
+          cp "$elf" "$out/doom-md-scd-scene-replay.elf"
+          echo "SCENE_OUT=$out" >> "$GITHUB_ENV"
+      - name: Compare render and two DMA transfers to the active VDP planes
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/scd-scene.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if ! test -f "$cfg"; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          stem="$SCENE_OUT/doom-md-scd-scene-replay"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SceneReplay/test_scene.py "$stem.bin" "$stem.elf"
