@@ -90,3 +90,31 @@ Esperado: o render sai do caminho crítico. O limite passa a ser `max(lógica, r
 - ROM, WAD, blobs e capturas só em `/home/dan/Projetos/Personal/`.
 - Nada de CD-DA nem leitura de disco nesta fase.
 - BlastEm: no máximo 10.000 quadros por execução, com a configuração fixa.
+
+## 8. Objetivo final: uma ROM só, com detecção (pedido do usuário, 2026-11-06)
+A mesma ROM usa o Sega CD se ele estiver acoplado. Sem ele, roda como a R128 pura.
+
+**Detecção na partida, antes de qualquer acesso a `$A12xxx`:**
+1. `$A10001` bit 5 = 0 (dispositivo de expansão presente) **e** `"SEGA"` em `$400100` (cabeçalho do BIOS).
+2. `boot_sub()` completo, com assinatura do sub e o modo 1M confirmado (MODE/RET, nunca DMNA), tudo dentro do prazo.
+3. Qualquer falha nos passos 1–2 → **modo Mega Drive (R128), sem `I_Error`**. A tela de título mostra `SEGA CD: ON/OFF`.
+4. Em jogo, se houver timeout persistente do sub (por exemplo 3 seguidos), cai para o render do Mega Drive na carga do próximo mapa.
+
+**ROM sem duplicar o WAD:**
+- O "packer" do §2 roda **no próprio principal, na carga do mapa**. Ele lê o WAD que já está na ROM e monta o blob direto na Program RAM.
+- Na ROM entra só o código do sub, de algumas dezenas de KiB.
+- Um script host (`pack_level.py`) gera a mesma saída e serve para conferir o CRC e o orçamento de 448 KiB.
+
+**RAM do principal:**
+- BSS ≤ 57.920 continua valendo nos dois modos.
+- O código SCD do principal não pode acrescentar BSS relevante: estado do protocolo em poucos bytes, pacote montado direto no banco 1M.
+- No modo Sega CD, as estruturas de render do principal ficam simplesmente sem uso.
+
+**Testes obrigatórios da ROM única:**
+| Ambiente | Exigência |
+|---|---|
+| BlastEm **sem** Sega CD | lógica idêntica à R128 All nas 10 demos e FPS dentro de ±2% da R128 (o modo Mega Drive não pode piorar) |
+| BlastEm **com** Sega CD | marcos E1–E3 |
+| Console sem Sega CD | Run All igual à R128 |
+| Console com Sega CD | Run All com `SEGA CD: ON` |
+| Flashcart + Sega CD | o mesmo, porque o Mode 1 por flashcart é o caso real do usuário |
