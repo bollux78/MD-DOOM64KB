@@ -135,7 +135,7 @@ static void wait_frame(u16 id, bool swap, u16 bank, bool useful_work)
         if ((!swap && CD_SUB_READY == id) ||
             (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 7u) == (4u | bank)))
             return;
-        if (vtimer - start >= 6u)
+        if (vtimer - start >= ((!swap && id <= 8u) ? 30u : 6u))
         {
             timeouts++;
             scd_replay_fail(swap ? "SWAP TIMEOUT" : "RENDER TIMEOUT");

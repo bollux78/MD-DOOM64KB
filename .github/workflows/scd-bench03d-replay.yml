@@ -77,6 +77,7 @@ jobs:
                   sp = int(regs[15*8:16*8], 16) & 0xffffff
                   ptr = int.from_bytes(g.readmem(sp + 4, 4), "big") & 0xffffff
                   reason = g.readmem(ptr, 40).split(b'\0', 1)[0]
+                  print("gate-array communication:", g.readmem(0xa12010, 28).hex())
                   raise AssertionError(f"replay ROM stopped: {reason!r}")
               assert pc == target
               values = {name: int.from_bytes(g.readmem(at(name), 4), "big") for name in (
