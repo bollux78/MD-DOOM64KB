@@ -20,19 +20,16 @@ def at(name):
     return address & 0xFFFFFF
 
 
+main, = (name for name in syms if name.split(".")[0] == "main")
 asm = subprocess.check_output(
     [str(Path(os.environ["GDK"]) / "bin/m68k-elf-objdump"),
-     "-d", "--disassemble=main", elf],
+     "-d", f"--disassemble={main}", elf],
     text=True,
 )
 reads = re.findall(r"^\s*([0-9a-f]+):.*\bmovew\s+[0-9a-f]+ <joyState[^>]*>,%d[0-7]$",
                    asm, re.MULTILINE)
-if len(reads) != 1 and "JOY_readJoypad" not in syms:
-    print(asm, flush=True)
-    print({k: hex(v) for k, v in syms.items() if any(
-        key in k for key in ("joy", "JOY", "camera", "heading", "main"))}, flush=True)
-    raise AssertionError(f"expected one joyState load, found {reads}")
-poll = int(reads[0], 16) if len(reads) == 1 else at("JOY_readJoypad")
+assert len(reads) == 1, (main, [line for line in asm.splitlines() if "joyState" in line])
+poll = int(reads[0], 16)
 fail, joy = at("scd_gate_fail"), at("joyState")
 g = RSP(os.environ["BLASTEM"], out / "doom-scd-visual-3d.bin", 8000, 90)
 phase = "boot"
@@ -95,7 +92,6 @@ try:
     print(f"{phase}: {position()}", flush=True)
 
     phase = "west wall"
-    hold(DOWN, 57)
     hold(LEFT, 16)
     hold(DOWN, 24)
     assert position() == (304, 808, 0), position()
