@@ -4,7 +4,7 @@ on:
     inputs:
       capture:
         description: Private capture folder name
-        default: run-42298796094-1
+        default: run-42299359419-1
         required: true
   push:
     branches: [exp-chatgpt-scd-bench03b]
@@ -16,7 +16,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     env:
-      RAY_CAPTURE: ${{ inputs.capture || 'run-42298796094-1' }}
+      RAY_CAPTURE: ${{ inputs.capture || 'run-42299359419-1' }}
       BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
     steps:
       - uses: actions/checkout@v6
@@ -32,7 +32,7 @@ jobs:
           cd experiments/DOOM_SCD_ASIC_Rays/replay
           mkdir -p build
           [[ "$RAY_CAPTURE" =~ ^run-[0-9]+-[0-9]+$ ]]
-          python3 prepare.py "$HOME/Projetos/doom-md/assets/wads/doom1.wad" "$HOME/Projetos/Personal/scd-asic-rays/$RAY_CAPTURE/e1m1-sight.json" build/ray-assets.bin
+          python3 prepare.py "$HOME/Projetos/doom-md/assets/wads/doom1.wad" "$HOME/Projetos/Personal/scd-asic-rays/$RAY_CAPTURE/e1m1-sight.json" build/ray-assets.bin mixed
           m68k-elf-as -m68000 subcpu/boot.s -o build/sub.o
           m68k-elf-gcc -m68000 -O2 -ffreestanding -fno-builtin -c subcpu/sub_bench.c -o build/bench.o
           m68k-elf-gcc -m68000 -nostdlib -Wl,-Ttext=0,-e,subcpu_vectors -o build/sub.elf build/sub.o build/bench.o -lgcc
@@ -46,9 +46,9 @@ jobs:
           test -f "$elf"
           out="$HOME/Projetos/Personal/scd-asic-rays/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          python3 "$tools/mark_mode1.py" "$rom" "$out/doom-md-scd-asic-rays.bin"
-          python3 ../../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-asic-rays.bin"
-          cp "$elf" "$out/doom-md-scd-asic-rays.elf"
+          python3 "$tools/mark_mode1.py" "$rom" "$out/doom-md-scd-asic-rays-v2.bin"
+          python3 ../../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-asic-rays-v2.bin"
+          cp "$elf" "$out/doom-md-scd-asic-rays-v2.elf"
           echo "SCD_ASIC_OUT=$out" >> "$GITHUB_ENV"
       - name: Compare ASIC, DDA and native visibility decisions
         shell: bash
@@ -61,6 +61,6 @@ jobs:
           if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
-          stem="$SCD_ASIC_OUT/doom-md-scd-asic-rays"
+          stem="$SCD_ASIC_OUT/doom-md-scd-asic-rays-v2"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_ASIC_Rays/replay/test_bench.py "$stem.bin" "$stem.elf"

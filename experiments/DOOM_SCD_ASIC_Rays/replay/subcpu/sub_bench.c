@@ -37,12 +37,22 @@ static bool asic(uint16_t width)
 
 static bool scan(uint16_t row, uint16_t length)
 {
-    for (uint16_t x = 0; x < length; ++x)
+    const volatile uint16_t *word = IMAGE + row * 2u;
+    while (length >= 8)
     {
-        const uint16_t word = IMAGE[((x >> 3) << 7) + row * 2u + ((x >> 2) & 1u)];
-        if (word & (0xf000u >> ((x & 3u) * 4u)))
+        if (word[0] || word[1])
             return true;
+        word += 128;
+        length -= 8;
     }
+    if (length >= 4)
+    {
+        if (*word++)
+            return true;
+        length -= 4;
+    }
+    if (length)
+        return (*word & (uint16_t)(0xffffu << ((4u - length) * 4u))) != 0;
     return false;
 }
 

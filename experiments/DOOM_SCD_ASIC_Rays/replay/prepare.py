@@ -5,7 +5,9 @@ from pathlib import Path
 import struct
 import sys
 
-wad_path, queries_path, output = map(Path, sys.argv[1:])
+wad_path, queries_path, output = map(Path, sys.argv[1:4])
+selection = sys.argv[4] if len(sys.argv) == 5 else "first"
+assert selection in ("first", "mixed")
 wad = wad_path.read_bytes()
 tag, count, directory = struct.unpack_from("<4sii", wad)
 assert tag in (b"IWAD", b"PWAD")
@@ -14,7 +16,13 @@ start = next(i for i, (_, _, name) in enumerate(lumps) if name.rstrip(b"\0") == 
 level = {name.rstrip(b"\0"): wad[pos:pos + size] for pos, size, name in lumps[start + 1:start + 11]}
 vertices = list(struct.iter_unpack("<hh", level[b"VERTEXES"]))
 lines = list(struct.iter_unpack("<7H", level[b"LINEDEFS"]))
-queries = json.loads(queries_path.read_text())[:256]
+recorded = json.loads(queries_path.read_text())
+if selection == "mixed":
+    clear = [q for q in recorded if q[5]][:128]
+    blocked = [q for q in recorded if not q[5]][:256 - len(clear)]
+    queries = sorted(clear + blocked, key=lambda q: q[0])
+else:
+    queries = recorded[:256]
 assert len(queries) == 256
 SCALE = 8
 min_x = min([p[0] for p in vertices] + [q[i] >> 16 for q in queries for i in (1, 3)]) // SCALE * SCALE - 16
@@ -68,4 +76,6 @@ for offset in range(0, len(queries), 64):
 assets = (struct.pack(">H", len(stamps) * 256) + b"".join(stamps) +
           struct.pack(">16384H", *stamp_map) + batches)
 output.write_bytes(assets)
-print(f"Packed {len(stamps)} stamps and 256 native E1M1 sight calls ({len(assets)} bytes).")
+print(f"Packed {len(stamps)} stamps and 256 native E1M1 sight calls ({len(assets)} bytes). "
+      f"Selection {selection}, tics {queries[0][0]}–{queries[-1][0]}, "
+      f"{sum(q[5] for q in queries)} visible out of {sum(q[5] for q in recorded)} in capture.")

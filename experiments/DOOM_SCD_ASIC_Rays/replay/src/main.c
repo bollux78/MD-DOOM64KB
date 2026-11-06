@@ -121,7 +121,7 @@ int main(bool hard_reset)
 {
     (void)hard_reset;
     VDP_setScreenWidth320();
-    VDP_drawText("doom-md-scd-asic-rays.bin", 8, 2);
+    VDP_drawText("doom-md-scd-asic-rays-v2.bin", 8, 2);
     run_bench();
     ray_bench_complete();
     if (ray_bench_result[0] == 2)
