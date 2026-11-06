@@ -27,6 +27,11 @@ asm = subprocess.check_output(
 )
 reads = re.findall(r"^\s*([0-9a-f]+):.*\bmovew\s+[0-9a-f]+ <joyState[^>]*>,%d[0-7]$",
                    asm, re.MULTILINE)
+if len(reads) != 1 and "JOY_readJoypad" not in syms:
+    print(asm, flush=True)
+    print({k: hex(v) for k, v in syms.items() if any(
+        key in k for key in ("joy", "JOY", "camera", "heading", "main"))}, flush=True)
+    raise AssertionError(f"expected one joyState load, found {reads}")
 poll = int(reads[0], 16) if len(reads) == 1 else at("JOY_readJoypad")
 fail, joy = at("scd_gate_fail"), at("joyState")
 g = RSP(os.environ["BLASTEM"], out / "doom-scd-visual-3d.bin", 8000, 90)
