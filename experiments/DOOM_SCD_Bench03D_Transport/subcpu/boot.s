@@ -28,8 +28,8 @@ loop:
     move.w  %d2, 0x000c0000
     move.w  %d2, 0xff8028
 wait_swap:
-    btst    #1, 0xff8003     /* Main requests swap by clearing DMNA */
-    beq.s   wait_swap
+    cmp.w   0xff8018, %d2    /* Main requests swap by writing the frame id */
+    bne.s   wait_swap
     eori.w  #1, %d4         /* Sub toggles RET to change both banks */
     move.w  %d4, 0xff8002
     move.w  %d2, 0xff8026

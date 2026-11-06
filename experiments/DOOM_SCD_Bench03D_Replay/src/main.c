@@ -9,6 +9,7 @@
 #define CD_MEMCTRL (*(volatile u16 *)0xA12002)
 #define CD_MAIN_SEQ (*(volatile u16 *)0xA12010)
 #define CD_MAIN_DATA (*(volatile u16 *)0xA12012)
+#define CD_MAIN_SWAP (*(volatile u16 *)0xA12018)
 #define CD_SUB_SIG (*(volatile const u16 *)0xA12020)
 #define CD_TIMER (*(volatile const u16 *)0xA1200C)
 #define CD_SUB_TICKS (*(volatile const u16 *)0xA12024)
@@ -71,6 +72,7 @@ static const char *boot_sub(void)
         return "BUS REQUEST TIMEOUT";
 
     CD_MAIN_SEQ = 0;
+    CD_MAIN_SWAP = 0;
     CD_MAIN_DATA = 0;
     for (u32 first = 0; first < SUB_PROGRAM_WORDS; first += 65536u)
     {
@@ -133,7 +135,7 @@ static void wait_frame(u16 id, bool swap, u16 bank, bool useful_work)
         if (CD_SUB_SIG == SUB_FAULT)
             scd_replay_fail("SUB CPU EXCEPTION");
         if ((!swap && CD_SUB_READY == id) ||
-            (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 7u) == (4u | bank)))
+            (swap && CD_SUB_ACK == id && (CD_MEMCTRL & 5u) == (4u | bank)))
             return;
         if (vtimer - start >= ((!swap && id <= 8u) ? 30u : 6u))
         {
@@ -171,7 +173,7 @@ int main(bool hard)
     const char *failure = boot_sub();
     if (failure)
         scd_replay_fail(failure);
-    for (u16 wait = 0; CD_SUB_SIG != SUB_READY || (CD_MEMCTRL & 7u) != 4u; wait++)
+    for (u16 wait = 0; CD_SUB_SIG != SUB_READY || (CD_MEMCTRL & 5u) != 4u; wait++)
     {
         if (wait == TIMEOUT_VBLANKS)
             scd_replay_fail("WORD RAM 1M INIT TIMEOUT");
@@ -211,7 +213,7 @@ int main(bool hard)
         const u16 elapsed = CD_SUB_TICKS;
         const u16 next_bank = (CD_MEMCTRL ^ 1u) & 1u;
         u16 start = CD_TIMER;
-        CD_MEMCTRL = 0;
+        CD_MAIN_SWAP = id; /* console: DMNA reads 1 after 2M->1M, so request swaps via comm word */
         wait_frame(id, TRUE, next_bank, FALSE);
         if (!verify)
             swap_ticks += delta(start);
