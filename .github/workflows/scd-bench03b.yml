@@ -1,0 +1,43 @@
+name: Sega CD 03B cartridge diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_Bench03B/**', '.github/workflows/scd-bench03b.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compile both 68000 images and verify ROM layout
+        shell: bash
+        env:
+          GDK: /home/dan/mars/m68k-elf
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/scd03b.XXXXXX")"
+          trap 'rm -rf "$work"' EXIT
+          cp -a experiments/DOOM_SCD_Bench03B/. "$work/"
+          cd "$work"
+          fish build.fish
+          python3 - <<'PY'
+          from pathlib import Path
+          from struct import unpack_from
+          sub = Path('build/subcpu.bin').read_bytes()
+          stack, entry = unpack_from('>II', sub)
+          assert (stack, entry) == (0x80000, 0x100)
+          assert 0x100 < len(sub) <= 0x20000
+          rom = Path('build/doom-scd-bench03b.bin').read_bytes()
+          assert rom[0x100:0x104] == b'SEGA' and b'C' in rom[0x190:0x1a0]
+          assert rom.count(sub) == 1
+          print('PASS: reset vectors, single embedded Sub-CPU image, Mode 1 device field')
+          PY
+          out="$HOME/Projetos/Personal/scd-bench03b/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cp build/doom-scd-bench03b.bin "$out/"
+          sha256sum "$out/doom-scd-bench03b.bin"
