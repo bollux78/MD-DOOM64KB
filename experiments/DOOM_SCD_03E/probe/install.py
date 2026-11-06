@@ -61,4 +61,9 @@ path.write_text(s[:a] + '    do\n    {\n        SCD_BeginWorld();\n' + world +
 replace(video, 'void R_DrawColumnSprite(const draw_column_vars_t *v) {',
         '#include "scd_probe.h"\n'
         'uint8_t *SCD_DrawBuffer(void) { return r115_draw; }\n'
+        'void SCD_LutBases(const uint8_t **base) {\n'
+        '    _Static_assert(R52_COLORMAP_BYTES == 34u * 256u, "Sega CD LUT layout");\n'
+        '    base[0] = R59_CURRENT.comp_even[0];\n'
+        '    base[1] = R59_CURRENT.comp_odd[0];\n'
+        '}\n'
         'void R_DrawColumnSprite(const draw_column_vars_t *v) {')

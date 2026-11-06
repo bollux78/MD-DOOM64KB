@@ -28,6 +28,13 @@ volatile uint32_t scd_copy_ticks, scd_wait_ticks, scd_sub_ticks, scd_pack_ticks;
 volatile uint8_t scd_route;
 
 enum { SCD_VERIFY_PIXELS = 1, SCD_PROFILE = 2, SCD_TEST_TIMEOUT = 4 };
+enum {
+    SCD_ROUTE_MASK = 3, SCD_REJECT_ALL = 3,
+    SCD_EARLY_REJECT = 4, SCD_LUT_RESIDENT = 8, SCD_SHARE_SOURCE = 16
+};
+void SCD_LutBases(const uint8_t **base);
+static void prepare_luts(void);
+
 static uint8_t in_world;
 static uint8_t pending;
 static uint16_t sequence;
@@ -109,7 +116,9 @@ void SCD_Probe(void)
         return;
     scd_available = boot_sub() && round_trip();
     sequence = COOKIE;
-    if (!scd_available)
+    if (scd_available)
+        packet->lut_base[0] = packet->lut_base[1] = 0;
+    else
         CD_CTRL = 0;
 }
 
@@ -124,13 +133,18 @@ static void clear_packet(void)
 {
     packet->columns = 0;
     packet->luts = 0;
+    packet->last_source = 0;
 }
 
 void SCD_BeginWorld(void)
 {
     in_world = scd_available;
     if (in_world)
+    {
         clear_packet();
+        if (scd_route & SCD_LUT_RESIDENT)
+            prepare_luts();
+    }
 }
 
 /* The BSP gives each wall its own rows. Merge edge nibbles so native
@@ -152,7 +166,7 @@ static int compose(uint8_t *fb, bool verify)
             {
                 uint8_t pair = src[(row >> 1) * SCD_STRIDE];
                 uint8_t pixel = row & 1u ? pair & 15u : pair >> 4;
-                if (pixel != packet->lut[column->lut][column->source[phase >> 9]])
+                if (pixel != packet->lut[column->lut][packet->source[column->source_slot][phase >> 9]])
                     return 0;
                 phase += column->step;
             }
@@ -269,8 +283,13 @@ static void exchange(void)
         scd_rendered_batches++;
         scd_textured_columns += packet->columns;
     }
+    /* The first exchange returns the bank used by the bootstrap handshake. */
+    if (previous == COOKIE && !pending)
+        packet->lut_base[0] = packet->lut_base[1] = 0;
     pending = submitted;
     clear_packet();
+    if (scd_route & SCD_LUT_RESIDENT)
+        prepare_luts();
 }
 
 int SCD_EndWorld(void)
@@ -305,12 +324,57 @@ static void copy_bytes(volatile uint8_t *dst, const uint8_t *src, uint16_t bytes
         *(volatile uint16_t *)(dst + i) = (uint16_t)src[i] << 8;
 }
 
+static void prepare_luts(void)
+{
+    const uint8_t *base[SCD_LUT_BANKS];
+    SCD_LutBases(base);
+    for (uint16_t parity = 0; parity < SCD_LUT_BANKS; ++parity)
+    {
+        if (packet->lut_base[parity] != (uintptr_t)base[parity])
+        {
+            const uint16_t first = SCD_MAX_LUTS + parity * SCD_LUTS_PER_PARITY;
+            copy_bytes(packet->lut[first], base[parity], SCD_LUTS_PER_PARITY * 256u);
+            packet->lut_base[parity] = (uintptr_t)base[parity];
+        }
+    }
+}
+
+static uint16_t lut_slot(const uint8_t *lut, uint8_t options)
+{
+    const uint32_t key = (uintptr_t)lut;
+    if (options & SCD_LUT_RESIDENT)
+    {
+        for (uint16_t parity = 0; parity < SCD_LUT_BANKS; ++parity)
+        {
+            const uint32_t offset = key - packet->lut_base[parity];
+            if (offset < SCD_LUTS_PER_PARITY * 256u && !(offset & 255u))
+                return SCD_MAX_LUTS + parity * SCD_LUTS_PER_PARITY + (offset >> 8);
+        }
+    }
+    uint16_t slot = 0;
+    while (slot < packet->luts && packet->lut_key[slot] != key)
+        ++slot;
+    if (slot == packet->luts)
+    {
+        packet->lut_key[slot] = key;
+        copy_bytes(packet->lut[slot], lut, 256);
+        packet->luts++;
+    }
+    return slot;
+}
+
 int SCD_Column(uint8_t *fb, uint8_t *dst, const uint8_t *source,
                const uint8_t *lut, uint16_t phase, uint16_t step,
                uint16_t rows, uint16_t odd)
 {
     if (!in_world || !scd_available)
         return 0;
+
+    const uint8_t options = scd_route;
+    const uint8_t route = options & SCD_ROUTE_MASK;
+    if (route == SCD_REJECT_ALL)
+        return 0;
+    const uint16_t limit = route == 1 ? rows : rows >> 1;
 
     uint32_t offset = (uintptr_t)dst - (uintptr_t)fb;
     if (!rows || rows > SCD_MAX_ROWS || odd > 1 || offset >= SCD_FRAME_BYTES ||
@@ -340,39 +404,54 @@ int SCD_Column(uint8_t *fb, uint8_t *dst, const uint8_t *source,
                 max_sample = f >> 9;
             if ((f >> 9) < min_sample)
                 min_sample = f >> 9;
+            if (route && (options & SCD_EARLY_REJECT) &&
+                max_sample - (min_sample & ~1u) + 1u > limit)
+                goto rejected;
         }
     }
     min_sample &= ~1u;
     const uint16_t bytes = max_sample - min_sample + 1u;
-    const uint8_t route = scd_route;
-    if (route && bytes > (route == 1 ? rows : rows >> 1))
-    {
-        if (profile)
-            scd_pack_ticks += elapsed(mark);
-        return 0;
-    }
+    if (route && bytes > limit)
+        goto rejected;
 
-    uint16_t slot = 0;
-    const uint32_t key = (uintptr_t)lut;
-    while (slot < packet->luts && packet->lut_key[slot] != key)
-        ++slot;
-    if (slot == packet->luts)
-    {
-        packet->lut_key[slot] = key;
-        copy_bytes(packet->lut[slot], lut, 256);
-        packet->luts++;
-    }
-
-    volatile ScdColumn *column = &packet->column[packet->columns];
+    const uint16_t index = packet->columns;
+    volatile ScdColumn *column = &packet->column[index];
     column->offset = offset;
     column->phase = phase;
     column->step = step;
     column->rows = rows;
     column->odd = odd;
-    column->lut = slot;
-    copy_bytes(column->source + min_sample, source + min_sample, bytes);
-    packet->columns++;
+    column->lut = lut_slot(lut, options);
+
+    uint16_t source_slot = index;
+    const uint32_t source_key = (uintptr_t)source;
+    /* Only cartridge ROM sources are immutable. Reuse a copied range
+     * only if it covers all samples in this command. */
+    if ((options & SCD_SHARE_SOURCE) && source_key &&
+        source_key < 0x400000UL && source_key == packet->last_source &&
+        min_sample >= packet->last_min && max_sample <= packet->last_max)
+    {
+        source_slot = packet->last_slot;
+    }
+    else
+    {
+        copy_bytes(packet->source[index] + min_sample, source + min_sample, bytes);
+        if (options & SCD_SHARE_SOURCE)
+        {
+            packet->last_source = source_key;
+            packet->last_slot = index;
+            packet->last_min = min_sample;
+            packet->last_max = max_sample;
+        }
+    }
+    column->source_slot = source_slot;
+    packet->columns = index + 1u;
     if (profile)
         scd_pack_ticks += elapsed(mark);
     return 1;
+
+rejected:
+    if (profile)
+        scd_pack_ticks += elapsed(mark);
+    return 0;
 }

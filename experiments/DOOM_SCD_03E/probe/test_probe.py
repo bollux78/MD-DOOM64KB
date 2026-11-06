@@ -14,6 +14,26 @@ def bounded_rsp(exe, rom, _max_frames, timeout):
 
 play.RSP = bounded_rsp
 FRAMES = 24
+ROUTES = {
+    0: "all",
+    1: "route1",
+    2: "route2",
+    3: "reject-all",
+    5: "route1+early",
+    6: "route2+early",
+    8: "all+resident-luts",
+    16: "all+shared-source",
+    24: "all+resident-luts+shared-source",
+    29: "route1+all-optimizations",
+}
+METRICS = (
+    ("scd_rendered_batches", 2),
+    ("scd_textured_columns", 2),
+    ("scd_copy_ticks", 4),
+    ("scd_wait_ticks", 4),
+    ("scd_sub_ticks", 4),
+    ("scd_pack_ticks", 4),
+)
 
 
 def set_byte(game, name, value):
@@ -29,7 +49,7 @@ def enter_level(game):
     game.check_map(1, 85)
 
 
-def frame_window(game, frames=FRAMES):
+def frame_window(game, frames=FRAMES, metrics=()):
     """Measure identical views at the E1M1 spawn, excluding startup."""
     game.breakpoint(game.frame)
 
@@ -41,10 +61,15 @@ def frame_window(game, frames=FRAMES):
         next_frame()
         position = game.position()
         start = game.number("ticcount", 4)
+        initial = [game.number(name, size) for name, size in metrics]
         for _ in range(frames):
             next_frame()
         end = game.number("ticcount", 4)
         assert end > start and game.position() == position, (start, end, position)
+        if metrics:
+            deltas = tuple((game.number(name, size) - before) % (1 << (size * 8))
+                           for (name, size), before in zip(metrics, initial))
+            return end - start, deltas
         return end - start
     finally:
         game.breakpoint(game.frame, False)
@@ -87,12 +112,14 @@ def main():
         if available:
             # Speed runs exclude the software pixel verifier.
             before = game.number("scd_rendered_batches")
-            for route in range(3):
+            for route, label in ROUTES.items():
                 set_byte(game, "scd_route", route)
-                start_cols = game.number("scd_textured_columns")
-                show_rate(f"SPLIT-ALT route={route}", frame_window(game))
-                print(f"PERF route={route} spawn columns={game.number('scd_textured_columns') - start_cols}",
+                vblanks, (batches, columns) = frame_window(game, metrics=METRICS[:2])
+                show_rate(label, vblanks)
+                print(f"PERF {label}: {batches} batches, {columns} columns in spawn window",
                       flush=True)
+                if route == 3:
+                    assert batches == columns == 0
             assert game.number("scd_rendered_batches") > before
             set_byte(game, "scd_route", 0)
             set_byte(game, "scd_available", 0)
@@ -101,18 +128,17 @@ def main():
             set_byte(game, "scd_available", 1)
 
             set_byte(game, "scd_verify", 2)
-            before = game.number("scd_rendered_batches")
             profile_frames = 8
-            frame_window(game, profile_frames)
-            batches = game.number("scd_rendered_batches") - before
-            assert batches >= profile_frames
-            copy = game.number("scd_copy_ticks", 4)
-            wait = game.number("scd_wait_ticks", 4)
-            sub = game.number("scd_sub_ticks", 4)
-            pack = game.number("scd_pack_ticks", 4)
-            assert min(copy, wait, sub, pack) > 0, (copy, wait, sub, pack)
-            print(f"PERF SPLIT-ALT stopwatch: {profile_frames} sampled frames, {batches} batches, "
-                  f"compose={copy}, wait={wait}, sub={sub}, pack={pack} ticks", flush=True)
+            for route in (0, 1, 2, 3, 5, 6, 8, 16, 24, 29):
+                set_byte(game, "scd_route", route)
+                vblanks, (batches, columns, copy, wait, sub, pack) = frame_window(
+                    game, profile_frames, METRICS)
+                if route in (0, 8, 16, 24):
+                    assert batches >= profile_frames and min(copy, sub, pack) > 0
+                print(f"PERF stopwatch {ROUTES[route]}: {profile_frames} frames / {vblanks} VBlanks, "
+                      f"{batches} batches, {columns} columns, "
+                      f"compose={copy}, wait={wait}, sub={sub}, pack={pack} ticks", flush=True)
+            set_byte(game, "scd_route", 24)
 
         # Pixel comparison runs separately while playing the game.
         set_byte(game, "scd_verify", 1)
@@ -134,7 +160,7 @@ def main():
     if mode == "on":
         measure_prior(blastem)
         reference = None
-        for route in (None, 0, 1, 2):
+        for route in (None, *ROUTES):
             game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
             try:
                 captured = profile_native.demo(game, sampler, route)
@@ -148,7 +174,7 @@ def main():
                 game.g.close()
         game = play.Play(blastem, Path(sys.argv[2]), stem.with_suffix(".elf"))
         try:
-            captured = profile_native.demo(game, sampler, route=0, force_timeout=True)
+            captured = profile_native.demo(game, sampler, route=24, force_timeout=True)
             assert captured == reference, [tic for tic, frame in captured.items() if frame != reference[tic]]
             print("PASS timeout: same-frame native redraw at tic 211 and matching subsequent checkpoints",
                   flush=True)

@@ -15,29 +15,12 @@ uint32_t scd_render_world(ScdPacket *packet, uint32_t sequence)
             column->offset + SCD_STRIDE * ((rows + odd - 1u) >> 1) >= SCD_FRAME_BYTES)
             return 2;
         uint8_t *dst = (uint8_t *)packet->frame + column->offset;
-        if (column->lut == SCD_FLAT)
-        {
-            uint8_t shade = column->step;
-            if (shade > 15)
-                return 3;
-            if (odd)
-            {
-                *dst = (*dst & 0xf0u) | shade;
-                dst += SCD_STRIDE;
-                --rows;
-            }
-            for (uint16_t pairs = rows >> 1; pairs; --pairs, dst += SCD_STRIDE)
-                *dst = (shade << 4) | shade;
-            if (rows & 1u)
-                *dst = (*dst & 0x0fu) | (shade << 4);
-        }
-        else
-        {
-            if (column->lut >= packet->luts)
-                return 4;
-            R60_WallDraw(dst, column->source, packet->lut[column->lut],
-                         column->phase, column->step, rows, odd);
-        }
+        if ((column->lut >= packet->luts && column->lut < SCD_MAX_LUTS) ||
+            column->lut >= SCD_MAX_LUTS + SCD_RESIDENT_LUTS ||
+            column->source_slot > i)
+            return 4;
+        R60_WallDraw(dst, packet->source[column->source_slot], packet->lut[column->lut],
+                     column->phase, column->step, rows, odd);
     }
     return 0;
 }
