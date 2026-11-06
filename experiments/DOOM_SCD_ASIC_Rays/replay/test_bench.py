@@ -7,7 +7,7 @@ import sys
 
 from r64a_rsp_capture import RSP
 
-rom, elf = map(Path, sys.argv[1:])
+rom, elf = map(Path, sys.argv[1:3])
 nm = Path.home() / "mars/m68k-elf/bin/m68k-elf-nm"
 symbols = {}
 for line in subprocess.check_output([nm, elf], text=True).splitlines():
@@ -31,5 +31,15 @@ try:
     print("RAY_BENCH " + json.dumps(result, sort_keys=True), flush=True)
     assert result["state"] == 2 and result["rays"] == 256 and not result["timeouts"], result
     assert not result["asic_dda_mismatches"], result
+    selected = json.loads(Path(sys.argv[3]).read_text())
+    raw_hits = b"".join(g.readmem(0x630040 + offset, 128) for offset in range(0, 1024, 128))
+    hits = [int.from_bytes(raw_hits[i:i + 4], "big") for i in range(0, 1024, 4)]
+    pairs = [{"tic": q[0], "native_visible": bool(q[5]),
+              "first_block_map_units": None if hit == 0xffffffff else hit / 256}
+             for q, hit in zip(selected, hits)]
+    assert len(pairs) == 256
+    assert sum(q["native_visible"] and q["first_block_map_units"] is not None for q in pairs) == result["false_blocked"]
+    rom.with_suffix(".hits.json").write_text(json.dumps(pairs, indent=1) + "\n")
+    print("False-blocked distances:", [q for q in pairs if q["native_visible"] and q["first_block_map_units"] is not None])
 finally:
     g.close()

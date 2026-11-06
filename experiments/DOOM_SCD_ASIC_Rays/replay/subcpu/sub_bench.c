@@ -35,28 +35,53 @@ static bool asic(uint16_t width)
     return false;
 }
 
-static bool scan(uint16_t row, uint16_t length)
+enum { CLEAR = UINT16_MAX, STRIDE = 8 };
+#define HITS ((volatile uint32_t *)0x0b0040)
+
+static uint16_t first_nibble(uint16_t word)
+{
+    uint16_t i = 0;
+    while (!(word & 0xf000u))
+    {
+        word <<= 4;
+        ++i;
+    }
+    return i;
+}
+
+static uint16_t scan(uint16_t row, uint16_t length)
 {
     const volatile uint16_t *word = IMAGE + row * 2u;
+    uint16_t i = 0;
     while (length >= 8)
     {
-        if (word[0] || word[1])
-            return true;
+        const uint16_t a = word[0], b = word[1];
+        if (a)
+            return i + first_nibble(a);
+        if (b)
+            return i + 4u + first_nibble(b);
         word += 128;
         length -= 8;
+        i += 8;
     }
     if (length >= 4)
     {
-        if (*word++)
-            return true;
+        const uint16_t a = *word++;
+        if (a)
+            return i + first_nibble(a);
         length -= 4;
+        i += 4;
     }
     if (length)
-        return (*word & (uint16_t)(0xffffu << ((4u - length) * 4u))) != 0;
-    return false;
+    {
+        const uint16_t a = *word & (uint16_t)(0xffffu << ((4u - length) * 4u));
+        if (a)
+            return i + first_nibble(a);
+    }
+    return CLEAR;
 }
 
-static bool dda(const uint16_t *ray)
+static uint16_t dda(const uint16_t *ray)
 {
     uint32_t fx = (uint32_t)ray[0] << 8, fy = (uint32_t)ray[1] << 8;
     const int32_t dx = (int16_t)ray[2], dy = (int16_t)ray[3];
@@ -69,12 +94,12 @@ static bool dda(const uint16_t *ray)
             const uint16_t word = STAMPS[((uint32_t)stamp << 6) + ((x & 31u) >> 3) * 64u +
                                           (y & 31u) * 2u + ((x >> 2) & 1u)];
             if (word & (0xf000u >> ((x & 3u) * 4u)))
-                return true;
+                return i;
         }
         fx += dx;
         fy += dy;
     }
-    return false;
+    return CLEAR;
 }
 
 void ray_bench(void)
@@ -92,7 +117,7 @@ void ray_bench(void)
         const uint16_t width = *src++;
         const uint16_t *vectors = src;
         uint16_t mark = TIMER;
-        for (uint16_t i = 0; i < RAYS; ++i, src += 6)
+        for (uint16_t i = 0; i < RAYS; ++i, src += STRIDE)
             for (uint16_t j = 0; j < 4; ++j)
                 TRACE[i * 4u + j] = src[j];
         report[SETUP] += elapsed(mark);
@@ -103,35 +128,39 @@ void ray_bench(void)
             break;
         }
         report[DRAW] += elapsed(mark);
-        bool blocked[RAYS];
+        uint16_t hit[RAYS];
         for (uint16_t base = 0; base < RAYS; base += 8)
         {
             mark = TIMER;
             for (uint16_t i = base; i < base + 8u; ++i)
-                blocked[i] = scan(i, vectors[i * 6u + 4u]);
+                hit[i] = scan(i, vectors[i * STRIDE + 4u]);
             report[SCAN] += elapsed(mark);
         }
         for (uint16_t base = 0; base < RAYS; base += 8)
         {
-            bool software[8];
+            uint16_t software[8];
             mark = TIMER;
             for (uint16_t i = 0; i < 8; ++i)
-                software[i] = dda(vectors + (base + i) * 6u);
+                software[i] = dda(vectors + (base + i) * STRIDE);
             report[DDA] += elapsed(mark);
             for (uint16_t i = 0; i < 8; ++i)
             {
                 const uint16_t row = base + i;
                 ++report[COUNT];
-                report[MISMATCH] += blocked[row] != software[i];
-                if (vectors[row * 6u + 5u])
+                const uint16_t *ray = vectors + row * STRIDE;
+                const bool blocked = hit[row] != CLEAR;
+                HITS[batch * RAYS + row] = blocked ?
+                    (uint32_t)(hit[row] + ray[6]) * ray[7] : UINT32_MAX;
+                report[MISMATCH] += hit[row] != software[i];
+                if (ray[5])
                 {
                     ++report[NATIVE_CLEAR];
-                    report[FALSE_BLOCK] += blocked[row];
+                    report[FALSE_BLOCK] += blocked;
                 }
                 else
                 {
                     ++report[NATIVE_BLOCK];
-                    report[FALSE_CLEAR] += !blocked[row];
+                    report[FALSE_CLEAR] += !blocked;
                 }
             }
         }

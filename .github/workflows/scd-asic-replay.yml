@@ -46,9 +46,10 @@ jobs:
           test -f "$elf"
           out="$HOME/Projetos/Personal/scd-asic-rays/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          python3 "$tools/mark_mode1.py" "$rom" "$out/doom-md-scd-asic-rays-v2.bin"
-          python3 ../../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-asic-rays-v2.bin"
-          cp "$elf" "$out/doom-md-scd-asic-rays-v2.elf"
+          python3 "$tools/mark_mode1.py" "$rom" "$out/doom-md-scd-asic-rays-v3.bin"
+          python3 ../../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-asic-rays-v3.bin"
+          cp "$elf" "$out/doom-md-scd-asic-rays-v3.elf"
+          cp build/ray-assets.json "$out/ray-assets.json"
           echo "SCD_ASIC_OUT=$out" >> "$GITHUB_ENV"
       - name: Compare ASIC, DDA and native visibility decisions
         shell: bash
@@ -61,6 +62,6 @@ jobs:
           if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
-          stem="$SCD_ASIC_OUT/doom-md-scd-asic-rays-v2"
+          stem="$SCD_ASIC_OUT/doom-md-scd-asic-rays-v3"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_ASIC_Rays/replay/test_bench.py "$stem.bin" "$stem.elf"
+            python3 experiments/DOOM_SCD_ASIC_Rays/replay/test_bench.py "$stem.bin" "$stem.elf" "$SCD_ASIC_OUT/ray-assets.json"

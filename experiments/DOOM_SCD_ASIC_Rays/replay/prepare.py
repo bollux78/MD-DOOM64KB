@@ -1,4 +1,5 @@
 """Pack private E1M1 walls and real query vectors for the isolated cartridge."""
+from fractions import Fraction
 import json
 import math
 from pathlib import Path
@@ -37,20 +38,31 @@ def mark(x, y):
     tile[offset] |= 1 << (0 if x & 1 else 4)
 
 
+def supercover(x1, y1, x2, y2):
+    """Mark every closed grid cell touched, including ties at vertices."""
+    dx, dy = x2 - x1, y2 - y1
+    events = {Fraction(0), Fraction(1)}
+    for start, finish in ((x1, x2), (y1, y2)):
+        low, high = sorted((start, finish))
+        if low != high:
+            events.update(Fraction(boundary - start, finish - start)
+                          for boundary in range((low // SCALE + 1) * SCALE, high, SCALE))
+    ordered = sorted(events)
+    for t in ordered + [(a + b) / 2 for a, b in zip(ordered, ordered[1:])]:
+        x, y = (x1 + dx * t) / SCALE, (y1 + dy * t) / SCALE
+        ix, iy = math.floor(x), math.floor(y)
+        for cx in ((ix - 1, ix) if x.denominator == 1 else (ix,)):
+            for cy in ((iy - 1, iy) if y.denominator == 1 else (iy,)):
+                mark(cx, cy)
+
+
 tiles = {}
 for a, b, flags, _, _, _, back in lines:
     if flags & 4 and back != 0xffff:
         continue
     x1, y1 = vertices[a]
     x2, y2 = vertices[b]
-    x1, x2 = (x1 - min_x) // SCALE, (x2 - min_x) // SCALE
-    y1, y2 = (y1 - min_y) // SCALE, (y2 - min_y) // SCALE
-    dx, dy = x2 - x1, y2 - y1
-    n = max(abs(dx), abs(dy), 1)
-    for i in range(n + 1):
-        x, y = x1 + round(i * dx / n), y1 + round(i * dy / n)
-        mark(x, y)
-        mark(x + int(abs(dy) > abs(dx)), y + int(abs(dx) >= abs(dy)))
+    supercover(x1 - min_x, y1 - min_y, x2 - min_x, y2 - min_y)
 
 stamps = {bytes(512): 0}
 stamp_map = [0] * (128 * 128)
@@ -70,8 +82,15 @@ for offset in range(0, len(queries), 64):
         steps = max(1, math.ceil(max(abs(x2 - x1), abs(y2 - y1)) / 8))
         assert steps + 1 <= 511
         dx, dy = [round(delta * 256 / steps) for delta in (x2 - x1, y2 - y1)]
-        vectors += struct.pack(">HHhhHH", x1, y1, dx, dy, steps, visible)
-        width = max(width, steps + 1)
+        distance = math.hypot(x2 - x1, y2 - y1)
+        trim = math.ceil(32 * steps / distance) if distance >= 64 else steps + 1
+        length = max(0, steps + 1 - 2 * trim)
+        if length:
+            x1 += round(dx * trim / 256)
+            y1 += round(dy * trim / 256)
+        vectors += struct.pack(">HHhhHHHH", x1, y1, dx, dy, length, visible,
+                               trim, round(distance * 256 / steps))
+        width = max(width, length, 1)
     batches += struct.pack(">H", width) + vectors
 assets = (struct.pack(">H", len(stamps) * 256) + b"".join(stamps) +
           struct.pack(">16384H", *stamp_map) + batches)
@@ -79,3 +98,4 @@ output.write_bytes(assets)
 print(f"Packed {len(stamps)} stamps and 256 native E1M1 sight calls ({len(assets)} bytes). "
       f"Selection {selection}, tics {queries[0][0]}–{queries[-1][0]}, "
       f"{sum(q[5] for q in queries)} visible out of {sum(q[5] for q in recorded)} in capture.")
+output.with_suffix(".json").write_text(json.dumps(queries) + "\n")
