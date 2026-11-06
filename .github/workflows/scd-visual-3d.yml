@@ -1,0 +1,111 @@
+name: Sega CD Live 3D
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-chatgpt-scd-bench03b']
+    paths: ['experiments/DOOM_SCD_Visual_3D/**', '.github/workflows/scd-visual-3d.yml']
+permissions:
+  contents: read
+env:
+  GDK: /home/dan/mars/m68k-elf
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+jobs:
+  verify:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Isolate ROM output and pin BlastEm divider
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/scd-visual.XXXXXX")"
+          out="$HOME/Projetos/Personal/scd-visual-3d/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out" "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if ! test -f "$cfg"; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          echo "SCD_WORK=$work" >> "$GITHUB_ENV"
+          echo "SCD_OUT=$out" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$work/config" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$work/data" >> "$GITHUB_ENV"
+      - name: Build the visual ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a experiments/DOOM_SCD_Visual_3D/. "$SCD_WORK/"
+          cd "$SCD_WORK"
+          fish build.fish
+          elf="$(find out -name rom.out -print -quit)"
+          test -n "$elf"
+          cp "$elf" "$SCD_OUT/visual.elf"
+          cp build/doom-scd-visual-3d.bin "$SCD_OUT/"
+          sha256sum "$SCD_OUT/doom-scd-visual-3d.bin"
+          echo 'build: PASS (Live 3D)'
+      - name: BlastEm live camera and VDP readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 - <<'PY'
+          import base64
+          import hashlib
+          import os
+          import zlib
+          from pathlib import Path
+          from r64a_rsp_capture import RSP, symbols
+
+          out = Path(os.environ["SCD_OUT"])
+          syms = symbols(out / "visual.elf")
+          def at(name):
+              address, = [v for k, v in syms.items() if k.split('.')[0] == name]
+              return address & 0xffffff
+
+          target, fail = at("scd_visual_checkpoint"), at("scd_gate_fail")
+          g = RSP(os.environ["BLASTEM"], out / "doom-scd-visual-3d.bin", 3000, 90)
+          def read(addr, size):
+              return int.from_bytes(g.readmem(addr, size), "big")
+
+          images, ticks = [], []
+          try:
+              g.req("qSupported")
+              for addr in (target, fail):
+                  assert g.req(f"Z0,{addr:x},2") == "OK"
+              for expected in (1, 65):
+                  g.cont()
+                  regs = g.req("g")
+                  pc = int(regs[17*8:18*8], 16) & 0xffffff
+                  sp = int(regs[15*8:16*8], 16) & 0xffffff
+                  if pc == fail:
+                      reason = g.readmem(read(sp + 4, 4) & 0xffffff, 40).split(b'\0', 1)[0]
+                      raise AssertionError(f"visual ROM stopped: {reason!r}")
+                  assert pc == target, hex(pc)
+                  assert read(at("scd_frames"), 4) == expected
+                  tiles = g.readmem(at("scd_vram_readback"), 8960)
+                  assert len(set(tiles)) >= 6, "scene has too few distinct pixel values"
+                  ticks.append(read(at("vtimer"), 4))
+                  print(f"frame {expected}: {len(tiles)} bytes, "
+                        f"{len(set(tiles))} pixel values, vblank {ticks[-1]}, "
+                        f"sha256 {hashlib.sha256(tiles).hexdigest()}", flush=True)
+                  (out / f"vram-frame-{expected:03d}.bin").write_bytes(tiles)
+                  images.append(tiles)
+                  if expected == 1:
+                      assert g.req(f"z0,{target:x},2") == "OK"
+                      assert g.req("s")[0] in "ST"
+                      assert g.req(f"Z0,{target:x},2") == "OK"
+              assert images[0] != images[1], "moving the camera did not change the scene"
+              print(f"blastem: PASS (65 live frames, two exact VRAM readbacks, "
+                    f"64 rendered frames in {ticks[1] - ticks[0]} VBlanks)", flush=True)
+              for frame, tiles in zip((1, 65), images):
+                  data = base64.b64encode(zlib.compress(tiles)).decode("ascii")
+                  print(f"SCD_VISUAL_TILES_{frame} {data}", flush=True)
+          finally:
+              g.close()
+          PY
+      - name: Remove isolated scratch
+        if: always()
+        shell: bash
+        run: |
+          if test -n "${SCD_WORK:-}"; then rm -rf -- "$SCD_WORK"; fi
