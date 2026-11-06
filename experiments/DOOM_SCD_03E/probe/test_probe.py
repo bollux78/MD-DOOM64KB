@@ -14,7 +14,7 @@ def bounded_rsp(exe, rom, _max_frames, timeout):
 play.RSP = bounded_rsp
 mode = sys.argv[1]
 stem = Path(os.environ["SCD_OUT"]) / "doom-md-r128-scd-probe"
-game = play.Play(os.environ["BLASTEM"], stem.with_suffix(".bin"), stem.with_suffix(".elf"))
+game = play.Play(os.environ["BLASTEM"], Path(sys.argv[2]), stem.with_suffix(".elf"))
 try:
     game.boot()
     available = game.number("scd_available", 1)

@@ -99,7 +99,7 @@ jobs:
           cp "$elf" "$out/doom-md-r128-scd-probe.elf"
           python3 experiments/DOOM_SCD_Bench03D_Transport/tools/mark_mode1.py "$rom" "$out/doom-md-r128-scd-probe.bin"
           echo "SCD_OUT=$out" >> "$GITHUB_ENV"
-      - name: Boot the same ROM with and without Sega CD and play E1M1
+      - name: Play E1M1 with Sega CD and exercise the fallback
         shell: bash
         run: |
           set -euo pipefail
@@ -112,9 +112,23 @@ jobs:
             cp "$cfg" "$work/$mode/config/blastem/blastem.cfg"
             target="$work/$mode/config/blastem/blastem.cfg"
             sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$target"
+            test_rom="$SCD_OUT/doom-md-r128-scd-probe.bin"
             if [ "$mode" = off ]; then
-              sed -i -E '/^[[:space:]]*scd_bios_(us|eu|jp)[[:space:]]/d; /^[[:space:]]*system[[:space:]]*\{/a\ scd_bios_us /nonexistent/scd-us.bin\n scd_bios_eu /nonexistent/scd-eu.bin\n scd_bios_jp /nonexistent/scd-jp.bin' "$target"
+              # BlastEm auto-attaches the expansion for a cartridge with device C.
+              # Change only the device header in the temporary emulator fixture.
+              python3 - "$test_rom" "$work/no-cd.bin" <<'PY'
+          from pathlib import Path
+          import sys
+
+          original, fixture = map(Path, sys.argv[1:])
+          rom = bytearray(original.read_bytes())
+          field = rom[0x190:0x1a0]
+          assert field.count(b"C") == 1
+          rom[0x190:0x1a0] = field.replace(b"C", b" ")
+          fixture.write_bytes(rom)
+          PY
+              test_rom="$work/no-cd.bin"
             fi
             XDG_CONFIG_HOME="$work/$mode/config" XDG_DATA_HOME="$work/$mode/data" \
-              PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 experiments/DOOM_SCD_03E/probe/test_probe.py "$mode"
+              PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" python3 experiments/DOOM_SCD_03E/probe/test_probe.py "$mode" "$test_rom"
           done
