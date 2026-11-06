@@ -1,11 +1,11 @@
-name: R136c Freedoom Classic SRAM Compatibility
+name: R136d Freedoom Bank 9 SRAM
 on:
   workflow_dispatch:
   push:
-    branches: ['exp-chatgpt-r136c-classic-sram']
+    branches: ['exp-chatgpt-r136d-bank9']
     paths:
       - '.github/workflows/r136-freedoom.yml'
-      - 'scripts/lab/apply_r135.py'
+      - 'scripts/lab/apply_r136d.py'
       - 'scripts/lab/apply_r136.py'
       - 'scripts/lab/r136_freedoom.py'
       - 'scripts/lab/test_r136_play.py'
@@ -57,7 +57,7 @@ jobs:
           test ! -e "$work"
           python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns(".git","dist","__pycache__"),symlinks=True)' "$GITHUB_WORKSPACE" "$work"
           echo "R136_WORK=$work" >> "$GITHUB_ENV"
-      - name: Apply R128 All, audited classic SRAM and R136 banked map
+      - name: Apply R128 All, audited bank 9 SRAM and R136 banked map
         shell: bash
         run: |
           set -euo pipefail
@@ -89,7 +89,8 @@ jobs:
           python3 scripts/lab/apply_r126.py
           R128_MODE=all python3 scripts/lab/apply_r128.py
           python3 scripts/lab/apply_r133.py
-          python3 scripts/lab/apply_r135.py --classic-sram
+          python3 scripts/lab/apply_r135.py
+          python3 scripts/lab/apply_r136d.py
           python3 scripts/lab/apply_r136.py
           python3 - <<'PY'
           from pathlib import Path
@@ -129,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$R136_WORK"
-          out="/home/dan/Projetos/Personal/r136c-classic-sram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="/home/dan/Projetos/Personal/r136d-bank9/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           source=dist/hud/doom-md-r60-r128-all-pl
           "$M68K_NM" "$source.elf" | awk '$3=="_etext" { found=1; if (tolower($1)>="00200000") exit 1 } END { if(!found) exit 1 }'
@@ -137,12 +138,12 @@ jobs:
           "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary "$source.elf" "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin"
           python3 scripts/lab/r136_freedoom.py --input "$source.bin" \
             --linked-size "$(stat -c %s "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin")" \
-            --iwad scripts/doom1.wad --base scripts/doom64.wad --classic-sram \
-            --output "$out/doom-md-r136c-classic-sram-5m.bin" --report "$out/R136-MANIFEST.json"
+            --iwad scripts/doom1.wad --base scripts/doom64.wad \
+            --output "$out/doom-md-r136d-bank9-5m.bin" --report "$out/R136-MANIFEST.json"
           rm "$RUNNER_TEMP/r136-linked-$GITHUB_RUN_ID.bin"
-          cp "$source.elf" "$out/doom-md-r136c-classic-sram-5m.elf"
+          cp "$source.elf" "$out/doom-md-r136d-bank9-5m.elf"
           cp docs/licenses/Freedoom-BSD-3-Clause.txt "$out/"
-          echo "::notice title=R136c build PASS::$out"
+          echo "::notice title=R136d build PASS::$out"
       - name: 'BlastEm: both map loads, cross-map save/load and R128 comparison'
         shell: bash
         env:
@@ -150,13 +151,13 @@ jobs:
           R128_REF: /home/dan/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all
         run: |
           set -euo pipefail
-          out="/home/dan/Projetos/Personal/r136c-classic-sram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="/home/dan/Projetos/Personal/r136d-bank9/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           work="$(mktemp -d "$RUNNER_TEMP/r136-play.XXXXXX")"
           export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
           mkdir -p "$XDG_CONFIG_HOME/blastem" "$XDG_DATA_HOME" "$out/blastem"
           cfg="$(dirname "$BLASTEM")/default.cfg"
           if test -f "$cfg"; then cp "$cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
-          rom=doom-md-r136c-classic-sram-5m
+          rom=doom-md-r136d-bank9-5m
           ref=doom-md-r60-r128-all-pl
           python3 - "$out" "$R128_REF" "$rom" "$ref" <<'PY'
           from hashlib import sha256
