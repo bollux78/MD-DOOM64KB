@@ -1,4 +1,4 @@
-name: Sega CD S1b fallback and S1d Z0 sub-engine smoke
+name: Sega CD S1d Z4 real P_SetupLevel / Z5 full-link probe
 on:
   workflow_dispatch:
   push:
@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py experiments/DOOM_SCD_SubPort/s1d/test_map.py experiments/DOOM_SCD_SubPort/s1d/test_live.py
+          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py experiments/DOOM_SCD_SubPort/s1d/test_map.py experiments/DOOM_SCD_SubPort/s1d/test_live.py experiments/DOOM_SCD_SubPort/s1d/build_setup.py experiments/DOOM_SCD_SubPort/s1d/test_setup.py
       - name: Restore VGM and pinned shareware WAD
         shell: bash
         run: |
@@ -148,22 +148,27 @@ jobs:
           out="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           python3 experiments/DOOM_SCD_SubPort/s1d/logic_slice.py "$tree" "$out" --ram-only
 
-      - name: S1d Z2 compile ROM with resident nine-lump WAD cache
+
+      - name: S1d Z4 strict link and package actual P_SetupLevel geometry ROM
+        id: z4_build
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
-          out="$HOME/Projetos/Personal/scd-subport-s1d-z2/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --resident
-          echo "S1D_Z2_OUT=$out" >> "$GITHUB_ENV"
-      - name: S1d Z2 BlastEm plus MD fallback
-        id: z2_blastem
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z4/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S1D_Z4_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out"
+      - name: S1d Z4 BlastEm real P_SetupLevel geometry plus MD fallback
+        id: z4_blastem
+        if: steps.z4_build.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          work=$(mktemp -d "$RUNNER_TEMP/s1d-z2.XXXXXX")
+          work=$(mktemp -d "$RUNNER_TEMP/s1d-z4.XXXXXX")
           trap 'rm -rf "$work"' EXIT
           mkdir -p "$work/config/blastem" "$work/data"
           cfg="$HOME/.config/blastem/blastem.cfg"
@@ -171,39 +176,22 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/s1d/test_live.py --resident "$S1D_Z2_OUT/doom-md-scd-s1d-z2.bin" "$S1D_Z2_OUT/doom-md-scd-s1d-z2.elf"
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py "$S1D_Z4_OUT/doom-md-scd-s1d-z4.bin" "$S1D_Z4_OUT/doom-md-scd-s1d-z4.elf"
 
-      - name: S1d Z3 compile ROM with native PRG-RAM E1M1 runtime geometry
+      - name: S1d Z5 full P_SetupLevel strict link diagnostic
         shell: bash
         run: |
           set -euo pipefail
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
-          out="$HOME/Projetos/Personal/scd-subport-s1d-z3/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --construct
-          echo "S1D_Z3_OUT=$out" >> "$GITHUB_ENV"
-      - name: S1d Z3 BlastEm plus MD fallback
-        id: z3_blastem
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          work=$(mktemp -d "$RUNNER_TEMP/s1d-z3.XXXXXX")
-          trap 'rm -rf "$work"' EXIT
-          mkdir -p "$work/config/blastem" "$work/data"
-          cfg="$HOME/.config/blastem/blastem.cfg"
-          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
-          cp "$cfg" "$work/config/blastem/blastem.cfg"
-          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
-          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/s1d/test_live.py --construct "$S1D_Z3_OUT/doom-md-scd-s1d-z3.bin" "$S1D_Z3_OUT/doom-md-scd-s1d-z3.elf"
-
-      - name: S1d Z2 and Z3 combined gate
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z5-link/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --full
+      - name: Z4 acceptance gate (Z5 remains diagnostic)
         if: always()
         shell: bash
         run: |
-          set -euo pipefail
-          echo "Z2 BlastEm outcome: ${{ steps.z2_blastem.outcome }}"
-          echo "Z3 BlastEm outcome: ${{ steps.z3_blastem.outcome }}"
-          test "${{ steps.z2_blastem.outcome }}" = "success"
-          test "${{ steps.z3_blastem.outcome }}" = "success"
+          echo "Z4 strict build: ${{ steps.z4_build.outcome }}"
+          echo "Z4 sub runtime / MD fallback: ${{ steps.z4_blastem.outcome }}"
+          test "${{ steps.z4_build.outcome }}" = "success"
+          test "${{ steps.z4_blastem.outcome }}" = "success"
