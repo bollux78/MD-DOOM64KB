@@ -178,16 +178,36 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py "$S1D_Z4_OUT/doom-md-scd-s1d-z4.bin" "$S1D_Z4_OUT/doom-md-scd-s1d-z4.elf"
 
-      - name: S1d Z5 full P_SetupLevel strict link diagnostic
+      - name: S1d Z5 full P_SetupLevel ROM strict build
+        id: z5_build
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          out="$HOME/Projetos/Personal/scd-subport-s1d-z5-link/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z5/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S1D_Z5_OUT=$out" >> "$GITHUB_ENV"
           python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --full
-      - name: Z4 acceptance gate (Z5 remains diagnostic)
+      - name: S1d Z5 BlastEm full P_SetupLevel player and things plus MD fallback
+        id: z5_blastem
+        if: steps.z5_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s1d-z5.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --full "$S1D_Z5_OUT/doom-md-scd-s1d-z5.bin" "$S1D_Z5_OUT/doom-md-scd-s1d-z5.elf"
+
+      - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
         run: |
@@ -195,3 +215,7 @@ jobs:
           echo "Z4 sub runtime / MD fallback: ${{ steps.z4_blastem.outcome }}"
           test "${{ steps.z4_build.outcome }}" = "success"
           test "${{ steps.z4_blastem.outcome }}" = "success"
+          echo "Z5 strict build: ${{ steps.z5_build.outcome }}"
+          echo "Z5 runtime: ${{ steps.z5_blastem.outcome }}"
+          test "${{ steps.z5_build.outcome }}" = "success"
+          test "${{ steps.z5_blastem.outcome }}" = "success"

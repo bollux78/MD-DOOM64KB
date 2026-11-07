@@ -5,7 +5,11 @@ G_Ticker remains on the MD after START; full P_SetupLevel is not claimed.
 import os, subprocess, sys, struct
 from pathlib import Path
 from r64a_rsp_capture import RSP
-rom, elf=map(Path,sys.argv[1:])
+full=len(sys.argv)==4 and sys.argv[1]=="--full"
+if len(sys.argv)!=(4 if full else 3):
+    raise SystemExit("usage: test_setup.py [--full] ROM ELF")
+rom, elf=map(Path,sys.argv[2:] if full else sys.argv[1:])
+expected=0x5A6D if full else 0x5A5D
 nm=Path("/home/dan/mars/m68k-elf/bin/m68k-elf-nm")
 symbols={}
 for line in subprocess.check_output([nm,str(elf)],text=True).splitlines():
@@ -31,8 +35,8 @@ try:
                         mdcrc=hex(mdcrc),subcrc=hex(subcrc),timeouts=timeouts)
             break
     assert report is not None,"missing S1d-Z4 completion"
-    print("S1d-Z4 actual P_SetupLevel(1) through P_GroupLines:",report,flush=True)
-    passed=(stage==5 and marker==0x5A5D and served==10 and errors==0
+    print("Z5 full P_SetupLevel" if full else "Z4 P_SetupLevel geometry",report,flush=True)
+    passed=(stage==5 and marker==expected and served==10 and errors==0
             and timeouts==0 and bytes_sent>0 and mdcrc==subcrc)
     for name in ("s1b_complete","I_Error"):
         g.req("z0,%x,2"%symbols[name])
@@ -40,7 +44,7 @@ try:
     g.cont()
     pc=int(g.req("g")[17*8:18*8],16)&0xFFFFFF
     fallback=pc==symbols["G_Ticker"]
-    print("Z4 build PASS / BlastEm", "PASS" if passed and fallback else "FAIL",
+    print("Z5 build PASS / BlastEm" if full else "Z4 build PASS / BlastEm", "PASS" if passed and fallback else "FAIL",
           "/ MD fallback",fallback,flush=True)
     assert passed and fallback
 finally:

@@ -25,6 +25,7 @@ opt=(tree/"out/.render_options").read_text().split()
 defs=[o for o in opt if o.startswith("-D") and not o.startswith(tuple(
     "-D"+d for d in ("DOOM_R22_SRAM_BLOCKLINKS","DOOM_R23_MAPMEM",
     "DOOM_R24_EPISODE","DOOM_R81_SAVE","DOOM_R25_MUSIC")))]
+if full: defs.append("-DSCD_FULL_SETUP")
 cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
     "-isystem",str(gdk/"inc"),"-isystem",str(gdk/"lib"),
     "-m68000","-O2","-fno-builtin","-ffreestanding",
@@ -155,9 +156,6 @@ print("S1d",("Z5" if full else "Z4"),"strict link:",
       "PASS" if p.returncode==0 else "FAIL", "objects",len(objs),flush=True)
 if p.returncode:
     print(p.stderr,flush=True)
-    if full:
-        print("Z5 is diagnostic only. No full-engine ROM was generated.",flush=True)
-        raise SystemExit(0)
     raise SystemExit(1)
 symbols={}
 for row in subprocess.check_output([nm,str(elf)],text=True).splitlines():
@@ -176,9 +174,8 @@ if binary.stat().st_size>128*1024:
     raise SystemExit("setup payload exceeds existing S1b single-window loader")
 print("S1d linked sub image bytes",binary.stat().st_size,
       "RAM end",hex(symbols["_end"]),flush=True)
-if full:
-    print("Z5 strict link succeeded but boot/emulator has NOT been verified.",flush=True)
-    raise SystemExit(0)
+name="doom-md-scd-s1d-z5" if full else "doom-md-scd-s1d-z4"
+marker="0x5A6Du" if full else "0x5A5Du"
 
 # Reuse trusted S1b boot and gameplay fallback, packaging private diagnostic ROM.
 subprocess.run(["python3",str(common.parent/
@@ -197,7 +194,7 @@ md=md.replace(needle,
 needle="const bool pass=r.stage==5 && r.serviced==4"
 assert md.count(needle)==1,"S1b acceptance predicate changed"
 md=md.replace(needle,
-    "const bool pass=r.reserved==0x5A5Du && r.stage==5 && r.serviced==10")
+    "const bool pass=r.reserved=="+marker+" && r.stage==5 && r.serviced==10")
 assert md.count("r.serviced==4")==0
 assert md.count("r.serviced==10")==1
 needle='VDP_drawText("S1B SUB WAD TRANSPORT",1,2);'
@@ -205,6 +202,9 @@ assert md.count(needle)==1
 md=md.replace(needle,
     'VDP_drawText("S1D Z4 REAL P_SETUP GEOM",1,2);\n'
     '    VDP_drawText(r.reserved==0x5A5Du?"SETUP PASS":"SETUP FAIL",1,11);')
+if full:
+    md=md.replace("S1D Z4 REAL P_SETUP GEOM","S1D Z5 FULL P_SETUP")
+    md=md.replace("r.reserved==0x5A5Du", "r.reserved=="+marker)
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",
@@ -212,7 +212,7 @@ subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",
                     o for o in opt if o.startswith("-D")),
                 "LIBGCC="+libgcc+" -lgcc"],
                cwd=tree,env=env,check=True)
-rom=out/"doom-md-scd-s1d-z4.bin"
+rom=out/(name+".bin")
 linear=out/"linear.bin"
 subprocess.run(["python3","scripts/lab/finish_r35_rom.py",
                 "out/rom.bin",str(linear)],check=True,cwd=tree)
@@ -222,5 +222,5 @@ subprocess.run(["python3",str(common.parent/
 subprocess.run(["python3",str(common.parent/
     "DOOM_SCD_03E/rom_identity.py"),str(rom)],check=True)
 linear.unlink()
-shutil.copyfile(tree/"out/release/rom.out",out/"doom-md-scd-s1d-z4.elf")
-print("S1d Z4 private ROM:",rom,flush=True)
+shutil.copyfile(tree/"out/release/rom.out",out/(name+".elf"))
+print("S1d Z5 private ROM:" if full else "S1d Z4 private ROM:",rom,flush=True)

@@ -36,6 +36,9 @@ void sub_main(void)
     _g_gamestate=GS_LEVEL;
     _g_gameskill=sk_medium;
     _g_gamemap=1;
+#if defined(SCD_FULL_SETUP)
+    _g_player.playerstate=PST_REBORN;
+#endif
     REG16(0xFF8024UL)=0x5701u; /* entering real P_SetupLevel */
     P_SetupLevel(1);
     REG16(0xFF8024UL)=0x5702u; /* returned after real P_GroupLines */
@@ -46,6 +49,11 @@ void sub_main(void)
     if(!_g_subsectors[0].sector || _g_sectors[0].linecount<=0 ||
        !_g_sectors[0].lines)
         I_Error("SCD SETUP SECTOR GROUPING");
+#if defined(SCD_FULL_SETUP)
+    if(!_g_player.mo || _g_player.mo->health!=100 ||
+       !_g_player.mo->subsector || _g_totalkills<=0)
+        I_Error("SCD FULL SETUP PLAYER OR THINGS");
+#endif
     Z_CheckHeap();
     const int16_t label=W_GetNumForName("E1M1");
     uint32_t crc=0xFFFFFFFFUL;
@@ -60,7 +68,11 @@ void sub_main(void)
         I_Error("SCD SETUP WAD CACHE");
     REG16(0xFF802AUL)=(uint16_t)(crc>>16);
     REG16(0xFF802CUL)=(uint16_t)crc;
+#if defined(SCD_FULL_SETUP)
+    REG16(0xFF8024UL)=0x5A6Du;
+#else
     REG16(0xFF8024UL)=0x5A5Du;
+#endif
     REG16(0xFF8020UL)=0x51B1u;
     for(;;){}
 }
