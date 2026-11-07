@@ -7,7 +7,6 @@
  * must survive MD-driven bank swaps during rendering and P_Ticker.
  */
 #include <stdint.h>
-#include <string.h>
 #include "doomtype.h"
 #include "w_wad.h"
 #include "i_system.h"
