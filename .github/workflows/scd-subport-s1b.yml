@@ -166,6 +166,6 @@ jobs:
           cfg="$HOME/.config/blastem/blastem.cfg"
           if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
           cp "$cfg" "$work/config/blastem/blastem.cfg"
-          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\\17/' "$work/config/blastem/blastem.cfg"
-          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \\
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s1d/test_zone.py "$S1D_Z0_OUT/doom-md-scd-s1d-z0.bin" "$S1D_Z0_OUT/doom-md-scd-s1d-z0.elf"
