@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['exp-chatgpt-scd-bench03b']
-    paths: ['experiments/DOOM_SCD_SubPort/**', '.github/workflows/scd-subport-s0.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s0_report.py', '.github/workflows/scd-subport-s0.yml']
 permissions:
   contents: read
 env:
