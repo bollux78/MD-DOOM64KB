@@ -38,3 +38,22 @@ Correção do erro original: `zone_sub_main.c` precisava incluir `i_system.h`, c
 
 ## Critério de pronto
 S1 só está completo com `G_Ticker` demonstravelmente executando no sub-68000, dados reais via servidor MD, 2600 tics instrumentados, fingerprints avaliados e fallback START jogável. Sucesso de compilação não equivale a jogabilidade/paridade.
+
+## S1d-Z1 — leitura e validação E1M1 na CPU sub (07/11/2026)
+
+**Build e BlastEm PASS:** [run 42395731404](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42395731404), commit `c7d2be5`.
+
+- ROM privada gerada: `/home/dan/Projetos/Personal/scd-subport-s1d-z1/run-42395731404-1/doom-md-scd-s1d-z1.bin` (Mode 1, 3.932.160 bytes).
+- Código na branch: `experiments/DOOM_SCD_SubPort/s1d/map_sub_main.c`, variante `--map` de `s1d/build_zone.py`, `s1d/test_map.py`.
+- Sega CD sub-68000: `Z_Init`/memória, WAD remoto com cache e **validação dos nove lumps E1M1** (THINGS, LINEDEFS, SIDEDEFS, SEGS, SSECTORS, NODES, SECTORS, REJECT, BLOCKMAP) usando os tipos reais do port, com verificações de índices e relações geométricas. Registro final sub `0x5A2D` chegou ao MD.
+- Relatório real do BlastEm: `stage=5`, `served=10` (DIR + nove lumps), `errors=0`, `timeouts=0`, `bytes=52895`, `mdcrc=subcrc=0x5547100C`.
+- O `G_Ticker` alcançado após START/timeout **continua sendo no Mega Drive**.
+- **Importante:** a Z1 processa cada lump e chama `W_FlushCache` em seguida. Portanto o pico de cache medido aqui **não demonstra** que o carregamento completo por `P_SetupLevel` caiba com todos os ponteiros residentes. Tampouco executa `P_SetupLevel`, `P_SpawnSpecials` ou os 2600 tics de demo.
+- A execução anterior `42395502556` falhou porque Z1 tentou modificar a mesma árvore temporária já alterada por Z0; corrigido para usar sempre `s1b/s1b_md.c` original como base e respeitar o índice `NO_INDEX` de segmentos.
+- S1a e S1b continuam preservadas; ROM e WAD privados no runner. Hardware físico: **NOT TESTED**.
+
+### Próximo marco S1d-Z2
+
+1. Fazer link **estrito** (sem `--unresolved-symbols=ignore-all`) com `P_SetupLevel` como raiz, registrar dependências *vivas* e resolver apenas a camada necessária a lógica E1M1 sem render.
+2. Usar o cache **residente** sem `W_FlushCache` durante `P_SetupLevel`, medir pico e pressão de memória PRG-RAM; preservar dados 1M Word RAM somente para transporte, nunca como ponteiros permanentes.
+3. Rodar `P_SetupLevel(1)` com servidor MD ativo em uma ROM diagnóstica que mantenha START → R128 no MD. Só depois ligar o demo `G_Ticker` no sub e comparar fingerprints da S1e.
