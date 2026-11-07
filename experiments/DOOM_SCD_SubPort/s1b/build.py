@@ -46,13 +46,13 @@ p = tree / "src/w_wad.c"
 ws=p.read_text()
 needle="const char __far* PUREFUNC W_GetNameForNum(int16_t num)"
 assert ws.count(needle)==1
-ws=ws.replace(needle,"uint16_t SCD_MdLumpCount(void) { const wadinfo_t *header=(const wadinfo_t *)&doom_iwad[0]; return (uint16_t)header->numlumps; }\\n\\n"+needle)
+ws=ws.replace(needle,"uint16_t SCD_MdLumpCount(void) { const wadinfo_t *header=(const wadinfo_t *)&doom_iwad[0]; return (uint16_t)header->numlumps; }\n\n"+needle)
 p.write_text(ws)
 g = tree / "src/i_genesis.c"
 s = g.read_text()
 anchor = "\tD_DoomMain(argc, argv);"
 assert s.count(anchor) == 1
-s = s.replace(anchor, "\t{ void S1A_Test(void); S1A_Test(); }\n" + anchor)
+s = s.replace(anchor, "\t{ void S1B_Test(void); S1B_Test(); }\n" + anchor)
 g.write_text(s)
 render = " ".join(defs)
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
