@@ -7,6 +7,8 @@ on:
       - '.github/workflows/scd-subport-s1-groundwork.yml'
       - 'experiments/DOOM_SCD_SubPort/scd_proto.h'
       - 'experiments/DOOM_SCD_SubPort/scd_sub_w_wad.c'
+      - 'experiments/DOOM_SCD_SubPort/scd_md_server.c'
+      - 'experiments/DOOM_SCD_SubPort/scd_sub_transport.c'
 permissions:
   contents: read
 jobs:
@@ -41,13 +43,27 @@ jobs:
             -DSGDK_GCC -I./src -I./compat -I/home/dan/mars/m68k-elf/inc \
             -Iexperiments/DOOM_SCD_SubPort -c \
             experiments/DOOM_SCD_SubPort/scd_sub_w_wad.c -o "$work/wad.o"
-          "$SIZE" "$work/protocol.o" "$work/wad.o"
+          "$CC" -m68000 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding \
+            -DSGDK_GCC -I./src -I./compat -I/home/dan/mars/m68k-elf/inc \
+            -Iexperiments/DOOM_SCD_SubPort -c \
+            experiments/DOOM_SCD_SubPort/scd_md_server.c -o "$work/md-server.o"
+          "$CC" -m68000 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding \
+            -Iexperiments/DOOM_SCD_SubPort -c \
+            experiments/DOOM_SCD_SubPort/scd_sub_transport.c -o "$work/sub-transport.o"
+          "$SIZE" "$work/protocol.o" "$work/wad.o" "$work/md-server.o" "$work/sub-transport.o"
           "$NM" -u "$work/wad.o"
           python3 - "$work/wad.o" <<'PY'
           import subprocess,sys
           out=subprocess.check_output(['/home/dan/mars/m68k-elf/bin/m68k-elf-nm','-u',sys.argv[1]],text=True)
           need=['scd_fetch_directory','scd_fetch_lump','I_Error']
           assert all(x in out for x in need),out
-          print('S1 FOUNDATION BUILD: PASS')
-          print('NOT YET S1 GAMEPLAY: transport callbacks are unresolved intentionally')
+          import os
+          nm='/home/dan/mars/m68k-elf/bin/m68k-elf-nm'
+          root=os.path.dirname(sys.argv[1])
+          server=subprocess.check_output([nm,'-u',os.path.join(root,'md-server.o')],text=True)
+          transport=subprocess.check_output([nm,os.path.join(root,'sub-transport.o')],text=True)
+          assert 'SCD_MdLumpCount' in server and 'W_GetLumpByNum' in server
+          assert 'scd_fetch_directory' in transport and 'scd_fetch_lump' in transport
+          print('S1 FOUNDATION BUILD: PASS (MD server + sub transport + sub WAD cache)')
+          print('NOT YET S1 GAMEPLAY: boot integration + engine runtime still pending')
           PY
