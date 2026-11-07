@@ -19,7 +19,7 @@ gcc, ld, nm = (str(tc / ("m68k-elf-" + t)) for t in ("gcc", "ld", "nm"))
 opts = (work / "out/.render_options").read_text().split()
 defs = [o for o in opts if o.startswith("-")]
 sgdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
-cflags = ["-m68000", "-O3", "-fno-web", "-fno-gcse", "-fomit-frame-pointer", "-fms-extensions", "-fno-builtin",
+cflags = ["-DSGDK_GCC", "-I.", "-I" + str(work / "out"), "-isystem", str(sgdk / "inc"), "-isystem", str(sgdk / "lib"), "-m68000", "-fno-tree-loop-ivcanon", "-O3", "-fno-web", "-fno-gcse", "-fomit-frame-pointer", "-fms-extensions", "-fno-builtin",
           "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
           "-I" + str(work / "src"), "-I" + str(work / "compat"), "-I" + str(sgdk / "inc"), "-I" + str(sgdk / "res"),
           "-I" + str(work / "out"), "-I" + str(work / "res"), "-I" + str(work)] + defs
@@ -27,7 +27,7 @@ objs, fails = [], []
 srcs = sorted(p for p in (work / "src").rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts)
 for src in srcs:
     obj = out / (src.relative_to(work / "src").as_posix().replace("/", "_") + ".o")
-    cmd = [gcc] + cflags + (["-x", "assembler-with-cpp"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]
+    cmd = [gcc] + cflags + (["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(work))
     if r.returncode:
         fails.append((src.name, next((l for l in r.stderr.splitlines() if "error" in l.lower()), "?")[-200:]))
