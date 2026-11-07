@@ -49,7 +49,8 @@ for name in names:
         objects.append(str(obj))
 report = {"phase": "S1d logic-only dependency preflight — NOT an executable",
           "compiled": len(objects), "requested": len(names), "compile_failures": failures,
-          "excluded_md_features": ["MUSIC", "RECIP_LUT", "XGM2"],\n          "known_blocker": "R128 R81/R119/R24 structures depend on R23_MAPMEM; retaining R23 in this probe, NOT valid sub hardware configuration"}
+          "excluded_md_features": ["MUSIC", "RECIP_LUT", "XGM2"],
+          "known_blocker": "R128 R81/R119/R24 structures depend on R23_MAPMEM; retaining R23 in this probe, NOT valid sub hardware configuration"}
 if not failures:
     reloc = out / "logic-slice.o"
     p = subprocess.run([gcc, "-m68000", "-nostdlib", "-Wl,-r",
