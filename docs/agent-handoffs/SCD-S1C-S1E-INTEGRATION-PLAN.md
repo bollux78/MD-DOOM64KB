@@ -79,3 +79,21 @@ S1 só está completo com `G_Ticker` demonstravelmente executando no sub-68000, 
 - **Limitação importante:** Z3 replica as alocações/relacionamentos básicos, mas NÃO chama `P_SetupLevel`, `P_SpawnMapThing`, `P_SpawnSpecials`, `G_Ticker`, nem prova que todo o heap de E1M1 é suficiente para a execução completa.
 - Próximo marco após aprovação física: link estrito do código real `P_SetupLevel` e dependências não gráficas, com diagnóstico de referências ausentes e orçamento de heap antes de iniciar `G_Ticker`. Não introduzir funções artificiais de gameplay que falseiem a prova.
 
+
+## Z4 / Z5 iniciadas — motor real e diagnóstico estrito (2026-11-07)
+
+O usuário autorizou prosseguir após PASS de Z2/Z3 no BlastEm, antes da homologação dessas duas em hardware. A Z1 já foi aprovada pelo usuário no console. Histórico: Z2/Z3 build/BlastEm PASS [run 42401064058](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42401064058).
+
+### Z4 — ROM experimental, ainda sem PASS validado
+- Fontes `s1d/setup_sub_main.c`, `s1d/setup_bsp_state.c`, `s1d/build_setup.py` e `s1d/test_setup.py`.
+- Chama **a função real** `src/p_setup.c:P_SetupLevel(1)`, derivada apenas na árvore gerada R128 descartável. Adapta o pré-carregamento gráfico (não há renderer no sub) e substitui a formatação E1M%d por montagem direta do mesmo nome. A execução **termina após `P_GroupLines`**, antes de `P_LoadThings2`, `P_SpawnSpecials`, `P_MapEnd`.
+- Usa `p_tick.o` real para `P_InitThinkers`, globais `g_game.o`, `z_zone.o`, transporte/cache S1b, e armazenamento específico de globais BSP, com link estrito: nenhum `--unresolved-symbols=ignore-all`, sem falsos stubs de `P_SpawnMapThing`.
+- PASS somente quando marcador `0x5A5D`, 10 transações, CRC correto, `Z_CheckHeap`, estruturas reais válidas e fallback para `G_Ticker` no **MD** forem observados no BlastEm.
+
+### Z5 — segundo diagnóstico sequencial
+- `build_setup.py --full` compila `P_SetupLevel` **sem parar após `P_GroupLines`** e sem neutralizar o carregamento das texturas. Liga o subconjunto real de módulos de gameplay e verifica símbolos externamente pelo linker estrito. Escreve relatório privado em `scd-subport-s1d-z5-link/run-<id>/link_report.json`.
+- Se houver símbolos de vídeo, áudio, spawn, sprites ou especiais não resolvidos, é apenas diagnóstico, sem ROM completa aprovada.
+- Quando ambos os estudos forem concluídos, seguir para `P_SetupLevel` completo e `G_Ticker` / 2600 tics reais no Sega CD; nenhuma execução no MD pode ser apresentada como execução da lógica no sub.
+- CI preserva S1b como regressão. Z2/Z3 anteriormente validadas deixam de ser recompiladas a cada nova execução. Nada é modificado no checkout principal do usuário.
+
+**Estado neste registro:** implementação Z4 e Z5 publicada; aprovação de CI ainda não confirmada.
