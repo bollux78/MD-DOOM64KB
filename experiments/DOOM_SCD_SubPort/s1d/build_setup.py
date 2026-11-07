@@ -101,7 +101,7 @@ if full:
     utility=objdir/"sub_geometry.c"
     utility.write_text(draw[:draw.index("#include <stdint.h>")]+
         '#include "compiler.h"\n#include "r_main.h"\n#include "globdata.h"\n'+
-        '#include "m_fixed.h"\n#include "tables.h"\n'+
+        '#include "m_fixed.h"\n#include "tables.h"\n#include "r47_mul.h"\n'+
         '#define SLOPERANGE 2048\nuint16_t validcount=1;\n'+
         angle_table+'\n#define tantoangle(t) tantoangleTable[t]\n'+
         "\n\n".join(definition(sig) for sig in funcs))
