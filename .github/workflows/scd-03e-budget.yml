@@ -38,3 +38,28 @@ jobs:
           (out / "reference.wad").write_bytes(wad)
           PY
           python3 experiments/DOOM_SCD_03E/tools/profile_level.py "$out/reference.wad" --source src | tee "$out/budget.txt"
+      - name: Engine code and table sizes for a sub-CPU port (sizes only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="$HOME/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pf"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$ref.elf" | grep -E "^\.(text|rodata|data|bss)|Total"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S --size-sort "$ref.elf" | python3 -c '
+          import sys, collections
+          cat = collections.Counter(); big = []
+          for line in sys.stdin:
+              f = line.split()
+              if len(f) != 4: continue
+              size, kind, name = int(f[1], 16), f[2], f[3]
+              if name.startswith("doom_iwad"): key = "wad"
+              elif name.startswith(("bgm_", "pcm_", "xgm", "stop_xgm", "z80_", "drv_", "smp_", "snd_")): key = "music/sound"
+              elif kind in "Tt": key = "code"
+              elif kind in "RrDd": key = "tables/rodata"
+              elif kind in "BbCc": key = "bss"
+              else: key = "other:" + kind
+              cat[key] += size
+              if kind in "RrDd" and not name.startswith("doom_iwad"): big.append((size, name))
+          for k, v in sorted(cat.items(), key=lambda kv: -kv[1]): print("%-14s %9d bytes  %7.1f KiB" % (k, v, v / 1024))
+          print("largest rodata/data symbols:")
+          for size, name in sorted(big, reverse=True)[:25]: print("  %8d  %s" % (size, name))
+          '
