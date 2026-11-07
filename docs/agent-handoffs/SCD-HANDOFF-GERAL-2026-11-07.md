@@ -1,5 +1,23 @@
 # Handoff geral — DOOM-MD R128 → Sega CD sub-68000 (07/11/2026)
 
+> ## Atualização que substitui o estado antigo da Z5 — 07/11/2026
+>
+> **Z4 aprovada em console real**, reafirmado pelo usuário nesta retomada.
+>
+> **Z5 AGORA É ROM REAL, COM BUILD/LINK E BLASTEM PASS**, não apenas diagnóstico. [Run 42414041898](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42414041898), commit `226ff84a1b4b6ce236b61d3c39491ce2e57aa7e3`.
+> - `P_SetupLevel(1)` real percorre a inicialização inteira, inclusive `P_LoadThings2`, `P_SpawnSpecials` e `P_MapEnd`, **sem retorno antecipado pós-P_GroupLines**.
+> - No sub: jogador iniciado via `PST_REBORN`; teste exige jogador com saúde 100, subsector válido, monstros presentes (`_g_totalkills>0`), geometria e heap íntegros.
+> - Matemática/BSP extraídos **literalmente** de `r_draw.c` gerado: `FixedMul`, `FixedMulAngle`, `FixedMul3232`, `FixedMul3216`, `FixedApproxDiv`, `R10_ReciprocalSmall`, `R_PointOnSide`, `R_PointInSubsector`, `SlopeDiv`, `R_PointToAngle3`; tabela `tantoangleTable` exata e `r47_mul.h`. Automapa e estado sky usam fontes originais, com GC de seções.
+> - Fronteiras de hardware: chamadas S_StartSound/S_StartSound2/S_StopSound são silenciosas apenas no sub; pré-carga de texturas P_LoadTexture/R_GetTexture e hooks de framebuffer MD R115_LevelEnd/Start não executam vídeo no sub. **Não há stubs de spawn/gameplay**.
+> - Bug no probe antigo corrigido: não linkar `logic-slice.o` juntamente com os objetos individuais.
+> - Link estrito: **39 objetos, PASS**; payload sub **83.224 bytes**, RAM end **0x57B88**, dentro de 512 KiB e do loader de 128 KiB.
+> - BlastEm: stage=5, served=10, errors=0, timeouts=0, bytes=52895, marcador sub **0x5A6D**, CRC MD=CD **0x5547100C**; MD fallback G_Ticker PASS. O workflow agora reprova se Z5 build/runtime falharem; não usa mais falso verde do probe.
+> - **ROM privada para console:** `/home/dan/Projetos/Personal/scd-subport-s1d-z5/run-42414041898-1/doom-md-scd-s1d-z5.bin`. Tela `S1D Z5 FULL P_SETUP`, `SETUP PASS`, `TRANSFER PASS`; START/timeout → R128 no MD.
+> - **Z5 hardware: AINDA NÃO TESTADO. G_Ticker no sub: AINDA NÃO EXECUTADO.** O jogo do fallback segue no MD. Próxima etapa é demo/ticker real no sub e 2600 tics/fingerprints independentes (S1e), mantendo WAD/input/relatório no MD.
+>
+> **O restante deste documento é histórico anterior e suas menções a Z5 apenas diagnóstica foram superadas por esta atualização.**
+
+
 **Ler primeiro:** [`SCD-S1C-S1E-INTEGRATION-PLAN.md`](./SCD-S1C-S1E-INTEGRATION-PLAN.md), [`SCD-SUBPORT-S1S2-CLAUDIO.md`](./SCD-SUBPORT-S1S2-CLAUDIO.md) e [`SCD-S1B-VALIDATED-TRANSPORT.md`](./SCD-S1B-VALIDATED-TRANSPORT.md).
 
 **Repo:** `bollux78/MD-DOOM64KB`. **Branch de trabalho:** `exp-werk-scd-subport-s1s2`. **HEAD imediatamente anterior a este handoff:** `ca923368846190aaf33d5be02903447e9dd1db35`. Usar branch experimental, nunca sobrescrever versões aprovadas ou editar `/home/dan/Projetos/doom-md`.
