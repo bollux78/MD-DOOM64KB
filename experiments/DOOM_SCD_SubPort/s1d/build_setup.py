@@ -8,9 +8,10 @@ the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
-if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5]!="--full"):
+if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker")):
     raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
+ticker=len(sys.argv)==6 and sys.argv[5]=="--ticker"
 full=len(sys.argv)==6
 here=Path(__file__).resolve().parent
 common=here.parent
@@ -26,6 +27,7 @@ defs=[o for o in opt if o.startswith("-D") and not o.startswith(tuple(
     "-D"+d for d in ("DOOM_R22_SRAM_BLOCKLINKS","DOOM_R23_MAPMEM",
     "DOOM_R24_EPISODE","DOOM_R81_SAVE","DOOM_R25_MUSIC")))]
 if full: defs.append("-DSCD_FULL_SETUP")
+if ticker: defs += ["-DSCD_TICKER", "-DDOOM_R47_STATE_HASH"]
 cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
     "-isystem",str(gdk/"inc"),"-isystem",str(gdk/"lib"),
     "-m68000","-O2","-fno-builtin","-ffreestanding",
@@ -69,7 +71,7 @@ p_setup=p_setup.replace(needle,
 patched=objdir/"p_setup.c"
 patched.write_text(p_setup)
 parts=[]
-for name,source in (("setup",here/"setup_sub_main.c"),
+for name,source in (("setup",here/("ticker_sub_main.c" if ticker else "setup_sub_main.c")),
                      ("bsp",here/"setup_bsp_state.c"),
                      ("p_setup",patched)):
     obj=objdir/(name+".o")
@@ -134,6 +136,12 @@ if full:
             print(result.stderr,flush=True)
             raise SystemExit("Z5 platform compile failed: "+name)
         parts.append(obj)
+if ticker:
+    for name in ("m_random", "r89_ai"):
+        source=tree/"src"/(name+".c")
+        obj=objdir/(name+".o")
+        subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
+        parts.append(obj)
 base=s1b/"sub"
 kept=[base/name for name in ("boot.o","libc.o","scd_sub_transport.c.o",
                              "scd_sub_w_wad.c.o")]
@@ -146,7 +154,7 @@ if full:
         if path.name not in ("p_setup.o","p_tick.o","g_game.o",
                             "z_zone.o","scd_sub_system.o",
                             "scd_sub_transport.o","scd_sub_w_wad.o",
-                            "logic-slice.o","p_switch.o"):
+                            "logic-slice.o","p_switch.o") and not (ticker and path.name in ("m_random.o", "r89_ai.o")):
             objs.append(str(path))
 
 libgcc=subprocess.check_output([gcc,"-m68000","-print-libgcc-file-name"],
@@ -172,10 +180,10 @@ for row in subprocess.check_output([nm,str(elf)],text=True).splitlines():
     if len(v)==3:
         try: symbols[v[2]]=int(v[0],16)
         except ValueError: pass
-for root in ("subcpu_vectors","P_SetupLevel","P_InitThinkers"):
+for root in ("subcpu_vectors","P_SetupLevel","P_InitThinkers") + (("P_Ticker", "P_PlayerThink", "P_MobjThinker") if ticker else ()):
     if root not in symbols: raise SystemExit("Missing linked runtime root: "+root)
 if symbols["subcpu_vectors"]!=0: raise SystemExit("bad boot vector")
-if symbols.get("_end",0)>=0x7E000: raise SystemExit("sub PRG-RAM end exceeds stack reserve")
+if symbols.get("_end",0)>=(0x7C000 if ticker else 0x7E000): raise SystemExit("sub PRG-RAM end exceeds stack reserve")
 binary=objdir/"setup.bin"
 subprocess.run([objcopy,"-O","binary","-R",".bss",
                 str(elf),str(binary)],check=True)
@@ -185,6 +193,9 @@ print("S1d linked sub image bytes",binary.stat().st_size,
       "RAM end",hex(symbols["_end"]),flush=True)
 name="doom-md-scd-s1d-z5" if full else "doom-md-scd-s1d-z4"
 marker="0x5A6Du" if full else "0x5A5Du"
+if ticker:
+    name="doom-md-scd-s1e-z6"
+    marker="0x5A7Du"
 
 # Reuse trusted S1b boot and gameplay fallback, packaging private diagnostic ROM.
 subprocess.run(["python3",str(common.parent/
@@ -214,6 +225,26 @@ md=md.replace(needle,
 if full:
     md=md.replace("S1D Z4 REAL P_SETUP GEOM","S1D Z5 FULL P_SETUP")
     md=md.replace("r.reserved==0x5A5Du", "r.reserved=="+marker)
+if ticker:
+    md=md.replace("S1D Z5 FULL P_SETUP", "S1E Z6 SUB P_TICKER 2600")
+    md=md.replace("    REPORT=r;", """    if(r.stage==5 && r.reserved==0x5A7Du){
+        CD_SUB_BYTE=3; /* halt sub and request PRG-RAM bus after completion */
+        if(!wait_sub(2,2)){r.stage=7;}else{
+            CD_MEMCTRL=(CD_MEMCTRL & 0xFF3Fu)|0x00C0u;
+            volatile const u16 *src=(volatile const u16 *)0x43C000;
+            volatile u16 *dst=(volatile u16 *)0x61E000;
+            for(u16 i=0;i<27u*8u*2u;i++)dst[i]=src[i];
+        }
+    }
+    REPORT=r;""")
+    md=md.replace("SETUP PASS", "2600 TICS PASS")
+    md=md.replace("r.serviced==10", "r.serviced==11")
+    md=md.replace("spins<50000000UL", "spins<500000000UL")
+    md=md.replace("r.md_crc==r.sub_crc", "r.sub_crc!=0")
+    md=md.replace('sprintf(t,"MD CRC %08lX",(unsigned long)r.md_crc);',
+                  'sprintf(t,"INPUT DTE1M1 / AI NORMAL");')
+    md=md.replace('sprintf(t,"CD CRC %08lX",(unsigned long)r.sub_crc);',
+                  'sprintf(t,"STATE HASH %08lX",(unsigned long)r.sub_crc);')
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",

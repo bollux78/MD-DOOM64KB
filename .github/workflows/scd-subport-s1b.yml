@@ -1,4 +1,4 @@
-name: Sega CD S1d Z4 real P_SetupLevel / Z5 full-link probe
+name: Sega CD Z5 setup and Z6 real sub simulation
 on:
   workflow_dispatch:
   push:
@@ -207,6 +207,35 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --full "$S1D_Z5_OUT/doom-md-scd-s1d-z5.bin" "$S1D_Z5_OUT/doom-md-scd-s1d-z5.elf"
 
+      - name: S1e Z6 real P_Ticker 2600 strict build
+        id: z6_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1e-z6/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S1E_Z6_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --ticker
+      - name: S1e Z6 BlastEm actual sub simulation and independent trace
+        id: z6_blastem
+        if: steps.z6_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s1e-z6.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --ticker "$S1E_Z6_OUT/doom-md-scd-s1e-z6.bin" "$S1E_Z6_OUT/doom-md-scd-s1e-z6.elf"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -219,3 +248,7 @@ jobs:
           echo "Z5 runtime: ${{ steps.z5_blastem.outcome }}"
           test "${{ steps.z5_build.outcome }}" = "success"
           test "${{ steps.z5_blastem.outcome }}" = "success"
+          echo "Z6 strict build: ${{ steps.z6_build.outcome }}"
+          echo "Z6 real sub simulation: ${{ steps.z6_blastem.outcome }}"
+          test "${{ steps.z6_build.outcome }}" = "success"
+          test "${{ steps.z6_blastem.outcome }}" = "success"
