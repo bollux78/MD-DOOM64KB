@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py experiments/DOOM_SCD_SubPort/s1d/test_map.py
+          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py experiments/DOOM_SCD_SubPort/s1d/test_map.py experiments/DOOM_SCD_SubPort/s1d/test_live.py
       - name: Restore VGM and pinned shareware WAD
         shell: bash
         run: |
@@ -147,43 +147,21 @@ jobs:
           tree=$(dirname "$(dirname "$stamp")")
           out="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           python3 experiments/DOOM_SCD_SubPort/s1d/logic_slice.py "$tree" "$out" --ram-only
-      - name: S1d Z0 build private ROM with real Z_Init on sub
-        shell: bash
-        run: |
-          set -euo pipefail
-          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
-          tree=$(dirname "$(dirname "$stamp")")
-          out="$HOME/Projetos/Personal/scd-subport-s1d-z0/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out"
-          echo "S1D_Z0_OUT=$out" >> "$GITHUB_ENV"
-      - name: S1d Z0 BlastEm real sub Z_Init + WAD + MD fallback
-        shell: bash
-        run: |
-          set -euo pipefail
-          work=$(mktemp -d "$RUNNER_TEMP/s1d-z0.XXXXXX")
-          trap 'rm -rf "$work"' EXIT
-          mkdir -p "$work/config/blastem" "$work/data"
-          cfg="$HOME/.config/blastem/blastem.cfg"
-          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
-          cp "$cfg" "$work/config/blastem/blastem.cfg"
-          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
-          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/s1d/test_zone.py "$S1D_Z0_OUT/doom-md-scd-s1d-z0.bin" "$S1D_Z0_OUT/doom-md-scd-s1d-z0.elf"
 
-      - name: S1d Z1 build private ROM with E1M1 geometry validation on sub
+      - name: S1d Z2 compile ROM with resident nine-lump WAD cache
         shell: bash
         run: |
           set -euo pipefail
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
-          out="$HOME/Projetos/Personal/scd-subport-s1d-z1/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --map
-          echo "S1D_Z1_OUT=$out" >> "$GITHUB_ENV"
-      - name: S1d Z1 BlastEm sub E1M1 geometry plus MD gameplay fallback
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z2/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --resident
+          echo "S1D_Z2_OUT=$out" >> "$GITHUB_ENV"
+      - name: S1d Z2 BlastEm plus MD fallback
         shell: bash
         run: |
           set -euo pipefail
-          work=$(mktemp -d "$RUNNER_TEMP/s1d-z1.XXXXXX")
+          work=$(mktemp -d "$RUNNER_TEMP/s1d-z2.XXXXXX")
           trap 'rm -rf "$work"' EXIT
           mkdir -p "$work/config/blastem" "$work/data"
           cfg="$HOME/.config/blastem/blastem.cfg"
@@ -191,4 +169,27 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/s1d/test_map.py "$S1D_Z1_OUT/doom-md-scd-s1d-z1.bin" "$S1D_Z1_OUT/doom-md-scd-s1d-z1.elf"
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_live.py --resident "$S1D_Z2_OUT/doom-md-scd-s1d-z2.bin" "$S1D_Z2_OUT/doom-md-scd-s1d-z2.elf"
+
+      - name: S1d Z3 compile ROM with native PRG-RAM E1M1 runtime geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z3/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --construct
+          echo "S1D_Z3_OUT=$out" >> "$GITHUB_ENV"
+      - name: S1d Z3 BlastEm plus MD fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s1d-z3.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_live.py --construct "$S1D_Z3_OUT/doom-md-scd-s1d-z3.bin" "$S1D_Z3_OUT/doom-md-scd-s1d-z3.elf"
