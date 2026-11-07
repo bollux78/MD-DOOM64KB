@@ -19,11 +19,12 @@ w = out / "sub"
 w.mkdir(exist_ok=True)
 subprocess.run([b("as"), "-m68000", str(here / "sub_boot.s"), "-o", str(w / "boot.o")], check=True)
 subprocess.run([b("gcc")] + cflags + ["-c", str(here / "sub_main.c"), "-o", str(w / "main.o")], check=True, cwd=str(tree))
+subprocess.run([b("gcc"), "-m68000", "-O2", "-ffreestanding", "-fno-builtin", "-ffunction-sections", "-c", str(here / "sub_libc.c"), "-o", str(w / "libc.o")], check=True)
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "sub.elf"
 engine = [str(objs / n) for n in ("r_draw.c.o", "m_random.c.o", "tables.c.o")]
 subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors", "-Wl,-Ttext=0",
-                "-Wl,-Map," + str(w / "sub.map"), "-o", str(elf), str(w / "boot.o"), str(w / "main.o")] + engine + [libgcc],
+                "-Wl,-Map," + str(w / "sub.map"), "-o", str(elf), str(w / "boot.o"), str(w / "main.o"), str(w / "libc.o")] + engine + [libgcc],
                check=True)
 sym = {}
 for l in subprocess.check_output([b("nm"), str(elf)], text=True).splitlines():

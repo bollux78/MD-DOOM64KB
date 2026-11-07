@@ -10,8 +10,6 @@
 #define REG16(a) (*(volatile uint16_t *)(a))
 #define BANK ((volatile const uint8_t *)0x0C0000)
 
-void *memset(void *d, int c, unsigned long n) { uint8_t *p = d; while (n--) *p++ = (uint8_t)c; return d; }
-void *memcpy(void *d, const void *s, unsigned long n) { uint8_t *p = d; const uint8_t *q = s; while (n--) *p++ = *q++; return d; }
 
 static uint8_t cache[160u * 1024u];
 static uint32_t cache_used, cache_crc, results[S1A_TESTS];
