@@ -272,15 +272,21 @@ if comparison:
     anchor="    D_DoomMainSetup();"
     assert text.count(anchor)==1,"MD setup observer anchor changed"
     text=text.replace(anchor,anchor+"""
-    /* Z7 diagnostic only: start the original R116 menu benchmark explicitly. */
-    { extern void D_R116_SelectDemo(int16_t);
-      extern void R89_SetAIMode(uint8_t);
-      extern volatile uint8_t r116_norender;
-      extern void M_ClearMenus(void);
-      D_R116_SelectDemo(1);R89_SetAIMode(0);r116_norender=1;
-      M_ClearMenus();D_R50_BenchmarkStart(); }
+    /* Z7 diagnostic only: invoke the exact existing menu benchmark action. */
+    { extern void S1E_MDStart(void); S1E_MDStart(); }
 """)
     main.write_text(text)
+    menu=tree/"src/m_text.c"
+    text=menu.read_text()
+    assert "static void M_R116Run(int16_t choice)" in text
+    menu.write_text(text+"""
+void S1E_MDStart(void)
+{
+    extern volatile uint8_t r116_norender;
+    R89_SetAIMode(0);r116_norender=1;
+    M_R116Run(1);
+}
+""")
     random=tree/"src/m_random.c"
     text=random.read_text()
     assert text.count("#if defined(DOOM_R47_STATE_HASH)")==1
