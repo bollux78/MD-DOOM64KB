@@ -5,7 +5,7 @@ Usage: build_setup.py GENERATED_TREE S1B_OUT RAM_OBJECT_DIR PRIVATE_OUT [--full]
 This modifies ONLY the disposable generated worktree. Nothing is written to
 the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 """
-import json, os, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
 if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5]!="--full"):
@@ -37,7 +37,7 @@ cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
 # (1) drop texture preload that exists purely for the MD renderer;
 # (2) stop just after actual P_GroupLines, before thinker/item spawns.
 p_setup=(tree/"src/p_setup.c").read_text()
-if not full:
+if True:
     # R115_LevelEnd belongs to the MD video double-buffer lifecycle.
     # The sub CPU has no framebuffer and P_SetupLevel starts with an empty
     # renderer state. Remove only this video cleanup call (keep Z_FreeTags).
@@ -48,6 +48,7 @@ if not full:
     anchor='#include "r24_romthings.h"'
     assert p_setup.count(anchor)==1,"p_setup include anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'\n#define P_LoadTexture(t) ((void)0) /* sub no-render only */')
+if not full:
     anchor='    P_GroupLines();'
     assert p_setup.count(anchor)==1,"P_GroupLines anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'''
@@ -74,6 +75,50 @@ for name,source in (("setup",here/"setup_sub_main.c"),
         print("S1d",name,"C COMPILE FAIL\n"+call.stderr[-8000:],flush=True)
         raise SystemExit(1)
     parts.append(obj)
+if full:
+    # Copy the genuine nonvisual R128 helpers, not the renderer or approximations.
+    # Extract complete named definitions; fail closed if upstream signatures change.
+    draw=(tree/"src/r_draw.c").read_text()
+    def definition(signature):
+        start=draw.index(signature)
+        brace=draw.index("{",start)
+        depth=1
+        end=brace+1
+        while depth:
+            depth += (draw[end]=="{")-(draw[end]=="}")
+            end+=1
+        return draw[start:end]
+    funcs=["static uint32_t mulu(","fixed_t CONSTFUNC FixedMul(",
+           "fixed_t CONSTFUNC FixedMulAngle(",
+           "static PUREFUNC int16_t R_PointOnSide(",
+           "subsector_t __far* R_PointInSubsector(",
+           "static CONSTFUNC int16_t SlopeDiv(",
+           "CONSTFUNC angle_t R_PointToAngle3("]
+    utility=objdir/"sub_geometry.c"
+    utility.write_text(draw[:draw.index("#include <stdint.h>")]+
+        '#include "compiler.h"\n#include "r_main.h"\n#include "globdata.h"\n'+
+        '#include "m_fixed.h"\n#include "tables.h"\n'+
+        '#define SLOPERANGE 2048\nuint16_t validcount=1;\n'+
+        "\n\n".join(definition(sig) for sig in funcs))
+    # Silent hardware boundary only. No gameplay function is substituted.
+    audio=objdir/"sub_silent_audio.c"
+    audio.write_text('#include "s_sound.h"\n'
+        'void S_StartSound(mobj_t *o,sfxenum_t s){(void)o;(void)s;}\n'
+        'void S_StartSound2(degenmobj_t *o,sfxenum_t s){(void)o;(void)s;}\n'
+        'void S_StopSound(void *o){(void)o;}\n')
+    switch=objdir/"p_switch.c"
+    switch_text=(tree/"src/p_switch.c").read_text()
+    # Texture warming is a renderer side effect; switch gameplay remains real.
+    switch_text=re.sub(r"R_GetTexture\(([^;]+)\);",r"(void)(\1);",switch_text)
+    switch.write_text(switch_text)
+    for name,source in (("sub_geometry",utility),("sub_audio",audio),("p_switch",switch)):
+        obj=objdir/(name+".o")
+        result=subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],
+                              cwd=tree,capture_output=True,text=True)
+        if result.returncode:
+            print(result.stderr,flush=True)
+            raise SystemExit("Z5 platform compile failed: "+name)
+        parts.append(obj)
 base=s1b/"sub"
 kept=[base/name for name in ("boot.o","libc.o","scd_sub_transport.c.o",
                              "scd_sub_w_wad.c.o")]
@@ -85,7 +130,8 @@ if full:
     for path in sorted(ram.glob("*.o")):
         if path.name not in ("p_setup.o","p_tick.o","g_game.o",
                             "z_zone.o","scd_sub_system.o",
-                            "scd_sub_transport.o","scd_sub_w_wad.o"):
+                            "scd_sub_transport.o","scd_sub_w_wad.o",
+                            "logic-slice.o","p_switch.o"):
             objs.append(str(path))
 
 libgcc=subprocess.check_output([gcc,"-m68000","-print-libgcc-file-name"],
@@ -97,12 +143,13 @@ link=[gcc,"-m68000","-nostdlib","-Wl,--gc-sections",
 p=subprocess.run(link,capture_output=True,text=True)
 report=dict(phase="Z5 full P_SetupLevel STRICT diagnostic — not a ROM" if full
        else "Z4 actual P_SetupLevel geometry phase",linked=p.returncode==0,
-       errors=p.stderr[-16000:],object_count=len(objs))
+       errors=p.stderr,object_count=len(objs),
+       undefined_symbols=sorted(set(re.findall(r"undefined reference to [`\"]([^\'\"]+)[\'\"]",p.stderr))))
 (out/"link_report.json").write_text(json.dumps(report,indent=2)+"\n")
 print("S1d",("Z5" if full else "Z4"),"strict link:",
       "PASS" if p.returncode==0 else "FAIL", "objects",len(objs),flush=True)
 if p.returncode:
-    print(p.stderr[-10000:],flush=True)
+    print(p.stderr,flush=True)
     if full:
         print("Z5 is diagnostic only. No full-engine ROM was generated.",flush=True)
         raise SystemExit(0)
