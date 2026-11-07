@@ -1,0 +1,53 @@
+name: Sega CD S1 groundwork: protocol and WAD cache sub-CPU cross-build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['exp-werk-scd-subport-s1s2']
+    paths:
+      - '.github/workflows/scd-subport-s1-groundwork.yml'
+      - 'experiments/DOOM_SCD_SubPort/scd_proto.h'
+      - 'experiments/DOOM_SCD_SubPort/scd_sub_w_wad.c'
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify S1 shared 68000 protocol and sub WAD cache compile cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          CC=/home/dan/mars/m68k-elf/bin/m68k-elf-gcc
+          NM=/home/dan/mars/m68k-elf/bin/m68k-elf-nm
+          SIZE=/home/dan/mars/m68k-elf/bin/m68k-elf-size
+          test -x "$CC"; test -x "$NM"; test -x "$SIZE"
+          work="$RUNNER_TEMP/scd-s1-groundwork-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$work"
+          cat > "$work/protocol_test.c" <<'EOF'
+          #include "scd_proto.h"
+          int scd_proto_validate(void) {
+              scd_packet_t p={SCD_PROTO_VERSION,SCD_CMD_DIR,1,0,0,0,0,0};
+              return p.command==SCD_CMD_DIR &&
+                     sizeof(p)==24 && SCD_FRAME_OFFSET+SCD_FRAME_BYTES<SCD_BANK_BYTES;
+          }
+          EOF
+          "$CC" -m68000 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding \
+            -Iexperiments/DOOM_SCD_SubPort -c "$work/protocol_test.c" -o "$work/protocol.o"
+          "$CC" -m68000 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding \
+            -DSGDK_GCC -I./src -I./compat -I/home/dan/mars/m68k-elf/inc \
+            -Iexperiments/DOOM_SCD_SubPort -c \
+            experiments/DOOM_SCD_SubPort/scd_sub_w_wad.c -o "$work/wad.o"
+          "$SIZE" "$work/protocol.o" "$work/wad.o"
+          "$NM" -u "$work/wad.o"
+          python3 - "$work/wad.o" <<'PY'
+          import subprocess,sys
+          out=subprocess.check_output(['/home/dan/mars/m68k-elf/bin/m68k-elf-nm','-u',sys.argv[1]],text=True)
+          need=['scd_fetch_directory','scd_fetch_lump','I_Error']
+          assert all(x in out for x in need),out
+          print('S1 FOUNDATION BUILD: PASS')
+          print('NOT YET S1 GAMEPLAY: transport callbacks are unresolved intentionally')
+          PY
