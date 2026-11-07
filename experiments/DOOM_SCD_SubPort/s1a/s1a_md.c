@@ -96,16 +96,21 @@ static void run(void)
     }
     s1a_mark(3);
     /* Serve E1M1's lumps exactly as the sub will request them in S1. */
+    s1a_mark(4);
     const int16_t first = W_GetNumForName("E1M1");
+    s1a_mark(5);
     for (int16_t n = first; n < first + 16; n++)
     {
         const char __far *name = W_GetNameForNum(n);
         if (n > first && name[0] == 'E' && name[2] == 'M') break;
+        s1a_mark(0x200 + (u16)(n - first));
         const u16 size = W_LumpLength(n);
         const u8 *src = W_GetLumpByNum(n);
         BANK[0] = size >> 8; BANK[1] = size; BANK[2] = 0; BANK[3] = 0;
         for (u16 i = 0; i < size; i++) BANK[4 + i] = src[i];
+        s1a_mark(0x300 + (u16)(n - first));
         const u32 mine = s1a_crc(0, src, size);
+        s1a_mark(0x400 + (u16)(n - first));
         if (!call(++request & 0x7fffu, &crc)) { R.state = 3; return; }
         s1a_mark(0x100 + R.lumps);
         ++R.lumps; R.bytes += size;

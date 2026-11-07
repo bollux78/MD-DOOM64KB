@@ -13,7 +13,7 @@ g = RSP(os.environ["BLASTEM"], rom, 9000, 600)
 try:
     g.req("qSupported")
     stop = sym["s1a_complete"]
-    for name in ("S1A_Test", "s1a_mark", "s1a_complete"):
+    for name in ("S1A_Test", "s1a_mark", "s1a_complete", "I_Error"):
         assert g.req(f"Z0,{sym[name]:x},2") == "OK", name
     while True:
         g.cont()
@@ -21,7 +21,13 @@ try:
         if pc == stop:
             break
         stage = int.from_bytes(g.readmem(0x61F000 + 44, 2), "big")
-        print("reached", "S1A_Test" if pc == sym["S1A_Test"] else "mark stage(before update) 0x%x" % stage, flush=True)
+        if pc == sym["I_Error"]:
+            print("reached I_Error (game error screen) after stage 0x%x" % stage, flush=True)
+            break
+        regs = g.req("g")
+        sp = int(regs[15 * 8:16 * 8], 16) & 0xffffff
+        arg = int.from_bytes(g.readmem(sp + 4, 4), "big") & 0xffff
+        print("reached", "S1A_Test" if pc == sym["S1A_Test"] else "mark 0x%x" % arg, flush=True)
     import struct
     raw = bytes(g.readmem(0x61F000, 46))
     f = struct.unpack(">4H3I3I3IH", raw)
