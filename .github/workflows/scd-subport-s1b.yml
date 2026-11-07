@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
@@ -103,6 +103,14 @@ jobs:
           out="$HOME/Projetos/Personal/scd-subport-s1b/s0-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           diag="$HOME/Projetos/Personal/scd-subport-s1c/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           python3 experiments/DOOM_SCD_SubPort/s1c/engine_probe.py "$out" "$diag"
+      - name: S1d logic-only sub-CPU recompilation preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          out="$HOME/Projetos/Personal/scd-subport-s1d/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_SCD_SubPort/s1d/logic_slice.py "$tree" "$out"
       - name: Build S1b test ROM (private)
         shell: bash
         run: |
