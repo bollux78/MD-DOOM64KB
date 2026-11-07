@@ -9,6 +9,7 @@
 #include "doomtype.h"
 #include "compiler.h"
 #include "w_wad.h"
+#include "i_system.h"
 #include "s1a_tests.h"
 #include "s1a_sub.h"
 
@@ -25,11 +26,12 @@
 #define CD_PRGRAM ((volatile u16 *)0x420000)
 #define BANK ((volatile u8 *)0x600000)
 
-volatile u16 s1a_state;                 /* 1 no CD, 2 boot fail, 3 swap fail, 4 done */
-volatile u32 s1a_md[S1A_TESTS], s1a_sub[S1A_TESTS];
-volatile u16 s1a_lumps, s1a_lump_bad, s1a_tests_bad;
-volatile u32 s1a_bytes, s1a_cache_md, s1a_cache_sub;
-static u16 request;
+/* No new BSS: R128 is 40 bytes from the RAM limit. Results live at the end of the Word RAM bank
+ * the MD holds when the test finishes (read by test_s1a.py at s1a_complete). */
+typedef struct { u16 state, tests_bad, lumps, lump_bad; u32 bytes, cache_md, cache_sub, md[S1A_TESTS], sub[S1A_TESTS]; u16 stage; } S1aResult;
+#define BANKRES (*(volatile S1aResult *)0x61F000)
+static S1aResult *res_ptr;
+#define R (*res_ptr)
 
 static bool wait_sub(u8 mask, u8 expected)
 {
@@ -73,30 +75,24 @@ static bool call(u16 id, u32 *crc)
     return FALSE;
 }
 
-static void line(const char *label, u32 value, u16 y)
-{
-    char t[40], d[12];
-    uintToStr(value, d, 1); strcpy(t, label); strcat(t, d);
-    VDP_drawText(t, 1, y);
-}
 
 void __attribute__((noipa)) s1a_complete(void) { __asm__ volatile ("" ::: "memory"); }
-volatile u16 s1a_stage;
-void __attribute__((noipa)) s1a_mark(u16 stage) { s1a_stage = stage; __asm__ volatile ("" ::: "memory"); }
+void __attribute__((noipa)) s1a_mark(u16 stage) { R.stage = stage; BANKRES.stage = stage; __asm__ volatile ("" ::: "memory"); }
 
 static void run(void)
 {
-    for (int k = 0; k < S1A_TESTS; k++) s1a_md[k] = s1a_test(k);
-    if ((HW_VERSION & 0x20u) || CD_BIOS_HEADER != 0x53454741UL) { s1a_state = 1; return; }
+    u16 request = 0;
+    for (int k = 0; k < S1A_TESTS; k++) R.md[k] = s1a_test(k);
+    if ((HW_VERSION & 0x20u) || CD_BIOS_HEADER != 0x53454741UL) { R.state = 1; return; }
     s1a_mark(1);
-    if (!boot_sub()) { s1a_state = 2; return; }
+    if (!boot_sub()) { R.state = 2; return; }
     s1a_mark(2);
     u32 crc;
     for (int k = 0; k < S1A_TESTS; k++)
     {
-        if (!call(++request | 0x8000u, &crc)) { s1a_state = 3; return; }
-        s1a_sub[k] = crc;
-        s1a_tests_bad += crc != s1a_md[k];
+        if (!call(++request | 0x8000u, &crc)) { R.state = 3; return; }
+        R.sub[k] = crc;
+        R.tests_bad += crc != R.md[k];
     }
     s1a_mark(3);
     /* Serve E1M1's lumps exactly as the sub will request them in S1. */
@@ -110,35 +106,31 @@ static void run(void)
         BANK[0] = size >> 8; BANK[1] = size; BANK[2] = 0; BANK[3] = 0;
         for (u16 i = 0; i < size; i++) BANK[4 + i] = src[i];
         const u32 mine = s1a_crc(0, src, size);
-        if (!call(++request & 0x7fffu, &crc)) { s1a_state = 3; return; }
-        s1a_mark(0x100 + s1a_lumps);
-        ++s1a_lumps; s1a_bytes += size;
-        s1a_lump_bad += crc != mine;
-        if (s1a_bytes <= 160u * 1024u) s1a_cache_md = s1a_crc(s1a_cache_md, src, size);
+        if (!call(++request & 0x7fffu, &crc)) { R.state = 3; return; }
+        s1a_mark(0x100 + R.lumps);
+        ++R.lumps; R.bytes += size;
+        R.lump_bad += crc != mine;
+        if (R.bytes <= 160u * 1024u) R.cache_md = s1a_crc(R.cache_md, src, size);
     }
-    if (!call(++request | 0x800Fu, &crc)) { s1a_state = 3; return; }
-    s1a_cache_sub = crc;
-    s1a_state = 4;
+    if (!call(++request | 0x800Fu, &crc)) { R.state = 3; return; }
+    R.cache_sub = crc;
+    R.state = 4;
 }
 
 void S1A_Test(void)
 {
+    S1aResult r;
+    memset(&r, 0, sizeof r);
+    res_ptr = &r;
     SYS_disableInts();
     run();
+    BANKRES = r;                       /* into whichever bank the MD holds now */
     SYS_enableInts();
     s1a_complete();
-    VDP_init();
-    VDP_drawText("doom-md-scd-s1a.bin", 1, 1);
-    static const char *const st[] = { "?", "NO SEGA CD", "SUB BOOT FAILED", "SUB CALL TIMEOUT", "" };
-    const bool pass = s1a_state == 4 && !s1a_tests_bad && !s1a_lump_bad && s1a_cache_md == s1a_cache_sub;
-    VDP_drawText(pass ? "S1A PASS: ENGINE CODE ON SUB-CPU" : "S1A FAIL", 1, 3);
-    VDP_drawText(st[s1a_state < 5 ? s1a_state : 0], 1, 4);
-    line("SUB PROGRAM BYTES: ", SUB_PROGRAM_WORDS * 2u, 6);
-    line("ENGINE TESTS DIFFERENT: ", s1a_tests_bad, 7);
-    line("E1M1 LUMPS SERVED: ", s1a_lumps, 9);
-    line("E1M1 BYTES SERVED: ", s1a_bytes, 10);
-    line("LUMP CRC MISMATCHES: ", s1a_lump_bad, 11);
-    VDP_drawText(s1a_cache_md == s1a_cache_sub ? "SUB CACHE CRC: MATCH" : "SUB CACHE CRC: DIFFERENT", 1, 12);
-    VDP_drawText("TEST ROM: GAME DOES NOT START", 1, 15);
-    for (;;) ;
+    const bool pass = r.state == 4 && !r.tests_bad && !r.lump_bad && r.cache_md == r.cache_sub;
+    static const char *const st[] = { "?", "NO SEGA CD", "SUB BOOT FAILED", "SUB CALL TIMEOUT", "OK" };
+    I_Error("doom-md-scd-s1a.bin\nS1A %s (%s)\nSUB BYTES %u\nENGINE TESTS DIFF %u\nE1M1 LUMPS %u / %u BYTES\nLUMP CRC BAD %u\nSUB CACHE %s\nTEST ROM: GAME DOES NOT START",
+            pass ? "PASS" : "FAIL", st[r.state < 5 ? r.state : 0], (unsigned)(SUB_PROGRAM_WORDS * 2u),
+            (unsigned)r.tests_bad, (unsigned)r.lumps, (unsigned)r.bytes, (unsigned)r.lump_bad,
+            r.cache_md == r.cache_sub ? "MATCH" : "DIFFERENT");
 }

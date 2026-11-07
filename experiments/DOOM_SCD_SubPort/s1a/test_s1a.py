@@ -20,15 +20,14 @@ try:
         pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xffffff
         if pc == stop:
             break
-        stage = int.from_bytes(g.readmem(sym["s1a_stage"], 2), "big")
+        stage = int.from_bytes(g.readmem(0x61F000 + 44, 2), "big")
         print("reached", "S1A_Test" if pc == sym["S1A_Test"] else "mark stage(before update) 0x%x" % stage, flush=True)
-    rd = lambda n, k: int.from_bytes(g.readmem(sym[n], k), "big")
-    state = rd("s1a_state", 2)
-    md = [int.from_bytes(g.readmem(sym["s1a_md"] + 4 * i, 4), "big") for i in range(3)]
-    sub = [int.from_bytes(g.readmem(sym["s1a_sub"] + 4 * i, 4), "big") for i in range(3)]
-    r = dict(state=state, tests_bad=rd("s1a_tests_bad", 2), lumps=rd("s1a_lumps", 2), bytes=rd("s1a_bytes", 4),
-             lump_bad=rd("s1a_lump_bad", 2), cache_md=hex(rd("s1a_cache_md", 4)), cache_sub=hex(rd("s1a_cache_sub", 4)),
-             md=[hex(x) for x in md], sub=[hex(x) for x in sub])
+    import struct
+    raw = bytes(g.readmem(0x61F000, 46))
+    f = struct.unpack(">4H3I3I3IH", raw)
+    state, tests_bad, lumps, lump_bad, nbytes, cmd, csub = f[:7]
+    r = dict(state=state, tests_bad=tests_bad, lumps=lumps, bytes=nbytes, lump_bad=lump_bad,
+             cache_md=hex(cmd), cache_sub=hex(csub), md=[hex(x) for x in f[7:10]], sub=[hex(x) for x in f[10:13]])
     print("S1a:", r)
     ok = state == 4 and r["tests_bad"] == 0 and r["lump_bad"] == 0 and r["lumps"] > 5 and r["cache_md"] == r["cache_sub"]
     print("blastem:", "PASS" if ok else "FAIL")
