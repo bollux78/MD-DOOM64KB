@@ -79,3 +79,31 @@
 - **Conversão para o plano no MD (opção a):** se custar caro, o MD vira gargalo da apresentação. Medir no S2.
 - **Divisões e recíprocas no sub** sem a tabela de 127 KiB.
 - O sub não tem VDP nem Z80: tudo que a R128 faz direto no hardware (`I_*`) vira comando para o MD.
+
+## 7. Resultado do S0 (run 42326484112, 2026-11-06): `build: PASS`
+- **Compilação:** as **85 fontes** da R128 All, com os mesmos 87 defines, compilam para o 68000 sem a biblioteca SGDK (só os headers). Ferramenta: `experiments/DOOM_SCD_SubPort/s0_report.py`, workflow `scd-subport-s0.yml`.
+- **Link a partir de `main()` com `--gc-sections`:**
+
+  | Item | Tamanho |
+  |---|---|
+  | **Funções** | **191 KiB**, ainda incluindo o código de vídeo, HUD, som e menus que vai para o MD |
+  | BSS | 55 KiB (`heap` 46 KiB) |
+  | Dados const | 1.078 KiB: `r91_joint` 512, `r84_pixels` 136, `r12_recip_table` 127, `r79_*` 112, HUD R76/R77 ~105, PCM no MD |
+
+  O WAD (1.633 KiB) e a música (419 KiB) ficam na ROM e no MD.
+- **Dependências externas: 71**
+
+  | Grupo | Qtd. | Símbolos | Destino |
+  |---|---|---|---|
+  | SGDK | 47 | `JOY_*`, `MEM_alloc`/`getFree`, `PAL_*`, `SYS_*`, `VDP_*` (planos, texto, scroll, janela), `XGM2_*`, `Z80_*` | comandos ao MD (vídeo, som, controle) ou substitutos no sub (`MEM_*`) |
+  | libc | 8 | `memcmp`, `memcpy`, `memset`, `sprintf`, `vsprintf`, `strcpy`, `strlen`, `strncpy` | implementar no sub |
+  | libgcc | 8 | — | resolve no link |
+  | Endereços de plano da SGDK | — | `bga_addr`, `bgb_addr`, `window_addr`, `maps_addr` | vira layout fixo do protocolo |
+  | `bgm_episode` | — | — | MD |
+  | Profiler R21 | — | — | descartar |
+
+**Próximo (S1):**
+1. Levantar os acessos diretos ao hardware no engine, que não aparecem como símbolo: `$C000xx` VDP, `$A1xxxx` I/O e Z80, SRAM `$A130F1`/`$200000` R23/R25. Eles viram RAM no sub ou comandos ao MD.
+2. Separar os arquivos em sub / MD / ambos.
+3. Fazer `W_*` ler os lumps de um cache em PRG-RAM, abastecido pelo MD.
+4. Rodar a lógica da demo 1 no sub.
