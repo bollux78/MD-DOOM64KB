@@ -22,6 +22,9 @@ w.mkdir(exist_ok=True)
 subprocess.run([b("as"), "-m68000", str(s1a / "sub_boot.s"), "-o", str(w / "boot.o")], check=True)
 subprocess.run([b("gcc")] + cflags + ["-c", str(here / "sub_main.c"), "-o", str(w / "main.o")], check=True, cwd=str(tree))
 subprocess.run([b("gcc"), "-m68000", "-O2", "-ffreestanding", "-fno-builtin", "-ffunction-sections", "-c", str(s1a / "sub_libc.c"), "-o", str(w / "libc.o")], check=True)
+for name in ("scd_sub_transport.c","scd_sub_w_wad.c"):
+    subprocess.run([b("gcc")] + cflags + ["-c",str(common / name),"-o",str(w / (name+".o"))],
+                   check=True,cwd=str(tree))
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "sub.elf"
 engine = [str(w / (n+".o")) for n in ("scd_sub_transport.c","scd_sub_w_wad.c")]
