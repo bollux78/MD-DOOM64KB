@@ -134,10 +134,13 @@ assert md.count(needle)==1
 md=md.replace(needle,
     "    r.reserved=(r.stage==5 || r.stage==6)?*(volatile const u16*)0xA12024:0;\n"
     +needle)
-needle="const bool pass=r.stage==5"
-assert md.count(needle)==1
+# S1b's 4-request check must be replaced for the E1M1 9-lump test.
+needle="const bool pass=r.stage==5 && r.serviced==4"
+assert md.count(needle)==1,"S1b acceptance predicate changed"
 md=md.replace(needle,
-    "const bool pass=r.reserved==0x5A5Du && r.serviced==10 && r.stage==5")
+    "const bool pass=r.reserved==0x5A5Du && r.stage==5 && r.serviced==10")
+assert md.count("r.serviced==4")==0
+assert md.count("r.serviced==10")==1
 needle='VDP_drawText("S1B SUB WAD TRANSPORT",1,2);'
 assert md.count(needle)==1
 md=md.replace(needle,

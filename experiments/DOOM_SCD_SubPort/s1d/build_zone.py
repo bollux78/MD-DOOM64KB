@@ -97,10 +97,15 @@ title = ("S1D Z3 LIVE GEOMETRY" if construct_mode else "S1D Z2 RESIDENT MAP" if 
          "S1D Z1 E1M1 MAP LUMPS" if map_mode else "S1D Z0 Z_INIT + WAD")
 assert md.count("    REPORT=r;") == 1, "S1b diagnostic anchor changed"
 md = md.replace("    REPORT=r;", "    r.reserved=(r.stage==5 || r.stage==6)?*(volatile const u16*)0xA12024:0;\n    REPORT=r;")
-assert md.count("const bool pass=r.stage==5") == 1
-md = md.replace("const bool pass=r.stage==5",
-                "const bool pass=r.reserved==" + marker + " && r.stage==5" +
-                (" && r.serviced==10" if map_mode else ""))
+# Replace the WHOLE request-count comparison, not just the stage prefix.
+# S1b expects 4 (DIR + 3 lumps); Z1/Z2/Z3 expect 10 (DIR + 9).
+needle = "const bool pass=r.stage==5 && r.serviced==4"
+assert md.count(needle) == 1, "S1b acceptance predicate changed"
+md = md.replace(needle,
+    "const bool pass=r.reserved==" + marker +
+    " && r.stage==5 && r.serviced==" + ("10" if map_mode else "4"))
+assert md.count("r.serviced==4") == (0 if map_mode else 1)
+assert md.count("r.serviced==10") == (1 if map_mode else 0)
 assert md.count('VDP_drawText("S1B SUB WAD TRANSPORT",1,2);') == 1
 md = md.replace('VDP_drawText("S1B SUB WAD TRANSPORT",1,2);',
                 'VDP_drawText("' + title + '",1,2);\n'
