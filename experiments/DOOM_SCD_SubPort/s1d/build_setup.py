@@ -46,7 +46,10 @@ if True:
     assert p_setup.count(hook)==1,"R115 MD video cleanup anchor changed"
     p_setup=p_setup.replace(hook,
         "{ /* SCD sub has no R115 video buffers; Z_FreeTags still runs. */ }")
-    anchor='#include "r24_romthings.h"'
+        start_hook="{   extern void R115_LevelStart(void); R115_LevelStart(); }"
+    assert p_setup.count(start_hook)==1,"R115 MD framebuffer start anchor changed"
+    p_setup=p_setup.replace(start_hook,"{ /* no MD framebuffer on sub */ }")
+anchor='#include "r24_romthings.h"'
     assert p_setup.count(anchor)==1,"p_setup include anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'\n#define P_LoadTexture(t) ((void)0) /* sub no-render only */')
 if not full:
@@ -91,6 +94,10 @@ if full:
         return draw[start:end]
     funcs=["static uint32_t mulu(","fixed_t CONSTFUNC FixedMul(",
            "fixed_t CONSTFUNC FixedMulAngle(",
+           "inline static fixed_t CONSTFUNC FixedMul3232(",
+           "fixed_t CONSTFUNC FixedMul3216(",
+           "static uint32_t R10_ReciprocalSmall(",
+           "fixed_t CONSTFUNC FixedApproxDiv(",
            "static PUREFUNC int16_t R_PointOnSide(",
            "subsector_t __far* R_PointInSubsector(",
            "static CONSTFUNC int16_t SlopeDiv(",
@@ -117,7 +124,9 @@ if full:
     # Texture warming is a renderer side effect; switch gameplay remains real.
     switch_text=re.sub(r"R_GetTexture\(([^;]+)\);",r"(void)(\1);",switch_text)
     switch.write_text(switch_text)
-    for name,source in (("sub_geometry",utility),("sub_audio",audio),("p_switch",switch)):
+    for name,source in (("sub_geometry",utility),("sub_audio",audio),("p_switch",switch),
+                        ("am_map",tree/"src/am_map.c"),
+                        ("r_sky",tree/"src/r_sky.c")):
         obj=objdir/(name+".o")
         result=subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],
                               cwd=tree,capture_output=True,text=True)
