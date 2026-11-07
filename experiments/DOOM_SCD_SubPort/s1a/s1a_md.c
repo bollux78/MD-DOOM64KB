@@ -90,7 +90,7 @@ static void run(void)
     u32 crc;
     for (int k = 0; k < S1A_TESTS; k++)
     {
-        if (!call(++request | 0x8000u, &crc)) { R.state = 3; return; }
+        if (!call(0x8000u | (u16)((++request & 0x7ffu) << 4) | (u16)k, &crc)) { R.state = 3; return; }
         R.sub[k] = crc;
         R.tests_bad += crc != R.md[k];
     }
@@ -118,7 +118,7 @@ static void run(void)
         R.lump_bad += crc != mine;
         if (R.bytes <= 160u * 1024u) R.cache_md = s1a_crc(R.cache_md, src, size);
     }
-    if (!call(++request | 0x800Fu, &crc)) { R.state = 3; return; }
+    if (!call(0x8000u | (u16)((++request & 0x7ffu) << 4) | 15u, &crc)) { R.state = 3; return; }
     R.cache_sub = crc;
     R.state = 4;
 }
