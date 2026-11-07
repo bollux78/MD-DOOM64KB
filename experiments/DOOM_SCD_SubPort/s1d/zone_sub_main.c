@@ -6,6 +6,7 @@
 #include "w_wad.h"
 #include "scd_proto.h"
 #include "z_zone.h"
+#include "i_system.h"
 
 #define REG16(a) (*(volatile uint16_t *)(uintptr_t)(a))
 extern void SCD_SubTransportReset(void);
