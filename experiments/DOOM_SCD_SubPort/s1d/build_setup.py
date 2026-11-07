@@ -46,10 +46,10 @@ if True:
     assert p_setup.count(hook)==1,"R115 MD video cleanup anchor changed"
     p_setup=p_setup.replace(hook,
         "{ /* SCD sub has no R115 video buffers; Z_FreeTags still runs. */ }")
-        start_hook="{   extern void R115_LevelStart(void); R115_LevelStart(); }"
+    start_hook="{   extern void R115_LevelStart(void); R115_LevelStart(); }"
     assert p_setup.count(start_hook)==1,"R115 MD framebuffer start anchor changed"
     p_setup=p_setup.replace(start_hook,"{ /* no MD framebuffer on sub */ }")
-anchor='#include "r24_romthings.h"'
+    anchor='#include "r24_romthings.h"'
     assert p_setup.count(anchor)==1,"p_setup include anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'\n#define P_LoadTexture(t) ((void)0) /* sub no-render only */')
 if not full:
