@@ -81,12 +81,16 @@ static void line(const char *label, u32 value, u16 y)
 }
 
 void __attribute__((noipa)) s1a_complete(void) { __asm__ volatile ("" ::: "memory"); }
+volatile u16 s1a_stage;
+void __attribute__((noipa)) s1a_mark(u16 stage) { s1a_stage = stage; __asm__ volatile ("" ::: "memory"); }
 
 static void run(void)
 {
     for (int k = 0; k < S1A_TESTS; k++) s1a_md[k] = s1a_test(k);
     if ((HW_VERSION & 0x20u) || CD_BIOS_HEADER != 0x53454741UL) { s1a_state = 1; return; }
+    s1a_mark(1);
     if (!boot_sub()) { s1a_state = 2; return; }
+    s1a_mark(2);
     u32 crc;
     for (int k = 0; k < S1A_TESTS; k++)
     {
@@ -94,6 +98,7 @@ static void run(void)
         s1a_sub[k] = crc;
         s1a_tests_bad += crc != s1a_md[k];
     }
+    s1a_mark(3);
     /* Serve E1M1's lumps exactly as the sub will request them in S1. */
     const int16_t first = W_GetNumForName("E1M1");
     for (int16_t n = first; n < first + 16; n++)
@@ -106,6 +111,7 @@ static void run(void)
         for (u16 i = 0; i < size; i++) BANK[4 + i] = src[i];
         const u32 mine = s1a_crc(0, src, size);
         if (!call(++request & 0x7fffu, &crc)) { s1a_state = 3; return; }
+        s1a_mark(0x100 + s1a_lumps);
         ++s1a_lumps; s1a_bytes += size;
         s1a_lump_bad += crc != mine;
         if (s1a_bytes <= 160u * 1024u) s1a_cache_md = s1a_crc(s1a_cache_md, src, size);

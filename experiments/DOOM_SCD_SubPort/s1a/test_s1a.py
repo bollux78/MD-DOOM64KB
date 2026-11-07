@@ -13,8 +13,15 @@ g = RSP(os.environ["BLASTEM"], rom, 9000, 600)
 try:
     g.req("qSupported")
     stop = sym["s1a_complete"]
-    assert g.req(f"Z0,{stop:x},2") == "OK"
-    g.cont()
+    for name in ("S1A_Test", "s1a_mark", "s1a_complete"):
+        assert g.req(f"Z0,{sym[name]:x},2") == "OK", name
+    while True:
+        g.cont()
+        pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xffffff
+        if pc == stop:
+            break
+        stage = int.from_bytes(g.readmem(sym["s1a_stage"], 2), "big")
+        print("reached", "S1A_Test" if pc == sym["S1A_Test"] else "mark stage(before update) 0x%x" % stage, flush=True)
     rd = lambda n, k: int.from_bytes(g.readmem(sym[n], k), "big")
     state = rd("s1a_state", 2)
     md = [int.from_bytes(g.readmem(sym["s1a_md"] + 4 * i, 4), "big") for i in range(3)]
