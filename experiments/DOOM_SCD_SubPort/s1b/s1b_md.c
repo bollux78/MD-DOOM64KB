@@ -19,7 +19,7 @@
 #define CD_SUB_HI (*(volatile const u16 *)0xA1202A)
 #define CD_SUB_LO (*(volatile const u16 *)0xA1202C)
 #define CD_PRGRAM ((volatile u16 *)0x420000)
-#include "s1a_sub.h"
+#include "s1b_sub.h"
 
 extern void SCD_MdServeReset(void);
 extern int16_t SCD_MdServeOnce(void);
