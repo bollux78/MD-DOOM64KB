@@ -2,6 +2,7 @@
  * Boot sub, let it fetch WAD directory and three E1M1 lumps, compare CRCs.
  * Diagnostic then START (or timeout) launches unmodified R128 All on MD.
  * Does NOT claim the Doom ticker already executes on the Sega CD. */
+#include <stddef.h>
 #include <stdint.h>
 #include <genesis.h>
 #include "doomtype.h"
