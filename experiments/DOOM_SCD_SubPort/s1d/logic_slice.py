@@ -91,9 +91,28 @@ for name in names:
         failures.append({"source": name, "error": p.stderr[-1600:]})
     else:
         objects.append(str(obj))
+# Unlike the original 28-object probe, the RAM candidate also includes
+# the actual sub WAD directory, synchronous transport and PRG-RAM zone.
+if ram_only:
+    common = Path(__file__).resolve().parent.parent
+    staging = Path(__file__).resolve().parent
+    extra = [("scd_sub_system", staging / "scd_sub_system.c"),
+             ("scd_sub_w_wad", common / "scd_sub_w_wad.c"),
+             ("scd_sub_transport", common / "scd_sub_transport.c")]
+    for name, source in extra:
+        obj = out / (name + ".o")
+        p = subprocess.run([gcc] + cflags + ["-I" + str(common), "-c",
+                            str(source), "-o", str(obj)],
+                           cwd=work, capture_output=True, text=True)
+        if p.returncode:
+            failures.append({"source": name, "error": p.stderr[-2200:]})
+        else:
+            objects.append(str(obj))
 report = {"phase": ("S1d direct-PRG-RAM logic candidate — NOT executable" if ram_only
                      else "S1d logic-only dependency preflight — NOT an executable"),
           "ram_only": ram_only,
+          "real_sub_modules": (["scd_sub_system", "scd_sub_w_wad",
+                                "scd_sub_transport"] if ram_only else []),
           "compiled": len(objects), "requested": len(names), "compile_failures": failures,
           "excluded_md_features": excluded,
           "known_blocker": (None if ram_only else
@@ -141,6 +160,7 @@ if not failures:
 print("S1d %s LOGIC SLICE: COMPILED %d/%d" %
       ("RAM" if ram_only else "BASE", len(objects), len(names)))
 print("Reloc link:", report.get("reloc_link_ok"))
+if ram_only: print("Includes real sub WAD/cache/transport and zone staging")
 print("GC link:", report.get("gc_link_ok"))
 print("Undefined:", report.get("undefined_count", "n/a"))
 print("Required roots:", report.get("required_roots", {}))
