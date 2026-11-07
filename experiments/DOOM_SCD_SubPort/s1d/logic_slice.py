@@ -156,6 +156,18 @@ if not failures:
             sections = subprocess.check_output([size, "-A", str(elf)], text=True)
             report["sections"] = sections
             (out / "sections.txt").write_text(sections)
+            if ram_only:
+                def read_end(symbols):
+                    for line in symbols.splitlines():
+                        fields = line.split()
+                        if len(fields) == 3 and fields[2] in ("_end", "__bss_end__"):
+                            return int(fields[0], 16)
+                    return None
+                end = read_end(subprocess.check_output([nm, str(elf)], text=True))
+                report["prg_ram_end_address"] = end
+                report["prg_ram_budget_bytes"] = 512 * 1024
+                report["fits_prg_ram_with_8kb_stack_reserve"] = (
+                    end is not None and end <= 512 * 1024 - 8 * 1024)
 (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 print("S1d %s LOGIC SLICE: COMPILED %d/%d" %
       ("RAM" if ram_only else "BASE", len(objects), len(names)))
@@ -166,6 +178,10 @@ print("Undefined:", report.get("undefined_count", "n/a"))
 print("Required roots:", report.get("required_roots", {}))
 if ram_only:
     print("Forbidden MD-memory symbols:", report.get("forbidden_md_memory_symbols", []))
+    print("RAM image end (provisional):", report.get("prg_ram_end_address"))
+    print("RAM fits with stack reserve (provisional):", report.get("fits_prg_ram_with_8kb_stack_reserve"))
+    for sym in report.get("undefined", []):
+        print("S1D_UNRESOLVED:", sym)
 for failure in failures:
     print("COMPILE FAIL:", failure["source"])
     print(failure["error"])
