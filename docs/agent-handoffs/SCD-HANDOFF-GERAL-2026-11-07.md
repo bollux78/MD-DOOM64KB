@@ -22,13 +22,13 @@
 | Z0 | [42394549410](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42394549410) PASS: `Z_Init`, alocação/free/heap e WAD no sub. |
 | **Z1** | [42395731404](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42395731404) PASS, **usuário aprovou em console físico**; 9 lumps + DIR, 52.895 B, CRC `5547100C`. |
 | **Z2/Z3** | [42401064058](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42401064058) PASS ambos no BlastEm. Z2 preserva nove lumps em cache; Z3 constrói runtime geometry PRG-RAM. Usuário testou no console e relatou Doom carregando; HUD dizia `TRANSFER FAIL` com `MAP PASS`, zero erros, CRC igual — **bug de texto, não de transporte**. |
-| **Z4** | **[42404785842](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42404785842) SUCCESS: link estrito + BlastEm PASS**. Pela primeira vez o **`P_SetupLevel(1)` real** roda no sub até `P_GroupLines`, sem spawn/especiais. Marcador `0x5A5D`, 10 transações/52.895 B, 0 erros/timeout, CRC MD/CD `5547100C`, START → R128 no MD PASS. **Console físico da Z4 ainda pendente**. |
+| **Z4** | **[42404785842](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42404785842) SUCCESS: link estrito + BlastEm PASS**. Pela primeira vez o **`P_SetupLevel(1)` real** roda no sub até `P_GroupLines`, sem spawn/especiais. Marcador `0x5A5D`, 10 transações/52.895 B, 0 erros/timeout, CRC MD/CD `5547100C`, START → R128 no MD PASS. **Z4 APROVADA NO CONSOLE FÍSICO pelo usuário em 07/11/2026**. |
 | **Z5** | Executou diagnóstico de **link estrito da inicialização inteira** no mesmo run; `S1d Z5 strict link: FAIL objects 36`. A etapa diagnóstica saiu com status 0 intencional; **não existe ROM Z5 validada**. |
 | S1e/S2 | `G_Ticker` real no sub e render offload **ainda não implementados/validados**. |
 
 **Última ROM Z4 privada do runner:**
 `/home/dan/Projetos/Personal/scd-subport-s1d-z4/run-42404785842-1/doom-md-scd-s1d-z4.bin`.
-Sub payload = **8.240 bytes**; fim da RAM `0x451D8`. Marcador Z4 `0x5A5D`; fallback do MD passou no BlastEm. Não declarar hardware PASS sem retorno do usuário.
+Sub payload = **8.240 bytes**; fim da RAM `0x451D8`. Marcador Z4 `0x5A5D`; fallback do MD passou no BlastEm. Hardware PASS informado pelo usuário em 07/11/2026 (tela Z4 e fallback aprovados).
 
 **Relatório Z5:** `/home/dan/Projetos/Personal/scd-subport-s1d-z5-link/run-42404785842-1/link_report.json`. Símbolos faltantes verificados incluem `FixedMul`, `FixedMulAngle`, `R_PointToAngle3`, `R_PointInSubsector`, `S_StartSound`, `S_StopSound`; há mais no relatório completo.
 
@@ -50,7 +50,7 @@ Sub payload = **8.240 bytes**; fim da RAM `0x451D8`. Marcador Z4 `0x5A5D`; fallb
 
 ## Ação concreta para o próximo agente
 
-1. Confirmar branch/HEAD e eventual aprovação física da Z4. Ler o relatório Z5 completo e **catalogar dependências alcançáveis** — não deduzir somente pelos trechos visíveis no log.
+1. Confirmar branch/HEAD. Z4 foi aprovada no console pelo usuário em 07/11/2026; continuar para Z5 e integração completa. Ler o relatório Z5 completo e **catalogar dependências alcançáveis** — não deduzir somente pelos trechos visíveis no log.
 2. Portar matemática/BSP do jogo e inicialização de monstros/especiais reais (`P_LoadThings2`, `P_SpawnSpecials`, `P_MapEnd`); **não** usar stubs artificiais de lógica que fariam falso PASS. Áudio/vídeo podem ser hooks sem execução de hardware no sub, com arquitetura explícita.
 3. Preparar duas etapas sequenciais: uma ROM de runtime realmente ampliada para testar no BlastEm e console, e um probe/ROM mais avançado, mantendo o fallback via START e isolando resultados.
 4. Depois de `P_SetupLevel` completo, executar demo E1M1 com `G_Ticker` **no segundo 68000**, 2.600 tics sem render, medir fingerprints reais e independentes, contagem de mobjs e memória. Só então S2.
