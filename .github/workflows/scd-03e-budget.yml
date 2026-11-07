@@ -63,3 +63,26 @@ jobs:
           print("largest rodata/data symbols:")
           for size, name in sorted(big, reverse=True)[:25]: print("  %8d  %s" % (size, name))
           '
+      - name: Functions vs const objects (objdump -t flags)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="$HOME/Projetos/Personal/r128-claudio-simplify/run-41914756942-1/c-all/doom-md-r60-r128-all-pf"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" -t "$ref.elf" | python3 -c '
+          import sys, collections, re
+          fn = 0; ob = collections.Counter(); objs = []
+          for line in sys.stdin:
+              m = re.match(r"^([0-9a-f]{8}) (.{7}) (\S+)\s+([0-9a-f]{8}) (.+)$", line.rstrip())
+              if not m: continue
+              flags, sec, size, name = m.group(2), m.group(3), int(m.group(4), 16), m.group(5).split()[-1]
+              if sec != ".text" or not size: continue
+              if "F" in flags: fn += size
+              else:
+                  key = "wad" if name.startswith("doom_iwad") else "music/sound" if name.startswith(("bgm_", "pcm_", "xgm", "stop_xgm", "z80_", "drv_", "smp_", "snd_")) else "const data"
+                  ob[key] += size
+                  if key == "const data": objs.append((size, name))
+          print("functions      %9d bytes %7.1f KiB" % (fn, fn / 1024))
+          for k, v in ob.most_common(): print("%-14s %9d bytes %7.1f KiB" % (k, v, v / 1024))
+          print("largest const objects:")
+          for size, name in sorted(objs, reverse=True)[:30]: print("  %8d  %s" % (size, name))
+          '
