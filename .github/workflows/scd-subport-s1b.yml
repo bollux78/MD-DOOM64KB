@@ -158,6 +158,8 @@ jobs:
           python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --resident
           echo "S1D_Z2_OUT=$out" >> "$GITHUB_ENV"
       - name: S1d Z2 BlastEm plus MD fallback
+        id: z2_blastem
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -181,6 +183,8 @@ jobs:
           python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --construct
           echo "S1D_Z3_OUT=$out" >> "$GITHUB_ENV"
       - name: S1d Z3 BlastEm plus MD fallback
+        id: z3_blastem
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -193,3 +197,13 @@ jobs:
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s1d/test_live.py --construct "$S1D_Z3_OUT/doom-md-scd-s1d-z3.bin" "$S1D_Z3_OUT/doom-md-scd-s1d-z3.elf"
+
+      - name: S1d Z2 and Z3 combined gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Z2 BlastEm outcome: ${{ steps.z2_blastem.outcome }}"
+          echo "Z3 BlastEm outcome: ${{ steps.z3_blastem.outcome }}"
+          test "${{ steps.z2_blastem.outcome }}" = "success"
+          test "${{ steps.z3_blastem.outcome }}" = "success"

@@ -217,10 +217,22 @@ void sub_main(void)
         if(!again || again!=held[k])I_Error("S1D Z2 POINTER NOT STABLE");
         verify=crc32_sample(verify,again,size[k]);
     }
-    if(verify!=crc || SCD_WadCacheMisses()!=9 ||
-       SCD_WadCachePeak()!=SCD_WadCacheCurrent() ||
-       SCD_WadCacheCurrent()<52895UL)
-        I_Error("S1D Z2 CACHE INTEGRITY");
+    uint32_t resident_bytes=0;
+    for(uint16_t k=1;k<=9;k++)resident_bytes+=size[k];
+    /* Directory bytes count in transport, not in nine-lump arena. */
+    if(verify!=crc){
+        REG16(0xFF8024UL)=0x57A1u;
+        I_Error("S1D Z2 CACHE CRC");
+    }
+    if(SCD_WadCacheMisses()!=9){
+        REG16(0xFF8024UL)=0x57A2u;
+        I_Error("S1D Z2 CACHE MISSES");
+    }
+    if(SCD_WadCachePeak()!=SCD_WadCacheCurrent() ||
+       SCD_WadCacheCurrent()<resident_bytes){
+        REG16(0xFF8024UL)=0x57A3u;
+        I_Error("S1D Z2 CACHE ALLOCATION");
+    }
 #if defined(SCD_Z3_CONSTRUCT)
     REG16(0xFF8024UL)=0x5603u; /* currently building live geometry */
     construct_geometry(held,count);
