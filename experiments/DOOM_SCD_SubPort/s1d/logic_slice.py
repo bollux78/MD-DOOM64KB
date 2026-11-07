@@ -92,6 +92,9 @@ print("Reloc link:", report.get("reloc_link_ok"))
 print("GC link:", report.get("gc_link_ok"))
 print("Undefined:", report.get("undefined_count", "n/a"))
 print("Required roots:", report.get("required_roots", {}))
+for failure in failures:
+    print("COMPILE FAIL:", failure["source"])
+    print(failure["error"])
 print("Report:", out / "report.json")
 if failures or not report.get("reloc_link_ok") or not report.get("gc_link_ok"):
     raise SystemExit("S1d dependency preflight FAIL; see private report")
