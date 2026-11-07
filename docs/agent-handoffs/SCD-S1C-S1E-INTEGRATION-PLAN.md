@@ -97,3 +97,12 @@ O usuário autorizou prosseguir após PASS de Z2/Z3 no BlastEm, antes da homolog
 - CI preserva S1b como regressão. Z2/Z3 anteriormente validadas deixam de ser recompiladas a cada nova execução. Nada é modificado no checkout principal do usuário.
 
 **Estado neste registro:** implementação Z4 e Z5 publicada; aprovação de CI ainda não confirmada.
+
+## Z4 validada no BlastEm — após correção de R115 (07/11/2026)
+
+- A execução [42402895451](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42402895451) falhou porque o link da Z4 apontou apenas um símbolo não resolvido: `R115_LevelEnd`, rotina do ciclo de vídeo com duplo framebuffer do **Mega Drive** inserida por `scripts/lab/apply_r115.py`. Não foi erro do transporte Sega CD.
+- Commit de correção `f7289af`: `s1d/build_setup.py` retira **somente** a chamada de limpeza do framebuffer R115 da cópia experimental de `p_setup.c` usada pela Z4 (sem render), preservando `Z_FreeTags` e a execução **real** de `P_SetupLevel(1)` até após `P_GroupLines`. O fonte original MD não é alterado.
+- **[Run 42404785842](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42404785842): SUCCESS**. Link estrito Z4 PASS, payload sub **8240 bytes**, endereço final PRG-RAM **0x451D8**. BlastEm Z4 PASS: `stage=5`, `served=10`, `errors=0`, `timeouts=0`, `bytes=52895`, `mdcrc=subcrc=0x5547100C`, sinal sub `0x5A5D`. Fallback `G_Ticker` **no MD** PASS.
+- ROM Z4 privada: `/home/dan/Projetos/Personal/scd-subport-s1d-z4/run-42404785842-1/doom-md-scd-s1d-z4.bin`. **Hardware físico ainda não testado**, ao contrário da Z1 já aprovada pelo usuário.
+- **Z5 permanece um diagnóstico**: link estrito completo reportou FAIL com várias dependências ainda não portadas (`FixedMul`, `FixedMulAngle`, `R_PointToAngle3`, `R_PointInSubsector`, `S_StartSound`, `S_StopSound` e outras). A etapa de diagnóstico terminou sem interromper o workflow, mas **não existe ROM Z5 completa validada**.
+- Próximo passo técnico: resolver as dependências de matemática e geometria de jogo, depois remover a interrupção pós-`P_GroupLines`, linkar os spawns/especiais reais e validar no Sega CD; apenas depois ligar `G_Ticker` no segundo CPU. Nunca confundir o fallback MD com motor offloaded.
