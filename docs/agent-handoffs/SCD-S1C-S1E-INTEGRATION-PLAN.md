@@ -57,3 +57,25 @@ S1 só está completo com `G_Ticker` demonstravelmente executando no sub-68000, 
 1. Fazer link **estrito** (sem `--unresolved-symbols=ignore-all`) com `P_SetupLevel` como raiz, registrar dependências *vivas* e resolver apenas a camada necessária a lógica E1M1 sem render.
 2. Usar o cache **residente** sem `W_FlushCache` durante `P_SetupLevel`, medir pico e pressão de memória PRG-RAM; preservar dados 1M Word RAM somente para transporte, nunca como ponteiros permanentes.
 3. Rodar `P_SetupLevel(1)` com servidor MD ativo em uma ROM diagnóstica que mantenha START → R128 no MD. Só depois ligar o demo `G_Ticker` no sub e comparar fingerprints da S1e.
+
+## Duas ROMs por rodada: S1d-Z2 e S1d-Z3 (07/11/2026)
+
+**Z1 aprovada pelo usuário no console físico.** Essa aprovação é da Z1; Z2/Z3 ainda exigem teste em hardware.
+
+**GitHub Actions [42401064058](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42401064058): SUCCESS em Z2 + Z3 (build e BlastEm)**. Commit de correção `76b5e2d`; commit base `20a41b5`.
+
+| ROM | Função real executada no Sega CD sub | Resultado BlastEm |
+| --- | --- | --- |
+| Z2 | `Z_Init`, WAD remoto, nove lumps E1M1 mantidos residentes após todas as trocas 1M, ponteiros e CRC rechecados, `Z_CheckHeap` | PASS |
+| Z3 | Tudo da Z2 + criação de `sector_t`, `side_t`, `linedata_t`, `subsector_t`, referências de linhas por setor e blocklinks em zone PRG-RAM | PASS |
+
+- Z2: `/home/dan/Projetos/Personal/scd-subport-s1d-z2/run-42401064058-1/doom-md-scd-s1d-z2.bin`; marcador sub `0x5A3D`.
+- Z3: `/home/dan/Projetos/Personal/scd-subport-s1d-z3/run-42401064058-1/doom-md-scd-s1d-z3.bin`; marcador sub `0x5A4D`.
+- Ambas: `stage=5`, `served=10`, `bytes=52895`, `errors=0`, `timeouts=0`, `mdcrc=subcrc=0x5547100C`; MD gameplay após START/timeout = PASS.
+- Conservamos definição R128 no MD; novas variantes no sub removem R23/SRAM/R24 e usam RAM direta. `S1b` mantém seu teste de regressão no workflow.
+- O workflow agora cria **Z2, testa Z2, cria Z3, testa Z3 sequencialmente**, mas uma falha do teste Z2 não impede experimentar Z3. O gate final exige que **ambos** tenham resultado success, evitando falso verde.
+- A primeira execução [42400684542](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42400684542) gerou Z2 mas seu teste falhou porque comparava cache residente com bytes totais de transporte **incluindo diretório**. Corrigido para comparar com soma dos comprimentos dos nove lumps. Há marcadores de falha `0x57A1` CRC, `0x57A2` misses, `0x57A3` espaço de cache.
+- Arquivo principal dessas variantes: `experiments/DOOM_SCD_SubPort/s1d/resident_sub_main.c`, construído via `s1d/build_zone.py --resident|--construct`; teste `s1d/test_live.py`.
+- **Limitação importante:** Z3 replica as alocações/relacionamentos básicos, mas NÃO chama `P_SetupLevel`, `P_SpawnMapThing`, `P_SpawnSpecials`, `G_Ticker`, nem prova que todo o heap de E1M1 é suficiente para a execução completa.
+- Próximo marco após aprovação física: link estrito do código real `P_SetupLevel` e dependências não gráficas, com diagnóstico de referências ausentes e orçamento de heap antes de iniciar `G_Ticker`. Não introduzir funções artificiais de gameplay que falseiem a prova.
+
