@@ -97,6 +97,7 @@ static void run(void)
     s1a_mark(3);
     /* Serve E1M1's lumps exactly as the sub will request them in S1. */
     s1a_mark(4);
+    W_Init();                          /* normally done inside D_DoomMain */
     const int16_t first = W_GetNumForName("E1M1");
     s1a_mark(5);
     for (int16_t n = first; n < first + 16; n++)
