@@ -76,7 +76,9 @@ subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tool
                 str(binary), str(tree / "src/s1b_sub.h")], check=True)
 # Modify only a disposable generated worktree to expose a unique real-zone marker.
 source = tree / "src/s1b_md.c"
-md = source.read_text()
+# Both Z0 and Z1 run against the same disposable generated work tree.
+# Always start from pristine S1b source, not a previous diagnostic patch.
+md = (common / "s1b" / "s1b_md.c").read_text()
 if map_mode:
     original = "for(u16 i=1;i<=3;i++)"
     assert md.count(original) == 1, "S1b checksum loop changed"
@@ -84,7 +86,7 @@ if map_mode:
 marker = "0x5A2Du" if map_mode else "0x5A1Du"
 title = "S1D Z1 E1M1 MAP LUMPS" if map_mode else "S1D Z0 Z_INIT + WAD"
 assert md.count("    REPORT=r;") == 1, "S1b diagnostic anchor changed"
-md = md.replace("    REPORT=r;", "    r.reserved=(r.stage==5)?*(volatile const u16*)0xA12024:0;\n    REPORT=r;")
+md = md.replace("    REPORT=r;", "    r.reserved=(r.stage==5 || r.stage==6)?*(volatile const u16*)0xA12024:0;\n    REPORT=r;")
 assert md.count("const bool pass=r.stage==5") == 1
 md = md.replace("const bool pass=r.stage==5",
                 "const bool pass=r.reserved==" + marker + " && r.stage==5" +

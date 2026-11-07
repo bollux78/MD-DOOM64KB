@@ -64,6 +64,7 @@ void sub_main(void)
     uint32_t crc=0xFFFFFFFFUL;
     for (uint16_t k=1;k<=9;k++) {
         const uint8_t *p=(const uint8_t *)W_GetLumpByNum(map+(int16_t)k);
+        REG16(0xFF8024UL)=(uint16_t)(0x5500u | k); /* last validated lump */
         crc=crc32_sample(crc,p,size[k]);
 
         if (k==2) {
@@ -84,10 +85,11 @@ void sub_main(void)
             const seg_t *segs=(const seg_t *)p;
             for (uint16_t j=0;j<count[k];j++)
                 if (segs[j].linenum>=count[2] ||
-                    segs[j].sidenum>=count[3] ||
-                    segs[j].frontsectornum>=count[7] ||
-                    (segs[j].backsectornum!=NO_INDEX8 &&
-                     segs[j].backsectornum>=count[7]))
+                    (segs[j].sidenum!=NO_INDEX &&
+                     (segs[j].sidenum>=count[3] ||
+                      segs[j].frontsectornum>=count[7] ||
+                      (segs[j].backsectornum!=NO_INDEX8 &&
+                       segs[j].backsectornum>=count[7]))))
                     I_Error("S1D Z1 SEG REFERENCE");
         }
         if (k==5) {
