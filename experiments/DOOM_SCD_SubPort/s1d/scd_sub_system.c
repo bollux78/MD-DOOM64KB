@@ -21,6 +21,10 @@ uint8_t __far* I_ZoneBase(uint32_t *size)
 
 void SCD_SubSetTime(uint32_t ticks) { sub_tic_clock = ticks; }
 int32_t I_GetTime(void) { return (int32_t)sub_tic_clock; }
+/* The sub has no console; Doom diagnostic prints are intentionally dropped.
+ * A later step will route formatted errors via comm registers. */
+int printf(const char *format, ...) { (void)format; return 0; }
+
 void I_InitTimer(void) {}
 void I_StartTic(void) {}
 
