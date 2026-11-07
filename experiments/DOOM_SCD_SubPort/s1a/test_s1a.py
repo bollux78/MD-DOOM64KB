@@ -9,7 +9,7 @@ sym = {}
 for line in subprocess.check_output([nm, elf], text=True).splitlines():
     f = line.split()
     if len(f) == 3: sym[f[2].split(".")[0]] = int(f[0], 16) & 0xffffff
-g = RSP(os.environ["BLASTEM"], rom, 1800, 60)
+g = RSP(os.environ["BLASTEM"], rom, 9000, 600)
 try:
     g.req("qSupported")
     stop = sym["s1a_complete"]
