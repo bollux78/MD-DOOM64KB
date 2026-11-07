@@ -17,7 +17,7 @@ size = str(tc / "m68k-elf-size")
 opts = (work / "out/.render_options").read_text().split()
 defines = [v for v in opts if v.startswith("-D") and not any(
     v.startswith("-D" + d) for d in (
-        "DOOM_R22_SRAM_BLOCKLINKS", "DOOM_R23_MAPMEM", "DOOM_R25_MUSIC",
+        "DOOM_R25_MUSIC",
         "DOOM_R12_RECIP_LUT", "DOOM_R29_XGM2"))]
 sgdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 cflags = ["-DSGDK_GCC", "-I.", "-I" + str(work / "out"),
@@ -49,7 +49,7 @@ for name in names:
         objects.append(str(obj))
 report = {"phase": "S1d logic-only dependency preflight — NOT an executable",
           "compiled": len(objects), "requested": len(names), "compile_failures": failures,
-          "excluded_md_features": ["SRAM_BLOCKLINKS", "MAPMEM", "MUSIC", "RECIP_LUT", "XGM2"]}
+          "excluded_md_features": ["MUSIC", "RECIP_LUT", "XGM2"],\n          "known_blocker": "R128 R81/R119/R24 structures depend on R23_MAPMEM; retaining R23 in this probe, NOT valid sub hardware configuration"}
 if not failures:
     reloc = out / "logic-slice.o"
     p = subprocess.run([gcc, "-m68000", "-nostdlib", "-Wl,-r",
