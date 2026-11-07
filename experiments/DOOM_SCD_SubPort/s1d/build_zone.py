@@ -74,7 +74,7 @@ subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tool
 source = tree / "src/s1b_md.c"
 md = source.read_text()
 assert md.count("    REPORT=r;") == 1, "S1b diagnostic anchor changed"
-md = md.replace("    REPORT=r;", "    r.reserved=*(volatile const u16*)0xA12024;\n    REPORT=r;")
+md = md.replace("    REPORT=r;", "    r.reserved=(r.stage==5)?*(volatile const u16*)0xA12024:0;\n    REPORT=r;")
 assert md.count("const bool pass=r.stage==5") == 1
 md = md.replace("const bool pass=r.stage==5",
                 "const bool pass=r.reserved==0x5A1Du && r.stage==5")
