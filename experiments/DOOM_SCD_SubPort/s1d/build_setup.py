@@ -38,6 +38,13 @@ cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
 # (2) stop just after actual P_GroupLines, before thinker/item spawns.
 p_setup=(tree/"src/p_setup.c").read_text()
 if not full:
+    # R115_LevelEnd belongs to the MD video double-buffer lifecycle.
+    # The sub CPU has no framebuffer and P_SetupLevel starts with an empty
+    # renderer state. Remove only this video cleanup call (keep Z_FreeTags).
+    hook="{   extern void R115_LevelEnd(void); R115_LevelEnd(); }"
+    assert p_setup.count(hook)==1,"R115 MD video cleanup anchor changed"
+    p_setup=p_setup.replace(hook,
+        "{ /* SCD sub has no R115 video buffers; Z_FreeTags still runs. */ }")
     anchor='#include "r24_romthings.h"'
     assert p_setup.count(anchor)==1,"p_setup include anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'\n#define P_LoadTexture(t) ((void)0) /* sub no-render only */')
