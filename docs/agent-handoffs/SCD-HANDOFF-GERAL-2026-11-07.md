@@ -1,3 +1,9 @@
+# Atualização Z6 — 07/11/2026
+
+Z5 aprovada pelo usuário no console nesta conversa. **Z6: 2600 chamadas reais de P_Ticker no sub-68000, build/link estrito e BlastEm PASS**, run 42417494369, commit 04a66b6. 27 checkpoints devolvidos da PRG-RAM e hash 182C31E7 conferido; 11 requests, 63309 bytes, 0 erros/timeouts. Heap da variante ticker 224 KiB; payload 81988 bytes, RAM end 0x736D0. **Saúde final 0: comparação MD/sub pendente.** Não é G_Ticker completo nem renderização a partir do sub. Z6 hardware ainda não testado. ROM `/home/dan/Projetos/Personal/scd-subport-s1e-z6/run-42417494369-1/doom-md-scd-s1e-z6.bin`. START ainda executa R128 no MD.
+
+Ler primeiro [SCD-Z6-REAL-SIMULATION.md](./SCD-Z6-REAL-SIMULATION.md), com prova, limites e próximos passos. As afirmações abaixo de que não houve ticker no sub são históricas: P_Ticker agora foi executado, G_Ticker completo ainda não.
+
 # Handoff geral — DOOM-MD R128 → Sega CD sub-68000 (07/11/2026)
 
 > ## Atualização que substitui o estado antigo da Z5 — 07/11/2026
