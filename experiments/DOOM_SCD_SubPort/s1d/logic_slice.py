@@ -81,7 +81,7 @@ for name in names:
             marker = '#include "r23_mapmem.h"'
             if text.count(marker) != 1:
                 raise SystemExit("S1d RAM: R119 header marker changed")
-            text = text.replace(marker, marker + "\\n" + ram_nodes)
+            text = text.replace(marker, marker + chr(10) + ram_nodes)
         source = out / (name + ".c")
         source.write_text(text)
     obj = out / (name + ".o")
