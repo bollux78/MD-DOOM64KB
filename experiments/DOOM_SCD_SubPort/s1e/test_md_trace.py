@@ -37,10 +37,10 @@ try:
             continue
         assert pc==sym('S1E_MDCheckpoint'),hex(pc)
         assert g.readmem(sym('r116_active'),1)==b'\x01','wrong MD demo'
-        raw=g.readmem(0x61c000,40)
+        raw=g.readmem(0x61c000,44)
         row=dict(zip(fields,struct.unpack('>IiiiIiII',raw[:32])))
         assert row['tic']==len(rows)*100,('missing/repeated MD checkpoint',row)
-        rows.append(row);clocks.append(struct.unpack('>ii',raw[32:]))
+        rows.append(row);clocks.append(struct.unpack('>iii',raw[32:]))
         print('MD checkpoint',row,flush=True)
         if row['tic']==2600:break
     assert len(rows)==27,'incomplete MD trace'
@@ -48,5 +48,9 @@ try:
         w=csv.DictWriter(fp,fieldnames=fields);w.writeheader();w.writerows(rows)
     (rom.parent/'md_clock.json').write_text(json.dumps(clocks))
     print('MD original G_Ticker / 27 checkpoints PASS; last',rows[-1],flush=True)
-    print('MD initial/final (gametic,basetic)',clocks[0],clocks[-1],flush=True)
+    metadata=dict(initial_clock=clocks[0],final_clock=clocks[-1],
+                  first_dead_tic=int.from_bytes(g.readmem(0x61c034,4),'big'),
+                  deaths=int.from_bytes(g.readmem(sym('r116_res')+24,2),'big'))
+    (rom.parent/'md_metadata.json').write_text(json.dumps(metadata))
+    print('MD clock/death metadata',metadata,flush=True)
 finally:g.close()

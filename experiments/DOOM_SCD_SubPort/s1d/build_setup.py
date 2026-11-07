@@ -261,10 +261,10 @@ if comparison:
     text=game.read_text()
     anchor="        P_Ticker ();"
     assert text.count(anchor)==1,"G_Ticker P_Ticker observer anchor changed"
-    text=text.replace(anchor, """        { extern void S1E_MDObserve(void);
-          if(_g_leveltime==0)S1E_MDObserve();
+    text=text.replace(anchor, """        { extern void S1E_MDObserve(uint16_t);
+          S1E_MDObserve(0);
           P_Ticker();
-          S1E_MDObserve(); }
+          S1E_MDObserve(1); }
 """)
     game.write_text(text)
     main=tree/"src/d_main.c"
@@ -283,6 +283,8 @@ if comparison:
 void S1E_MDStart(void)
 {
     extern volatile uint8_t r116_norender;
+    *(volatile uint32_t *)0x61C030UL=0;
+    *(volatile uint32_t *)0x61C034UL=0xFFFFFFFFUL;
     R89_SetAIMode(0);r116_norender=1;
     M_R116Run(1);
 }
