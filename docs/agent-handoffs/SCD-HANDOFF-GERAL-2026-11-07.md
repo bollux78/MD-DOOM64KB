@@ -1,3 +1,9 @@
+# Atualização Z7 / Z6 hardware — 07/11/2026
+
+**Z6 hardware PASS**, confirmado por foto: 2600 TICS PASS, hash 182C31E7 igual ao BlastEm, requests 11, bytes 63309, erros 0. **Z7 comparação independente concluída, workflow SUCCESS**: run 42426895978 / commit 1c2dd15. 27 checkpoints MD G_Ticker e sub P_Ticker. Tic 0 coincide; primeiro checkpoint divergente 100 (objetos/RNG), trajetória diverge no 200. MD morre no tic 541, respawna uma vez e termina com saúde 100; sub tem primeiro checkpoint morto no 2300 e termina com saúde 0. Divergência real, causa exata ainda não isolada; não exigir identidade bit a bit (critério do usuário). Próximo marco: P_Init / switches e G_Ticker completo no sub, inclusive rebirth/reload. Renderização ainda não usa estado sub.
+
+**Ler primeiro [SCD-Z7-MD-SUB-COMPARISON.md](./SCD-Z7-MD-SUB-COMPARISON.md)**. O estado abaixo é histórico e suas menções a Z6 não testada/ausência de comparação estão superadas.
+
 # Atualização Z6 — 07/11/2026
 
 Z5 aprovada pelo usuário no console nesta conversa. **Z6: 2600 chamadas reais de P_Ticker no sub-68000, build/link estrito e BlastEm PASS**, run 42417494369, commit 04a66b6. 27 checkpoints devolvidos da PRG-RAM e hash 182C31E7 conferido; 11 requests, 63309 bytes, 0 erros/timeouts. Heap da variante ticker 224 KiB; payload 81988 bytes, RAM end 0x736D0. **Saúde final 0: comparação MD/sub pendente.** Não é G_Ticker completo nem renderização a partir do sub. Z6 hardware ainda não testado. ROM `/home/dan/Projetos/Personal/scd-subport-s1e-z6/run-42417494369-1/doom-md-scd-s1e-z6.bin`. START ainda executa R128 no MD.
