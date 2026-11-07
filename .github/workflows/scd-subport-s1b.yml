@@ -1,9 +1,9 @@
-name: Sega CD Z5 setup and Z6 real sub simulation
+name: Sega CD Z7 independent MD and sub traces
 on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
@@ -216,9 +216,9 @@ jobs:
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          out="$HOME/Projetos/Personal/scd-subport-s1e-z6/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1e-z7/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           echo "S1E_Z6_OUT=$out" >> "$GITHUB_ENV"
-          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --ticker
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --compare
       - name: S1e Z6 BlastEm actual sub simulation and independent trace
         id: z6_blastem
         if: steps.z6_build.outcome == 'success'
@@ -234,7 +234,11 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --ticker "$S1E_Z6_OUT/doom-md-scd-s1e-z6.bin" "$S1E_Z6_OUT/doom-md-scd-s1e-z6.elf"
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --ticker "$S1E_Z6_OUT/doom-md-scd-s1e-z7.bin" "$S1E_Z6_OUT/doom-md-scd-s1e-z7.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1e/test_md_trace.py "$S1E_Z6_OUT/doom-md-scd-s1e-z7.bin" "$S1E_Z6_OUT/doom-md-scd-s1e-z7.elf"
+          python3 experiments/DOOM_SCD_SubPort/s1e/compare_logic.py "$S1E_Z6_OUT/md_trace.csv" "$S1E_Z6_OUT/sub_trace.csv" --out "$S1E_Z6_OUT/comparison.json"
+
 
       - name: Z4 and Z5 runtime acceptance gate
         if: always()

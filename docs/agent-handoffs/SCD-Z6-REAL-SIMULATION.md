@@ -45,3 +45,7 @@ Z5 já executa P_SetupLevel inteiro no sub. Z6 adiciona uma etapa independente: 
 2. Comparar trace MD com mesmo WAD/input/AI/RNG, localizar morte e primeira divergência (diferenças por layout/endereço do R128 são possíveis; não prometer bit identity).
 3. Integrar G_Ticker completo e estados de jogo; depois conectar estado do sub à renderização e medir ganho real. A simulação Z6 isolada não mede FPS do jogo renderizado.
 
+
+## Z6 no console físico — confirmação de 07/11/2026
+
+Foto enviada pelo usuário confirma TRANSFER PASS / STAGE 5, REQUESTS 11 / ERRORS 0, BYTES 63309, AI NORMAL, STATE HASH 182C31E7 e 2600 TICS PASS. **Z6 hardware PASS para a simulação.** Hash igual ao BlastEm. A foto não confirma por si só o fallback após START. Continuação autorizada: captura independente MD/sub (Z7) e depois integração completa de G_Ticker.

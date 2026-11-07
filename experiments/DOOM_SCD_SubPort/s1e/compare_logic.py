@@ -3,7 +3,7 @@
 
 Both CSVs must contain:
 tic,player_x,player_y,player_z,angle,health,mobjs,prndindex
-Only the actual G_Ticker observer may emit these checkpoints. Never synthesize
+The MD G_Ticker and sub P_Ticker observers emit independent checkpoints. Never synthesize
 or infer the sub trace from the MD trace. Exit 0 when traces valid even if
 divergent: playable behavior is the acceptance criterion, not bit identity.
 """
@@ -27,6 +27,8 @@ def load(path):
             if tic in trace or tic < 0 or tic > 2600 or tic % 100:
                 raise ValueError(f"{path}: invalid/duplicate checkpoint {tic}")
             trace[tic] = x
+    if set(trace)!=set(range(0,2601,100)):
+        raise ValueError(f"{path}: require all 27 checkpoints from 0 through 2600")
     return trace
 
 def compare(md, sub):
@@ -45,7 +47,11 @@ def compare(md, sub):
                 first = tic
     return {"md_checkpoints": len(md), "sub_checkpoints": len(sub),
             "first_divergent_tic": first, "differences": differences,
-            "exact_match": not differences}
+            "exact_match": not differences,
+            "sampling": "First divergence means checkpoint (100-tic spacing), not exact simulation tic.",
+            "first_dead_checkpoint_md": next((t for t in sorted(md) if md[t]["health"]<=0),None),
+            "first_dead_checkpoint_sub": next((t for t in sorted(sub) if sub[t]["health"]<=0),None),
+            "first_divergent_states": ({"md":md.get(first),"sub":sub.get(first)} if first is not None else None)}
 
 def main():
     p = argparse.ArgumentParser()
@@ -56,6 +62,7 @@ def main():
     md, sub = load(args.md_csv), load(args.sub_csv)
     report = compare(md, sub)
     report["disclaimer"] = "Comparison only: does not prove sub-68000 execution. Require independent BlastEm trace."
+    print(json.dumps(report),flush=True)
     Path(args.out).write_text(json.dumps(report, indent=2) + "\n")
     print("S1e comparison: checkpoints MD=%d sub=%d, first divergence=%s" %
           (report["md_checkpoints"], report["sub_checkpoints"], report["first_divergent_tic"]))

@@ -8,10 +8,11 @@ the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
-if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker")):
+if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare")):
     raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full|--ticker]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
-ticker=len(sys.argv)==6 and sys.argv[5]=="--ticker"
+comparison=len(sys.argv)==6 and sys.argv[5]=="--compare"
+ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare")
 full=len(sys.argv)==6
 here=Path(__file__).resolve().parent
 common=here.parent
@@ -252,6 +253,24 @@ if ticker:
                   'sprintf(t,"INPUT DTE1M1 / AI NORMAL");')
     md=md.replace('sprintf(t,"CD CRC %08lX",(unsigned long)r.sub_crc);',
                   'sprintf(t,"STATE HASH %08lX",(unsigned long)r.sub_crc);')
+if comparison:
+    name="doom-md-scd-s1e-z7"
+    md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z7 MD SUB TRACE")
+    shutil.copyfile(common/"s1e/md_observer.c",tree/"src/s1e_md_observer.c")
+    game=tree/"src/g_game.c"
+    text=game.read_text()
+    anchor="        P_Ticker ();"
+    assert text.count(anchor)==1,"G_Ticker P_Ticker observer anchor changed"
+    text=text.replace(anchor, """        { extern void S1E_MDObserve(void);
+          if(_g_leveltime==0)S1E_MDObserve();
+          P_Ticker();
+          S1E_MDObserve(); }
+""")
+    game.write_text(text)
+    random=tree/"src/m_random.c"
+    text=random.read_text()
+    assert text.count("#if defined(DOOM_R47_STATE_HASH)")==1
+    random.write_text(text.replace("#if defined(DOOM_R47_STATE_HASH)","#if 1 /* read-only MD trace observer */"))
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",
