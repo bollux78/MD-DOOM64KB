@@ -18,9 +18,18 @@ for line in subprocess.check_output([nm,str(elf)],text=True).splitlines():
     if len(fields)==3:
         try: symbols[fields[2].split(".")[0]]=int(fields[0],16)&0xFFFFFF
         except ValueError: pass
-g=RSP(os.environ["BLASTEM"],rom,16000,600)
+for attempt in range(3):
+    g=RSP(os.environ["BLASTEM"],rom,16000,600)
+    try:
+        g.req("qSupported")
+        break
+    except (RuntimeError, BrokenPipeError):
+        g.proc.wait(timeout=5)
+        err=g.proc.stderr.read().decode(errors="replace")
+        g.close()
+        if "out of range of a 32-bit displacement" not in err or attempt==2: raise
+        print("BlastEm startup JIT allocation failed; retrying before ROM execution",flush=True)
 try:
-    g.req("qSupported")
     for name in ("s1b_complete","I_Error"):
         assert g.req("Z0,%x,2"%symbols[name])=="OK",name
     report=None
@@ -40,6 +49,8 @@ try:
     passed=(stage==5 and marker==expected and served==(11 if ticker else 10) and errors==0
             and timeouts==0 and bytes_sent>0 and (subcrc!=0 if ticker else mdcrc==subcrc))
     if ticker:
+        print("sub last tic",int.from_bytes(g.readmem(0xA12026,2),"big"),flush=True)
+        assert passed,"Z6 did not complete; inspect stage/marker/tic above"
         import csv
         fields=("tic","player_x","player_y","player_z","angle","health","mobjs","prndindex")
         raw=g.readmem(0x61E000,27*32)

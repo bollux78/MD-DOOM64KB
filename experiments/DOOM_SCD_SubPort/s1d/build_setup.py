@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """S1d-Z4 actual R128 P_SetupLevel geometry-phase ROM, or Z5 full strict-link probe.
 
-Usage: build_setup.py GENERATED_TREE S1B_OUT RAM_OBJECT_DIR PRIVATE_OUT [--full]
+Usage: build_setup.py GENERATED_TREE S1B_OUT RAM_OBJECT_DIR PRIVATE_OUT [--full|--ticker]
 This modifies ONLY the disposable generated worktree. Nothing is written to
 the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 """
@@ -9,7 +9,7 @@ import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
 if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker")):
-    raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full]")
+    raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full|--ticker]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
 ticker=len(sys.argv)==6 and sys.argv[5]=="--ticker"
 full=len(sys.argv)==6
@@ -137,7 +137,7 @@ if full:
             raise SystemExit("Z5 platform compile failed: "+name)
         parts.append(obj)
 if ticker:
-    for name in ("m_random",):
+    for name in ("m_random", "r_plane"):
         source=tree/"src"/(name+".c")
         obj=objdir/(name+".o")
         subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)

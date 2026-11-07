@@ -20,6 +20,7 @@
 extern void SCD_SubTransportReset(void), SCD_SubSetTime(uint32_t);
 extern uint16_t M_R47RandomState(void);
 extern void R89_SetAIMode(uint8_t);
+boolean _g_menuactive; /* headless platform owns the menu state */
 static uint32_t hash=2166136261UL;
 static void checkpoint(uint16_t tic)
 {
