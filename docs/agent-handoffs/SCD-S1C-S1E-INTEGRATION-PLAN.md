@@ -16,9 +16,20 @@ Branch `exp-werk-scd-subport-s1s2`. S1b: build PASS / BlastEm PASS (run 42376206
 - **S1d slice original:** [run 42378872339](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42378872339) PASS — 28/28 arquivos e link, porém com definições R23/SRAM.
 - **S1d RAM direto:** [run 42388960828](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42388960828) PASS — 28/28, sem R23_MAPMEM/R22_SRAM_BLOCKLINKS, nenhum símbolo de acesso MD/SRAM proibido, 77 referências externas na compilação parcial.
 - **S1d RAM com módulos reais:** [run 42389565745](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42389565745) PASS — 28 componentes de lógica + sistema, WAD/cache e transporte = 31 objetos, link relocável/diagnóstico, 70 referências externas; `_end=349948` (341,7 KiB), **provisório** pois símbolos faltantes foram ignorados no link. Não declarar executável funcional a partir deste dado.
-- **S1d-Z0:** códigos `s1d/zone_sub_main.c`, `scd_sub_system.c`, `build_zone.py`, `test_zone.py` e etapa no workflow `scd-subport-s1b.yml` adicionados. Objetivo: provar no BlastEm **Z_Init real + Z_MallocStatic/Z_Free/Z_CheckHeap no sub**, somado ao transporte WAD e ao fallback START no MD. Verificar relatório de CI posterior ao commit `2ee3f12`; **não há PASS comprovado de Z0 nesta atualização**. ROM Z0 não é `P_SetupLevel` nem `G_Ticker` no sub.
+- **S1d-Z0 (histórico anterior à validação):** códigos `s1d/zone_sub_main.c`, `scd_sub_system.c`, `build_zone.py`, `test_zone.py` e etapa no workflow `scd-subport-s1b.yml` adicionados. Objetivo: provar no BlastEm **Z_Init real + Z_MallocStatic/Z_Free/Z_CheckHeap no sub**, somado ao transporte WAD e ao fallback START no MD. Verificar relatório de CI posterior ao commit `2ee3f12`; **não há PASS comprovado de Z0 nesta atualização**. ROM Z0 não é `P_SetupLevel` nem `G_Ticker` no sub.
 - O marcador `0x5A1D` é escrito no registrador de argumento do sub (`FF8024`) só após o teste de zona e CRC. O MD captura em `A12024` **apenas se stage==5** (evita acessar periférico inexistente no MD sem Sega CD). `test_zone.py` exige marcador + CRC igual + `G_Ticker` **no MD**, não no sub.
 - Todos os artefatos binários, WAD e ELF permanecem em `~/Projetos/Personal` no runner. `/home/dan/Projetos/doom-md` não é modificado.
+
+### S1d-Z0 — primeiro build e execução comprovados
+
+**Run [42394549410](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42394549410): build PASS / BlastEm PASS / hardware NOT TESTED.**
+Correção do erro original: `zone_sub_main.c` precisava incluir `i_system.h`, commit `9aa67e2`.
+- ROM privada: `/home/dan/Projetos/Personal/scd-subport-s1d-z0/run-42394549410-1/doom-md-scd-s1d-z0.bin`.
+- Sub image 8194 bytes; BSS end `0x45058`, abaixo de `0x7E000`.
+- Registros observados via BlastEm/MD: `stage=5`, `served=4`, `bytes=26331`, `errors=0`, `timeouts=0`; `mdcrc=subcrc=0x998D122A`.
+- Marcador `0x5A1D`: sub 68000 passou por `Z_Init`, alocação e preenchimento/checagem de 256 bytes, `Z_Free`, `Z_CheckHeap`, e WAD I/O. O teste confirma o marcador lido pelo MD.
+- `G_Ticker` depois de START/timeout foi alcançado **no Mega Drive**, não no sub.
+- Esta é a **Z0 de diagnóstico**, ainda não S1d com `P_SetupLevel` nem S1e de 2600 tics. Sem teste de console até confirmação do usuário.
 
 ### Próximo passo após o PASS do Z0
 1. Link estrito do núcleo sem `--unresolved-symbols=ignore-all`, resolvendo por etapas os 70 símbolos remanescentes e adicionando apenas módulos realmente necessários à demo E1M1.
