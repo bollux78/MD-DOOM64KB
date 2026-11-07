@@ -94,11 +94,16 @@ if full:
            "subsector_t __far* R_PointInSubsector(",
            "static CONSTFUNC int16_t SlopeDiv(",
            "CONSTFUNC angle_t R_PointToAngle3("]
+    # Angle table is private to r_draw.c (not tables.c); keep exact values.
+    angle_start=draw.index("static const angle_t tantoangleTable[2049] =")
+    angle_end=draw.index("};",angle_start)+2
+    angle_table=draw[angle_start:angle_end]
     utility=objdir/"sub_geometry.c"
     utility.write_text(draw[:draw.index("#include <stdint.h>")]+
         '#include "compiler.h"\n#include "r_main.h"\n#include "globdata.h"\n'+
         '#include "m_fixed.h"\n#include "tables.h"\n'+
         '#define SLOPERANGE 2048\nuint16_t validcount=1;\n'+
+        angle_table+'\n#define tantoangle(t) tantoangleTable[t]\n'+
         "\n\n".join(definition(sig) for sig in funcs))
     # Silent hardware boundary only. No gameplay function is substituted.
     audio=objdir/"sub_silent_audio.c"
