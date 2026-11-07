@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py
+          python3 -m py_compile experiments/DOOM_SCD_SubPort/s1d/logic_slice.py experiments/DOOM_SCD_SubPort/s1d/build_zone.py experiments/DOOM_SCD_SubPort/s1d/test_zone.py experiments/DOOM_SCD_SubPort/s1d/test_map.py
       - name: Restore VGM and pinned shareware WAD
         shell: bash
         run: |
@@ -169,3 +169,26 @@ jobs:
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s1d/test_zone.py "$S1D_Z0_OUT/doom-md-scd-s1d-z0.bin" "$S1D_Z0_OUT/doom-md-scd-s1d-z0.elf"
+
+      - name: S1d Z1 build private ROM with E1M1 geometry validation on sub
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          out="$HOME/Projetos/Personal/scd-subport-s1d-z1/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_zone.py "$tree" "$S1A_OUT" "$out" --map
+          echo "S1D_Z1_OUT=$out" >> "$GITHUB_ENV"
+      - name: S1d Z1 BlastEm sub E1M1 geometry plus MD gameplay fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s1d-z1.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_map.py "$S1D_Z1_OUT/doom-md-scd-s1d-z1.bin" "$S1D_Z1_OUT/doom-md-scd-s1d-z1.elf"

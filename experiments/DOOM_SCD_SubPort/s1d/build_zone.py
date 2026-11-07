@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""S1d Z0: replace only the S1b sub image in an already built disposable R128 tree.
+"""S1d Z0/Z1: replace the S1b sub image in a disposable R128 tree.
 
 Run after s1b/build.py. Real sub-68000 Z_Init + allocation/free + remote WAD I/O.
 The MD still plays R128 after START; this is NOT P_SetupLevel/G_Ticker on sub.
-Usage: build_zone.py GENERATED_TREE PREVIOUS_S1B_OUT PRIVATE_OUTPUT
+Usage: build_zone.py GENERATED_TREE PREVIOUS_S1B_OUT PRIVATE_OUTPUT [--map]
 """
 import os, shutil, subprocess, sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
 common = here.parent
-tree, s1b, out = (Path(arg).resolve() for arg in sys.argv[1:])
+args = sys.argv[1:]
+if len(args) not in (3, 4) or (len(args) == 4 and args[3] != "--map"):
+    raise SystemExit("usage: build_zone.py TREE S1B_OUT PRIVATE_OUT [--map]")
+map_mode = len(args) == 4
+tree, s1b, out = (Path(arg).resolve() for arg in args[:3])
 out.mkdir(parents=True, exist_ok=True)
 w = out / "sub"
 w.mkdir(exist_ok=True)
@@ -33,7 +37,7 @@ for obj in kept:
     if not obj.is_file():
         raise SystemExit("Missing prerequisite S1b object: " + str(obj))
 
-extra = [("zone_main", here / "zone_sub_main.c"),
+extra = [("zone_main", here / ("map_sub_main.c" if map_mode else "zone_sub_main.c")),
          ("system", here / "scd_sub_system.c"),
          ("zone", tree / "src/z_zone.c")]
 created = []
@@ -73,15 +77,25 @@ subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tool
 # Modify only a disposable generated worktree to expose a unique real-zone marker.
 source = tree / "src/s1b_md.c"
 md = source.read_text()
+if map_mode:
+    original = "for(u16 i=1;i<=3;i++)"
+    assert md.count(original) == 1, "S1b checksum loop changed"
+    md = md.replace(original, "for(u16 i=1;i<=9;i++)")
+marker = "0x5A2Du" if map_mode else "0x5A1Du"
+title = "S1D Z1 E1M1 MAP LUMPS" if map_mode else "S1D Z0 Z_INIT + WAD"
 assert md.count("    REPORT=r;") == 1, "S1b diagnostic anchor changed"
 md = md.replace("    REPORT=r;", "    r.reserved=(r.stage==5)?*(volatile const u16*)0xA12024:0;\n    REPORT=r;")
 assert md.count("const bool pass=r.stage==5") == 1
 md = md.replace("const bool pass=r.stage==5",
-                "const bool pass=r.reserved==0x5A1Du && r.stage==5")
+                "const bool pass=r.reserved==" + marker + " && r.stage==5" +
+                (" && r.serviced==10" if map_mode else ""))
 assert md.count('VDP_drawText("S1B SUB WAD TRANSPORT",1,2);') == 1
 md = md.replace('VDP_drawText("S1B SUB WAD TRANSPORT",1,2);',
-                'VDP_drawText("S1D Z0 Z_INIT + WAD",1,2);\n'
-                '    VDP_drawText(r.reserved==0x5A1Du?"ZONE PASS":"ZONE FAIL",1,11);')
+                'VDP_drawText("' + title + '",1,2);\n'
+                '    VDP_drawText(r.reserved==' + marker +
+                '?"' + ('MAP PASS' if map_mode else 'ZONE PASS') +
+                '":"' + ('MAP FAIL' if map_mode else 'ZONE FAIL') +
+                '",1,11);')
 source.write_text(md)
 # This also rebuilds the header-dependent s1b_md.o with the new sub image.
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
@@ -89,7 +103,8 @@ subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
                 "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + " ".join(defs),
                 "LIBGCC=" + libgcc + " -lgcc"],
                cwd=str(tree), env=env, check=True)
-rom = out / "doom-md-scd-s1d-z0.bin"
+name = "doom-md-scd-s1d-z1" if map_mode else "doom-md-scd-s1d-z0"
+rom = out / (name + ".bin")
 linear = out / "linear.bin"
 subprocess.run(["python3", "scripts/lab/finish_r35_rom.py",
                 "out/rom.bin", str(linear)], check=True, cwd=str(tree))
@@ -98,5 +113,5 @@ subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tool
 subprocess.run(["python3", str(common.parent / "DOOM_SCD_03E/rom_identity.py"),
                 str(rom)], check=True)
 linear.unlink()
-shutil.copyfile(tree / "out/release/rom.out", out / "doom-md-scd-s1d-z0.elf")
-print("S1d Z0 private ROM:", rom, flush=True)
+shutil.copyfile(tree / "out/release/rom.out", out / (name + ".elf"))
+print("S1d Z1 map ROM:" if map_mode else "S1d Z0 private ROM:", rom, flush=True)
