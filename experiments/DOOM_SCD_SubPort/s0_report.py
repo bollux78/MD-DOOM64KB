@@ -18,7 +18,7 @@ tc = Path(os.environ.get("M68K_BIN", str(Path.home() / "mars/m68k-elf/bin")))
 gcc, ld, nm = (str(tc / ("m68k-elf-" + t)) for t in ("gcc", "ld", "nm"))
 opts = (work / "out/.render_options").read_text().split()
 defs = [o for o in opts if o.startswith("-")]
-sgdk = work / "vendor/sgdk"
+sgdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 cflags = ["-m68000", "-O3", "-fno-web", "-fno-gcse", "-fomit-frame-pointer", "-fms-extensions", "-fno-builtin",
           "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
           "-I" + str(work / "src"), "-I" + str(work / "compat"), "-I" + str(sgdk / "inc"), "-I" + str(sgdk / "res"),
@@ -28,9 +28,9 @@ srcs = sorted(p for p in (work / "src").rglob("*") if p.suffix in (".c", ".s") a
 for src in srcs:
     obj = out / (src.relative_to(work / "src").as_posix().replace("/", "_") + ".o")
     cmd = [gcc] + cflags + (["-x", "assembler-with-cpp"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(work))
     if r.returncode:
-        fails.append((src.name, (r.stderr.strip().splitlines() or ["?"])[-1][:160]))
+        fails.append((src.name, next((l for l in r.stderr.splitlines() if "error" in l.lower()), "?")[-200:]))
     else:
         objs.append(str(obj))
 print("S0 defines:", len(defs), "| sources:", len(srcs), "| compiled:", len(objs), "| failed:", len(fails))
