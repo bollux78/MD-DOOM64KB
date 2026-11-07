@@ -10,6 +10,7 @@
 #include "compiler.h"
 #include "w_wad.h"
 #include "i_system.h"
+#include "r21_textscreen.h"
 #include "s1a_tests.h"
 #include "s1a_sub.h"
 
@@ -77,6 +78,7 @@ static bool call(u16 id, u32 *crc)
 
 
 void __attribute__((noipa)) s1a_complete(void) { __asm__ volatile ("" ::: "memory"); }
+void __attribute__((noipa)) s1a_continue(void) { __asm__ volatile ("" ::: "memory"); }
 void __attribute__((noipa)) s1a_mark(u16 stage) { R.stage = stage; BANKRES.stage = stage; __asm__ volatile ("" ::: "memory"); }
 
 static void run(void)
@@ -135,8 +137,29 @@ void S1A_Test(void)
     s1a_complete();
     const bool pass = r.state == 4 && !r.tests_bad && !r.lump_bad && r.cache_md == r.cache_sub;
     static const char *const st[] = { "?", "NO SEGA CD", "SUB BOOT FAILED", "SUB CALL TIMEOUT", "OK" };
-    I_Error("doom-md-scd-s1a.bin\nS1A %s (%s)\nSUB BYTES %u\nENGINE TESTS DIFF %u\nE1M1 LUMPS %u / %u BYTES\nLUMP CRC BAD %u\nSUB CACHE %s\nTEST ROM: GAME DOES NOT START",
-            pass ? "PASS" : "FAIL", st[r.state < 5 ? r.state : 0], (unsigned)(SUB_PROGRAM_WORDS * 2u),
-            (unsigned)r.tests_bad, (unsigned)r.lumps, (unsigned)r.bytes, (unsigned)r.lump_bad,
-            r.cache_md == r.cache_sub ? "MATCH" : "DIFFERENT");
+    char t[40];
+    I_R21_TextScreen();                /* R128 text screen: no VDP_init, font already in VRAM */
+    VDP_drawText("doom-md-scd-s1a.bin", 1, 2);
+    sprintf(t, "S1A %s (%s)", pass ? "PASS" : "FAIL", st[r.state < 5 ? r.state : 0]); VDP_drawText(t, 1, 4);
+    sprintf(t, "SUB PROGRAM BYTES %u", (unsigned)(SUB_PROGRAM_WORDS * 2u)); VDP_drawText(t, 1, 6);
+    sprintf(t, "ENGINE TESTS DIFF %u", (unsigned)r.tests_bad); VDP_drawText(t, 1, 7);
+    sprintf(t, "E1M1 LUMPS %u / %u BYTES", (unsigned)r.lumps, (unsigned)r.bytes); VDP_drawText(t, 1, 8);
+    sprintf(t, "LUMP CRC BAD %u", (unsigned)r.lump_bad); VDP_drawText(t, 1, 9);
+    VDP_drawText(r.cache_md == r.cache_sub ? "SUB CACHE MATCH" : "SUB CACHE DIFFERENT", 1, 10);
+    VDP_drawText("PRESS START TO PLAY", 1, 13);
+    VDP_drawText("(STARTS BY ITSELF IN 15 S)", 1, 14);
+    /* START on pad 1 (TH low: bit 5), or 900 VBlanks. Game itself runs on the MD as in R128. */
+    volatile u8 *const data = (volatile u8 *)0xA10003, *const ctrl = (volatile u8 *)0xA10009;
+    volatile const u16 *const vdp = (volatile const u16 *)0xC00004;
+    *ctrl = 0x40;
+    for (u16 frames = 0; frames < 900; frames++)
+    {
+        while (*vdp & 8u) ;
+        while (!(*vdp & 8u)) ;
+        *data = 0x00; __asm__ volatile ("nop; nop; nop; nop");
+        const u8 b = *data;
+        *data = 0x40;
+        if (!(b & 0x20u)) break;
+    }
+    s1a_continue();
 }

@@ -36,6 +36,16 @@ try:
              cache_md=hex(cmd), cache_sub=hex(csub), md=[hex(x) for x in f[7:10]], sub=[hex(x) for x in f[10:13]])
     print("S1a:", r)
     ok = state == 4 and r["tests_bad"] == 0 and r["lump_bad"] == 0 and r["lumps"] > 5 and r["cache_md"] == r["cache_sub"]
+    # The ROM must stay playable: after the result screen (15 s timeout here) the game must run.
+    for name in ("s1a_mark", "S1A_Test", "I_Error"):
+        g.req(f"z0,{sym[name]:x},2")
+    ticker = sym["G_Ticker"]
+    assert g.req(f"Z0,{ticker:x},2") == "OK"
+    g.cont()
+    pc = int(g.req("g")[17 * 8:18 * 8], 16) & 0xffffff
+    played = pc == ticker
+    print("game started after the result screen (G_Ticker reached):", played)
+    ok = ok and played
     print("blastem:", "PASS" if ok else "FAIL")
     assert ok
 finally:
