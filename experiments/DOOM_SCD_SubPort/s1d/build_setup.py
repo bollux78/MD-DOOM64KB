@@ -137,7 +137,7 @@ if full:
             raise SystemExit("Z5 platform compile failed: "+name)
         parts.append(obj)
 if ticker:
-    for name in ("m_random", "r89_ai"):
+    for name in ("m_random",):
         source=tree/"src"/(name+".c")
         obj=objdir/(name+".o")
         subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
