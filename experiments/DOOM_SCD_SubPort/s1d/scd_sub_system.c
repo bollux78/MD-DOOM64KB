@@ -7,7 +7,9 @@
 #include "i_system.h"
 
 /* Conservative initial zone budget, to be validated against E1M1 heap peak. */
+#ifndef SCD_SUB_ZONE_BYTES
 #define SCD_SUB_ZONE_BYTES (112UL * 1024UL)
+#endif
 #define REG16(addr) (*(volatile uint16_t *)(uintptr_t)(addr))
 
 static uint8_t sub_zone[SCD_SUB_ZONE_BYTES] __attribute__((aligned(16)));
@@ -42,7 +44,8 @@ _Noreturn void I_Quit(void)
 }
 _Noreturn void I_Error(const char *message, ...)
 {
-    (void)message;
+    REG16(0xFF802AUL) = (uint32_t)(uintptr_t)message >> 16;
+    REG16(0xFF802CUL) = (uint32_t)(uintptr_t)message;
     REG16(0xFF8020UL) = 0xDEADu;
     for (;;) {}
 }

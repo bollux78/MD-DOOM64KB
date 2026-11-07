@@ -137,15 +137,15 @@ if full:
             raise SystemExit("Z5 platform compile failed: "+name)
         parts.append(obj)
 if ticker:
-    for name in ("m_random", "r_plane"):
-        source=tree/"src"/(name+".c")
+    for name in ("m_random", "r_plane", "scd_sub_system"):
+        source=(here if name=="scd_sub_system" else tree/"src")/(name+".c")
         obj=objdir/(name+".o")
-        subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
+        subprocess.run([gcc]+cflags+["-DSCD_SUB_ZONE_BYTES=229376", "-c",str(source),"-o",str(obj)],cwd=tree,check=True)
         parts.append(obj)
 base=s1b/"sub"
 kept=[base/name for name in ("boot.o","libc.o","scd_sub_transport.c.o",
                              "scd_sub_w_wad.c.o")]
-kept += [ram/name for name in ("p_tick.o","g_game.o","z_zone.o","scd_sub_system.o")]
+kept += [ram/name for name in ("p_tick.o","g_game.o","z_zone.o","scd_sub_system.o") if not (ticker and name=="scd_sub_system.o")]
 for obj in kept:
     if not obj.is_file(): raise SystemExit("Missing object: "+str(obj))
 objs=[str(x) for x in kept+parts]
@@ -227,9 +227,16 @@ if full:
     md=md.replace("r.reserved==0x5A5Du", "r.reserved=="+marker)
 if ticker:
     md=md.replace("S1D Z5 FULL P_SETUP", "S1E Z6 SUB P_TICKER 2600")
-    md=md.replace("    REPORT=r;", """    if(r.stage==5 && r.reserved==0x5A7Du){
+    md=md.replace("    REPORT=r;", """    if((r.stage==5 && r.reserved==0x5A7Du) || r.stage==6){
         CD_SUB_BYTE=3; /* halt sub and request PRG-RAM bus after completion */
         if(!wait_sub(2,2)){r.stage=7;}else{
+            if(r.stage==6 && r.sub_crc<0x80000UL){
+                const u32 ep=r.sub_crc;
+                CD_MEMCTRL=(CD_MEMCTRL & 0xFF3Fu)|((ep>>11)&0xC0u);
+                volatile const u8 *msg=(volatile const u8 *)(0x420000UL+(ep&0x1FFFFUL));
+                volatile u8 *err=(volatile u8 *)0x61D000;
+                for(u16 i=0;i<128;i++)err[i]=msg[i];
+            }
             CD_MEMCTRL=(CD_MEMCTRL & 0xFF3Fu)|0x00C0u;
             volatile const u16 *src=(volatile const u16 *)0x43C000;
             volatile u16 *dst=(volatile u16 *)0x61E000;

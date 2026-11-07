@@ -50,6 +50,8 @@ try:
             and timeouts==0 and bytes_sent>0 and (subcrc!=0 if ticker else mdcrc==subcrc))
     if ticker:
         print("sub last tic",int.from_bytes(g.readmem(0xA12026,2),"big"),flush=True)
+        if stage==6:
+            print("SUB I_Error:",g.readmem(0x61D000,128).split(b"\0")[0].decode(errors="replace"),flush=True)
         assert passed,"Z6 did not complete; inspect stage/marker/tic above"
         import csv
         fields=("tic","player_x","player_y","player_z","angle","health","mobjs","prndindex")
