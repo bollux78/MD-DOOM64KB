@@ -41,6 +41,7 @@ try:
         row=dict(zip(fields,struct.unpack('>IiiiIiII',raw[:32])))
         assert row['tic']==len(rows)*100,('missing/repeated MD checkpoint',row)
         rows.append(row);clocks.append(struct.unpack('>ii',raw[32:]))
+        print('MD checkpoint',row,flush=True)
         if row['tic']==2600:break
     assert len(rows)==27,'incomplete MD trace'
     with (rom.parent/'md_trace.csv').open('w') as fp:

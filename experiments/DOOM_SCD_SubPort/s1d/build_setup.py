@@ -267,6 +267,20 @@ if comparison:
           S1E_MDObserve(); }
 """)
     game.write_text(text)
+    main=tree/"src/d_main.c"
+    text=main.read_text()
+    anchor="    D_DoomMainSetup();"
+    assert text.count(anchor)==1,"MD setup observer anchor changed"
+    text=text.replace(anchor,anchor+"""
+    /* Z7 diagnostic only: start the original R116 menu benchmark explicitly. */
+    { extern void D_R116_SelectDemo(int16_t);
+      extern void R89_SetAIMode(uint8_t);
+      extern volatile uint8_t r116_norender;
+      extern void M_ClearMenus(void);
+      D_R116_SelectDemo(1);R89_SetAIMode(0);r116_norender=1;
+      M_ClearMenus();D_R50_BenchmarkStart(); }
+""")
+    main.write_text(text)
     random=tree/"src/m_random.c"
     text=random.read_text()
     assert text.count("#if defined(DOOM_R47_STATE_HASH)")==1
