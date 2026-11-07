@@ -2,7 +2,12 @@
  * Boots the sub-CPU with engine code, runs the same engine checks natively, serves the
  * E1M1 lumps from the ROM WAD through Word RAM 1M, compares everything, shows the result
  * and stops (test ROM: the game does not start). */
+#include <stddef.h>
+#include <stdint.h>
 #include <genesis.h>
+#include "doomdef.h"
+#include "doomtype.h"
+#include "compiler.h"
 #include "w_wad.h"
 #include "s1a_tests.h"
 #include "s1a_sub.h"
