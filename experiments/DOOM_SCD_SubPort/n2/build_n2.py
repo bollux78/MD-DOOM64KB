@@ -85,6 +85,8 @@ int SCD_SubFrame(uint16_t arg, uint8_t out[16])
 '''
 (w / "transport.c").write_text(tr)
 ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N2_WAD_CACHE", "96") + "UL * 1024UL)")
+ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
+    '{ static char nf[26] = "LUMP NOT FOUND: "; for (uint16_t j = 0; j < 8u; j++) nf[16 + j] = name[j] ? name[j] : 32; nf[24] = 0; I_Error(nf); }')
 (w / "w_wad_client.c").write_text(ww)
 
 cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
