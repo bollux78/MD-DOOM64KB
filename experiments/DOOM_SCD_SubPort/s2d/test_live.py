@@ -7,7 +7,8 @@ from pathlib import Path
 from r64a_rsp_capture import RSP,symbols
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'s2c'))
 from test_actors import check_applied,mix
-rom,elf=map(Path,sys.argv[1:]);syms=symbols(elf)
+fast='--fast' in sys.argv
+rom,elf=map(Path,[a for a in sys.argv[1:] if a!='--fast']);syms=symbols(elf)
 def sym(n):
     v=[v for k,v in syms.items() if k==n or k.startswith(n+'.')];assert len(v)==1,(n,v)
     return v[0]&0xffffff
@@ -25,41 +26,59 @@ def command(tic,joy,stop=0):
     turn=0 if joy&32 else 640 if joy&4 else -640 if joy&8 else 0
     return struct.pack('>IIbbhHH',0x53324449,tic,f,side,turn,(2 if joy&64 else 0)|(1 if joy&16 else 0),stop)
 
+world_sectors={};world_sides={};rom_states={}
+def word_checksum(raw):
+    assert len(raw)%4==0
+    h=2166136261
+    for i,x in enumerate(struct.unpack('>%dI'%(len(raw)//4),raw)):
+        h=((h<<5)|(h>>27))&0xffffffff;h^=0 if i==7 else x;h=(h+0x9e3779b9)&0xffffffff
+    return h
+
 def decode(g):
     header=g.readmem(0x61a000,256);magic,version,tic,total,wb,ab,status,want=struct.unpack_from('>8I',header)
-    assert (magic,version,status)==(0x53324446,1,0) and total==256+wb+ab and total<=16384
+    assert (magic,version,status)==((0x53324546,2,0) if fast else (0x53324446,1,0)) and total==256+wb+ab and total<=16384
     world=g.readmem(0x600000,wb);actors=g.readmem(0x608000,ab)
-    raw=bytearray(header+world+actors);raw[28:32]=bytes(4);h=2166136261
-    for x in raw:h=mix(h,x)
+    raw=bytearray(header+world+actors);raw[28:32]=bytes(4)
+    if fast:h=word_checksum(raw)
+    else:
+        h=2166136261
+        for x in raw:h=mix(h,x)
     assert h==want,'live frame transport checksum'
     wm,wv,wc,ns,nd,used,whash,_=struct.unpack_from('>8I',world)
     assert (wm,wv,wc,used)==(0x53325742,1,1,wb)
+    if fast:assert whash==0
     off=struct.unpack_from('>I',world,32)[0];zero,nsec,nside,want,leveltime=struct.unpack_from('>IHHII',world,off)
-    assert not zero and (nsec,nside)==(ns,nd)
-    p=off+16;vals=[]
-    for i in range(ns):
-        id,light,floor,ceil,fp,cp=struct.unpack_from('>Hhiihh',world,p);p+=16;assert id==i
-        vals += [floor,ceil,fp,cp,light]
-    for i in range(nd):
-        id,offset,top,bottom,mid,res=struct.unpack_from('>HhhhhH',world,p);p+=12;assert id==i and not res
-        vals += [offset,top,bottom,mid]
-    assert p==wb;h=mix(mix(2166136261,ns),nd)
-    for x in vals:h=mix(h,x)
+    assert not zero and nsec<=ns and nside<=nd
+    if not fast or not tic:assert (nsec,nside)==(ns,nd)
+    p=off+16;seen=set()
+    for i in range(nsec):
+        id,light,floor,ceil,fp,cp=struct.unpack_from('>Hhiihh',world,p);p+=16
+        assert id<ns and id not in seen;seen.add(id);world_sectors[id]=[floor,ceil,fp,cp,light]
+    seen=set()
+    for i in range(nside):
+        id,offset,top,bottom,mid,res=struct.unpack_from('>HhhhhH',world,p);p+=12
+        assert id<nd and id not in seen and not res;seen.add(id);world_sides[id]=[offset,top,bottom,mid]
+    assert p==wb and len(world_sectors)==ns and len(world_sides)==nd
+    h=mix(mix(2166136261,ns),nd)
+    for x in [x for i in range(ns) for x in world_sectors[i]]+[x for i in range(nd) for x in world_sides[i]]:h=mix(h,x)
     assert h==want
     wwant,actual,ans,and_,alevel=struct.unpack('>5I',g.readmem(0x61b020,20))
-    assert (wwant,actual,ans,and_,alevel)==(want,want,ns,nd,leveltime)
+    assert (wwant,actual,ans,and_,alevel)==(want,want,nsec,nside,leveltime)
     am,av,ac,nrom,used,ahash,stride,res=struct.unpack_from('>8I',actors)
     assert (am,av,ac,used,stride,res)==(0x53324342,1,1,ab,36,0)
+    if fast:assert ahash==0
     off=struct.unpack_from('>I',actors,32)[0];zero,n,nr,want,player,res=struct.unpack_from('>IHHIHH',actors,off)
-    assert zero==0 and nr==nrom and not res
+    assert zero==0 and nr<=nrom and not res
+    if not fast or not tic:assert nr==nrom
     p=off+16;records=[]
     for _ in range(n):records.append(struct.unpack_from('>HHiiiIIHHHhhH',actors,p));p+=36
-    actor_bytes=actors[off+16:p];rvals=[]
-    for i in range(nrom):
-        id,dead,delay,res=struct.unpack_from('>4H',actors,p);p+=8;assert id==i and dead in (0,1) and not res
-        rvals += [dead,delay]
-    assert p==ab;h=2166136261
-    for x in [n,nrom,player]+[x for r in records for x in r]+rvals:h=mix(h,x)
+    actor_bytes=actors[off+16:p];seen=set()
+    for i in range(nr):
+        id,dead,delay,res=struct.unpack_from('>4H',actors,p);p+=8
+        assert id<nrom and id not in seen and dead in (0,1) and not res
+        seen.add(id);rom_states[id]=[dead,delay]
+    assert p==ab and len(rom_states)==nrom;h=2166136261
+    for x in [n,nrom,player]+[x for r in records for x in r]+[x for i in range(nrom) for x in rom_states[i]]:h=mix(h,x)
     assert h==want
     check_applied(g,tic,dict(hash=want,n=n,nr=nr,player=player,records=records,actor_bytes=actor_bytes),sym)
     out=struct.unpack('>7I',g.readmem(0x61b000,28));camera=struct.unpack_from('>8I',header,32)
@@ -67,7 +86,7 @@ def decode(g):
     audit=struct.unpack('>10I',g.readmem(0x61b100,40))
     assert audit[:2]==struct.unpack_from('>2I',header,88)
     assert audit[2:]==struct.unpack_from('>8I',header,160),'native weapon/flash psprites differ from CD'
-    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n)
+    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n,changed_sectors=nsec,changed_sides=nside,changed_rom=nr,profile_vblanks=list(struct.unpack('>6I',g.readmem(0x61b140,24))))
 commands[0]=command(0,0)
 try:
     for name in ('s1b_complete','S2D_MDFrameDone','G_Ticker','P_Ticker','I_Error'):
@@ -79,7 +98,7 @@ try:
             raise RuntimeError('MD I_Error: '+g.readmem(ptr,120).split(b'\0')[0].decode(errors='replace'))
         if pc==sym('s1b_complete'):
             stage,served,errors,marker,*_=struct.unpack('>4H4I',g.readmem(0x61f000,24))
-            assert (stage,served,errors,marker)==(5,18,0,0x5a9d)
+            assert (stage,served,errors,marker)==(5,18,0,0x5aad if fast else 0x5a9d)
             assert g.req('z0,%x,2'%pc)=='OK';continue
         if pc in (sym('G_Ticker'),sym('P_Ticker')):
             assert stopping and pc==sym('G_Ticker'),'MD simulation ticked during live CD play'
@@ -105,8 +124,11 @@ try:
     assert len({r['angle'] for r in rows})>8 and min(r['ammo'] for r in rows)<rows[0]['ammo']
     assert {r['bank'] for r in rows}=={4,5},'Word RAM banks did not alternate'
     assert len({r.get('frame_sha256') for r in rows})>8
+    if fast:
+        assert max(r['world_bytes'] for r in rows[1:])<rows[0]['world_bytes']//2,'world deltas not exercised'
+        assert any(r['changed_rom']==0 for r in rows[1:]),'R24 deltas not exercised'
     report=dict(status='PASS',frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
-                scope='One real CD tic per exchange with live MD inputs and native MD renderer. E1M1 prototype; full snapshots; no FPS/35Hz claim.')
+                scope='One real CD tic per exchange; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast)
     (rom.parent/'live_report.json').write_text(json.dumps(report,indent=2))
     print('S2d LIVE PASS: actual movement/turn/fire, input echo, 2 Word RAM banks, exact world/actors, no MD logic, exit restored',flush=True)
 finally:g.close()

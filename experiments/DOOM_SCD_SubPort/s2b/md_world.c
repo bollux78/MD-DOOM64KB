@@ -16,9 +16,11 @@ void S2B_Init(void)
     uint32_t used=HEAD[5];
     if(HEAD[0]!=S2B_MAGIC || HEAD[1]!=1 || HEAD[2]!=S2B_COUNT || HEAD[3]!=nsec ||
        HEAD[4]!=nside || used<256 || used>S2B_CAPACITY || used%4)I_Error("S2B HEADER COUNTS");
+#if !defined(SCD_FAST)
     uint32_t h=2166136261UL;
     for(uint32_t i=0;i<used;i++)h=S2B_Mix(h,(i>=24 && i<28)?0:BASE[i]);
     if(h!=HEAD[6])I_Error("S2B STREAM HASH");
+#endif
 }
 void S2B_ApplyFrame(uint16_t frame)
 {

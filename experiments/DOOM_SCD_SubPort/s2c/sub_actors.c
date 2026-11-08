@@ -5,6 +5,9 @@ static mobj_t *live[S2C_MAX_ACTORS];
 static uint16_t ids[S2C_MAX_ACTORS],nextid,romcount;
 static uint32_t previous_rom[S2C_MAX_ROM];
 static uint32_t used=256;
+#if defined(SCD_FAST)
+static uint16_t captured;
+#endif
 #define BASE ((volatile uint8_t *)S2C_SUB_BASE)
 #define HEAD ((volatile uint32_t *)S2C_SUB_BASE)
 void S2C_ResetActors(void){for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)live[i]=0;}
@@ -23,6 +26,11 @@ static volatile uint8_t *reserve(uint16_t n){
 }
 void S2C_Capture(uint16_t tic){
     uint16_t frame=tic/100u,n=0,playerid=0,nr=0;
+#if defined(SCD_FAST)
+    const uint16_t full=!captured;
+#else
+    const uint16_t full=!frame;
+#endif
     if(frame>=S2C_FRAME_COUNT || tic%100u)I_Error("S2C FRAME ORDER");
     if(!frame){
 #if defined(SCD_LIVE)
@@ -46,16 +54,23 @@ void S2C_Capture(uint16_t tic){
         uint16_t dead=S2C_RomDead(i),delay=S2C_RomDelay(i);
         h=S2C_Mix(S2C_Mix(h,dead),delay);
         uint32_t v=((uint32_t)dead<<16)|delay;
-        if(!frame || previous_rom[i]!=v){
+        if(full || previous_rom[i]!=v){
             volatile uint16_t *p=(volatile uint16_t *)reserve(8);
             p[0]=i;p[1]=dead;p[2]=delay;p[3]=0;nr++;previous_rom[i]=v;
         }
     }
+#if defined(SCD_FAST)
+    captured=1;
+#endif
     *(volatile uint32_t *)header=tic;*(volatile uint16_t *)(header+4)=n;
     *(volatile uint16_t *)(header+6)=nr;*(volatile uint32_t *)(header+8)=h;
     *(volatile uint16_t *)(header+12)=playerid;*(volatile uint16_t *)(header+14)=0;
 }
 void S2C_Finish(void){
-    HEAD[4]=used;HEAD[5]=0;uint32_t h=2166136261UL;
+    HEAD[4]=used;HEAD[5]=0;
+#if defined(SCD_FAST)
+    return; /* complete packet checksum is checked before application */
+#endif
+    uint32_t h=2166136261UL;
     for(uint32_t i=0;i<used;i++)h=S2C_Mix(h,BASE[i]);HEAD[5]=h;
 }

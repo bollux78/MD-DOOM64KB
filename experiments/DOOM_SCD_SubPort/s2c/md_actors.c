@@ -15,11 +15,14 @@
 static uint16_t romcount;
 void S2C_Begin(void){
     if(sizeof(mobj_t)*S2C_MAX_ACTORS>0x3000 || _g_numsectors>256)I_Error("S2C PROXY MEMORY");
-    romcount=S2C_RomCount();uint32_t used=HEAD[4],h=2166136261UL;
+    romcount=S2C_RomCount();uint32_t used=HEAD[4];
     if(HEAD[0]!=S2C_MAGIC || HEAD[1]!=1 || HEAD[2]!=S2C_FRAME_COUNT || HEAD[3]!=romcount ||
        romcount>S2C_MAX_ROM || HEAD[6]!=36 || used<256 || used>S2C_CAPACITY || used%4)I_Error("S2C HEADER");
+#if !defined(SCD_FAST)
+    uint32_t h=2166136261UL;
     for(uint32_t i=0;i<used;i++)h=S2C_Mix(h,(i>=20 && i<24)?0:BASE[i]);
     if(h!=HEAD[5])I_Error("S2C STREAM HASH");
+#endif
     SAVED_PLAYER[0]=_g_player.mo->x;SAVED_PLAYER[1]=_g_player.mo->y;SAVED_PLAYER[2]=_g_player.mo->z;
     SAVED_PLAYER[3]=_g_player.mo->angle;SAVED_PLAYER[4]=_g_player.viewz;SAVED_PLAYER[5]=_g_player.health;
     SAVED_PLAYER[6]=_g_leveltime;

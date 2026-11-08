@@ -6,6 +6,7 @@
 #include "r_main.h"
 #include "i_system.h"
 #include "live_wire.h"
+extern volatile uint32_t _g_vblankCount;
 #define R16(a) (*(volatile uint16_t *)(a))
 extern void S2A_InitLocalMap(void),S2A_Display(void),S2A_ClearMenus(void),R20_StopVideo(void);
 extern void S2B_Init(void),S2B_ApplyFrame(uint16_t),S2C_Begin(void),S2C_ApplyFrame(uint16_t),S2C_End(void);
@@ -37,17 +38,29 @@ static void copy_frame(void){
     volatile const uint8_t *src=(volatile const uint8_t *)0x601000UL;
     volatile const uint32_t *h=(volatile const uint32_t *)src;
     uint32_t total=h[3],wb=h[4],ab=h[5];
-    if(h[0]!=S2D_MAGIC || h[1]!=1 || h[2]!=expected_tic || h[6] ||
-       wb<272 || wb>8192 || ab<272 || ab>8192 || total!=256+wb+ab || total>S2D_MAX_FRAME)I_Error("S2D LIVE HEADER");
+    if(h[0]!=S2D_MAGIC || h[1]!=S2D_VERSION || h[2]!=expected_tic || h[6] ||
+       wb<272 || wb>8192 || wb%4 || ab<272 || ab>8192 || ab%4 || total!=256+wb+ab || total>S2D_MAX_FRAME)I_Error("S2D LIVE HEADER");
+#if defined(SCD_FAST)
+    if(total%4 || S2E_Checksum(h,total)!=h[7])I_Error("S2E LIVE CHECKSUM");
+#else
     uint32_t hash=2166136261UL;
     for(uint16_t i=0;i<total;i++)hash=(hash^((i>=28 && i<32)?0:src[i]))*16777619UL;
     if(hash!=h[7])I_Error("S2D LIVE CHECKSUM");
+#endif
     volatile uint8_t *camera=(volatile uint8_t *)0x61A000UL;
+#if defined(SCD_FAST)
+    for(uint16_t i=0;i<64;i++)((volatile uint32_t *)camera)[i]=h[i];
+    volatile const uint32_t *ws=(volatile const uint32_t *)(src+256);
+    volatile const uint32_t *as=(volatile const uint32_t *)(src+256+wb);
+    for(uint16_t i=0;i<wb/4;i++)((volatile uint32_t *)0x600000UL)[i]=ws[i];
+    for(uint16_t i=0;i<ab/4;i++)((volatile uint32_t *)0x608000UL)[i]=as[i];
+#else
     for(uint16_t i=0;i<256;i++)camera[i]=src[i];
     /* Forward copy is safe: world destination precedes its source. Actor
      * source ends below0x608000 for the bounded combined frame. */
     for(uint16_t i=0;i<wb;i++)((volatile uint8_t *)0x600000UL)[i]=src[256+i];
     for(uint16_t i=0;i<ab;i++)((volatile uint8_t *)0x608000UL)[i]=src[256+wb+i];
+#endif
     if(*(volatile const uint32_t *)0x600008UL!=1 || *(volatile const uint32_t *)0x608008UL!=1)I_Error("S2D BLOB COUNT");
 }
 static void apply_player(void){
@@ -79,7 +92,7 @@ static void apply_player(void){
 }
 void S2D_Run(void){
     volatile const uint16_t *boot=(volatile const uint16_t *)0x61F000UL;
-    if(boot[0]!=5 || boot[3]!=0x5A9D)return;
+    if(boot[0]!=5 || boot[3]!=S2D_MARKER)return;
     S2A_ClearMenus();S2A_InitLocalMap();
     JOY_update();
     while(JOY_readJoypad(JOY_1)&BUTTON_START){SYS_doVBlankProcess();JOY_update();}
@@ -88,6 +101,7 @@ void S2D_Run(void){
     uint32_t saved[256];uint16_t nr=0,ns=0,initialized=0;
     R16(0xA12010UL)=0xD04D;
     for(;;){
+        uint32_t t0=_g_vblankCount;
         int16_t served=0;
         for(uint32_t spins=0;spins<200000000UL;spins++){
             if(R16(0xA12020UL)==0xDEAD)I_Error("S2D SUB ERROR");
@@ -97,6 +111,7 @@ void S2D_Run(void){
             if(served>0 && SCD_MdLastCommand()==3)break;
         }
         if(served<=0)I_Error("S2D NO FRAME");
+        uint32_t t1=_g_vblankCount;
         copy_frame();
         if(!initialized){
             S2B_Init();S2C_Begin();
@@ -112,15 +127,26 @@ void S2D_Run(void){
         for(uint16_t i=0;i<nr;i++)((volatile uint32_t *)0x61C000UL)[i]=saved[i];
         for(uint16_t i=0;i<ns;i++)((volatile uint32_t *)0x61C800UL)[i]=saved[nr+i];
         for(uint16_t i=0;i<7;i++)((volatile uint32_t *)0x61CC00UL)[i]=saved[nr+ns+i];
-        S2B_ApplyFrame(0);S2C_ApplyFrame(0);apply_player();
+        uint32_t t2=_g_vblankCount;
+        S2B_ApplyFrame(0);uint32_t t3=_g_vblankCount;
+        S2C_ApplyFrame(0);apply_player();uint32_t t4=_g_vblankCount;
         if(expected_tic){
             S2A_Display();R20_StopVideo();
-            SYS_disableInts();VDP_drawText("S2D LOGIC ON SEGA CD / LIVE INPUT",1,1);
+            SYS_disableInts();
+#if defined(SCD_FAST)
+            VDP_drawText("S2E FAST STATE / LOGIC ON SEGA CD",1,1);
+#else
+            VDP_drawText("S2D LOGIC ON SEGA CD / LIVE INPUT",1,1);
+#endif
             VDP_drawText("A USE B FIRE C STRAFE / START EXIT",1,2);SYS_enableInts();
         }
         volatile uint32_t *r=(volatile uint32_t *)0x61B000UL;
         r[0]=expected_tic;r[1]=_g_player.mo->x;r[2]=_g_player.mo->y;r[3]=_g_player.mo->angle;
         r[4]=_g_player.health;r[5]=_g_player.ammo[0];r[6]=R16(0xA12002UL)&5u;
+        uint32_t t5=_g_vblankCount;
+        volatile uint32_t *profile=(volatile uint32_t *)0x61B140UL;
+        profile[0]=t1-t0;profile[1]=t2-t1;profile[2]=t3-t2;
+        profile[3]=t4-t3;profile[4]=t5-t4;profile[5]=t5-t0;
         S2D_MDFrameDone();expected_tic++;
         if(stop_sent)goto done;
     }

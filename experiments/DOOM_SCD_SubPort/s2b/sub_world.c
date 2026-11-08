@@ -9,6 +9,9 @@ static uint32_t prev_sector[S2B_MAX_SECTORS][4];
 static uint32_t prev_side[S2B_MAX_SIDES][2];
 static uint32_t used=256;
 static uint16_t nsec,nside;
+#if defined(SCD_FAST)
+static uint16_t captured;
+#endif
 #define BASE ((volatile uint8_t *)S2B_SUB_WORLD)
 #define HEAD ((volatile uint32_t *)S2B_SUB_WORLD)
 static volatile uint8_t *reserve(uint16_t n)
@@ -19,6 +22,11 @@ static volatile uint8_t *reserve(uint16_t n)
 void S2B_Capture(uint16_t tic)
 {
     const uint16_t frame=tic/100u;
+#if defined(SCD_FAST)
+    const uint16_t full=!captured;
+#else
+    const uint16_t full=!frame;
+#endif
     if(frame>=S2B_COUNT || tic%100u)I_Error("S2B FRAME ORDER");
     if(frame==0){
 #if defined(SCD_LIVE)
@@ -38,7 +46,7 @@ void S2B_Capture(uint16_t tic)
         uint32_t v[5];S2B_SectorValues(i,v);
         for(uint16_t j=0;j<5;j++)h=S2B_Mix(h,v[j]);
         uint32_t packed=((uint32_t)(uint16_t)v[2]<<16)|(uint16_t)v[3];
-        if(!frame || prev_sector[i][0]!=v[0] || prev_sector[i][1]!=v[1] ||
+        if(full || prev_sector[i][0]!=v[0] || prev_sector[i][1]!=v[1] ||
            prev_sector[i][2]!=packed || prev_sector[i][3]!=v[4]){
             volatile uint8_t *p=reserve(16);
             *(volatile uint16_t *)(p+0)=i;*(volatile uint16_t *)(p+2)=v[4];
@@ -52,7 +60,7 @@ void S2B_Capture(uint16_t tic)
         for(uint16_t j=0;j<4;j++)h=S2B_Mix(h,v[j]);
         uint32_t a=((uint32_t)(uint16_t)v[0]<<16)|((uint32_t)(uint8_t)v[1]<<8)|(uint8_t)v[2];
         uint32_t b=(uint8_t)v[3];
-        if(!frame || prev_side[i][0]!=a || prev_side[i][1]!=b){
+        if(full || prev_side[i][0]!=a || prev_side[i][1]!=b){
             volatile uint8_t *p=reserve(12);
             *(volatile uint16_t *)(p+0)=i;
             for(uint16_t j=0;j<4;j++)*(volatile uint16_t *)(p+2+j*2)=v[j];
@@ -62,11 +70,17 @@ void S2B_Capture(uint16_t tic)
     }
     *(volatile uint32_t *)(header+0)=tic;
     *(volatile uint16_t *)(header+4)=ns;*(volatile uint16_t *)(header+6)=nd;
+#if defined(SCD_FAST)
+    captured=1;
+#endif
     *(volatile uint32_t *)(header+8)=h;*(volatile uint32_t *)(header+12)=_g_leveltime;
 }
 void S2B_Finish(void)
 {
     HEAD[5]=used;HEAD[6]=0;
+#if defined(SCD_FAST)
+    return; /* one checked outer packet covers these bytes */
+#endif
     uint32_t h=2166136261UL;
     for(uint32_t i=0;i<used;i++)h=S2B_Mix(h,BASE[i]);
     HEAD[6]=h;

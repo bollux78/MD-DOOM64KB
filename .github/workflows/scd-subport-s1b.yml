@@ -1,9 +1,9 @@
-name: Sega CD S2d live input and sub logic
+name: Sega CD S2e measured fast state bridge
 on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/s2b/**', 'experiments/DOOM_SCD_SubPort/s2c/**', 'experiments/DOOM_SCD_SubPort/s2d/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/s2b/**', 'experiments/DOOM_SCD_SubPort/s2c/**', 'experiments/DOOM_SCD_SubPort/s2d/**', 'experiments/DOOM_SCD_SubPort/s2e/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
@@ -392,6 +392,42 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s2d/test_live.py "$S2D_OUT/doom-md-scd-s2d-live.bin" "$S2D_OUT/doom-md-scd-s2d-live.elf"
 
+      - name: S2e live input and state bridge strict build
+        id: s2e_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s2e-fast/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S2E_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --fast
+      - name: S2e BlastEm exact applied camera and world without MD simulation
+        id: s2e_blastem
+        if: steps.s2e_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s2e.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s2d/test_live.py --fast "$S2E_OUT/doom-md-scd-s2e-fast.bin" "$S2E_OUT/doom-md-scd-s2e-fast.elf"
+
+      - name: Compare deterministic NTSC VBlank phase counters and packet bytes
+        id: s2e_compare
+        if: steps.s2d_blastem.outcome == 'success' && steps.s2e_blastem.outcome == 'success'
+        shell: bash
+        run: |
+          python3 experiments/DOOM_SCD_SubPort/s2e/compare_perf.py "$S2D_OUT/live_report.json" "$S2E_OUT/live_report.json"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -428,3 +464,8 @@ jobs:
           echo "S2d live controller and state: ${{ steps.s2d_blastem.outcome }}"
           test "${{ steps.s2d_build.outcome }}" = "success"
           test "${{ steps.s2d_blastem.outcome }}" = "success"
+          echo "S2e build: ${{ steps.s2e_build.outcome }}"
+          echo "S2e optimized live bridge: ${{ steps.s2e_blastem.outcome }}"
+          test "${{ steps.s2e_build.outcome }}" = "success"
+          test "${{ steps.s2e_blastem.outcome }}" = "success"
+          test "${{ steps.s2e_compare.outcome }}" = "success"

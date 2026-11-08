@@ -8,16 +8,17 @@ the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
-if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live")):
+if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live", "--fast")):
     raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full|--ticker]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
-live=len(sys.argv)==6 and sys.argv[5]=="--live"
-actors=len(sys.argv)==6 and sys.argv[5] in ("--actors", "--live")
-world=len(sys.argv)==6 and sys.argv[5] in ("--world", "--actors", "--live")
-visual=len(sys.argv)==6 and sys.argv[5] in ("--visual", "--world", "--actors", "--live")
-engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual", "--world", "--actors", "--live")
+fast=len(sys.argv)==6 and sys.argv[5]=="--fast"
+live=len(sys.argv)==6 and sys.argv[5] in ("--live", "--fast")
+actors=len(sys.argv)==6 and sys.argv[5] in ("--actors", "--live", "--fast")
+world=len(sys.argv)==6 and sys.argv[5] in ("--world", "--actors", "--live", "--fast")
+visual=len(sys.argv)==6 and sys.argv[5] in ("--visual", "--world", "--actors", "--live", "--fast")
+engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual", "--world", "--actors", "--live", "--fast")
 comparison=len(sys.argv)==6 and sys.argv[5]=="--compare"
-ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live")
+ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live", "--fast")
 full=len(sys.argv)==6
 here=Path(__file__).resolve().parent
 common=here.parent
@@ -39,6 +40,7 @@ if visual: defs += ["-DSCD_VISUAL", "-I"+str(common/"s2a")]
 if world: defs += ["-DSCD_WORLD", "-I"+str(common/"s2b")]
 if actors: defs += ["-DSCD_ACTORS", "-DDOOM_R24_EPISODE", "-I"+str(common/"s2c")]
 if live: defs += ["-DSCD_LIVE", "-I"+str(common/"s2d")]
+if fast: defs += ["-DSCD_FAST"]
 if full: defs.append("-DSCD_FULL_SETUP")
 if ticker: defs += ["-DSCD_TICKER", "-DDOOM_R47_STATE_HASH"]
 cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
@@ -397,11 +399,12 @@ if actors:
     }
     REPORT=r;""")
 if live:
+    shutil.copyfile(common/'scd_md_server.c',tree/'src/scd_md_server.c')
     sys.path.insert(0,str(common/'s2d'))
     import live_build
-    live_build.install(tree,common)
-    md=live_build.boot(common)
-    name='doom-md-scd-s2d-live'
+    live_build.install(tree,common,fast=fast)
+    md=live_build.boot(common,fast=fast)
+    name='doom-md-scd-s2e-fast' if fast else 'doom-md-scd-s2d-live'
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",
