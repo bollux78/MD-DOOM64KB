@@ -19,6 +19,16 @@
 #define SCD_H R22_H
 uint8_t scd_fb[SCD_H][SCD_W];
 uint32_t scd_columns, scd_pixels;
+/* Sub stopwatch (30.72 us units, 12-bit, wraps ~125.8 ms): polled from every column so long
+ * frames never lose a wrap. */
+uint32_t scd_clock_units;
+static uint16_t scd_clock_prev;
+void SCD_ClockPoll(void)
+{
+    const uint16_t now = *(volatile const uint16_t *)0xFF800CUL & 4095u;
+    scd_clock_units += (uint16_t)(now - scd_clock_prev) & 4095u;
+    scd_clock_prev = now;
+}
 
 static void column(const draw_column_vars_t *v, const uint8_t *map)
 {
@@ -41,6 +51,7 @@ static void column(const draw_column_vars_t *v, const uint8_t *map)
         frac = (uint16_t)(frac + step);
     }
     scd_columns++; scd_pixels += (uint32_t)(y1 - first + 1);
+    SCD_ClockPoll();
 }
 
 void R_DrawColumnWall(const draw_column_vars_t *v) { column(v, r22_color); }
