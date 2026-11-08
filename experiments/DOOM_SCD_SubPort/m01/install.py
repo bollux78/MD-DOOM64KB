@@ -10,21 +10,31 @@ def install(tree,boot):
     # Preserve the final DMA fence until M0 measurements establish redundancy.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
 volatile uint16_t s2f_test_mode __attribute__((section(".data")))=0;
-static uint32_t stage_start[2],stage_cost[2];
+static uint32_t stage_start[5],stage_vblank[5],stage_cost[5];
+void S2F_ProfileBegin(uint16_t),S2F_ProfileEnd(uint16_t);
 void __attribute__((noipa,noinline)) S2F_M0FrameDone(void){__asm__ volatile("":::"memory");}
 static void frozen_benchmark(void){
     for(uint16_t i=0;i<24;i++){
-        _g_gametic++;uint32_t start=_g_vblankCount;
-        S2A_Display();uint32_t drawn=_g_vblankCount;R20_StopVideo();
+        _g_gametic++;stage_cost[4]=0;S2F_ProfileBegin(2);
+        S2A_Display();S2F_ProfileBegin(3);R20_StopVideo();S2F_ProfileEnd(3);S2F_ProfileEnd(2);
         volatile uint32_t *m=(volatile uint32_t *)0x61B1C0UL;
         m[0]=i;m[1]=stage_cost[0];m[2]=stage_cost[1];
-        m[3]=_g_vblankCount-drawn;m[4]=_g_vblankCount-start;
+        m[3]=stage_cost[3];m[4]=stage_cost[2];m[5]=stage_cost[4];
         S2F_M0FrameDone();
     }
     for(;;){}
 }
-void S2F_ProfileBegin(uint16_t stage){stage_start[stage]=_g_vblankCount;}
-void S2F_ProfileEnd(uint16_t stage){stage_cost[stage]=_g_vblankCount-stage_start[stage];}
+void S2F_ProfileBegin(uint16_t stage){
+    uint32_t a,b;do{a=_g_vblankCount;stage_start[stage]=R16(0xA1200CUL)&4095u;b=_g_vblankCount;}while(a!=b);
+    stage_vblank[stage]=a;
+}
+void S2F_ProfileEnd(uint16_t stage){
+    uint32_t a,b,now;do{a=_g_vblankCount;now=R16(0xA1200CUL)&4095u;b=_g_vblankCount;}while(a!=b);
+    uint32_t raw=(now-stage_start[stage])&4095u;
+    uint32_t estimate=(a-stage_vblank[stage])*542UL;
+    if(estimate>raw)raw+=((estimate-raw+2048UL)/4096UL)*4096UL;
+    if(stage==4)stage_cost[stage]+=raw;else stage_cost[stage]=raw;
+}
 """)
     s=s.replace('S2D_MDFrameDone();expected_tic++;',"""volatile uint32_t *m=(volatile uint32_t *)0x61B180UL;
         m[0]=stage_cost[0];m[1]=stage_cost[1];m[2]=t5;
@@ -47,6 +57,14 @@ void S2F_ProfileEnd(uint16_t stage){stage_cost[stage]=_g_vblankCount-stage_start
         p=candidates[0]
     s=p.read_text();a=s.index('        R92_ShadowPass(');b=s.index(';',a)+1
     s=s[:a]+'        S2F_ProfileBegin(1);\n'+s[a:b]+'\n        S2F_ProfileEnd(1);'+s[b:]
+    s=s.replace('void R20_VBlankVideo(void){','static void S2F_VBlankImpl(void){')
+    s+='''\nvoid R20_VBlankVideo(void){
+    unsigned short line=(*(volatile unsigned short *)0xC00008)>>8;
+    unsigned short measure=r22_ready && line>=224 && line<=232;
+    if(measure)S2F_ProfileBegin(4);
+    S2F_VBlankImpl();
+    if(measure)S2F_ProfileEnd(4);
+}\n'''
     s='extern void S2F_ProfileBegin(unsigned short),S2F_ProfileEnd(unsigned short);\n'+s
     p.write_text(s)
     return boot.replace('S2E FAST LIVE SUB LOGIC','M01 REALTIME SUB LOGIC').replace('DELTA WORLD / CHECKED WORD COPIES','35 HZ LOGIC / A USE B FIRE C STRAFE')

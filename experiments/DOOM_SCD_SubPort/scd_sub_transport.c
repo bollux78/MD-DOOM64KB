@@ -24,6 +24,9 @@ typedef struct {
     uint16_t size;
 } scd_lump_dirent_t;
 
+#if defined(SCD_REALTIME)
+extern void S2F_ClockPoll(void);
+#endif
 static uint16_t sub_seq, sub_mode = 4u;
 static uint32_t sub_requests, sub_bytes, sub_timeouts;
 
@@ -66,6 +69,9 @@ static const volatile uint8_t *scd_exchange(uint16_t command,
     SCD_SUB_REG16(SCD_SUB_REQUEST_REG)=seq;
     for (uint32_t spins=0; spins<SCD_SUB_MAX_SPINS; spins++)
     {
+#if defined(SCD_REALTIME)
+        if(!(spins&255u))S2F_ClockPoll();
+#endif
         if (SCD_SUB_REG16(SCD_SUB_MAIN_REQUEST_REG)!=seq) continue;
         sub_mode^=1u;
         SCD_SUB_REG16(SCD_SUB_MODE_REG)=sub_mode;

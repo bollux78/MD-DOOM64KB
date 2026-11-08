@@ -16,7 +16,7 @@ extern void S2D_SetCommand(int8_t,int8_t,int16_t,uint8_t);
 static uint8_t echo[16];
 static uint32_t elapsed,phase,dropped,ticks,cost_total,cost_max,max_gap,frame;
 static uint16_t previous_clock;
-static void clock_poll(void){
+void S2F_ClockPoll(void){
     uint16_t now=R16(0xFF800CUL)&4095u;
     uint16_t delta=(now-previous_clock)&4095u;previous_clock=now;
     elapsed+=delta;phase+=(uint32_t)delta*13440UL;
@@ -75,13 +75,14 @@ void sub_main(void){
     S2D_InitGame();_g_demoplayback=false;
     R16(0xFF8024UL)=S2D_MARKER;R16(0xFF802AUL)=0;R16(0xFF802CUL)=0;R16(0xFF8020UL)=0x51B1;
     while(R16(0xFF8010UL)!=0xD04D){} /* startup screen: no timed transport wait */
+    elapsed=phase=dropped=ticks=cost_total=cost_max=max_gap=frame=0;
     previous_clock=R16(0xFF800CUL)&4095u;
     uint16_t demand=0;
     uint16_t frozen=R16(0xFF8014UL);
     if(frozen){S2D_SetCommand(0,0,0,0);G_Ticker();_g_gametic++;}
 
     for(;;){
-        clock_poll();
+        S2F_ClockPoll();
         uint16_t requested=R16(0xFF8012UL);
         if(requested && requested!=demand){
             /* Main is requesting a frame and will service any startup lumps.
@@ -89,11 +90,11 @@ void sub_main(void){
             SCD_SubLiveBegin();
             uint32_t spins=0;
             while(!SCD_SubLiveReady()){
-                clock_poll();if(++spins==200000000UL)I_Error("M1 INPUT TIMEOUT");
+                S2F_ClockPoll();if(++spins==200000000UL)I_Error("M1 INPUT TIMEOUT");
             }
-            clock_poll();publish(frame);
+            S2F_ClockPoll();publish(frame);
             if(!SCD_SubLiveCommit(frame,echo))I_Error("M1 INPUT TRANSPORT");
-            demand=requested;frame++;clock_poll();
+            demand=requested;frame++;S2F_ClockPoll();
             if(echo[14] || echo[15])break;
         }
         if(frozen)continue;
@@ -103,9 +104,9 @@ void sub_main(void){
             if(_g_gameaction!=ga_nothing && _g_gameaction!=ga_loadlevel)goto done;
             int16_t turn=(int16_t)(((uint16_t)echo[10]<<8)|echo[11]);
             S2D_SetCommand((int8_t)echo[8],(int8_t)echo[9],turn,echo[13]);
-            clock_poll();uint32_t start=elapsed;
+            S2F_ClockPoll();uint32_t start=elapsed;
             SCD_SubSetTime(_g_gametic);G_Ticker();_g_gametic++;
-            clock_poll();uint32_t cost=elapsed-start;cost_total+=cost;ticks++;
+            S2F_ClockPoll();uint32_t cost=elapsed-start;cost_total+=cost;ticks++;
             if(cost>cost_max)cost_max=cost;
             if(!_g_player.mo || _g_gamestate!=GS_LEVEL)goto done;
             if(!(ticks&63))Z_CheckHeap();

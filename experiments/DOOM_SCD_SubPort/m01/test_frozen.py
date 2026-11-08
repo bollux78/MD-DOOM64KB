@@ -23,12 +23,12 @@ for mode,name in ((1,'native'),(2,'cd')):
                 assert g.req('M%x,2:%04x'%(sym('s2f_test_mode'),mode))=='OK'
                 assert g.req('z0,%x,2'%pc)=='OK';continue
             assert pc==sym('S2F_M0FrameDone'),('benchmark failed',name,hex(pc))
-            row=list(struct.unpack('>5I',g.readmem(0x61b1c0,20)))
+            row=list(struct.unpack('>6I',g.readmem(0x61b1c0,24)))
             assert row[0]==len(rows);rows.append(row)
         assert len(rows)==24
-        reports[name]={'frames':24,'raster_vblanks':sum(r[1] for r in rows),'conversion_vblanks':sum(r[2] for r in rows),'extra_wait_vblanks':sum(r[3] for r in rows),'total_vblanks':sum(r[4] for r in rows),'rows':rows}
+        reports[name]={'frames':24,'raster_stopwatch_units':sum(r[1] for r in rows),'conversion_stopwatch_units':sum(r[2] for r in rows),'extra_wait_stopwatch_units':sum(r[3] for r in rows),'total_stopwatch_units':sum(r[4] for r in rows),'dma_stopwatch_units':sum(r[5] for r in rows),'rows':rows}
         print('M0 frozen',name,reports[name],flush=True)
     finally:g.close()
-reports['cd_over_native']=reports['cd']['total_vblanks']/reports['native']['total_vblanks']
+reports['cd_over_native']=reports['cd']['total_stopwatch_units']/reports['native']['total_stopwatch_units']
 (rom.parent/'m0_frozen_report.json').write_text(json.dumps(reports,indent=2))
 print('M0 24 frozen frames measured; CD/native cost ratio',reports['cd_over_native'],flush=True)

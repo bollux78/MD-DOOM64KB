@@ -119,7 +119,7 @@ try:
             if tic in (1,16,32,64,96):(rom.parent/('live-frame-%03d.bin'%tic)).write_bytes(pixels)
         metrics=struct.unpack_from('>9I',header,208)
         raster,conversion,vblank=struct.unpack('>3I',g.readmem(0x61b180,12))
-        row.update(game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_vblanks=raster,conversion_vblanks=conversion)
+        row.update(game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_stopwatch_units=raster,conversion_stopwatch_units=conversion)
         rows.append(row)
         if tic>=96:
             stopping=True;assert g.req('M%x,1:01'%sym('s2d_test_exit'))=='OK'

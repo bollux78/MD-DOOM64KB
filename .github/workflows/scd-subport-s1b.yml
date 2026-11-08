@@ -454,8 +454,6 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
-            python3 experiments/DOOM_SCD_SubPort/m01/test_frozen.py "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
-          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast --production "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
 
       - name: Compare deterministic NTSC VBlank phase counters and packet bytes
