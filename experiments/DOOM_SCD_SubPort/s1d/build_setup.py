@@ -313,6 +313,10 @@ if engine:
         # Z8 console ROM must retain the original R128 menu/game after START.
         for filename in ("g_game.c","d_main.c","m_text.c","m_random.c"):
             shutil.copyfile(backup/filename,tree/"src"/filename)
+    for artifact in (tree/"src/s1e_md_observer.c",
+                     tree/"out/release/src/s1e_md_observer.o",
+                     tree/"out/release/_deps/src/s1e_md_observer.d"):
+        artifact.unlink(missing_ok=True)
     name="doom-md-scd-s1e-z8"
     md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z8 REAL G_TICKER")
     md=md.replace("0x5A7Du", "0x5A8Du")
