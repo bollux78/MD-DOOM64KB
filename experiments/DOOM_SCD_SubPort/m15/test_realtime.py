@@ -11,7 +11,7 @@ def mix(h,x):return (((((h<<5)|(h>>27))&0xffffffff)^(x&0xffffffff))+0x9e3779b9)&
 fast=True
 production='--production' in sys.argv
 route='--route' in sys.argv
-nav_phase=0;nav_neutral=False;nav_finish=0;door_open=False;door_started=False;occluded_retained=False
+nav_phase=0;nav_neutral=False;nav_finish=0;door_open=False;door_started=False;door_requested=False;occluded_retained=False
 waypoints=[(1312,-3520),(1248,-3400),(1280,-3100),(1280,-2848),(1320,-2600),(1472,-2496),(1632,-2496)]
 assert not production or fast
 rom,elf=map(Path,[a for a in sys.argv[1:] if a not in ('--fast','--production','--route')]);syms=symbols(elf)
@@ -166,7 +166,13 @@ try:
                 diff=(target-angle+math.pi)%(2*math.pi)-math.pi
                 joy=(4 if diff>0 else 8) if abs(diff)>math.radians(18) else 1
                 nav_neutral=True
-            if nav_phase>=5 and (door_started or tic%8==0):joy|=64
+            if nav_phase>=5 and not door_requested:
+                heading=row['angle']*2*math.pi/2**32
+                c=math.cos(heading)
+                if c>0.3:
+                    ray=(1536-x)/c
+                    if 0<ray<60 and -2556<y+math.sin(heading)*ray<-2436:door_requested=True
+            if door_requested:joy|=64
             if tic<2:joy|=16
             print('M15 route',tic,'phase',nav_phase,'xy',round(x,1),round(y,1),'item',row['item_count'],'door',round(row['door_ceiling']/65536),flush=True)
             if nav_finish>=6 or tic>=190:
