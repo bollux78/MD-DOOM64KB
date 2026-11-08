@@ -169,7 +169,12 @@ int SCD_SubLiveCommit(uint32_t frame,uint8_t out[16]){
         get16(b+4)==sub_seq && get16(b+6) && get32(b+12)==16 &&
         get32(p)==0x53324449UL && get32(p+4)==frame;
     uint32_t h=2166136261UL;
+#if defined(SCD_M15)
+    for(uint16_t i=0;i<16;i++)out[i]=p[i];
+    for(uint16_t i=0;i<4;i++){uint32_t v=((volatile const uint32_t *)p)[i];h=(((h<<5)|(h>>27))^v)+0x9e3779b9UL;}
+#else
     for(uint16_t i=0;i<16;i++){out[i]=p[i];h=(h^out[i])*16777619UL;}
+#endif
     ok=ok && h==get32(b+16);
     sub_requests++;sub_bytes+=16;
     SCD_SUB_REG16(SCD_SUB_DONE_REG)=sub_seq;return ok;

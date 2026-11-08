@@ -68,11 +68,12 @@ static void build_snapshot(uint32_t tic){
     volatile const uint32_t *ws=(volatile const uint32_t *)0x74000UL;
     volatile const uint32_t *as=(volatile const uint32_t *)0x68000UL;
     mark=elapsed;
-    for(uint16_t i=0;i<wb/4;i++)w[i]=ws[i];
+    uint32_t payload_hash=2166136261UL;
+    for(uint16_t i=0;i<wb/4;i++){uint32_t v=ws[i];w[i]=v;payload_hash=M15_Mix(payload_hash,v);}
     w=(volatile uint32_t *)(p+256+wb);
-    for(uint16_t i=0;i<ab/4;i++)w[i]=as[i];
+    for(uint16_t i=0;i<ab/4;i++){uint32_t v=as[i];w[i]=v;payload_hash=M15_Mix(payload_hash,v);}
     S2F_ClockPoll();cap_copy=elapsed-mark;mark=elapsed;
-    h[7]=M15_Check((volatile const uint32_t *)(p+256),(total-256)/4);
+    h[7]=payload_hash; /* fused copy verifies every payload word */
     S2F_ClockPoll();cap_hash=elapsed-mark;
 #else
     for(uint16_t i=0;i<wb;i++)p[256+i]=((volatile const uint8_t *)0x74000UL)[i];
@@ -90,7 +91,7 @@ static void seal(void){
  h[2]=frame;
  for(uint16_t i=0;i<16;i++)((volatile uint8_t *)h)[192+i]=echo[i];
  h[53]=elapsed;h[54]=dropped;h[55]=ticks;h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=cap_hash;h[60]=cap_copy;
- h[37]=capture_max;h[38]=2;h[39]=_g_gametic-h[9];h[61]=capture_count;h[62]=capture_total;
+ h[37]=capture_max;h[38]=3;h[39]=_g_gametic-h[9];h[61]=capture_count;h[62]=capture_total;
  h[63]=M15_Check(h,63);
 }
 static void service(void){
@@ -149,7 +150,7 @@ void sub_main(void){
             if(!_g_player.mo || _g_gamestate!=GS_LEVEL)goto done;
             if(!(ticks&63))Z_CheckHeap();
             if(stop_received)goto done;
-            if(!(_g_gametic&1u))prepare();
+            if(!(_g_gametic%3u))prepare();
         }
     }
  done:

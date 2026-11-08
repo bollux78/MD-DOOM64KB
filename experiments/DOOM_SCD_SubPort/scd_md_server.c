@@ -121,7 +121,11 @@ int16_t SCD_MdServeOnce(void)
     if(cmd==SCD_CMD_TIC && status){
         uint32_t h=2166136261UL;
         volatile const uint8_t *p=(volatile const uint8_t *)(SCD_MD_BANK_BASE+SCD_PAYLOAD_OFFSET);
+#if defined(SCD_M15)
+        for(uint16_t i=0;i<4;i++){uint32_t v=((volatile const uint32_t *)p)[i];h=(((h<<5)|(h>>27))^v)+0x9e3779b9UL;}
+#else
         for(uint16_t i=0;i<16;i++)h=(h^p[i])*16777619UL;
+#endif
         put32((volatile uint8_t *)(SCD_MD_BANK_BASE+16),h);
     }
 #endif
