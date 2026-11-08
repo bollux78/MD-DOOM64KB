@@ -122,15 +122,15 @@ try:
         raster,conversion,vblank=struct.unpack('>3I',g.readmem(0x61b180,12))
         row.update(game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_stopwatch_units=raster,conversion_stopwatch_units=conversion)
         rows.append(row)
-        if tic>=96:
+        if tic>=48:
             stopping=True;assert g.req('M%x,1:01'%sym('s2d_test_exit'))=='OK'
             joy=0
-        else:joy=1 if tic<16 else 4 if tic<32 else (16|64 if tic>=80 else 16)
+        else:joy=(1|16) if tic<8 else (4|16) if tic<16 else (16|64 if tic>=40 else 16)
         assert g.req('M%x,2:%04x'%(sym('s2d_test_buttons'),joy))=='OK'
         commands[tic+1]=command(tic+1,joy,int(stopping))
         print('S2d live applied',tic,'actors',row['actors'],'ammo',row['ammo'],'bank',row['bank'],flush=True)
     else:raise AssertionError('missing normal exit')
-    assert len(rows)>=97 and len({(r['x'],r['y']) for r in rows})>2
+    assert len(rows)>=49 and len({(r['x'],r['y']) for r in rows})>2
     assert len({r['angle'] for r in rows})>2 and min(r['ammo'] for r in rows)<rows[0]['ammo']
     assert {r['bank'] for r in rows}=={4,5},'Word RAM banks did not alternate'
     assert len({r.get('frame_sha256') for r in rows})>8

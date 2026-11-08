@@ -1,0 +1,55 @@
+name: Sega CD M01 isolated iteration
+on:
+  push:
+    branches: ['exp-werk-scd-subport-s1s2']
+    paths: ['experiments/DOOM_SCD_SubPort/m01/**', '.github/workflows/scd-subport-m01-iterate.yml']
+permissions:
+  contents: read
+jobs:
+  iterate:
+    if: contains(github.event.head_commit.message, '[m01-iterate]')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    env:
+      BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+      BASE_RUN: '42493316283'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Clone disposable R128 build and restore pristine video source
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$BASE_RUN-1-work/*/out/.render_options | head -1)
+          source_tree=$(dirname "$(dirname "$stamp")")
+          tree="$RUNNER_TEMP/m01-iterate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$tree"
+          python3 -c 'import shutil,sys;shutil.copytree(sys.argv[1],sys.argv[2],ignore=shutil.ignore_patterns("dist",".git","__pycache__"))' "$source_tree" "$tree"
+          cp "$RUNNER_TEMP/r92-shadow-c-all-$BASE_RUN-1/src/r22_video.inc" "$tree/src/r22_video.inc"
+          echo "M01_TREE=$tree" >> "$GITHUB_ENV"
+      - name: Build M01 from validated base objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$HOME/Projetos/Personal/scd-subport-m01/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "M01_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$M01_TREE" \
+            "$HOME/Projetos/Personal/scd-subport-s1b/run-$BASE_RUN-1" \
+            "$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$BASE_RUN-1" "$out" --m01
+          "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$out/doom-md-scd-m01.elf"
+      - name: Frozen spawn costs and independent logic cadence
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/m01-config.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          export XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab"
+          python3 experiments/DOOM_SCD_SubPort/m01/test_frozen.py "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
+          python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
+          python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast --production "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"

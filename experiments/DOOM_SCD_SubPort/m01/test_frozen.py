@@ -12,9 +12,13 @@ def sym(n):
     return vals[0]&0xffffff
 reports={}
 for mode,name in ((1,'native'),(2,'cd'),(3,'native_legacy_text'),(4,'cd_legacy_text')):
-    g=RSP(os.environ['BLASTEM'],rom,16000,600)
+    for attempt in range(3):
+        g=RSP(os.environ['BLASTEM'],rom,16000,600)
+        try:g.req('qSupported');break
+        except (RuntimeError,BrokenPipeError):
+            g.proc.wait(timeout=5);err=g.proc.stderr.read().decode(errors='replace');g.close()
+            if 'out of range of a 32-bit displacement' not in err or attempt==2:raise
     try:
-        g.req('qSupported')
         for n in ('s1b_complete','S2F_M0FrameDone','I_Error'):assert g.req('Z0,%x,2'%sym(n))=='OK'
         rows=[]
         for _ in range(25):

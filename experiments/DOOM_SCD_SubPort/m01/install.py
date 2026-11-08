@@ -7,6 +7,7 @@ def install(tree,boot):
     a=s.index('            SYS_disableInts();',s.index('if(expected_tic){'))
     b=s.index('SYS_enableInts();',a)+len('SYS_enableInts();')
     s=s[:a]+s[b:]
+    s=s.replace('S2A_Display();R20_StopVideo();','stage_cost[0]=stage_cost[1]=0;S2A_Display();R20_StopVideo();')
     # Profiling scratch uses owned Word RAM, preserving scarce MD work RAM.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
 #define s2f_test_mode (s2d_test_exit>>4)
@@ -17,7 +18,7 @@ void S2F_ProfileBegin(uint16_t),S2F_ProfileEnd(uint16_t);
 void __attribute__((noipa,noinline)) S2F_M0FrameDone(void){__asm__ volatile("":::"memory");}
 static void frozen_benchmark(void){
     for(uint16_t i=0;i<24;i++){
-        _g_gametic++;stage_cost[4]=0;S2F_ProfileBegin(2);
+        _g_gametic++;stage_cost[0]=stage_cost[1]=stage_cost[4]=0;S2F_ProfileBegin(2);
         S2A_Display();S2F_ProfileBegin(3);R20_StopVideo();S2F_ProfileEnd(3);
         S2F_ProfileBegin(5);
         if(s2f_test_mode>=3){

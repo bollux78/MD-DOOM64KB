@@ -101,6 +101,8 @@ void sub_main(void){
         uint32_t due=phase/12500000UL;phase%=12500000UL;
         if(due>4){dropped+=due-4;due=4;}
         while(due--){
+            /* A new display demand preempts catch-up between any two ticks. */
+            if(R16(0xFF8012UL)!=demand){phase+=(due+1)*12500000UL;break;}
             if(_g_gameaction!=ga_nothing && _g_gameaction!=ga_loadlevel)goto done;
             int16_t turn=(int16_t)(((uint16_t)echo[10]<<8)|echo[11]);
             S2D_SetCommand((int8_t)echo[8],(int8_t)echo[9],turn,echo[13]);
