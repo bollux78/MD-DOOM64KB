@@ -56,7 +56,7 @@ static void apply_player(void){
     _g_player.viewz=h[14];_g_player.health=h[16];_g_player.mo->health=h[16];_g_player.armorpoints=h[17];
     _g_player.mo->subsector=R_PointInSubsector(_g_player.mo->x,_g_player.mo->y);
     for(uint16_t i=0;i<4;i++)_g_player.ammo[i]=h[18+i];
-    if(h[22]>=NUMWEAPONS || h[23]>NUMWEAPONS)I_Error("S2D WEAPON ID");
+    if(h[22]>=NUMWEAPONS || (h[23]>=NUMWEAPONS && h[23]!=wp_nochange))I_Error("S2D WEAPON ID");
     _g_player.readyweapon=h[22];_g_player.pendingweapon=h[23];
     for(uint16_t i=0;i<NUMWEAPONS;i++)_g_player.weaponowned[i]=!!(h[24]&(1UL<<i));
     _g_player.damagecount=h[25];_g_player.bonuscount=h[26];_g_player.armortype=h[27];
@@ -67,6 +67,13 @@ static void apply_player(void){
         if(v[0]!=0xffffffffUL && v[0]>=NUMSTATES)I_Error("S2D PSPRITE ID");
         _g_player.psprites[i].state=v[0]==0xffffffffUL?0:&states[v[0]];
         _g_player.psprites[i].sx=v[1];_g_player.psprites[i].sy=v[2];_g_player.psprites[i].tics=v[3];
+    }
+    volatile uint32_t *audit=(volatile uint32_t *)0x61B100UL;
+    audit[0]=_g_player.readyweapon;audit[1]=_g_player.pendingweapon;
+    for(uint16_t i=0;i<NUMPSPRITES;i++){
+        audit[2+i*4]=_g_player.psprites[i].state?(uint32_t)(_g_player.psprites[i].state-states):0xffffffffUL;
+        audit[3+i*4]=(int32_t)_g_player.psprites[i].sx;
+        audit[4+i*4]=_g_player.psprites[i].sy;audit[5+i*4]=(int32_t)_g_player.psprites[i].tics;
     }
     _g_gametic=expected_tic;
 }

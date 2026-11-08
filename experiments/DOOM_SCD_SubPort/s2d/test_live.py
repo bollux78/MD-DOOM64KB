@@ -64,6 +64,9 @@ def decode(g):
     check_applied(g,tic,dict(hash=want,n=n,nr=nr,player=player,records=records,actor_bytes=actor_bytes),sym)
     out=struct.unpack('>7I',g.readmem(0x61b000,28));camera=struct.unpack_from('>8I',header,32)
     assert out[:6]==(tic,camera[2],camera[3],camera[5],camera[7],struct.unpack_from('>I',header,72)[0])
+    audit=struct.unpack('>10I',g.readmem(0x61b100,40))
+    assert audit[:2]==struct.unpack_from('>2I',header,88)
+    assert audit[2:]==struct.unpack_from('>8I',header,160),'native weapon/flash psprites differ from CD'
     return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n)
 commands[0]=command(0,0)
 try:
