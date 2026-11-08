@@ -64,3 +64,17 @@ Sem R84/R76/SRAM. **Cabe sem carregador multi-janela** se o código ficar ≤ 12
 - **Velocidade do renderer novo × o R128 ajustado** (R60 asm, R95/R96): o laço de coluna do R128 é muito otimizado. **Portar esse laço** (pair writer adaptado para tiles), em vez de escrever do zero.
 - **Escrita em tiles:** colunas verticais em tiles 4 bpp exigem escrita de nibble com stride de 4 bytes por linha dentro do tile e salto de tile a cada 8 linhas. Alternativa: buffer linear de colunas e um passo de "transposição para tiles" no fim (custo medido).
   - **ou** a área "dot image" do modo 1M do sub (escrita por pixel, que o hardware arranja em cells): **testar primeiro, porque pode eliminar a transposição.**
+
+## N0: resultado (run 42500537461, branch `exp-chatgpt-scd-bench03b`, `experiments/DOOM_SCD_CellImage`): `build: PASS`, `blastem: PASS`
+- **Montagem:** o sub escreve um bitmap **linear** 4 bpp de 256×128 (stride de 256 B) em `banco+0x10000`. O MD lê a **visão "cell image"** em `0x630000` e recebe **tiles prontos**, em ordem por coluna (tile = coluna×16 + linha).
+
+| Teste | Resultado |
+|---|---|
+| leitura pela CPU, 8.192 palavras | 0 erradas |
+| 1 DMA de 16 KiB a partir da visão cell, tela desligada | 0 erradas, **5,1 ms** |
+| 3 DMAs em 3 VBlanks seguidos, **tela ligada** | 0 erradas, 5,3 ms no total, **0 partes fora do VBlank** |
+
+- **Consequência:** o renderer novo escreve **pixels lineares** (colunas com stride de 256 B), o hardware converte para tiles, e o MD só faz DMA.
+  - Sem passo de transposição e sem tabela de conversão.
+  - No modo 2×2, cada pixel lógico é **1 byte** (dois nibbles iguais) escrito em 2 linhas: `move.b d0,(a0); move.b d0,256(a0)`.
+- **Ainda falta:** conferir no console (ROM só de diagnóstico, sem jogo).
