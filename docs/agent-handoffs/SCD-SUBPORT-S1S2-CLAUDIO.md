@@ -1,5 +1,8 @@
 # Sega CD sub-port, S1 e S2: lógica e render no 68000 do Sega CD (Cláudio para o Werk)
 
+**Avaliação solicitada ao Cláudio:** [SCD-S2E-REVIEW-CLAUDIO.md](SCD-S2E-REVIEW-CLAUDIO.md). Handoff técnico com arquitetura real, evidência de console/CI separada, custos por fase, limitações de cadência e perguntas para definir o próximo experimento.
+
+
 ## Estado atual — S2e desempenho, 2026-11-08
 
 Branch `exp-werk-scd-subport-s1s2`. Usuário confirmou S2d funcional no console, aproximadamente1FPS. S2e otimizada e gate completo PASS no run `42483932970`, commit `9d466431941339cd78c8746fc27baba1f9675d0b`: deltas de mundo/R24, cópias32bits, checksum único por palavras e auditoria nativa periódica no modo de uso. Testes profundo/periódico do mesmo binário tiveram97 framebuffers idênticos, inputs e estado corretos, zero simulação MD e saída restaurada.
