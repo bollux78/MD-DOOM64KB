@@ -47,7 +47,7 @@ Commit `0eae23564ccba904a7281f9e75e5ff8c6d2b19bf`, Actions run `42440328871`, jo
 - Mundo nesta variante: stream8796 bytes;85 setores/273 sides;61 mudanças de luz e208 de side, nenhuma alteração de altura/flat na trajetória S2c. A cobertura dinâmica de altura existe no teste S2b anterior, que permanece separado. Não alegar altura dinâmica exercida pela demo S2c.
 -27 estados decodificados com hashes válidos;26 conjuntos de atores efetivamente aplicados no MD iguais ao sub, campo a campo; listas nativas por setor percorridas e verificadas independentemente em Python; câmera e mundo exatos, imagens distintas, nenhum G_Ticker/P_Ticker MD durante replay: PASS.
 - Saída instrumentada restaurou o estado local e alcançou o G_Ticker original: PASS. START físico da S2c ainda pendente.
-- Console: S2b aprovada; S2c pendente do usuário. Não confundir aprovação anterior com esta ROM nova.
+- Console: S2c aprovada pelo usuário nesta conversa, com autorização para avançar à S2d. Aprovação verbal, sem nova foto/métricas nem relato separado do START físico.
 
 ROM privada: `/home/dan/Projetos/Personal/scd-subport-s2c-actors/run-42440328871-1/doom-md-scd-s2c-actors.bin` (4063232 bytes).
 Mesmo diretório: `visual_report.json`, snapshots brutos renderizados, `sub_trace.csv`, ELF e relatório de link. Nenhum WAD/ROM/frame foi publicado no repositório.

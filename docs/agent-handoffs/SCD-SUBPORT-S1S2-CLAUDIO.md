@@ -1,5 +1,12 @@
 # Sega CD sub-port, S1 e S2: lógica e render no 68000 do Sega CD (Cláudio para o Werk)
 
+## Estado atual — S2d interativa, 2026-11-08
+
+Branch `exp-werk-scd-subport-s1s2`. S2c confirmada no console pelo usuário. S2d implementada e validada em BlastEm: controle MD → netcmd/G_Ticker original no Sega CD → estado completo por tic em Word RAM → renderer MD. Movimento, giro, disparos, consumo de munição, arma/flash e atores conferidos em98 estados; alternância dos dois bancos, zero ticks MD durante o modo CD e saída instrumentada restaurada. Run `42480397654`, commit `adbe47283f1dd9daf1ca15342b9db776e6870871`. Console S2d pendente.
+
+Ver [SCD-S2D-LIVE-TICS.md](SCD-S2D-LIVE-TICS.md) para protocolo, limites, resultados e ROM privada. Protótipo E1M1 interativo, um estado completo/tic; sem garantia35Hz/FPS final, áudio de eventos ou campanha. Próxima etapa: validar pad/START no console, reduzir transferência/escritas e medir cadência/latência. As seções anteriores de S2c/S2b abaixo são históricas.
+
+
 ## Estado atual — S2c, 2026-11-08
 
 Branch `exp-werk-scd-subport-s1s2`. S2b confirmada no console pelo usuário. S2c implementada e validada em BlastEm: câmera, setores/sides, atores dinâmicos com IDs estáveis e itens R24 reais do sub no renderer MD. 27 estados/26 frames, hashes e valores aplicados exatos, listas nativas por setor verificadas, zero ticks MD durante replay, saída instrumentada restaurada. Run `42440328871`, commit `0eae23564ccba904a7281f9e75e5ff8c6d2b19bf`. Máximo55 atores vivos,68 itens R24,122 IDs observados. Console S2c pendente.
