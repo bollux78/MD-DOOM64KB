@@ -12,6 +12,9 @@
 #include "z_zone.h"
 #include "i_system.h"
 #define REG16(a) (*(volatile uint16_t *)(uintptr_t)(a))
+#if defined(SCD_VISUAL)
+#include "camera_wire.h"
+#endif
 #define TRACE ((volatile uint32_t *)0x7C000UL)
 extern void SCD_SubTransportReset(void),SCD_SubSetTime(uint32_t),SCD_MetadataInit(void);
 extern uint16_t M_R47RandomState(void);
@@ -26,6 +29,13 @@ static void checkpoint(uint16_t tic)
     uint32_t v[8]={tic,_g_player.mo->x,_g_player.mo->y,_g_player.mo->z,
         _g_player.mo->angle,(int32_t)_g_player.health,count,M_R47RandomState()&255u};
     for(uint16_t i=0;i<8;i++){TRACE[(tic/100u)*8u+i]=v[i];hash=(hash^v[i])*16777619UL;}
+#if defined(SCD_VISUAL)
+    volatile uint32_t *cam=(volatile uint32_t *)(S2A_SUB_CAMERA+(uint32_t)(tic/100u)*S2A_CAMERA_BYTES);
+    uint32_t c[8]={S2A_CAMERA_MAGIC,tic,_g_player.mo->x,_g_player.mo->y,
+        _g_player.mo->z,_g_player.mo->angle,_g_player.viewz,(int32_t)_g_player.health};
+    for(uint16_t i=0;i<8;i++)cam[i]=c[i];
+#endif
+
 }
 void sub_main(void)
 {
@@ -56,6 +66,13 @@ void sub_main(void)
        !_g_player.mo || _g_player.health!=100)I_Error("Z8 REBIRTH FAILED");
     Z_CheckHeap();
     TRACE[216]=2600;TRACE[217]=1;TRACE[218]=firstdead;TRACE[219]=_g_leveltime;
+#if defined(SCD_VISUAL)
+    volatile const uint32_t *cam=(volatile const uint32_t *)S2A_SUB_CAMERA;
+    uint32_t h=2166136261UL;
+    for(uint16_t i=0;i<S2A_CAMERA_COUNT*S2A_CAMERA_WORDS;i++)h=(h^cam[i])*16777619UL;
+    volatile uint32_t *meta=(volatile uint32_t *)S2A_SUB_META;
+    meta[0]=S2A_META_MAGIC;meta[1]=S2A_CAMERA_COUNT;meta[2]=S2A_CAMERA_BYTES;meta[3]=h;
+#endif
     REG16(0xFF8028UL)=1;
     REG16(0xFF802AUL)=hash>>16;REG16(0xFF802CUL)=hash;
     REG16(0xFF8024UL)=0x5A8D;REG16(0xFF8020UL)=0x51B1u;

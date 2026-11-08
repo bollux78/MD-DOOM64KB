@@ -52,3 +52,7 @@ Após Z6 aprovada no console e Z7 comparar 27 checkpoints independentes, o usuá
 ## Próximo marco
 
 Homologação física da Z8 após PASS no BlastEm. Depois: snapshots do estado do sub para o MD, entrada contínua e renderização alimentada pela lógica sub; medir custos de transferência e FPS real. Não prometer ganho FPS a partir de um teste sem renderização.
+
+## Z8 hardware PASS — confirmado por foto do usuário
+
+Foto mostra S1E Z8 REAL G_TICKER, TRANSFER PASS/STAGE5, REQUESTS12/ERRORS0/BYTES69151, AI NORMAL, STATE HASH 0A1B0220 e 2600 TICS AND REBIRTH PASS. Aprovação física da simulação e da prova de reinício. A foto não comprova o fallback após START nem renderização do estado sub. Usuário autorizou iniciar a ponte visual; S2a começa com câmera real do sub e mundo/atores locais congelados, sem apresentar isso como snapshot completo.

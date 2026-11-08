@@ -1,9 +1,9 @@
-name: Sega CD Z8 original level ticker and rebirth
+name: Sega CD S2a real sub-camera visual bridge
 on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
@@ -270,6 +270,37 @@ jobs:
             python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --engine "$S1E_Z8_OUT/doom-md-scd-s1e-z8.bin" "$S1E_Z8_OUT/doom-md-scd-s1e-z8.elf"
           python3 experiments/DOOM_SCD_SubPort/s1e/compare_logic.py "$S1E_Z6_OUT/md_trace.csv" "$S1E_Z8_OUT/sub_trace.csv" --out "$S1E_Z8_OUT/comparison.json"
 
+      - name: S2a camera-only bridge strict build
+        id: s2a_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s2a-camera/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S2A_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --visual
+      - name: S2a BlastEm real sub camera and MD renderer with no MD simulation
+        id: s2a_blastem
+        if: steps.s2a_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s2a.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --visual "$S2A_OUT/doom-md-scd-s2a-camera.bin" "$S2A_OUT/doom-md-scd-s2a-camera.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s2a/test_visual.py "$S2A_OUT/doom-md-scd-s2a-camera.bin" "$S2A_OUT/doom-md-scd-s2a-camera.elf"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -290,3 +321,7 @@ jobs:
           echo "Z8 G_Ticker and rebirth: ${{ steps.z8_blastem.outcome }}"
           test "${{ steps.z8_build.outcome }}" = "success"
           test "${{ steps.z8_blastem.outcome }}" = "success"
+          echo "S2a build: ${{ steps.s2a_build.outcome }}"
+          echo "S2a actual sub camera rendering: ${{ steps.s2a_blastem.outcome }}"
+          test "${{ steps.s2a_build.outcome }}" = "success"
+          test "${{ steps.s2a_blastem.outcome }}" = "success"

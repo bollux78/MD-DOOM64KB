@@ -5,9 +5,10 @@ G_Ticker remains on the MD after START; full P_SetupLevel is not claimed.
 import os, subprocess, sys, struct
 from pathlib import Path
 from r64a_rsp_capture import RSP
-engine=len(sys.argv)==4 and sys.argv[1]=="--engine"
-ticker=len(sys.argv)==4 and sys.argv[1] in ("--ticker", "--engine")
-full=len(sys.argv)==4 and sys.argv[1] in ("--full", "--ticker", "--engine")
+visual=len(sys.argv)==4 and sys.argv[1]=="--visual"
+engine=len(sys.argv)==4 and sys.argv[1] in ("--engine", "--visual")
+ticker=len(sys.argv)==4 and sys.argv[1] in ("--ticker", "--engine", "--visual")
+full=len(sys.argv)==4 and sys.argv[1] in ("--full", "--ticker", "--engine", "--visual")
 if len(sys.argv)!=(4 if full else 3):
     raise SystemExit("usage: test_setup.py [--full] ROM ELF")
 rom, elf=map(Path,sys.argv[2:] if full else sys.argv[1:])
@@ -73,10 +74,11 @@ try:
             print("Z8 separate controlled real G_Ticker rebirth PASS; first dead natural tic",firstdead,flush=True)
     for name in ("s1b_complete","I_Error"):
         g.req("z0,%x,2"%symbols[name])
-    assert g.req("Z0,%x,2"%symbols["G_Ticker"])=="OK"
+    fallback_symbol="S2A_MDFrameDone" if visual else "G_Ticker"
+    assert g.req("Z0,%x,2"%symbols[fallback_symbol])=="OK"
     g.cont()
     pc=int(g.req("g")[17*8:18*8],16)&0xFFFFFF
-    fallback=pc==symbols["G_Ticker"]
+    fallback=pc==symbols[fallback_symbol]
     print("Z5 build PASS / BlastEm" if full else "Z4 build PASS / BlastEm", "PASS" if passed and fallback else "FAIL",
           "/ MD fallback",fallback,flush=True)
     assert passed and fallback
