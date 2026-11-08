@@ -301,6 +301,37 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s2a/test_visual.py "$S2A_OUT/doom-md-scd-s2a-camera.bin" "$S2A_OUT/doom-md-scd-s2a-camera.elf"
 
+      - name: S2b camera and sector-side bridge strict build
+        id: s2b_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s2b-world/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S2B_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --world
+      - name: S2b BlastEm exact applied camera and world without MD simulation
+        id: s2b_blastem
+        if: steps.s2b_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s2b.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --visual "$S2B_OUT/doom-md-scd-s2b-world.bin" "$S2B_OUT/doom-md-scd-s2b-world.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s2a/test_visual.py --world "$S2B_OUT/doom-md-scd-s2b-world.bin" "$S2B_OUT/doom-md-scd-s2b-world.elf"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -325,3 +356,7 @@ jobs:
           echo "S2a actual sub camera rendering: ${{ steps.s2a_blastem.outcome }}"
           test "${{ steps.s2a_build.outcome }}" = "success"
           test "${{ steps.s2a_blastem.outcome }}" = "success"
+          echo "S2b build: ${{ steps.s2b_build.outcome }}"
+          echo "S2b applied world: ${{ steps.s2b_blastem.outcome }}"
+          test "${{ steps.s2b_build.outcome }}" = "success"
+          test "${{ steps.s2b_blastem.outcome }}" = "success"

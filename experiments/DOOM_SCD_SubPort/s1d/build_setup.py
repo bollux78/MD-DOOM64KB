@@ -8,19 +8,22 @@ the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
-if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual")):
+if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual", "--world")):
     raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full|--ticker]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
-visual=len(sys.argv)==6 and sys.argv[5]=="--visual"
-engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual")
+world=len(sys.argv)==6 and sys.argv[5]=="--world"
+visual=len(sys.argv)==6 and sys.argv[5] in ("--visual", "--world")
+engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual", "--world")
 comparison=len(sys.argv)==6 and sys.argv[5]=="--compare"
-ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual")
+ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual", "--world")
 full=len(sys.argv)==6
 here=Path(__file__).resolve().parent
 common=here.parent
 out.mkdir(parents=True,exist_ok=True)
 objdir=out/"sub"
 objdir.mkdir(exist_ok=True)
+if engine and (tree/".s1e-md-original/p_tick.c").is_file():
+    shutil.copyfile(tree/".s1e-md-original/p_tick.c",tree/"src/p_tick.c")
 gdk=Path(os.environ.get("SGDK",str(Path.home()/"mars/m68k-elf")))
 gcc=str(gdk/"bin/m68k-elf-gcc")
 nm=str(gdk/"bin/m68k-elf-nm")
@@ -30,6 +33,7 @@ defs=[o for o in opt if o.startswith("-D") and not o.startswith(tuple(
     "-D"+d for d in ("DOOM_R22_SRAM_BLOCKLINKS","DOOM_R23_MAPMEM",
     "DOOM_R24_EPISODE","DOOM_R81_SAVE","DOOM_R25_MUSIC")))]
 if visual: defs += ["-DSCD_VISUAL", "-I"+str(common/"s2a")]
+if world: defs += ["-DSCD_WORLD", "-I"+str(common/"s2b")]
 if full: defs.append("-DSCD_FULL_SETUP")
 if ticker: defs += ["-DSCD_TICKER", "-DDOOM_R47_STATE_HASH"]
 cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
@@ -148,8 +152,13 @@ if ticker:
     for name in ("m_random", "r_plane", "scd_sub_system"):
         source=(here if name=="scd_sub_system" else tree/"src")/(name+".c")
         obj=objdir/(name+".o")
-        subprocess.run([gcc]+cflags+["-DSCD_SUB_ZONE_BYTES=229376", "-c",str(source),"-o",str(obj)],cwd=tree,check=True)
+        subprocess.run([gcc]+cflags+[("-DSCD_SUB_ZONE_BYTES=196608" if world else "-DSCD_SUB_ZONE_BYTES=229376"), "-c",str(source),"-o",str(obj)],cwd=tree,check=True)
         parts.append(obj)
+if world:
+    source=common/"s2b/sub_world.c"
+    obj=objdir/"sub_world.o"
+    subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
+    parts.append(obj)
 if engine:
     sys.path.insert(0,str(common/"s1e"))
     from engine_build import prepare
@@ -195,7 +204,7 @@ for row in subprocess.check_output([nm,str(elf)],text=True).splitlines():
 for root in (("G_Ticker","P_Init","G_DeferedPlayDemo") if engine else ()) + ("subcpu_vectors","P_SetupLevel","P_InitThinkers") + (("P_Ticker", "P_PlayerThink", "P_MobjThinker") if ticker else ()):
     if root not in symbols: raise SystemExit("Missing linked runtime root: "+root)
 if symbols["subcpu_vectors"]!=0: raise SystemExit("bad boot vector")
-if symbols.get("_end",0)>=(0x7C000 if ticker else 0x7E000): raise SystemExit("sub PRG-RAM end exceeds stack reserve")
+if symbols.get("_end",0)>=(0x74000 if world else (0x7C000 if ticker else 0x7E000)): raise SystemExit("sub PRG-RAM end exceeds stack reserve")
 binary=objdir/"setup.bin"
 subprocess.run([objcopy,"-O","binary","-R",".bss",
                 str(elf),str(binary)],check=True)
@@ -267,7 +276,7 @@ if ticker:
 if comparison:
     backup=tree/".s1e-md-original"
     backup.mkdir(exist_ok=True)
-    for filename in ("g_game.c","d_main.c","m_text.c","m_random.c"):
+    for filename in ("g_game.c","d_main.c","m_text.c","m_random.c","p_tick.c"):
         shutil.copyfile(tree/"src"/filename,backup/filename)
     name="doom-md-scd-s1e-z7"
     md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z7 MD SUB TRACE")
@@ -313,12 +322,15 @@ if engine:
     if backup.is_dir():
         # Z7's automatic headless MD benchmark is instrumentation only. The
         # Z8 console ROM must retain the original R128 menu/game after START.
-        for filename in ("g_game.c","d_main.c","m_text.c","m_random.c"):
+        for filename in ("g_game.c","d_main.c","m_text.c","m_random.c","p_tick.c"):
             shutil.copyfile(backup/filename,tree/"src"/filename)
     for artifact in (tree/"src/s1e_md_observer.c",
                      tree/"out/release/src/s1e_md_observer.o",
                      tree/"out/release/_deps/src/s1e_md_observer.d"):
         artifact.unlink(missing_ok=True)
+    for filename in ("s2a_md_camera","s2b_md_world"):
+        for artifact in (tree/"src"/(filename+".c"),tree/"out/release/src"/(filename+".o"),tree/"out/release/_deps/src"/(filename+".d")):
+            artifact.unlink(missing_ok=True)
     name="doom-md-scd-s1e-z8"
     md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z8 REAL G_TICKER")
     md=md.replace("0x5A7Du", "0x5A8Du")
@@ -338,7 +350,23 @@ if visual:
     REPORT=r;""")
     sys.path.insert(0,str(common/"s2a"))
     from visual_build import install
-    install(tree,common)
+    install(tree,common,world=world)
+if world:
+    name="doom-md-scd-s2b-world"
+    md=md.replace("S2A SUB CAMERA READY", "S2B SUB WORLD READY")
+    anchor="    REPORT=r;"
+    assert md.count(anchor)==1
+    md=md.replace(anchor,"""    if(r.stage==5 && r.reserved==0x5A8Du){
+        volatile const u32 *head=(volatile const u32 *)0x434000UL;
+        const u32 used=head[5];
+        if(head[0]!=0x53325742UL || used<256u || used>32768u || used%4u){r.stage=8;}
+        else{
+            volatile const u16 *src=(volatile const u16 *)0x434000UL;
+            volatile u16 *dst=(volatile u16 *)0x600000UL;
+            for(u16 i=0;i<used/2u;i++)dst[i]=src[i];
+        }
+    }
+    REPORT=r;""")
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",

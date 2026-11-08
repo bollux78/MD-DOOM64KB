@@ -1,7 +1,7 @@
 """Install camera-only MD replay into disposable R128 tree after Z8 build."""
 import shutil
 
-def install(tree,common):
+def install(tree,common,world=False):
     for name in ('md_camera.c','camera_wire.h'):
         shutil.copyfile(common/'s2a'/name,tree/'src'/('s2a_'+name if name.endswith('.c') else name))
     game=tree/'src/g_game.c'
@@ -30,3 +30,9 @@ void S2A_InitLocalMap(void){G_InitNew(sk_hard,1);}
     anchor='void P_Ticker (void)'
     assert text.count(anchor)==1
     tick.write_text(text.replace(anchor,'void __attribute__((noipa,noinline)) P_Ticker (void)'))
+
+    if world:
+        for name in ('world_wire.h','world_values.h','md_world.c'):
+            shutil.copyfile(common/'s2b'/name,tree/'src'/('s2b_'+name if name.endswith('.c') else name))
+        camera=tree/'src/s2a_md_camera.c'
+        camera.write_text('#define SCD_WORLD 1\n'+camera.read_text())

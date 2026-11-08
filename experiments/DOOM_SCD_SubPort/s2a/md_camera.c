@@ -8,6 +8,9 @@
 #include "r_main.h"
 #include "i_system.h"
 #include "camera_wire.h"
+#if defined(SCD_WORLD)
+extern void S2B_Init(void),S2B_ApplyFrame(uint16_t);
+#endif
 extern void S2A_InitLocalMap(void),S2A_Display(void),S2A_ClearMenus(void),R20_StopVideo(void);
 volatile uint8_t s2a_test_exit __attribute__((section(".data")))=0; /* debugger only */
 void __attribute__((noipa,noinline)) S2A_MDFrameDone(void){__asm__ volatile("":::"memory");}
@@ -27,15 +30,24 @@ void S2A_Run(void)
     if(meta[0]!=S2A_META_MAGIC || meta[1]!=S2A_CAMERA_COUNT ||
        meta[2]!=S2A_CAMERA_BYTES || meta[3]!=camera_hash())I_Error("S2A CAMERA PACKET");
     S2A_ClearMenus();S2A_InitLocalMap();
+#if defined(SCD_WORLD)
+    S2B_Init();
+#endif
     while(JOY_readJoypad(JOY_1)&BUTTON_START)SYS_doVBlankProcess();
     _g_menuactive=false;_g_demoplayback=false;_g_basetic=0;
     wipegamestate=GS_LEVEL;
     for(;;){
         if(s2a_test_exit)return;
+#if defined(SCD_WORLD)
+        S2B_ApplyFrame(0);
+#endif
         /* Skip pre-first-tic camera0 (viewz=1 by original setup contract). */
         for(uint16_t i=1;i<S2A_CAMERA_COUNT;i++){
             volatile const uint32_t *p=(volatile const uint32_t *)(S2A_MD_CAMERA+(uint32_t)i*S2A_CAMERA_BYTES);
             if(p[0]!=S2A_CAMERA_MAGIC || p[1]!=(uint32_t)i*100u)I_Error("S2A CAMERA ORDER");
+#if defined(SCD_WORLD)
+            S2B_ApplyFrame(i);
+#endif
             _g_player.mo->x=(int32_t)p[2];_g_player.mo->y=(int32_t)p[3];
             _g_player.mo->z=(int32_t)p[4];_g_player.mo->angle=p[5];
             _g_player.viewz=(int32_t)p[6];_g_player.health=(int32_t)p[7];
@@ -45,8 +57,13 @@ void S2A_Run(void)
             S2A_Display();
             R20_StopVideo(); /* complete posted DMA before text overlays */
             SYS_disableInts();
+#if defined(SCD_WORLD)
+            VDP_drawText("S2B CAMERA AND WORLD FROM CD",1,1);
+            VDP_drawText("ACTORS LOCAL FROZEN / START EXIT",1,2);
+#else
             VDP_drawText("S2A CAMERA FROM SEGA CD",1,1);
             VDP_drawText("LOCAL ACTORS FROZEN / START EXIT",1,2);
+#endif
             SYS_enableInts();
             volatile uint32_t *out=(volatile uint32_t *)S2A_MD_REPORT;
             out[0]=i;out[1]=p[1];out[2]=_g_player.mo->x;out[3]=_g_player.mo->y;

@@ -15,6 +15,9 @@
 #if defined(SCD_VISUAL)
 #include "camera_wire.h"
 #endif
+#if defined(SCD_WORLD)
+extern void S2B_Capture(uint16_t),S2B_Finish(void);
+#endif
 #define TRACE ((volatile uint32_t *)0x7C000UL)
 extern void SCD_SubTransportReset(void),SCD_SubSetTime(uint32_t),SCD_MetadataInit(void);
 extern uint16_t M_R47RandomState(void);
@@ -29,6 +32,10 @@ static void checkpoint(uint16_t tic)
     uint32_t v[8]={tic,_g_player.mo->x,_g_player.mo->y,_g_player.mo->z,
         _g_player.mo->angle,(int32_t)_g_player.health,count,M_R47RandomState()&255u};
     for(uint16_t i=0;i<8;i++){TRACE[(tic/100u)*8u+i]=v[i];hash=(hash^v[i])*16777619UL;}
+#if defined(SCD_WORLD)
+    S2B_Capture(tic);
+#endif
+
 #if defined(SCD_VISUAL)
     volatile uint32_t *cam=(volatile uint32_t *)(S2A_SUB_CAMERA+(uint32_t)(tic/100u)*S2A_CAMERA_BYTES);
     uint32_t c[8]={S2A_CAMERA_MAGIC,tic,_g_player.mo->x,_g_player.mo->y,
@@ -72,6 +79,9 @@ void sub_main(void)
     for(uint16_t i=0;i<S2A_CAMERA_COUNT*S2A_CAMERA_WORDS;i++)h=(h^cam[i])*16777619UL;
     volatile uint32_t *meta=(volatile uint32_t *)S2A_SUB_META;
     meta[0]=S2A_META_MAGIC;meta[1]=S2A_CAMERA_COUNT;meta[2]=S2A_CAMERA_BYTES;meta[3]=h;
+#endif
+#if defined(SCD_WORLD)
+    S2B_Finish();
 #endif
     REG16(0xFF8028UL)=1;
     REG16(0xFF802AUL)=hash>>16;REG16(0xFF802CUL)=hash;
