@@ -33,7 +33,7 @@ O workflow mantém as regressões Z4/Z5/Z7/Z8/S2a e acrescenta build S2b, prova 
 - Stream: 8924 bytes para 27 amostras de 85 setores e 273 sides. Após a inicialização: 8 alterações de altura, 61 de iluminação, 208 de side. São contagens de registros alterados entre amostras, não número de portas ou eventos distintos. Nenhuma troca de flat de setor foi exercida nessa demo; o formato suporta o campo, mas não se atribui cobertura dinâmica a ele.
 - Python reconstruiu os 27 estados com checksum/hash válidos. Os 26 frames exibidos tiveram câmera exata e hash canônico aplicado no MD igual ao produzido pelo sub. Houve imagens distintas, nenhum G_Ticker/P_Ticker MD durante o replay e saída instrumentada para o G_Ticker MD original: PASS.
 - Teste adicional local do decodificador com valores assinados e pacote corrompido: PASS.
-- Console S2b: pendente do usuário. A aprovação física anterior é da S2a.
+- Console S2b: confirmado pelo usuário nesta conversa, com autorização explícita para prosseguir à S2c. Aprovação verbal; sem foto ou métricas adicionais, e sem relato separado sobre START.
 
 ROM privada: `/home/dan/Projetos/Personal/scd-subport-s2b-world/run-42438888747-1/doom-md-scd-s2b-world.bin`.
 Mesmo diretório: `visual_report.json`, frames brutos, `sub_trace.csv`, ELF e relatórios de link. ROMs, WADs, ELF e dumps de imagem ficam privados no computador do usuário.

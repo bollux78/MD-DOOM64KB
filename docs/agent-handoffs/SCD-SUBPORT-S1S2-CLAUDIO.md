@@ -1,5 +1,12 @@
 # Sega CD sub-port, S1 e S2: lógica e render no 68000 do Sega CD (Cláudio para o Werk)
 
+## Estado atual — S2c, 2026-11-08
+
+Branch `exp-werk-scd-subport-s1s2`. S2b confirmada no console pelo usuário. S2c implementada e validada em BlastEm: câmera, setores/sides, atores dinâmicos com IDs estáveis e itens R24 reais do sub no renderer MD. 27 estados/26 frames, hashes e valores aplicados exatos, listas nativas por setor verificadas, zero ticks MD durante replay, saída instrumentada restaurada. Run `42440328871`, commit `0eae23564ccba904a7281f9e75e5ff8c6d2b19bf`. Máximo55 atores vivos,68 itens R24,122 IDs observados. Console S2c pendente.
+
+Ver [SCD-S2C-ACTORS-BRIDGE.md](SCD-S2C-ACTORS-BRIDGE.md) para limites, wire, memória, resultados e ROM privada. Continua sendo replay em lote, sem input ao vivo e sem alegação de FPS. Próximo marco: comunicação por tic e entrada real. O estado S2b abaixo é histórico.
+
+
 ## Estado atual — S2b, 2026-11-08
 
 Branch de desenvolvimento: `exp-werk-scd-subport-s1s2`. S2a aprovada em hardware pelo usuário. S2b implementada e validada em BlastEm: câmera e setores/sides reais do sub aplicados ao renderer MD, 27 estados/26 frames, sem G_Ticker/P_Ticker MD durante o replay, saída para ciclo original PASS. Run `42438888747`, commit `22cd6de114551bb4faf4ca8b2f832ce37ae88c22`. Stream de 8924 bytes; 85 setores/273 sides; alterações reais de altura, luz e sides verificadas. Console S2b ainda pendente.
