@@ -32,9 +32,15 @@ void S2B_Capture(uint16_t tic)
 #if defined(SCD_LIVE)
         used=256;
 #endif
+#if defined(SCD_M15)
+        if(!nsec){
+#endif
         nsec=_g_numsectors;
         nside=W_LumpLength(W_GetNumForName("E1M1")+3)/sizeof(mapsidedef_t);
         if(!nsec || nsec>S2B_MAX_SECTORS || !nside || nside>S2B_MAX_SIDES)I_Error("S2B WORLD COUNTS");
+#if defined(SCD_M15)
+        }
+#endif
         for(uint16_t i=0;i<64;i++)HEAD[i]=0;
         HEAD[0]=S2B_MAGIC;HEAD[1]=S2B_VERSION;HEAD[2]=S2B_COUNT;HEAD[3]=nsec;HEAD[4]=nside;
     }
