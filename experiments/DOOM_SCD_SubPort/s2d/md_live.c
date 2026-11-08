@@ -17,6 +17,7 @@ static uint32_t expected_tic;
 static uint16_t stop_sent;
 void __attribute__((noipa,noinline)) S2D_MDFrameDone(void){__asm__ volatile("":::"memory");}
 uint16_t S2D_PrepareInput(void){
+    JOY_update(); /* required on the R128 hardware path; no MD ticker */
     uint16_t joy=s2d_test_buttons==0xffff?JOY_readJoypad(JOY_1):s2d_test_buttons;
     stop_sent=s2d_test_exit || (joy&BUTTON_START);
     int8_t forward=0,side=0;int16_t turn=0;uint16_t buttons=0;
@@ -73,7 +74,8 @@ void S2D_Run(void){
     volatile const uint16_t *boot=(volatile const uint16_t *)0x61F000UL;
     if(boot[0]!=5 || boot[3]!=0x5A9D)return;
     S2A_ClearMenus();S2A_InitLocalMap();
-    while(JOY_readJoypad(JOY_1)&BUTTON_START)SYS_doVBlankProcess();
+    JOY_update();
+    while(JOY_readJoypad(JOY_1)&BUTTON_START){SYS_doVBlankProcess();JOY_update();}
     _g_menuactive=false;_g_demoplayback=false;wipegamestate=GS_LEVEL;
     expected_tic=0;stop_sent=0;
     uint32_t saved[256];uint16_t nr=0,ns=0,initialized=0;

@@ -11,6 +11,7 @@
 extern void SCD_SubTransportReset(void),SCD_SubSetTime(uint32_t),SCD_MetadataInit(void),R89_SetAIMode(uint8_t);
 extern void S2B_Capture(uint16_t),S2B_Finish(void),S2C_Capture(uint16_t),S2C_Finish(void);
 extern int SCD_SubLiveInput(uint32_t,uint8_t *);
+extern void S2D_InitGame(void);
 extern void S2D_SetCommand(int8_t,int8_t,int16_t,uint8_t);
 static uint8_t echo[16];
 static void publish(uint32_t tic){
@@ -47,7 +48,7 @@ void sub_main(void){
     Z_Init();W_Init();SCD_MetadataInit();P_Init();R89_SetAIMode(0);
     const uint8_t *demo=W_GetLumpByName("DTE1M1");if(demo[0]!=109)I_Error("S2D BASE DEMO");
     _g_gametic=0;_g_basetic=0;_g_menuactive=false;_g_timingdemo=false;
-    G_InitNew(sk_hard,1);_g_demoplayback=false;
+    S2D_InitGame();_g_demoplayback=false;
     R16(0xFF8024UL)=0x5A9D;R16(0xFF802AUL)=0;R16(0xFF802CUL)=0;R16(0xFF8020UL)=0x51B1;
     while(R16(0xFF8010UL)!=0xD04D){} /* startup screen: no timed transport wait */
     for(uint32_t tic=0;;tic++){

@@ -24,7 +24,7 @@ def prepare(tree,objdir,gcc,cflags,common):
         a,b,c=function_span(game,'static void '+name+'(void)') if 'static void '+name+'(void)' in game else function_span(game,'static void '+name+' (void)')
         game=game[:b]+'{ I_Error("SCD SAVE LOAD UNSUPPORTED"); }'+game[c:]
     if '-DSCD_LIVE' in cflags:
-        game+='\nvoid S2D_SetCommand(int8_t f,int8_t s,int16_t a,uint8_t b){netcmd.forwardmove=f;netcmd.sidemove=s;netcmd.angleturn=a;netcmd.buttons=b;}\n'
+        game+='\nvoid S2D_InitGame(void){G_InitNew(sk_hard,1); }\nvoid S2D_SetCommand(int8_t f,int8_t s,int16_t a,uint8_t b){netcmd.forwardmove=f;netcmd.sidemove=s;netcmd.angleturn=a;netcmd.buttons=b;}\n'
     # Assert that the actual entire G_Ticker body is unchanged from this source.
     original=(root/'src/g_game.c').read_text()
     a,b,c=function_span(original,'void G_Ticker (void)')
