@@ -17,7 +17,6 @@
 #define HP ((mobj_t **)0x618280UL)
 #define REP ((subsector_t **)0x618400UL)
 #define LOOKUP ((uint16_t *)0x618800UL)
-#define CACHED ((volatile uint32_t *)0x618900UL)
 #define SLOTS ((uint16_t *)0x617C00UL)
 #define SAVED_ROM ((uint32_t *)0x61C000UL)
 #define SAVED_PLAYER ((int32_t *)0x61CC00UL)
@@ -83,7 +82,6 @@ void S2C_ApplyFrame(uint16_t frame){
  for(uint16_t j=0;j<n;j++,p+=24){
   uint16_t id=*(volatile const uint16_t *)p,type=*(volatile const uint16_t *)(p+2),sector=*(volatile const uint16_t *)(p+22),i=assigned[j];
   if(type>=NUMMOBJTYPES || sector>=_g_numsectors || !REP[sector] || *(volatile const uint16_t *)(p+18)>=NUMSPRITES)I_Error("M15 ACTOR FIELDS");
-  uint16_t fresh_slot=i==65535;
   if(i==65535){for(i=0;i<64 && IDS[i];i++){}if(i==64)I_Error("M15 POOL FULL");
    uint32_t *z=(uint32_t *)&POOL[i];for(uint16_t k=0;k<sizeof(mobj_t)/4;k++)z[k]=0;
    for(uint16_t k=(sizeof(mobj_t)/4)*4;k<sizeof(mobj_t);k++)((uint8_t *)&POOL[i])[k]=0;
@@ -91,25 +89,18 @@ void S2C_ApplyFrame(uint16_t frame){
    MOBJ_SET_RADIUS(&POOL[i],mobjinfo[type].radius);MOBJ_SET_HEIGHT(&POOL[i],mobjinfo[type].height);fresh++;
   }else if(POOL[i].type!=type)I_Error("M15 ID TYPE CHANGED");
   SLOTS[j]=i;mobj_t *m=&POOL[i];uint32_t flags=M15_Expand(p[17]);
-  volatile uint32_t *cache=CACHED+(uint16_t)(i*6u);
-  uint16_t unchanged=!fresh_slot;
-  if(unchanged)for(uint16_t k=0;k<6;k++)if(cache[k]!=((volatile const uint32_t *)p)[k]){unchanged=0;break;}
-  uint16_t relink=0;
-  if(!unchanged){
-  relink=SEC[i]!=sector || LINK[i]!=!(flags&MF_NOSECTOR);
+  uint16_t relink=SEC[i]!=sector || LINK[i]!=!(flags&MF_NOSECTOR);
   if(relink){unlink_slot(i);moved++;}
   m->x=*(volatile const int32_t *)(p+4);m->y=*(volatile const int32_t *)(p+8);m->z=*(volatile const int32_t *)(p+12);
   m->angle=(uint32_t)p[16]<<24;m->flags=flags;m->sprite=*(volatile const uint16_t *)(p+18);m->frame=*(volatile const uint16_t *)(p+20);
   m->subsector=REP[sector];SEC[i]=sector;
-  }
   m->floorz=m->dropoffz=_g_sectors[sector].floorheight;m->ceilingz=_g_sectors[sector].ceilingheight;
   if(checked && SUBSECTOR_SECTOR(R_PointInSubsector(m->x,m->y))!=&_g_sectors[sector])I_Error("M15 SPATIAL SECTOR");
   if(relink && !(flags&MF_NOSECTOR)){mobj_t **head=&_g_sectors[sector].thinglist;m->snext=*head;m->sprev=head;if(*head)(*head)->sprev=&m->snext;*head=m;LINK[i]=1;}
   if(LINK[i]){linked++;uint16_t k;for(k=0;k<HC && HS[k]!=sector;k++){}if(k==HC){HS[HC++]=sector;}}
   if(id==player)found++;
-  if(checked || !unchanged){uint32_t v[10];M15_Values(m,id,v);if(checked)for(uint16_t k=0;k<10;k++)h=M15_Mix(h,v[k]);M15_Write((volatile uint8_t *)cache,v);}
-  volatile uint32_t *applied=(volatile uint32_t *)(S2C_MD_APPLIED+(uint32_t)j*24);
-  for(uint16_t k=0;k<6;k++)applied[k]=cache[k];
+  uint32_t v[10];M15_Values(m,id,v);if(checked)for(uint16_t k=0;k<10;k++)h=M15_Mix(h,v[k]);
+  M15_Write((volatile uint8_t *)(S2C_MD_APPLIED+(uint32_t)j*24),v);
  }
  if(found!=1)I_Error("M15 PLAYER MEMBERSHIP");
  for(uint16_t j=0;j<nr;j++,p+=8){uint16_t id=*(volatile const uint16_t *)p,dead=*(volatile const uint16_t *)(p+2),delay=*(volatile const uint16_t *)(p+4);if(id>=romcount || dead>1)I_Error("M15 ROM DELTA");S2C_RomApply(id,dead,delay);}

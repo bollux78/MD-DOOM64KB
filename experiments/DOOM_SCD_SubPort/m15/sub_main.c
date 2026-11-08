@@ -91,7 +91,7 @@ static void seal(void){
  h[2]=frame;
  for(uint16_t i=0;i<16;i++)((volatile uint8_t *)h)[192+i]=echo[i];
  h[53]=elapsed;h[54]=dropped;h[55]=ticks;h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=cap_hash;h[60]=cap_copy;
- h[37]=capture_max;h[38]=3;h[39]=_g_gametic-h[9];h[61]=capture_count;h[62]=capture_total;
+ h[37]=capture_max;h[38]=2;h[39]=_g_gametic-h[9];h[61]=capture_count;h[62]=capture_total;
  h[63]=M15_Check(h,63);
 }
 static void service(void){
@@ -150,7 +150,7 @@ void sub_main(void){
             if(!_g_player.mo || _g_gamestate!=GS_LEVEL)goto done;
             if(!(ticks&63))Z_CheckHeap();
             if(stop_received)goto done;
-            if(!(_g_gametic%3u))prepare();
+            if(!(_g_gametic&1u))prepare();
         }
     }
  done:

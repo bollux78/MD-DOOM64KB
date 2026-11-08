@@ -36,12 +36,22 @@ static void sector_index_init(void){
  for(uint16_t i=0;i<_g_numsectors;i++,s++){uint16_t k=((uint32_t)s>>2)&511u;while(sector_keys[k])k=(k+1)&511u;sector_keys[k]=s;sector_ids[k]=i;}
 }
 uint16_t M15_SectorIndex(sector_t *s){uint16_t k=((uint32_t)s>>2)&511u;while(sector_keys[k] && sector_keys[k]!=s)k=(k+1)&511u;if(!sector_keys[k])I_Error("M15 ACTOR SECTOR");return sector_ids[k];}
+/* Conservative rear rejection; margin keeps nearby/wide edge sprites.
+ * Never tests walls, portals, line of sight or occlusion. */
+static const int16_t directions[16][2]={
+ {256,0},{237,98},{181,181},{98,237},{0,256},{-98,237},{-181,181},{-237,98},
+ {-256,0},{-237,-98},{-181,-181},{-98,-237},{0,-256},{98,-237},{181,-181},{237,-98}
+};
 static uint16_t relevant(const mobj_t *m){
  if(m==_g_player.mo)return 1;
  if(m->sprite<0 || m->sprite>=NUMSPRITES)return 0;
  fixed_t dx=m->x-_g_player.mo->x,dy=m->y-_g_player.mo->y;
- if(dx<0)dx=-dx;if(dy<0)dy=-dy;
- return dx<=1280L*FRACUNIT && dy<=1280L*FRACUNIT;
+ fixed_t ax=dx<0?-dx:dx,ay=dy<0?-dy:dy;
+ if(ax>1280L*FRACUNIT || ay>1280L*FRACUNIT)return 0;
+ uint16_t k=(uint32_t)(_g_player.mo->angle+0x08000000UL)>>28;
+ int16_t ux=dx>>16,uy=dy>>16;
+ int32_t forward=(int32_t)ux*directions[k][0]+(int32_t)uy*directions[k][1];
+ return forward>=-128L*256L;
 }
 void S2C_Capture(uint16_t tic){
     uint16_t frame=tic/100u,n=0,playerid=0,nr=0,eligible[64];
