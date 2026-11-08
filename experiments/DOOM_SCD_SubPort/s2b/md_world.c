@@ -14,7 +14,7 @@ void S2B_Init(void)
 {
     nsec=_g_numsectors;nside=W_LumpLength(W_GetNumForName("E1M1")+3)/sizeof(mapsidedef_t);
     uint32_t used=HEAD[5];
-    if(HEAD[0]!=S2B_MAGIC || HEAD[1]!=1 || HEAD[2]!=27 || HEAD[3]!=nsec ||
+    if(HEAD[0]!=S2B_MAGIC || HEAD[1]!=1 || HEAD[2]!=S2B_COUNT || HEAD[3]!=nsec ||
        HEAD[4]!=nside || used<256 || used>S2B_CAPACITY || used%4)I_Error("S2B HEADER COUNTS");
     uint32_t h=2166136261UL;
     for(uint32_t i=0;i<used;i++)h=S2B_Mix(h,(i>=24 && i<28)?0:BASE[i]);
@@ -22,7 +22,7 @@ void S2B_Init(void)
 }
 void S2B_ApplyFrame(uint16_t frame)
 {
-    if(frame>=27)I_Error("S2B FRAME INDEX");
+    if(frame>=S2B_COUNT)I_Error("S2B FRAME INDEX");
     uint32_t offset=HEAD[8+frame];
     if(offset<256 || offset+16>HEAD[5] || offset%4)I_Error("S2B FRAME BOUNDS");
     volatile const uint8_t *p=BASE+offset;
@@ -32,7 +32,7 @@ void S2B_ApplyFrame(uint16_t frame)
     _g_leveltime=*(volatile const uint32_t *)(p+12);
     uint32_t end=offset+16+(uint32_t)ns*16+(uint32_t)nd*12;
     if(tic!=(uint32_t)frame*100 || ns>nsec || nd>nside || end>HEAD[5] ||
-       (frame<26 && end!=HEAD[9+frame]) || (frame==26 && end!=HEAD[5]))I_Error("S2B RECORD BOUNDS");
+       (frame+1<S2B_COUNT && end!=HEAD[9+frame]) || (frame+1==S2B_COUNT && end!=HEAD[5]))I_Error("S2B RECORD BOUNDS");
     p+=16;
     for(uint16_t j=0;j<ns;j++,p+=16){
         uint16_t id=*(volatile const uint16_t *)p;

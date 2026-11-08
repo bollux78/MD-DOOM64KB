@@ -21,6 +21,9 @@ void S2B_Capture(uint16_t tic)
     const uint16_t frame=tic/100u;
     if(frame>=S2B_COUNT || tic%100u)I_Error("S2B FRAME ORDER");
     if(frame==0){
+#if defined(SCD_LIVE)
+        used=256;
+#endif
         nsec=_g_numsectors;
         nside=W_LumpLength(W_GetNumForName("E1M1")+3)/sizeof(mapsidedef_t);
         if(!nsec || nsec>S2B_MAX_SECTORS || !nside || nside>S2B_MAX_SIDES)I_Error("S2B WORLD COUNTS");

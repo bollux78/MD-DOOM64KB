@@ -10,7 +10,11 @@
 #include <stdint.h>
 #define S2B_MAGIC 0x53325742UL
 #define S2B_VERSION 1u
+#if defined(SCD_LIVE)
+#define S2B_COUNT 1u
+#else
 #define S2B_COUNT 27u
+#endif
 #define S2B_CAPACITY 32768UL
 #define S2B_SUB_WORLD 0x74000UL
 #define S2B_MD_WORLD 0x600000UL

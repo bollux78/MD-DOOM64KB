@@ -23,11 +23,14 @@ static volatile uint8_t *reserve(uint16_t n){
 }
 void S2C_Capture(uint16_t tic){
     uint16_t frame=tic/100u,n=0,playerid=0,nr=0;
-    if(frame>=27 || tic%100u)I_Error("S2C FRAME ORDER");
+    if(frame>=S2C_FRAME_COUNT || tic%100u)I_Error("S2C FRAME ORDER");
     if(!frame){
+#if defined(SCD_LIVE)
+        used=256;
+#endif
         romcount=S2C_RomCount();if(romcount>S2C_MAX_ROM)I_Error("S2C ROM COUNT");
         for(uint16_t i=0;i<64;i++)HEAD[i]=0;
-        HEAD[0]=S2C_MAGIC;HEAD[1]=1;HEAD[2]=27;HEAD[3]=romcount;HEAD[6]=36;
+        HEAD[0]=S2C_MAGIC;HEAD[1]=1;HEAD[2]=S2C_FRAME_COUNT;HEAD[3]=romcount;HEAD[6]=36;
     }
     if(romcount!=S2C_RomCount())I_Error("S2C ROM COUNT CHANGED");
     for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i]){n++;if(live[i]==_g_player.mo)playerid=ids[i];}

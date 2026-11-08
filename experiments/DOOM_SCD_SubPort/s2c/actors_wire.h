@@ -1,6 +1,11 @@
 #ifndef S2C_ACTORS_WIRE_H
 #define S2C_ACTORS_WIRE_H
 #include <stdint.h>
+#if defined(SCD_LIVE)
+#define S2C_FRAME_COUNT 1u
+#else
+#define S2C_FRAME_COUNT 27u
+#endif
 #define S2C_MAGIC 0x53324342UL
 #define S2C_SUB_BASE 0x68000UL
 #define S2C_MD_BASE 0x608000UL

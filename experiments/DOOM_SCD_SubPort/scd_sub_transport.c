@@ -13,7 +13,11 @@
 #define SCD_SUB_MAIN_REQUEST_REG 0xFF8018UL
 #define SCD_SUB_MODE_REG 0xFF8002UL
 #define SCD_SUB_MEMCTRL_REG 0xFF8002UL
+#if defined(SCD_LIVE)
+#define SCD_SUB_MAX_SPINS 200000000UL
+#else
 #define SCD_SUB_MAX_SPINS 4000000UL
+#endif
 
 typedef struct {
     char name[8];
@@ -115,4 +119,16 @@ int scd_fetch_lump(uint16_t lump, void *destination, uint16_t bytes)
     uint8_t *const out=(uint8_t *)destination;
     for (uint16_t i=0; i<bytes; i++) out[i]=p[i];
     return 1;
+}
+
+/* Reverse snapshot path: sub has already filled its owned bank. After this
+ * MD-initiated exchange, MD owns that state and sub receives the next input. */
+int SCD_SubLiveInput(uint32_t tick,uint8_t out[16])
+{
+    uint16_t len=0;const volatile uint8_t *p=scd_exchange(SCD_CMD_TIC,0,&len);
+    if(!p || len!=16 || get32(p)!=0x53324449UL || get32(p+4)!=tick)return 0;
+    uint32_t h=2166136261UL;
+    for(uint16_t i=0;i<16;i++){out[i]=p[i];h=(h^out[i])*16777619UL;}
+    const volatile uint8_t *bank=(const volatile uint8_t *)SCD_SUB_BANK_BASE;
+    return h==get32(bank+16);
 }

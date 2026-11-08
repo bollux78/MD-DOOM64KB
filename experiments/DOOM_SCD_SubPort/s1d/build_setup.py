@@ -8,15 +8,16 @@ the main checkout or user-approved ROMs. All WAD/ROM objects stay private.
 import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
-if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual", "--world", "--actors")):
+if len(sys.argv) not in (5, 6) or (len(sys.argv)==6 and sys.argv[5] not in ("--full", "--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live")):
     raise SystemExit("usage: build_setup.py TREE S1B_OUT RAM_OBJECTS OUT [--full|--ticker]")
 tree,s1b,ram,out=(Path(s).resolve() for s in sys.argv[1:5])
-actors=len(sys.argv)==6 and sys.argv[5]=="--actors"
-world=len(sys.argv)==6 and sys.argv[5] in ("--world", "--actors")
-visual=len(sys.argv)==6 and sys.argv[5] in ("--visual", "--world", "--actors")
-engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual", "--world", "--actors")
+live=len(sys.argv)==6 and sys.argv[5]=="--live"
+actors=len(sys.argv)==6 and sys.argv[5] in ("--actors", "--live")
+world=len(sys.argv)==6 and sys.argv[5] in ("--world", "--actors", "--live")
+visual=len(sys.argv)==6 and sys.argv[5] in ("--visual", "--world", "--actors", "--live")
+engine=len(sys.argv)==6 and sys.argv[5] in ("--engine", "--visual", "--world", "--actors", "--live")
 comparison=len(sys.argv)==6 and sys.argv[5]=="--compare"
-ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual", "--world", "--actors")
+ticker=len(sys.argv)==6 and sys.argv[5] in ("--ticker", "--compare", "--engine", "--visual", "--world", "--actors", "--live")
 full=len(sys.argv)==6
 here=Path(__file__).resolve().parent
 common=here.parent
@@ -25,6 +26,7 @@ objdir=out/"sub"
 objdir.mkdir(exist_ok=True)
 if engine and (tree/".s1e-md-original/p_tick.c").is_file():
     shutil.copyfile(tree/".s1e-md-original/p_tick.c",tree/"src/p_tick.c")
+    shutil.copyfile(tree/".s1e-md-original/r24_romthings.c",tree/"src/r24_romthings.c")
 gdk=Path(os.environ.get("SGDK",str(Path.home()/"mars/m68k-elf")))
 gcc=str(gdk/"bin/m68k-elf-gcc")
 nm=str(gdk/"bin/m68k-elf-nm")
@@ -36,6 +38,7 @@ defs=[o for o in opt if o.startswith("-D") and not o.startswith(tuple(
 if visual: defs += ["-DSCD_VISUAL", "-I"+str(common/"s2a")]
 if world: defs += ["-DSCD_WORLD", "-I"+str(common/"s2b")]
 if actors: defs += ["-DSCD_ACTORS", "-DDOOM_R24_EPISODE", "-I"+str(common/"s2c")]
+if live: defs += ["-DSCD_LIVE", "-I"+str(common/"s2d")]
 if full: defs.append("-DSCD_FULL_SETUP")
 if ticker: defs += ["-DSCD_TICKER", "-DDOOM_R47_STATE_HASH"]
 cflags=["-DSGDK_GCC","-DDOOM_R23_CPU_PROBE","-I.","-I"+str(tree/"out"),
@@ -85,7 +88,7 @@ p_setup=p_setup.replace(needle,
 patched=objdir/"p_setup.c"
 patched.write_text(p_setup)
 parts=[]
-for name,source in (("setup",(common/"s1e/engine_sub_main.c" if engine else here/("ticker_sub_main.c" if ticker else "setup_sub_main.c"))),
+for name,source in (("setup",(common/"s2d/sub_live.c" if live else common/"s1e/engine_sub_main.c" if engine else here/("ticker_sub_main.c" if ticker else "setup_sub_main.c"))),
                      ("bsp",here/"setup_bsp_state.c"),
                      ("p_setup",patched)):
     obj=objdir/(name+".o")
@@ -171,6 +174,11 @@ kept=[base/name for name in ("boot.o","libc.o","scd_sub_transport.c.o",
 kept += [ram/name for name in ("p_tick.o","g_game.o","z_zone.o","scd_sub_system.o") if not ((ticker and name=="scd_sub_system.o") or (engine and name in ("p_tick.o","g_game.o")))]
 for obj in kept:
     if not obj.is_file(): raise SystemExit("Missing object: "+str(obj))
+if live:
+    kept=[p for p in kept if p.name!='scd_sub_transport.c.o']
+    obj=objdir/'live_transport.o'
+    subprocess.run([gcc]+cflags+['-c',str(common/'scd_sub_transport.c'),'-o',str(obj)],cwd=tree,check=True)
+    parts.append(obj)
 objs=[str(x) for x in kept+parts]
 if full:
     for path in sorted(ram.glob("*.o")):
@@ -205,7 +213,7 @@ for row in subprocess.check_output([nm,str(elf)],text=True).splitlines():
     if len(v)==3:
         try: symbols[v[2]]=int(v[0],16)
         except ValueError: pass
-for root in (("G_Ticker","P_Init","G_DeferedPlayDemo") if engine else ()) + ("subcpu_vectors","P_SetupLevel","P_InitThinkers") + (("P_Ticker", "P_PlayerThink", "P_MobjThinker") if ticker else ()):
+for root in (("G_Ticker","P_Init",("S2D_SetCommand" if live else "G_DeferedPlayDemo")) if engine else ()) + ("subcpu_vectors","P_SetupLevel","P_InitThinkers") + (("P_Ticker", "P_PlayerThink", "P_MobjThinker") if ticker else ()):
     if root not in symbols: raise SystemExit("Missing linked runtime root: "+root)
 if symbols["subcpu_vectors"]!=0: raise SystemExit("bad boot vector")
 if symbols.get("_end",0)>=(0x68000 if actors else (0x74000 if world else (0x7C000 if ticker else 0x7E000))): raise SystemExit("sub PRG-RAM end exceeds stack reserve")
@@ -332,7 +340,7 @@ if engine:
                      tree/"out/release/src/s1e_md_observer.o",
                      tree/"out/release/_deps/src/s1e_md_observer.d"):
         artifact.unlink(missing_ok=True)
-    for filename in ("s2a_md_camera","s2b_md_world","s2c_md_actors"):
+    for filename in ("s2a_md_camera","s2b_md_world","s2c_md_actors","s2d_md_live"):
         for artifact in (tree/"src"/(filename+".c"),tree/"out/release/src"/(filename+".o"),tree/"out/release/_deps/src"/(filename+".d")):
             artifact.unlink(missing_ok=True)
     name="doom-md-scd-s1e-z8"
@@ -388,6 +396,12 @@ if actors:
         }
     }
     REPORT=r;""")
+if live:
+    sys.path.insert(0,str(common/'s2d'))
+    import live_build
+    live_build.install(tree,common)
+    md=live_build.boot(common)
+    name='doom-md-scd-s2d-live'
 (tree/"src/s1b_md.c").write_text(md)
 env=dict(os.environ,PATH=str(gdk/"bin")+":"+os.environ["PATH"])
 subprocess.run(["make","GDK="+str(gdk),"PREFIX=m68k-elf-","JAVA=java",

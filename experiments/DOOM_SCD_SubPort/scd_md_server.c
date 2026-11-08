@@ -21,7 +21,10 @@
 /* Returns the BE WAD header count; installed in the R128 WAD module later. */
 extern uint16_t SCD_MdLumpCount(void);
 
-static uint16_t last_request, transactions, errors;
+#if defined(SCD_LIVE)
+extern uint16_t S2D_PrepareInput(void);
+#endif
+static uint16_t last_request, transactions, errors, last_command;
 static uint32_t bytes_sent, timeouts;
 
 static void put16(volatile uint8_t *p, uint16_t value)
@@ -53,12 +56,13 @@ static void response(uint16_t cmd, uint16_t seq, uint16_t status,
 
 void SCD_MdServeReset(void)
 {
-    last_request = 0;
+    last_request = 0;last_command=0;
     transactions = 0;
     errors = 0;
     bytes_sent = 0;
     timeouts = 0;
 }
+uint16_t SCD_MdLastCommand(void){return last_command;}
 uint16_t SCD_MdTransactions(void) { return transactions; }
 uint16_t SCD_MdErrors(void) { return errors; }
 uint32_t SCD_MdBytes(void) { return bytes_sent; }
@@ -102,14 +106,25 @@ int16_t SCD_MdServeOnce(void)
     if (!seq || seq == last_request) return 0;
     const uint16_t cmd = SCD_MD_REG16(SCD_MD_CMD_REG);
     const uint16_t arg = SCD_MD_REG16(SCD_MD_ARG_REG);
-    last_request = seq;
+    last_request = seq;last_command=cmd;
     uint16_t status = 0, size = 0;
     if (cmd == SCD_CMD_DIR)
         status = prepare_dir(&size);
     else if (cmd == SCD_CMD_LUMP)
         status = prepare_lump(arg, &size);
+#if defined(SCD_LIVE)
+    else if(cmd==SCD_CMD_TIC){size=S2D_PrepareInput();status=size==16;}
+#endif
     /* Even invalid requests are acknowledged, so the sub does not hang. */
     response(cmd, seq, status, arg, size);
+#if defined(SCD_LIVE)
+    if(cmd==SCD_CMD_TIC && status){
+        uint32_t h=2166136261UL;
+        volatile const uint8_t *p=(volatile const uint8_t *)(SCD_MD_BANK_BASE+SCD_PAYLOAD_OFFSET);
+        for(uint16_t i=0;i<16;i++)h=(h^p[i])*16777619UL;
+        put32((volatile uint8_t *)(SCD_MD_BANK_BASE+16),h);
+    }
+#endif
     __asm__ volatile("" ::: "memory");
     const uint16_t previous = SCD_MD_REG16(SCD_MD_MEMCTRL_REG) & 5u;
     SCD_MD_REG16(SCD_MD_SWAP_REG) = seq;

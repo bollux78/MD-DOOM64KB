@@ -16,7 +16,7 @@ static uint16_t romcount;
 void S2C_Begin(void){
     if(sizeof(mobj_t)*S2C_MAX_ACTORS>0x3000 || _g_numsectors>256)I_Error("S2C PROXY MEMORY");
     romcount=S2C_RomCount();uint32_t used=HEAD[4],h=2166136261UL;
-    if(HEAD[0]!=S2C_MAGIC || HEAD[1]!=1 || HEAD[2]!=27 || HEAD[3]!=romcount ||
+    if(HEAD[0]!=S2C_MAGIC || HEAD[1]!=1 || HEAD[2]!=S2C_FRAME_COUNT || HEAD[3]!=romcount ||
        romcount>S2C_MAX_ROM || HEAD[6]!=36 || used<256 || used>S2C_CAPACITY || used%4)I_Error("S2C HEADER");
     for(uint32_t i=0;i<used;i++)h=S2C_Mix(h,(i>=20 && i<24)?0:BASE[i]);
     if(h!=HEAD[5])I_Error("S2C STREAM HASH");
@@ -35,7 +35,7 @@ void S2C_End(void){
     *(volatile uint32_t *)0x61B0A0UL=1;
 }
 void S2C_ApplyFrame(uint16_t frame){
-    if(frame>=27)I_Error("S2C FRAME INDEX");
+    if(frame>=S2C_FRAME_COUNT)I_Error("S2C FRAME INDEX");
     uint32_t off=HEAD[8+frame];
     if(off<256 || off%4 || off+16>HEAD[4])I_Error("S2C FRAME BOUNDS");
     volatile const uint8_t *p=BASE+off;
@@ -43,7 +43,7 @@ void S2C_ApplyFrame(uint16_t frame){
     uint16_t n=*(volatile const uint16_t *)(p+4),nr=*(volatile const uint16_t *)(p+6),player=*(volatile const uint16_t *)(p+12);
     uint32_t end=off+16+(uint32_t)n*36+(uint32_t)nr*8;
     if(tic!=(uint32_t)frame*100 || !n || n>S2C_MAX_ACTORS || nr>romcount || end>HEAD[4] ||
-       end!=(frame==26?HEAD[4]:HEAD[9+frame]))I_Error("S2C RECORD BOUNDS");
+       end!=(frame+1==S2C_FRAME_COUNT?HEAD[4]:HEAD[9+frame]))I_Error("S2C RECORD BOUNDS");
     for(uint16_t i=0;i<_g_numsectors;i++)_g_sectors[i].thinglist=0;
     p+=16;uint16_t ids[S2C_MAX_ACTORS],foundplayer=0,expected=0;
     for(uint16_t i=0;i<n;i++,p+=36){
