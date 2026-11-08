@@ -44,13 +44,7 @@ static uint16_t relevant(const mobj_t *m){
  fixed_t dx=m->x-_g_player.mo->x,dy=m->y-_g_player.mo->y;
  fixed_t ax=dx<0?-dx:dx,ay=dy<0?-dy:dy;
  if(ax>1280L*FRACUNIT || ay>1280L*FRACUNIT)return 0;
- uint16_t k=(uint32_t)(_g_player.mo->angle+0x10000000UL)>>29;
- int16_t ux=dx>>16,uy=dy>>16;int16_t forward;
- switch(k){case 0:forward=ux;break;case 1:forward=ux+uy;break;
- case 2:forward=uy;break;case 3:forward=uy-ux;break;
- case 4:forward=-ux;break;case 5:forward=-ux-uy;break;
- case 6:forward=-uy;break;default:forward=ux-uy;break;}
- return forward>=(k&1u?-384:-256);
+ return 1;
 }
 void S2C_Capture(uint16_t tic){
     uint16_t frame=tic/100u,n=0,playerid=0,nr=0,eligible[64];

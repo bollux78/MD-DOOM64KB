@@ -10,7 +10,7 @@ def install(tree,common,boot):
     new='''    for(uint16_t i=0;i<nsec;i++){uint32_t v[5];S2B_SectorValues(i,v);uint32_t f=S2B_Mix(2166136261UL,i);for(uint16_t j=0;j<5;j++)f=S2B_Mix(f,v[j]);h^=f;}
     for(uint16_t i=0;i<nside;i++){uint32_t v[4];S2B_SideValues(i,v);uint32_t f=S2B_Mix(2166136261UL,0x80000000UL|i);for(uint16_t j=0;j<4;j++)f=S2B_Mix(f,v[j]);h^=f;}'''
     assert w.count(old)==1;w=w.replace(old,new)
-    p.write_text('#define SCD_M15 1\n'+w)
+    p.write_text('#pragma GCC optimize ("O3")\n#define SCD_M15 1\n'+w)
     p=tree/'src/scd_md_server.c';p.write_text('#define SCD_M15 1\n'+p.read_text())
     p=tree/'src/s2d_md_live.c';s=p.read_text()
     s=s.replace('#include "live_wire.h"','#include "live_wire.h"\n#include "compact.h"\nextern void M15_PrepareSwap(void);')
@@ -39,5 +39,5 @@ def install(tree,common,boot):
     s=s.replace('S2D_MDFrameDone();expected_tic++;','''volatile uint32_t *latency=(volatile uint32_t *)0x61B280UL;
         latency[0]=wait;latency[1]=copied;latency[2]=world;latency[3]=actors;latency[4]=m15_delta(c0,t0);latency[5]=proxy;latency[6]=actors-proxy;
         S2D_MDFrameDone();expected_tic++;''')
-    p.write_text(s)
+    p.write_text('#pragma GCC optimize ("O3")\n'+s)
     return boot.replace('M01 REALTIME SUB LOGIC','M15 READY STATE / COMPACT ACTORS').replace('0x5AAD','0x5ABD').replace('AI NORMAL','AI NORMAL / M15')

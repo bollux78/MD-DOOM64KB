@@ -1,3 +1,4 @@
+#pragma GCC optimize ("O3")
 /* Per-bank persistent render proxies. No MD simulation or foreign pointers. */
 #include <stddef.h>
 #include <stdint.h>
