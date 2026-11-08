@@ -26,7 +26,8 @@ extern void SCD_SubLiveBegin(void);
 extern int SCD_SubLiveReady(void),SCD_SubLiveCommit(uint32_t,uint8_t *);
 
 static void publish(uint32_t tic){
-    S2B_Capture(0);S2B_Finish();S2C_Capture(0);S2C_Finish();
+    /* Poll between capture phases: the 12-bit stopwatch wraps every ~125.8 ms. */
+    S2B_Capture(0);S2F_ClockPoll();S2B_Finish();S2F_ClockPoll();S2C_Capture(0);S2F_ClockPoll();S2C_Finish();S2F_ClockPoll();
     uint32_t wb=*(volatile const uint32_t *)0x74014UL,ab=*(volatile const uint32_t *)0x68010UL;
     uint32_t total=256+wb+ab;
     if(wb>8192 || ab>8192 || total>S2D_MAX_FRAME)I_Error("S2D FRAME BOUNDS");
@@ -99,7 +100,8 @@ void sub_main(void){
         }
         if(frozen)continue;
         uint32_t due=phase/12500000UL;phase%=12500000UL;
-        if(due>4){dropped+=due-4;due=4;}
+        /* Catch-up cap: a publish/input exchange can take ~4 tics; mean tick cost ~13 ms leaves room for 8. */
+        if(due>8){dropped+=due-8;due=8;}
         while(due--){
             /* A new display demand preempts catch-up between any two ticks. */
             if(R16(0xFF8012UL)!=demand){phase+=(due+1)*12500000UL;break;}
