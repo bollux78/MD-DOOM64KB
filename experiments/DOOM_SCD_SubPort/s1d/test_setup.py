@@ -72,6 +72,9 @@ try:
             ticks,rebirth,firstdead,leveltime=struct.unpack(">4I",g.readmem(0x61E360,16))
             assert ticks==2600 and rebirth==1 and leveltime==1,(ticks,rebirth,firstdead,leveltime)
             print("Z8 separate controlled real G_Ticker rebirth PASS; first dead natural tic",firstdead,flush=True)
+    if visual:
+        print("S2a sub trace and rebirth PASS; visual rendering checked in independent process",flush=True)
+        raise SystemExit(0)
     for name in ("s1b_complete","I_Error"):
         g.req("z0,%x,2"%symbols[name])
     fallback_symbol="S2A_MDFrameDone" if visual else "G_Ticker"

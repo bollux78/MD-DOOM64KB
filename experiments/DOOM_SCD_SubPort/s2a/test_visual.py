@@ -24,7 +24,11 @@ try:
     packets=None
     for _ in range(32):
         g.cont();pc=int(g.req('g')[17*8:18*8],16)&0xffffff
-        if pc==sym('I_Error'):raise RuntimeError('MD I_Error during sub-camera display')
+        if pc==sym('I_Error'):
+            regs=g.req('g');sp=int(regs[15*8:16*8],16)&0xffffff
+            ptr=int.from_bytes(g.readmem(sp+4,4),'big')&0xffffff
+            msg=g.readmem(ptr,120).split(b'\0')[0].decode(errors='replace')
+            raise RuntimeError('MD I_Error during sub-camera display: '+msg)
         if pc in (sym('G_Ticker'),sym('P_Ticker')):raise RuntimeError('MD simulation ticked during camera-only proof')
         if pc==sym('S2A_VisualDone'):break
         assert pc==sym('S2A_MDFrameDone'),hex(pc)

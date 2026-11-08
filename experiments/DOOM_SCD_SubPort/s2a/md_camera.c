@@ -1,5 +1,7 @@
 /* Real sub-camera -> original MD renderer. This is NOT a full world snapshot.
  * The local map/actors are initialized once; MD simulation is never ticked. */
+#include <stddef.h>
+#include <stdint.h>
 #include <genesis.h>
 #include "doomdef.h"
 #include "globdata.h"
