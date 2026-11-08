@@ -4,6 +4,7 @@
 #include "actors_wire.h"
 #include "compact.h"
 #include "i_system.h"
+#include "w_wad.h"
 #define BASE ((volatile const uint8_t *)S2C_MD_BASE)
 #define HEAD ((volatile const uint32_t *)S2C_MD_BASE)
 #define POOL ((mobj_t *)S2C_MD_POOL)
@@ -51,7 +52,8 @@ void S2C_ApplyFrame(uint16_t frame){
  if(VALID!=0x1531){
   for(uint16_t i=0;i<64;i++){IDS[i]=0;LINK[i]=0;}
   for(uint16_t s=0;s<_g_numsectors;s++){_g_sectors[s].thinglist=0;REP[s]=0;}
-  for(uint16_t i=0;i<_g_numsubsectors;i++){
+  uint16_t nsub=W_LumpLength(W_GetNumForName("E1M1")+5)/sizeof(mapsubsector_t);
+  for(uint16_t i=0;i<nsub;i++){
    subsector_t *ss=&_g_subsectors[i];uint16_t s=SUBSECTOR_SECTOR(ss)-_g_sectors;if(s>=_g_numsectors)I_Error("M15 MAP SECTOR");
    if(!REP[s])REP[s]=ss;
   }
