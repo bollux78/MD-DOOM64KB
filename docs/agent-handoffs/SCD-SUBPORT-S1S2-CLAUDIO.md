@@ -1,5 +1,12 @@
 # Sega CD sub-port, S1 e S2: lógica e render no 68000 do Sega CD (Cláudio para o Werk)
 
+## Estado atual — S2e desempenho, 2026-11-08
+
+Branch `exp-werk-scd-subport-s1s2`. Usuário confirmou S2d funcional no console, aproximadamente1FPS. S2e otimizada e gate completo PASS no run `42483932970`, commit `9d466431941339cd78c8746fc27baba1f9675d0b`: deltas de mundo/R24, cópias32bits, checksum único por palavras e auditoria nativa periódica no modo de uso. Testes profundo/periódico do mesmo binário tiveram97 framebuffers idênticos, inputs e estado corretos, zero simulação MD e saída restaurada.
+
+Medição NTSC emulada por VBlank interno:1,014→3,151FPS equivalentes (3,107×),65,35% menos bytes. Não é medição física da S2e. Render/DMA MD agora representa cerca de75% do tempo. Ver [SCD-S2E-PERFORMANCE.md](SCD-S2E-PERFORMANCE.md) para tabela, metodologia, segurança dos deltas e ROM privada. Próximo trabalho: validar FPS físico, atacar renderização/apresentação MD e desacoplar lógica35Hz. Os estados anteriores abaixo são históricos.
+
+
 ## Estado atual — S2d interativa, 2026-11-08
 
 Branch `exp-werk-scd-subport-s1s2`. S2c confirmada no console pelo usuário. S2d implementada e validada em BlastEm: controle MD → netcmd/G_Ticker original no Sega CD → estado completo por tic em Word RAM → renderer MD. Movimento, giro, disparos, consumo de munição, arma/flash e atores conferidos em98 estados; alternância dos dois bancos, zero ticks MD durante o modo CD e saída instrumentada restaurada. Run `42480397654`, commit `adbe47283f1dd9daf1ca15342b9db776e6870871`. Console S2d pendente.

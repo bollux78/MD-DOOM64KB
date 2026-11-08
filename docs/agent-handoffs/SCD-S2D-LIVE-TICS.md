@@ -1,5 +1,9 @@
 # S2d — input MD, G_Ticker CD e estado por tic em Word RAM
 
+## Aprovação posterior no console
+
+O usuário confirmou que a S2d funcionou corretamente no console e relatou aproximadamente1FPS. Essa é uma aprovação funcional geral, sem nova foto ou medições por fase; não atribuir um teste físico individual de cada botão. O trabalho autorizado seguinte é melhorar desempenho, preservando esta ROM como referência. Os testes físicos sugeridos abaixo ficam como registro histórico.
+
 ## Base e limite do marco
 
 S2c confirmada no console pelo usuário, com autorização para seguir. A S2d substitui o replay offline por execução interativa sincronizada: controle no MD, lógica original no sub, apresentação no MD. Primeiro protótipo de E1M1: uma troca por tic e um estado completo por troca. Não há garantia de cadência35Hz, benchmark de FPS offloaded ou campanha completa. Áudio de eventos do sub ainda não é transportado.
