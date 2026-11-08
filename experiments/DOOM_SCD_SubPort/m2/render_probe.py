@@ -38,6 +38,7 @@ variants = {
     "sub-defines-norecip": [o for o in opt if o.startswith("-D") and not o.startswith(tuple("-D" + d for d in drop + ("DOOM_R12_RECIP",)))],
     "sram-in-ram": [o for o in opt if o.startswith("-D")] + ["-DSCD_SRAM_BASE=0x00060000UL"],
     "m2-sub": [o for o in opt if o.startswith("-D") and not o.startswith(("-DDOOM_R12_RECIP",))] + ["-DSCD_SRAM_BASE=0x00060000UL"],
+    "n1": [o for o in opt if o.startswith("-D") and not o.startswith(("-DDOOM_R12_RECIP",))] + ["-DSCD_SRAM_BASE=0x00060000UL"],
 }
 for label, defs in variants.items():
     w = out / label
@@ -45,11 +46,14 @@ for label, defs in variants.items():
     cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
               "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
               "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
-              "-I" + str(patched if label in ("sram-in-ram", "m2-sub") else tree / "src"), "-I" + str(tree / "compat")] + defs
-    srcroot = patched if label in ("sram-in-ram", "m2-sub") else tree / "src"
+              "-I" + str(patched if label in ("sram-in-ram", "m2-sub", "n1") else tree / "src"), "-I" + str(tree / "compat")] + defs
+    srcroot = patched if label in ("sram-in-ram", "m2-sub", "n1") else tree / "src"
     objs, fails = [], []
-    for src in sorted(p for p in srcroot.rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts):
-        obj = w / (src.relative_to(srcroot).as_posix().replace("/", "_") + ".o")
+    sources = sorted(p for p in srcroot.rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts)
+    if label == "n1":   # MD pixel4 back end out, Sega CD column output in
+        sources = [p for p in sources if p.name not in ("i_genesisv.c", "i_genesis.c", "r25_music.c")] + [Path(__file__).resolve().parent / "scd_draw.c"]
+    for src in sources:
+        obj = w / ((src.relative_to(srcroot).as_posix() if srcroot in src.parents else src.name).replace("/", "_") + ".o")
         cmd = [b("gcc")] + cflags + (["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(tree))
         (fails.append((src.name, next((l for l in r.stderr.splitlines() if "error" in l.lower()), "?")[-160:])) if r.returncode else objs.append(str(obj)))
@@ -59,7 +63,7 @@ for label, defs in variants.items():
     subprocess.run([b("ld"), "-r", "-o", str(rel)] + objs, check=True)
     libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
     roots = {"R_RenderPlayerView": ["R_RenderPlayerView"], "I_FinishUpdate": ["I_FinishUpdate"]}
-    if label == "m2-sub":
+    if label in ("m2-sub", "n1"):
         roots = {"sub-logic+render": ["G_Ticker", "P_SetupLevel", "P_Init", "R_RenderPlayerView", "R_Init", "G_InitNew"]}
     for root, entries in roots.items():
         elf = w / (root + ".elf")
