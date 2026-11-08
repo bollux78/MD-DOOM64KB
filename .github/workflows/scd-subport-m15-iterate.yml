@@ -28,18 +28,26 @@ jobs:
         run: |
           set -euo pipefail
           key=$(git rev-parse HEAD:src HEAD:scripts/lab HEAD:assets | tr '\n' '-')
-          cache="$HOME/Projetos/Personal/scd-subport-m15/build-cache/$key"
+          cache="$HOME/Projetos/Personal/scd-subport-m15/build-cache/v2-$key"
           echo "M15_CACHE=$cache" >> "$GITHUB_ENV"
           if [ -f "$cache/ready" ]; then
             tree="$RUNNER_TEMP/m15-tree-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             cp -a "$cache/tree" "$tree"
+            python3 - "$cache/origin" "$tree" <<'PY_RELOCATE'
+          import pathlib,sys
+          old=pathlib.Path(sys.argv[1]).read_text().strip().encode();root=pathlib.Path(sys.argv[2]);new=str(root).encode()
+          suffixes={'.d','.res','.s','.c','.h','.inc','.mk','.json','.txt','.cfg'}
+          for p in root.rglob('*'):
+              if p.is_file() and (p.suffix in suffixes or p.name in {'Makefile','makefile','.render_options'}):
+                  data=p.read_bytes()
+                  if old in data:p.write_bytes(data.replace(old,new))
+          PY_RELOCATE
             echo "M15_TREE=$tree" >> "$GITHUB_ENV"
             echo "hit=true" >> "$GITHUB_OUTPUT"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Restore VGM and pinned shareware WAD
-        if: steps.cache.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -118,7 +126,8 @@ jobs:
             stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
             tree=$(dirname "$(dirname "$stamp")")
             mkdir -p "$M15_CACHE"
-            cp -a "$tree" "$M15_CACHE/tree"
+            cp -aL "$tree" "$M15_CACHE/tree"
+            echo "$tree" > "$M15_CACHE/origin"
             touch "$M15_CACHE/ready"
           fi
           out="$HOME/Projetos/Personal/scd-subport-m15/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/base"
