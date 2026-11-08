@@ -7,6 +7,9 @@
 R57ViewConfig r57_view = {0, 0, 0, 2, 76, 2, 44};
 #endif
 volatile uint32_t _g_vblankCount;
+/* Cartridge SRAM emulated in PRG-RAM (odd-lane layout kept): R22 block links, R23 map memory up to
+ * +0xF001 + the 16-slot column cache, control byte at +0x11FFE. */
+unsigned char scd_sram[0x12000] __attribute__((aligned(16)));
 void R64A_FrameBegin(void) {}
 void R64A_FrameEnd(void) {}
 void R95_FlatSetup(void) {}

@@ -12,7 +12,7 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
-defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + ["-DSCD_SRAM_BASE=0x00060000UL"]
+defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)"]
 
 # 1. Patched source copy: cartridge SRAM -> sub PRG-RAM (same odd-lane layout), no mapper writes.
 src = out / "src-n2"
@@ -24,9 +24,11 @@ for f in src.rglob("*"):
     t = t.replace("#define R22_SRAM_BASE 0x00200000UL", "#define R22_SRAM_BASE SCD_SRAM_BASE")
     t = t.replace("#define DOOM_SRAM_FIRST 0x0020F001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+0xF001UL)")
     t = t.replace("#define DOOM_SRAM_FIRST 0x00200001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+1UL)")
-    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL (SCD_SRAM_BASE+0x1FFFEUL)")
+    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL (SCD_SRAM_BASE+0x11FFEUL)")
     t = t.replace("(*(volatile uint8_t*)0x00A130F1UL=1)", "((void)0)").replace("(*(volatile uint8_t*)0x00A130F1UL=0)", "((void)0)")
-    if t != o: f.write_text(t)
+    if t != o:
+        # the emulated SRAM is a linker-placed array (inside the checked PRG-RAM map), not a fixed address
+        f.write_text("extern unsigned char scd_sram[];\n" + t)
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
     "\nvoid N2_InitGame(void){G_InitNew(sk_medium,1);}\n"
     "void N2_SetCommand(int8_t f,int8_t s,int16_t a,uint8_t b){netcmd.forwardmove=f;netcmd.sidemove=s;netcmd.angleturn=a;netcmd.buttons=b;}\n")
