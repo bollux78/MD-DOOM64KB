@@ -60,7 +60,10 @@ for label, defs in variants.items():
     print("\n=== %s: %d defines, compiled %d, failed %d" % (label, len(defs), len(objs), len(fails)))
     for n, e in fails: print("  FAIL %-22s %s" % (n, e))
     rel = w / "all-r.o"
-    subprocess.run([b("ld"), "-r", "-o", str(rel)] + objs, check=True)
+    r = subprocess.run([b("ld"), "-r", "--allow-multiple-definition", "-o", str(rel)] + objs, capture_output=True, text=True)
+    dups = sorted(set(re.findall(r"multiple definition of [`'\"]([^'`\"]+)", r.stderr)))
+    if dups: print("  duplicate definitions (first object wins; stubs come last):", " ".join(dups))
+    if r.returncode: print(r.stderr[-1500:]); raise SystemExit(1)
     libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
     roots = {"R_RenderPlayerView": ["R_RenderPlayerView"], "I_FinishUpdate": ["I_FinishUpdate"]}
     if label in ("m2-sub", "n1"):
