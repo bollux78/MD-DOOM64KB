@@ -1,5 +1,14 @@
 # Sega CD sub-port, S1 e S2: lógica e render no 68000 do Sega CD (Cláudio para o Werk)
 
+## Estado atual — S2b, 2026-11-08
+
+Branch de desenvolvimento: `exp-werk-scd-subport-s1s2`. S2a aprovada em hardware pelo usuário. S2b implementada e validada em BlastEm: câmera e setores/sides reais do sub aplicados ao renderer MD, 27 estados/26 frames, sem G_Ticker/P_Ticker MD durante o replay, saída para ciclo original PASS. Run `42438888747`, commit `22cd6de114551bb4faf4ca8b2f832ce37ae88c22`. Stream de 8924 bytes; 85 setores/273 sides; alterações reais de altura, luz e sides verificadas. Console S2b ainda pendente.
+
+Ver [SCD-S2B-WORLD-BRIDGE.md](SCD-S2B-WORLD-BRIDGE.md) para contrato, memória, resultados e ROM privada. Continua sendo replay em lote; atores congelados locais, sem input ao vivo e sem alegação de FPS. Próximo marco: atores com IDs estáveis e vínculo espacial local; depois comunicação por tic.
+
+O plano/base histórica abaixo permanece como referência; a branch citada no primeiro parágrafo abaixo não é a branch atual de desenvolvimento.
+
+
 **Branch:** `exp-chatgpt-scd-bench03b`. **Base pronta:**
 - **S0:** `experiments/DOOM_SCD_SubPort/s0_report.py`. As 85 fontes da R128 All compilam para o sub sem SGDK; 191 KiB de funções.
 - **S1a:** `experiments/DOOM_SCD_SubPort/s1a/`, workflow `scd-subport-s1a.yml`.

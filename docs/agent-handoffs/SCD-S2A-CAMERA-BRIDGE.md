@@ -4,6 +4,8 @@
 
 Z8 aprovada em hardware por foto: 2600 TICS AND REBIRTH PASS, requests12/errors0/bytes69151, hash0A1B0220 igual ao BlastEm. A foto comprova a simulação e prova separada de reinício; não comprova o fallback após START. Usuário autorizou iniciar a imagem a partir do estado sub.
 
+**Aprovação posterior em hardware:** o usuário aprovou a S2a e autorizou prosseguir para S2b (câmera + setores/sides). Aprovação verbal nesta conversa, sem nova foto ou métricas adicionais; não inferir teste físico separado do retorno por START.
+
 ## Escopo exato
 
 **Replay de câmera real, sem simulação MD durante a exibição. Não é snapshot completo do mundo, jogo interativo offloaded nem benchmark FPS.** O sub calcula os2600 tics primeiro, devolve27 poses; depois fica parado. O MD inicializa sua cópia de E1M1 uma vez e desenha26 poses (tics100–2600) com atores, portas e geometria dinâmica no estado inicial local. A pose0 é validada mas não exibida: antes do primeiro P_Ticker, viewz=1 por contrato do motor original.

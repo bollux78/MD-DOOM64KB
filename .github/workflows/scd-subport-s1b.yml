@@ -1,9 +1,9 @@
-name: Sega CD S2a real sub-camera visual bridge
+name: Sega CD S2b camera and sector-side visual bridge
 on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/s2b/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
