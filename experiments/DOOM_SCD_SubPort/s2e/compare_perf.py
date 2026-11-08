@@ -12,6 +12,14 @@ def summarize(r):
                 mean_phase_vblanks={name:statistics.mean(x['profile_vblanks'][i] for x in rows) for i,name in enumerate(labels)},
                 mean_packet_bytes=statistics.mean(256+x['world_bytes']+x['actor_bytes'] for x in rows))
 a,b=map(summarize,reports)
+deep=json.loads((fast.parent/'live_deep_report.json').read_text())
+assert all(x['checked'] for x in deep['rows'])
+assert any(not x['checked'] for x in reports[1]['rows'])
+assert all(x['checked']==(x['tic']%32==0) for x in reports[1]['rows'])
+fields=('tic','x','y','angle','health','ammo','actors','world_bytes','actor_bytes')
+assert [[x[k] for k in fields] for x in deep['rows']]==[[x[k] for k in fields] for x in reports[1]['rows']],'deep/production state trajectory diverged'
+assert [x.get('frame_sha256') for x in deep['rows']]==[x.get('frame_sha256') for x in reports[1]['rows']],'deep/production rendered frames differ'
+
 result=dict(baseline=a,optimized=b,speedup=a['vblanks']/b['vblanks'],bytes_reduction=1-b['mean_packet_bytes']/a['mean_packet_bytes'],
             scope='NTSC VBlank counter inside ROM. Emulator CPU-divider7; not debugger wall time, not measured console FPS or guaranteed35Hz.')
 print('S2e PERFORMANCE',json.dumps(result,sort_keys=True),flush=True)

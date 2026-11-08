@@ -53,11 +53,19 @@ void S2B_ApplyFrame(uint16_t frame)
         R23_SET(s,bottomtexture,*(volatile const int16_t *)(p+6));
         R23_SET(s,midtexture,*(volatile const int16_t *)(p+8));
     }
-    uint32_t h=S2B_Mix(S2B_Mix(2166136261UL,nsec),nside);
+    uint16_t checked=1;
+#if defined(SCD_FAST)
+    extern volatile uint8_t s2e_test_deep;
+    checked=s2e_test_deep || !(*(volatile const uint32_t *)0x61A008UL&31u);
+#endif
+    uint32_t h=0;
+    if(checked){
+    h=S2B_Mix(S2B_Mix(2166136261UL,nsec),nside);
     for(uint16_t i=0;i<nsec;i++){uint32_t v[5];S2B_SectorValues(i,v);for(uint16_t j=0;j<5;j++)h=S2B_Mix(h,v[j]);}
     for(uint16_t i=0;i<nside;i++){uint32_t v[4];S2B_SideValues(i,v);for(uint16_t j=0;j<4;j++)h=S2B_Mix(h,v[j]);}
     if(h!=want)I_Error("S2B APPLIED WORLD HASH");
+    }
     P_UpdateAnimatedFlat(); /* renderer animation state, not simulation */
     volatile uint32_t *r=(volatile uint32_t *)S2B_MD_REPORT;
-    r[0]=want;r[1]=h;r[2]=ns;r[3]=nd;r[4]=_g_leveltime;
+    r[0]=want;r[1]=h;r[2]=ns;r[3]=nd;r[4]=_g_leveltime;r[5]=checked;
 }

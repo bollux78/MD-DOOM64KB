@@ -8,7 +8,9 @@ from r64a_rsp_capture import RSP,symbols
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'s2c'))
 from test_actors import check_applied,mix
 fast='--fast' in sys.argv
-rom,elf=map(Path,[a for a in sys.argv[1:] if a!='--fast']);syms=symbols(elf)
+production='--production' in sys.argv
+assert not production or fast
+rom,elf=map(Path,[a for a in sys.argv[1:] if a not in ('--fast','--production')]);syms=symbols(elf)
 def sym(n):
     v=[v for k,v in syms.items() if k==n or k.startswith(n+'.')];assert len(v)==1,(n,v)
     return v[0]&0xffffff
@@ -62,8 +64,10 @@ def decode(g):
     h=mix(mix(2166136261,ns),nd)
     for x in [x for i in range(ns) for x in world_sectors[i]]+[x for i in range(nd) for x in world_sides[i]]:h=mix(h,x)
     assert h==want
-    wwant,actual,ans,and_,alevel=struct.unpack('>5I',g.readmem(0x61b020,20))
-    assert (wwant,actual,ans,and_,alevel)==(want,want,nsec,nside,leveltime)
+    checked=not production or tic%32==0
+    wwant,actual,ans,and_,alevel,wchecked=struct.unpack('>6I',g.readmem(0x61b020,24))
+    assert wchecked==int(checked)
+    assert (wwant,actual,ans,and_,alevel)==(want,want if checked else 0,nsec,nside,leveltime)
     am,av,ac,nrom,used,ahash,stride,res=struct.unpack_from('>8I',actors)
     assert (am,av,ac,used,stride,res)==(0x53324342,1,1,ab,36,0)
     if fast:assert ahash==0
@@ -80,13 +84,14 @@ def decode(g):
     assert p==ab and len(rom_states)==nrom;h=2166136261
     for x in [n,nrom,player]+[x for r in records for x in r]+[x for i in range(nrom) for x in rom_states[i]]:h=mix(h,x)
     assert h==want
-    check_applied(g,tic,dict(hash=want,n=n,nr=nr,player=player,records=records,actor_bytes=actor_bytes),sym)
+    check_applied(g,tic,dict(hash=want,n=n,nr=nr,player=player,records=records,actor_bytes=actor_bytes),sym,checked=checked)
+    assert int.from_bytes(g.readmem(0x61b070,4),'big')==int(checked)
     out=struct.unpack('>7I',g.readmem(0x61b000,28));camera=struct.unpack_from('>8I',header,32)
     assert out[:6]==(tic,camera[2],camera[3],camera[5],camera[7],struct.unpack_from('>I',header,72)[0])
     audit=struct.unpack('>10I',g.readmem(0x61b100,40))
     assert audit[:2]==struct.unpack_from('>2I',header,88)
     assert audit[2:]==struct.unpack_from('>8I',header,160),'native weapon/flash psprites differ from CD'
-    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n,changed_sectors=nsec,changed_sides=nside,changed_rom=nr,profile_vblanks=list(struct.unpack('>6I',g.readmem(0x61b140,24))))
+    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n,changed_sectors=nsec,changed_sides=nside,changed_rom=nr,checked=checked,profile_vblanks=list(struct.unpack('>6I',g.readmem(0x61b140,24))))
 commands[0]=command(0,0)
 try:
     for name in ('s1b_complete','S2D_MDFrameDone','G_Ticker','P_Ticker','I_Error'):
@@ -99,6 +104,7 @@ try:
         if pc==sym('s1b_complete'):
             stage,served,errors,marker,*_=struct.unpack('>4H4I',g.readmem(0x61f000,24))
             assert (stage,served,errors,marker)==(5,18,0,0x5aad if fast else 0x5a9d)
+            if fast:assert g.req('M%x,1:%02x'%(sym('s2e_test_deep'),0 if production else 1))=='OK'
             assert g.req('z0,%x,2'%pc)=='OK';continue
         if pc in (sym('G_Ticker'),sym('P_Ticker')):
             assert stopping and pc==sym('G_Ticker'),'MD simulation ticked during live CD play'
@@ -128,7 +134,7 @@ try:
         assert max(r['world_bytes'] for r in rows[1:])<rows[0]['world_bytes']//2,'world deltas not exercised'
         assert any(r['changed_rom']==0 for r in rows[1:]),'R24 deltas not exercised'
     report=dict(status='PASS',frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
-                scope='One real CD tic per exchange; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast)
-    (rom.parent/'live_report.json').write_text(json.dumps(report,indent=2))
+                scope='One real CD tic per exchange; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast,production=production)
+    (rom.parent/('live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
     print('S2d LIVE PASS: actual movement/turn/fire, input echo, 2 Word RAM banks, exact world/actors, no MD logic, exit restored',flush=True)
 finally:g.close()

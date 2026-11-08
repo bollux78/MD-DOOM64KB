@@ -14,6 +14,9 @@ extern int16_t SCD_MdServeOnce(void);
 extern uint16_t SCD_MdLastCommand(void);
 volatile uint16_t s2d_test_buttons __attribute__((section(".data")))=0xffff;
 volatile uint8_t s2d_test_exit __attribute__((section(".data")))=0;
+#if defined(SCD_FAST)
+volatile uint8_t s2e_test_deep __attribute__((section(".data")))=0;
+#endif
 static uint32_t expected_tic;
 static uint16_t stop_sent;
 void __attribute__((noipa,noinline)) S2D_MDFrameDone(void){__asm__ volatile("":::"memory");}

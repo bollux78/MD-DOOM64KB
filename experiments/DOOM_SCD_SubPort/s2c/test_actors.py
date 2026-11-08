@@ -52,9 +52,9 @@ def decode_actors(g):
     print('S2c decoded real actors',stats,flush=True)
     return frames,stats
 
-def check_applied(g,frame,expected,sym):
+def check_applied(g,frame,expected,sym,checked=True):
     want,actual,n,player,nr,linked,msize,snext,sprev,subsector,ssize,head=struct.unpack('>12I',g.readmem(0x61b040,48))
-    assert (want,n,player,nr)==(expected['hash'],expected['n'],expected['player'],expected['nr']) and actual==want
+    assert (want,n,player,nr)==(expected['hash'],expected['n'],expected['player'],expected['nr']) and actual==(want if checked else 0)
     assert g.readmem(0x617000,n*36)==expected['actor_bytes'],('native applied actor values',frame)
     assert msize*64<=0x3000 and snext+4<=msize and sprev+4<=msize and head+4<=ssize
     sectors=int.from_bytes(g.readmem(sym('_g_sectors'),4),'big')&0xffffff

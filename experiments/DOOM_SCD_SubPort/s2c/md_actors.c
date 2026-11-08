@@ -88,15 +88,20 @@ void S2C_ApplyFrame(uint16_t frame){
         }
     }
     if(linked!=expected)I_Error("S2C LINK COUNT");
-    uint32_t h=S2C_Mix(S2C_Mix(S2C_Mix(2166136261UL,n),romcount),player);
+    uint16_t checked=1;
+#if defined(SCD_FAST)
+    extern volatile uint8_t s2e_test_deep;
+    checked=s2e_test_deep || !(*(volatile const uint32_t *)0x61A008UL&31u);
+#endif
+    uint32_t h=checked?S2C_Mix(S2C_Mix(S2C_Mix(2166136261UL,n),romcount),player):0;
     for(uint16_t i=0;i<n;i++){
         uint32_t v[13];S2C_Values(&POOL[i],ids[i],v);
-        for(uint16_t j=0;j<13;j++)h=S2C_Mix(h,v[j]);
+        if(checked)for(uint16_t j=0;j<13;j++)h=S2C_Mix(h,v[j]);
         S2C_Write((volatile uint8_t *)(S2C_MD_APPLIED+(uint32_t)i*36),v);
     }
-    for(uint16_t i=0;i<romcount;i++)h=S2C_Mix(S2C_Mix(h,S2C_RomDead(i)),S2C_RomDelay(i));
-    if(h!=want)I_Error("S2C APPLIED ACTOR HASH");
+    if(checked)for(uint16_t i=0;i<romcount;i++)h=S2C_Mix(S2C_Mix(h,S2C_RomDead(i)),S2C_RomDelay(i));
+    if(checked && h!=want)I_Error("S2C APPLIED ACTOR HASH");
     volatile uint32_t *r=(volatile uint32_t *)S2C_MD_REPORT;
     r[0]=want;r[1]=h;r[2]=n;r[3]=player;r[4]=nr;r[5]=linked;r[6]=sizeof(mobj_t);r[7]=offsetof(mobj_t,snext);r[8]=offsetof(mobj_t,sprev);
-    r[9]=offsetof(mobj_t,subsector);r[10]=sizeof(sector_t);r[11]=offsetof(sector_t,thinglist);
+    r[9]=offsetof(mobj_t,subsector);r[10]=sizeof(sector_t);r[11]=offsetof(sector_t,thinglist);r[12]=checked;
 }

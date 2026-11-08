@@ -16,7 +16,9 @@ for attempt in range(3):
     except (RuntimeError,BrokenPipeError):
         g.proc.wait(timeout=5)
         err=g.proc.stderr.read().decode(errors='replace');g.close()
-        if 'out of range of a 32-bit displacement' not in err or attempt==2:raise
+        if 'out of range of a 32-bit displacement' not in err or attempt==2:
+            print('BlastEm startup failed:',g.proc.returncode,err[-2000:],flush=True)
+            raise
         print('Retrying BlastEm startup JIT allocation before execution',flush=True)
 fields=('tic','player_x','player_y','player_z','angle','health','mobjs','prndindex')
 rows=[];clocks=[]

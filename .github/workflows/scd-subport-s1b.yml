@@ -420,6 +420,8 @@ jobs:
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s2d/test_live.py --fast "$S2E_OUT/doom-md-scd-s2e-fast.bin" "$S2E_OUT/doom-md-scd-s2e-fast.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s2d/test_live.py --fast --production "$S2E_OUT/doom-md-scd-s2e-fast.bin" "$S2E_OUT/doom-md-scd-s2e-fast.elf"
 
       - name: Compare deterministic NTSC VBlank phase counters and packet bytes
         id: s2e_compare
