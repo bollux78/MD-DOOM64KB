@@ -5,8 +5,8 @@
 #include "compact.h"
 #include "i_system.h"
 #include "w_wad.h"
-#define BASE ((volatile const uint8_t *)S2C_MD_BASE)
-#define HEAD ((volatile const uint32_t *)S2C_MD_BASE)
+#define BASE ((volatile const uint8_t *)(0x601100UL+*(volatile const uint32_t *)0x61A010UL))
+#define HEAD ((volatile const uint32_t *)BASE)
 #define POOL ((mobj_t *)S2C_MD_POOL)
 #define IDS ((uint16_t *)0x618000UL)
 #define SEC ((uint16_t *)0x618080UL)

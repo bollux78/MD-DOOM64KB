@@ -98,7 +98,7 @@ for name,source in (("setup",(common/"m15/sub_main.c" if m15 else common/"m01/su
                      ("bsp",here/"setup_bsp_state.c"),
                      ("p_setup",patched)):
     obj=objdir/(name+".o")
-    call=subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],
+    call=subprocess.run([gcc]+cflags+(["-O3"] if m15 and name=="setup" else [])+["-c",str(source),"-o",str(obj)],
                         cwd=tree,capture_output=True,text=True)
     if call.returncode:
         print("S1d",name,"C COMPILE FAIL\n"+call.stderr[-8000:],flush=True)
@@ -168,7 +168,7 @@ if ticker:
 if world:
     source=common/("m15/sub_world.c" if m15 else "s2b/sub_world.c")
     obj=objdir/"sub_world.o"
-    subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
+    subprocess.run([gcc]+cflags+(["-O3"] if m15 else [])+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
     parts.append(obj)
 if engine:
     sys.path.insert(0,str(common/"s1e"))

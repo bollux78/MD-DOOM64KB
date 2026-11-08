@@ -27,6 +27,15 @@ static volatile uint8_t *reserve(uint16_t n){
     if(used+n>S2C_CAPACITY)I_Error("S2C ACTOR STREAM FULL");
     volatile uint8_t *p=BASE+used;used+=n;return p;
 }
+static sector_t *sector_keys[512],*sector_base;
+static uint16_t sector_ids[512];
+static void sector_index_init(void){
+ if(sector_base==_g_sectors)return;sector_base=_g_sectors;
+ for(uint16_t i=0;i<512;i++)sector_keys[i]=0;
+ sector_t *s=_g_sectors;
+ for(uint16_t i=0;i<_g_numsectors;i++,s++){uint16_t k=((uint32_t)s>>2)&511u;while(sector_keys[k])k=(k+1)&511u;sector_keys[k]=s;sector_ids[k]=i;}
+}
+uint16_t M15_SectorIndex(sector_t *s){uint16_t k=((uint32_t)s>>2)&511u;while(sector_keys[k] && sector_keys[k]!=s)k=(k+1)&511u;if(!sector_keys[k])I_Error("M15 ACTOR SECTOR");return sector_ids[k];}
 static uint16_t relevant(const mobj_t *m){
  if(m==_g_player.mo)return 1;
  if(m->sprite<0 || m->sprite>=NUMSPRITES)return 0;
@@ -35,7 +44,8 @@ static uint16_t relevant(const mobj_t *m){
  return dx<=1280L*FRACUNIT && dy<=1280L*FRACUNIT;
 }
 void S2C_Capture(uint16_t tic){
-    uint16_t frame=tic/100u,n=0,playerid=0,nr=0;
+    uint16_t frame=tic/100u,n=0,playerid=0,nr=0,eligible[64];
+    sector_index_init();
 #if defined(SCD_FAST)
     const uint16_t full=!captured;
 #else
@@ -51,13 +61,14 @@ void S2C_Capture(uint16_t tic){
         HEAD[0]=S2C_MAGIC;HEAD[1]=2;HEAD[2]=S2C_FRAME_COUNT;HEAD[3]=romcount;HEAD[6]=24;
     }
     if(romcount!=S2C_RomCount())I_Error("S2C ROM COUNT CHANGED");
-    uint16_t all=0;for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i])all++;HEAD[7]=all;
-    for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i] && relevant(live[i])){n++;if(live[i]==_g_player.mo)playerid=ids[i];}
+    uint16_t all=0;
+    for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i]){all++;if(relevant(live[i])){eligible[n++]=i;if(live[i]==_g_player.mo)playerid=ids[i];}}
+    HEAD[7]=all;
     if(!playerid)I_Error("S2C PLAYER ID");
     HEAD[8+frame]=used;volatile uint8_t *header=reserve(16);
     uint32_t h=M15_Mix(M15_Mix(M15_Mix(2166136261UL,n),romcount),playerid);
-    for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i] && relevant(live[i])){
-        S2F_ClockPoll();uint32_t v[10];M15_Values(live[i],ids[i],v);
+    for(uint16_t j=0;j<n;j++){
+        uint16_t i=eligible[j];S2F_ClockPoll();uint32_t v[10];M15_Values(live[i],ids[i],v);
         for(uint16_t j=0;j<10;j++)h=M15_Mix(h,v[j]);
         M15_Write(reserve(24),v);
     }

@@ -80,6 +80,6 @@ def prepare(tree,objdir,gcc,cflags,common):
     flags=[f for f in cflags if f!='-DDOOM_R50_PLAY_BENCH']
     for source in sources:
         obj=objdir/(source.stem+'.o')
-        subprocess.run([gcc]+flags+['-c',str(source),'-o',str(obj)],cwd=tree,check=True)
+        subprocess.run([gcc]+flags+(['-O3'] if '-DSCD_M15' in flags and source.name=='sub_actors.c' else [])+['-c',str(source),'-o',str(obj)],cwd=tree,check=True)
         objects.append(obj)
     return objects

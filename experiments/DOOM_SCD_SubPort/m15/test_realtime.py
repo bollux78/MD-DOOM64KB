@@ -43,7 +43,7 @@ def word_checksum(raw):
 def decode(g):
     header=g.readmem(0x61a000,256);magic,version,tic,total,wb,ab,status,want=struct.unpack_from('>8I',header)
     assert (magic,version,status)==(0x53324d35,3,0) and total==256+wb+ab and total<=16384
-    world=g.readmem(0x600000,wb);actors=g.readmem(0x608000,ab)
+    world=g.readmem(0x601100,wb);actors=g.readmem(0x601100+wb,ab)
     def words(raw):
         h=2166136261
         for v in struct.unpack('>%dI'%(len(raw)//4),raw):h=mix(h,v)
@@ -142,10 +142,10 @@ try:
         metrics=struct.unpack_from('>9I',header,208)
         raster,conversion,vblank=struct.unpack('>3I',g.readmem(0x61b180,12))
         row.update(capture_hash_units=metrics[7],capture_copy_units=metrics[8],game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_stopwatch_units=raster,conversion_stopwatch_units=conversion)
-        wait,copied,world_cost,actors_cost,total=struct.unpack('>5I',g.readmem(0x61b280,20))
+        wait,copied,world_cost,actors_cost,total,proxy,player_cost=struct.unpack('>7I',g.readmem(0x61b280,28))
         capmax,period,age=struct.unpack_from('>3I',header,148)
         captures,capture_total=struct.unpack_from('>2I',header,244)
-        row.update(demand_units=wait,copy_units=copied,apply_world_units=world_cost,apply_actors_units=actors_cost,total_units=total,captures=captures,capture_total_units=capture_total,capture_max_units=capmax,capture_period=period,snapshot_age=age)
+        row.update(proxy_units=proxy,player_units=player_cost,demand_units=wait,copy_units=copied,apply_world_units=world_cost,apply_actors_units=actors_cost,total_units=total,captures=captures,capture_total_units=capture_total,capture_max_units=capmax,capture_period=period,snapshot_age=age)
         rows.append(row)
         if route:
             door_open |= row['door_ceiling']>=32*65536
@@ -191,7 +191,7 @@ try:
     steady=rows[8:-1]
     fps=(b['tic']-a['tic'])*60/(b['vblank']-a['vblank'])
     telemetry=dict(presentation_fps=fps,demand_mean_ms=sum(r['demand_units'] for r in steady)*0.03072/len(steady),demand_max_ms=max(r['demand_units'] for r in steady)*0.03072,apply_world_ms=sum(r['apply_world_units'] for r in steady)*0.03072/len(steady),apply_actors_ms=sum(r['apply_actors_units'] for r in steady)*0.03072/len(steady),capture_mean_ms=b['capture_total_units']*0.03072/max(1,b['captures']),capture_max_ms=b['capture_max_units']*0.03072,mean_tick_ms=b['tick_cost_total']*0.03072/max(1,b['tick_count']),max_snapshot_age=max(r['snapshot_age'] for r in rows),max_poll_ms=b['max_poll']*0.03072)
-    telemetry.update(copy_ms=sum(r['copy_units'] for r in steady)*0.03072/len(steady),capture_world_ms=sum(r['capture_world_units'] for r in steady)*0.03072/len(steady),capture_actor_ms=sum(r['capture_actor_units'] for r in steady)*0.03072/len(steady),capture_copy_ms=sum(r['capture_copy_units'] for r in steady)*0.03072/len(steady),capture_hash_ms=sum(r['capture_hash_units'] for r in steady)*0.03072/len(steady),actors_mean=sum(r['actors'] for r in steady)/len(steady))
+    telemetry.update(raster_ms=sum(r['raster_stopwatch_units'] for r in steady)*0.03072/len(steady),proxy_ms=sum(r['proxy_units'] for r in steady)*0.03072/len(steady),player_ms=sum(r['player_units'] for r in steady)*0.03072/len(steady),copy_ms=sum(r['copy_units'] for r in steady)*0.03072/len(steady),capture_world_ms=sum(r['capture_world_units'] for r in steady)*0.03072/len(steady),capture_actor_ms=sum(r['capture_actor_units'] for r in steady)*0.03072/len(steady),capture_copy_ms=sum(r['capture_copy_units'] for r in steady)*0.03072/len(steady),capture_hash_ms=sum(r['capture_hash_units'] for r in steady)*0.03072/len(steady),actors_mean=sum(r['actors'] for r in steady)/len(steady))
     print('M15 telemetry',json.dumps(telemetry),flush=True)
     passed=34.3<=hz<=35.7 and not b['dropped'] and b['max_poll']*0.03072<100 and (not production or route or fps>4.6) and (not route or (nav_finish>=6 and door_open and max(r['item_count'] for r in rows)>rows[0]['item_count'] and occluded_retained))
     report=dict(telemetry=telemetry,logic_hz=hz,status='PASS' if passed else 'FAIL' ,frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
