@@ -10,6 +10,7 @@
 #include "m_fixed.h"
 #include "r_main.h"
 #include "r22_pixel4.h"
+#include "r22_palette.h"   /* r22_color (PLAYPAL -> 16 colours) and r22_cram */
 
 #ifndef CENTERY
 #define CENTERY (R22_H / 2)   /* 22, as the R22 back end */
