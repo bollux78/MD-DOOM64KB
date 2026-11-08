@@ -45,7 +45,7 @@ void sub_main(void)
 {
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
     Z_Init(); W_Init(); REG16(0xFF8024UL) = 0x4E31;           /* 'N1': directory loaded */
-    SCD_MetadataInit(); P_Init(); R_Init();
+    R_Init(); P_Init();                                      /* D_DoomMain order */
     N2_InitGame();                                           /* G_InitNew(sk_medium, 1) -> E1M1 */
     N2_SetCommand(0, 0, 0, 0); SCD_SubSetTime(0); G_Ticker(); _g_gametic++;
     if (!_g_player.mo || _g_gamestate != GS_LEVEL) I_Error("N2 NO LEVEL");
