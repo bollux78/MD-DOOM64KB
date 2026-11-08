@@ -21,7 +21,7 @@ uint8_t scd_fb[SCD_H][SCD_W];
 uint32_t scd_columns, scd_pixels;
 /* Sub stopwatch (30.72 us units, 12-bit, wraps ~125.8 ms): polled from every column so long
  * frames never lose a wrap. */
-uint32_t scd_clock_units;
+uint32_t scd_clock_units, scd_column_units;
 static uint16_t scd_clock_prev;
 void SCD_ClockPoll(void)
 {
@@ -32,6 +32,8 @@ void SCD_ClockPoll(void)
 
 static void column(const draw_column_vars_t *v, const uint8_t *map)
 {
+    SCD_ClockPoll();
+    const uint32_t c0 = scd_clock_units;
     int16_t x = v->x, y0 = v->yl, y1 = v->yh;
     if ((uint16_t)x >= SCD_W || y1 < y0) return;
     int16_t first = y0 < 0 ? 0 : y0;
@@ -52,6 +54,7 @@ static void column(const draw_column_vars_t *v, const uint8_t *map)
     }
     scd_columns++; scd_pixels += (uint32_t)(y1 - first + 1);
     SCD_ClockPoll();
+    scd_column_units += scd_clock_units - c0;
 }
 
 void R_DrawColumnWall(const draw_column_vars_t *v) { column(v, r22_color); }

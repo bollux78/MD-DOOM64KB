@@ -21,7 +21,7 @@ extern int SCD_SubFrame(uint16_t arg, uint8_t out[16]);
 extern void N2_InitGame(void), N2_SetCommand(int8_t, int8_t, int16_t, uint8_t);
 extern uint8_t scd_fb[R22_H][R22_W];
 extern uint32_t scd_columns, scd_pixels;
-extern uint32_t scd_clock_units;
+extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
 
 /* Report for the MD (sub status words are taken by the transport): last words of the bank. */
@@ -66,7 +66,7 @@ void sub_main(void)
         volatile uint32_t *rep = (volatile uint32_t *)(BANK + 0xFF00u);
         rep[0] = 0x4E324652UL; rep[1] = f; rep[2] = t1 - t0; rep[3] = t2 - t1; rep[4] = scd_columns; rep[5] = scd_pixels;
         if (f == 0 || t1 - t0 < min_render) min_render = t1 - t0;
-        rep[6] = min_render;
+        rep[6] = min_render; rep[7] = scd_column_units; scd_column_units = 0;
         scd_columns = scd_pixels = 0;
         if (!SCD_SubFrame(f, input)) I_Error("N2 FRAME TRANSPORT");
     }

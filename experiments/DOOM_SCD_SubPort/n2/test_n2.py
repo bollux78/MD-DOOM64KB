@@ -33,11 +33,12 @@ try:
                 for x in range(0, 152, 2):
                     hist[raw[y * 256 + x] & 15] += 1
             print("frame", shown, "colour histogram (sample index: count):", dict(sorted(hist.items())), flush=True)
-    rep = struct.unpack(">4H7I", bytes(g.readmem(0x61F000, 36)))
-    keys = ("stage", "frames", "errors", "timeouts", "bytes", "render_units", "expand_units", "columns", "pixels", "vblanks", "min_render")
+    rep = struct.unpack(">4H8I", bytes(g.readmem(0x61F000, 40)))
+    keys = ("stage", "frames", "errors", "timeouts", "bytes", "render_units", "expand_units", "columns", "pixels", "vblanks", "min_render", "column_units")
     r = dict(zip(keys, rep))
     if r["frames"]:
         r["render_ms_per_frame"] = round(r["render_units"] * 0.03072 / r["frames"], 2)
+        r["column_ms_per_frame"] = round(r["column_units"] * 0.03072 / r["frames"], 2)
         r["min_render_ms"] = round(r["min_render"] * 0.03072, 2)
         r["expand_ms_per_frame"] = round(r["expand_units"] * 0.03072 / r["frames"], 2)
     print("N2 report:", r, flush=True)

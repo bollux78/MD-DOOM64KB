@@ -33,7 +33,7 @@ extern int16_t SCD_MdServeOnce(void);
 extern uint16_t SCD_MdTransactions(void), SCD_MdErrors(void);
 extern uint32_t SCD_MdBytes(void), SCD_MdTimeouts(void);
 
-typedef struct { u16 stage, frames, errors, timeouts; u32 bytes, render_units, expand_units, columns, pixels, vblanks, min_render; } N2Report;
+typedef struct { u16 stage, frames, errors, timeouts; u32 bytes, render_units, expand_units, columns, pixels, vblanks, min_render, column_units; } N2Report;
 #define REPORT (*(volatile N2Report *)0x61F000)
 static N2Report *rep;
 
@@ -76,7 +76,7 @@ static void wait_vblank(void) { while (VDP_STATUS & 8u) ; while (!(VDP_STATUS & 
 void N2_MdFrameArrived(u16 frame)
 {
     volatile const u32 *r = (volatile const u32 *)0x60FF00UL;
-    if (r[0] == 0x4E324652UL) { rep->render_units += r[2]; rep->expand_units += r[3]; rep->columns += r[4]; rep->pixels += r[5]; rep->min_render = r[6]; }
+    if (r[0] == 0x4E324652UL) { rep->render_units += r[2]; rep->expand_units += r[3]; rep->columns += r[4]; rep->pixels += r[5]; rep->min_render = r[6]; rep->column_units += r[7]; }
     rep->frames = frame + 1;
     /* 38 column DMAs of 22 cells (704 B) from the 64x32 cell view, 8 per VBlank. */
     VDP_CTRL16 = 0x8f02;
