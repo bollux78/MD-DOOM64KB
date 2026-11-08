@@ -27,15 +27,16 @@ extern void SCD_ClockPoll(void);
 /* Report for the MD (sub status words are taken by the transport): last words of the bank. */
 static void expand(void)
 {
+    /* 4x4 px per sample: one 16-bit word (4 nibbles) per row, 4 rows; stride 256 B. */
     for (uint16_t y = 0; y < R22_H; y++)
     {
-        volatile uint8_t *row = BANK + (uint32_t)y * 4u * 256u;
+        volatile uint16_t *row = (volatile uint16_t *)(BANK + (uint32_t)y * 1024u);
         const uint8_t *s = scd_fb[y];
         for (uint16_t x = 0; x < R22_W; x++)
         {
-            const uint8_t c = s[x], b = (uint8_t)((c << 4) | c);
-            volatile uint8_t *p = row + x * 2u;
-            p[0] = b; p[1] = b; p[256] = b; p[257] = b; p[512] = b; p[513] = b; p[768] = b; p[769] = b;
+            const uint16_t c = s[x];
+            const uint16_t w = (uint16_t)(c * 0x1111u);
+            row[x] = w; row[x + 128] = w; row[x + 256] = w; row[x + 384] = w;
         }
         if (!(y & 7)) SCD_ClockPoll();
     }
@@ -50,6 +51,7 @@ void sub_main(void)
     N2_SetCommand(0, 0, 0, 0); SCD_SubSetTime(0); G_Ticker(); _g_gametic++;
     if (!_g_player.mo || _g_gamestate != GS_LEVEL) I_Error("N2 NO LEVEL");
     uint8_t input[16];
+    uint32_t min_render = 0;
     for (uint16_t f = 0; f < 24; f++)
     {
         SCD_ClockPoll();
@@ -63,6 +65,8 @@ void sub_main(void)
         /* frame report at bank+0xFF00: render units, expand units, columns, pixels */
         volatile uint32_t *rep = (volatile uint32_t *)(BANK + 0xFF00u);
         rep[0] = 0x4E324652UL; rep[1] = f; rep[2] = t1 - t0; rep[3] = t2 - t1; rep[4] = scd_columns; rep[5] = scd_pixels;
+        if (f == 0 || t1 - t0 < min_render) min_render = t1 - t0;
+        rep[6] = min_render;
         scd_columns = scd_pixels = 0;
         if (!SCD_SubFrame(f, input)) I_Error("N2 FRAME TRANSPORT");
     }
