@@ -77,6 +77,9 @@ void sub_main(void){
     while(R16(0xFF8010UL)!=0xD04D){} /* startup screen: no timed transport wait */
     previous_clock=R16(0xFF800CUL)&4095u;
     uint16_t demand=0;
+    uint16_t frozen=R16(0xFF8014UL);
+    if(frozen){S2D_SetCommand(0,0,0,0);G_Ticker();_g_gametic++;}
+
     for(;;){
         clock_poll();
         uint16_t requested=R16(0xFF8012UL);
@@ -93,6 +96,7 @@ void sub_main(void){
             demand=requested;frame++;clock_poll();
             if(echo[14] || echo[15])break;
         }
+        if(frozen)continue;
         uint32_t due=phase/12500000UL;phase%=12500000UL;
         if(due>4){dropped+=due-4;due=4;}
         while(due--){

@@ -9,15 +9,33 @@ def install(tree,boot):
     s=s[:a]+s[b:]
     # Preserve the final DMA fence until M0 measurements establish redundancy.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
+volatile uint16_t s2f_test_mode __attribute__((section(".data")))=0;
 static uint32_t stage_start[2],stage_cost[2];
+void __attribute__((noipa,noinline)) S2F_M0FrameDone(void){__asm__ volatile("":::"memory");}
+static void frozen_benchmark(void){
+    for(uint16_t i=0;i<24;i++){
+        _g_gametic++;uint32_t start=_g_vblankCount;
+        S2A_Display();uint32_t drawn=_g_vblankCount;R20_StopVideo();
+        volatile uint32_t *m=(volatile uint32_t *)0x61B1C0UL;
+        m[0]=i;m[1]=stage_cost[0];m[2]=stage_cost[1];
+        m[3]=_g_vblankCount-drawn;m[4]=_g_vblankCount-start;
+        S2F_M0FrameDone();
+    }
+    for(;;){}
+}
 void S2F_ProfileBegin(uint16_t stage){stage_start[stage]=_g_vblankCount;}
 void S2F_ProfileEnd(uint16_t stage){stage_cost[stage]=_g_vblankCount-stage_start[stage];}
 """)
     s=s.replace('S2D_MDFrameDone();expected_tic++;',"""volatile uint32_t *m=(volatile uint32_t *)0x61B180UL;
         m[0]=stage_cost[0];m[1]=stage_cost[1];m[2]=t5;
         S2D_MDFrameDone();expected_tic++;""")
+    s=s.replace('expected_tic=0;stop_sent=0;',"""expected_tic=0;stop_sent=0;
+    if(s2f_test_mode==1){extern void G_Ticker(void);G_Ticker();frozen_benchmark();}
+    R16(0xA12014UL)=s2f_test_mode==2;
+""")
+    s=s.replace('if(expected_tic){','if(s2f_test_mode==2)frozen_benchmark();\n        if(expected_tic){')
     p.write_text(s)
-    p=tree/'src/d_main.c';s=p.read_text()
+    p=tree/'src/d_main.c' ;s=p.read_text()
     s='extern void S2F_ProfileBegin(unsigned short),S2F_ProfileEnd(unsigned short);\n'+s
     anchor='R_RenderPlayerView (&_g_player);'
     assert s.count(anchor)==1

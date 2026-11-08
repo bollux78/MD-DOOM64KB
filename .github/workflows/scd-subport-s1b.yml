@@ -450,7 +450,11 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/m01/test_frozen.py "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/m01/test_frozen.py "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/m01/test_realtime.py --fast --production "$M01_OUT/doom-md-scd-m01.bin" "$M01_OUT/doom-md-scd-m01.elf"
 
@@ -497,8 +501,11 @@ jobs:
           echo "S2d live controller and state: ${{ steps.s2d_blastem.outcome }}"
           test "${{ steps.s2d_build.outcome }}" = "success"
           test "${{ steps.s2d_blastem.outcome }}" = "success"
+          test "${{ steps.m01_build.outcome }}" = "success"
+          test "${{ steps.m01_blastem.outcome }}" = "success"
           echo "S2e build: ${{ steps.s2e_build.outcome }}"
           echo "S2e optimized live bridge: ${{ steps.s2e_blastem.outcome }}"
           test "${{ steps.s2e_build.outcome }}" = "success"
           test "${{ steps.s2e_blastem.outcome }}" = "success"
           test "${{ steps.s2e_compare.outcome }}" = "success"
+
