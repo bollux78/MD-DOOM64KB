@@ -73,3 +73,14 @@ int vsprintf(char *out, const char *f, va_list ap)
     return (int)(o - out);
 }
 int sprintf(char *b, const char *f, ...) { va_list ap; va_start(ap, f); int n = vsprintf(b, f, ap); va_end(ap); return n; }
+/* Formatted I_Error for the sub: the MD reads the text through a bus request (N2+). Linked before
+ * scd_sub_system.c, so this definition wins. */
+static char scd_error_text[64];
+_Noreturn void I_Error(const char *message, ...)
+{
+    va_list ap; va_start(ap, message); vsprintf(scd_error_text, message, ap); va_end(ap);
+    *(volatile uint16_t *)0xFF802AUL = (uint16_t)((uint32_t)(uintptr_t)scd_error_text >> 16);
+    *(volatile uint16_t *)0xFF802CUL = (uint16_t)(uintptr_t)scd_error_text;
+    *(volatile uint16_t *)0xFF8020UL = 0xDEADu;
+    for (;;) {}
+}
