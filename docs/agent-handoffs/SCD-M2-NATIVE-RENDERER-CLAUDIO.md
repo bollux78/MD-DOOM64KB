@@ -78,3 +78,40 @@ Sem R84/R76/SRAM. **Cabe sem carregador multi-janela** se o código ficar ≤ 12
   - Sem passo de transposição e sem tabela de conversão.
   - No modo 2×2, cada pixel lógico é **1 byte** (dois nibbles iguais) escrito em 2 linhas: `move.b d0,(a0); move.b d0,256(a0)`.
 - **Ainda falta:** conferir no console (ROM só de diagnóstico, sem jogo).
+
+## N1: resultado (run 42501603471): link do sub inteiro com a saída nova
+- **Montagem:**
+  - modelo "SRAM na RAM", com todos os defines R128 menos `DOOM_R12_RECIP*`;
+  - **`i_genesisv.c` fora** (back end pixel4 do MD) e **`m2/scd_draw.c` dentro**: colunas de parede, sprite, fuzz e flat com a mesma matemática do R22, saída de 1 byte por pixel lógico em `scd_fb` (76×44);
+  - stubs dos ganchos de MD em `m2/scd_n1_platform.c`;
+  - libc/sistema do Werk.
+- **87/87 fontes compilam.**
+- **Fechamento** (`G_Ticker`, `P_SetupLevel`, `P_Init`, `R_RenderPlayerView`, `R_Init`):
+
+  | Item | Tamanho |
+  |---|---|
+  | **Funções** | **108,6 KiB** |
+  | **BSS** | 9,8 KiB |
+  | **Const** | **177 KiB**, dos quais **`r84_pixels`+`offsets` = 149 KiB** |
+  | **Não resolvidos** | só `G_InitNew` (é `static` no `g_game.c`; precisa de um wrapper, como o `S2D_InitGame` do Werk) e as 3 variáveis do profiler R21 |
+
+  **`r91_joint` e `r76/r77` sumiram** com o back end novo: as tabelas de conversão e de cor do MD não são mais necessárias.
+- **Orçamento:**
+
+  | Item | KiB |
+  |---|---|
+  | funções | 109 |
+  | const | 177 |
+  | BSS | 10 |
+  | "SRAM" | 64 |
+  | zone | 112 |
+  | **total** | **~472** |
+
+  Sobram ~40 KiB para cache WAD (patches/sprites/flats) e pilha. **Apertado: o `r84` é o elefante.**
+
+**Próximos passos para o N2 (spawn congelado):**
+1. **Subconjunto `r84` por mapa:** só as colunas das texturas do mapa. O MD monta e manda pelo transporte (na carga), e o sub usa um `r84_offsets` remapeado. A estimativa no E1M1 é de dezenas de KiB.
+2. **Carregador multi-janela:** a imagem tem 286 KiB sem o `r84`. Copiar em janelas de 128 KiB trocando os bits BK de `$A12003`.
+3. **W no sub pelo cliente DIR/LUMP do Werk** (`scd_sub_w_wad.c`), compilado neste modelo, no lugar do `w_wad.c` com o WAD embutido.
+4. **Programa do sub N2:** init, `G_InitNew` E1M1 (wrapper), `R_RenderPlayerView` 24×, expansão de `scd_fb` para o bitmap linear 4 bpp no banco (pixel 4×4, 304×176) e troca.
+5. **MD:** DMA da visão cell em ~4 VBlanks + paleta `r22_cram` + tela de diagnóstico e START → jogo (ROM jogável).
