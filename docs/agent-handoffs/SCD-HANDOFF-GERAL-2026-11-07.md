@@ -1,3 +1,11 @@
+# Atualização S2a — ponte visual de câmera (07/11/2026 SP)
+
+**Z8 hardware PASS**, foto com hash0A1B0220 e2600TICS AND REBIRTH PASS. Usuário autorizou iniciar renderização do estado sub.
+
+**S2a build e BlastEm VISUAL PASS**, run42434107386 / commit1c5b202:27câmeras reais calculadas pelo sub durante2600tics,26quadros no renderer MD, pacotes/hash/poses efetivas conferidos, zero G_Ticker/P_Ticker MD durante replay. Saída para loop original MD PASS. Payload82606bytes, RAMend0x739E0;12requests/69151bytesWAD/0erros/0timeouts, statehash182C31E7. **É replay em lote de câmera, NÃO mundo completo/tempo real/jogo interativo nem benchmark FPS.** Atores/portas continuam no estado inicial MD. Sub fica parado após calcular as poses. S2a hardware ainda NÃO TESTADO.
+
+ROM privada: `/home/dan/Projetos/Personal/scd-subport-s2a-camera/run-42434107386-1/doom-md-scd-s2a-camera.bin`. Diagnóstico → START/15s → câmera em saltos com rótulo LOCAL ACTORS FROZEN; START sai. Ler primeiro [SCD-S2A-CAMERA-BRIDGE.md](./SCD-S2A-CAMERA-BRIDGE.md) para prova, limites e próximos snapshots/streaming. A partir daqui, as menções abaixo a Z8 não testada ou ausência total de ponte visual são históricas.
+
 # Atualização Z8 — G_Ticker original no sub (07/11/2026, horário de São Paulo)
 
 **Z8 build/link estrito e BlastEm PASS**, run 42430167033 / commit 34639e9. P_Init de lógica (switches/animações via TEXTURE1 real), decoder original e G_Ticker inteiro original de nível por 2600 tics no sub; 27 checkpoints/hash **0A1B0220** conferidos. Depois, prova CONTROLADA separada de PST_REBORN: mapa recarregado, jogador vivo com saúde 100/leveltime 1, heap PASS. Natural morreu no tic 2334 e terminou saúde 0. 12 requests/69151 bytes/0 erros/0 timeouts. Payload 82450 bytes, RAM end 0x73950, vetores no zero. Fallback ticker MD PASS; R128 normal restaurado após START. **Z8 hardware ainda NÃO TESTADO**; Z6 segue aprovada no console.
