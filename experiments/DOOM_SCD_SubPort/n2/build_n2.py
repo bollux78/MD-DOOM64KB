@@ -102,7 +102,7 @@ ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
 (w / "w_wad_client.c").write_text(ww)
 
 cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
-          "-m68000", "-O3", "-fno-web", "-fno-gcse", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
+          "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
           "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
           "-I" + str(src), "-I" + str(common), "-I" + str(tree / "compat")] + defs
 sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_genesisv.c", "i_genesis.c", "r25_music.c"))
