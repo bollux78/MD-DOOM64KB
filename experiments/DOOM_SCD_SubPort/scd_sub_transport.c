@@ -132,3 +132,31 @@ int SCD_SubLiveInput(uint32_t tick,uint8_t out[16])
     const volatile uint8_t *bank=(const volatile uint8_t *)SCD_SUB_BANK_BASE;
     return h==get32(bank+16);
 }
+
+#if defined(SCD_REALTIME)
+/* Advertise only between logic ticks; no WAD transaction can overlap. */
+void SCD_SubLiveBegin(void){
+    uint16_t seq=++sub_seq;if(!seq)seq=++sub_seq;
+    SCD_SUB_REG16(SCD_SUB_CMD_REG)=SCD_CMD_TIC;
+    SCD_SUB_REG16(SCD_SUB_ARG_REG)=0;
+    SCD_SUB_REG16(SCD_SUB_ACK_REG)=0;SCD_SUB_REG16(SCD_SUB_DONE_REG)=0;
+    __asm__ volatile("" ::: "memory");
+    SCD_SUB_REG16(SCD_SUB_REQUEST_REG)=seq;
+}
+int SCD_SubLiveReady(void){return SCD_SUB_REG16(SCD_SUB_MAIN_REQUEST_REG)==sub_seq;}
+int SCD_SubLiveCommit(uint32_t frame,uint8_t out[16]){
+    sub_mode^=1u;SCD_SUB_REG16(SCD_SUB_MODE_REG)=sub_mode;
+    __asm__ volatile("" ::: "memory");
+    SCD_SUB_REG16(SCD_SUB_ACK_REG)=sub_seq;
+    const volatile uint8_t *b=(const volatile uint8_t *)SCD_SUB_BANK_BASE;
+    const volatile uint8_t *p=b+SCD_PAYLOAD_OFFSET;
+    int ok=get16(b)==SCD_PROTO_VERSION && get16(b+2)==SCD_CMD_TIC &&
+        get16(b+4)==sub_seq && get16(b+6) && get32(b+12)==16 &&
+        get32(p)==0x53324449UL && get32(p+4)==frame;
+    uint32_t h=2166136261UL;
+    for(uint16_t i=0;i<16;i++){out[i]=p[i];h=(h^out[i])*16777619UL;}
+    ok=ok && h==get32(b+16);
+    sub_requests++;sub_bytes+=16;
+    SCD_SUB_REG16(SCD_SUB_DONE_REG)=sub_seq;return ok;
+}
+#endif
