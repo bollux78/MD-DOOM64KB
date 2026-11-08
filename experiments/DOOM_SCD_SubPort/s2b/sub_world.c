@@ -52,7 +52,10 @@ void S2B_Capture(uint16_t tic)
             *(volatile uint16_t *)(p+0)=i;*(volatile uint16_t *)(p+2)=v[4];
             *(volatile uint32_t *)(p+4)=v[0];*(volatile uint32_t *)(p+8)=v[1];
             *(volatile uint16_t *)(p+12)=v[2];*(volatile uint16_t *)(p+14)=v[3];
-            prev_sector[i][0]=v[0];prev_sector[i][1]=v[1];prev_sector[i][2]=packed;prev_sector[i][3]=v[4];ns++;
+#if !defined(SCD_M15)
+            prev_sector[i][0]=v[0];prev_sector[i][1]=v[1];prev_sector[i][2]=packed;prev_sector[i][3]=v[4];
+#endif
+            ns++;
         }
     }
     for(uint16_t i=0;i<nside;i++){
@@ -65,12 +68,15 @@ void S2B_Capture(uint16_t tic)
             *(volatile uint16_t *)(p+0)=i;
             for(uint16_t j=0;j<4;j++)*(volatile uint16_t *)(p+2+j*2)=v[j];
             *(volatile uint16_t *)(p+10)=0;
-            prev_side[i][0]=a;prev_side[i][1]=b;nd++;
+#if !defined(SCD_M15)
+            prev_side[i][0]=a;prev_side[i][1]=b;
+#endif
+            nd++;
         }
     }
     *(volatile uint32_t *)(header+0)=tic;
     *(volatile uint16_t *)(header+4)=ns;*(volatile uint16_t *)(header+6)=nd;
-#if defined(SCD_FAST)
+#if defined(SCD_FAST) && !defined(SCD_M15)
     captured=1;
 #endif
     *(volatile uint32_t *)(header+8)=h;*(volatile uint32_t *)(header+12)=_g_leveltime;
@@ -85,3 +91,22 @@ void S2B_Finish(void)
     for(uint32_t i=0;i<used;i++)h=S2B_Mix(h,BASE[i]);
     HEAD[6]=h;
 }
+
+
+#if defined(SCD_M15)
+/* Commit the delivered snapshot, never the possibly newer live world. */
+void M15_WorldDelivered(void){
+ volatile const uint8_t *p=BASE+256;
+ uint16_t ns=*(volatile const uint16_t *)(p+4),nd=*(volatile const uint16_t *)(p+6);p+=16;
+ for(uint16_t j=0;j<ns;j++,p+=16){uint16_t i=*(volatile const uint16_t *)p;
+  prev_sector[i][0]=*(volatile const uint32_t *)(p+4);prev_sector[i][1]=*(volatile const uint32_t *)(p+8);
+  prev_sector[i][2]=((uint32_t)*(volatile const uint16_t *)(p+12)<<16)|*(volatile const uint16_t *)(p+14);
+  prev_sector[i][3]=(int32_t)*(volatile const int16_t *)(p+2);
+ }
+ for(uint16_t j=0;j<nd;j++,p+=12){uint16_t i=*(volatile const uint16_t *)p;
+  prev_side[i][0]=((uint32_t)*(volatile const uint16_t *)(p+2)<<16)|((uint32_t)(uint8_t)*(volatile const uint16_t *)(p+4)<<8)|(uint8_t)*(volatile const uint16_t *)(p+6);
+  prev_side[i][1]=(uint8_t)*(volatile const uint16_t *)(p+8);
+ }
+ captured=1;
+}
+#endif

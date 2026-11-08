@@ -70,7 +70,7 @@ def prepare(tree,objdir,gcc,cflags,common):
             assert rom.count(anchor)==1
             rom=rom.replace(anchor,'strcpy(name,"S1'+suffix+'");name[1]=(char)(\'0\'+map);')
         (objdir/'engine_rom.c').write_text(rom+'\n'+(common/'s2c/r24_helpers.inc').read_text())
-        sources += [objdir/'engine_mobj.c',objdir/'engine_rom.c',tree/'src/p_maputl.c',common/'s2c/sub_actors.c']
+        sources += [objdir/'engine_mobj.c',objdir/'engine_rom.c',tree/'src/p_maputl.c',common/('m15/sub_actors.c' if '-DSCD_M15' in cflags else 's2c/sub_actors.c')]
     objects=[]
     # Strip only MD benchmark UI controls from the unmodified core g_game source.
     flags=[f for f in cflags if f!='-DDOOM_R50_PLAY_BENCH']

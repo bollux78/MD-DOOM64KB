@@ -13,7 +13,7 @@ env:
   R116_DEMO_DIR: /home/dan/Projetos/Personal/demos
 jobs:
   probe:
-    if: "!contains(github.event.head_commit.message, '[m01-iterate]')"
+    if: "!contains(github.event.head_commit.message, '[m01-iterate]') && !contains(github.event.head_commit.message, '[m15-iterate]')"
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
     steps:
@@ -507,4 +507,5 @@ jobs:
           test "${{ steps.s2e_build.outcome }}" = "success"
           test "${{ steps.s2e_blastem.outcome }}" = "success"
           test "${{ steps.s2e_compare.outcome }}" = "success"
+
 
