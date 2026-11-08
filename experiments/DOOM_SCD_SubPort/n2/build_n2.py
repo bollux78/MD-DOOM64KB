@@ -94,7 +94,7 @@ int SCD_SubFrame(uint16_t arg, uint8_t out[16])
 }
 '''
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N2_WAD_CACHE", "96") + "UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N2_WAD_CACHE", "72") + "UL * 1024UL)")
 ww = ww.replace('I_Error("SCD LUMP TRANSFER FAILED %d", n);',
     '{ extern uint16_t n2_bad[6]; extern uint32_t SCD_SubTimeouts(void); I_Error("X%d Z%u T%lu L%u K%X S%u", n, (unsigned)size, (unsigned long)SCD_SubTimeouts(), n2_bad[4], n2_bad[5], n2_bad[2]); }')
 ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
