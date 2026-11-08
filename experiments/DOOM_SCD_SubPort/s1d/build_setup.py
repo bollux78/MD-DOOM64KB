@@ -56,6 +56,10 @@ if True:
     anchor='#include "r24_romthings.h"'
     assert p_setup.count(anchor)==1,"p_setup include anchor changed"
     p_setup=p_setup.replace(anchor,anchor+'\n#define P_LoadTexture(t) ((void)0) /* sub no-render only */')
+if engine:
+    anchor="    R_InitSprites();"
+    assert p_setup.count(anchor)==1,"P_Init visual sprite cache anchor changed"
+    p_setup=p_setup.replace(anchor,"    /* Sprite graphics remain on MD; switch/animation init above is real. */")
 if not full:
     anchor='    P_GroupLines();'
     assert p_setup.count(anchor)==1,"P_GroupLines anchor changed"

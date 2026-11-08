@@ -9,3 +9,7 @@ int strcmp(const char *a,const char *b)
 int toupper(int c){return c>='a' && c<='z'?c-'a'+'A':c;}
 extern void I_Error(const char *,...);
 void exit(int code){(void)code;I_Error("SCD EXIT BEFORE BUDGET");for(;;){}}
+unsigned long strlen(const char *s)
+{unsigned short n=0;while(s[n])n++;return n;}
+int memcmp(const void *a,const void *b,unsigned short n)
+{const unsigned char *p=a,*q=b;while(n--){if(*p!=*q)return (int)*p-(int)*q;p++;q++;}return 0;}
