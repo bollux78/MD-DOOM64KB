@@ -5,7 +5,7 @@ def expand(f):return (f&15)|((f&16)<<12)|((f&32)<<13)|((f&64)<<14)|((f&128)<<15)
 def check_applied(g,frame,expected,sym,checked=True):
     want,actual,n,player,nr,linked,msize,snext,sprev,subsector,ssize,head=struct.unpack('>12I',g.readmem(0x61b040,48))
     assert (want,n,player,nr)==(expected['hash'],expected['n'],expected['player'],expected['nr']) and actual==(want if checked else 0)
-    assert g.readmem(0x617000,n*24)==expected['actor_bytes'],('native compact values',frame)
+    if checked:assert g.readmem(0x617000,n*24)==expected['actor_bytes'],('native compact values',frame)
     slots=struct.unpack('>%dH'%n,g.readmem(0x617c00,n*2));assert len(set(slots))==n and max(slots)<64
     ids=struct.unpack('>64H',g.readmem(0x618000,128));pool=g.readmem(0x614000,64*msize)
     offsets=struct.unpack('>8I',g.readmem(0x61b300,32));records={}

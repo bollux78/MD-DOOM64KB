@@ -53,7 +53,8 @@ def prepare(tree,objdir,gcc,cflags,common):
     if '-DSCD_M15' in cflags:
         poll='        thinker_t __far* th_next = th->next;'
         assert tick.count(poll)==1
-        tick=tick.replace(poll,'        {extern void S2F_ClockPoll(void);S2F_ClockPoll();}\n'+poll)
+        tick=tick.replace('    thinker_t* th_end = &_g_thinkerclasscap;','    thinker_t* th_end = &_g_thinkerclasscap; uint16_t m15_poll=0;')
+        tick=tick.replace(poll,'        if(!(m15_poll++&3u)){extern void S2F_ClockPoll(void);S2F_ClockPoll();}\n'+poll)
     (objdir/'engine_tick.c').write_text(tick)
     sources=[objdir/'engine_tick.c',objdir/'engine_game.c' ,objdir/'engine_metadata.c',
              common/'s1e/engine_platform.c',common/'s1e/engine_libc.c']

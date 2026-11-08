@@ -21,10 +21,14 @@ extern int SCD_SubBusy(void);
 static void service(void);
 static uint32_t capture_count,capture_total,capture_max,cap_world,cap_actor,cap_copy,cap_hash;
 extern void M15_WorldDelivered(void),M15_ActorsDelivered(void);
+static void add_phase(uint32_t amount){
+ if(phase>0xffffffffUL-amount)I_Error("M15 CLOCK BACKLOG");
+ phase+=amount;
+}
 void S2F_ClockPoll(void){
     uint16_t now=R16(0xFF800CUL)&4095u;
     uint16_t delta=(now-previous_clock)&4095u;previous_clock=now;
-    elapsed+=delta;phase+=(uint32_t)delta*13440UL;
+    elapsed+=delta;add_phase((uint32_t)delta*13440UL);
     if(delta>max_gap)max_gap=delta;
     if(async_enabled && prepared && !servicing && !SCD_SubBusy())service();
 }
@@ -136,10 +140,10 @@ void sub_main(void){
         if(frozen)continue;
         uint32_t due=phase/12500000UL;phase%=12500000UL;
         /* Catch-up cap: a publish/input exchange can take ~4 tics; mean tick cost ~13 ms leaves room for 8. */
-        if(due>8){dropped+=due-8;due=8;}
+        if(due>8){add_phase((due-8)*12500000UL);due=8;} /* carry debt; never discard game time */
         while(due--){
             /* A new display demand preempts catch-up between any two ticks. */
-            if(prepared && R16(0xFF8012UL)!=demand){phase+=(due+1)*12500000UL;break;}
+            if(prepared && R16(0xFF8012UL)!=demand){add_phase((due+1)*12500000UL);break;}
             if(_g_gameaction!=ga_nothing && _g_gameaction!=ga_loadlevel)goto done;
             int16_t turn=(int16_t)(((uint16_t)echo[10]<<8)|echo[11]);
             S2D_SetCommand((int8_t)echo[8],(int8_t)echo[9],turn,echo[13]);

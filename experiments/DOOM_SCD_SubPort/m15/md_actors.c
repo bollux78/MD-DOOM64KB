@@ -99,8 +99,8 @@ void S2C_ApplyFrame(uint16_t frame){
   if(relink && !(flags&MF_NOSECTOR)){mobj_t **head=&_g_sectors[sector].thinglist;m->snext=*head;m->sprev=head;if(*head)(*head)->sprev=&m->snext;*head=m;LINK[i]=1;}
   if(LINK[i]){linked++;uint16_t k;for(k=0;k<HC && HS[k]!=sector;k++){}if(k==HC){HS[HC++]=sector;}}
   if(id==player)found++;
-  uint32_t v[10];M15_Values(m,id,v);if(checked)for(uint16_t k=0;k<10;k++)h=M15_Mix(h,v[k]);
-  M15_Write((volatile uint8_t *)(S2C_MD_APPLIED+(uint32_t)j*24),v);
+  if(checked){uint32_t v[10];M15_Values(m,id,v);for(uint16_t k=0;k<10;k++)h=M15_Mix(h,v[k]);
+  M15_Write((volatile uint8_t *)(S2C_MD_APPLIED+(uint32_t)j*24),v);}
  }
  if(found!=1)I_Error("M15 PLAYER MEMBERSHIP");
  for(uint16_t j=0;j<nr;j++,p+=8){uint16_t id=*(volatile const uint16_t *)p,dead=*(volatile const uint16_t *)(p+2),delay=*(volatile const uint16_t *)(p+4);if(id>=romcount || dead>1)I_Error("M15 ROM DELTA");S2C_RomApply(id,dead,delay);}
