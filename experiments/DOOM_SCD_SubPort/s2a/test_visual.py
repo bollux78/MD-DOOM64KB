@@ -52,8 +52,11 @@ try:
         print('S2a rendered actual sub camera',i,'tic',out[1],row['frame_sha256'][:16],flush=True)
     assert len(records)==26,'incomplete visual replay'
     assert len({r['frame_sha256'] for r in records})>3,'rendered images did not change'
-    report=dict(status='PASS',frames=26,md_logic_ticks=0,records=records,
+    assert g.req('M%x,1:01'%sym('s2a_test_exit'))=='OK'
+    g.cont();pc=int(g.req('g')[17*8:18*8],16)&0xffffff
+    assert pc==sym('G_Ticker'),'exit did not reach original MD title/game loop'
+    report=dict(exit_to_md_loop=True,status='PASS' ,frames=26,md_logic_ticks=0,records=records,
                 scope='Real sub-camera replay on MD renderer. Local actors/doors frozen; not full world offload or an FPS benchmark.')
     (rom.parent/'visual_report.json').write_text(json.dumps(report,indent=2))
-    print('S2a VISUAL PASS: 26 frames; exact sub cameras; MD G_Ticker never executed',flush=True)
+    print('S2a VISUAL PASS: 26 frames; exact sub cameras; MD ticker absent during replay; exit to original MD loop PASS',flush=True)
 finally:g.close()

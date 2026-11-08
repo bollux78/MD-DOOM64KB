@@ -9,6 +9,7 @@
 #include "i_system.h"
 #include "camera_wire.h"
 extern void S2A_InitLocalMap(void),S2A_Display(void),S2A_ClearMenus(void),R20_StopVideo(void);
+volatile uint8_t s2a_test_exit __attribute__((section(".data")))=0; /* debugger only */
 void __attribute__((noipa,noinline)) S2A_MDFrameDone(void){__asm__ volatile("":::"memory");}
 void __attribute__((noipa,noinline)) S2A_VisualDone(void){__asm__ volatile("":::"memory");}
 static uint32_t camera_hash(void)
@@ -30,6 +31,7 @@ void S2A_Run(void)
     _g_menuactive=false;_g_demoplayback=false;_g_basetic=0;
     wipegamestate=GS_LEVEL;
     for(;;){
+        if(s2a_test_exit)return;
         /* Skip pre-first-tic camera0 (viewz=1 by original setup contract). */
         for(uint16_t i=1;i<S2A_CAMERA_COUNT;i++){
             volatile const uint32_t *p=(volatile const uint32_t *)(S2A_MD_CAMERA+(uint32_t)i*S2A_CAMERA_BYTES);

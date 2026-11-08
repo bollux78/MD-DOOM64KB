@@ -14,7 +14,7 @@ void S2A_InitLocalMap(void){G_InitNew(sk_hard,1);}
     text=main.read_text()
     anchor='    D_DoomMainSetup();'
     assert text.count(anchor)==1
-    text=text.replace(anchor,anchor+'\n    {extern void S2A_Run(void);S2A_Run();D_StartTitle();}\n')
+    text=text.replace(anchor,anchor+'\n    {extern void S2A_Run(void);S2A_Run();{extern void R81_ResyncInput(void);R81_ResyncInput();}D_StartTitle();}\n')
     text+='\nvoid S2A_Display(void){D_Display();}\n'
     main.write_text(text)
 
