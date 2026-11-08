@@ -1,0 +1,58 @@
+name: Sega CD N0 cell image (linear bitmap from sub -> VDP tiles)
+on:
+  workflow_dispatch:
+  push:
+    branches: [exp-chatgpt-scd-bench03b]
+    paths: ['experiments/DOOM_SCD_CellImage/**', '.github/workflows/scd-cell-image.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    env:
+      M68K_OBJDUMP: /home/dan/mars/m68k-elf/bin/m68k-elf-objdump
+      BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build and stage private diagnostic ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdk="$HOME/mars/m68k-elf"
+          tools="$GITHUB_WORKSPACE/experiments/DOOM_SCD_Bench03D_Transport/tools"
+          export PATH="$gdk/bin:$PATH"
+          cd experiments/DOOM_SCD_CellImage
+          mkdir -p build
+          m68k-elf-as -m68000 subcpu/boot.s -o build/sub.o
+          m68k-elf-ld -Ttext=0 -e subcpu_vectors -o build/sub.elf build/sub.o
+          m68k-elf-objcopy -O binary build/sub.elf build/sub.bin
+          python3 "$tools/make_sub_header.py" build/sub.bin src/sub_program.h
+          make GDK="$gdk" PREFIX=m68k-elf- -j1
+          rom=out/rom.bin
+          if [ -f out/release/rom.bin ]; then rom=out/release/rom.bin; fi
+          elf=${rom%.bin}.elf
+          if [ ! -f "$elf" ]; then elf=${rom%.bin}.out; fi
+          test -f "$elf"
+          out="$HOME/Projetos/Personal/scd-cell-image/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          python3 "$tools/mark_mode1.py" "$rom" "$out/doom-md-scd-cell-image.bin"
+          python3 ../DOOM_SCD_03E/rom_identity.py "$out/doom-md-scd-cell-image.bin"
+          cp "$elf" "$out/doom-md-scd-cell-image.elf"
+          echo "SCD_ASIC_OUT=$out" >> "$GITHUB_ENV"
+      - name: Cell view and DMA readback in BlastEm
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/scd-asic.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          stem="$SCD_ASIC_OUT/doom-md-scd-cell-image"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_CellImage/test_cell.py "$stem.bin" "$stem.elf"
