@@ -137,7 +137,7 @@ sv = sv.replace(a, a + "    else if (cmd == SCD_CMD_FRAME)\n    {\n        volat
 a = "            transactions++;\n"
 assert sv.count(a) == 1
 sv = sv.replace(a, "            transactions++;\n            if (cmd == SCD_CMD_FRAME) { extern void N2_MdFrameArrived(uint16_t); N2_MdFrameArrived(arg); }\n")
-sv = "uint16_t SCD_MdLumpCount(void);\n" + sv
+pass  # server already declares SCD_MdLumpCount
 (tree / "src/scd_md_server.c").write_text(sv)
 wp = tree / "src/w_wad.c"; ws = wp.read_text()
 needle = "const char __far* PUREFUNC W_GetNameForNum(int16_t num)"
