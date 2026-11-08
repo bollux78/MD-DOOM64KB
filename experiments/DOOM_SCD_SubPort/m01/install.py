@@ -9,7 +9,7 @@ def install(tree,boot):
     s=s[:a]+s[b:]
     # Profiling scratch uses owned Word RAM, preserving scarce MD work RAM.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
-volatile uint16_t s2f_test_mode __attribute__((section(".data")))=0;
+#define s2f_test_mode (s2d_test_exit>>4)
 #define stage_start ((volatile uint32_t *)0x61B200UL)
 #define stage_vblank ((volatile uint32_t *)0x61B220UL)
 #define stage_cost ((volatile uint32_t *)0x61B240UL)

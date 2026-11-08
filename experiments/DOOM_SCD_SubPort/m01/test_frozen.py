@@ -20,7 +20,7 @@ for mode,name in ((1,'native'),(2,'cd'),(3,'native_legacy_text'),(4,'cd_legacy_t
         for _ in range(25):
             g.cont();pc=int(g.req('g')[136:144],16)&0xffffff
             if pc==sym('s1b_complete'):
-                assert g.req('M%x,2:%04x'%(sym('s2f_test_mode'),mode))=='OK'
+                assert g.req('M%x,1:%02x'%(sym('s2d_test_exit'),mode<<4))=='OK'
                 assert g.req('z0,%x,2'%pc)=='OK';continue
             assert pc==sym('S2F_M0FrameDone'),('benchmark failed',name,hex(pc))
             row=list(struct.unpack('>7I',g.readmem(0x61b1c0,28)))
