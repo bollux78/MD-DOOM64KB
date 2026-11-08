@@ -51,7 +51,7 @@ def decode(g):
     assert words(header[:252])==struct.unpack_from('>I',header,252)[0],'mutable header checksum'
     assert words(world+actors)==want,'immutable snapshot checksum'
     wm,wv,wc,ns,nd,used,whash,_=struct.unpack_from('>8I',world)
-    assert (wm,wv,wc,used)==(0x53325742,1,1,wb)
+    assert (wm,wv,wc,used)==(0x53325742,2,1,wb)
     if fast:assert whash==0
     off=struct.unpack_from('>I',world,32)[0];zero,nsec,nside,want,leveltime=struct.unpack_from('>IHHII',world,off)
     assert not zero and nsec<=ns and nside<=nd
@@ -66,7 +66,14 @@ def decode(g):
         assert id<nd and id not in seen and not res;seen.add(id);world_sides[id]=[offset,top,bottom,mid]
     assert p==wb and len(world_sectors)==ns and len(world_sides)==nd
     h=mix(mix(2166136261,ns),nd)
-    for x in [x for i in range(ns) for x in world_sectors[i]]+[x for i in range(nd) for x in world_sides[i]]:h=mix(h,x)
+    for i in range(ns):
+        f=mix(2166136261,i)
+        for x in world_sectors[i]:f=mix(f,x)
+        h^=f
+    for i in range(nd):
+        f=mix(2166136261,0x80000000|i)
+        for x in world_sides[i]:f=mix(f,x)
+        h^=f
     assert h==want
     checked=not production or tic%32==0
     wwant,actual,ans,and_,alevel,wchecked=struct.unpack('>6I',g.readmem(0x61b020,24))
@@ -186,7 +193,8 @@ try:
     telemetry=dict(presentation_fps=fps,demand_mean_ms=sum(r['demand_units'] for r in steady)*0.03072/len(steady),demand_max_ms=max(r['demand_units'] for r in steady)*0.03072,apply_world_ms=sum(r['apply_world_units'] for r in steady)*0.03072/len(steady),apply_actors_ms=sum(r['apply_actors_units'] for r in steady)*0.03072/len(steady),capture_mean_ms=b['capture_total_units']*0.03072/max(1,b['captures']),capture_max_ms=b['capture_max_units']*0.03072,mean_tick_ms=b['tick_cost_total']*0.03072/max(1,b['tick_count']),max_snapshot_age=max(r['snapshot_age'] for r in rows),max_poll_ms=b['max_poll']*0.03072)
     telemetry.update(copy_ms=sum(r['copy_units'] for r in steady)*0.03072/len(steady),capture_world_ms=sum(r['capture_world_units'] for r in steady)*0.03072/len(steady),capture_actor_ms=sum(r['capture_actor_units'] for r in steady)*0.03072/len(steady),capture_copy_ms=sum(r['capture_copy_units'] for r in steady)*0.03072/len(steady),capture_hash_ms=sum(r['capture_hash_units'] for r in steady)*0.03072/len(steady),actors_mean=sum(r['actors'] for r in steady)/len(steady))
     print('M15 telemetry',json.dumps(telemetry),flush=True)
-    report=dict(telemetry=telemetry,logic_hz=hz,status='PASS' ,frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
+    passed=34.3<=hz<=35.7 and not b['dropped'] and b['max_poll']*0.03072<100 and (not production or route or fps>4.6) and (not route or (nav_finish>=6 and door_open and max(r['item_count'] for r in rows)>rows[0]['item_count'] and occluded_retained))
+    report=dict(telemetry=telemetry,logic_hz=hz,status='PASS' if passed else 'FAIL' ,frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
                 scope='Independent 35 Hz CD logic; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast,production=production)
     (rom.parent/('route_report.json' if route else 'live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
     assert 34.3<=hz<=35.7,('35 Hz cadence',hz)

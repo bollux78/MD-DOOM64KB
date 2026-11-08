@@ -4,7 +4,13 @@ import shutil
 def install(tree,common,boot):
     for name in ('compact.h',):shutil.copyfile(common/'m15'/name,tree/'src'/name)
     shutil.copyfile(common/'m15/md_actors.c',tree/'src/s2c_md_actors.c')
-    p=tree/'src/s2b_md_world.c';p.write_text('#define SCD_M15 1\n'+p.read_text())
+    p=tree/'src/s2b_md_world.c';w=p.read_text().replace('HEAD[1]!=1','HEAD[1]!=2')
+    old='''    for(uint16_t i=0;i<nsec;i++){uint32_t v[5];S2B_SectorValues(i,v);for(uint16_t j=0;j<5;j++)h=S2B_Mix(h,v[j]);}
+    for(uint16_t i=0;i<nside;i++){uint32_t v[4];S2B_SideValues(i,v);for(uint16_t j=0;j<4;j++)h=S2B_Mix(h,v[j]);}'''
+    new='''    for(uint16_t i=0;i<nsec;i++){uint32_t v[5];S2B_SectorValues(i,v);uint32_t f=S2B_Mix(2166136261UL,i);for(uint16_t j=0;j<5;j++)f=S2B_Mix(f,v[j]);h^=f;}
+    for(uint16_t i=0;i<nside;i++){uint32_t v[4];S2B_SideValues(i,v);uint32_t f=S2B_Mix(2166136261UL,0x80000000UL|i);for(uint16_t j=0;j<4;j++)f=S2B_Mix(f,v[j]);h^=f;}'''
+    assert w.count(old)==1;w=w.replace(old,new)
+    p.write_text('#define SCD_M15 1\n'+w)
     p=tree/'src/s2d_md_live.c';s=p.read_text()
     s=s.replace('#include "live_wire.h"','#include "live_wire.h"\n#include "compact.h"\nextern void M15_PrepareSwap(void);')
     s=s.replace('h[0]!=S2D_MAGIC || h[1]!=S2D_VERSION','h[0]!=M15_MAGIC || h[1]!=3')

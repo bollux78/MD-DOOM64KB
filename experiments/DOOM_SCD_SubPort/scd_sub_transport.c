@@ -47,6 +47,7 @@ static uint32_t get32(const volatile uint8_t *p)
 }
 void SCD_SubTransportReset(void)
 {
+    M15_BUSY(0);
     sub_seq=0;
     sub_mode=4u; /* matches S1a boot after selecting mode 1M RET=0 */
     sub_requests=0;

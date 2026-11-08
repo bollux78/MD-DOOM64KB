@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Actual producer delta and hash invariants
+        run: python3 experiments/DOOM_SCD_SubPort/m15/test_world_host.py
       - name: Reuse pristine generated R128 objects when source trees match
         id: cache
         shell: bash

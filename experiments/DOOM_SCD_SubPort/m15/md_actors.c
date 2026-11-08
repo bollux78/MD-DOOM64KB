@@ -24,6 +24,7 @@
 static uint16_t romcount;
 void M15_PrepareSwap(void){
  if(VALID!=0x1531)return;
+ if(HC>64)I_Error("M15 HEAD CACHE COUNT");
  for(uint16_t i=0;i<HC;i++){HP[i]=_g_sectors[HS[i]].thinglist;_g_sectors[HS[i]].thinglist=0;}
 }
 void S2C_Begin(void){
@@ -59,7 +60,8 @@ void S2C_ApplyFrame(uint16_t frame){
    if(!REP[s])REP[s]=ss;
   }
   HC=0;VALID=0x1531;
- }else for(uint16_t i=0;i<HC;i++)_g_sectors[HS[i]].thinglist=HP[i];
+ }else if(HC>64)I_Error("M15 HEAD CACHE COUNT");
+ else for(uint16_t i=0;i<HC;i++)_g_sectors[HS[i]].thinglist=HP[i];
  uint8_t seen[64]={0};uint16_t assigned[64],fresh=0,moved=0,removed=0,found=0;
  p+=16;
  for(uint16_t i=0;i<128;i++)LOOKUP[i]=0;
