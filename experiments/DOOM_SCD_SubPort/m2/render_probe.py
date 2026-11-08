@@ -37,6 +37,7 @@ variants = {
     "sub-defines": [o for o in opt if o.startswith("-D") and not o.startswith(tuple("-D" + d for d in drop))],
     "sub-defines-norecip": [o for o in opt if o.startswith("-D") and not o.startswith(tuple("-D" + d for d in drop + ("DOOM_R12_RECIP",)))],
     "sram-in-ram": [o for o in opt if o.startswith("-D")] + ["-DSCD_SRAM_BASE=0x00060000UL"],
+    "m2-sub": [o for o in opt if o.startswith("-D") and not o.startswith(("-DDOOM_R12_RECIP",))] + ["-DSCD_SRAM_BASE=0x00060000UL"],
 }
 for label, defs in variants.items():
     w = out / label
@@ -44,8 +45,8 @@ for label, defs in variants.items():
     cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
               "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
               "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
-              "-I" + str(patched if label == "sram-in-ram" else tree / "src"), "-I" + str(tree / "compat")] + defs
-    srcroot = patched if label == "sram-in-ram" else tree / "src"
+              "-I" + str(patched if label in ("sram-in-ram", "m2-sub") else tree / "src"), "-I" + str(tree / "compat")] + defs
+    srcroot = patched if label in ("sram-in-ram", "m2-sub") else tree / "src"
     objs, fails = [], []
     for src in sorted(p for p in srcroot.rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts):
         obj = w / (src.relative_to(srcroot).as_posix().replace("/", "_") + ".o")
@@ -57,9 +58,12 @@ for label, defs in variants.items():
     rel = w / "all-r.o"
     subprocess.run([b("ld"), "-r", "-o", str(rel)] + objs, check=True)
     libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
-    for root in ("R_RenderPlayerView", "I_FinishUpdate"):
+    roots = {"R_RenderPlayerView": ["R_RenderPlayerView"], "I_FinishUpdate": ["I_FinishUpdate"]}
+    if label == "m2-sub":
+        roots = {"sub-logic+render": ["G_Ticker", "P_SetupLevel", "P_Init", "R_RenderPlayerView", "R_Init", "G_InitNew"]}
+    for root, entries in roots.items():
         elf = w / (root + ".elf")
-        r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e," + root, "-Wl,-u," + root,
+        r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e," + entries[0]] + ["-Wl,-u," + e for e in entries] + [
                             "-Wl,--unresolved-symbols=ignore-all", "-Wl,-Ttext=0x6000", "-Wl,-Map," + str(w / (root + ".map")),
                             "-o", str(elf), str(rel), libgcc], capture_output=True, text=True)
         if r.returncode:
