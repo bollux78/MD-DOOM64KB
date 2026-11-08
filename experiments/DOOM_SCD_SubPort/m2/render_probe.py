@@ -83,3 +83,20 @@ for label, defs in variants.items():
             m = re.match(r"\s+\.(?:text|rodata|data|bss)\S*\s+0x[0-9a-f]+\s+0x([0-9a-f]+)\s+.*/([^/]+)\.o$", line)
             if m: srcs[m.group(2)] += int(m.group(1), 16)
         print("    by source: " + "; ".join("%s %.1fK" % (n, v / 1024) for n, v in srcs.most_common(14)))
+
+# Who references the big tables (section = function with -ffunction-sections)?
+w = out / "sram-in-ram"
+targets = ("r91_joint", "r84_pixels", "r84_offsets", "r12_recip_table", "doom_iwad", "r79_map", "r77_h_comp_odd", "r76_l_comp_odd")
+refs = collections.defaultdict(set)
+for obj in sorted(w.glob("*.o")):
+    if obj.name == "all-r.o": continue
+    sec = None
+    for line in subprocess.run([b("objdump"), "-r", str(obj)], capture_output=True, text=True).stdout.splitlines():
+        m = re.match(r"RELOCATION RECORDS FOR \[(.+)\]:", line)
+        if m: sec = m.group(1); continue
+        for t in targets:
+            if line.rstrip().endswith(t) or (" " + t + "+") in line or line.split()[-1:] == [t]:
+                refs[t].add("%s:%s" % (obj.name.replace(".c.o", ""), sec))
+print("\n=== references to big tables (object:section)")
+for t in targets:
+    print("  %s <- %s" % (t, ", ".join(sorted(refs[t])) or "-"))
