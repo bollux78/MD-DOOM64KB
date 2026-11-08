@@ -263,6 +263,10 @@ if ticker:
     md=md.replace('sprintf(t,"CD CRC %08lX",(unsigned long)r.sub_crc);',
                   'sprintf(t,"STATE HASH %08lX",(unsigned long)r.sub_crc);')
 if comparison:
+    backup=tree/".s1e-md-original"
+    backup.mkdir(exist_ok=True)
+    for filename in ("g_game.c","d_main.c","m_text.c","m_random.c"):
+        shutil.copyfile(tree/"src"/filename,backup/filename)
     name="doom-md-scd-s1e-z7"
     md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z7 MD SUB TRACE")
     shutil.copyfile(common/"s1e/md_observer.c",tree/"src/s1e_md_observer.c")
@@ -303,6 +307,12 @@ void S1E_MDStart(void)
     assert text.count("#if defined(DOOM_R47_STATE_HASH)")==1
     random.write_text(text.replace("#if defined(DOOM_R47_STATE_HASH)","#if 1 /* read-only MD trace observer */"))
 if engine:
+    backup=tree/".s1e-md-original"
+    if backup.is_dir():
+        # Z7's automatic headless MD benchmark is instrumentation only. The
+        # Z8 console ROM must retain the original R128 menu/game after START.
+        for filename in ("g_game.c","d_main.c","m_text.c","m_random.c"):
+            shutil.copyfile(backup/filename,tree/"src"/filename)
     name="doom-md-scd-s1e-z8"
     md=md.replace("S1E Z6 SUB P_TICKER 2600", "S1E Z8 REAL G_TICKER")
     md=md.replace("0x5A7Du", "0x5A8Du")
