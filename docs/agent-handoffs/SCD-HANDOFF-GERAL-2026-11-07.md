@@ -1,3 +1,11 @@
+# Atualização Z8 — G_Ticker original no sub (07/11/2026, horário de São Paulo)
+
+**Z8 build/link estrito e BlastEm PASS**, run 42430167033 / commit 34639e9. P_Init de lógica (switches/animações via TEXTURE1 real), decoder original e G_Ticker inteiro original de nível por 2600 tics no sub; 27 checkpoints/hash **0A1B0220** conferidos. Depois, prova CONTROLADA separada de PST_REBORN: mapa recarregado, jogador vivo com saúde 100/leveltime 1, heap PASS. Natural morreu no tic 2334 e terminou saúde 0. 12 requests/69151 bytes/0 erros/0 timeouts. Payload 82450 bytes, RAM end 0x73950, vetores no zero. Fallback ticker MD PASS; R128 normal restaurado após START. **Z8 hardware ainda NÃO TESTADO**; Z6 segue aprovada no console.
+
+ROM privada: `/home/dan/Projetos/Personal/scd-subport-s1e-z8/run-42430167033-1/doom-md-scd-s1e-z8.bin`.
+
+**Ler primeiro [SCD-Z8-ORIGINAL-G-TICKER.md](./SCD-Z8-ORIGINAL-G-TICKER.md)** para limites (E1M1, sem render do sub, HUD/áudio silenciosos, save/intermissão/final/título não implementados), prova, diferenças MD/sub e próximo teste físico. O histórico abaixo sobre G_Ticker ainda não executado foi superado apenas para o ciclo de nível coberto pela Z8.
+
 # Atualização Z7 / Z6 hardware — 07/11/2026
 
 **Z6 hardware PASS**, confirmado por foto: 2600 TICS PASS, hash 182C31E7 igual ao BlastEm, requests 11, bytes 63309, erros 0. **Z7 comparação independente concluída, workflow SUCCESS**: run 42426895978 / commit 1c2dd15. 27 checkpoints MD G_Ticker e sub P_Ticker. Tic 0 coincide; primeiro checkpoint divergente 100 (objetos/RNG), trajetória diverge no 200. MD morre no tic 541, respawna uma vez e termina com saúde 100; sub tem primeiro checkpoint morto no 2300 e termina com saúde 0. Divergência real, causa exata ainda não isolada; não exigir identidade bit a bit (critério do usuário). Próximo marco: P_Init / switches e G_Ticker completo no sub, inclusive rebirth/reload. Renderização ainda não usa estado sub.
