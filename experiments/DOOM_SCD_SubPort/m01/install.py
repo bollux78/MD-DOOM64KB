@@ -7,7 +7,7 @@ def install(tree,boot):
     a=s.index('            SYS_disableInts();',s.index('if(expected_tic){'))
     b=s.index('SYS_enableInts();',a)+len('SYS_enableInts();')
     s=s[:a]+s[b:]
-    s=s.replace('S2A_Display();R20_StopVideo();','stage_cost[0]=stage_cost[1]=0;S2A_Display();R20_StopVideo();')
+    s=s.replace('S2A_Display();R20_StopVideo();','stage_cost[0]=stage_cost[1]=0;S2A_Display();')
     # Profiling scratch uses owned Word RAM, preserving scarce MD work RAM.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
 #define s2f_test_mode (s2d_test_exit>>4)

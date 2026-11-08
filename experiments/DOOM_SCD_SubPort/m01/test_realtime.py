@@ -140,6 +140,7 @@ try:
     a,b=rows[8],rows[-2]
     hz=(b['game_tic']-a['game_tic'])*60/(b['vblank']-a['vblank'])
     print('M1 independent MD-clock logic Hz',hz,'dropped',b['dropped'],flush=True)
+    print('M1 telemetry',json.dumps(dict(presentation_fps=(b['tic']-a['tic'])*60/(b['vblank']-a['vblank']),game_tics=b['game_tic'],elapsed_units=b['clock_units'],tick_count=b['tick_count'],mean_tick_ms=b['tick_cost_total']*0.03072/max(1,b['tick_count']),max_tick_ms=b['tick_cost_max']*0.03072,max_poll_ms=b['max_poll']*0.03072,first_drop_frame=next((r['tic'] for r in rows if r['dropped']),None))),flush=True)
     report=dict(logic_hz=hz,status='PASS',frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
                 scope='Independent 35 Hz CD logic; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast,production=production)
     (rom.parent/('live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
