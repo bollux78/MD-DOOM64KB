@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/n2/**', '.github/workflows/scd-subport-n2.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/n2/**', 'experiments/DOOM_SCD_SubPort/m2/scd_*.c', '.github/workflows/scd-subport-n2.yml']
 permissions:
   contents: read
 env:
