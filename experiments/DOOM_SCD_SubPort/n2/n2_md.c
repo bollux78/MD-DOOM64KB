@@ -111,6 +111,24 @@ static void setup_screen(void)
     VDP_drawText("doom-md-scd-n2.bin  SEGA CD RENDER", 1, 1);
 }
 
+/* Sub I_Error leaves the message address in $A1202A/2C. Halt the sub (bus request) and read the
+ * string from PRG-RAM through the 128 KiB window, into Word RAM at 0x61F100 (report area). */
+static void fetch_sub_error(void)
+{
+    const u32 addr = ((u32)*(volatile const u16 *)0xA1202A << 16) | *(volatile const u16 *)0xA1202C;
+    volatile u8 *msg = (volatile u8 *)0x61F100;
+    msg[0] = 0;
+    if (addr >= 0x80000UL) return;
+    CD_SUB_BYTE = 3;
+    if (!wait_sub(2, 2)) return;
+    CD_MEMCTRL_LO = (u8)((addr >> 17) << 6);
+    volatile const u8 *p = (volatile const u8 *)(0x420000UL + (addr & 0x1FFFFUL));
+    u16 i = 0;
+    for (; i < 39 && p[i] >= 32 && p[i] < 127; i++) msg[i] = p[i];
+    msg[i] = 0;
+    CD_MEMCTRL_LO = 0;
+}
+
 static void run(void)
 {
     if ((HW_VERSION & 0x20u) || CD_BIOS_HEADER != 0x53454741UL) { rep->stage = 1; return; }
@@ -125,7 +143,7 @@ static void run(void)
         if (served < 0) { rep->stage = 4; break; }
         if (served > 0 && rep->frames) n2_frame_shown();
         if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; break; }
-        if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; break; }
+        if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; fetch_sub_error(); break; }
     }
     rep->errors = SCD_MdErrors(); rep->timeouts = SCD_MdTimeouts(); rep->bytes = SCD_MdBytes();
 }
@@ -144,6 +162,7 @@ void N2_Test(void)
     const bool pass = r.stage == 5 && r.frames == 24 && !r.errors && !r.timeouts;
     sprintf(t, "N2 %s STAGE %u FRAMES %u", pass ? "PASS" : "FAIL", (unsigned)r.stage, (unsigned)r.frames); VDP_drawText(t, 1, 26);
     sprintf(t, "CD RENDER MS/FRAME %u", (unsigned)(r.frames ? r.render_units * 3072u / 100000u / r.frames : 0)); VDP_drawText(t, 1, 27);
+    if (r.stage == 6) { char m[40]; volatile const u8 *e = (volatile const u8 *)0x61F100; u16 i = 0; for (; i < 39 && e[i]; i++) m[i] = (char)e[i]; m[i] = 0; VDP_drawText(m, 1, 25); }
     VDP_drawText("START: PLAY R128 ON MEGA DRIVE", 1, 2);
     volatile u8 *const data = (volatile u8 *)0xA10003, *const ctrl = (volatile u8 *)0xA10009;
     *ctrl = 0x40;
