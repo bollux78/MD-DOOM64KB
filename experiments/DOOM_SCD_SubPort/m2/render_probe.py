@@ -51,7 +51,7 @@ for label, defs in variants.items():
     objs, fails = [], []
     sources = sorted(p for p in srcroot.rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts)
     if label == "n1":   # MD pixel4 back end out, Sega CD column output in
-        sources = [p for p in sources if p.name not in ("i_genesisv.c", "i_genesis.c", "r25_music.c")] + [Path(__file__).resolve().parent / "scd_draw.c"]
+        sources = [p for p in sources if p.name not in ("i_genesisv.c", "i_genesis.c", "r25_music.c")] + [Path(__file__).resolve().parent / n for n in ("scd_draw.c", "scd_n1_platform.c")] + [Path(__file__).resolve().parents[1] / n for n in ("s1e/engine_libc.c", "s1d/scd_sub_system.c", "s1a/sub_libc.c")]
     for src in sources:
         obj = w / ((src.relative_to(srcroot).as_posix() if srcroot in src.parents else src.name).replace("/", "_") + ".o")
         cmd = [b("gcc")] + cflags + (["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]

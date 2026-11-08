@@ -11,6 +11,9 @@
 #include "r_main.h"
 #include "r22_pixel4.h"
 
+#ifndef CENTERY
+#define CENTERY (R22_H / 2)   /* 22, as the R22 back end */
+#endif
 #define SCD_W R22_W
 #define SCD_H R22_H
 uint8_t scd_fb[SCD_H][SCD_W];
