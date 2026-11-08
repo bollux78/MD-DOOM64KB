@@ -74,7 +74,7 @@ print("N2 R84 subset: textures %d, columns %d, bytes %d (full pool %d)" % (len(u
 # 3. Sub transport/WAD client with the FRAME call; smaller WAD cache.
 w = out / "sub"; w.mkdir(exist_ok=True)
 tr = (common / "scd_sub_transport.c").read_text()
-a = "            SCD_SUB_REG16(SCD_SUB_DONE_REG)=seq;\n            return 0;"
+a = "            SCD_SUB_REG16(SCD_SUB_DONE_REG)=seq;\n            M15_BUSY(0);return 0;"
 assert tr.count(a) == 1
 tr = tr.replace(a, "            n2_bad[0]=version;n2_bad[1]=cmd;n2_bad[2]=got_seq;n2_bad[3]=status;n2_bad[4]=(uint16_t)got_len;n2_bad[5]=seq;\n" + a)
 tr = tr.replace("static uint16_t sub_seq", "uint16_t n2_bad[6];\nstatic uint16_t sub_seq")
