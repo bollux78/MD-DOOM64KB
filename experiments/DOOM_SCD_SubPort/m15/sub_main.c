@@ -154,7 +154,7 @@ void sub_main(void){
             if(!_g_player.mo || _g_gamestate!=GS_LEVEL)goto done;
             if(!(ticks&63))Z_CheckHeap();
             if(stop_received)goto done;
-            if(!(_g_gametic&1u))prepare();
+            if(!(_g_gametic&1u) && (!prepared || (!due && phase<12500000UL)))prepare();
         }
     }
  done:
