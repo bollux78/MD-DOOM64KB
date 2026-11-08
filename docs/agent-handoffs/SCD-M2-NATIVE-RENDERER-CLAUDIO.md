@@ -115,3 +115,28 @@ Sem R84/R76/SRAM. **Cabe sem carregador multi-janela** se o código ficar ≤ 12
 3. **W no sub pelo cliente DIR/LUMP do Werk** (`scd_sub_w_wad.c`), compilado neste modelo, no lugar do `w_wad.c` com o WAD embutido.
 4. **Programa do sub N2:** init, `G_InitNew` E1M1 (wrapper), `R_RenderPlayerView` 24×, expansão de `scd_fb` para o bitmap linear 4 bpp no banco (pixel 4×4, 304×176) e troca.
 5. **MD:** DMA da visão cell em ~4 VBlanks + paleta `r22_cram` + tela de diagnóstico e START → jogo (ROM jogável).
+
+## N2: subconjunto R84 por mapa (desenho)
+- O formato vem de `gen_r84_columns.py`:
+  - `r84_pixels`: pool de colunas de 128 B deduplicadas;
+  - `r84_offsets`: uma entrada a cada 4 colunas de cada textura (largura pixel4);
+  - `r84_starts[t]`: início da textura t em `r84_offsets`.
+- **No sub:**
+  - `r84_offsets`/`r84_starts` ficam inteiros (~11 KiB);
+  - o pool vira um **pool local** com só as colunas das texturas do mapa: top/bottom/mid de todos os sides, mais as alternativas de switch/animação;
+  - na carga, o sub pede ao MD as colunas por índice (lote de N índices por transação, novo comando `R84COL`) e **reescreve** as entradas usadas para apontar ao pool local;
+  - as entradas não usadas apontam para uma coluna "erro" (cor sólida), para detectar falta.
+- **Medir no E1M1–E1M9:** colunas únicas e KiB. Gate: ≤ 64 KiB no pior mapa.
+
+## Som: efeitos pelo RF5C164 (PCM do Sega CD) — decisão para a linha exclusiva
+- O PCM do Sega CD tem 8 canais com volume, pan, passo de frequência e loop, e lê **sozinho** os samples da sua RAM de 64 KiB. Disparar um som = escrever alguns registradores.
+- Na linha exclusiva, **a lógica já roda no sub, que é quem gera os eventos de som.** O sub dispara o RF5C164 direto, sem pacote ao MD.
+- **Ganhos sobre o caminho atual (Z80/DAC do YM2612 no MD):**
+  - 8 canais de efeito em vez de dividir o DAC;
+  - o Z80 deixa de ler samples da ROM, o que tira **disputa de barramento** com o 68000 do MD (e o tipo de problema da R122);
+  - música e efeitos param de competir.
+- **Custo:** os samples precisam caber em 64 KiB no formato do RF5C164 (8 bits, sinal-magnitude, 0xFF reservado para fim de loop).
+  - Doom tem uns 60 efeitos. Selecionar os do E1, reamostrar para ~8–11 kHz, e carregar na partida via servidor de ROM do MD → sub → RAM do PCM.
+  - Medir quantos cabem e a qualidade.
+- **Música:** continua no YM2612/PSG pelo XGM2 no MD (ou CD-DA no futuro, se houver disco).
+- **Fica para depois do N3** (render ao vivo). Antes disso, o som continua como no S2e/M01.
