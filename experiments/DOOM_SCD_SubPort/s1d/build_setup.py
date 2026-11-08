@@ -171,7 +171,7 @@ libgcc=subprocess.check_output([gcc,"-m68000","-print-libgcc-file-name"],
                                text=True).strip()
 elf=objdir/("full.elf" if full else "geometry.elf")
 link=[gcc,"-m68000","-nostdlib","-Wl,--gc-sections",
-      "-Wl,-e,subcpu_vectors","-Wl,-Ttext=0",
+      "-Wl,-e,subcpu_vectors",("-Wl,-T,"+str(common/"s1e/sub_engine.ld") if engine else "-Wl,-Ttext=0"),
       "-Wl,-Map,"+str(objdir/"setup.map"),"-o",str(elf)]+objs+[libgcc]
 p=subprocess.run(link,capture_output=True,text=True)
 report=dict(phase="Z5 full P_SetupLevel STRICT diagnostic — not a ROM" if full
