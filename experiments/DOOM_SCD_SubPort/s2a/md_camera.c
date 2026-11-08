@@ -11,6 +11,12 @@
 #if defined(SCD_WORLD)
 extern void S2B_Init(void),S2B_ApplyFrame(uint16_t);
 #endif
+#if defined(SCD_ACTORS)
+extern void S2C_Begin(void),S2C_ApplyFrame(uint16_t),S2C_End(void);
+#define REPLAY_EXIT() do {S2C_End();return;} while(0)
+#else
+#define REPLAY_EXIT() return
+#endif
 extern void S2A_InitLocalMap(void),S2A_Display(void),S2A_ClearMenus(void),R20_StopVideo(void);
 volatile uint8_t s2a_test_exit __attribute__((section(".data")))=0; /* debugger only */
 void __attribute__((noipa,noinline)) S2A_MDFrameDone(void){__asm__ volatile("":::"memory");}
@@ -32,14 +38,20 @@ void S2A_Run(void)
     S2A_ClearMenus();S2A_InitLocalMap();
 #if defined(SCD_WORLD)
     S2B_Init();
+#if defined(SCD_ACTORS)
+    S2C_Begin();
+#endif
 #endif
     while(JOY_readJoypad(JOY_1)&BUTTON_START)SYS_doVBlankProcess();
     _g_menuactive=false;_g_demoplayback=false;_g_basetic=0;
     wipegamestate=GS_LEVEL;
     for(;;){
-        if(s2a_test_exit)return;
+        if(s2a_test_exit)REPLAY_EXIT();
 #if defined(SCD_WORLD)
         S2B_ApplyFrame(0);
+#if defined(SCD_ACTORS)
+        S2C_ApplyFrame(0);
+#endif
 #endif
         /* Skip pre-first-tic camera0 (viewz=1 by original setup contract). */
         for(uint16_t i=1;i<S2A_CAMERA_COUNT;i++){
@@ -47,6 +59,9 @@ void S2A_Run(void)
             if(p[0]!=S2A_CAMERA_MAGIC || p[1]!=(uint32_t)i*100u)I_Error("S2A CAMERA ORDER");
 #if defined(SCD_WORLD)
             S2B_ApplyFrame(i);
+#if defined(SCD_ACTORS)
+            S2C_ApplyFrame(i);
+#endif
 #endif
             _g_player.mo->x=(int32_t)p[2];_g_player.mo->y=(int32_t)p[3];
             _g_player.mo->z=(int32_t)p[4];_g_player.mo->angle=p[5];
@@ -57,7 +72,10 @@ void S2A_Run(void)
             S2A_Display();
             R20_StopVideo(); /* complete posted DMA before text overlays */
             SYS_disableInts();
-#if defined(SCD_WORLD)
+#if defined(SCD_ACTORS)
+            VDP_drawText("S2C CAMERA WORLD ACTORS FROM CD",1,1);
+            VDP_drawText("OFFLINE REPLAY / START EXIT",1,2);
+#elif defined(SCD_WORLD)
             VDP_drawText("S2B CAMERA AND WORLD FROM CD",1,1);
             VDP_drawText("ACTORS LOCAL FROZEN / START EXIT",1,2);
 #else
@@ -72,7 +90,7 @@ void S2A_Run(void)
             S2A_MDFrameDone();
             for(uint16_t hold=0;hold<45;hold++){
                 SYS_doVBlankProcess();
-                if(JOY_readJoypad(JOY_1)&BUTTON_START)return;
+                if(JOY_readJoypad(JOY_1)&BUTTON_START)REPLAY_EXIT();
             }
         }
         S2A_VisualDone();

@@ -18,6 +18,9 @@
 #if defined(SCD_WORLD)
 extern void S2B_Capture(uint16_t),S2B_Finish(void);
 #endif
+#if defined(SCD_ACTORS)
+extern void S2C_Capture(uint16_t),S2C_Finish(void);
+#endif
 #define TRACE ((volatile uint32_t *)0x7C000UL)
 extern void SCD_SubTransportReset(void),SCD_SubSetTime(uint32_t),SCD_MetadataInit(void);
 extern uint16_t M_R47RandomState(void);
@@ -34,6 +37,9 @@ static void checkpoint(uint16_t tic)
     for(uint16_t i=0;i<8;i++){TRACE[(tic/100u)*8u+i]=v[i];hash=(hash^v[i])*16777619UL;}
 #if defined(SCD_WORLD)
     S2B_Capture(tic);
+#if defined(SCD_ACTORS)
+    S2C_Capture(tic);
+#endif
 #endif
 
 #if defined(SCD_VISUAL)
@@ -82,6 +88,9 @@ void sub_main(void)
 #endif
 #if defined(SCD_WORLD)
     S2B_Finish();
+#if defined(SCD_ACTORS)
+    S2C_Finish();
+#endif
 #endif
     REG16(0xFF8028UL)=1;
     REG16(0xFF802AUL)=hash>>16;REG16(0xFF802CUL)=hash;

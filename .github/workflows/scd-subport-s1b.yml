@@ -1,9 +1,9 @@
-name: Sega CD S2b camera and sector-side visual bridge
+name: Sega CD S2c real sub actor visual bridge
 on:
   workflow_dispatch:
   push:
     branches: ['exp-werk-scd-subport-s1s2']
-    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/s2b/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
+    paths: ['experiments/DOOM_SCD_SubPort/s1b/**', 'experiments/DOOM_SCD_SubPort/s1c/**', 'experiments/DOOM_SCD_SubPort/s1d/**', 'experiments/DOOM_SCD_SubPort/s1e/**', 'experiments/DOOM_SCD_SubPort/s2a/**', 'experiments/DOOM_SCD_SubPort/s2b/**', 'experiments/DOOM_SCD_SubPort/s2c/**', 'experiments/DOOM_SCD_SubPort/scd_*.c', 'experiments/DOOM_SCD_SubPort/scd_proto.h', '.github/workflows/scd-subport-s1b.yml']
 permissions:
   contents: read
 env:
@@ -332,6 +332,37 @@ jobs:
           XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
             python3 experiments/DOOM_SCD_SubPort/s2a/test_visual.py --world "$S2B_OUT/doom-md-scd-s2b-world.bin" "$S2B_OUT/doom-md-scd-s2b-world.elf"
 
+      - name: S2c camera and actor bridge strict build
+        id: s2c_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s2c-actors/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S2C_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --actors
+      - name: S2c BlastEm exact applied camera and world without MD simulation
+        id: s2c_blastem
+        if: steps.s2c_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s2c.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --actors "$S2C_OUT/doom-md-scd-s2c-actors.bin" "$S2C_OUT/doom-md-scd-s2c-actors.elf"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s2a/test_visual.py --actors "$S2C_OUT/doom-md-scd-s2c-actors.bin" "$S2C_OUT/doom-md-scd-s2c-actors.elf"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -360,3 +391,7 @@ jobs:
           echo "S2b applied world: ${{ steps.s2b_blastem.outcome }}"
           test "${{ steps.s2b_build.outcome }}" = "success"
           test "${{ steps.s2b_blastem.outcome }}" = "success"
+          echo "S2c build: ${{ steps.s2c_build.outcome }}"
+          echo "S2c applied actors: ${{ steps.s2c_blastem.outcome }}"
+          test "${{ steps.s2c_build.outcome }}" = "success"
+          test "${{ steps.s2c_blastem.outcome }}" = "success"

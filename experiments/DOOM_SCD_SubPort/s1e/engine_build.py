@@ -43,9 +43,32 @@ def prepare(tree,objdir,gcc,cflags,common):
     anchor='void P_Ticker (void)\n{'
     assert tick.count(anchor)==1
     tick=tick.replace(anchor,anchor+'\n  if(_g_gametic==0){extern void SCD_EngineInitialCheckpoint(void);SCD_EngineInitialCheckpoint();}\n')
+    actors='-DSCD_ACTORS' in cflags
+    if actors:
+        anchor='void P_InitThinkers(void)\n{'
+        assert tick.count(anchor)==1
+        tick=tick.replace(anchor,anchor+'\n  {extern void S2C_ResetActors(void);S2C_ResetActors();}\n')
     (objdir/'engine_tick.c').write_text(tick)
     sources=[objdir/'engine_tick.c',objdir/'engine_game.c' ,objdir/'engine_metadata.c',
              common/'s1e/engine_platform.c',common/'s1e/engine_libc.c']
+    if actors:
+        mobj=(tree/'src/p_mobj.c').read_text()
+        a,b,c=function_span(mobj,'mobj_t __far* P_SpawnMobj(')
+        part=mobj[a:c];assert part.count('return mobj;')==1
+        mobj=mobj[:a]+part.replace('return mobj;','{extern void S2C_ActorSpawn(mobj_t *);S2C_ActorSpawn(mobj);} return mobj;')+mobj[c:]
+        a,b,c=function_span(mobj,'void P_RemoveMobj(')
+        part=mobj[a:c];anchor='  P_UnsetThingPosition (mobj);';assert part.count(anchor)==1
+        mobj=mobj[:a]+part.replace(anchor,'  {extern void S2C_ActorRemove(mobj_t *);S2C_ActorRemove(mobj); }\n'+anchor)+mobj[c:]
+        (objdir/'engine_mobj.c').write_text(mobj)
+        rom=(tree/'src/r24_romthings.c').read_text()
+        # Presentation helper only: the RAM sector has no SRAM sector_index.
+        rom=rom.replace('uint16_t s=sec->sector_index;', 'uint16_t s=sec-_g_sectors;')
+        for suffix in ('RTHING','RMAP','COFF','CIDX','ROFF','RIDX'):
+            anchor='sprintf(name,"S%d'+suffix+'",map);'
+            assert rom.count(anchor)==1
+            rom=rom.replace(anchor,'strcpy(name,"S1'+suffix+'");name[1]=(char)(\'0\'+map);')
+        (objdir/'engine_rom.c').write_text(rom+'\n'+(common/'s2c/r24_helpers.inc').read_text())
+        sources += [objdir/'engine_mobj.c',objdir/'engine_rom.c',tree/'src/p_maputl.c',common/'s2c/sub_actors.c']
     objects=[]
     # Strip only MD benchmark UI controls from the unmodified core g_game source.
     flags=[f for f in cflags if f!='-DDOOM_R50_PLAY_BENCH']

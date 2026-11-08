@@ -5,10 +5,11 @@ G_Ticker remains on the MD after START; full P_SetupLevel is not claimed.
 import os, subprocess, sys, struct
 from pathlib import Path
 from r64a_rsp_capture import RSP
-visual=len(sys.argv)==4 and sys.argv[1]=="--visual"
-engine=len(sys.argv)==4 and sys.argv[1] in ("--engine", "--visual")
-ticker=len(sys.argv)==4 and sys.argv[1] in ("--ticker", "--engine", "--visual")
-full=len(sys.argv)==4 and sys.argv[1] in ("--full", "--ticker", "--engine", "--visual")
+actors=len(sys.argv)==4 and sys.argv[1]=="--actors"
+visual=len(sys.argv)==4 and sys.argv[1] in ("--visual", "--actors")
+engine=len(sys.argv)==4 and sys.argv[1] in ("--engine", "--visual", "--actors")
+ticker=len(sys.argv)==4 and sys.argv[1] in ("--ticker", "--engine", "--visual", "--actors")
+full=len(sys.argv)==4 and sys.argv[1] in ("--full", "--ticker", "--engine", "--visual", "--actors")
 if len(sys.argv)!=(4 if full else 3):
     raise SystemExit("usage: test_setup.py [--full] ROM ELF")
 rom, elf=map(Path,sys.argv[2:] if full else sys.argv[1:])
@@ -48,7 +49,7 @@ try:
             break
     assert report is not None,"missing S1d-Z4 completion"
     print("Z5 full P_SetupLevel" if full else "Z4 P_SetupLevel geometry",report,flush=True)
-    passed=(stage==5 and marker==expected and served==(12 if engine else (11 if ticker else 10)) and errors==0
+    passed=(stage==5 and marker==expected and served==(18 if actors else (12 if engine else (11 if ticker else 10))) and errors==0
             and timeouts==0 and bytes_sent>0 and (subcrc!=0 if ticker else mdcrc==subcrc))
     if ticker:
         print("sub last tic",int.from_bytes(g.readmem(0xA12026,2),"big"),flush=True)

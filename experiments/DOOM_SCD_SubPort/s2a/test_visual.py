@@ -5,8 +5,12 @@ Raw frames stay private. This is camera-only replay with frozen local actors.
 import hashlib,json,os,struct,sys
 from pathlib import Path
 from r64a_rsp_capture import RSP,symbols
-world='--world' in sys.argv
-rom,elf=map(Path,[a for a in sys.argv[1:] if a!='--world']);syms=symbols(elf)
+actors='--actors' in sys.argv
+world='--world' in sys.argv or actors
+if actors:
+    sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'s2c'))
+    from test_actors import decode_actors,check_applied
+rom,elf=map(Path,[a for a in sys.argv[1:] if a not in ('--world','--actors')]);syms=symbols(elf)
 def sym(name):
     vals=[v for k,v in syms.items() if k==name or k.startswith(name+'.')]
     assert len(vals)==1,(name,vals)
@@ -56,7 +60,7 @@ def decode_world(g):
     print('S2b decoded world',dict(bytes=used,sectors=nsec,sides=nside,changes=changes),flush=True)
     return frames,dict(bytes=used,sectors=nsec,sides=nside,changes=changes)
 records=[]
-world_frames=None;world_stats=None
+world_frames=None;world_stats=None;actor_frames=None;actor_stats=None
 try:
     for name in ('S2A_MDFrameDone','S2A_VisualDone','G_Ticker','P_Ticker','I_Error'):
         assert g.req('Z0,%x,2'%sym(name))=='OK'
@@ -80,12 +84,14 @@ try:
             assert (magic,count,stride)==(0x53324142,27,32) and h==want,'camera transport hash'
             assert all(p[0]==0x53324341 and p[1]==i*100 for i,p in enumerate(packets))
         if world and world_frames is None:world_frames,world_stats=decode_world(g)
+        if actors and actor_frames is None:actor_frames,actor_stats=decode_actors(g)
         out=struct.unpack('>IIiiiIii',g.readmem(0x61b000,32))
         i=out[0];assert i==len(records)+1,('camera index',out)
         assert out[1:]==packets[i][1:],('applied MD camera differs from real sub packet',out,packets[i])
         if world:
             want,actual,ns,nd,leveltime=struct.unpack('>5I',g.readmem(0x61b020,20))
             assert (want,ns,nd,leveltime)==world_frames[i] and actual==want,('applied world',i,hex(actual),world_frames[i])
+        if actors:check_applied(g,i,actor_frames[i],sym)
         fb=int.from_bytes(g.readmem(sym('r115_show'),4),'big')&0xffffff
         assert 0xff0000<=fb<0x1000000,hex(fb)
         pixels=g.readmem(fb,3344)
@@ -98,11 +104,16 @@ try:
     assert g.req('M%x,1:01'%sym('s2a_test_exit'))=='OK'
     g.cont();pc=int(g.req('g')[17*8:18*8],16)&0xffffff
     assert pc==sym('G_Ticker'),'exit did not reach original MD title/game loop'
+    if actors:assert int.from_bytes(g.readmem(0x61b0a0,4),'big')==1,'original local actor state not restored'
     report=dict(exit_to_md_loop=True,status='PASS' ,frames=26,md_logic_ticks=0,records=records,
                 scope='Real sub-camera replay on MD renderer. Local actors/doors frozen; not full world offload or an FPS benchmark.')
     if world:
         report['world']=world_stats
         report['scope']='Real sub camera plus sector/side state applied to MD renderer; local actors frozen; offline replay.'
+    if actors:
+        report['actors']=actor_stats
+        report['scope']='Real sub camera/world/dynamic actors/R24 item visibility; local renderer proxies; offline replay, no live input or offloaded FPS claim.'
+        print('S2c ACTORS PASS: 27 snapshots; 26 applied actor sets and native sector graphs exact; lifetimes and animation exercised; exit restored',flush=True)
     (rom.parent/'visual_report.json').write_text(json.dumps(report,indent=2))
     if world:print('S2b WORLD PASS: 27 decoded snapshots; 26 applied world hashes match CD; no MD simulation ticks',flush=True)
     print('S2a VISUAL PASS: 26 frames; exact sub cameras; MD ticker absent during replay; exit to original MD loop PASS',flush=True)
