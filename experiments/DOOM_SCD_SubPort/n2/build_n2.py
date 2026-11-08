@@ -114,7 +114,10 @@ for s in sources:
     obj = w / (s.name + ".o")
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
     zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N2_ZONE", "98304")] if s.name == "scd_sub_system.c" else []
-    r = subprocess.run([b("gcc")] + cflags + zone + extra + ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
+    # Speed where it matters (renderer, -O3 like the MD build), size elsewhere (-Os) to fit PRG-RAM.
+    hot = s.name.startswith("r_") or s.name in ("scd_draw.c", "tables.c")
+    opt_flags = (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) if os.environ.get("N2_OPT", "split") == "split" else []
+    r = subprocess.run([b("gcc")] + cflags + opt_flags + zone + extra + ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
         print("N2 compile FAIL", s.name, r.stderr[-2000:]); raise SystemExit(1)
     objs.append(str(obj))
@@ -135,6 +138,7 @@ for l in subprocess.check_output([b("nm"), "-S", str(elf)], text=True).splitline
 subprocess.run([b("objcopy"), "-O", "binary", "-R", ".bss", str(elf), str(w / "n2-sub.bin")], check=True)
 size = (w / "n2-sub.bin").stat().st_size
 print("N2 sub image %d bytes, bss end 0x%X (stack reserve from 0x7C000)" % (size, sym["_end"]))
+print("N2 largest functions:", sorted(((int(l.split()[1], 16), l.split()[3]) for l in subprocess.check_output([b("nm"), "-S", "--size-sort", str(elf)], text=True).splitlines() if len(l.split()) == 4 and l.split()[2] in "Tt"), reverse=True)[:8])
 assert size <= 4 * 128 * 1024 and sym["_end"] < 0x7C000
 
 # 4. MD side.
