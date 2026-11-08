@@ -76,3 +76,52 @@ Todos já existem ou são triviais no sub (S1e tem libc/`I_Error`).
 - ponteiros fixos na Word RAM para as tabelas de cor.
 
 Os quatro são medidos no passo 5.
+
+## 5. M2b-1: o sub inteiro (lógica + render) no modelo "SRAM na RAM" (run 42497635967)
+- **Defines:** todos os da R128, menos `DOOM_R12_RECIP*`. "SRAM" na PRG-RAM. 83/85 fontes; só faltam `i_genesis.c`/`r25_music.c`, que são do MD.
+- **Raízes:** `G_Ticker`, `P_SetupLevel`, `P_Init`, `R_RenderPlayerView`, `R_Init`, `G_InitNew`.
+- **Fechamento:**
+
+  | Item | Tamanho |
+  |---|---|
+  | Funções | **117 KiB** (lógica + render) |
+  | BSS | 10 KiB |
+  | Const | sem a recíproca; `r84` 146 KiB, `r76/r77` 104 KiB, demais ~36 KiB |
+
+  `r91_joint` (512 KiB) ainda é arrastado pela seção do arquivo gerado e precisa sair: separar a seção ou descartar no link (o render não o usa).
+- **Não resolvidos (34):** plataforma (VDP/JOY/SYS/PAL do texto de benchmark e menus), libc (`mem*`, `str*`, `sprintf`), `I_GetTime`, `I_PlaySong`/`I_StopSong`, `DMX_Play`, `MEM_*`, profiler R21. Todos ganham stub ou comando ao MD; o S1e já tem a maioria.
+
+**Orçamento da PRG-RAM (512 KiB):**
+
+| Item | KiB |
+|---|---|
+| código | 117 |
+| BSS | 10 |
+| "SRAM" do mapa | 64 |
+| const pequenas | 36 |
+| zone/heap | 128 |
+| cache WAD | ≥ 64 |
+| **subtotal** | **~420** |
+| + `r84` | 146 |
+| + `r76/r77` | 104 |
+| **total** | **~670 → não cabe** |
+
+**Cortes:**
+1. **`r76/r77` (104 KiB) duplicadas nos dois bancos 1M da Word RAM.** Sobram ~24 KiB por banco para `r22_fb` e pacote.
+2. **`r84`, colunas compostas na ROM (146 KiB):** só as das texturas do mapa atual. O MD monta o subconjunto na carga da fase (estimativa no E1M1: algumas dezenas de KiB), com os índices `r84_offsets` remapeados. Alternativa: desligar a R84 no sub (composição em tempo de execução, mais lenta).
+3. **Zone de 128 → 96 KiB,** se o pico medido permitir.
+
+Com 1 + 2, o total fica em ~420 + subconjunto `r84` (≤ 60 KiB): **cabe**, com folga para a pilha.
+
+**Consequência para o código existente:**
+- o sub inteiro precisa ser compilado no modelo "SRAM na RAM";
+- a lógica S2e foi compilada **sem** R22/R23, e o renderer só existe **com** eles. Os dois modelos de dados não convivem no mesmo binário.
+- Como o M2 dispensa os streams de mundo/atores, o caminho mais curto é **um novo programa do sub**: o engine R128 inteiro neste modelo, servidor WAD do S1b, relógio M1, `R_RenderPlayerView` → `r22_fb` no banco, e o MD só convertendo e apresentando + HUD/som.
+
+## 6. M2b-2: próximo passo concreto (spawn congelado)
+1. **Sub:** init (DIR/LUMP, Z, `P_Init`, `R_Init`, `G_InitNew` E1M1), sem ticks, `R_RenderPlayerView` 24 vezes, stopwatch por quadro, framebuffer no banco a cada quadro.
+2. **MD:** recebe, copia para o `r22_fb` e chama `I_FinishUpdate` (conversão + entrega R128). Mostra o tempo de render do sub.
+3. **Medir e comparar:**
+   - render no sub (stopwatch) contra os ~6.221 unidades/quadro do MD (M0);
+   - framebuffer do sub × framebuffer do MD, mesmo spawn.
+4. **Só depois:** M2b-3 ao vivo (relógio M1 + render a cada troca + HUD + som) e o gate > 4,6 FPS.
