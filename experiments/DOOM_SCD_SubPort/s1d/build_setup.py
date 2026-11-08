@@ -166,7 +166,7 @@ if ticker:
         subprocess.run([gcc]+cflags+[("-DSCD_SUB_ZONE_BYTES=131072" if actors else ("-DSCD_SUB_ZONE_BYTES=196608" if world else "-DSCD_SUB_ZONE_BYTES=229376")), "-c",str(source),"-o",str(obj)],cwd=tree,check=True)
         parts.append(obj)
 if world:
-    source=common/"s2b/sub_world.c"
+    source=common/("m15/sub_world.c" if m15 else "s2b/sub_world.c")
     obj=objdir/"sub_world.o"
     subprocess.run([gcc]+cflags+["-c",str(source),"-o",str(obj)],cwd=tree,check=True)
     parts.append(obj)

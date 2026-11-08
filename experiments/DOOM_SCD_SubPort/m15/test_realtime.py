@@ -2,7 +2,7 @@
 """Interactive dual-CPU proof: controller -> CD G_Ticker -> MD native renderer.
 No MD simulation ticks permitted before requested exit. All files private.
 """
-import hashlib,json,os,struct,sys
+import hashlib,json,os,struct,sys,math
 from pathlib import Path
 from r64a_rsp_capture import RSP,symbols
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'s2c'))
@@ -10,8 +10,11 @@ from check_actors import check_applied
 def mix(h,x):return (((((h<<5)|(h>>27))&0xffffffff)^(x&0xffffffff))+0x9e3779b9)&0xffffffff
 fast=True
 production='--production' in sys.argv
+route='--route' in sys.argv
+nav_phase=0;nav_neutral=False;nav_finish=0;door_open=False;occluded_retained=False
+waypoints=[(1312,-3520),(1248,-3400),(1280,-3100),(1280,-2848),(1320,-2600),(1472,-2496),(1632,-2496)]
 assert not production or fast
-rom,elf=map(Path,[a for a in sys.argv[1:] if a not in ('--fast','--production')]);syms=symbols(elf)
+rom,elf=map(Path,[a for a in sys.argv[1:] if a not in ('--fast','--production','--route')]);syms=symbols(elf)
 def sym(n):
     v=[v for k,v in syms.items() if k==n or k.startswith(n+'.')];assert len(v)==1,(n,v)
     return v[0]&0xffffff
@@ -92,6 +95,9 @@ def decode(g):
     assert p==ab and len(rom_states)==nrom;h=2166136261
     for x in [n,nrom,player]+[x for r in records for x in r]+[x for i in range(nrom) for x in rom_states[i]]:h=mix(h,x)
     assert h==want
+    global occluded_retained
+    if route and world_sectors[4][1]==0:
+        occluded_retained |= any(v[1]==2 and v[2]>1550*65536 and v[3]>-3000*65536 for v in records)
     check_applied(g,tic,dict(hash=want,n=n,nr=nr,player=player,records=records,actor_bytes=actor_bytes),sym,checked=checked)
     assert int.from_bytes(g.readmem(0x61b070,4),'big')==int(checked)
     out=struct.unpack('>7I',g.readmem(0x61b000,28));camera=struct.unpack_from('>8I',header,32)
@@ -99,12 +105,12 @@ def decode(g):
     audit=struct.unpack('>10I',g.readmem(0x61b100,40))
     assert audit[:2]==struct.unpack_from('>2I',header,88)
     assert audit[2:]==struct.unpack_from('>8I',header,160),'native weapon/flash psprites differ from CD'
-    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n,changed_sectors=nsec,changed_sides=nside,changed_rom=nr,checked=checked,profile_vblanks=list(struct.unpack('>6I',g.readmem(0x61b140,24))))
+    return header,dict(tic=tic,x=out[1],y=out[2],angle=out[3],health=out[4],ammo=out[5],bank=out[6],world_bytes=wb,actor_bytes=ab,actors=n,capture_world_units=struct.unpack_from('>I',actors,36)[0],capture_actor_units=struct.unpack_from('>I',actors,40)[0],item_count=struct.unpack_from('>I',header,140)[0],door_ceiling=world_sectors[4][1],changed_sectors=nsec,changed_sides=nside,changed_rom=nr,checked=checked,profile_vblanks=list(struct.unpack('>6I',g.readmem(0x61b140,24))))
 commands[0]=command(0,0)
 try:
     for name in ('s1b_complete','S2D_MDFrameDone','G_Ticker','P_Ticker','I_Error'):
         assert g.req('Z0,%x,2'%sym(name))=='OK'
-    for _ in range(105):
+    for _ in range(205 if route else 105):
         g.cont();pc=int(g.req('g')[136:144],16)&0xffffff
         if pc==sym('I_Error'):
             regs=g.req('g');sp=int(regs[120:128],16)&0xffffff;ptr=int.from_bytes(g.readmem(sp+4,4),'big')&0xffffff
@@ -128,21 +134,43 @@ try:
             if tic in (1,16,32,64,96):(rom.parent/('live-frame-%03d.bin'%tic)).write_bytes(pixels)
         metrics=struct.unpack_from('>9I',header,208)
         raster,conversion,vblank=struct.unpack('>3I',g.readmem(0x61b180,12))
-        row.update(game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_stopwatch_units=raster,conversion_stopwatch_units=conversion)
+        row.update(capture_hash_units=metrics[7],capture_copy_units=metrics[8],game_tic=metrics[0],clock_units=metrics[1],dropped=metrics[2],tick_count=metrics[3],tick_cost_total=metrics[4],tick_cost_max=metrics[5],max_poll=metrics[6],vblank=vblank,raster_stopwatch_units=raster,conversion_stopwatch_units=conversion)
         wait,copied,world_cost,actors_cost,total=struct.unpack('>5I',g.readmem(0x61b280,20))
         capmax,period,age=struct.unpack_from('>3I',header,148)
         captures,capture_total=struct.unpack_from('>2I',header,244)
         row.update(demand_units=wait,copy_units=copied,apply_world_units=world_cost,apply_actors_units=actors_cost,total_units=total,captures=captures,capture_total_units=capture_total,capture_max_units=capmax,capture_period=period,snapshot_age=age)
         rows.append(row)
-        if tic>=48:
-            stopping=True;assert g.req('M%x,1:01'%sym('s2d_test_exit'))=='OK'
-            joy=0
+        if route:
+            door_open |= row['door_ceiling']>=32*65536
+            x=row['x'] if row['x']<2**31 else row['x']-2**32
+            y=row['y'] if row['y']<2**31 else row['y']-2**32
+            x/=65536;y/=65536
+            if nav_phase<len(waypoints):
+                wx,wy=waypoints[nav_phase];distance=math.hypot(wx-x,wy-y)
+                if (nav_phase==0 and row['item_count']>rows[0]['item_count']) or (nav_phase>0 and distance<56):nav_phase+=1
+            if nav_phase==len(waypoints):
+                nav_finish+=1;joy=(8|16) if nav_finish<=3 else 16
+            elif nav_neutral:
+                joy=0;nav_neutral=False
+            else:
+                wx,wy=waypoints[nav_phase]
+                target=math.atan2(wy-y,wx-x);angle=row['angle']*2*math.pi/2**32
+                diff=(target-angle+math.pi)%(2*math.pi)-math.pi
+                joy=(4 if diff>0 else 8) if abs(diff)>math.radians(18) else 1
+                nav_neutral=True
+            if nav_phase>=5 and tic%4<2:joy|=64
+            if tic<2:joy|=16
+            print('M15 route',tic,'phase',nav_phase,'xy',round(x,1),round(y,1),'item',row['item_count'],'door',round(row['door_ceiling']/65536),flush=True)
+            if nav_finish>=6 or tic>=190:
+                stopping=True;joy=0;assert g.req('M%x,1:01'%sym('s2d_test_exit'))=='OK'
+        elif tic>=48:
+            stopping=True;assert g.req('M%x,1:01'%sym('s2d_test_exit'))=='OK';joy=0
         else:joy=(1|16) if tic<8 else (4|16) if tic<16 else (16|64 if tic>=40 else 16)
         assert g.req('M%x,2:%04x'%(sym('s2d_test_buttons'),joy))=='OK'
         commands[tic+1]=command(tic+1,joy,int(stopping))
         print('S2d live applied',tic,'actors',row['actors'],'ammo',row['ammo'],'bank',row['bank'],flush=True)
     else:raise AssertionError('missing normal exit')
-    assert len(rows)>=49 and len({(r['x'],r['y']) for r in rows})>2
+    assert len(rows)>=(20 if route else 49) and len({(r['x'],r['y']) for r in rows})>2
     assert len({r['angle'] for r in rows})>2 and min(r['ammo'] for r in rows)<rows[0]['ammo']
     assert {r['bank'] for r in rows}=={4,5},'Word RAM banks did not alternate'
     assert len({r.get('frame_sha256') for r in rows})>8
@@ -156,14 +184,17 @@ try:
     steady=rows[8:-1]
     fps=(b['tic']-a['tic'])*60/(b['vblank']-a['vblank'])
     telemetry=dict(presentation_fps=fps,demand_mean_ms=sum(r['demand_units'] for r in steady)*0.03072/len(steady),demand_max_ms=max(r['demand_units'] for r in steady)*0.03072,apply_world_ms=sum(r['apply_world_units'] for r in steady)*0.03072/len(steady),apply_actors_ms=sum(r['apply_actors_units'] for r in steady)*0.03072/len(steady),capture_mean_ms=b['capture_total_units']*0.03072/max(1,b['captures']),capture_max_ms=b['capture_max_units']*0.03072,mean_tick_ms=b['tick_cost_total']*0.03072/max(1,b['tick_count']),max_snapshot_age=max(r['snapshot_age'] for r in rows),max_poll_ms=b['max_poll']*0.03072)
+    telemetry.update(copy_ms=sum(r['copy_units'] for r in steady)*0.03072/len(steady),capture_world_ms=sum(r['capture_world_units'] for r in steady)*0.03072/len(steady),capture_actor_ms=sum(r['capture_actor_units'] for r in steady)*0.03072/len(steady),capture_copy_ms=sum(r['capture_copy_units'] for r in steady)*0.03072/len(steady),capture_hash_ms=sum(r['capture_hash_units'] for r in steady)*0.03072/len(steady),actors_mean=sum(r['actors'] for r in steady)/len(steady))
     print('M15 telemetry',json.dumps(telemetry),flush=True)
     report=dict(telemetry=telemetry,logic_hz=hz,status='PASS' ,frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
                 scope='Independent 35 Hz CD logic; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast,production=production)
-    (rom.parent/('live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
+    (rom.parent/('route_report.json' if route else 'live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
     assert 34.3<=hz<=35.7,('35 Hz cadence',hz)
     assert not b['dropped'],('dropped ticks',b['dropped'])
     assert b['max_poll']*0.03072<100,('stopwatch poll gap',b['max_poll'])
-    if production:assert fps>4.6,('presentation target >4.6 FPS',fps)
+    if route:
+        assert nav_finish>=6 and door_open and max(r['item_count'] for r in rows)>rows[0]['item_count'] and occluded_retained,('door/item/occluded actor route',nav_phase,nav_finish,door_open,occluded_retained)
+    if production and not route:assert fps>4.6,('presentation target >4.6 FPS',fps)
     print('M15 LIVE PASS: actual movement/turn/fire, input echo, 2 Word RAM banks, exact world/actors, no MD logic, exit restored',flush=True)
 finally:g.close()
 

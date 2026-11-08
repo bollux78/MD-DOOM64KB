@@ -27,6 +27,13 @@ typedef struct {
 #if defined(SCD_REALTIME)
 extern void S2F_ClockPoll(void);
 #endif
+#if defined(SCD_M15)
+static uint16_t m15_busy;
+int SCD_SubBusy(void){return m15_busy;}
+#define M15_BUSY(x) (m15_busy=(x))
+#else
+#define M15_BUSY(x) ((void)0)
+#endif
 static uint16_t sub_seq, sub_mode = 4u;
 static uint32_t sub_requests, sub_bytes, sub_timeouts;
 
@@ -59,6 +66,7 @@ uint32_t SCD_SubTimeouts(void) { return sub_timeouts; }
 static const volatile uint8_t *scd_exchange(uint16_t command,
                                              uint16_t argument, uint16_t *length)
 {
+    M15_BUSY(1);
     uint16_t seq=++sub_seq;
     if(!seq) seq=++sub_seq;
     SCD_SUB_REG16(SCD_SUB_CMD_REG)=command;
@@ -88,17 +96,17 @@ static const volatile uint8_t *scd_exchange(uint16_t command,
             !status || got_len>room || got_len>65535ul)
         {
             SCD_SUB_REG16(SCD_SUB_DONE_REG)=seq;
-            return 0;
+            M15_BUSY(0);return 0;
         }
         *length=(uint16_t)got_len;
         sub_requests++;
         sub_bytes+=got_len;
         /* The caller MUST copy payload before issuing another request. */
         SCD_SUB_REG16(SCD_SUB_DONE_REG)=seq;
-        return bank+SCD_PAYLOAD_OFFSET;
+        M15_BUSY(0);return bank+SCD_PAYLOAD_OFFSET;
     }
     sub_timeouts++;
-    return 0;
+    M15_BUSY(0);return 0;
 }
 int scd_fetch_directory(scd_lump_dirent_t *entries, uint16_t capacity,
                         uint16_t *count)
@@ -166,3 +174,4 @@ int SCD_SubLiveCommit(uint32_t frame,uint8_t out[16]){
     SCD_SUB_REG16(SCD_SUB_DONE_REG)=sub_seq;return ok;
 }
 #endif
+

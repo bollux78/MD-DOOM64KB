@@ -50,6 +50,10 @@ def prepare(tree,objdir,gcc,cflags,common):
         anchor='void P_InitThinkers(void)\n{'
         assert tick.count(anchor)==1
         tick=tick.replace(anchor,anchor+'\n  {extern void S2C_ResetActors(void);S2C_ResetActors();}\n')
+    if '-DSCD_M15' in cflags:
+        poll='        thinker_t __far* th_next = th->next;'
+        assert tick.count(poll)==1
+        tick=tick.replace(poll,'        {extern void S2F_ClockPoll(void);S2F_ClockPoll();}\n'+poll)
     (objdir/'engine_tick.c').write_text(tick)
     sources=[objdir/'engine_tick.c',objdir/'engine_game.c' ,objdir/'engine_metadata.c',
              common/'s1e/engine_platform.c',common/'s1e/engine_libc.c']

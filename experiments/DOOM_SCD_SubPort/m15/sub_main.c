@@ -16,24 +16,31 @@ extern void S2D_InitGame(void);
 extern void S2D_SetCommand(int8_t,int8_t,int16_t,uint8_t);
 static uint8_t echo[16];
 static uint32_t elapsed,phase,dropped,ticks,cost_total,cost_max,max_gap,frame;
-static uint16_t previous_clock,prepared;
-static uint32_t capture_count,capture_total,capture_max;
+static uint16_t previous_clock,prepared,demand,servicing,async_enabled,stop_received;
+extern int SCD_SubBusy(void);
+static void service(void);
+static uint32_t capture_count,capture_total,capture_max,cap_world,cap_actor,cap_copy,cap_hash;
 extern void M15_WorldDelivered(void),M15_ActorsDelivered(void);
 void S2F_ClockPoll(void){
     uint16_t now=R16(0xFF800CUL)&4095u;
     uint16_t delta=(now-previous_clock)&4095u;previous_clock=now;
     elapsed+=delta;phase+=(uint32_t)delta*13440UL;
     if(delta>max_gap)max_gap=delta;
+    if(async_enabled && prepared && !servicing && !SCD_SubBusy())service();
 }
 extern void SCD_SubLiveBegin(void);
 extern int SCD_SubLiveReady(void),SCD_SubLiveCommit(uint32_t,uint8_t *);
 
 static void build_snapshot(uint32_t tic){
     /* Poll between capture phases: the 12-bit stopwatch wraps every ~125.8 ms. */
-    S2B_Capture(0);S2F_ClockPoll();S2B_Finish();S2F_ClockPoll();S2C_Capture(0);S2F_ClockPoll();S2C_Finish();S2F_ClockPoll();
+    uint32_t mark=elapsed;
+    S2B_Capture(0);S2F_ClockPoll();S2B_Finish();S2F_ClockPoll();cap_world=elapsed-mark;mark=elapsed;
+    S2C_Capture(0);S2F_ClockPoll();S2C_Finish();S2F_ClockPoll();cap_actor=elapsed-mark;
+    ((volatile uint32_t *)0x68024UL)[0]=cap_world;((volatile uint32_t *)0x68024UL)[1]=cap_actor;
     uint32_t wb=*(volatile const uint32_t *)0x74014UL,ab=*(volatile const uint32_t *)0x68010UL;
     uint32_t total=256+wb+ab;
     if(wb>8192 || ab>8192 || total>S2D_MAX_FRAME)I_Error("S2D FRAME BOUNDS");
+    prepared=0; /* lock the owned bank only while replacing its immutable packet */
     volatile uint8_t *p=(volatile uint8_t *)(0xC0000UL+S2D_FRAME_OFFSET);
     for(uint16_t i=0;i<256;i++)p[i]=0;
     volatile uint32_t *h=(volatile uint32_t *)p;
@@ -54,16 +61,19 @@ static void build_snapshot(uint32_t tic){
     }
     for(uint16_t i=0;i<16;i++)p[192+i]=echo[i];
     h[52]=_g_gametic;h[53]=elapsed;h[54]=dropped;h[55]=ticks;
-    h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=phase;h[60]=frame;
+    h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=cap_hash;h[60]=cap_copy;
 
 #if defined(SCD_FAST)
     volatile uint32_t *w=(volatile uint32_t *)(p+256);
     volatile const uint32_t *ws=(volatile const uint32_t *)0x74000UL;
     volatile const uint32_t *as=(volatile const uint32_t *)0x68000UL;
+    mark=elapsed;
     for(uint16_t i=0;i<wb/4;i++)w[i]=ws[i];
     w=(volatile uint32_t *)(p+256+wb);
     for(uint16_t i=0;i<ab/4;i++)w[i]=as[i];
+    S2F_ClockPoll();cap_copy=elapsed-mark;mark=elapsed;
     h[7]=M15_Check((volatile const uint32_t *)(p+256),(total-256)/4);
+    S2F_ClockPoll();cap_hash=elapsed-mark;
 #else
     for(uint16_t i=0;i<wb;i++)p[256+i]=((volatile const uint8_t *)0x74000UL)[i];
     for(uint16_t i=0;i<ab;i++)p[256+wb+i]=((volatile const uint8_t *)0x68000UL)[i];
@@ -79,9 +89,26 @@ static void seal(void){
  volatile uint32_t *h=(volatile uint32_t *)(0xC0000UL+S2D_FRAME_OFFSET);
  h[2]=frame;
  for(uint16_t i=0;i<16;i++)((volatile uint8_t *)h)[192+i]=echo[i];
- h[53]=elapsed;h[54]=dropped;h[55]=ticks;h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=phase;h[60]=frame;
+ h[53]=elapsed;h[54]=dropped;h[55]=ticks;h[56]=cost_total;h[57]=cost_max;h[58]=max_gap;h[59]=cap_hash;h[60]=cap_copy;
  h[37]=capture_max;h[38]=2;h[39]=_g_gametic-h[9];h[61]=capture_count;h[62]=capture_total;
  h[63]=M15_Check(h,63);
+}
+static void service(void){
+        uint16_t requested=R16(0xFF8012UL);
+        if(requested && requested!=demand && prepared){
+            servicing=1;
+            SCD_SubLiveBegin();
+            uint32_t spins=0;
+            while(!SCD_SubLiveReady()){
+                S2F_ClockPoll();if(++spins==200000000UL)I_Error("M1 INPUT TIMEOUT");
+            }
+            S2F_ClockPoll();seal();
+            if(!SCD_SubLiveCommit(frame,echo))I_Error("M1 INPUT TRANSPORT");
+            M15_WorldDelivered();M15_ActorsDelivered();prepared=0;
+            demand=requested;frame++;S2F_ClockPoll();
+            if(echo[14] || echo[15])stop_received=1;
+            servicing=0;
+        }
 }
 void SCD_EngineInitialCheckpoint(void){} /* no offline checkpoint observer */
 void sub_main(void){
@@ -96,28 +123,15 @@ void sub_main(void){
     while(R16(0xFF8010UL)!=0xD04D){} /* startup screen: no timed transport wait */
     elapsed=phase=dropped=ticks=cost_total=cost_max=max_gap=frame=0;
     previous_clock=R16(0xFF800CUL)&4095u;
-    uint16_t demand=0;
+    demand=0;
     uint16_t frozen=R16(0xFF8014UL);
     capture_count=capture_total=capture_max=0;
     if(frozen){S2D_SetCommand(0,0,0,0);G_Ticker();_g_gametic++;prepare();}
 
+    async_enabled=1;
     for(;;){
         S2F_ClockPoll();
-        uint16_t requested=R16(0xFF8012UL);
-        if(requested && requested!=demand && prepared){
-            /* Main is requesting a frame and will service any startup lumps.
-             * Capture only after it has prepared input, then swap atomically. */
-            SCD_SubLiveBegin();
-            uint32_t spins=0;
-            while(!SCD_SubLiveReady()){
-                S2F_ClockPoll();if(++spins==200000000UL)I_Error("M1 INPUT TIMEOUT");
-            }
-            S2F_ClockPoll();seal();
-            if(!SCD_SubLiveCommit(frame,echo))I_Error("M1 INPUT TRANSPORT");
-            M15_WorldDelivered();M15_ActorsDelivered();prepared=0;
-            demand=requested;frame++;S2F_ClockPoll();
-            if(echo[14] || echo[15])break;
-        }
+        if(stop_received)goto done;
         if(frozen)continue;
         uint32_t due=phase/12500000UL;phase%=12500000UL;
         /* Catch-up cap: a publish/input exchange can take ~4 tics; mean tick cost ~13 ms leaves room for 8. */
@@ -134,7 +148,8 @@ void sub_main(void){
             if(cost>cost_max)cost_max=cost;
             if(!_g_player.mo || _g_gamestate!=GS_LEVEL)goto done;
             if(!(ticks&63))Z_CheckHeap();
-            if(!(_g_gametic&1u) && !(prepared && R16(0xFF8012UL)!=demand))prepare();
+            if(stop_received)goto done;
+            if(!(_g_gametic&1u))prepare();
         }
     }
  done:

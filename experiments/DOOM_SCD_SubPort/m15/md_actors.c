@@ -16,6 +16,7 @@
 #define HS ((uint16_t *)0x618200UL)
 #define HP ((mobj_t **)0x618280UL)
 #define REP ((subsector_t **)0x618400UL)
+#define LOOKUP ((uint16_t *)0x618800UL)
 #define SLOTS ((uint16_t *)0x617C00UL)
 #define SAVED_ROM ((uint32_t *)0x61C000UL)
 #define SAVED_PLAYER ((int32_t *)0x61CC00UL)
@@ -61,11 +62,15 @@ void S2C_ApplyFrame(uint16_t frame){
  }else for(uint16_t i=0;i<HC;i++)_g_sectors[HS[i]].thinglist=HP[i];
  uint8_t seen[64]={0};uint16_t assigned[64],fresh=0,moved=0,removed=0,found=0;
  p+=16;
+ for(uint16_t i=0;i<128;i++)LOOKUP[i]=0;
+ for(uint16_t i=0;i<64;i++)if(IDS[i]){uint16_t k=IDS[i]&127u;while(LOOKUP[k])k=(k+1)&127u;LOOKUP[k]=i+1;}
  for(uint16_t j=0;j<n;j++){
   uint16_t id=*(volatile const uint16_t *)(p+(uint32_t)j*24);if(!id)I_Error("M15 ZERO ID");
   assigned[j]=65535;
-  for(uint16_t i=0;i<64;i++)if(IDS[i]==id){if(seen[i])I_Error("M15 DUPLICATE ID");seen[i]=1;assigned[j]=i;break;}
-  for(uint16_t k=0;k<j;k++)if(*(volatile const uint16_t *)(p+(uint32_t)k*24)==id)I_Error("M15 DUPLICATE NEW ID");
+  uint16_t key=id&127u;
+  while(LOOKUP[key] && IDS[LOOKUP[key]-1]!=id)key=(key+1)&127u;
+  if(LOOKUP[key]){uint16_t i=LOOKUP[key]-1;if(seen[i])I_Error("M15 DUPLICATE ID");seen[i]=1;assigned[j]=i;}
+  if(assigned[j]==65535)for(uint16_t k=0;k<j;k++)if(*(volatile const uint16_t *)(p+(uint32_t)k*24)==id)I_Error("M15 DUPLICATE NEW ID");
  }
  for(uint16_t i=0;i<64;i++)if(IDS[i] && !seen[i]){unlink_slot(i);IDS[i]=0;removed++;}
  extern volatile uint8_t s2e_test_deep;

@@ -20,7 +20,24 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Reuse pristine generated R128 objects when source trees match
+        id: cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          key=$(git rev-parse HEAD:src HEAD:scripts/lab HEAD:assets | tr '\n' '-')
+          cache="$HOME/Projetos/Personal/scd-subport-m15/build-cache/$key"
+          echo "M15_CACHE=$cache" >> "$GITHUB_ENV"
+          if [ -f "$cache/ready" ]; then
+            tree="$RUNNER_TEMP/m15-tree-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            cp -a "$cache/tree" "$tree"
+            echo "M15_TREE=$tree" >> "$GITHUB_ENV"
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Restore VGM and pinned shareware WAD
+        if: steps.cache.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -36,6 +53,7 @@ jobs:
           shutil.copyfile(source,'scripts/doom1.wad')
           PY
       - name: Generate artwork and preflight renderer palettes
+        if: steps.cache.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +65,7 @@ jobs:
           python3 scripts/lab/test_r49_colormix.py
           python3 scripts/lab/gen_hud_wad.py --wad scripts/doom1.wad --out src/hud_wad_assets.h --preview dist/hud/hud-preview.png
       - name: Build control and candidate in separate disposable copies
+        if: steps.cache.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -91,8 +110,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
-          tree=$(dirname "$(dirname "$stamp")")
+          if [ "${{ steps.cache.outputs.hit }}" = true ]; then
+            tree="$M15_TREE"
+          else
+            stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+            tree=$(dirname "$(dirname "$stamp")")
+            mkdir -p "$M15_CACHE"
+            cp -a "$tree" "$M15_CACHE/tree"
+            touch "$M15_CACHE/ready"
+          fi
           out="$HOME/Projetos/Personal/scd-subport-m15/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/base"
           python3 experiments/DOOM_SCD_SubPort/s1b/build.py "$tree" "$out" "$out"
           echo "M15_TREE=$tree" >> "$GITHUB_ENV"
@@ -124,6 +150,7 @@ jobs:
           python3 experiments/DOOM_SCD_SubPort/m15/test_frozen.py "$M15_OUT/doom-md-scd-m15.bin" "$M15_OUT/doom-md-scd-m15.elf"
           python3 experiments/DOOM_SCD_SubPort/m15/test_realtime.py --fast "$M15_OUT/doom-md-scd-m15.bin" "$M15_OUT/doom-md-scd-m15.elf"
           python3 experiments/DOOM_SCD_SubPort/m15/test_realtime.py --fast --production "$M15_OUT/doom-md-scd-m15.bin" "$M15_OUT/doom-md-scd-m15.elf"
+          python3 experiments/DOOM_SCD_SubPort/m15/test_realtime.py --fast --production --route "$M15_OUT/doom-md-scd-m15.bin" "$M15_OUT/doom-md-scd-m15.elf"
 
       - name: Separate build and BlastEm verdicts
         if: always()

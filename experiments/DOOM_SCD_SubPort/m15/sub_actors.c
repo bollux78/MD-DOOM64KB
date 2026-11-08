@@ -4,6 +4,9 @@
 static mobj_t *live[S2C_MAX_ACTORS];
 static uint16_t ids[S2C_MAX_ACTORS],nextid,romcount;
 static uint32_t previous_rom[S2C_MAX_ROM];
+static uint8_t dirty_rom[S2C_MAX_ROM];
+static uint16_t initialized;
+extern void S2F_ClockPoll(void);
 static uint32_t used=256;
 #if defined(SCD_FAST)
 static uint16_t captured;
@@ -54,7 +57,7 @@ void S2C_Capture(uint16_t tic){
     HEAD[8+frame]=used;volatile uint8_t *header=reserve(16);
     uint32_t h=M15_Mix(M15_Mix(M15_Mix(2166136261UL,n),romcount),playerid);
     for(uint16_t i=0;i<S2C_MAX_ACTORS;i++)if(live[i] && relevant(live[i])){
-        uint32_t v[10];M15_Values(live[i],ids[i],v);
+        S2F_ClockPoll();uint32_t v[10];M15_Values(live[i],ids[i],v);
         for(uint16_t j=0;j<10;j++)h=M15_Mix(h,v[j]);
         M15_Write(reserve(24),v);
     }
@@ -62,13 +65,15 @@ void S2C_Capture(uint16_t tic){
         uint16_t dead=S2C_RomDead(i),delay=S2C_RomDelay(i);
         h=M15_Mix(M15_Mix(h,dead),delay);
         uint32_t v=((uint32_t)dead<<16)|delay;
-        if(full || previous_rom[i]!=v){
+        if(initialized && previous_rom[i]!=v)dirty_rom[i]=1;
+        previous_rom[i]=v;
+        if(full || dirty_rom[i]){
             volatile uint16_t *p=(volatile uint16_t *)reserve(8);
             p[0]=i;p[1]=dead;p[2]=delay;p[3]=0;nr++;
         }
     }
 #if defined(SCD_FAST)
-    /* Baseline advances only after delivery. */
+    initialized=1;
 #endif
     *(volatile uint32_t *)header=tic;*(volatile uint16_t *)(header+4)=n;
     *(volatile uint16_t *)(header+6)=nr;*(volatile uint32_t *)(header+8)=h;
@@ -84,10 +89,4 @@ void S2C_Finish(void){
 }
 
 
-void M15_ActorsDelivered(void){
- volatile const uint8_t *p=BASE+256;
- uint16_t n=*(volatile const uint16_t *)(p+4),nr=*(volatile const uint16_t *)(p+6);p+=16+(uint32_t)n*24;
- for(uint16_t j=0;j<nr;j++,p+=8){uint16_t i=*(volatile const uint16_t *)p;
- previous_rom[i]=((uint32_t)*(volatile const uint16_t *)(p+2)<<16)|*(volatile const uint16_t *)(p+4);}
- captured=1;
-}
+void M15_ActorsDelivered(void){captured=1;}
