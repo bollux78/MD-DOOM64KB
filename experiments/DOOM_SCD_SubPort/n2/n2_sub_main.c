@@ -7,6 +7,7 @@
 #include "globdata.h"
 #include "g_game.h"
 #include "p_tick.h"
+#include "p_setup.h"
 #include "r_main.h"
 #include "w_wad.h"
 #include "z_zone.h"
