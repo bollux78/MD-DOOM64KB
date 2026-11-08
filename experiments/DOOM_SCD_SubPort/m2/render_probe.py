@@ -18,9 +18,25 @@ gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
 drop = ("DOOM_R22_SRAM_BLOCKLINKS", "DOOM_R23_MAPMEM", "DOOM_R25_MUSIC", "DOOM_R81_SAVE")
+import shutil
+# Variant 3: keep ALL R128 defines (R22/R23/R25 map memory included) but move the "cartridge SRAM"
+# into sub PRG-RAM: same odd-lane layout, enable/disable become no-ops.
+patched = out / "src-sram-in-ram"
+if patched.exists(): shutil.rmtree(patched)
+shutil.copytree(tree / "src", patched)
+for f in patched.rglob("*"):
+    if f.suffix not in (".c", ".h", ".inc"): continue
+    t = f.read_text(errors="replace"); o = t
+    t = t.replace("#define R22_SRAM_BASE 0x00200000UL", "#define R22_SRAM_BASE SCD_SRAM_BASE")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x0020F001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+0xF001UL)")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x00200001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+1UL)")
+    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL (SCD_SRAM_BASE+0x1FFFEUL)")
+    t = t.replace("(*(volatile uint8_t*)0x00A130F1UL=1)", "((void)0)").replace("(*(volatile uint8_t*)0x00A130F1UL=0)", "((void)0)")
+    if t != o: f.write_text(t); print("patched", f.name)
 variants = {
     "sub-defines": [o for o in opt if o.startswith("-D") and not o.startswith(tuple("-D" + d for d in drop))],
     "sub-defines-norecip": [o for o in opt if o.startswith("-D") and not o.startswith(tuple("-D" + d for d in drop + ("DOOM_R12_RECIP",)))],
+    "sram-in-ram": [o for o in opt if o.startswith("-D")] + ["-DSCD_SRAM_BASE=0x00060000UL"],
 }
 for label, defs in variants.items():
     w = out / label
@@ -28,10 +44,11 @@ for label, defs in variants.items():
     cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
               "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
               "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
-              "-I" + str(tree / "src"), "-I" + str(tree / "compat")] + defs
+              "-I" + str(patched if label == "sram-in-ram" else tree / "src"), "-I" + str(tree / "compat")] + defs
+    srcroot = patched if label == "sram-in-ram" else tree / "src"
     objs, fails = [], []
-    for src in sorted(p for p in (tree / "src").rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts):
-        obj = w / (src.relative_to(tree / "src").as_posix().replace("/", "_") + ".o")
+    for src in sorted(p for p in srcroot.rglob("*") if p.suffix in (".c", ".s") and "boot" not in p.parts):
+        obj = w / (src.relative_to(srcroot).as_posix().replace("/", "_") + ".o")
         cmd = [b("gcc")] + cflags + (["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if src.suffix == ".s" else []) + ["-c", str(src), "-o", str(obj)]
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(tree))
         (fails.append((src.name, next((l for l in r.stderr.splitlines() if "error" in l.lower()), "?")[-160:])) if r.returncode else objs.append(str(obj)))
