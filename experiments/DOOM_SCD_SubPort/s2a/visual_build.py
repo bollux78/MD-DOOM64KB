@@ -22,3 +22,11 @@ void S2A_InitLocalMap(void){G_InitNew(sk_hard,1);}
     text=menu.read_text()
     text+='\nvoid S2A_ClearMenus(void){M_ClearMenus();}\n'
     menu.write_text(text)
+
+    # Preserve the real MD ticker as an explicit debug boundary. Its body is
+    # unchanged; a breakpoint must reject accidental local simulation.
+    tick=tree/'src/p_tick.c'
+    text=tick.read_text()
+    anchor='void P_Ticker (void)'
+    assert text.count(anchor)==1
+    tick.write_text(text.replace(anchor,'void __attribute__((noipa,noinline)) P_Ticker (void)'))
