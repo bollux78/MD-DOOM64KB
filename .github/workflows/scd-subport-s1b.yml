@@ -1,4 +1,4 @@
-name: Sega CD Z7 independent MD and sub traces
+name: Sega CD Z8 original level ticker and rebirth
 on:
   workflow_dispatch:
   push:
@@ -240,6 +240,36 @@ jobs:
           python3 experiments/DOOM_SCD_SubPort/s1e/compare_logic.py "$S1E_Z6_OUT/md_trace.csv" "$S1E_Z6_OUT/sub_trace.csv" --out "$S1E_Z6_OUT/comparison.json"
 
 
+      - name: S1e Z8 original G_Ticker P_Init and rebirth strict build
+        id: z8_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
+          tree=$(dirname "$(dirname "$stamp")")
+          ram="$HOME/Projetos/Personal/scd-subport-s1d-ram/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$HOME/Projetos/Personal/scd-subport-s1e-z8/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "S1E_Z8_OUT=$out" >> "$GITHUB_ENV"
+          python3 experiments/DOOM_SCD_SubPort/s1d/build_setup.py "$tree" "$S1A_OUT" "$ram" "$out" --engine
+      - name: S1e Z8 BlastEm original decoder full level ticker plus rebirth
+        id: z8_blastem
+        if: steps.z8_build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/s1e-z8.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/config/blastem" "$work/data"
+          cfg="$HOME/.config/blastem/blastem.cfg"
+          if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
+          cp "$cfg" "$work/config/blastem/blastem.cfg"
+          sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
+          XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            python3 experiments/DOOM_SCD_SubPort/s1d/test_setup.py --engine "$S1E_Z8_OUT/doom-md-scd-s1e-z8.bin" "$S1E_Z8_OUT/doom-md-scd-s1e-z8.elf"
+          python3 experiments/DOOM_SCD_SubPort/s1e/compare_logic.py "$S1E_Z6_OUT/md_trace.csv" "$S1E_Z8_OUT/sub_trace.csv" --out "$S1E_Z8_OUT/comparison.json"
+
       - name: Z4 and Z5 runtime acceptance gate
         if: always()
         shell: bash
@@ -256,3 +286,7 @@ jobs:
           echo "Z6 real sub simulation: ${{ steps.z6_blastem.outcome }}"
           test "${{ steps.z6_build.outcome }}" = "success"
           test "${{ steps.z6_blastem.outcome }}" = "success"
+          echo "Z8 strict build: ${{ steps.z8_build.outcome }}"
+          echo "Z8 G_Ticker and rebirth: ${{ steps.z8_blastem.outcome }}"
+          test "${{ steps.z8_build.outcome }}" = "success"
+          test "${{ steps.z8_blastem.outcome }}" = "success"
