@@ -11,7 +11,7 @@ def sym(n):
     assert len(vals)==1,(n,vals)
     return vals[0]&0xffffff
 reports={}
-for mode,name in ((1,'native'),(2,'cd')):
+for mode,name in ((1,'native'),(2,'cd'),(3,'native_legacy_text'),(4,'cd_legacy_text')):
     g=RSP(os.environ['BLASTEM'],rom,16000,600)
     try:
         g.req('qSupported')
@@ -23,10 +23,10 @@ for mode,name in ((1,'native'),(2,'cd')):
                 assert g.req('M%x,2:%04x'%(sym('s2f_test_mode'),mode))=='OK'
                 assert g.req('z0,%x,2'%pc)=='OK';continue
             assert pc==sym('S2F_M0FrameDone'),('benchmark failed',name,hex(pc))
-            row=list(struct.unpack('>6I',g.readmem(0x61b1c0,24)))
+            row=list(struct.unpack('>7I',g.readmem(0x61b1c0,28)))
             assert row[0]==len(rows);rows.append(row)
         assert len(rows)==24
-        reports[name]={'frames':24,'raster_stopwatch_units':sum(r[1] for r in rows),'conversion_stopwatch_units':sum(r[2] for r in rows),'extra_wait_stopwatch_units':sum(r[3] for r in rows),'total_stopwatch_units':sum(r[4] for r in rows),'dma_stopwatch_units':sum(r[5] for r in rows),'rows':rows}
+        reports[name]={'frames':24,'raster_stopwatch_units':sum(r[1] for r in rows),'conversion_stopwatch_units':sum(r[2] for r in rows),'extra_wait_stopwatch_units':sum(r[3] for r in rows),'total_stopwatch_units':sum(r[4] for r in rows),'dma_stopwatch_units':sum(r[5] for r in rows),'text_stopwatch_units':sum(r[6] for r in rows),'rows':rows}
         print('M0 frozen',name,reports[name],flush=True)
     finally:g.close()
 reports['cd_over_native']=reports['cd']['total_stopwatch_units']/reports['native']['total_stopwatch_units']

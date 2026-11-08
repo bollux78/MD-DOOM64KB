@@ -7,19 +7,27 @@ def install(tree,boot):
     a=s.index('            SYS_disableInts();',s.index('if(expected_tic){'))
     b=s.index('SYS_enableInts();',a)+len('SYS_enableInts();')
     s=s[:a]+s[b:]
-    # Preserve the final DMA fence until M0 measurements establish redundancy.
+    # Profiling scratch uses owned Word RAM, preserving scarce MD work RAM.
     s=s.replace('static uint32_t expected_tic;',"""static uint32_t expected_tic;
 volatile uint16_t s2f_test_mode __attribute__((section(".data")))=0;
-static uint32_t stage_start[5],stage_vblank[5],stage_cost[5];
+#define stage_start ((volatile uint32_t *)0x61B200UL)
+#define stage_vblank ((volatile uint32_t *)0x61B220UL)
+#define stage_cost ((volatile uint32_t *)0x61B240UL)
 void S2F_ProfileBegin(uint16_t),S2F_ProfileEnd(uint16_t);
 void __attribute__((noipa,noinline)) S2F_M0FrameDone(void){__asm__ volatile("":::"memory");}
 static void frozen_benchmark(void){
     for(uint16_t i=0;i<24;i++){
         _g_gametic++;stage_cost[4]=0;S2F_ProfileBegin(2);
-        S2A_Display();S2F_ProfileBegin(3);R20_StopVideo();S2F_ProfileEnd(3);S2F_ProfileEnd(2);
+        S2A_Display();S2F_ProfileBegin(3);R20_StopVideo();S2F_ProfileEnd(3);
+        S2F_ProfileBegin(5);
+        if(s2f_test_mode>=3){
+            SYS_disableInts();VDP_drawText("S2E FAST STATE / LOGIC ON SEGA CD",1,1);
+            VDP_drawText("A USE B FIRE C STRAFE / START EXIT",1,2);SYS_enableInts();
+        }
+        S2F_ProfileEnd(5);S2F_ProfileEnd(2);
         volatile uint32_t *m=(volatile uint32_t *)0x61B1C0UL;
         m[0]=i;m[1]=stage_cost[0];m[2]=stage_cost[1];
-        m[3]=stage_cost[3];m[4]=stage_cost[2];m[5]=stage_cost[4];
+        m[3]=stage_cost[3];m[4]=stage_cost[2];m[5]=stage_cost[4];m[6]=stage_cost[5];
         S2F_M0FrameDone();
     }
     for(;;){}
@@ -40,10 +48,10 @@ void S2F_ProfileEnd(uint16_t stage){
         m[0]=stage_cost[0];m[1]=stage_cost[1];m[2]=t5;
         S2D_MDFrameDone();expected_tic++;""")
     s=s.replace('expected_tic=0;stop_sent=0;',"""expected_tic=0;stop_sent=0;
-    if(s2f_test_mode==1){extern void G_Ticker(void);G_Ticker();frozen_benchmark();}
-    R16(0xA12014UL)=s2f_test_mode==2;
+    if(s2f_test_mode==1 || s2f_test_mode==3){extern void G_Ticker(void);G_Ticker();frozen_benchmark();}
+    R16(0xA12014UL)=(s2f_test_mode==2 || s2f_test_mode==4);
 """)
-    s=s.replace('if(expected_tic){','if(s2f_test_mode==2)frozen_benchmark();\n        if(expected_tic){')
+    s=s.replace('if(expected_tic){','if((s2f_test_mode==2 || s2f_test_mode==4))frozen_benchmark();\n        if(expected_tic){')
     p.write_text(s)
     p=tree/'src/d_main.c' ;s=p.read_text()
     s='extern void S2F_ProfileBegin(unsigned short),S2F_ProfileEnd(unsigned short);\n'+s

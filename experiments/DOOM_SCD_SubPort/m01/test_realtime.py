@@ -105,6 +105,7 @@ try:
             stage,served,errors,marker,*_=struct.unpack('>4H4I',g.readmem(0x61f000,24))
             assert (stage,served,errors,marker)==(5,18,0,0x5aad if fast else 0x5a9d)
             if fast:assert g.req('M%x,1:%02x'%(sym('s2e_test_deep'),0 if production else 1))=='OK'
+            print('M01 boot ready',flush=True)
             assert g.req('z0,%x,2'%pc)=='OK';continue
         if pc in (sym('G_Ticker'),sym('P_Ticker')):
             assert stopping and pc==sym('G_Ticker'),'MD simulation ticked during live CD play'
@@ -139,10 +140,10 @@ try:
     a,b=rows[8],rows[-2]
     hz=(b['game_tic']-a['game_tic'])*60/(b['vblank']-a['vblank'])
     print('M1 independent MD-clock logic Hz',hz,'dropped',b['dropped'],flush=True)
-    assert 34.3<=hz<=35.7,('35 Hz cadence',hz)
-    assert not b['dropped'],('dropped ticks',b['dropped'])
     report=dict(logic_hz=hz,status='PASS',frames=len(rows),md_simulation_ticks=0,controller_echo=True,exit_restored=True,rows=rows,
                 scope='Independent 35 Hz CD logic; native MD renderer; delta world/R24 and word checksum on S2e only; profile counts are emulated VBlanks, not wall time or console FPS.',fast=fast,production=production)
     (rom.parent/('live_deep_report.json' if fast and not production else 'live_report.json')).write_text(json.dumps(report,indent=2))
+    assert 34.3<=hz<=35.7,('35 Hz cadence',hz)
+    assert not b['dropped'],('dropped ticks',b['dropped'])
     print('S2d LIVE PASS: actual movement/turn/fire, input echo, 2 Word RAM banks, exact world/actors, no MD logic, exit restored',flush=True)
 finally:g.close()
