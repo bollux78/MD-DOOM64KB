@@ -224,7 +224,7 @@ tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPIN
 tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
        "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "112") + "UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "126") + "UL * 1024UL)")
 ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
     if (!size) return;
@@ -281,7 +281,7 @@ const void __far* W_GetLumpByNum(int16_t n)
         !(nm3[0] == 'S' && nm3[1] == 'K' && nm3[2] == 'Y'))
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
-ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "28"))
+ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "24"))
 ww = ww.replace('I_Error("SCD LUMP CACHE FULL %d", n);', 'I_Error("CACHE FULL %d u%lu m%lu s%u", n, (unsigned long)scd_cache_used, (unsigned long)scd_cache_mark, (unsigned)size);')
 ww = ww.replace("static uint32_t scd_cache_used, scd_cache_peak;", "static uint32_t scd_cache_used, scd_cache_peak, scd_cache_mark;")
 ww += """
@@ -314,7 +314,7 @@ objs = []
 for s in sources:
     obj = w / (s.name + ".o")
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
-    zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N3_ZONE", "49152")] if s.name == "scd_sub_system.c" else []
+    zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N3_ZONE", "40960")] if s.name == "scd_sub_system.c" else []
     hot = s.name.startswith("r") or s.name == "tables.c"
     r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) + zone + extra +
                        ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
