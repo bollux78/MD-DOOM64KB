@@ -177,6 +177,18 @@ r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
     print("N2 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:])
+    try:
+        from collections import Counter
+        tot = Counter(); pend = None
+        for ml in (w / "n2-sub.map").read_text(errors="replace").splitlines():
+            m2 = re.match(r"^ (\.\S+)\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)", ml)
+            if m2: tot[(m2.group(1).split(".")[1], Path(m2.group(4)).name)] += int(m2.group(3), 16); pend = None; continue
+            m1 = re.match(r"^ (\.\S+)$", ml)
+            if m1: pend = m1.group(1); continue
+            m3 = re.match(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)", ml)
+            if pend and m3: tot[(pend.split(".")[1], Path(m3.group(3)).name)] += int(m3.group(2), 16); pend = None
+        print("N2 map top:", [(k, v) for k, v in tot.most_common(25)])
+    except Exception as e: print("map parse failed", e)
     if int(os.environ.get("N2_PROF", "0")) & 2 and not os.environ.get("N2_PROF_O2") and "overlaps" in r.stderr:
         print("N2 profiling build too big at -O3: retrying instrumented files at -O2", flush=True)
         os.environ["N2_PROF_O2"] = "1"; os.execv(sys.executable, [sys.executable] + sys.argv)
