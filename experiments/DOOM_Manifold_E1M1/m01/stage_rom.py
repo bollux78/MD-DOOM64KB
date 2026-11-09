@@ -43,7 +43,7 @@ def stage_missing_resources(out):
         for y in range(h):
             pixels.append(0)
             pixels.extend(1+((x//8+y//8)%3) for x in range(w))
-        data=(b"\\x89PNG\\r\\n\\x1a\\n"+chunk(b"IHDR",ihdr)
+        data=(b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",ihdr)
               +chunk(b"PLTE",pal)+chunk(b"IDAT",zlib.compress(bytes(pixels)))
               +chunk(b"IEND",b""))
         path.write_bytes(data)
