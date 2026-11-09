@@ -16,8 +16,8 @@ opt = (tree / "out/.render_options").read_text().split()
 defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
        ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
 
-if os.environ.get("N3_GREP"):
-    rx = re.compile(os.environ["N3_GREP"])
+if os.environ.get("N3_GREP") or os.environ.get("N3_R84INFO"):
+    rx = re.compile(os.environ.get("N3_GREP") or r"r84_(pixels|offsets|starts)|R84_")
     for f in sorted((tree / "src").glob("*")):
         if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 400000 or "table" in f.name: continue
         for i, l in enumerate(f.read_text(errors="replace").splitlines()):
@@ -150,6 +150,22 @@ hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "static const ui
 hdr = re.sub(r"static const uint32_t r84_offsets\[\]=\{[^}]*\};", "static const uint32_t r84_offsets[]={" + ",".join(str(v) + "u" for v in newoffs) + "};", hdr)
 (src / "r84_columns.h").write_text(hdr)
 print("N3 R84 subset: textures %d, columns %d, bytes %d" % (len(used), len(remap), len(newpool)))
+if os.environ.get("N3_R84INFO"):
+    print("N3 R84 table sizes: pool %d, offsets %d, starts %d, max offset %d" % (len(pool), len(offs), len(starts), max(o for o in offs if o != 0xFFFFFFFF)))
+    for mi, mn in enumerate(names):
+        if re.fullmatch(r"E\dM\d|MAP\d\d", mn):
+            sd = next((i for i in range(mi + 1, min(mi + 12, len(names))) if names[i] == "SIDEDEFS"), None)
+            if sd is None: continue
+            _, p2, z2 = lumps[sd]; u2 = set()
+            for o2 in range(p2, p2 + z2 - z2 % 7, 7):
+                _x, _y, a1, a2, a3, _s = struct.unpack_from(">hBbbbB", wad, o2)
+                u2.update(t for t in (a1, a2, a3) if t > 0)
+            blocks = set()
+            for t in u2:
+                if t >= len(starts): continue
+                end = starts[t + 1] if t + 1 < len(starts) else len(offs)
+                blocks.update(offs[e] for e in range(starts[t], end) if offs[e] != 0xFFFFFFFF)
+            print("N3 map %s: textures %d, blocks %d, bytes %d" % (mn, len(u2), len(blocks), 128 * len(blocks)))
 
 # 3. Sub transport (exported exchange, patient spins) and WAD client.
 w = out / "sub"; w.mkdir(exist_ok=True)
@@ -321,6 +337,13 @@ gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeo
                "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n"))
 (tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
 md_patch("d_main.c", r"G_Ticker \(\);", "G_Ticker (); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); }", regex=True)
+md_patch("d_main.c", "    int32_t entertime = I_GetTime();\n", "    int32_t entertime = I_GetTime();\n"
+         "    { extern int N3_SkipWait(void); if (N3_SkipWait()) { D_BuildNewTiccmds(); runtics = maketic - _g_gametic; if (runtics <= 0) return; goto n3_run; } }\n")
+md_patch("d_main.c", "    while (runtics-- > 0)\n    {\n\n        if (advancedemo)", "n3_run:\n    while (runtics-- > 0)\n    {\n\n        if (advancedemo)")
+dm = tree / "src/d_main.c"
+dm.write_text(dm.read_text() + "\n/* N3: run the tics that are due now, without waiting (overlaps the sub's render). */\n"
+              "void N3_EarlyTics(void){ D_BuildNewTiccmds(); int16_t r = maketic - _g_gametic;\n"
+              "  while (r-- > 0) { if (advancedemo) D_DoAdvanceDemo(); M_Ticker(); G_Ticker(); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); } _g_gametic++; } }\n")
 md_patch("d_main.c", "    R22_BeginFrame();\n#endif", "    R22_BeginFrame();\n#endif\n    { extern void N3_Pump(void); N3_Pump(); }")
 md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Display(void); if (!N3_Display()) R_RenderPlayerView (&_g_player); }", regex=True)
 if os.environ.get("N3_AUTOSTART"):
@@ -330,6 +353,7 @@ for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\
     md_patch("r22_video.inc", fn, fn + "\n    { extern void N3_Poll(void); N3_Poll(); }")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
+md_patch("d_main.c", "static void TryRunTics (void)", "static void TryRunTics (void)")
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
          (" -DN3_SPLIT" if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
 subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",

@@ -44,6 +44,7 @@ typedef struct {
     /* split screen: MD renders [md_x0, split), the sub renders [split, 76) of the same state */
     int16_t split, md_x0, md_x1; uint8_t expect_frame, rendering;
     uint32_t split_sum, wait_b_vblanks, md_render_vblanks;
+    uint8_t early, pad2[3];
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -192,6 +193,18 @@ uint16_t N3_MdFramePayload(volatile uint8_t *p)
     N3State *s = state();
     if (!s) return 0;
     uint16_t flags = 0, snaplen = 0;
+#if defined(N3_SPLIT)
+    if (s->expect_frame)
+    {
+        /* Exchange B: only collects the sub's half. Tics the MD already ran for the next frame
+         * (early logic) stay queued for the next exchange A; the reference state stays A's. */
+        N3PayHead hb = { N3_PAY_MAGIC, s->lock ? 0 : N3_F_STOP, 0, 0, (uint16_t)s->split, 76 };
+        for (uint16_t i = 0; i < sizeof hb; i++) p[i] = ((const uint8_t *)&hb)[i];
+        s->prev_valid = s->chk_valid; s->prev_gametic = s->chk_gametic; s->prev_x = s->chk_x; s->prev_y = s->chk_y; s->prev_angle = s->chk_angle;
+        s->exchanges++;
+        return sizeof hb;
+    }
+#endif
     if (!s->lock) flags |= N3_F_STOP;
     else if (s->snap_pending) { flags |= N3_F_SNAP; snaplen = sizeof(N3SnapHead) + sizeof(player_t); }
     const uint16_t ntics = s->lock ? s->ntics : 0;
@@ -335,6 +348,8 @@ int N3_Display(void)
         s->md_x0 = 0; s->md_x1 = s->split; s->rendering = 1;
         R_RenderPlayerView(&_g_player);
         s->rendering = 0;
+        /* Overlap: run the next frame's game logic while the sub is still drawing its half. */
+        { extern void N3_EarlyTics(void); s->early = 1; N3_EarlyTics(); }
         const uint32_t t1 = _g_vblankCount;
         s->expect_frame = 1; s->have_frame = 0;
         const int ok = wait_frame(s);
@@ -383,3 +398,5 @@ int N3_Display(void)
     return 0;
 }
 void *N3_State(void) { return n3; }
+/* TryRunTics: logic already ran early inside the last D_Display, do not wait for a tic. */
+int N3_SkipWait(void) { N3State *s = n3; if (s && s != N3_BOOTED && s->early) { s->early = 0; return 1; } return 0; }
