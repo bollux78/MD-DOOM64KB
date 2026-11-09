@@ -13,7 +13,7 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
-defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP") and o != "-DDOOM_R39C_MOVEP_MAP"] + \
+defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
        ["-DN2_R128_DRAW", "-DN3_SRAM_COMPACT", "-DSCD_SRAM_BASE=0x00200000UL", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
 
 if os.environ.get("N3_GREP") or os.environ.get("N3_R84INFO"):
@@ -54,6 +54,38 @@ for f in src.rglob("*"):
     t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL ((unsigned long)scd_colcache+0x10FEUL)")
     t = t.replace("(*(volatile uint8_t*)0x00A130F1UL=1)", "((void)0)").replace("(*(volatile uint8_t*)0x00A130F1UL=0)", "((void)0)")
     if t != o: f.write_text("extern unsigned char scd_sram[], scd_colcache[];\n" + t)
+(src / "r39c_movep.h").write_text("""/* N3 sub: MOVEP helpers over the compact SRAM emulation (virtual 0x200000..0x23FFFF -> scd_sram,
+ * 4 logical bytes are consecutive there) or real stride-2 memory (column cache). */
+#ifndef R39C_MOVEP_H
+#define R39C_MOVEP_H
+#include <stdint.h>
+extern unsigned char scd_sram[];
+#define N3_VSRAM(a) ((a) >= 0x00200000UL && (a) < 0x00240000UL)
+static inline uint32_t R39C_MovepRead32(uint32_t a)
+{
+    if (N3_VSRAM(a)) { const uint8_t *q = scd_sram + ((a - 0x00200000UL) >> 1);
+        return ((uint32_t)q[0] << 24) | ((uint32_t)q[1] << 16) | ((uint32_t)q[2] << 8) | q[3]; }
+    const volatile uint8_t *p = (const volatile uint8_t *)(uintptr_t)a;
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[2] << 16) | ((uint32_t)p[4] << 8) | p[6];
+}
+static inline uint16_t R39C_MovepRead16(uint32_t a)
+{
+    if (N3_VSRAM(a)) { const uint8_t *q = scd_sram + ((a - 0x00200000UL) >> 1); return (uint16_t)((q[0] << 8) | q[1]); }
+    const volatile uint8_t *p = (const volatile uint8_t *)(uintptr_t)a;
+    return (uint16_t)((p[0] << 8) | p[2]);
+}
+static inline void R39C_MovepWrite32(uint32_t a, uint32_t v)
+{
+    if (N3_VSRAM(a)) { uint8_t *q = scd_sram + ((a - 0x00200000UL) >> 1); q[0] = v >> 24; q[1] = v >> 16; q[2] = v >> 8; q[3] = v; return; }
+    volatile uint8_t *p = (volatile uint8_t *)(uintptr_t)a; p[0] = v >> 24; p[2] = v >> 16; p[4] = v >> 8; p[6] = v;
+}
+static inline void R39C_MovepWrite16(uint32_t a, uint16_t v)
+{
+    if (N3_VSRAM(a)) { uint8_t *q = scd_sram + ((a - 0x00200000UL) >> 1); q[0] = v >> 8; q[1] = v; return; }
+    volatile uint8_t *p = (volatile uint8_t *)(uintptr_t)a; p[0] = v >> 8; p[2] = v;
+}
+#endif
+""")
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
     "\nvoid N3_SetCmd(const void *c){memcpy(&netcmd,c,sizeof netcmd);}\n"
     "void N3_LoadLevel(void){G_DoLoadLevel();}\n")
