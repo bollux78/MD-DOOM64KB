@@ -26,7 +26,7 @@ g = RSP(os.environ["BLASTEM"], rom, 9500, 900)
 res = {"label": label}
 try:
     g.req("qSupported")
-    trace_tic = int(os.environ.get("N3_TRACE_TIC", "-1"))
+    trace_tic = int(os.environ.get("N3_RSP_TRACE_TIC", "-1"))
     if trace_tic >= 0:
         # MD P_Random callers during one tic (return address at (SP) on entry)
         funcs = sorted((a, n) for n, a in sym.items())
