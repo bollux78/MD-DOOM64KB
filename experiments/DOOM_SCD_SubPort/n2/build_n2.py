@@ -138,6 +138,11 @@ for l in subprocess.check_output([b("nm"), "-S", str(elf)], text=True).splitline
 subprocess.run([b("objcopy"), "-O", "binary", "-R", ".bss", str(elf), str(w / "n2-sub.bin")], check=True)
 size = (w / "n2-sub.bin").stat().st_size
 print("N2 sub image %d bytes, bss end 0x%X (stack reserve from 0x7C000)" % (size, sym["_end"]))
+_dis = subprocess.check_output([b("objdump"), "-d", str(elf)], text=True).splitlines()
+print("N2 vectors/isr:\n" + "\n".join(_dis[:12] + [l for l in _dis if l[:9].strip().rstrip(":") and l.strip()[:4] in ("6c:", ) ] ))
+_i = next(i for i, l in enumerate(_dis) if "<prof_isr>:" in l); print("\n".join(_dis[_i:_i + 16]))
+for _k, l in enumerate(_dis):
+    if "ff8030" in l or "ff8032" in l or "#8704" in l or "#9984" in l: print("\n".join(_dis[max(0, _k - 3):_k + 3])); print("--")
 print("N2 largest functions:", sorted(((int(l.split()[1], 16), l.split()[3]) for l in subprocess.check_output([b("nm"), "-S", "--size-sort", str(elf)], text=True).splitlines() if len(l.split()) == 4 and l.split()[2] in "Tt"), reverse=True)[:8])
 assert size <= 4 * 128 * 1024 and sym["_end"] < 0x7C000
 
