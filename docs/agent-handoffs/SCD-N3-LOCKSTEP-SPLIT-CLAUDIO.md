@@ -60,3 +60,8 @@ Branch `exp-werk-scd-subport-s1s2`, pasta `experiments/DOOM_SCD_SubPort/n3`, wor
 |---|---|---|
 | E1M1 | **8,2** | 3,8 (≈2,2×) |
 | E1M8 | **8,0** | — |
+
+## Atualização 2: tics na troca B + cópia só da janela
+- A troca B leva os tics que o MD já rodou (flag `N3_F_NORENDER`). O sub executa essa lógica enquanto o MD junta e apresenta; na troca A ele já começa a desenhar.
+- A cópia do frame no sub e a junção no MD agora copiam só as colunas da janela, com ponteiros de passo 2.
+- BlastEm, mesmo roteiro, 0 desyncs: **E1M1 9,7 FPS** (antes 8,2; R128 só MD 3,8) e **E1M8 10,9 FPS**. O split equilibra perto da coluna ~30, então o sub pega mais da metade da tela.
