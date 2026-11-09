@@ -323,7 +323,7 @@ for s in sources:
     obj = w / (s.name + ".o")
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
     zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N3_ZONE", "40960")] if s.name == "scd_sub_system.c" else []
-    hot = s.name.startswith("r") or s.name == "tables.c"
+    hot = s.name.startswith("r") or s.name == "tables.c" or (os.environ.get("N3_LOGIC_O3") and s.name[:2] in ("p_", "g_", "m_"))
     r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) + zone + extra +
                        ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
