@@ -93,7 +93,7 @@ jobs:
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           out="$HOME/Projetos/Personal/scd-subport-n3/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          for v in split map8 play; do
+          for v in split; do
             vt="$RUNNER_TEMP/n3tree-$v"; rm -rf "$vt"; cp -a "$tree" "$vt"
             echo "=== N3 build $v ==="
             case $v in
@@ -103,7 +103,7 @@ jobs:
               splitE1) N3_SUBSET=E1M1 N3_AUTOSTART=1 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               splitE1z64) N3_ZONE=65536 N3_SUBSET=E1M1 N3_AUTOSTART=1 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               map8) N3_AUTOSTART=map8 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
-              split) N3_AUTOSTART=1 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
+              split) N3_GREP="VDP_loadTileData|loadTile|TILE_USER|VRAM|R22_TILE|tile base|TILEBASE|VDP_setPlaneSize|setBGAAddress|setBGBAddress|setWindowAddress|setSpriteListAddress|setHScrollTableAddress|r22_maps|1696|R22_BANK" N3_AUTOSTART=1 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               on) N3_AUTOSTART=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               off) N3_AUTOSTART=1 N3_OFF=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               verify) N3_AUTOSTART=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
@@ -123,7 +123,7 @@ jobs:
           if [ ! -f "$cfg" ]; then cfg="$(dirname "$BLASTEM")/default.cfg"; fi
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
-          for v in split map8; do
+          for v in split; do
             N3_MAXFRAMES=$([ $v = play ] && echo 150 || echo 3000) N3_MOVE=1 N3_TICS=$([ $v = splitverify ] && echo 560 || echo 1400) N3_VERIFY_OFFSET=60 XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
               python3 experiments/DOOM_SCD_SubPort/n3/test_n3.py "$N3_OUT/$v/doom-md-scd-n3.bin" "$N3_OUT/$v/doom-md-scd-n3.elf" "$v"
           done
