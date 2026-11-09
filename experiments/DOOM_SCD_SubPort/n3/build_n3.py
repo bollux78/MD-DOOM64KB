@@ -462,6 +462,8 @@ if os.environ.get("N3_AUTOSTART"):
     md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
 split_patch(tree / "src" / "r_draw.c")
 sight_patch(tree / "src" / "p_sight.c")
+# N3: also serve the sub's lump requests while the MD runs the early game logic (per thinker)
+md_patch("p_tick.c", "            th->function(th);\n", "            th->function(th);\n        { extern void N3_Poll(void); N3_Poll(); }\n")
 rdm = tree / "src" / "r_draw.c"
 rdm.write_text(rdm.read_text() + "\nconst uint8_t *N3_R84Pixels(void){return r84_pixels;}\n")
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):

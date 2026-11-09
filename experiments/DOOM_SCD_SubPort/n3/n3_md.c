@@ -398,7 +398,7 @@ static int wait_frame(N3State *s)
 void N3_Poll(void)
 {
     N3State *s = n3;
-    if (!s || s == N3_BOOTED || !s->active || !s->rendering) return;
+    if (!s || s == N3_BOOTED || !s->active || !(s->rendering || s->early)) return;
     const uint16_t cmd = SCD_MdPendingCmd();
     if (cmd && cmd != SCD_CMD_FRAME && SCD_MdServeOnce() < 0) { s->active = 0; s->last_error = 3; }
 }
