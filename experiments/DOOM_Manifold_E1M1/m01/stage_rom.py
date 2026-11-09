@@ -376,6 +376,27 @@ def normalize_header_global_definitions(out):
     import re
     p.write_text(re.sub(r"\bbmp_plane_addr\b","manifold_bmp_plane_addr",data))
 
+def mute_legacy_emulator_debug_logging(out):
+    """Avoid invoking old SGDK KLog emulator debug traps in release candidates.
+
+    Legacy KLog calls can enter BlastEm's debugger without a terminal, making
+    a healthy boot appear frozen. This alters only isolated staged sources.
+    """
+    base=out/"src"
+    definitions="#include <genesis.h>\n"
+    names=("KLog","KLog_U1","KLog_U2","KLog_U3","KLog_U4",
+           "KLog_U1_","KLog_U2_","KLog_U3_","KLog_U4_",
+           "KLog_U1x","KLog_U2x","KLog_U3x","KLog_U4x")
+    for name in names:
+        definitions+=f"#define {name}(...) ((void)0)\n"
+    (base/"manifold_mute_klog.h").write_text(definitions)
+    count=0
+    for c in base.glob("*.c"):
+        code=c.read_text()
+        c.write_text('#include "manifold_mute_klog.h"\n'+code)
+        count+=1
+    print("Legacy emulator debug log calls suppressed in",count,"C units")
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -398,6 +419,7 @@ def stage(src, wad, out):
     normalize_toggle_declarations(out)
     normalize_weapon_sprite_frame_layout(out)
     normalize_header_global_definitions(out)
+    mute_legacy_emulator_debug_logging(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
