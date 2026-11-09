@@ -184,6 +184,15 @@ def normalize_game_integration(out):
         raise ValueError(f"unexpected Manifold game palette call count {n}")
     p.write_text(source)
 
+def normalize_weapon_api_declaration(out):
+    """Match weapon header declaration to upstream implementation name."""
+    p=out/"src/weapon_sprites.h"
+    data=p.read_text()
+    old="void step_weapon_anim(TransferMethod transfer_type);"
+    if data.count(old)!=1:
+        raise ValueError("upstream weapon step declaration changed")
+    p.write_text(data.replace(old,"void step_weapon_animation(TransferMethod transfer_type);"))
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -197,6 +206,7 @@ def stage(src, wad, out):
     normalize_wide_sprite_registers(out)
     normalize_legacy_palette_and_asm(out)
     normalize_game_integration(out)
+    normalize_weapon_api_declaration(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
