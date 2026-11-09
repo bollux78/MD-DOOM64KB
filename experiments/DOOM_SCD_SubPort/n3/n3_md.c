@@ -332,6 +332,12 @@ void N3_Pump(void)
 
 /* Serve requests until the sub's next FRAME request has been answered (0 new tics). */
 /* Time in scanlines (63.5 us): VBlank count + VDP V counter (VBlank IRQ comes at line 224). */
+#ifndef N3_LATE_LINES
+#define N3_LATE_LINES 100
+#endif
+#ifndef N3_READY_LINES
+#define N3_READY_LINES 15
+#endif
 static uint32_t lines_now(void)
 {
     for (;;)
@@ -390,11 +396,10 @@ int N3_Display(void)
         /* Balance in scanlines: sub idle time (its report, 30.72 us units) vs our wait. Positive =
          * the sub has slack -> it gets columns. ~70 lines per column swing, half-step damping. */
         {
-            const int32_t sub_idle = (int32_t)((s->sub_idle_units * 31u) >> 6);
-            /* md_wait always contains the B exchange itself (~40 lines): deadband, one column/frame */
-            const int32_t e = sub_idle - (md_wait - 40);
+            /* Our wait for B, in scanlines (the exchange itself is ~40): sub late -> MD takes a
+             * column; sub ready on arrival -> the sub takes one. */
             int32_t f = s->split_fp;
-            if (e > 60) f -= 16; else if (e < -60) f += 16;
+            if (md_wait > 40 + N3_LATE_LINES) f += 16; else if (md_wait < 40 + N3_READY_LINES) f -= 16;
             if (f < 10 * 16) f = 10 * 16; else if (f > 66 * 16) f = 66 * 16;
             s->split_fp = (int16_t)f; s->split = (int16_t)(f >> 4);
         }
