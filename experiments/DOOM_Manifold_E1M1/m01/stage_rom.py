@@ -201,7 +201,7 @@ def normalize_remaining_palettes(out):
         data=p.read_text()
         lines=data.splitlines(keepends=True)
         for i,line in enumerate(lines):
-            match=re.search(r"PAL_setPalette\\(PAL[0-3],\\s*[^,();]+\\);",line)
+            match=re.search(r"PAL_setPalette\(PAL[0-3],\s*[^,();]+\);",line)
             if match:
                 call=match.group()
                 lines[i]=line.replace(call,call[:-2]+", DMA);")
