@@ -14,7 +14,7 @@ gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
 defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
-       ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)"]
+       ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
 
 if os.environ.get("N3_GREP"):
     rx = re.compile(os.environ["N3_GREP"])
@@ -50,7 +50,7 @@ for f in src.rglob("*"):
 RND = "\nuint8_t N3_GetPRnd(void){return prndindex;}\nvoid N3_SetPRnd(uint8_t v){prndindex=v;}\n"
 (src / "m_random.c").write_text((src / "m_random.c").read_text() + RND)
 rv = src / "r22_video.inc"
-sub_patch(rv, "#define R59_CURRENT (r59_color_tables[r59_color_mode])", "#define R59_CURRENT (r59_color_tables[0])")
+sub_patch(rv, "#define R59_CURRENT (r59_color_tables[r59_color_mode])", "#define R59_CURRENT (r59_color_tables[N3_R59_MODE])")
 sub_patch(rv, "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
     sub_patch(rv, fn, fn + "\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }")
