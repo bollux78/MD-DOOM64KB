@@ -75,8 +75,8 @@ def normalize_legacy_asm(out):
     Strip comments on the two authored .s files; never modify SGDK or the
     original upstream checkout. Validate source still contains instructions.
     """
-    for filename in ("fire_native.s","my_bmp_a.s"):
-        path=out/"src"/filename
+    for path in (out/"src").rglob("*.s"):
+        filename=str(path.relative_to(out/"src"))
         source=path.read_text()
         filtered="\n".join(line.split("|",1)[0].rstrip()
                               for line in source.splitlines())+"\n"
