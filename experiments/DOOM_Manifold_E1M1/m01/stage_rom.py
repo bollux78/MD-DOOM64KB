@@ -114,6 +114,7 @@ def normalize_legacy_fixed_point_api(out):
     replacements = {
         "fix32Mul": "F32_mul",
         "fix32ToInt": "F32_toInt",
+        "fix32ToFix16": "F32_toFix16",
         "intToFix32": "FIX32",
     }
     import re
@@ -251,6 +252,40 @@ def normalize_math_and_menu(out):
         raise ValueError("upstream obsolete menu-clear calls changed")
     p.write_text(src.replace("clear_menu(cur_menu);","clear_menu();"))
 
+def normalize_bitmap_legacy_symbols(out):
+    """Compatibility spellings for the copied SGDK bitmap engine.
+
+    These are token-level renames preserving tile counts and VRAM byte offsets.
+    """
+    p=out/"src/my_bmp.c"
+    source=p.read_text()
+    tokens={
+        "BMP_PLANWIDTH":"BMP_PLANE_WIDTH",
+        "BMP_PLANHEIGHT":"BMP_PLANE_HEIGHT",
+        "BMP_CELLWIDTH":"BMP_TILE_WIDTH",
+        "BMP_CELLHEIGHT":"BMP_TILE_HEIGHT",
+        "BMP_CELLXOFFSET":"BMP_TILE_XOFFSET",
+        "BMP_CELLYOFFSET":"BMP_TILE_YOFFSET",
+        "BMP_BASETILEINDEX":"BMP_BASE_TILE_INDEX",
+        "BMP_FB0TILEINDEX":"BMP_FB0_TILE_INDEX",
+        "BMP_FB1TILEINDEX":"BMP_FB1_TILE_INDEX",
+        "BMP_FB0TILE":"BMP_FB0_ADDR",
+        "BMP_FB1TILE":"BMP_FB1_ADDR",
+        "GFX_CTRL_PORT":"VDP_CTRL_PORT",
+        "GFX_DATA_PORT":"VDP_DATA_PORT",
+        "GFX_WRITE_VRAM_ADDR":"VDP_WRITE_VRAM_ADDR",
+        "IS_PALSYSTEM":"IS_PAL_SYSTEM",
+    }
+    import re
+    count=0
+    for old,new in tokens.items():
+        source,n=re.subn(r"\\b"+old+r"\\b",new,source)
+        count+=n
+    if count<30:
+        raise ValueError(f"unexpected bitmap compatibility rewrite count {count}")
+    p.write_text(source)
+    print("Legacy bitmap API symbols normalized:",count)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -268,6 +303,7 @@ def stage(src, wad, out):
     normalize_remaining_palettes(out)
     normalize_menu_callbacks(out)
     normalize_math_and_menu(out)
+    normalize_bitmap_legacy_symbols(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
