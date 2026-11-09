@@ -31,7 +31,7 @@ int wipe_StartScreen(void) { return 0; }
 
 /* R22_Alloc used SGDK MEM_alloc (MD work RAM heap): give it a PRG-RAM bump pool. */
 extern void I_Error(const char *, ...);
-static unsigned char n2_r22_pool[8192] __attribute__((aligned(4)));
+static unsigned char n2_r22_pool[4096] __attribute__((aligned(4)));
 static unsigned short n2_r22_used;
 void *R22_Alloc(unsigned short n)
 {

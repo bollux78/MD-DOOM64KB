@@ -1,5 +1,6 @@
-/* N2 sub boot: 256 vectors, every exception names itself through the sub I_Error channel
- * (message address in $FF802A/2C, 0xDEAD in $FF8020) instead of jumping into the void. */
+/* N2 sub boot: 256 vectors; any exception reports through the sub I_Error channel: message
+ * address in $FF802A/2C ("SUB EXCEPTION"), vector number in $FF8028, faulting PC high word in
+ * $FF8026, 0xDEAD in $FF8020. */
     .section .text.vectors,"ax"
     .globl subcpu_vectors
 subcpu_vectors:
@@ -268,1028 +269,523 @@ entry:
     bra.s 1b
 2:  jsr sub_main
 3:  bra.s 3b
-vex2:
-    move.l #vmsg2,%d0
+vex2: move.w #2,%d0
     bra.w vexc
-vex3:
-    move.l #vmsg3,%d0
+vex3: move.w #3,%d0
     bra.w vexc
-vex4:
-    move.l #vmsg4,%d0
+vex4: move.w #4,%d0
     bra.w vexc
-vex5:
-    move.l #vmsg5,%d0
+vex5: move.w #5,%d0
     bra.w vexc
-vex6:
-    move.l #vmsg6,%d0
+vex6: move.w #6,%d0
     bra.w vexc
-vex7:
-    move.l #vmsg7,%d0
+vex7: move.w #7,%d0
     bra.w vexc
-vex8:
-    move.l #vmsg8,%d0
+vex8: move.w #8,%d0
     bra.w vexc
-vex9:
-    move.l #vmsg9,%d0
+vex9: move.w #9,%d0
     bra.w vexc
-vex10:
-    move.l #vmsg10,%d0
+vex10: move.w #10,%d0
     bra.w vexc
-vex11:
-    move.l #vmsg11,%d0
+vex11: move.w #11,%d0
     bra.w vexc
-vex12:
-    move.l #vmsg12,%d0
+vex12: move.w #12,%d0
     bra.w vexc
-vex13:
-    move.l #vmsg13,%d0
+vex13: move.w #13,%d0
     bra.w vexc
-vex14:
-    move.l #vmsg14,%d0
+vex14: move.w #14,%d0
     bra.w vexc
-vex15:
-    move.l #vmsg15,%d0
+vex15: move.w #15,%d0
     bra.w vexc
-vex16:
-    move.l #vmsg16,%d0
+vex16: move.w #16,%d0
     bra.w vexc
-vex17:
-    move.l #vmsg17,%d0
+vex17: move.w #17,%d0
     bra.w vexc
-vex18:
-    move.l #vmsg18,%d0
+vex18: move.w #18,%d0
     bra.w vexc
-vex19:
-    move.l #vmsg19,%d0
+vex19: move.w #19,%d0
     bra.w vexc
-vex20:
-    move.l #vmsg20,%d0
+vex20: move.w #20,%d0
     bra.w vexc
-vex21:
-    move.l #vmsg21,%d0
+vex21: move.w #21,%d0
     bra.w vexc
-vex22:
-    move.l #vmsg22,%d0
+vex22: move.w #22,%d0
     bra.w vexc
-vex23:
-    move.l #vmsg23,%d0
+vex23: move.w #23,%d0
     bra.w vexc
-vex24:
-    move.l #vmsg24,%d0
+vex24: move.w #24,%d0
     bra.w vexc
-vex25:
-    move.l #vmsg25,%d0
+vex25: move.w #25,%d0
     bra.w vexc
-vex26:
-    move.l #vmsg26,%d0
+vex26: move.w #26,%d0
     bra.w vexc
-vex27:
-    move.l #vmsg27,%d0
+vex27: move.w #27,%d0
     bra.w vexc
-vex28:
-    move.l #vmsg28,%d0
+vex28: move.w #28,%d0
     bra.w vexc
-vex29:
-    move.l #vmsg29,%d0
+vex29: move.w #29,%d0
     bra.w vexc
-vex30:
-    move.l #vmsg30,%d0
+vex30: move.w #30,%d0
     bra.w vexc
-vex31:
-    move.l #vmsg31,%d0
+vex31: move.w #31,%d0
     bra.w vexc
-vex32:
-    move.l #vmsg32,%d0
+vex32: move.w #32,%d0
     bra.w vexc
-vex33:
-    move.l #vmsg33,%d0
+vex33: move.w #33,%d0
     bra.w vexc
-vex34:
-    move.l #vmsg34,%d0
+vex34: move.w #34,%d0
     bra.w vexc
-vex35:
-    move.l #vmsg35,%d0
+vex35: move.w #35,%d0
     bra.w vexc
-vex36:
-    move.l #vmsg36,%d0
+vex36: move.w #36,%d0
     bra.w vexc
-vex37:
-    move.l #vmsg37,%d0
+vex37: move.w #37,%d0
     bra.w vexc
-vex38:
-    move.l #vmsg38,%d0
+vex38: move.w #38,%d0
     bra.w vexc
-vex39:
-    move.l #vmsg39,%d0
+vex39: move.w #39,%d0
     bra.w vexc
-vex40:
-    move.l #vmsg40,%d0
+vex40: move.w #40,%d0
     bra.w vexc
-vex41:
-    move.l #vmsg41,%d0
+vex41: move.w #41,%d0
     bra.w vexc
-vex42:
-    move.l #vmsg42,%d0
+vex42: move.w #42,%d0
     bra.w vexc
-vex43:
-    move.l #vmsg43,%d0
+vex43: move.w #43,%d0
     bra.w vexc
-vex44:
-    move.l #vmsg44,%d0
+vex44: move.w #44,%d0
     bra.w vexc
-vex45:
-    move.l #vmsg45,%d0
+vex45: move.w #45,%d0
     bra.w vexc
-vex46:
-    move.l #vmsg46,%d0
+vex46: move.w #46,%d0
     bra.w vexc
-vex47:
-    move.l #vmsg47,%d0
+vex47: move.w #47,%d0
     bra.w vexc
-vex48:
-    move.l #vmsg48,%d0
+vex48: move.w #48,%d0
     bra.w vexc
-vex49:
-    move.l #vmsg49,%d0
+vex49: move.w #49,%d0
     bra.w vexc
-vex50:
-    move.l #vmsg50,%d0
+vex50: move.w #50,%d0
     bra.w vexc
-vex51:
-    move.l #vmsg51,%d0
+vex51: move.w #51,%d0
     bra.w vexc
-vex52:
-    move.l #vmsg52,%d0
+vex52: move.w #52,%d0
     bra.w vexc
-vex53:
-    move.l #vmsg53,%d0
+vex53: move.w #53,%d0
     bra.w vexc
-vex54:
-    move.l #vmsg54,%d0
+vex54: move.w #54,%d0
     bra.w vexc
-vex55:
-    move.l #vmsg55,%d0
+vex55: move.w #55,%d0
     bra.w vexc
-vex56:
-    move.l #vmsg56,%d0
+vex56: move.w #56,%d0
     bra.w vexc
-vex57:
-    move.l #vmsg57,%d0
+vex57: move.w #57,%d0
     bra.w vexc
-vex58:
-    move.l #vmsg58,%d0
+vex58: move.w #58,%d0
     bra.w vexc
-vex59:
-    move.l #vmsg59,%d0
+vex59: move.w #59,%d0
     bra.w vexc
-vex60:
-    move.l #vmsg60,%d0
+vex60: move.w #60,%d0
     bra.w vexc
-vex61:
-    move.l #vmsg61,%d0
+vex61: move.w #61,%d0
     bra.w vexc
-vex62:
-    move.l #vmsg62,%d0
+vex62: move.w #62,%d0
     bra.w vexc
-vex63:
-    move.l #vmsg63,%d0
+vex63: move.w #63,%d0
     bra.w vexc
-vex64:
-    move.l #vmsg64,%d0
+vex64: move.w #64,%d0
     bra.w vexc
-vex65:
-    move.l #vmsg65,%d0
+vex65: move.w #65,%d0
     bra.w vexc
-vex66:
-    move.l #vmsg66,%d0
+vex66: move.w #66,%d0
     bra.w vexc
-vex67:
-    move.l #vmsg67,%d0
+vex67: move.w #67,%d0
     bra.w vexc
-vex68:
-    move.l #vmsg68,%d0
+vex68: move.w #68,%d0
     bra.w vexc
-vex69:
-    move.l #vmsg69,%d0
+vex69: move.w #69,%d0
     bra.w vexc
-vex70:
-    move.l #vmsg70,%d0
+vex70: move.w #70,%d0
     bra.w vexc
-vex71:
-    move.l #vmsg71,%d0
+vex71: move.w #71,%d0
     bra.w vexc
-vex72:
-    move.l #vmsg72,%d0
+vex72: move.w #72,%d0
     bra.w vexc
-vex73:
-    move.l #vmsg73,%d0
+vex73: move.w #73,%d0
     bra.w vexc
-vex74:
-    move.l #vmsg74,%d0
+vex74: move.w #74,%d0
     bra.w vexc
-vex75:
-    move.l #vmsg75,%d0
+vex75: move.w #75,%d0
     bra.w vexc
-vex76:
-    move.l #vmsg76,%d0
+vex76: move.w #76,%d0
     bra.w vexc
-vex77:
-    move.l #vmsg77,%d0
+vex77: move.w #77,%d0
     bra.w vexc
-vex78:
-    move.l #vmsg78,%d0
+vex78: move.w #78,%d0
     bra.w vexc
-vex79:
-    move.l #vmsg79,%d0
+vex79: move.w #79,%d0
     bra.w vexc
-vex80:
-    move.l #vmsg80,%d0
+vex80: move.w #80,%d0
     bra.w vexc
-vex81:
-    move.l #vmsg81,%d0
+vex81: move.w #81,%d0
     bra.w vexc
-vex82:
-    move.l #vmsg82,%d0
+vex82: move.w #82,%d0
     bra.w vexc
-vex83:
-    move.l #vmsg83,%d0
+vex83: move.w #83,%d0
     bra.w vexc
-vex84:
-    move.l #vmsg84,%d0
+vex84: move.w #84,%d0
     bra.w vexc
-vex85:
-    move.l #vmsg85,%d0
+vex85: move.w #85,%d0
     bra.w vexc
-vex86:
-    move.l #vmsg86,%d0
+vex86: move.w #86,%d0
     bra.w vexc
-vex87:
-    move.l #vmsg87,%d0
+vex87: move.w #87,%d0
     bra.w vexc
-vex88:
-    move.l #vmsg88,%d0
+vex88: move.w #88,%d0
     bra.w vexc
-vex89:
-    move.l #vmsg89,%d0
+vex89: move.w #89,%d0
     bra.w vexc
-vex90:
-    move.l #vmsg90,%d0
+vex90: move.w #90,%d0
     bra.w vexc
-vex91:
-    move.l #vmsg91,%d0
+vex91: move.w #91,%d0
     bra.w vexc
-vex92:
-    move.l #vmsg92,%d0
+vex92: move.w #92,%d0
     bra.w vexc
-vex93:
-    move.l #vmsg93,%d0
+vex93: move.w #93,%d0
     bra.w vexc
-vex94:
-    move.l #vmsg94,%d0
+vex94: move.w #94,%d0
     bra.w vexc
-vex95:
-    move.l #vmsg95,%d0
+vex95: move.w #95,%d0
     bra.w vexc
-vex96:
-    move.l #vmsg96,%d0
+vex96: move.w #96,%d0
     bra.w vexc
-vex97:
-    move.l #vmsg97,%d0
+vex97: move.w #97,%d0
     bra.w vexc
-vex98:
-    move.l #vmsg98,%d0
+vex98: move.w #98,%d0
     bra.w vexc
-vex99:
-    move.l #vmsg99,%d0
+vex99: move.w #99,%d0
     bra.w vexc
-vex100:
-    move.l #vmsg100,%d0
+vex100: move.w #100,%d0
     bra.w vexc
-vex101:
-    move.l #vmsg101,%d0
+vex101: move.w #101,%d0
     bra.w vexc
-vex102:
-    move.l #vmsg102,%d0
+vex102: move.w #102,%d0
     bra.w vexc
-vex103:
-    move.l #vmsg103,%d0
+vex103: move.w #103,%d0
     bra.w vexc
-vex104:
-    move.l #vmsg104,%d0
+vex104: move.w #104,%d0
     bra.w vexc
-vex105:
-    move.l #vmsg105,%d0
+vex105: move.w #105,%d0
     bra.w vexc
-vex106:
-    move.l #vmsg106,%d0
+vex106: move.w #106,%d0
     bra.w vexc
-vex107:
-    move.l #vmsg107,%d0
+vex107: move.w #107,%d0
     bra.w vexc
-vex108:
-    move.l #vmsg108,%d0
+vex108: move.w #108,%d0
     bra.w vexc
-vex109:
-    move.l #vmsg109,%d0
+vex109: move.w #109,%d0
     bra.w vexc
-vex110:
-    move.l #vmsg110,%d0
+vex110: move.w #110,%d0
     bra.w vexc
-vex111:
-    move.l #vmsg111,%d0
+vex111: move.w #111,%d0
     bra.w vexc
-vex112:
-    move.l #vmsg112,%d0
+vex112: move.w #112,%d0
     bra.w vexc
-vex113:
-    move.l #vmsg113,%d0
+vex113: move.w #113,%d0
     bra.w vexc
-vex114:
-    move.l #vmsg114,%d0
+vex114: move.w #114,%d0
     bra.w vexc
-vex115:
-    move.l #vmsg115,%d0
+vex115: move.w #115,%d0
     bra.w vexc
-vex116:
-    move.l #vmsg116,%d0
+vex116: move.w #116,%d0
     bra.w vexc
-vex117:
-    move.l #vmsg117,%d0
+vex117: move.w #117,%d0
     bra.w vexc
-vex118:
-    move.l #vmsg118,%d0
+vex118: move.w #118,%d0
     bra.w vexc
-vex119:
-    move.l #vmsg119,%d0
+vex119: move.w #119,%d0
     bra.w vexc
-vex120:
-    move.l #vmsg120,%d0
+vex120: move.w #120,%d0
     bra.w vexc
-vex121:
-    move.l #vmsg121,%d0
+vex121: move.w #121,%d0
     bra.w vexc
-vex122:
-    move.l #vmsg122,%d0
+vex122: move.w #122,%d0
     bra.w vexc
-vex123:
-    move.l #vmsg123,%d0
+vex123: move.w #123,%d0
     bra.w vexc
-vex124:
-    move.l #vmsg124,%d0
+vex124: move.w #124,%d0
     bra.w vexc
-vex125:
-    move.l #vmsg125,%d0
+vex125: move.w #125,%d0
     bra.w vexc
-vex126:
-    move.l #vmsg126,%d0
+vex126: move.w #126,%d0
     bra.w vexc
-vex127:
-    move.l #vmsg127,%d0
+vex127: move.w #127,%d0
     bra.w vexc
-vex128:
-    move.l #vmsg128,%d0
+vex128: move.w #128,%d0
     bra.w vexc
-vex129:
-    move.l #vmsg129,%d0
+vex129: move.w #129,%d0
     bra.w vexc
-vex130:
-    move.l #vmsg130,%d0
+vex130: move.w #130,%d0
     bra.w vexc
-vex131:
-    move.l #vmsg131,%d0
+vex131: move.w #131,%d0
     bra.w vexc
-vex132:
-    move.l #vmsg132,%d0
+vex132: move.w #132,%d0
     bra.w vexc
-vex133:
-    move.l #vmsg133,%d0
+vex133: move.w #133,%d0
     bra.w vexc
-vex134:
-    move.l #vmsg134,%d0
+vex134: move.w #134,%d0
     bra.w vexc
-vex135:
-    move.l #vmsg135,%d0
+vex135: move.w #135,%d0
     bra.w vexc
-vex136:
-    move.l #vmsg136,%d0
+vex136: move.w #136,%d0
     bra.w vexc
-vex137:
-    move.l #vmsg137,%d0
+vex137: move.w #137,%d0
     bra.w vexc
-vex138:
-    move.l #vmsg138,%d0
+vex138: move.w #138,%d0
     bra.w vexc
-vex139:
-    move.l #vmsg139,%d0
+vex139: move.w #139,%d0
     bra.w vexc
-vex140:
-    move.l #vmsg140,%d0
+vex140: move.w #140,%d0
     bra.w vexc
-vex141:
-    move.l #vmsg141,%d0
+vex141: move.w #141,%d0
     bra.w vexc
-vex142:
-    move.l #vmsg142,%d0
+vex142: move.w #142,%d0
     bra.w vexc
-vex143:
-    move.l #vmsg143,%d0
+vex143: move.w #143,%d0
     bra.w vexc
-vex144:
-    move.l #vmsg144,%d0
+vex144: move.w #144,%d0
     bra.w vexc
-vex145:
-    move.l #vmsg145,%d0
+vex145: move.w #145,%d0
     bra.w vexc
-vex146:
-    move.l #vmsg146,%d0
+vex146: move.w #146,%d0
     bra.w vexc
-vex147:
-    move.l #vmsg147,%d0
+vex147: move.w #147,%d0
     bra.w vexc
-vex148:
-    move.l #vmsg148,%d0
+vex148: move.w #148,%d0
     bra.w vexc
-vex149:
-    move.l #vmsg149,%d0
+vex149: move.w #149,%d0
     bra.w vexc
-vex150:
-    move.l #vmsg150,%d0
+vex150: move.w #150,%d0
     bra.w vexc
-vex151:
-    move.l #vmsg151,%d0
+vex151: move.w #151,%d0
     bra.w vexc
-vex152:
-    move.l #vmsg152,%d0
+vex152: move.w #152,%d0
     bra.w vexc
-vex153:
-    move.l #vmsg153,%d0
+vex153: move.w #153,%d0
     bra.w vexc
-vex154:
-    move.l #vmsg154,%d0
+vex154: move.w #154,%d0
     bra.w vexc
-vex155:
-    move.l #vmsg155,%d0
+vex155: move.w #155,%d0
     bra.w vexc
-vex156:
-    move.l #vmsg156,%d0
+vex156: move.w #156,%d0
     bra.w vexc
-vex157:
-    move.l #vmsg157,%d0
+vex157: move.w #157,%d0
     bra.w vexc
-vex158:
-    move.l #vmsg158,%d0
+vex158: move.w #158,%d0
     bra.w vexc
-vex159:
-    move.l #vmsg159,%d0
+vex159: move.w #159,%d0
     bra.w vexc
-vex160:
-    move.l #vmsg160,%d0
+vex160: move.w #160,%d0
     bra.w vexc
-vex161:
-    move.l #vmsg161,%d0
+vex161: move.w #161,%d0
     bra.w vexc
-vex162:
-    move.l #vmsg162,%d0
+vex162: move.w #162,%d0
     bra.w vexc
-vex163:
-    move.l #vmsg163,%d0
+vex163: move.w #163,%d0
     bra.w vexc
-vex164:
-    move.l #vmsg164,%d0
+vex164: move.w #164,%d0
     bra.w vexc
-vex165:
-    move.l #vmsg165,%d0
+vex165: move.w #165,%d0
     bra.w vexc
-vex166:
-    move.l #vmsg166,%d0
+vex166: move.w #166,%d0
     bra.w vexc
-vex167:
-    move.l #vmsg167,%d0
+vex167: move.w #167,%d0
     bra.w vexc
-vex168:
-    move.l #vmsg168,%d0
+vex168: move.w #168,%d0
     bra.w vexc
-vex169:
-    move.l #vmsg169,%d0
+vex169: move.w #169,%d0
     bra.w vexc
-vex170:
-    move.l #vmsg170,%d0
+vex170: move.w #170,%d0
     bra.w vexc
-vex171:
-    move.l #vmsg171,%d0
+vex171: move.w #171,%d0
     bra.w vexc
-vex172:
-    move.l #vmsg172,%d0
+vex172: move.w #172,%d0
     bra.w vexc
-vex173:
-    move.l #vmsg173,%d0
+vex173: move.w #173,%d0
     bra.w vexc
-vex174:
-    move.l #vmsg174,%d0
+vex174: move.w #174,%d0
     bra.w vexc
-vex175:
-    move.l #vmsg175,%d0
+vex175: move.w #175,%d0
     bra.w vexc
-vex176:
-    move.l #vmsg176,%d0
+vex176: move.w #176,%d0
     bra.w vexc
-vex177:
-    move.l #vmsg177,%d0
+vex177: move.w #177,%d0
     bra.w vexc
-vex178:
-    move.l #vmsg178,%d0
+vex178: move.w #178,%d0
     bra.w vexc
-vex179:
-    move.l #vmsg179,%d0
+vex179: move.w #179,%d0
     bra.w vexc
-vex180:
-    move.l #vmsg180,%d0
+vex180: move.w #180,%d0
     bra.w vexc
-vex181:
-    move.l #vmsg181,%d0
+vex181: move.w #181,%d0
     bra.w vexc
-vex182:
-    move.l #vmsg182,%d0
+vex182: move.w #182,%d0
     bra.w vexc
-vex183:
-    move.l #vmsg183,%d0
+vex183: move.w #183,%d0
     bra.w vexc
-vex184:
-    move.l #vmsg184,%d0
+vex184: move.w #184,%d0
     bra.w vexc
-vex185:
-    move.l #vmsg185,%d0
+vex185: move.w #185,%d0
     bra.w vexc
-vex186:
-    move.l #vmsg186,%d0
+vex186: move.w #186,%d0
     bra.w vexc
-vex187:
-    move.l #vmsg187,%d0
+vex187: move.w #187,%d0
     bra.w vexc
-vex188:
-    move.l #vmsg188,%d0
+vex188: move.w #188,%d0
     bra.w vexc
-vex189:
-    move.l #vmsg189,%d0
+vex189: move.w #189,%d0
     bra.w vexc
-vex190:
-    move.l #vmsg190,%d0
+vex190: move.w #190,%d0
     bra.w vexc
-vex191:
-    move.l #vmsg191,%d0
+vex191: move.w #191,%d0
     bra.w vexc
-vex192:
-    move.l #vmsg192,%d0
+vex192: move.w #192,%d0
     bra.w vexc
-vex193:
-    move.l #vmsg193,%d0
+vex193: move.w #193,%d0
     bra.w vexc
-vex194:
-    move.l #vmsg194,%d0
+vex194: move.w #194,%d0
     bra.w vexc
-vex195:
-    move.l #vmsg195,%d0
+vex195: move.w #195,%d0
     bra.w vexc
-vex196:
-    move.l #vmsg196,%d0
+vex196: move.w #196,%d0
     bra.w vexc
-vex197:
-    move.l #vmsg197,%d0
+vex197: move.w #197,%d0
     bra.w vexc
-vex198:
-    move.l #vmsg198,%d0
+vex198: move.w #198,%d0
     bra.w vexc
-vex199:
-    move.l #vmsg199,%d0
+vex199: move.w #199,%d0
     bra.w vexc
-vex200:
-    move.l #vmsg200,%d0
+vex200: move.w #200,%d0
     bra.w vexc
-vex201:
-    move.l #vmsg201,%d0
+vex201: move.w #201,%d0
     bra.w vexc
-vex202:
-    move.l #vmsg202,%d0
+vex202: move.w #202,%d0
     bra.w vexc
-vex203:
-    move.l #vmsg203,%d0
+vex203: move.w #203,%d0
     bra.w vexc
-vex204:
-    move.l #vmsg204,%d0
+vex204: move.w #204,%d0
     bra.w vexc
-vex205:
-    move.l #vmsg205,%d0
+vex205: move.w #205,%d0
     bra.w vexc
-vex206:
-    move.l #vmsg206,%d0
+vex206: move.w #206,%d0
     bra.w vexc
-vex207:
-    move.l #vmsg207,%d0
+vex207: move.w #207,%d0
     bra.w vexc
-vex208:
-    move.l #vmsg208,%d0
+vex208: move.w #208,%d0
     bra.w vexc
-vex209:
-    move.l #vmsg209,%d0
+vex209: move.w #209,%d0
     bra.w vexc
-vex210:
-    move.l #vmsg210,%d0
+vex210: move.w #210,%d0
     bra.w vexc
-vex211:
-    move.l #vmsg211,%d0
+vex211: move.w #211,%d0
     bra.w vexc
-vex212:
-    move.l #vmsg212,%d0
+vex212: move.w #212,%d0
     bra.w vexc
-vex213:
-    move.l #vmsg213,%d0
+vex213: move.w #213,%d0
     bra.w vexc
-vex214:
-    move.l #vmsg214,%d0
+vex214: move.w #214,%d0
     bra.w vexc
-vex215:
-    move.l #vmsg215,%d0
+vex215: move.w #215,%d0
     bra.w vexc
-vex216:
-    move.l #vmsg216,%d0
+vex216: move.w #216,%d0
     bra.w vexc
-vex217:
-    move.l #vmsg217,%d0
+vex217: move.w #217,%d0
     bra.w vexc
-vex218:
-    move.l #vmsg218,%d0
+vex218: move.w #218,%d0
     bra.w vexc
-vex219:
-    move.l #vmsg219,%d0
+vex219: move.w #219,%d0
     bra.w vexc
-vex220:
-    move.l #vmsg220,%d0
+vex220: move.w #220,%d0
     bra.w vexc
-vex221:
-    move.l #vmsg221,%d0
+vex221: move.w #221,%d0
     bra.w vexc
-vex222:
-    move.l #vmsg222,%d0
+vex222: move.w #222,%d0
     bra.w vexc
-vex223:
-    move.l #vmsg223,%d0
+vex223: move.w #223,%d0
     bra.w vexc
-vex224:
-    move.l #vmsg224,%d0
+vex224: move.w #224,%d0
     bra.w vexc
-vex225:
-    move.l #vmsg225,%d0
+vex225: move.w #225,%d0
     bra.w vexc
-vex226:
-    move.l #vmsg226,%d0
+vex226: move.w #226,%d0
     bra.w vexc
-vex227:
-    move.l #vmsg227,%d0
+vex227: move.w #227,%d0
     bra.w vexc
-vex228:
-    move.l #vmsg228,%d0
+vex228: move.w #228,%d0
     bra.w vexc
-vex229:
-    move.l #vmsg229,%d0
+vex229: move.w #229,%d0
     bra.w vexc
-vex230:
-    move.l #vmsg230,%d0
+vex230: move.w #230,%d0
     bra.w vexc
-vex231:
-    move.l #vmsg231,%d0
+vex231: move.w #231,%d0
     bra.w vexc
-vex232:
-    move.l #vmsg232,%d0
+vex232: move.w #232,%d0
     bra.w vexc
-vex233:
-    move.l #vmsg233,%d0
+vex233: move.w #233,%d0
     bra.w vexc
-vex234:
-    move.l #vmsg234,%d0
+vex234: move.w #234,%d0
     bra.w vexc
-vex235:
-    move.l #vmsg235,%d0
+vex235: move.w #235,%d0
     bra.w vexc
-vex236:
-    move.l #vmsg236,%d0
+vex236: move.w #236,%d0
     bra.w vexc
-vex237:
-    move.l #vmsg237,%d0
+vex237: move.w #237,%d0
     bra.w vexc
-vex238:
-    move.l #vmsg238,%d0
+vex238: move.w #238,%d0
     bra.w vexc
-vex239:
-    move.l #vmsg239,%d0
+vex239: move.w #239,%d0
     bra.w vexc
-vex240:
-    move.l #vmsg240,%d0
+vex240: move.w #240,%d0
     bra.w vexc
-vex241:
-    move.l #vmsg241,%d0
+vex241: move.w #241,%d0
     bra.w vexc
-vex242:
-    move.l #vmsg242,%d0
+vex242: move.w #242,%d0
     bra.w vexc
-vex243:
-    move.l #vmsg243,%d0
+vex243: move.w #243,%d0
     bra.w vexc
-vex244:
-    move.l #vmsg244,%d0
+vex244: move.w #244,%d0
     bra.w vexc
-vex245:
-    move.l #vmsg245,%d0
+vex245: move.w #245,%d0
     bra.w vexc
-vex246:
-    move.l #vmsg246,%d0
+vex246: move.w #246,%d0
     bra.w vexc
-vex247:
-    move.l #vmsg247,%d0
+vex247: move.w #247,%d0
     bra.w vexc
-vex248:
-    move.l #vmsg248,%d0
+vex248: move.w #248,%d0
     bra.w vexc
-vex249:
-    move.l #vmsg249,%d0
+vex249: move.w #249,%d0
     bra.w vexc
-vex250:
-    move.l #vmsg250,%d0
+vex250: move.w #250,%d0
     bra.w vexc
-vex251:
-    move.l #vmsg251,%d0
+vex251: move.w #251,%d0
     bra.w vexc
-vex252:
-    move.l #vmsg252,%d0
+vex252: move.w #252,%d0
     bra.w vexc
-vex253:
-    move.l #vmsg253,%d0
+vex253: move.w #253,%d0
     bra.w vexc
-vex254:
-    move.l #vmsg254,%d0
+vex254: move.w #254,%d0
     bra.w vexc
-vex255:
-    move.l #vmsg255,%d0
+vex255: move.w #255,%d0
     bra.w vexc
 vexc:
     move.w #0x2700,%sr
-    move.l 2(%sp),0xff8026
+    move.w 2(%sp),0xff8026
+    move.w %d0,0xff8028
+    move.l #vmsg,%d0
     move.w %d0,0xff802c
     swap %d0
     move.w %d0,0xff802a
     move.w #0xdead,0xff8020
 4:  bra.s 4b
-vmsg2: .asciz "SUB EXCEPTION VECTOR 2"
-vmsg3: .asciz "SUB EXCEPTION VECTOR 3"
-vmsg4: .asciz "SUB EXCEPTION VECTOR 4"
-vmsg5: .asciz "SUB EXCEPTION VECTOR 5"
-vmsg6: .asciz "SUB EXCEPTION VECTOR 6"
-vmsg7: .asciz "SUB EXCEPTION VECTOR 7"
-vmsg8: .asciz "SUB EXCEPTION VECTOR 8"
-vmsg9: .asciz "SUB EXCEPTION VECTOR 9"
-vmsg10: .asciz "SUB EXCEPTION VECTOR 10"
-vmsg11: .asciz "SUB EXCEPTION VECTOR 11"
-vmsg12: .asciz "SUB EXCEPTION VECTOR 12"
-vmsg13: .asciz "SUB EXCEPTION VECTOR 13"
-vmsg14: .asciz "SUB EXCEPTION VECTOR 14"
-vmsg15: .asciz "SUB EXCEPTION VECTOR 15"
-vmsg16: .asciz "SUB EXCEPTION VECTOR 16"
-vmsg17: .asciz "SUB EXCEPTION VECTOR 17"
-vmsg18: .asciz "SUB EXCEPTION VECTOR 18"
-vmsg19: .asciz "SUB EXCEPTION VECTOR 19"
-vmsg20: .asciz "SUB EXCEPTION VECTOR 20"
-vmsg21: .asciz "SUB EXCEPTION VECTOR 21"
-vmsg22: .asciz "SUB EXCEPTION VECTOR 22"
-vmsg23: .asciz "SUB EXCEPTION VECTOR 23"
-vmsg24: .asciz "SUB EXCEPTION VECTOR 24"
-vmsg25: .asciz "SUB EXCEPTION VECTOR 25"
-vmsg26: .asciz "SUB EXCEPTION VECTOR 26"
-vmsg27: .asciz "SUB EXCEPTION VECTOR 27"
-vmsg28: .asciz "SUB EXCEPTION VECTOR 28"
-vmsg29: .asciz "SUB EXCEPTION VECTOR 29"
-vmsg30: .asciz "SUB EXCEPTION VECTOR 30"
-vmsg31: .asciz "SUB EXCEPTION VECTOR 31"
-vmsg32: .asciz "SUB EXCEPTION VECTOR 32"
-vmsg33: .asciz "SUB EXCEPTION VECTOR 33"
-vmsg34: .asciz "SUB EXCEPTION VECTOR 34"
-vmsg35: .asciz "SUB EXCEPTION VECTOR 35"
-vmsg36: .asciz "SUB EXCEPTION VECTOR 36"
-vmsg37: .asciz "SUB EXCEPTION VECTOR 37"
-vmsg38: .asciz "SUB EXCEPTION VECTOR 38"
-vmsg39: .asciz "SUB EXCEPTION VECTOR 39"
-vmsg40: .asciz "SUB EXCEPTION VECTOR 40"
-vmsg41: .asciz "SUB EXCEPTION VECTOR 41"
-vmsg42: .asciz "SUB EXCEPTION VECTOR 42"
-vmsg43: .asciz "SUB EXCEPTION VECTOR 43"
-vmsg44: .asciz "SUB EXCEPTION VECTOR 44"
-vmsg45: .asciz "SUB EXCEPTION VECTOR 45"
-vmsg46: .asciz "SUB EXCEPTION VECTOR 46"
-vmsg47: .asciz "SUB EXCEPTION VECTOR 47"
-vmsg48: .asciz "SUB EXCEPTION VECTOR 48"
-vmsg49: .asciz "SUB EXCEPTION VECTOR 49"
-vmsg50: .asciz "SUB EXCEPTION VECTOR 50"
-vmsg51: .asciz "SUB EXCEPTION VECTOR 51"
-vmsg52: .asciz "SUB EXCEPTION VECTOR 52"
-vmsg53: .asciz "SUB EXCEPTION VECTOR 53"
-vmsg54: .asciz "SUB EXCEPTION VECTOR 54"
-vmsg55: .asciz "SUB EXCEPTION VECTOR 55"
-vmsg56: .asciz "SUB EXCEPTION VECTOR 56"
-vmsg57: .asciz "SUB EXCEPTION VECTOR 57"
-vmsg58: .asciz "SUB EXCEPTION VECTOR 58"
-vmsg59: .asciz "SUB EXCEPTION VECTOR 59"
-vmsg60: .asciz "SUB EXCEPTION VECTOR 60"
-vmsg61: .asciz "SUB EXCEPTION VECTOR 61"
-vmsg62: .asciz "SUB EXCEPTION VECTOR 62"
-vmsg63: .asciz "SUB EXCEPTION VECTOR 63"
-vmsg64: .asciz "SUB EXCEPTION VECTOR 64"
-vmsg65: .asciz "SUB EXCEPTION VECTOR 65"
-vmsg66: .asciz "SUB EXCEPTION VECTOR 66"
-vmsg67: .asciz "SUB EXCEPTION VECTOR 67"
-vmsg68: .asciz "SUB EXCEPTION VECTOR 68"
-vmsg69: .asciz "SUB EXCEPTION VECTOR 69"
-vmsg70: .asciz "SUB EXCEPTION VECTOR 70"
-vmsg71: .asciz "SUB EXCEPTION VECTOR 71"
-vmsg72: .asciz "SUB EXCEPTION VECTOR 72"
-vmsg73: .asciz "SUB EXCEPTION VECTOR 73"
-vmsg74: .asciz "SUB EXCEPTION VECTOR 74"
-vmsg75: .asciz "SUB EXCEPTION VECTOR 75"
-vmsg76: .asciz "SUB EXCEPTION VECTOR 76"
-vmsg77: .asciz "SUB EXCEPTION VECTOR 77"
-vmsg78: .asciz "SUB EXCEPTION VECTOR 78"
-vmsg79: .asciz "SUB EXCEPTION VECTOR 79"
-vmsg80: .asciz "SUB EXCEPTION VECTOR 80"
-vmsg81: .asciz "SUB EXCEPTION VECTOR 81"
-vmsg82: .asciz "SUB EXCEPTION VECTOR 82"
-vmsg83: .asciz "SUB EXCEPTION VECTOR 83"
-vmsg84: .asciz "SUB EXCEPTION VECTOR 84"
-vmsg85: .asciz "SUB EXCEPTION VECTOR 85"
-vmsg86: .asciz "SUB EXCEPTION VECTOR 86"
-vmsg87: .asciz "SUB EXCEPTION VECTOR 87"
-vmsg88: .asciz "SUB EXCEPTION VECTOR 88"
-vmsg89: .asciz "SUB EXCEPTION VECTOR 89"
-vmsg90: .asciz "SUB EXCEPTION VECTOR 90"
-vmsg91: .asciz "SUB EXCEPTION VECTOR 91"
-vmsg92: .asciz "SUB EXCEPTION VECTOR 92"
-vmsg93: .asciz "SUB EXCEPTION VECTOR 93"
-vmsg94: .asciz "SUB EXCEPTION VECTOR 94"
-vmsg95: .asciz "SUB EXCEPTION VECTOR 95"
-vmsg96: .asciz "SUB EXCEPTION VECTOR 96"
-vmsg97: .asciz "SUB EXCEPTION VECTOR 97"
-vmsg98: .asciz "SUB EXCEPTION VECTOR 98"
-vmsg99: .asciz "SUB EXCEPTION VECTOR 99"
-vmsg100: .asciz "SUB EXCEPTION VECTOR 100"
-vmsg101: .asciz "SUB EXCEPTION VECTOR 101"
-vmsg102: .asciz "SUB EXCEPTION VECTOR 102"
-vmsg103: .asciz "SUB EXCEPTION VECTOR 103"
-vmsg104: .asciz "SUB EXCEPTION VECTOR 104"
-vmsg105: .asciz "SUB EXCEPTION VECTOR 105"
-vmsg106: .asciz "SUB EXCEPTION VECTOR 106"
-vmsg107: .asciz "SUB EXCEPTION VECTOR 107"
-vmsg108: .asciz "SUB EXCEPTION VECTOR 108"
-vmsg109: .asciz "SUB EXCEPTION VECTOR 109"
-vmsg110: .asciz "SUB EXCEPTION VECTOR 110"
-vmsg111: .asciz "SUB EXCEPTION VECTOR 111"
-vmsg112: .asciz "SUB EXCEPTION VECTOR 112"
-vmsg113: .asciz "SUB EXCEPTION VECTOR 113"
-vmsg114: .asciz "SUB EXCEPTION VECTOR 114"
-vmsg115: .asciz "SUB EXCEPTION VECTOR 115"
-vmsg116: .asciz "SUB EXCEPTION VECTOR 116"
-vmsg117: .asciz "SUB EXCEPTION VECTOR 117"
-vmsg118: .asciz "SUB EXCEPTION VECTOR 118"
-vmsg119: .asciz "SUB EXCEPTION VECTOR 119"
-vmsg120: .asciz "SUB EXCEPTION VECTOR 120"
-vmsg121: .asciz "SUB EXCEPTION VECTOR 121"
-vmsg122: .asciz "SUB EXCEPTION VECTOR 122"
-vmsg123: .asciz "SUB EXCEPTION VECTOR 123"
-vmsg124: .asciz "SUB EXCEPTION VECTOR 124"
-vmsg125: .asciz "SUB EXCEPTION VECTOR 125"
-vmsg126: .asciz "SUB EXCEPTION VECTOR 126"
-vmsg127: .asciz "SUB EXCEPTION VECTOR 127"
-vmsg128: .asciz "SUB EXCEPTION VECTOR 128"
-vmsg129: .asciz "SUB EXCEPTION VECTOR 129"
-vmsg130: .asciz "SUB EXCEPTION VECTOR 130"
-vmsg131: .asciz "SUB EXCEPTION VECTOR 131"
-vmsg132: .asciz "SUB EXCEPTION VECTOR 132"
-vmsg133: .asciz "SUB EXCEPTION VECTOR 133"
-vmsg134: .asciz "SUB EXCEPTION VECTOR 134"
-vmsg135: .asciz "SUB EXCEPTION VECTOR 135"
-vmsg136: .asciz "SUB EXCEPTION VECTOR 136"
-vmsg137: .asciz "SUB EXCEPTION VECTOR 137"
-vmsg138: .asciz "SUB EXCEPTION VECTOR 138"
-vmsg139: .asciz "SUB EXCEPTION VECTOR 139"
-vmsg140: .asciz "SUB EXCEPTION VECTOR 140"
-vmsg141: .asciz "SUB EXCEPTION VECTOR 141"
-vmsg142: .asciz "SUB EXCEPTION VECTOR 142"
-vmsg143: .asciz "SUB EXCEPTION VECTOR 143"
-vmsg144: .asciz "SUB EXCEPTION VECTOR 144"
-vmsg145: .asciz "SUB EXCEPTION VECTOR 145"
-vmsg146: .asciz "SUB EXCEPTION VECTOR 146"
-vmsg147: .asciz "SUB EXCEPTION VECTOR 147"
-vmsg148: .asciz "SUB EXCEPTION VECTOR 148"
-vmsg149: .asciz "SUB EXCEPTION VECTOR 149"
-vmsg150: .asciz "SUB EXCEPTION VECTOR 150"
-vmsg151: .asciz "SUB EXCEPTION VECTOR 151"
-vmsg152: .asciz "SUB EXCEPTION VECTOR 152"
-vmsg153: .asciz "SUB EXCEPTION VECTOR 153"
-vmsg154: .asciz "SUB EXCEPTION VECTOR 154"
-vmsg155: .asciz "SUB EXCEPTION VECTOR 155"
-vmsg156: .asciz "SUB EXCEPTION VECTOR 156"
-vmsg157: .asciz "SUB EXCEPTION VECTOR 157"
-vmsg158: .asciz "SUB EXCEPTION VECTOR 158"
-vmsg159: .asciz "SUB EXCEPTION VECTOR 159"
-vmsg160: .asciz "SUB EXCEPTION VECTOR 160"
-vmsg161: .asciz "SUB EXCEPTION VECTOR 161"
-vmsg162: .asciz "SUB EXCEPTION VECTOR 162"
-vmsg163: .asciz "SUB EXCEPTION VECTOR 163"
-vmsg164: .asciz "SUB EXCEPTION VECTOR 164"
-vmsg165: .asciz "SUB EXCEPTION VECTOR 165"
-vmsg166: .asciz "SUB EXCEPTION VECTOR 166"
-vmsg167: .asciz "SUB EXCEPTION VECTOR 167"
-vmsg168: .asciz "SUB EXCEPTION VECTOR 168"
-vmsg169: .asciz "SUB EXCEPTION VECTOR 169"
-vmsg170: .asciz "SUB EXCEPTION VECTOR 170"
-vmsg171: .asciz "SUB EXCEPTION VECTOR 171"
-vmsg172: .asciz "SUB EXCEPTION VECTOR 172"
-vmsg173: .asciz "SUB EXCEPTION VECTOR 173"
-vmsg174: .asciz "SUB EXCEPTION VECTOR 174"
-vmsg175: .asciz "SUB EXCEPTION VECTOR 175"
-vmsg176: .asciz "SUB EXCEPTION VECTOR 176"
-vmsg177: .asciz "SUB EXCEPTION VECTOR 177"
-vmsg178: .asciz "SUB EXCEPTION VECTOR 178"
-vmsg179: .asciz "SUB EXCEPTION VECTOR 179"
-vmsg180: .asciz "SUB EXCEPTION VECTOR 180"
-vmsg181: .asciz "SUB EXCEPTION VECTOR 181"
-vmsg182: .asciz "SUB EXCEPTION VECTOR 182"
-vmsg183: .asciz "SUB EXCEPTION VECTOR 183"
-vmsg184: .asciz "SUB EXCEPTION VECTOR 184"
-vmsg185: .asciz "SUB EXCEPTION VECTOR 185"
-vmsg186: .asciz "SUB EXCEPTION VECTOR 186"
-vmsg187: .asciz "SUB EXCEPTION VECTOR 187"
-vmsg188: .asciz "SUB EXCEPTION VECTOR 188"
-vmsg189: .asciz "SUB EXCEPTION VECTOR 189"
-vmsg190: .asciz "SUB EXCEPTION VECTOR 190"
-vmsg191: .asciz "SUB EXCEPTION VECTOR 191"
-vmsg192: .asciz "SUB EXCEPTION VECTOR 192"
-vmsg193: .asciz "SUB EXCEPTION VECTOR 193"
-vmsg194: .asciz "SUB EXCEPTION VECTOR 194"
-vmsg195: .asciz "SUB EXCEPTION VECTOR 195"
-vmsg196: .asciz "SUB EXCEPTION VECTOR 196"
-vmsg197: .asciz "SUB EXCEPTION VECTOR 197"
-vmsg198: .asciz "SUB EXCEPTION VECTOR 198"
-vmsg199: .asciz "SUB EXCEPTION VECTOR 199"
-vmsg200: .asciz "SUB EXCEPTION VECTOR 200"
-vmsg201: .asciz "SUB EXCEPTION VECTOR 201"
-vmsg202: .asciz "SUB EXCEPTION VECTOR 202"
-vmsg203: .asciz "SUB EXCEPTION VECTOR 203"
-vmsg204: .asciz "SUB EXCEPTION VECTOR 204"
-vmsg205: .asciz "SUB EXCEPTION VECTOR 205"
-vmsg206: .asciz "SUB EXCEPTION VECTOR 206"
-vmsg207: .asciz "SUB EXCEPTION VECTOR 207"
-vmsg208: .asciz "SUB EXCEPTION VECTOR 208"
-vmsg209: .asciz "SUB EXCEPTION VECTOR 209"
-vmsg210: .asciz "SUB EXCEPTION VECTOR 210"
-vmsg211: .asciz "SUB EXCEPTION VECTOR 211"
-vmsg212: .asciz "SUB EXCEPTION VECTOR 212"
-vmsg213: .asciz "SUB EXCEPTION VECTOR 213"
-vmsg214: .asciz "SUB EXCEPTION VECTOR 214"
-vmsg215: .asciz "SUB EXCEPTION VECTOR 215"
-vmsg216: .asciz "SUB EXCEPTION VECTOR 216"
-vmsg217: .asciz "SUB EXCEPTION VECTOR 217"
-vmsg218: .asciz "SUB EXCEPTION VECTOR 218"
-vmsg219: .asciz "SUB EXCEPTION VECTOR 219"
-vmsg220: .asciz "SUB EXCEPTION VECTOR 220"
-vmsg221: .asciz "SUB EXCEPTION VECTOR 221"
-vmsg222: .asciz "SUB EXCEPTION VECTOR 222"
-vmsg223: .asciz "SUB EXCEPTION VECTOR 223"
-vmsg224: .asciz "SUB EXCEPTION VECTOR 224"
-vmsg225: .asciz "SUB EXCEPTION VECTOR 225"
-vmsg226: .asciz "SUB EXCEPTION VECTOR 226"
-vmsg227: .asciz "SUB EXCEPTION VECTOR 227"
-vmsg228: .asciz "SUB EXCEPTION VECTOR 228"
-vmsg229: .asciz "SUB EXCEPTION VECTOR 229"
-vmsg230: .asciz "SUB EXCEPTION VECTOR 230"
-vmsg231: .asciz "SUB EXCEPTION VECTOR 231"
-vmsg232: .asciz "SUB EXCEPTION VECTOR 232"
-vmsg233: .asciz "SUB EXCEPTION VECTOR 233"
-vmsg234: .asciz "SUB EXCEPTION VECTOR 234"
-vmsg235: .asciz "SUB EXCEPTION VECTOR 235"
-vmsg236: .asciz "SUB EXCEPTION VECTOR 236"
-vmsg237: .asciz "SUB EXCEPTION VECTOR 237"
-vmsg238: .asciz "SUB EXCEPTION VECTOR 238"
-vmsg239: .asciz "SUB EXCEPTION VECTOR 239"
-vmsg240: .asciz "SUB EXCEPTION VECTOR 240"
-vmsg241: .asciz "SUB EXCEPTION VECTOR 241"
-vmsg242: .asciz "SUB EXCEPTION VECTOR 242"
-vmsg243: .asciz "SUB EXCEPTION VECTOR 243"
-vmsg244: .asciz "SUB EXCEPTION VECTOR 244"
-vmsg245: .asciz "SUB EXCEPTION VECTOR 245"
-vmsg246: .asciz "SUB EXCEPTION VECTOR 246"
-vmsg247: .asciz "SUB EXCEPTION VECTOR 247"
-vmsg248: .asciz "SUB EXCEPTION VECTOR 248"
-vmsg249: .asciz "SUB EXCEPTION VECTOR 249"
-vmsg250: .asciz "SUB EXCEPTION VECTOR 250"
-vmsg251: .asciz "SUB EXCEPTION VECTOR 251"
-vmsg252: .asciz "SUB EXCEPTION VECTOR 252"
-vmsg253: .asciz "SUB EXCEPTION VECTOR 253"
-vmsg254: .asciz "SUB EXCEPTION VECTOR 254"
-vmsg255: .asciz "SUB EXCEPTION VECTOR 255"
+vmsg: .asciz "SUB EXCEPTION"
     .even

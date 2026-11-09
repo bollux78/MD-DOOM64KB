@@ -154,7 +154,7 @@ sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_gene
 sources += sorted(p for p in src.glob("*.s"))
 sources = ([here / "n2_video_stubs.c"] if R128DRAW else []) + [common / "m2/scd_n1_platform.c"] + sources
 sources += ([] if R128DRAW else [common / "m2/scd_draw.c"]) + [ common / "s1e/engine_libc.c",
-            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c", here / "prof_inst.c", here / "sub_sound_stubs.c", here / "sub_sound_stubs2.c"]
+            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c"] + ([here / "prof_inst.c"] if PROF & 2 else []) + [here / "sub_sound_stubs.c", here / "sub_sound_stubs2.c"]
 objs = []
 for s in sources:
     obj = w / (s.name + ".o")
