@@ -180,7 +180,11 @@ if r.returncode:
     try:
         from collections import Counter
         tot = Counter(); pend = None
-        for ml in (w / "n2-sub.map").read_text(errors="replace").splitlines():
+        _mt = (w / "n2-sub.map").read_text(errors="replace")
+        _mt = _mt[_mt.find("Linker script and memory map"):]
+        _mt = _mt[:_mt.find("Cross Reference Table")] if "Cross Reference Table" in _mt else _mt
+        _e = re.search(r"0x([0-9a-f]+)\s+_end = \.", _mt); print("N2 _end would be", _e.group(1) if _e else "?")
+        for ml in _mt.splitlines():
             m2 = re.match(r"^ (\.\S+)\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)", ml)
             if m2: tot[(m2.group(1).split(".")[1], Path(m2.group(4)).name)] += int(m2.group(3), 16); pend = None; continue
             m1 = re.match(r"^ (\.\S+)$", ml)
