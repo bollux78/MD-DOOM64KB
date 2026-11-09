@@ -136,7 +136,7 @@ ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
 # Sprite patches (between S_START and S_END) are only used while one sprite is projected/drawn:
 # they live in a ring that recycles the oldest ones instead of filling the resident cache.
 ww = ww.replace("const void __far* W_GetLumpByNum(int16_t n)\n{\n    scd_check_num(n);\n    if (scd_slots[n]) return scd_slots[n];",
-"""#define SCD_RING_BYTES (" + os.environ.get("N3_RING_KIB", "28") + "UL * 1024UL)
+"""#define SCD_RING_BYTES (N3RINGKIBUL * 1024UL)
 #define SCD_RING_ENTRIES 96u
 static uint8_t scd_ring[SCD_RING_BYTES];
 static struct { int16_t lump; uint16_t start, end; } scd_ring_e[SCD_RING_ENTRIES];
@@ -179,6 +179,7 @@ const void __far* W_GetLumpByNum(int16_t n)
     if (((n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size)
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
+ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "28"))
 ww += """
 /* Level-scoped cache: everything fetched after the mark (level data, sprites) is dropped at the
  * next level load; init-time lumps (colormaps, texture metadata) stay. */
