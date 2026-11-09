@@ -14,6 +14,7 @@
 #include "i_system.h"
 #include "scd_proto.h"
 #include "n3_proto.h"
+#include "r84_columns.h"
 #define REG16(a) (*(volatile uint16_t *)(uintptr_t)(a))
 #define BANK ((volatile uint8_t *)SCD_SUB_BANK_BASE)
 
@@ -56,7 +57,18 @@ static void apply_snapshot(const uint8_t *p)
 void sub_main(void)
 {
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
-    Z_Init(); W_Init(); R_Init(); P_Init(); SCD_SubSetTime(0);
+    Z_Init(); W_Init();
+    /* R84 wall pool into both Word RAM banks (each exchange swaps the bank we see) */
+    for (uint16_t k = 0; k < 2u; k++)
+    {
+        uint16_t len = 0;
+        const volatile uint8_t *pp = SCD_SubExchange(N3_CMD_POOL, k, &len);
+        if (!pp || len != N3_POOL_BYTES) I_Error("N3 POOL %u", (unsigned)len);
+        volatile uint16_t *d = (volatile uint16_t *)(BANK + N3_POOL_OFFSET);
+        const volatile uint16_t *ps = (const volatile uint16_t *)pp;
+        for (uint16_t i = 0; i < (uint16_t)((len + 1u) >> 1); i++) d[i] = ps[i];
+    }
+    R_Init(); P_Init(); SCD_SubSetTime(0);
     { extern void SCD_WadMark(void); SCD_WadMark(); }
     uint16_t lock = 0, valid = 0, frame = 0;
     uint32_t render_units = 0, tic_units = 0;

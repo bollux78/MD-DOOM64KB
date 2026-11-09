@@ -187,6 +187,18 @@ void N3_OnTicEnd(void)
     t[7] = (uint8_t)_g_menuactive;
 }
 
+extern const uint8_t n3_r84_pool[];
+extern const uint16_t n3_r84_pool_bytes;
+/* Server hook: the resident R84 pool (requested twice by the sub at boot, once per bank). */
+uint16_t N3_MdPoolPayload(volatile uint8_t *p)
+{
+    const uint16_t n = n3_r84_pool_bytes;
+    volatile uint16_t *d = (volatile uint16_t *)p;
+    const uint16_t *src = (const uint16_t *)n3_r84_pool;
+    for (uint16_t i = 0; i < (uint16_t)((n + 1u) >> 1); i++) d[i] = src[i];
+    return n;
+}
+
 /* Server hook: build the FRAME response (runs before the swap). */
 uint16_t N3_MdFramePayload(volatile uint8_t *p)
 {

@@ -10,6 +10,8 @@
 #define N3_MAX_TICS 32u
 #define N3_TIC_BYTES 8u
 #define N3_HDR_OFFSET 0x0F00u
+#define N3_CMD_POOL 9u                 /* sub -> MD: send the resident R84 wall-texture pool */
+#define N3_POOL_OFFSET 0x10200UL       /* pool copy in both Word RAM banks (above any lump payload) */
 #define N3_F_SNAP 1u   /* level (re)load: snapshot follows, sub runs G_DoLoadLevel */
 #define N3_F_STOP 2u   /* MD left lockstep (menu-less non-level state, demo, desync) */
 typedef struct { uint16_t magic, flags, ntics, snaplen, x0, x1; } N3PayHead;   /* x0..x1: sub render window */

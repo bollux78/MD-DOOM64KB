@@ -151,7 +151,11 @@ for t in sorted(used):
         if o == 0xFFFFFFFF: continue
         if o not in remap: remap[o] = len(newpool); newpool.extend(pool[o:o + 128])
 newoffs = [remap.get(o, 0) if o != 0xFFFFFFFF else o for o in offs]
-hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "static const uint8_t r84_pixels[]={" + ",".join(str(v) for v in newpool) + "};", hdr)
+# The pool lives in Word RAM (same copy in both 1M banks), loaded from the MD at sub boot.
+hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "#define r84_pixels ((const uint8_t *)(0x0C0000UL + 0x10200UL))\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
+assert 0x10200 + len(newpool) < 0x1F000, "R84 pool does not fit the Word RAM bank"
+pool_c = "/* N3: resident R84 wall-texture pool for the Sega CD sub (all maps). */\n#include <stdint.h>\n" \
+         "const uint8_t n3_r84_pool[%d] = {%s};\nconst uint16_t n3_r84_pool_bytes = %d;\n" % (len(newpool), ",".join(str(v) for v in newpool), len(newpool))
 hdr = re.sub(r"static const uint32_t r84_offsets\[\]=\{[^}]*\};", "static const uint32_t r84_offsets[]={" + ",".join(str(v) + "u" for v in newoffs) + "};", hdr)
 (src / "r84_columns.h").write_text(hdr)
 print("N3 R84 subset: textures %d, columns %d, bytes %d" % (len(used), len(remap), len(newpool)))
@@ -309,12 +313,15 @@ off = bool(os.environ.get("N3_OFF"))
 subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tools/make_sub_header.py"),
                 str(w / "n3-sub.bin"), str(tree / "src/n3_sub.h")], check=True)
 shutil.copyfile(here / "n3_md.c", tree / "src/n3_md.c")
+(tree / "src/n3_r84_pool.c").write_text(pool_c)
 shutil.copyfile(here / "n3_proto.h", tree / "src/n3_proto.h")
 shutil.copyfile(common / "scd_proto.h", tree / "src/scd_proto.h")
 sv = (common / "scd_md_server.c").read_text()
 a = "    else if (cmd == SCD_CMD_LUMP)\n        status = prepare_lump(arg, &size);\n"
 assert sv.count(a) == 1
-sv = sv.replace(a, a + "    else if (cmd == SCD_CMD_FRAME)\n    {\n        extern uint16_t N3_MdFramePayload(volatile uint8_t *);\n"
+sv = sv.replace(a, a + "    else if (cmd == 9u)\n    {\n        extern uint16_t N3_MdPoolPayload(volatile uint8_t *);\n"
+                "        size = N3_MdPoolPayload((volatile uint8_t *)(SCD_MD_BANK_BASE + SCD_PAYLOAD_OFFSET)); status = size != 0;\n    }\n"
+                "    else if (cmd == SCD_CMD_FRAME)\n    {\n        extern uint16_t N3_MdFramePayload(volatile uint8_t *);\n"
                 "        size = N3_MdFramePayload((volatile uint8_t *)(SCD_MD_BANK_BASE + SCD_PAYLOAD_OFFSET)); status = size != 0;\n    }\n")
 a = "            transactions++;\n"
 assert sv.count(a) == 1
