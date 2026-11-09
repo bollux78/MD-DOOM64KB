@@ -65,3 +65,18 @@ Branch `exp-werk-scd-subport-s1s2`, pasta `experiments/DOOM_SCD_SubPort/n3`, wor
 - A troca B leva os tics que o MD já rodou (flag `N3_F_NORENDER`). O sub executa essa lógica enquanto o MD junta e apresenta; na troca A ele já começa a desenhar.
 - A cópia do frame no sub e a junção no MD agora copiam só as colunas da janela, com ponteiros de passo 2.
 - BlastEm, mesmo roteiro, 0 desyncs: **E1M1 9,7 FPS** (antes 8,2; R128 só MD 3,8) e **E1M8 10,9 FPS**. O split equilibra perto da coluna ~30, então o sub pega mais da metade da tela.
+
+## Atualização 3: demos/bench em lockstep
+- Demos rodam em lockstep, para o bench da R128 usar o Sega CD.
+- **Memória do sub:**
+  - SRAM compacta: só a faixa ímpar, por `R22_SRAM_BYTE` (economia de ~36 KB); a cache de colunas MOVEP fica em array próprio.
+  - Pool R84 nas duas bancas da Word RAM.
+  - Cache WAD de 176 KB, com escopo de nível: depois do setup, todo lump novo vai para o anel de 24 KB. O patch do céu fica residente.
+- **Causas de dessincronização achadas:**
+  - O demo zera o RNG depois do load. Agora o sub adota o índice de `P_Random` do MD a cada tic, menos no tic do load.
+  - O comando do tic é capturado logo após o `G_Ticker` pegá-lo, porque `P_PlayerThink` edita `player.cmd`.
+  - **`P_CheckSight` da R128 escalonava os monstros pelo ENDEREÇO do mobj, que é diferente no MD e no sub.** Agora usa a posição (x^y). A divergência mudava de tic de uma compilação para outra por causa disso.
+- BlastEm: DEMO3 (E1M7) com 0 desyncs, mas 1,4 FPS contra 2,3 FPS do MD sozinho.
+  - Nesse demo a lógica é pesada (~36 ms/tic no sub) e roda nos dois processadores.
+  - O sub fica limitado pela lógica e entra em espiral: mais tempo por frame dá mais tics por frame.
+- E1M8 continua em ~10,8 FPS. Os números do E1M1 com o roteiro por frame são ruidosos (6–10 FPS).
