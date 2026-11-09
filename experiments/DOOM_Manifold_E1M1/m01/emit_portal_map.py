@@ -12,7 +12,7 @@ import json
 import math
 from pathlib import Path
 import struct
-from bsp_cells import build, NODE_FORMAT
+from bsp_cells import build, clip_to_seg_front, NODE_FORMAT
 from convert_wad import read_map, name
 
 SCALE=16
@@ -113,7 +113,11 @@ def source_wall(lumps,cell,a,b):
     return edges[0] if edges else None
 
 def candidate(lumps,nodes,allow_gaps=False):
-    polys={i:quantize(p) for i,p in build(lumps,nodes).items()}
+    leaves=clip_to_seg_front(lumps,build(lumps,nodes))
+    vanished=[i for i,p in leaves.items() if len(p)<3]
+    if vanished:
+        raise ValueError(f'{len(vanished)} empty cells after SEG clipping; examples {vanished[:12]}')
+    polys={i:quantize(p) for i,p in leaves.items()}
     polys=split_edges(polys)
     if len(polys)>MAX_CELLS:
         raise ValueError("too many cells")
@@ -211,6 +215,17 @@ def emit(lumps,cells):
     text+=as_c_array("s16","e1_group_params",sector_params)
     text+=as_c_array("u8","e1_group_types",[0]*len(lumps["SECTORS"]))
     text+=as_c_array("s16","e1_group_triggers",[0]*(len(lumps["SECTORS"])*8))
+    # Conservative all-cells PVS/PHS avoids NULL dereferences in sound/AI.
+    # This is temporary and deliberately slow; optimize after live gameplay.
+    runs=[]
+    remaining=len(cells)
+    while remaining:
+        chunk=min(127,remaining)
+        runs.append(chunk)
+        remaining-=chunk
+    runs.append(0)
+    text+=as_c_array("s8","e1_visibility_all",runs)
+    text+=as_c_array("u32","e1_visibility_offsets",[0]*len(cells))
     text+="static const vertex e1_vertices[] = {\n"
     for x,y in actual_points:
         if not (-32768<=round(x/SCALE)<=32767 and -32768<=round(y/SCALE)<=32767):
@@ -225,7 +240,7 @@ def emit(lumps,cells):
   .sector_group_params=e1_group_params,.sector_group_triggers=e1_group_triggers,
   .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
-  .has_pvs=0,.name="E1M1 geometry experimental",
+  .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
   .num_things=0,.things=0
 }};
 """
