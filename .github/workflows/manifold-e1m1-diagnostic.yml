@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [video, init]
+        mode: [map, init]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     steps:
@@ -62,6 +62,21 @@ jobs:
               VDP_setScreenWidth320();
               VDP_setScreenHeight224();
               VDP_drawText("MANIFOLD VIDEO BASELINE", 3, 10);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            map)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "level.h"
+          #include "map_table.h"
+          int main(void) {
+              VDP_init();
+              VDP_drawText("E1M1 MAP LOAD START", 3, 5);
+              load_portal_map((portal_map*)map_table[2]);
+              VDP_drawText("E1M1 MAP LOAD OK", 3, 9);
               while (1) { VDP_waitVSync(); }
               return 0;
           }
