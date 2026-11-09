@@ -22,6 +22,14 @@ if os.environ.get("N3_GREP"):
         if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 400000 or "table" in f.name: continue
         for i, l in enumerate(f.read_text(errors="replace").splitlines()):
             if rx.search(l): print("N3GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:220]))
+if os.environ.get("N3_DUMP"):
+    want = os.environ["N3_DUMP"].split(",")
+    for f in sorted((tree / "src").glob("*")):
+        if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 400000 or "table" in f.name: continue
+        lines = f.read_text(errors="replace").splitlines()
+        for i, l in enumerate(lines):
+            if any(re.match(r"^[A-Za-z].*\b" + w + r"\s*\(", l) and not l.rstrip().endswith(";") for w in want):
+                print("N3DUMP %s:%d" % (f.name, i + 1)); print("\n".join("N3DUMP| " + x for x in lines[i:i + 60]))
 for spec in filter(None, os.environ.get("N3_SHOW", "").split(";")):
     name, rng = spec.split(":"); lo, hi = map(int, rng.split("-"))
     ls = (tree / "src" / name).read_text(errors="replace").splitlines()
