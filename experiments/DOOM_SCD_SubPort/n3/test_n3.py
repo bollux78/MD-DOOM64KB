@@ -44,7 +44,7 @@ try:
                 fb = g.readmem(sym["r22_fb"] + 4, 3344)
                 hashes[k] = (tic, hashlib.sha1(fb).hexdigest()[:12])
             if tic - start[1] >= int(os.environ.get("N3_TICS", "700")) or k >= 400: break
-        if frames > 3000: break
+        if frames > int(os.environ.get("N3_MAXFRAMES", "3000")): break
     if start:
         res.update(frames=frames - start[0], tics=tic - start[1], seconds=round((vb - start[2]) / 60.0, 2))
         res["fps"] = round(res["frames"] / max(res["seconds"], 0.01), 2)
