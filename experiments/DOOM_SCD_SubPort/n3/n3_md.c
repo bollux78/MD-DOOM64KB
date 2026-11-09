@@ -277,7 +277,8 @@ void N3_MdFrameArrived(uint16_t arg)
     if (h->magic != N3_FR_MAGIC) return;
     s->sub_render_units += h->render_units; s->sub_tic_units += h->tic_units;
     if (!s->expect_frame) s->sub_idle_units = h->idle_units;
-    s->trace_n = h->lump_misses;   /* (debug) sub ring fetches so far */   /* A header: how long the sub waited for B */
+    s->trace_n = h->lump_misses;   /* (debug) sub ring fetches so far */
+    s->trace[0] += h->tic_fetch_units; s->trace[1] += h->render_fetch_units;   /* A header: how long the sub waited for B */
     if (!s->lock || !s->prev_valid || !h->lock) return;
     if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle ||
         h->health != s->prev_health)   /* RNG index is adopted from the MD every tic */

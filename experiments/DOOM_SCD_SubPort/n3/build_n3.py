@@ -318,6 +318,16 @@ const void __far* W_GetLumpByNum(int16_t n)
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
 ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "24"))
+ww = ww.replace("extern int scd_fetch_lump(uint16_t lump, void *destination, uint16_t bytes);",
+ """extern int scd_fetch_lump(uint16_t lump, void *destination, uint16_t bytes);
+/* N3 measurement: time spent waiting for the MD to serve lumps (sub clock units) */
+extern void SCD_ClockPoll(void); extern uint32_t scd_clock_units;
+uint32_t n3_fetch_units;
+static int n3_timed_fetch(uint16_t lump, void *d, uint16_t bytes)
+{ SCD_ClockPoll(); const uint32_t t0 = scd_clock_units; const int r = scd_fetch_lump(lump, d, bytes);
+  SCD_ClockPoll(); n3_fetch_units += scd_clock_units - t0; return r; }
+#define scd_fetch_lump n3_timed_fetch""")
+assert "n3_timed_fetch" in ww
 ww = ww.replace('I_Error("SCD LUMP CACHE FULL %d", n);', 'I_Error("FULL %d %.8s u%lu s%u S%d-%d P%d-%d", n, scd_directory[n].name, (unsigned long)scd_cache_used, (unsigned)size, scd_s_start, scd_s_end, scd_p_start, scd_p_end);')
 ww = ww.replace("static uint32_t scd_cache_used, scd_cache_peak;", "static uint32_t scd_cache_used, scd_cache_peak, scd_cache_mark;")
 ww += """

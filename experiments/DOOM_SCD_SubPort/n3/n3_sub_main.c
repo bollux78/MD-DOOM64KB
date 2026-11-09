@@ -78,7 +78,8 @@ void sub_main(void)
     R_Init(); P_Init(); SCD_SubSetTime(0);
     { extern void SCD_WadMark(void); SCD_WadMark(); }
     uint16_t lock = 0, valid = 0, frame = 0, first_tic = 0, rnd_fixes = 0;
-    uint32_t render_units = 0, tic_units = 0, idle_units = 0;
+    uint32_t render_units = 0, tic_units = 0, idle_units = 0, tic_fetch = 0, render_fetch = 0;
+    extern uint32_t n3_fetch_units;
     for (;;)
     {
         volatile N3FrameHead *fh = (volatile N3FrameHead *)(BANK + N3_HDR_OFFSET);
@@ -86,7 +87,7 @@ void sub_main(void)
         fh->gametic = _g_gametic;
         fh->x = _g_player.mo ? _g_player.mo->x : 0; fh->y = _g_player.mo ? _g_player.mo->y : 0;
         fh->angle = _g_player.mo ? _g_player.mo->angle : 0;
-        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health; { extern uint32_t scd_ring_fetches; fh->lump_misses = (uint16_t)scd_ring_fetches; }
+        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; fh->tic_fetch_units = tic_fetch; fh->render_fetch_units = render_fetch; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health; { extern uint32_t scd_ring_fetches; fh->lump_misses = (uint16_t)scd_ring_fetches; }
         if (valid)
         {
             /* only our window's sample bytes (MD merges exactly these) */
@@ -117,7 +118,7 @@ void sub_main(void)
         win_x0 = (int16_t)h.x0; win_x1 = (int16_t)h.x1;
         if (win_x0 < 0 || win_x0 > 76 || win_x1 < win_x0 || win_x1 > 76) { win_x0 = 0; win_x1 = 76; }
         valid = 0; render_units = tic_units = 0;
-        SCD_ClockPoll(); uint32_t t0 = scd_clock_units;
+        SCD_ClockPoll(); uint32_t t0 = scd_clock_units; uint32_t f0 = n3_fetch_units; tic_fetch = render_fetch = 0;
         if (h.flags & N3_F_STOP) lock = 0;
         if (h.flags & N3_F_SNAP)
         {
@@ -147,7 +148,7 @@ void sub_main(void)
             G_Ticker(); _g_gametic++; ran++;
             SCD_ClockPoll();
         }
-        SCD_ClockPoll(); tic_units = scd_clock_units - t0;
+        SCD_ClockPoll(); tic_units = scd_clock_units - t0; tic_fetch = n3_fetch_units - f0; f0 = n3_fetch_units;
 #if defined(N3_NO_SUB_RENDER)
         if (0)
 #else
@@ -156,7 +157,7 @@ void sub_main(void)
         {
             t0 = scd_clock_units;
             R_RenderPlayerView(&_g_player);
-            SCD_ClockPoll(); render_units = scd_clock_units - t0;
+            SCD_ClockPoll(); render_units = scd_clock_units - t0; render_fetch = n3_fetch_units - f0;
             valid = 1;
         }
     }

@@ -92,6 +92,8 @@ try:
         if ptr > 1:
             tn = int.from_bytes(g.readmem(ptr, 4), "big")
             res["sub_ring_fetches"] = tn
+            tf, rf = struct.unpack(">2I", g.readmem(ptr + 4, 8))
+            res["_tf_rf"] = (tf, rf)
             if tn and os.environ.get("N3_TRACE_TIC"):
                 funcs = sorted((a, n) for n, a in sym.items())
                 import bisect
@@ -112,6 +114,12 @@ try:
             dd = struct.unpack(">6i4H", g.readmem(ptr + 100 + 4 + 4 + 4, 32))
             if st["desyncs"]: st["first_desync_md_vs_sub"] = dd
             if ss: st.update(split_now=split, split_avg=round(ss / max(st["frames_sub"], 1), 1), wait_b_vblanks=wb, md_render_vblanks=mr)
+            if st["exchanges"] and "_tf_rf" in res:
+                tf, rf = res.pop("_tf_rf"); fr = max(st["frames_sub"], 1)
+                st["per_frame_ms"] = {"sub_logic": round((st["sub_tic_units"] - tf) * 0.03072 / fr, 1), "sub_logic_lump_wait": round(tf * 0.03072 / fr, 1),
+                                      "sub_render": round((st["sub_render_units"] - rf) * 0.03072 / fr, 1), "sub_render_lump_wait": round(rf * 0.03072 / fr, 1),
+                                      "md_render": round(st.get("md_render_vblanks", 0) * 16.68 / fr, 1) if "md_render_vblanks" in st else None,
+                                      "md_wait_for_sub": round(st.get("wait_b_vblanks", 0) * 16.68 / fr, 1) if "wait_b_vblanks" in st else None}
             if st["exchanges"]:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)
