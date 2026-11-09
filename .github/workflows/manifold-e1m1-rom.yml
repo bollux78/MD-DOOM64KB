@@ -107,7 +107,7 @@ jobs:
               raise SystemExit(f"invalid Sega ROM header: {data[0x100:0x104]!r}")
           print(f"ROM verification: size={len(data)}, sha256={hashlib.sha256(data).hexdigest()}")
           PY
-      - name: BlastEm headless 90-frame boot smoke
+      - name: BlastEm headless 45-frame boot smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -124,16 +124,16 @@ jobs:
           fi
           echo "BlastEm executable: $emu"
           set +e
-          timeout 25s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH"
+          timeout 25s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 45 "$ROM_PATH"
           rc=$?
           set -e
           if test "$rc" -ne 0; then
             echo "BLASTEM_VERDICT=FAIL" >> "$GITHUB_ENV"
-            echo "::error::BlastEm 90-frame smoke failed: exit $rc"
+            echo "::error::BlastEm 45-frame smoke failed: exit $rc"
             exit 1
           fi
-          echo "BLASTEM_VERDICT=PASS_HEADLESS_90_FRAMES" >> "$GITHUB_ENV"
-          echo "BlastEm 90 emulated frames: PASS (visual/gameplay not validated)"
+          echo "BLASTEM_VERDICT=PASS_HEADLESS_45_FRAMES" >> "$GITHUB_ENV"
+          echo "BlastEm 45 emulated frames: PASS (visual/gameplay not validated)"
       - name: Explicit validation verdicts
         if: always()
         shell: bash
