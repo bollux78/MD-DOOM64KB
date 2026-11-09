@@ -93,6 +93,28 @@ jobs:
           cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m01.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m01.bin"
+      - name: Decode 68000 address error from user screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELF="$MANIFOLD_STAGE/candidate/out/release/rom.out"
+          test -s "$ELF"
+          NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          OBJDUMP="$HOME/mars/m68k-elf/bin/m68k-elf-objdump"
+          echo "== Symbols around hint PC 0x008110 =="
+          "$NM" -n "$ELF" | awk '
+            /^[0-9a-fA-F]+ / {
+              if (strtonum("0x"$1)<=strtonum("0x8110")) previous=$0;
+              else if (!after++) next_symbol=$0;
+            }
+            END {print "nearest-before:", previous;print "nearest-after:", next_symbol}
+          ' 2>/dev/null || true
+          "$NM" -n "$ELF" | grep -i -B 9 -A 9 '^000081' || true
+          echo "== Disassembly near 0x008110 =="
+          "$OBJDUMP" -d --start-address=0x8000 --stop-address=0x8210 "$ELF" | tail -160
+          echo "== Symbols near odd crash address 0x08001D =="
+          "$NM" -n "$ELF" | grep -i -B 6 -A 6 '^000800' || true
+          "$OBJDUMP" -d --start-address=0x7ffb0 --stop-address=0x80070 "$ELF" | tail -80
       - name: Verify ROM header and record digest
         shell: bash
         run: |
