@@ -178,9 +178,9 @@ def normalize_game_integration(out):
             raise ValueError(f"Manifold game signature changed: {old}")
         source=source.replace(old,new)
     import re
-    source,n=re.subn(r"PAL_setPalette\\((PAL[0-3]),\\s*([^();]+)\\);",
-                      r"PAL_setPalette(\\1, \\2, DMA);",source)
-    if n!=4:
+    source,n=re.subn(r"PAL_setPalette\((PAL[0-3]),\s*([^();]+)\);",
+                      r"PAL_setPalette(\1, \2, DMA);",source)
+    if n!=6:
         raise ValueError(f"unexpected Manifold game palette call count {n}")
     p.write_text(source)
 
