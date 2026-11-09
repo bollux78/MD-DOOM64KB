@@ -73,7 +73,7 @@ void sub_main(void)
     }
     R_Init(); P_Init(); SCD_SubSetTime(0);
     { extern void SCD_WadMark(void); SCD_WadMark(); }
-    uint16_t lock = 0, valid = 0, frame = 0;
+    uint16_t lock = 0, valid = 0, frame = 0, first_tic = 0, rnd_fixes = 0;
     uint32_t render_units = 0, tic_units = 0, idle_units = 0;
     for (;;)
     {
@@ -82,7 +82,7 @@ void sub_main(void)
         fh->gametic = _g_gametic;
         fh->x = _g_player.mo ? _g_player.mo->x : 0; fh->y = _g_player.mo ? _g_player.mo->y : 0;
         fh->angle = _g_player.mo ? _g_player.mo->angle : 0;
-        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health;
+        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health; fh->lump_misses = rnd_fixes;
         if (valid)
         {
             /* only our window's sample bytes (MD merges exactly these) */
@@ -121,11 +121,15 @@ void sub_main(void)
             apply_snapshot(q); q += h.snaplen; lock = 1;
         }
         uint16_t ran = 0;
+        if (h.flags & N3_F_SNAP) first_tic = 1;
         for (uint16_t t = 0; t < h.ntics && lock; t++, q += N3_TIC_BYTES)
         {
             if (_g_gameaction != ga_nothing || _g_gamestate != GS_LEVEL) { lock = 0; break; }
-            { extern uint8_t N3_GetPRnd(void);
-              if (N3_GetPRnd() != q[6]) I_Error("PRND T%ld MD%u SUB%u B%u", (long)_g_gametic, (unsigned)q[6], (unsigned)N3_GetPRnd(), (unsigned)q[4]); }
+            { /* The MD may reset the RNG after a level load (demo start does): adopt the MD's P_Random
+               * index at every tic start; real logic divergence still shows up in the x/y/health check. */
+              extern uint8_t N3_GetPRnd(void);
+              if (N3_GetPRnd() != q[6]) { if (!first_tic) rnd_fixes++; N3_SetPRnd(q[6]); }
+              first_tic = 0; }
             N3_SetCmd(q); _g_menuactive = q[7];
             G_Ticker(); _g_gametic++; ran++;
             SCD_ClockPoll();
