@@ -269,13 +269,16 @@ def stage(src, wad, out):
     spawn_cell=sp[0]
     p=out/"src/level.c"
     s=p.read_text()
+    if s.count("MAX_S32") != 1:
+        raise ValueError("unexpected level distance bound")
+    s=s.replace("MAX_S32","2147483647")
     expected="    const int init_player_sector = 0;"
     assert s.count(expected)==1,"Manifold player initializer changed"
     # No unconditional renderer refactor; set spawn only in this experiment.
     s=s.replace(expected,f"    const int init_player_sector = {spawn_cell};")
     old="    cur_player_pos.x = sector_0_center.x;\n    cur_player_pos.y = sector_0_center.y;"
     assert s.count(old)==1
-    s=s.replace(old,f"    cur_player_pos.x = intToFix32({x});\n    cur_player_pos.y = intToFix32({y});")
+    s=s.replace(old,f"    cur_player_pos.x = FIX32({x});\n    cur_player_pos.y = FIX32({y});")
     old="    cur_player_pos.ang = 0;"
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.ang = {(angle*1024)//360};")
