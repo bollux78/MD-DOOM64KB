@@ -223,7 +223,8 @@ if not off:
 md_patch("g_game.c", "static void G_DoLoadLevel (void)\n{", "static void G_DoLoadLevel (void)\n{\n    { extern void N3_OnLoadLevel(void); N3_OnLoadLevel(); }")
 gg = tree / "src/g_game.c"
 gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeof netcmd);}\n"
-              "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n")
+              ("void N3_AutoStart(void){ G_DeferedPlayDemo(\"demo3\"); }\n" if os.environ.get("N3_AUTOSTART") == "demo3" else
+               "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n"))
 (tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
 md_patch("d_main.c", r"G_Ticker \(\);", "G_Ticker (); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); }", regex=True)
 md_patch("d_main.c", "    R22_BeginFrame();\n#endif", "    R22_BeginFrame();\n#endif\n    { extern void N3_Pump(void); N3_Pump(); }")
@@ -234,7 +235,7 @@ split_patch(tree / "src" / "r_draw.c")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
-         (" -DN3_SPLIT" if os.environ.get("N3_SPLIT") else "")
+         (" -DN3_SPLIT" if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
 subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
                 "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + render, "LIBGCC=" + libgcc + " -lgcc"], check=True, cwd=str(tree), env=env)
 rom = out / "doom-md-scd-n3.bin"

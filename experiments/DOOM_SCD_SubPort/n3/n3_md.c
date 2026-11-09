@@ -150,7 +150,13 @@ static N3State *state(void)
     return n3;
 }
 
+#if defined(N3_DEMO_TEST)
+static bool user_level(void) { return _g_gamestate == GS_LEVEL; }   /* test: demos run in lockstep too */
+#define N3_DEMO_OK 1
+#else
 static bool user_level(void) { return _g_gamestate == GS_LEVEL && !_g_demoplayback && _g_usergame; }
+#define N3_DEMO_OK 0
+#endif
 
 /* G_DoLoadLevel entry (any cause: new game, next map, death): snapshot what the level load reads. */
 void N3_OnLoadLevel(void)
@@ -158,7 +164,7 @@ void N3_OnLoadLevel(void)
     N3State *s = state();
     if (!s || !s->active) return;
     /* demos stay on the MD; the sub only has the E1M1 texture subset for now */
-    if (_g_demoplayback || _g_gamemap != 1) { s->lock = 0; s->snap_pending = 0; s->ntics = 0; return; }
+    if ((_g_demoplayback && !N3_DEMO_OK) || _g_gamemap != 1) { s->lock = 0; s->snap_pending = 0; s->ntics = 0; return; }
     s->snap.gamemap = _g_gamemap; s->snap.gameskill = (int16_t)_g_gameskill;
     s->snap.respawnmonsters = (uint8_t)_g_respawnmonsters; s->snap.usergame = (uint8_t)_g_usergame;
     s->snap.prnd = N3_GetPRnd(); s->snap.menuactive = (uint8_t)_g_menuactive;
@@ -175,7 +181,8 @@ void N3_OnTicEnd(void)
     if (!user_level()) { s->lock = 0; s->ntics = 0; return; }
     if (s->ntics >= N3_MAX_TICS) { s->lock = 0; s->desyncs++; s->ntics = 0; return; }
     uint8_t *t = s->tics[s->ntics++];
-    N3_GetCmd(t);
+    /* the command this tic actually used (netcmd, or the demo's): the sub feeds it as netcmd */
+    memcpy(t, &_g_player.cmd, sizeof(ticcmd_t));
     t[7] = (uint8_t)_g_menuactive;
 }
 
