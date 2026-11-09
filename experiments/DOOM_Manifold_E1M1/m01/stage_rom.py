@@ -161,6 +161,29 @@ def normalize_legacy_palette_and_asm(out):
         raise ValueError("Manifold horizontal texture ASM constraint changed")
     draw.write_text(data.replace(old,new))
 
+def normalize_game_integration(out):
+    """Correct stale upstream game calls and SGDK palette transfer signatures."""
+    p=out/"src/game.c"
+    source=p.read_text()
+    rewrites={
+        "showStats(0);":"showStats();",
+        "step_weapon_animation();":"step_weapon_animation(DMA_QUEUE);",
+        "void return_to_menu() {":"void return_to_menu(int menu_idx) {",
+        "volatile u32* vp_init_load_level_arr = instant_load_level_array;":
+          "volatile const int* vp_init_load_level_arr = instant_load_level_array;",
+        "init_shotgun(free_tile_loc);":"init_shotgun();",
+    }
+    for old,new in rewrites.items():
+        if source.count(old)!=1:
+            raise ValueError(f"Manifold game signature changed: {old}")
+        source=source.replace(old,new)
+    import re
+    source,n=re.subn(r"PAL_setPalette\\((PAL[0-3]),\\s*([^();]+)\\);",
+                      r"PAL_setPalette(\\1, \\2, DMA);",source)
+    if n!=4:
+        raise ValueError(f"unexpected Manifold game palette call count {n}")
+    p.write_text(source)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -173,6 +196,7 @@ def stage(src, wad, out):
     normalize_legacy_fixed_point_api(out)
     normalize_wide_sprite_registers(out)
     normalize_legacy_palette_and_asm(out)
+    normalize_game_integration(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
