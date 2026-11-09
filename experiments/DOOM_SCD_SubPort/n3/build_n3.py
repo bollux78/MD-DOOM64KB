@@ -133,6 +133,49 @@ ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (!scd_fetch_lump((uint16_t)n, ptr, size)) I_Error("SCD LUMP READ FAILED %d", n);""")
 ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
     '{ static char nf[26] = "LUMP NOT FOUND: "; for (uint16_t j = 0; j < 8u; j++) nf[16 + j] = name[j] ? name[j] : 32; nf[24] = 0; I_Error(nf); }')
+# Sprite patches (between S_START and S_END) are only used while one sprite is projected/drawn:
+# they live in a ring that recycles the oldest ones instead of filling the resident cache.
+ww = ww.replace("const void __far* W_GetLumpByNum(int16_t n)\n{\n    scd_check_num(n);\n    if (scd_slots[n]) return scd_slots[n];",
+"""#define SCD_RING_BYTES (24UL * 1024UL)
+#define SCD_RING_ENTRIES 96u
+static uint8_t scd_ring[SCD_RING_BYTES];
+static struct { int16_t lump; uint16_t start, end; } scd_ring_e[SCD_RING_ENTRIES];
+static uint16_t scd_ring_n, scd_ring_pos;
+static int16_t scd_s_start = -1, scd_s_end = -1;
+static void scd_find_sprites(void)
+{
+    scd_s_start = scd_s_end = -1;
+    for (uint16_t i = 0; i < scd_lump_count; i++)
+    {
+        const char *m = scd_directory[i].name;
+        if (m[0] == 'S' && m[1] == '_' && m[2] == 'S' && m[3] == 'T' && m[4] == 'A' && m[5] == 'R' && m[6] == 'T') scd_s_start = (int16_t)i;
+        if (m[0] == 'S' && m[1] == '_' && m[2] == 'E' && m[3] == 'N' && m[4] == 'D') scd_s_end = (int16_t)i;
+    }
+    if (scd_s_start < 0 || scd_s_end < 0) { scd_s_start = 0x7FFF; scd_s_end = 0; }
+}
+static const void *scd_ring_get(int16_t n, uint16_t size)
+{
+    if (size > SCD_RING_BYTES) I_Error("SCD SPRITE TOO BIG %d", n);
+    if ((uint32_t)scd_ring_pos + size > SCD_RING_BYTES) scd_ring_pos = 0;
+    const uint16_t a = scd_ring_pos, z = (uint16_t)(a + size);
+    for (uint16_t i = 0; i < scd_ring_n; )
+        if (scd_ring_e[i].start < z && a < scd_ring_e[i].end)
+        { scd_slots[scd_ring_e[i].lump] = 0; scd_ring_e[i] = scd_ring_e[--scd_ring_n]; }
+        else i++;
+    if (scd_ring_n >= SCD_RING_ENTRIES) { scd_slots[scd_ring_e[0].lump] = 0; scd_ring_e[0] = scd_ring_e[--scd_ring_n]; }
+    if (!scd_fetch_lump((uint16_t)n, scd_ring + a, size)) I_Error("SCD SPRITE TRANSFER FAILED %d", n);
+    scd_ring_e[scd_ring_n].lump = n; scd_ring_e[scd_ring_n].start = a; scd_ring_e[scd_ring_n].end = z; scd_ring_n++;
+    scd_ring_pos = (uint16_t)((z + 3u) & ~3u);
+    scd_slots[n] = scd_ring + a;
+    return scd_ring + a;
+}
+const void __far* W_GetLumpByNum(int16_t n)
+{
+    scd_check_num(n);
+    if (scd_slots[n]) return scd_slots[n];
+    if (scd_s_start < 0 && scd_s_end < 0) scd_find_sprites();
+    if (n > scd_s_start && n < scd_s_end && scd_directory[n].size) return scd_ring_get(n, scd_directory[n].size);""")
+assert "scd_ring_get" in ww
 ww += """
 /* Level-scoped cache: everything fetched after the mark (level data, sprites) is dropped at the
  * next level load; init-time lumps (colormaps, texture metadata) stay. */
@@ -143,6 +186,8 @@ void SCD_WadFlushToMark(void)
     for (uint16_t i = 0; i < scd_lump_count; i++)
         if (scd_slots[i] && (uint32_t)(scd_slots[i] - scd_cache) >= scd_cache_mark) scd_slots[i] = 0;
     scd_cache_used = scd_cache_mark;
+    for (uint16_t i = 0; i < scd_ring_n; i++) scd_slots[scd_ring_e[i].lump] = 0;
+    scd_ring_n = 0; scd_ring_pos = 0;
 }
 """
 (w / "w_wad_client.c").write_text(ww)
