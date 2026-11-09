@@ -361,6 +361,10 @@ void N3_Pump(void)
 
 /* Serve requests until the sub's next FRAME request has been answered (0 new tics). */
 /* Time in scanlines (63.5 us): VBlank count + VDP V counter (VBlank IRQ comes at line 224). */
+/* N3_SPLIT_MARK=1: other colour modes stay split, so the sub's half shows in wrong colours (diagnostic) */
+#ifndef N3_SPLIT_MARK
+#define N3_SPLIT_MARK 0
+#endif
 #ifndef N3_LATE_LINES
 #define N3_LATE_LINES 100
 #endif
@@ -407,7 +411,7 @@ int N3_Display(void)
 #if defined(N3_SPLIT)
     extern uint8_t N3_ColorMode(void);
     /* the sub only has the default colour profile's tables: other modes render on the MD */
-    if (s && s != N3_BOOTED && s->active && s->lock && s->chk_valid && N3_ColorMode() == N3_R59_MODE)
+    if (s && s != N3_BOOTED && s->active && s->lock && s->chk_valid && (N3_ColorMode() == N3_R59_MODE || N3_SPLIT_MARK))
     {
         extern void R_RenderPlayerView(player_t *);
         /* The sub is already rendering [split, 76) of this exact state; render ours meanwhile. */
