@@ -25,7 +25,16 @@ extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
 #if N2_PROF & 2
 uint16_t scd_prof_bins[4096];
-static void prof_on(void)  { REG16(0xFF8030UL) = 10; REG16(0xFF8032UL) = 0x08; __asm__ volatile ("move.w #0x2200,%sr"); }
+static void prof_on(void)
+{
+#if !(N2_PROF & 4)
+    REG16(0xFF8030UL) = 10;
+#endif
+    REG16(0xFF8032UL) = 0x08;
+#if !(N2_PROF & 8)
+    __asm__ volatile ("move.w #0x2200,%sr");
+#endif
+}
 static void prof_off(void) { __asm__ volatile ("move.w #0x2700,%sr"); REG16(0xFF8032UL) = 0; REG16(0xFF8030UL) = 0; }
 #else
 static void prof_on(void) {}
