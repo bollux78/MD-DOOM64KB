@@ -286,6 +286,24 @@ def normalize_bitmap_legacy_symbols(out):
     p.write_text(source)
     print("Legacy bitmap API symbols normalized:",count)
 
+def normalize_pvs_entry_types(out):
+    """Read PVS and PHS run-length streams as the actual signed bytes."""
+    p=out/"src/portal_map.c"
+    src=p.read_text()
+    replacements={
+        "sector_in_pvs_inner(u16 check_sector, s8* entries_for_src_sector)":
+          "sector_in_pvs_inner(u16 check_sector, const s8* entries_for_src_sector)",
+        "s8* entries = &mp->sector_pvs_entries[pvs_offset];":
+          "const s8* entries = &mp->sector_pvs_entries[pvs_offset];",
+        "s16* entries = &mp->sector_phs_entries[phs_offset];":
+          "const s8* entries = &mp->sector_phs_entries[phs_offset];",
+    }
+    for old,new in replacements.items():
+        if src.count(old)!=1:
+            raise ValueError(f"upstream PVS stream changed: {old}")
+        src=src.replace(old,new)
+    p.write_text(src)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -304,6 +322,7 @@ def stage(src, wad, out):
     normalize_menu_callbacks(out)
     normalize_math_and_menu(out)
     normalize_bitmap_legacy_symbols(out)
+    normalize_pvs_entry_types(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
