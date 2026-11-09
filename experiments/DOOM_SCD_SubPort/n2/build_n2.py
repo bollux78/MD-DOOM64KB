@@ -41,6 +41,12 @@ for f in src.rglob("*"):
     if t != o:
         # the emulated SRAM is a linker-placed array (inside the checked PRG-RAM map), not a fixed address
         f.write_text("extern unsigned char scd_sram[];\n" + t)
+if os.environ.get("N2_GREP"):
+    rx = re.compile(os.environ["N2_GREP"])
+    for f in sorted(src.glob("*")):
+        if f.suffix not in (".c", ".inc", ".h", ".s") or f.stat().st_size > 400000 or "table" in f.name or "lut" in f.name: continue
+        for i, l in enumerate(f.read_text(errors="replace").splitlines()):
+            if rx.search(l): print("N2GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:200]))
 if PROF & 256:
     # The R128 seg loop calls these once per seg: poll the 12-bit sub stopwatch there.
     rv = src / "r22_video.inc"; t = rv.read_text()
