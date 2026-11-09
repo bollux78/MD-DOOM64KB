@@ -11,6 +11,13 @@ for line in subprocess.check_output([nm, "-S", elf], text=True).splitlines():
     f = line.split()
     if len(f) == 4: sym[f[3].split(".")[0]] = int(f[0], 16) & 0xffffff; size[f[3].split(".")[0]] = int(f[1], 16)
     elif len(f) == 3: sym.setdefault(f[2].split(".")[0], int(f[0], 16) & 0xffffff)
+SCRIPT = [(10, 50, (4,)), (50, 70, (4, 6)), (70, 90, (1,)), (90, 110, (7,)), (110, 150, (4, 1)), (150, 170, (6,))]
+def keys(g, pressed):
+    if "gamekeydown" not in sym: return
+    n = size.get("gamekeydown", 12); el = n // 12 if n >= 12 else 1
+    data = bytearray(n)
+    for k in pressed: data[k * el + el - 1] = 1
+    assert g.req("M%x,%x:%s" % (sym["gamekeydown"], n, data.hex())) == "OK"
 def rd(g, name, n=None):
     n = n or size.get(name, 4)
     v = int.from_bytes(g.readmem(sym[name], n), "big")
@@ -30,6 +37,9 @@ try:
         if gs == 0 and start is None and tic > 0: start = (frames, tic, vb)
         if start:
             k = frames - start[0]
+            if os.environ.get("N3_MOVE"):
+                cur = next((p for a, b2, p in SCRIPT if a <= k < b2), ())
+                if k < 175: keys(g, cur)
             if k in (40, 80):
                 fb = g.readmem(sym["r22_fb"] + 4, 3344)
                 hashes[k] = (tic, hashlib.sha1(fb).hexdigest()[:12])
