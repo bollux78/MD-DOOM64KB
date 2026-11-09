@@ -84,6 +84,16 @@ def normalize_legacy_asm(out):
             raise ValueError(f"unexpected ASM comment conversion: {filename}")
         path.write_text(filtered)
 
+def namespace_legacy_allocators(out):
+    """Avoid collision between upstream two-argument malloc/free and SGDK macros."""
+    import re
+    for p in (out/"src").rglob("*"):
+        if p.is_file() and p.suffix in (".c",".h"):
+            source=p.read_text()
+            changed=re.sub(r"\\b(malloc|free)(\\s*\\()",lambda m:"man_"+m.group(1)+m.group(2),source)
+            if changed!=source:
+                p.write_text(changed)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -91,6 +101,7 @@ def stage(src, wad, out):
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     stage_missing_resources(out)
     normalize_legacy_asm(out)
+    namespace_legacy_allocators(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
