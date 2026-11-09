@@ -18,6 +18,8 @@ jobs:
         run: python3 -m compileall -q experiments/DOOM_Manifold_E1M1/m01
       - name: Synthetic Doom BSP edge and portal audit
         run: python3 experiments/DOOM_Manifold_E1M1/m01/convert_wad.py --selftest
+      - name: Synthetic BSP closed-cell audit
+        run: python3 experiments/DOOM_Manifold_E1M1/m01/bsp_cells.py --selftest
       - name: Separate validation verdicts
         if: always()
         run: |
