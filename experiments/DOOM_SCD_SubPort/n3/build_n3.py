@@ -241,7 +241,10 @@ const void __far* W_GetLumpByNum(int16_t n)
     scd_check_num(n);
     if (scd_slots[n]) return scd_slots[n];
     if (scd_s_start < 0 && scd_s_end < 0) scd_find_sprites();
-    if (((n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size)
+    /* the sky patch pointer is held for a whole frame (R_LoadSkyPatch): keep it resident */
+    const char *nm3 = scd_directory[n].name;
+    if (((n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size &&
+        !(nm3[0] == 'S' && nm3[1] == 'K' && nm3[2] == 'Y'))
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
 ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "28"))
