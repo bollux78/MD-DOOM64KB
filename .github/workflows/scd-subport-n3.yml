@@ -99,7 +99,7 @@ jobs:
             case $v in
               on) N3_AUTOSTART=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               off) N3_AUTOSTART=1 N3_OFF=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
-              verify) N3_DUMP="R_ClearClipSegs,R_DrawSprite,R_DrawVisSprite,R_DrawPlayerSprites,R_RenderPlayerView,R_DrawMasked,R_ProjectSprite,R_DrawPSprite,R_ClipWallSegment,R_ClipSolidWallSegment" N3_GREP="solidsegs\[[01]\]|newend\s*=\s*solidsegs|viewwidth\b.*;|->x1\s*=|->x2\s*=" N3_AUTOSTART=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
+              verify) N3_SHOW="r_draw.c:1760-1800;r_draw.c:2085-2135;r_draw.c:1640-1700" N3_AUTOSTART=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               play) python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
             esac
             rm -rf "$vt"
