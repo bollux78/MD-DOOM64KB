@@ -269,7 +269,7 @@ void N3_MdFrameArrived(uint16_t arg)
     if (!s->expect_frame) s->sub_idle_units = h->idle_units;   /* A header: how long the sub waited for B */
     if (!h->valid || !s->lock || !s->prev_valid) return;
     if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle ||
-        h->prnd != s->prev_prnd || h->health != s->prev_health)
+        h->health != s->prev_health)   /* RNG index is adopted from the MD every tic */
     {
         if (!s->desyncs) { s->d_tic = s->prev_gametic; s->d_x = s->prev_x; s->d_y = s->prev_y; s->d_prnd = s->prev_prnd; s->d_health = s->prev_health;
                            s->s_tic = h->gametic; s->s_x = h->x; s->s_y = h->y; s->s_prnd = h->prnd; s->s_health = h->health; }
