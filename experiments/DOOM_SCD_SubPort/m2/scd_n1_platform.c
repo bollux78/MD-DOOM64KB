@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "doomdef.h"
 #include "r57_viewport.h"
-#if defined(DOOM_R57_CROP16) && defined(DOOM_R57_VIEW_MENU)
+#if defined(DOOM_R57_CROP16) && defined(DOOM_R57_VIEW_MENU) && !defined(N2_R128_DRAW)
 R57ViewConfig r57_view = {0, 0, 0, 2, 76, 2, 44};
 #endif
 volatile uint32_t _g_vblankCount;

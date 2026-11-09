@@ -58,6 +58,8 @@ try:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)
             res["n3"] = st
+    for name in ("r59_color_mode", "r57_view"):
+        if name in sym: res[name] = g.readmem(sym[name], max(1, size.get(name, 1))).hex()
     res["sub_sig"] = hex(int.from_bytes(g.readmem(0xA12020, 2), "big"))
 finally:
     g.close()
