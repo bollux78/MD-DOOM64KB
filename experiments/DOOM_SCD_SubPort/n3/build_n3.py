@@ -189,7 +189,7 @@ for t in sorted(used):
         if o not in remap: remap[o] = len(newpool); newpool.extend(pool[o:o + 128])
 newoffs = [remap.get(o, 0) if o != 0xFFFFFFFF else o for o in offs]
 # The pool lives in Word RAM (same copy in both 1M banks), loaded from the MD at sub boot.
-hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "extern uint8_t n3_r84_pool_ram[];\n#define r84_pixels ((const uint8_t *)n3_r84_pool_ram)\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
+hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "#define r84_pixels ((const uint8_t *)(0x0C0000UL + 0x10200UL))\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
 assert 0x10200 + len(newpool) < 0x1F000, "R84 pool does not fit the Word RAM bank"
 # MD side: no second copy of the pool in ROM, just the list of source blocks (offsets/128) in the
 # MD's own r84_pixels, in subset order; block 0 of the subset is the 0xB0 "missing" marker.
@@ -224,7 +224,7 @@ tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPIN
 tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
        "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "126") + "UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "176") + "UL * 1024UL)")
 ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
     if (!size) return;
