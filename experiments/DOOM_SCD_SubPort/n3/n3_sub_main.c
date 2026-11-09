@@ -124,6 +124,8 @@ void sub_main(void)
         for (uint16_t t = 0; t < h.ntics && lock; t++, q += N3_TIC_BYTES)
         {
             if (_g_gameaction != ga_nothing || _g_gamestate != GS_LEVEL) { lock = 0; break; }
+            { extern uint8_t N3_GetPRnd(void);
+              if (N3_GetPRnd() != q[6]) I_Error("PRND T%ld MD%u SUB%u B%u", (long)_g_gametic, (unsigned)q[6], (unsigned)N3_GetPRnd(), (unsigned)q[4]); }
             N3_SetCmd(q); _g_menuactive = q[7];
             G_Ticker(); _g_gametic++; ran++;
             SCD_ClockPoll();

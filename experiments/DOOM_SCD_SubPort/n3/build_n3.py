@@ -396,6 +396,7 @@ if "SCD_MdLumpCount" not in ws:
 if not off:
     md_patch("i_genesis.c", "\tD_DoomMain(argc, argv);", "\t{ void N3_Boot(void); N3_Boot(); }\n\tD_DoomMain(argc, argv);")
 md_patch("g_game.c", "static void G_DoLoadLevel (void)\n{", "static void G_DoLoadLevel (void)\n{\n    { extern void N3_OnLoadLevel(void); N3_OnLoadLevel(); }")
+md_patch("g_game.c", r"void G_Ticker \(void\)\s*\{", "void G_Ticker (void)\n{\n    { extern void N3_TicStart(void); N3_TicStart(); }", regex=True)
 md_patch("g_game.c", "        if (_g_demoplayback)\n            G_ReadDemoTiccmd ();\n    }\n",
          "        if (_g_demoplayback)\n            G_ReadDemoTiccmd ();\n    }\n    { extern void N3_CaptureCmd(void); N3_CaptureCmd(); }\n")
 gg = tree / "src/g_game.c"

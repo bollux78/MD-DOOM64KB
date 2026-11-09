@@ -49,7 +49,7 @@ typedef struct {
     /* first desync: MD reference vs sub report */
     int32_t d_tic, d_x, d_y, s_tic, s_x, s_y; uint16_t d_prnd, s_prnd, d_health, s_health;
     uint8_t chk_prnd, prev_prnd; uint16_t chk_health, prev_health;
-    uint8_t cap[8];   /* this tic's ticcmd as G_Ticker took it, before P_PlayerThink can edit it */
+    uint8_t cap[8], cap_prnd, pad4[3];   /* this tic's ticcmd as G_Ticker took it, before P_PlayerThink can edit it */
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -178,7 +178,13 @@ void N3_OnLoadLevel(void)
 void N3_CaptureCmd(void)
 {
     N3State *s = n3;
-    if (s && s != N3_BOOTED) memcpy(s->cap, &_g_player.cmd, sizeof(ticcmd_t));
+    if (s && s != N3_BOOTED) { memcpy(s->cap, &_g_player.cmd, sizeof(ticcmd_t)); s->cap[6] = s->cap_prnd; }
+}
+/* G_Ticker entry: P_Random index before this tic (debug sync check on the sub) */
+void N3_TicStart(void)
+{
+    N3State *s = n3;
+    if (s && s != N3_BOOTED) s->cap_prnd = N3_GetPRnd();
 }
 
 /* After every G_Ticker: queue the ticcmd the MD just simulated. */
@@ -190,7 +196,7 @@ void N3_OnTicEnd(void)
     if (s->ntics >= N3_MAX_TICS) { s->lock = 0; s->desyncs++; s->ntics = 0; return; }
     uint8_t *t = s->tics[s->ntics++];
     /* the command this tic actually used (netcmd or the demo's), captured before P_PlayerThink */
-    memcpy(t, s->cap, sizeof(ticcmd_t));
+    memcpy(t, s->cap, 7);
     t[7] = (uint8_t)_g_menuactive;
 }
 
