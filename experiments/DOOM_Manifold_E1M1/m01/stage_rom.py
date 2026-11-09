@@ -90,7 +90,7 @@ def namespace_legacy_allocators(out):
     for p in (out/"src").rglob("*"):
         if p.is_file() and p.suffix in (".c",".h"):
             source=p.read_text()
-            changed=re.sub(r"\\b(malloc|free)(\\s*\\()",lambda m:"man_"+m.group(1)+m.group(2),source)
+            changed=re.sub(r"\b(malloc|free)(\s*\()",lambda m:"man_"+m.group(1)+m.group(2),source)
             if changed!=source:
                 p.write_text(changed)
 
