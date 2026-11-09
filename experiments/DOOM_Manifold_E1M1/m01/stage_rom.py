@@ -374,7 +374,7 @@ def normalize_header_global_definitions(out):
     if data.count("bmp_plane_addr")<2:
         raise ValueError("missing custom bitmap plane state")
     import re
-    p.write_text(re.sub(r"\\bbmp_plane_addr\\b","manifold_bmp_plane_addr",data))
+    p.write_text(re.sub(r"\bbmp_plane_addr\b","manifold_bmp_plane_addr",data))
 
 def stage(src, wad, out):
     out=out.resolve()
