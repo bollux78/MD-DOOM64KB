@@ -41,6 +41,7 @@ try:
         r["column_ms_per_frame"] = round(r["column_units"] * 0.03072 / r["frames"], 2)
         r["min_render_ms"] = round(r["min_render"] * 0.03072, 2)
         r["expand_ms_per_frame"] = round(r["expand_units"] * 0.03072 / r["frames"], 2)
+    r["fault_pc"] = hex(r["lowmem"])
     r["lowmem"] = "hot vector %d, first changed vector byte 0x%X, count %d" % (r["lowmem"] >> 24, (r["lowmem"] >> 16) & 0xFF, r["lowmem"] & 0xFFFF)
     cal = r.get("column_units", 0)
     print("sub calibration: subq/bcc loop %.2f ms (expect 50000 x 18 cyc = 72.0 ms @12.5 MHz), move.l/dbra loop %.2f ms (expect 28.8 ms)" % ((cal & 0xFFFF) * 0.03072, (cal >> 16) * 0.03072), flush=True)

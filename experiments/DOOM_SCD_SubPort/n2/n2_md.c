@@ -62,6 +62,9 @@ static bool boot_sub(void)
         done += n;
     }
     CD_MEMCTRL_LO = 0;
+    /* Write-protect the first 0xFF x 512 B of PRG-RAM (vectors + most code) against the sub:
+     * stray MD-hardware writes in R128 code must not destroy the program. */
+    *(volatile u8 *)0xA12002 = 0xFF;
     CD_SUB_BYTE = 0;
     if (!wait_sub(1, 0)) return FALSE;
     CD_SUB_BYTE = 1;
@@ -160,7 +163,7 @@ static void run(void)
         if (served < 0) { rep->stage = 4; break; }
         if (served > 0 && rep->frames) n2_frame_shown();
         if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; rep->stack_depth = *(volatile const u16 *)0xA1202E; rep->lowmem = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028; fetch_profile(); break; }
-        if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; fetch_sub_error(); break; }
+        if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; rep->lowmem = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028; fetch_sub_error(); break; }
     }
     rep->errors = SCD_MdErrors(); rep->timeouts = SCD_MdTimeouts(); rep->bytes = SCD_MdBytes();
 }
