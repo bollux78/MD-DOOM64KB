@@ -13,7 +13,14 @@ R57ViewConfig r57_view = {0, 0, 0, 2, 76, 2, 44};
 volatile uint32_t _g_vblankCount;
 /* Cartridge SRAM emulated in PRG-RAM (odd-lane layout kept): R22 block links, R23 map memory up to
  * +0xF001 + the 16-slot column cache, control byte at +0x11FFE. */
+#if defined(N3_SRAM_COMPACT)
+/* N3: the odd SRAM lane only (virtual 0x200000..0x211FFF -> index (a-0x200000)>>1); the column
+ * cache keeps the stride-2 layout its MOVEP code needs, in its own small array. */
+unsigned char scd_sram[0x9000] __attribute__((aligned(16)));
+unsigned char scd_colcache[0x1100] __attribute__((aligned(16)));
+#else
 unsigned char scd_sram[0x12000] __attribute__((aligned(16)));
+#endif
 #if !defined(N2_R128_DRAW)
 void R64A_FrameBegin(void) {}
 void R64A_FrameEnd(void) {}

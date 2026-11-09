@@ -13,8 +13,8 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
-defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
-       ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
+defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP") and o != "-DDOOM_R39C_MOVEP_MAP"] + \
+       ["-DN2_R128_DRAW", "-DN3_SRAM_COMPACT", "-DSCD_SRAM_BASE=0x00200000UL", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
 
 if os.environ.get("N3_GREP") or os.environ.get("N3_R84INFO"):
     rx = re.compile(os.environ.get("N3_GREP") or r"r84_(pixels|offsets|starts)|R84_")
@@ -46,12 +46,14 @@ shutil.copytree(tree / "src", src)
 for f in src.rglob("*"):
     if f.suffix not in (".c", ".h", ".inc"): continue
     t = f.read_text(errors="replace"); o = t
-    t = t.replace("#define R22_SRAM_BASE 0x00200000UL", "#define R22_SRAM_BASE SCD_SRAM_BASE")
-    t = t.replace("#define DOOM_SRAM_FIRST 0x0020F001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+0xF001UL)")
-    t = t.replace("#define DOOM_SRAM_FIRST 0x00200001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+1UL)")
-    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL (SCD_SRAM_BASE+0x11FFEUL)")
+    # SRAM addresses stay virtual (0x200000..): every byte goes through R22_SRAM_BYTE -> compact array
+    t = t.replace("#define R22_SRAM_BYTE(address) (*(volatile uint8_t*)(uintptr_t)(address))",
+                  "#define R22_SRAM_BYTE(address) (scd_sram[((uint32_t)(uintptr_t)(address) - 0x00200000UL) >> 1])")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x0020F001UL", "#define DOOM_SRAM_FIRST ((unsigned long)scd_colcache+1UL)")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x00200001UL", "#define DOOM_SRAM_FIRST ((unsigned long)scd_colcache+1UL)")
+    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL ((unsigned long)scd_colcache+0x10FEUL)")
     t = t.replace("(*(volatile uint8_t*)0x00A130F1UL=1)", "((void)0)").replace("(*(volatile uint8_t*)0x00A130F1UL=0)", "((void)0)")
-    if t != o: f.write_text("extern unsigned char scd_sram[];\n" + t)
+    if t != o: f.write_text("extern unsigned char scd_sram[], scd_colcache[];\n" + t)
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
     "\nvoid N3_SetCmd(const void *c){memcpy(&netcmd,c,sizeof netcmd);}\n"
     "void N3_LoadLevel(void){G_DoLoadLevel();}\n")
@@ -190,7 +192,7 @@ tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPIN
 tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
        "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "84") + "UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "118") + "UL * 1024UL)")
 ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
     if (!size) return;
