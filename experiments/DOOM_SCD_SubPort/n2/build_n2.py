@@ -118,7 +118,7 @@ for s in sources:
     hot = s.name.startswith("r_") or s.name in ("scd_draw.c", "tables.c")
     opt_flags = (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) if os.environ.get("N2_OPT", "split") == "split" else []
     if int(os.environ.get("N2_PROF", "2")) & 2 and s.suffix == ".c" and (s.name.startswith("r") or s.name == "scd_draw.c") and s.name != "r20_stackguard.c":
-        opt_flags = opt_flags + ["-finstrument-functions"]
+        opt_flags = (["-O2"] if os.environ.get("N2_PROF_O2") else opt_flags) + ["-finstrument-functions"]
     r = subprocess.run([b("gcc")] + cflags + opt_flags + zone + extra + ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
         print("N2 compile FAIL", s.name, r.stderr[-2000:]); raise SystemExit(1)
@@ -126,13 +126,21 @@ for s in sources:
 subprocess.run([b("as"), "-m68000", str(common / "s1a/sub_boot.s"), "-o", str(w / "boot.o")], check=True)
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "n2-sub.elf"
+ld_script = common / "s1e/sub_engine.ld"
+if int(os.environ.get("N2_PROF", "2")) & 2:   # profiling build: stack use is < 1 KiB, the trace area is unused in N2
+    ld_script = w / "sub_engine_prof.ld"
+    ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
-                    "-Wl,-T," + str(common / "s1e/sub_engine.ld"), "-Wl,--allow-multiple-definition",
+                    "-Wl,-T," + str(ld_script), "-Wl,--allow-multiple-definition",
                     "-Wl,-Map," + str(w / "n2-sub.map"), "-o", str(elf), str(w / "boot.o")] + objs + [libgcc],
                    capture_output=True, text=True)
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
-    print("N2 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:]); raise SystemExit(1)
+    print("N2 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:])
+    if int(os.environ.get("N2_PROF", "2")) & 2 and not os.environ.get("N2_PROF_O2") and "overlaps" in r.stderr:
+        print("N2 profiling build too big at -O3: retrying instrumented files at -O2", flush=True)
+        os.environ["N2_PROF_O2"] = "1"; os.execv(sys.executable, [sys.executable] + sys.argv)
+    raise SystemExit(1)
 sym = {}
 for l in subprocess.check_output([b("nm"), "-S", str(elf)], text=True).splitlines():
     f = l.split()
