@@ -157,6 +157,7 @@ void sub_main(void)
             if (((volatile const uint32_t *)0)[i] != lowmem_copy[i]) { if (first == 0xFFFF) first = i * 4; count++; }
         REG16(0xFF8026UL) = first; REG16(0xFF8028UL) = count;
     }
+    { extern uint32_t SCD_WadCachePeak(void); REG16(0xFF8022UL) = (uint16_t)(SCD_WadCachePeak() >> 8); }
     REG16(0xFF802EUL) = stack_depth();                       /* deepest stack use in bytes */
     REG16(0xFF8020UL) = 0x51B1u;                             /* done */
     for (;;) {}

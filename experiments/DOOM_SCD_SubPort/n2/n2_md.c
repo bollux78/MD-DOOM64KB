@@ -162,7 +162,7 @@ static void run(void)
         const int16_t served = SCD_MdServeOnce();
         if (served < 0) { rep->stage = 4; break; }
         if (served > 0 && rep->frames) n2_frame_shown();
-        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; rep->stack_depth = *(volatile const u16 *)0xA1202E; rep->lowmem = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028; fetch_profile(); break; }
+        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; rep->stack_depth = *(volatile const u16 *)0xA1202E | ((u32)*(volatile const u16 *)0xA12022 << 16); rep->lowmem = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028; fetch_profile(); break; }
         if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; rep->lowmem = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028; fetch_sub_error(); break; }
     }
     rep->errors = SCD_MdErrors(); rep->timeouts = SCD_MdTimeouts(); rep->bytes = SCD_MdBytes();
