@@ -47,6 +47,10 @@ if os.environ.get("N2_GREP"):
         if f.suffix not in (".c", ".inc", ".h", ".s") or f.stat().st_size > 400000 or "table" in f.name or "lut" in f.name: continue
         for i, l in enumerate(f.read_text(errors="replace").splitlines()):
             if rx.search(l): print("N2GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:200]))
+for name in filter(None, os.environ.get("N2_SHAPE", "").split(",")):
+    # structure of a generated table header: declarations only, no data rows
+    for i, l in enumerate((src / name).read_text(errors="replace").splitlines()):
+        if re.search(r"[A-Za-z_]{3,}", l) and len(re.findall(r"\d+", l)) < 12: print("N2SHAPE %s:%d: %s" % (name, i + 1, l.strip()[:220]))
 for spec in filter(None, os.environ.get("N2_SHOW", "").split(";")):
     name, rng = spec.split(":"); lo, hi = map(int, rng.split("-"))
     ls = (src / name).read_text(errors="replace").splitlines()
