@@ -327,6 +327,22 @@ def normalize_toggle_declarations(out):
         source=source.replace(old,new)
     p.write_text(source)
 
+def normalize_weapon_sprite_frame_layout(out):
+    """Use current SGDK inline FrameVDPSprite records instead of retired pointers."""
+    p=out/"src/weapon_sprites.c"
+    src=p.read_text()
+    for old,new,n in (
+        ("FrameVDPSprite** f = frame->frameInfos[0].frameVDPSprites;",
+         "FrameVDPSprite* f = frame->frameVDPSprites;",1),
+        ("FrameVDPSprite** f = frame1->frameInfos[0].frameVDPSprites;",
+         "FrameVDPSprite* f = frame1->frameVDPSprites;",1),
+        ("FrameVDPSprite* spr = f[i];","FrameVDPSprite* spr = &f[i];",2),
+    ):
+        if src.count(old)!=n:
+            raise ValueError(f"SGDK weapon sprite layout changed: {old}")
+        src=src.replace(old,new)
+    p.write_text(src)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -347,8 +363,11 @@ def stage(src, wad, out):
     normalize_bitmap_legacy_symbols(out)
     normalize_pvs_entry_types(out)
     normalize_toggle_declarations(out)
+    normalize_weapon_sprite_frame_layout(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
+    # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
+    (out/"src/python/e1m1.c").unlink(missing_ok=True)
     for file in ("sega.s","rom_head.c"):
         (out/"src/boot"/file).unlink(missing_ok=True)
     map_lumps=read_map(wad)
