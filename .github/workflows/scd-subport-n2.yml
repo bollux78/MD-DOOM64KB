@@ -93,10 +93,10 @@ jobs:
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           out="$HOME/Projetos/Personal/scd-subport-n2/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          for v in ${N2_PROF_VARIANTS:-128 384}; do
+          for v in ${N2_PROF_VARIANTS:-384}; do
             vt="$RUNNER_TEMP/n2tree-$v"; rm -rf "$vt"; cp -a "$tree" "$vt"
             echo "=== N2_PROF=$v ==="
-            N2_ZONE=65536 N2_PROF=$v python3 experiments/DOOM_SCD_SubPort/n2/build_n2.py "$vt" "$out/prof$v" || echo "variant $v build failed"
+            N2_DUMP="G_Ticker,G_DoLoadLevel,D_DoomLoop,D_Display,TryRunTics,G_BuildTiccmd,D_DoAdvanceDemo,G_DoNewGame,G_InitNew,G_DoCompleted,G_DoWorldDone,G_DoReborn,G_PlayerReborn,P_Random,M_Random" N2_GREP="\\b(_g_)?(menuactive|paused|prndindex|rndindex|netcmd|gameaction)\\b.*;" N2_ZONE=65536 N2_PROF=$v python3 experiments/DOOM_SCD_SubPort/n2/build_n2.py "$vt" "$out/prof$v" || echo "variant $v build failed"
             rm -rf "$vt"
           done
           echo "N2_OUT=$out" >> "$GITHUB_ENV"
@@ -112,7 +112,7 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           rc=0
-          for v in ${N2_PROF_VARIANTS:-128 384}; do
+          for v in ${N2_PROF_VARIANTS:-384}; do
             echo "=== N2_PROF=$v ==="
             XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
               python3 experiments/DOOM_SCD_SubPort/n2/test_n2.py "$N2_OUT/prof$v/doom-md-scd-n2.bin" "$N2_OUT/prof$v/doom-md-scd-n2.elf" || rc=1
