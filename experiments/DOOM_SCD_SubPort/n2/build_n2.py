@@ -173,7 +173,7 @@ if True:   # N2: measured stack use is < 1 KiB and the s1e trace area is unused,
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
                     "-Wl,-T," + str(ld_script), "-Wl,--allow-multiple-definition",
                     "-Wl,-Map," + str(w / "n2-sub.map"), "-Wl,--cref", "-o", str(elf), str(w / "boot.o")] + objs + ([str(gdk / "lib" / "libmd.a")] if R128DRAW else []) + [libgcc],
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, env=dict(os.environ, LANG="C", LC_ALL="C"))
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
     print("N2 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:])
