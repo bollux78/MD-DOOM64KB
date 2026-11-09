@@ -14,7 +14,7 @@ gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
 defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
-       ["-DN2_R128_DRAW", "-DN3_SRAM_COMPACT", "-DSCD_SRAM_BASE=0x00200000UL", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
+       ["-DN2_R128_DRAW", "-DN3_SRAM_COMPACT",] + (["-DN3_RND_TRAP"] if os.environ.get("N3_RND_TRAP") else []) + [ "-DSCD_SRAM_BASE=0x00200000UL", "-DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1")]
 
 if os.environ.get("N3_GREP") or os.environ.get("N3_R84INFO"):
     rx = re.compile(os.environ.get("N3_GREP") or r"r84_(pixels|offsets|starts)|R84_")

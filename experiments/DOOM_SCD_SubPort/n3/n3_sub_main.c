@@ -128,7 +128,11 @@ void sub_main(void)
             { /* The MD may reset the RNG after a level load (demo start does): adopt the MD's P_Random
                * index at every tic start; real logic divergence still shows up in the x/y/health check. */
               extern uint8_t N3_GetPRnd(void);
-              if (N3_GetPRnd() != q[6]) { if (!first_tic) rnd_fixes++; N3_SetPRnd(q[6]); }
+              if (N3_GetPRnd() != q[6]) {
+#if defined(N3_RND_TRAP)
+                  if (!first_tic) I_Error("RND T%ld MD%u SUB%u", (long)_g_gametic, (unsigned)q[6], (unsigned)N3_GetPRnd());
+#endif
+                  if (!first_tic) rnd_fixes++; N3_SetPRnd(q[6]); }
               first_tic = 0; }
             N3_SetCmd(q); _g_menuactive = q[7];
             G_Ticker(); _g_gametic++; ran++;
