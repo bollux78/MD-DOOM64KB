@@ -43,3 +43,20 @@ Branch `exp-werk-scd-subport-s1s2`, pasta `experiments/DOOM_SCD_SubPort/n3`, wor
   - Memória do sub: `_end` ≈ 0x7D200 de 0x7F000.
 - A lógica do MD (≈35 ms/frame movendo) ainda não sobrepõe o render do sub. Próximo ganho: reordenar o loop.
 - Console real ainda não testado.
+
+## Atualização: todos os mapas + lógica sobreposta
+- **Lógica sobreposta.**
+  - Depois de renderizar sua metade, o MD já roda os tics do próximo frame (`N3_EarlyTics`) enquanto o sub termina a metade dele.
+  - A troca B só coleta o frame: os tics ficam na fila até a próxima troca A, e o estado de referência continua sendo o de A.
+  - `TryRunTics` não espera quando a lógica já rodou (`N3_SkipWait`).
+- **Todos os mapas.**
+  - Subconjunto R84 = união das texturas de parede de todos os mapas, mais os pares de switch e as animações: 50 texturas, 51 KB.
+  - Fica na PRG-RAM do sub; zona 48 KB.
+  - O MD monta esse subconjunto na hora a partir do próprio `r84_pixels`, com uma lista de blocos. O sub pede uma vez no boot (`N3_CMD_POOL`).
+- **Armadilha.** Pôr uma cópia de 51 KB do pool na ROM do MD deixou o MD **e** o sub ~30% mais lentos (layout da ROM). Por isso o MD usa só a lista de blocos.
+- **Resultados no BlastEm**, mesmo roteiro de movimento, 0 desyncs:
+
+| Mapa | FPS N3 | FPS R128 só MD |
+|---|---|---|
+| E1M1 | **8,2** | 3,8 (≈2,2×) |
+| E1M8 | **8,0** | — |
