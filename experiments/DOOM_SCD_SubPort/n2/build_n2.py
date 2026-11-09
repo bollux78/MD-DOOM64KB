@@ -64,6 +64,11 @@ if os.environ.get("N2_LMTRACE"):
                 l = l + " { extern void N2_LmCheck(int); N2_LmCheck(%d); }" % (len(out_l) + 1 + (1000 if name.startswith("p_") else 2000))
             out_l.append(l)
         f.write_text("\n".join(out_l) + "\n")
+zz = src / "z_zone.c"; zt = zz.read_text(errors="replace")
+zt += "\nuint32_t N2_ZoneFree(void){return %s;}\nuint32_t N2_ZoneLargest(void){return %s;}\n" % (
+    "Z_GetTotalFreeMemory()" if "Z_GetTotalFreeMemory(void)" in zt else "0",
+    "Z_GetLargestFreeBlockSize()" if "Z_GetLargestFreeBlockSize(void)" in zt else "0")
+zz.write_text(zt)
 if PROF & 256:
     # The R128 seg loop calls these once per seg: poll the 12-bit sub stopwatch there.
     rv = src / "r22_video.inc"; t = rv.read_text()
