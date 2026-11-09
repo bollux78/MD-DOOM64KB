@@ -125,7 +125,8 @@ void N3_Boot(void)
             if (CD_SUB_SIG == 0xDEADu) { diag[1] = 1; fetch_sub_error(); break; }
             const u16 cmd = SCD_MdPendingCmd();
             if (cmd == SCD_CMD_FRAME) { diag[1] = 2; n3 = N3_BOOTED; break; }
-            if (cmd) { diag[2] = cmd; diag[3] = *(volatile const u16 *)0xA12024; }
+            if (!cmd) continue;   /* never call the server blind: a FRAME could slip in */
+            diag[2] = cmd; diag[3] = *(volatile const u16 *)0xA12024;
             if (SCD_MdServeOnce() < 0) diag[0]++;   /* count, keep serving */
         }
         if (spins >= 600000000UL) diag[1] = 4;
