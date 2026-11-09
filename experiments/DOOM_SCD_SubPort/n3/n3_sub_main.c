@@ -82,9 +82,21 @@ void sub_main(void)
         fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame;
         if (valid)
         {
-            const uint8_t *s = N2_DrawBuffer();
-            volatile uint8_t *d = BANK + SCD_FRAME_OFFSET;
-            for (uint16_t i = 1; i < SCD_FRAME_BYTES; i += 2) d[i] = s[i];
+            /* only our window's sample bytes (MD merges exactly these) */
+            const uint8_t *s0 = N2_DrawBuffer();
+            for (uint16_t par = 0; par < 2u; par++)
+            {
+                int16_t xs = win_x0 + ((win_x0 & 1) != (int16_t)par);
+                if (xs >= win_x1) continue;
+                const uint16_t first = (uint16_t)(par * 76u + (uint16_t)(xs >> 1) * 2u + 1u);
+                const uint16_t n = (uint16_t)((win_x1 - xs + 1) >> 1);
+                for (uint16_t y = 0; y < 22u; y++)
+                {
+                    const uint8_t *sp = s0 + y * 152u + first;
+                    volatile uint8_t *dp = BANK + SCD_FRAME_OFFSET + y * 152u + first;
+                    for (uint16_t k = n; k; k--) { *dp = *sp; dp += 2; sp += 2; }
+                }
+            }
         }
         uint16_t len = 0;
         const volatile uint8_t *p = SCD_SubExchange(SCD_CMD_FRAME, ++frame, &len);
@@ -112,7 +124,7 @@ void sub_main(void)
             SCD_ClockPoll();
         }
         SCD_ClockPoll(); tic_units = scd_clock_units - t0;
-        if (lock && _g_gamestate == GS_LEVEL && _g_gameaction == ga_nothing && (ran || (h.flags & N3_F_SNAP)))
+        if (!(h.flags & N3_F_NORENDER) && lock && _g_gamestate == GS_LEVEL && _g_gameaction == ga_nothing)
         {
             t0 = scd_clock_units;
             R_RenderPlayerView(&_g_player);

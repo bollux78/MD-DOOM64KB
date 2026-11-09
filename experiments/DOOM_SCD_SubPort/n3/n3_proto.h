@@ -13,7 +13,8 @@
 #define N3_CMD_POOL 9u                 /* sub -> MD: send the resident R84 wall-texture pool */
 #define N3_POOL_OFFSET 0x10200UL       /* pool copy in both Word RAM banks (above any lump payload) */
 #define N3_F_SNAP 1u   /* level (re)load: snapshot follows, sub runs G_DoLoadLevel */
-#define N3_F_STOP 2u   /* MD left lockstep (menu-less non-level state, demo, desync) */
+#define N3_F_STOP 2u
+#define N3_F_NORENDER 4u   /* run the tics now, no frame wanted (exchange B: next frame's logic) */   /* MD left lockstep (menu-less non-level state, demo, desync) */
 typedef struct { uint16_t magic, flags, ntics, snaplen, x0, x1; } N3PayHead;   /* x0..x1: sub render window */
 typedef struct {
     int16_t gamemap, gameskill;

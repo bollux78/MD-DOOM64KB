@@ -211,22 +211,15 @@ uint16_t N3_MdFramePayload(volatile uint8_t *p)
     if (!s) return 0;
     uint16_t flags = 0, snaplen = 0;
 #if defined(N3_SPLIT)
-    if (s->expect_frame)
-    {
-        /* Exchange B: only collects the sub's half. Tics the MD already ran for the next frame
-         * (early logic) stay queued for the next exchange A; the reference state stays A's. */
-        N3PayHead hb = { N3_PAY_MAGIC, s->lock ? 0 : N3_F_STOP, 0, 0, (uint16_t)s->split, 76 };
-        for (uint16_t i = 0; i < sizeof hb; i++) p[i] = ((const uint8_t *)&hb)[i];
-        s->prev_valid = s->chk_valid; s->prev_gametic = s->chk_gametic; s->prev_x = s->chk_x; s->prev_y = s->chk_y; s->prev_angle = s->chk_angle;
-        s->exchanges++;
-        return sizeof hb;
-    }
+    const uint16_t norender = s->expect_frame ? N3_F_NORENDER : 0;
+#else
+    const uint16_t norender = 0;
 #endif
     if (!s->lock) flags |= N3_F_STOP;
     else if (s->snap_pending) { flags |= N3_F_SNAP; snaplen = sizeof(N3SnapHead) + sizeof(player_t); }
     const uint16_t ntics = s->lock ? s->ntics : 0;
 #if defined(N3_SPLIT)
-    N3PayHead h = { N3_PAY_MAGIC, flags, ntics, snaplen, (uint16_t)s->split, 76 };
+    N3PayHead h = { N3_PAY_MAGIC, (uint16_t)(flags | norender), ntics, snaplen, (uint16_t)s->split, 76 };
 #else
     N3PayHead h = { N3_PAY_MAGIC, flags, ntics, snaplen, 0, 76 };
 #endif
@@ -270,12 +263,20 @@ void N3_MdFrameArrived(uint16_t arg)
     {
         uint8_t *dst = N2_DrawBuffer();
         const int16_t x0 = s->split;
-        for (uint16_t y = 0; y < 22u; y++)
-            for (int16_t x = x0; x < 76; x++)
+        /* Pair-V rows: [even x samples][odd x samples], 2 bytes each, sample byte odd */
+        for (uint16_t par = 0; par < 2u; par++)
+        {
+            int16_t xs = x0 + ((x0 & 1) != (int16_t)par);
+            if (xs >= 76) continue;
+            const uint16_t first = (uint16_t)(par * 76u + (uint16_t)(xs >> 1) * 2u + 1u);
+            const uint16_t n = (uint16_t)((76 - xs + 1) >> 1);
+            for (uint16_t y = 0; y < 22u; y++)
             {
-                const uint16_t o = (uint16_t)(y * 152u + (uint16_t)(x & 1) * 76u + (uint16_t)(x >> 1) * 2u + 1u);
-                dst[o] = src[o];
+                volatile const uint8_t *sp = src + y * 152u + first;
+                uint8_t *dp = dst + y * 152u + first;
+                for (uint16_t k = n; k; k--) { *dp = *sp; dp += 2; sp += 2; }
             }
+        }
         s->have_frame = 1; s->frames_sub++;
         return;
     }
