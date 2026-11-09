@@ -2,6 +2,7 @@
  * 256 KiB of PRG-RAM (4096 x u16 counters, saturating). */
     .section .text.vectors,"ax"
     .globl subcpu_vectors
+    .weak scd_prof_bins
 subcpu_vectors:
     .long 0x00080000, entry
     .rept 25
