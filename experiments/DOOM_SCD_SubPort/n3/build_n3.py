@@ -125,10 +125,6 @@ def sight_patch(f):
     old = "(uint16_t)(((uintptr_t)t1) >> 5)) % 12u;"
     assert old in t, "sight stagger anchor"
     t = t.replace(old, "(uint16_t)(((uint16_t)(t1->x >> 16) ^ (uint16_t)(t1->y >> 16)) >> 3)) % 12u;")
-    old = "  if (prevlat1 == linearAddress(t1)\n   && prevlat2 == linearAddress(t2))\n    return prevr;\n  prevlat1 = linearAddress(t1);\n  prevlat2 = linearAddress(t2);"
-    assert old in t, "sight cache anchor"
-    t = t.replace(old, "  static int32_t prevtic;\n  if (prevlat1 == linearAddress(t1)\n   && prevlat2 == linearAddress(t2) && prevtic == _g_gametic)\n    return prevr;\n"
-                  "  prevlat1 = linearAddress(t1);\n  prevlat2 = linearAddress(t2);\n  prevtic = _g_gametic;")
     f.write_text(t)
 sight_patch(src / "p_sight.c")
 
