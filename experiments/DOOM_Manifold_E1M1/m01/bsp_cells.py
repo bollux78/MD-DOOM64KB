@@ -98,8 +98,32 @@ def build(lumps, nodes):
         raise ValueError(f"BSP visits {len(cells)}/{len(lumps['SSECTORS'])} subsectors")
     return cells
 
-def audit(lumps,nodes):
+def clip_to_seg_front(lumps, cells):
+    """Restrict each infinite BSP leaf by its actual Doom SEG front planes.
+
+    Doom front-side convention is the right half-plane of an oriented SEG.
+    Keep this strictly diagnostic until real-WAD midpoint containment passes.
+    """
+    verts=lumps["VERTEXES"]
+    out={}
+    for i,poly in cells.items():
+        count,first=lumps["SSECTORS"][i]
+        clipped_poly=poly
+        for seg in lumps["SEGS"][first:first+count]:
+            start,end=verts[seg[0]],verts[seg[1]]
+            if start==end:
+                continue
+            line=(start[0],start[1],end[0]-start[0],end[1]-start[1])
+            clipped_poly=clipped(clipped_poly,line,False)
+            if not clipped_poly:
+                break
+        out[i]=clipped_poly
+    return out
+
+def audit(lumps,nodes,seg_clip=False):
     cells=build(lumps,nodes)
+    if seg_clip:
+        cells=clip_to_seg_front(lumps,cells)
     segs=lumps["SEGS"]
     missing=0
     mismatch=[]
@@ -149,6 +173,7 @@ def main():
     ap.add_argument("--wad", type=Path)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--seg-clip", action="store_true")
     args=ap.parse_args()
     if args.selftest:
         synthetic()
@@ -172,7 +197,7 @@ def main():
             raw[nm]=list(struct.iter_unpack(NODE_FORMAT,data[p:p+size]))
     if "NODES" not in raw:
         raise ValueError("missing NODES")
-    report=audit(read_map(args.wad),raw["NODES"])
+    report=audit(read_map(args.wad),raw["NODES"],args.seg_clip)
     print(json.dumps(report,indent=2))
     if args.out:
         args.out.write_text(json.dumps(report,indent=2)+"\n")
