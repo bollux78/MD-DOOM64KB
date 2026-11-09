@@ -1,0 +1,51 @@
+name: Manifold E1M1 private geometry audit
+on:
+  push:
+    branches: [exp-manifold-e1m1-m01]
+    paths:
+      - '.github/workflows/manifold-e1m1-private-geometry.yml'
+      - 'experiments/DOOM_Manifold_E1M1/m01/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: contains(github.event.head_commit.message, '[manifold-geometry]') || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inspect locally pinned private shareware WAD without uploading assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          export WAD=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          python3 - <<'PY'
+          import hashlib, os, pathlib
+          p=pathlib.Path(os.environ['WAD'])
+          assert p.is_file(), 'WAD not found'
+          assert p.stat().st_size==4196020, 'unexpected shareware WAD size'
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771', 'unexpected WAD digest'
+          print('PINNED_WAD_OK')
+          PY
+          python3 experiments/DOOM_Manifold_E1M1/m01/convert_wad.py \
+            --wad "$WAD" --map E1M1 --out "$RUNNER_TEMP/manifold-e1m1-geometry.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          d=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'manifold-e1m1-geometry.json').read_text())
+          print('E1M1_GEOMETRY_AUDIT',json.dumps({
+            'counts':d['limits'], 'limit_exceeded':d['exceeds_manifold_limits'],
+            'unclosed_subsectors':sum(not c['ordered'] for c in d['cells']),
+            'components':len(d['connected_components']), 'warnings':d['warnings'][:25],
+            'warning_count':len(d['warnings']), 'playable':d['playable']
+          }))
+          PY
+          rm -f "$RUNNER_TEMP/manifold-e1m1-geometry.json"
+      - name: Show separate validation status
+        if: always()
+        run: |
+          echo "WAD topology audit: ${{ job.status }}"
+          echo "build: NOT RUN"
+          echo "blastem: NOT RUN"
