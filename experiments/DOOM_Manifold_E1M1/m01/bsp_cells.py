@@ -147,11 +147,17 @@ def audit(lumps,nodes,seg_clip=False):
                 q=poly[(j+1)%len(poly)]
                 tests.append((q[0]-p[0])*(midpoint[1]-p[1])-
                              (q[1]-p[1])*(midpoint[0]-p[0]))
-            if min(tests)<-0.75 and max(tests)>0.75:
-                mismatch.append((i,seg[3]))
+            winding=1 if area(poly)>=0 else -1
+            outside=max(0.0,max(
+                -winding*tests[j]/max(math.dist(poly[j],poly[(j+1)%len(poly)]),EPS)
+                for j in range(len(poly))
+            ))
+            if outside>1.25:
+                mismatch.append((i,seg[3],round(outside,3)))
     return {"subsectors":len(cells),"closed_cells":sum(len(p)>=3 for p in cells.values()),
             "zero_area":missing,"seg_midpoint_outside":len(mismatch),
             "mismatch_examples":mismatch[:12],
+            "max_midpoint_outside_units":max((v[2] for v in mismatch),default=0),
             "polygon_edge_count":sum(len(p) for p in cells.values()),
             "cell_area_sum":round(sum(areas),1),
             "cell_max_edges":max(map(len,cells.values()))}
