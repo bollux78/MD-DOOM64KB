@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [pointer, params, pos]
+        mode: [alloc, copy]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     steps:
@@ -62,6 +62,42 @@ jobs:
               VDP_setScreenWidth320();
               VDP_setScreenHeight224();
               VDP_drawText("MANIFOLD VIDEO BASELINE", 3, 10);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            alloc)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "level.h"
+          #include "map_table.h"
+          static volatile u8 *probe;
+          int main(void) {
+              VDP_init();
+              const portal_map *p = (const portal_map*)map_table[2];
+              u16 n = p->num_sector_groups * 16;
+              probe = MEM_alloc(n);
+              if (probe) { probe[0]=0x55; probe[n-1]=0xAA; }
+              VDP_drawText(probe ? "E1M1 MEM ALLOC OK":"E1M1 MEM ALLOC BAD",3,9);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            copy)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "level.h"
+          #include "map_table.h"
+          static volatile u8 *probe;
+          int main(void) {
+              VDP_init();
+              const portal_map *p = (const portal_map*)map_table[2];
+              u16 n = p->num_sector_groups * 16;
+              probe = MEM_alloc(n);
+              if (probe) memcpy((void*)probe,p->sector_group_params,n);
+              VDP_drawText(probe ? "E1M1 PARAM COPY OK":"E1M1 PARAM COPY BAD",3,9);
               while (1) { VDP_waitVSync(); }
               return 0;
           }
