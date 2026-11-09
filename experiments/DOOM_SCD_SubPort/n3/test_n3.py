@@ -32,8 +32,11 @@ try:
         try:
             g.cont(); frames += 1
         except RuntimeError as e:
-            print("N3 stopped early:", e, "frames", frames, "start", start, "last tic", locals().get("tic"), flush=True); raise
+            print("N3 stopped early:", e, "frames", frames, "start", start, "last tic", locals().get("tic"), flush=True)
+            res["partial"] = True
+            break
         gs, tic, vb = rd(g, "_g_gamestate"), rd(g, "_g_gametic"), rd(g, "_g_vblankCount")
+        last = (frames, tic, vb)
         if gs == 0 and start is None and tic > 0: start = (frames, tic, vb)
         if start:
             k = frames - start[0]
@@ -46,12 +49,15 @@ try:
             if tic - start[1] >= int(os.environ.get("N3_TICS", "700")) or k >= 400: break
         if frames > int(os.environ.get("N3_MAXFRAMES", "3000")): break
     if start:
-        res.update(frames=frames - start[0], tics=tic - start[1], seconds=round((vb - start[2]) / 60.0, 2))
+        frames_, tic, vb = last
+        res.update(frames=frames_ - start[0], tics=tic - start[1], seconds=round((vb - start[2]) / 60.0, 2))
         res["fps"] = round(res["frames"] / max(res["seconds"], 0.01), 2)
         res["fb_hash"] = hashes
     else:
         res["error"] = "never reached a level"
-    if "n3" in sym:
+    if res.get("partial"):
+        pass
+    elif "n3" in sym:
         ptr = rd(g, "n3", 4)
         res["n3_ptr"] = hex(ptr)
         if ptr > 1:
@@ -67,6 +73,7 @@ try:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)
             res["n3"] = st
+    if res.get("partial"): raise SystemExit(print("N3 RESULT", res, flush=True))
     res["gamemap"] = rd(g, "_g_gamemap", 2); res["demoplayback"] = rd(g, "_g_demoplayback", size.get("_g_demoplayback", 1))
     for name in ("r59_color_mode", "r57_view"):
         if name in sym: res[name] = g.readmem(sym[name], max(1, size.get(name, 1))).hex()
