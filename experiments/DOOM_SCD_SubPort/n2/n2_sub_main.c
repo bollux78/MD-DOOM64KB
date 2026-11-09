@@ -50,8 +50,22 @@ static void expand(void)
     }
 }
 
+extern uint8_t _end[];
+static void stack_paint(void)
+{
+    uint32_t sp; __asm__ volatile ("move.l %%sp,%0" : "=a" (sp));
+    for (volatile uint32_t *p = (volatile uint32_t *)(((uint32_t)_end + 3) & ~3UL); (uint32_t)p < sp - 256; p++) *p = 0xA5A5A5A5UL;
+}
+static uint16_t stack_depth(void)
+{
+    const volatile uint32_t *p = (const volatile uint32_t *)(((uint32_t)_end + 3) & ~3UL);
+    while ((uint32_t)p < 0x80000UL && *p == 0xA5A5A5A5UL) p++;
+    return (uint16_t)(0x80000UL - (uint32_t)p);
+}
+
 void sub_main(void)
 {
+    stack_paint();
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
     Z_Init(); W_Init(); REG16(0xFF8024UL) = 0x4E31;           /* 'N1': directory loaded */
     R_Init(); P_Init();                                      /* D_DoomMain order */
@@ -86,6 +100,7 @@ void sub_main(void)
 #else
     REG16(0xFF802AUL) = 0xFFFF;
 #endif
+    REG16(0xFF802EUL) = stack_depth();                       /* deepest stack use in bytes */
     REG16(0xFF8020UL) = 0x51B1u;                             /* done */
     for (;;) {}
 }

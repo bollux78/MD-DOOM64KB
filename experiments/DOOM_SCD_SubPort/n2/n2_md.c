@@ -33,7 +33,7 @@ extern int16_t SCD_MdServeOnce(void);
 extern uint16_t SCD_MdTransactions(void), SCD_MdErrors(void);
 extern uint32_t SCD_MdBytes(void), SCD_MdTimeouts(void);
 
-typedef struct { u16 stage, frames, errors, timeouts; u32 bytes, render_units, expand_units, columns, pixels, vblanks, min_render, column_units; } N2Report;
+typedef struct { u16 stage, frames, errors, timeouts; u32 bytes, render_units, expand_units, columns, pixels, vblanks, min_render, column_units, stack_depth; } N2Report;
 #define REPORT (*(volatile N2Report *)0x61F000)
 static N2Report *rep;
 
@@ -159,7 +159,7 @@ static void run(void)
         const int16_t served = SCD_MdServeOnce();
         if (served < 0) { rep->stage = 4; break; }
         if (served > 0 && rep->frames) n2_frame_shown();
-        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; fetch_profile(); break; }
+        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; rep->stack_depth = *(volatile const u16 *)0xA1202E; fetch_profile(); break; }
         if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; fetch_sub_error(); break; }
     }
     rep->errors = SCD_MdErrors(); rep->timeouts = SCD_MdTimeouts(); rep->bytes = SCD_MdBytes();
