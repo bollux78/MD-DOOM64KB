@@ -128,8 +128,8 @@ jobs:
           mkdir -p "$out"
           cp "$MANIFOLD_STAGE/candidate/out/rom.bin" "$out/doom-md-manifold-diag-${{ matrix.mode }}.bin"
           cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
-          echo "ROM_PATH=$out/doom-md-manifold-e1m1-m01.bin" >> "$GITHUB_ENV"
-          echo "Candidate ROM: $out/doom-md-manifold-e1m1-m01.bin"
+          echo "ROM_PATH=$out/doom-md-manifold-diag-${{ matrix.mode }}.bin" >> "$GITHUB_ENV"
+          echo "Candidate ROM: $out/doom-md-manifold-diag-${{ matrix.mode }}.bin"
       - name: Verify ROM header and record digest
         shell: bash
         run: |
