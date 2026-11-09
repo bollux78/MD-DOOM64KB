@@ -128,7 +128,8 @@ void sub_main(void)
             { /* The MD may reset the RNG after a level load (demo start does): adopt the MD's P_Random
                * index at every tic start; real logic divergence still shows up in the x/y/health check. */
               extern uint8_t N3_GetPRnd(void);
-              if (N3_GetPRnd() != q[6]) {
+              /* (the tic that loaded the level sampled the index before the load: skip it) */
+              if (!first_tic && N3_GetPRnd() != q[6]) {
 #if defined(N3_RND_TRAP)
                   if (!first_tic) I_Error("RND T%ld MD%u SUB%u", (long)_g_gametic, (unsigned)q[6], (unsigned)N3_GetPRnd());
 #endif
