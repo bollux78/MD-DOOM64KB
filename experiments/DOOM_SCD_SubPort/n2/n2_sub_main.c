@@ -80,6 +80,15 @@ void sub_main(void)
     if (!_g_player.mo || _g_gamestate != GS_LEVEL) I_Error("N2 NO LEVEL");
     uint8_t input[16];
     uint32_t min_render = 0;
+    {   /* CPU calibration: 50000 x dbra (10 cycles) = 40.0 ms at 12.5 MHz;
+         * 16384 x (move.l (a0)+ ; dbra) (22 cycles) = 28.8 ms from PRG-RAM. */
+        SCD_ClockPoll(); uint32_t c0 = scd_clock_units;
+        __asm__ volatile ("move.l #49999,%%d0\n1: subq.l #1,%%d0\n bcc.s 1b" ::: "d0", "cc");
+        SCD_ClockPoll(); const uint32_t a = scd_clock_units - c0; c0 = scd_clock_units;
+        __asm__ volatile ("move.w #16383,%%d0\n lea 0x10000,%%a0\n1: move.l (%%a0)+,%%d1\n dbra %%d0,1b" ::: "d0", "d1", "a0", "cc");
+        SCD_ClockPoll(); const uint32_t b = scd_clock_units - c0;
+        scd_column_units = (b << 16) | a;
+    }
     for (uint16_t f = 0; f < 24; f++)
     {
         SCD_ClockPoll();
