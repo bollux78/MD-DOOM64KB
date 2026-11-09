@@ -2,7 +2,6 @@
  * logic as the MD in lockstep and renders the view. Loop: publish header + last frame in our
  * Word RAM bank, request FRAME, receive snapshot/ticcmds, run them, render. */
 #include <stdint.h>
-#include <string.h>
 #include "doomdef.h"
 #include "d_player.h"
 #include "d_ticcmd.h"
