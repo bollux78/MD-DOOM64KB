@@ -93,11 +93,52 @@ jobs:
           cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m01.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m01.bin"
+      - name: Verify ROM header and record digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$ROM_PATH" <<'PY'
+          import hashlib, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          data = path.read_bytes()
+          if len(data) < 131072 or len(data) % 131072:
+              raise SystemExit(f"invalid aligned ROM size: {len(data)}")
+          if data[0x100:0x104] != b"SEGA":
+              raise SystemExit(f"invalid Sega ROM header: {data[0x100:0x104]!r}")
+          print(f"ROM verification: size={len(data)}, sha256={hashlib.sha256(data).hexdigest()}")
+          PY
+      - name: BlastEm headless 180-frame boot smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$(command -v blastem || true)"
+          if test -z "$emu"; then
+            while IFS= read -r file; do
+              if test -x "$file"; then emu="$file"; break; fi
+            done < <(find "$HOME" /opt -maxdepth 8 -type f -name blastem 2>/dev/null | head -20)
+          fi
+          if test -z "$emu"; then
+            echo "::warning::BlastEm executable not found; emulator smoke NOT RUN"
+            echo "BLASTEM_VERDICT=NOT_RUN" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "BlastEm executable: $emu"
+          set +e
+          timeout 60s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 180 "$ROM_PATH"
+          rc=$?
+          set -e
+          if test "$rc" -ne 0; then
+            echo "BLASTEM_VERDICT=FAIL" >> "$GITHUB_ENV"
+            echo "::error::BlastEm 180-frame smoke failed: exit $rc"
+            exit 1
+          fi
+          echo "BLASTEM_VERDICT=PASS_HEADLESS_180_FRAMES" >> "$GITHUB_ENV"
+          echo "BlastEm 180 emulated frames: PASS (visual/gameplay not validated)"
       - name: Explicit validation verdicts
         if: always()
         shell: bash
         run: |
           echo "build/candidate: ${{ job.status }}"
-          echo "blastem: NOT RUN — must not claim PASS"
+          echo "blastem: ${BLASTEM_VERDICT:-NOT_RUN}"
           echo "physical console: NOT TESTED"
           echo "No binary or private WAD is uploaded to GitHub"
