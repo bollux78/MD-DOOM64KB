@@ -212,6 +212,31 @@ def normalize_remaining_palettes(out):
         raise ValueError("expected at least one extra legacy palette API call")
     print("Other SGDK PAL API calls normalized:",count)
 
+def normalize_menu_callbacks(out):
+    """Use type-correct wrappers for callbacks accepting selected menu index."""
+    p=out/"src/main_menu.c"
+    src=p.read_text()
+    old='#include "music.h"'
+    if src.count(old)!=1:
+        raise ValueError("main menu insertion anchor changed")
+    src=src.replace(old,old+"""
+static void select_toggle_sfx(int menu_idx) { (void)menu_idx; toggle_sfx(); }
+static void select_toggle_music(int menu_idx) { (void)menu_idx; toggle_music(); }
+static void select_toggle_dither(int menu_idx) { (void)menu_idx; toggle_dither_mode(); }
+""")
+    replacements={
+        "void go_to_new_game() {":"void go_to_new_game(int menu_idx) {",
+        "void populate_level_select() {":"void populate_level_select(int menu_idx) {",
+        ".select = &toggle_sfx":".select = &select_toggle_sfx",
+        ".select = &toggle_music":".select = &select_toggle_music",
+        ".select = &toggle_dither_mode":".select = &select_toggle_dither",
+    }
+    for old,new in replacements.items():
+        if src.count(old)!=1:
+            raise ValueError(f"main menu callback changed: {old}")
+        src=src.replace(old,new)
+    p.write_text(src)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -227,6 +252,7 @@ def stage(src, wad, out):
     normalize_game_integration(out)
     normalize_weapon_api_declaration(out)
     normalize_remaining_palettes(out)
+    normalize_menu_callbacks(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
