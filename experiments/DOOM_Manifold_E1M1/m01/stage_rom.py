@@ -305,6 +305,28 @@ def normalize_pvs_entry_types(out):
         src=src.replace(old,new)
     p.write_text(src)
 
+def normalize_toggle_declarations(out):
+    """Correct header prototypes to match existing sfx/music callback definitions."""
+    for file,old,new in (
+        ("sfx.h","void toggle_sfx();","void toggle_sfx(int menu_idx);"),
+        ("music.h","void toggle_music();","void toggle_music(int menu_idx);"),
+    ):
+        p=out/"src"/file
+        source=p.read_text()
+        if source.count(old)!=1:
+            raise ValueError(f"upstream toggle prototype changed: {file}")
+        p.write_text(source.replace(old,new))
+    p=out/"src/main_menu.c"
+    source=p.read_text()
+    for old,new in (
+        ("(void)menu_idx; toggle_sfx();","toggle_sfx(menu_idx);"),
+        ("(void)menu_idx; toggle_music();","toggle_music(menu_idx);"),
+    ):
+        if source.count(old)!=1:
+            raise ValueError(f"menu toggle wrapper changed: {old}")
+        source=source.replace(old,new)
+    p.write_text(source)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -324,6 +346,7 @@ def stage(src, wad, out):
     normalize_math_and_menu(out)
     normalize_bitmap_legacy_symbols(out)
     normalize_pvs_entry_types(out)
+    normalize_toggle_declarations(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
