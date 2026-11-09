@@ -193,6 +193,25 @@ def normalize_weapon_api_declaration(out):
         raise ValueError("upstream weapon step declaration changed")
     p.write_text(data.replace(old,"void step_weapon_animation(TransferMethod transfer_type);"))
 
+def normalize_remaining_palettes(out):
+    """Adapt other upstream PAL_setPalette calls that omit TransferMethod."""
+    import re
+    count=0
+    for p in (out/"src").rglob("*.c"):
+        data=p.read_text()
+        lines=data.splitlines(keepends=True)
+        for i,line in enumerate(lines):
+            match=re.search(r"PAL_setPalette\\(PAL[0-3],\\s*[^,();]+\\);",line)
+            if match:
+                call=match.group()
+                lines[i]=line.replace(call,call[:-2]+", DMA);")
+                count+=1
+        if data!="".join(lines):
+            p.write_text("".join(lines))
+    if count<1:
+        raise ValueError("expected at least one extra legacy palette API call")
+    print("Other SGDK PAL API calls normalized:",count)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -207,6 +226,7 @@ def stage(src, wad, out):
     normalize_legacy_palette_and_asm(out)
     normalize_game_integration(out)
     normalize_weapon_api_declaration(out)
+    normalize_remaining_palettes(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
