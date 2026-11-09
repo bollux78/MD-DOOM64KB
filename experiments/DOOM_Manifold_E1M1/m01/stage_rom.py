@@ -102,8 +102,8 @@ def normalize_legacy_s16_bounds(out):
     """
     p=out/"src/bunch_render.c"
     source=p.read_text()
-    if source.count("MAX_S16") != 1 or source.count("MIN_S16") != 1:
-        raise ValueError("unexpected legacy s16 bounds usage")
+    if "MAX_S16" not in source or "MIN_S16" not in source:
+        raise ValueError("legacy s16 bounds not found in expected renderer")
     p.write_text(source.replace("MAX_S16","32767").replace("MIN_S16","(-32768)"))
 
 def stage(src, wad, out):
