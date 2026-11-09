@@ -30,9 +30,9 @@ def stage(src, wad, out):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     map_lumps=read_map(wad)
-    cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad))
-    if missing:
-        raise ValueError(f"cannot stage {len(missing)} unpaired boundaries")
+    cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
+    # Prototype only: missing BSP cut edges are opaque and nontraversable.
+    # Never synthesize an unsafe portal or mark this build geometry-validated.
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells))
     # E1M1's split BSP contours have 1112 atomic walls; expand only this
     # isolated candidate's static budget, leaving upstream and R128 unchanged.
@@ -82,7 +82,7 @@ def stage(src, wad, out):
         "source":UPSTREAM,"pin":PIN,"map":"E1M1",
         "format":"Manifold portal_map C proof of concept",
         "player_spawn":{"x":x,"y":y,"doom_angle":angle,"manifold_cell":spawn_cell},
-        "geometry":stats,"safe_for_runtime":True,
+        "geometry":stats,"safe_for_runtime":not missing,\n        "unpaired_edges_are_solid":len(missing),
         "renderer_unchanged":True,"lighting_color_placeholder":True,
         "thing_spawns_pending":True,"doors_triggers_pending":True
     }
