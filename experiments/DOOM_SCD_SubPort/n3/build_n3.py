@@ -222,7 +222,7 @@ if not off:
     md_patch("i_genesis.c", "\tD_DoomMain(argc, argv);", "\t{ void N3_Boot(void); N3_Boot(); }\n\tD_DoomMain(argc, argv);")
 md_patch("g_game.c", "static void G_DoLoadLevel (void)\n{", "static void G_DoLoadLevel (void)\n{\n    { extern void N3_OnLoadLevel(void); N3_OnLoadLevel(); }")
 gg = tree / "src/g_game.c"
-gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeof netcmd);}\n"
+gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeof netcmd);}\n" +
               ("void N3_AutoStart(void){ G_DeferedPlayDemo(\"demo3\"); }\n" if os.environ.get("N3_AUTOSTART") == "demo3" else
                "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n"))
 (tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
