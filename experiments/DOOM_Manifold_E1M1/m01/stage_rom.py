@@ -91,6 +91,10 @@ def stage(src, wad, out):
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     stage_missing_resources(out)
     normalize_legacy_asm(out)
+    # Use SGDK standard Sega boot/header instead of upstream custom startup
+    # that requires an unpublished out/rom_head.bin at assembler time.
+    for file in ("sega.s","rom_head.c"):
+        (out/"src/boot"/file).unlink(missing_ok=True)
     map_lumps=read_map(wad)
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
