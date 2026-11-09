@@ -285,7 +285,7 @@ const void __far* W_GetLumpByNum(int16_t n)
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
 ww = ww.replace("N3RINGKIB", os.environ.get("N3_RING_KIB", "24"))
-ww = ww.replace('I_Error("SCD LUMP CACHE FULL %d", n);', 'I_Error("CACHE FULL %d u%lu m%lu s%u", n, (unsigned long)scd_cache_used, (unsigned long)scd_cache_mark, (unsigned)size);')
+ww = ww.replace('I_Error("SCD LUMP CACHE FULL %d", n);', 'I_Error("FULL %d %.8s u%lu s%u S%d-%d P%d-%d", n, scd_directory[n].name, (unsigned long)scd_cache_used, (unsigned)size, scd_s_start, scd_s_end, scd_p_start, scd_p_end);')
 ww = ww.replace("static uint32_t scd_cache_used, scd_cache_peak;", "static uint32_t scd_cache_used, scd_cache_peak, scd_cache_mark;")
 ww += """
 /* Level-scoped cache: everything fetched after the mark (level data, sprites) is dropped at the
