@@ -1,0 +1,27 @@
+name: Manifold E1M1 M01 source and converter checks
+on:
+  push:
+    branches: [exp-manifold-e1m1-m01]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/**'
+      - '.github/workflows/manifold-e1m1-m01.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  converter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Python sources
+        run: python3 -m compileall -q experiments/DOOM_Manifold_E1M1/m01
+      - name: Synthetic Doom BSP edge and portal audit
+        run: python3 experiments/DOOM_Manifold_E1M1/m01/convert_wad.py --selftest
+      - name: Separate validation verdicts
+        if: always()
+        run: |
+          echo "source and converter selftest: ${{ job.status }}"
+          echo "Manifold ROM build: NOT RUN"
+          echo "BlastEm: NOT RUN"
+          echo "E1M1 IWAD conversion: NOT RUN (private asset)"
