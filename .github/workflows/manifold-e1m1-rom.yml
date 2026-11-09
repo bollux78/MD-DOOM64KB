@@ -50,13 +50,19 @@ jobs:
         run: |
           set -euo pipefail
           gdk=""
-          for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
             if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
           done
           if test -z "$gdk"; then
-            echo "::error::SGDK makefile.gen not found in known SDK paths; failing explicitly"
-            exit 1
+            echo "Searching installed SGDK makefiles in HOME and /opt"
+            while IFS= read -r sdkfile; do
+              case "$sdkfile" in */makefile.gen) gdk="${sdkfile%/makefile.gen}"; break;; esac
+            done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -30)
           fi
+          if test -z "$gdk"; then
+            echo "::error::SGDK makefile.gen not found on runner"; exit 1
+          fi
+          echo "Using SGDK: $gdk"
           export GDK="$gdk" PREFIX=m68k-elf-\n          export PATH="$HOME/mars/m68k-elf/bin:$HOME/toolchains/mars/m68k-elf/bin:$GDK/bin:$PATH"
           if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
             ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
