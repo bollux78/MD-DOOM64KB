@@ -135,6 +135,16 @@ try:
                 f = line.split()
                 if len(f) == 3 and f[1] in "Tt" and int(f[0], 16) <= addr and (best is None or int(f[0], 16) > best[0]): best = (int(f[0], 16), f[2])
             res["sub_error_caller"] = (hex(addr), best[1] if best else None)
+        if subelf.exists() and os.environ.get("N3_TRACE_TIC"):
+            subsyms = sorted((int(f.split()[0], 16), f.split()[2]) for f in subprocess.check_output([nm, subelf], text=True).splitlines() if len(f.split()) == 3 and f.split()[1] in "Tt")
+            import bisect
+            ks = [a for a, _ in subsyms]
+            def sname(a):
+                i = bisect.bisect_right(ks, a) - 1
+                return "%s+0x%x" % (subsyms[i][1], a - subsyms[i][0]) if i >= 0 else hex(a)
+            parts = res["sub_error"].split()
+            try: res["sub_rnd_trace"] = (parts[0], [sname(int(x, 16)) for x in parts[1:]])
+            except Exception: pass
 finally:
     g.close()
 print("N3 RESULT", res, flush=True)

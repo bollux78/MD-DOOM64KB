@@ -94,6 +94,12 @@ for fn, old in (("p_mobj.c", "  if (!_g_demoplayback)\n"), ("p_tick.c", "if (_g_
     f = src / fn; t = f.read_text(errors="replace")
     assert old in t, (fn, old)
     f.write_text("extern unsigned char n3_demoplayback;\n" + t.replace(old, old.replace("_g_demoplayback", "n3_demoplayback")))
+if os.environ.get("N3_TRACE_TIC"):
+    mr = src / "m_random.c"; t = mr.read_text()
+    old = "int16_t P_Random (void)\n{\n    return rndtable[++prndindex];"
+    assert old in t
+    mr.write_text(t.replace(old, "__attribute__((noinline)) int16_t P_Random (void)\n{\n    { extern void N3_SubRndLog(void *); N3_SubRndLog(__builtin_return_address(0)); }\n    return rndtable[++prndindex];"))
+    defs.append("-DN3_TRACE_TIC=" + os.environ["N3_TRACE_TIC"])
 RND = "\nuint8_t N3_GetPRnd(void){return prndindex;}\nvoid N3_SetPRnd(uint8_t v){prndindex=v;}\n"
 (src / "m_random.c").write_text((src / "m_random.c").read_text() + RND)
 rv = src / "r22_video.inc"

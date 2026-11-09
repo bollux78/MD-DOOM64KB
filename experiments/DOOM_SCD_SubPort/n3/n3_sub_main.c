@@ -27,6 +27,10 @@ extern uint8_t *N2_DrawBuffer(void);
 uint32_t scd_clock_units, scd_column_units;
 uint8_t n3_demoplayback;   /* MD's demoplayback for game logic (the sub itself never reads the demo) */
 static int16_t win_x0 = 0, win_x1 = 76;
+#if defined(N3_TRACE_TIC)
+static uint32_t rlog[8]; static uint16_t rlog_n;
+void N3_SubRndLog(void *ra) { if (_g_gametic == N3_TRACE_TIC) { if (rlog_n < 8) rlog[rlog_n] = (uint32_t)ra; rlog_n++; } }
+#endif
 int16_t N3_X0(void) { return win_x0; }
 int16_t N3_X1(void) { return win_x1; }
 static uint16_t scd_clock_prev;
@@ -131,7 +135,11 @@ void sub_main(void)
               /* (the tic that loaded the level sampled the index before the load: skip it) */
               if (!first_tic && N3_GetPRnd() != q[6]) {
 #if defined(N3_RND_TRAP)
+#if defined(N3_TRACE_TIC)
+                  if (!first_tic) I_Error("%u %lx %lx %lx %lx %lx", rlog_n, rlog[0], rlog[1], rlog[2], rlog[3], rlog[4]);
+#else
                   if (!first_tic) I_Error("RND T%ld MD%u SUB%u", (long)_g_gametic, (unsigned)q[6], (unsigned)N3_GetPRnd());
+#endif
 #endif
                   if (!first_tic) rnd_fixes++; N3_SetPRnd(q[6]); }
               first_tic = 0; }
