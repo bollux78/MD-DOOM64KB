@@ -124,7 +124,7 @@ jobs:
           fi
           echo "BlastEm executable: $emu"
           set +e
-          timeout 25s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH"
+          timeout 25s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -t -b 90 "$ROM_PATH"
           rc=$?
           set -e
           if test "$rc" -ne 0; then
