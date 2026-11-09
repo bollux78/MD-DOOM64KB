@@ -129,7 +129,7 @@ for i in range(n):
     o = dirofs + i * 16; p, z = struct.unpack_from(">IH", wad, o)
     lumps.append((wad[o + 8:o + 16].rstrip(b"\0").decode("latin1"), p, z))
 names = [l[0] for l in lumps]
-print("N3 WAD lumps", n, [(i, lumps[i][0], lumps[i][2]) for i in (605,611,631,640)], "markers:", [(i, nm_) for i, (nm_, p_, z_) in enumerate(lumps) if nm_.endswith("_START") or nm_.endswith("_END")])
+print("N3 WAD lumps", n, [(i, lumps[i][0], lumps[i][2]) for i in range(0, 80)])
 # Union of the wall textures of every map in the WAD (the sub keeps one resident subset).
 used = set(); map_names = []
 for mi, mn in enumerate(names):
