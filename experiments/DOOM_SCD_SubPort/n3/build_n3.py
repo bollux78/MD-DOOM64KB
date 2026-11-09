@@ -125,7 +125,7 @@ tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPIN
 tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
        "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (96UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "84") + "UL * 1024UL)")
 ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
     if (!size) return;
@@ -136,12 +136,12 @@ ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
 # Sprite patches (between S_START and S_END) are only used while one sprite is projected/drawn:
 # they live in a ring that recycles the oldest ones instead of filling the resident cache.
 ww = ww.replace("const void __far* W_GetLumpByNum(int16_t n)\n{\n    scd_check_num(n);\n    if (scd_slots[n]) return scd_slots[n];",
-"""#define SCD_RING_BYTES (24UL * 1024UL)
+"""#define SCD_RING_BYTES (" + os.environ.get("N3_RING_KIB", "28") + "UL * 1024UL)
 #define SCD_RING_ENTRIES 96u
 static uint8_t scd_ring[SCD_RING_BYTES];
 static struct { int16_t lump; uint16_t start, end; } scd_ring_e[SCD_RING_ENTRIES];
 static uint16_t scd_ring_n, scd_ring_pos;
-static int16_t scd_s_start = -1, scd_s_end = -1;
+static int16_t scd_s_start = -1, scd_s_end = -1, scd_p_start = 0x7FFF, scd_p_end = 0;
 static void scd_find_sprites(void)
 {
     scd_s_start = scd_s_end = -1;
@@ -150,6 +150,8 @@ static void scd_find_sprites(void)
         const char *m = scd_directory[i].name;
         if (m[0] == 'S' && m[1] == '_' && m[2] == 'S' && m[3] == 'T' && m[4] == 'A' && m[5] == 'R' && m[6] == 'T') scd_s_start = (int16_t)i;
         if (m[0] == 'S' && m[1] == '_' && m[2] == 'E' && m[3] == 'N' && m[4] == 'D') scd_s_end = (int16_t)i;
+        if (m[0] == 'P' && m[1] == '_' && m[2] == 'S' && m[3] == 'T' && m[4] == 'A' && m[5] == 'R' && m[6] == 'T') scd_p_start = (int16_t)i;
+        if (m[0] == 'P' && m[1] == '_' && m[2] == 'E' && m[3] == 'N' && m[4] == 'D') scd_p_end = (int16_t)i;
     }
     if (scd_s_start < 0 || scd_s_end < 0) { scd_s_start = 0x7FFF; scd_s_end = 0; }
 }
@@ -174,7 +176,8 @@ const void __far* W_GetLumpByNum(int16_t n)
     scd_check_num(n);
     if (scd_slots[n]) return scd_slots[n];
     if (scd_s_start < 0 && scd_s_end < 0) scd_find_sprites();
-    if (n > scd_s_start && n < scd_s_end && scd_directory[n].size) return scd_ring_get(n, scd_directory[n].size);""")
+    if (((n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size)
+        return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
 ww += """
 /* Level-scoped cache: everything fetched after the mark (level data, sprites) is dropped at the
