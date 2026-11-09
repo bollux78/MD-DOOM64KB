@@ -172,7 +172,7 @@ if True:   # N2: measured stack use is < 1 KiB and the s1e trace area is unused,
     ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
                     "-Wl,-T," + str(ld_script), "-Wl,--allow-multiple-definition",
-                    "-Wl,-Map," + str(w / "n2-sub.map"), "-o", str(elf), str(w / "boot.o")] + objs + ([str(gdk / "lib" / "libmd.a")] if R128DRAW else []) + [libgcc],
+                    "-Wl,-Map," + str(w / "n2-sub.map"), "-Wl,--cref", "-o", str(elf), str(w / "boot.o")] + objs + ([str(gdk / "lib" / "libmd.a")] if R128DRAW else []) + [libgcc],
                    capture_output=True, text=True)
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
@@ -188,6 +188,17 @@ if r.returncode:
             m3 = re.match(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)", ml)
             if pend and m3: tot[(pend.split(".")[1], Path(m3.group(3)).name)] += int(m3.group(2), 16); pend = None
         print("N2 map top:", [(k, v) for k, v in tot.most_common(25)])
+        # cross reference: symbols defined in i_genesisv.c.o and who uses them
+        txt = (w / "n2-sub.map").read_text(errors="replace"); c = txt.find("Cross Reference Table")
+        if c >= 0:
+            cur = None; uses = {}
+            for ml in txt[c:].splitlines()[3:]:
+                if not ml.strip(): continue
+                if not ml.startswith(" "):
+                    parts = ml.split(); cur = (parts[0], Path(parts[1]).name if len(parts) > 1 else "")
+                    uses[cur] = []
+                elif cur: uses[cur].append(Path(ml.strip()).name)
+            print("N2 CREF i_genesisv:", sorted("%s<-%s" % (k[0], ",".join(sorted(set(v))[:4])) for k, v in uses.items() if k[1].startswith("i_genesisv") and v))
     except Exception as e: print("map parse failed", e)
     if int(os.environ.get("N2_PROF", "0")) & 2 and not os.environ.get("N2_PROF_O2") and "overlaps" in r.stderr:
         print("N2 profiling build too big at -O3: retrying instrumented files at -O2", flush=True)
