@@ -30,10 +30,10 @@ void SCD_ClockPoll(void)
     scd_clock_units += (uint16_t)(now - scd_clock_prev) & 4095u;
     scd_clock_prev = now;
 }
-extern uint8_t *r115_draw;
+extern uint8_t *N2_DrawBuffer(void);
 static void pairv_decode(void)
 {
-    const uint8_t *p = r115_draw;
+    const uint8_t *p = N2_DrawBuffer();
     if (!p) return;
     for (uint16_t y = 0; y < R22_H; y++)
         for (uint16_t x = 0; x < R22_W; x++)

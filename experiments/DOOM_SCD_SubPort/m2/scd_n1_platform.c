@@ -10,8 +10,10 @@ volatile uint32_t _g_vblankCount;
 /* Cartridge SRAM emulated in PRG-RAM (odd-lane layout kept): R22 block links, R23 map memory up to
  * +0xF001 + the 16-slot column cache, control byte at +0x11FFE. */
 unsigned char scd_sram[0x12000] __attribute__((aligned(16)));
+#if !defined(N2_R128_DRAW)
 void R64A_FrameBegin(void) {}
 void R64A_FrameEnd(void) {}
+#endif
 /* NULL = the R128 seg loop falls back to R_DrawColumnFlat/Wall, i.e. to scd_draw.c. */
 #if !defined(N2_R128_DRAW)
 uint8_t *R95_FlatSetup(const uint8_t **lut) { (void)lut; return 0; }
