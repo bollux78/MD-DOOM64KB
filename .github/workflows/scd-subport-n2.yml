@@ -96,7 +96,7 @@ jobs:
           for v in ${N2_PROF_VARIANTS:-0}; do
             vt="$RUNNER_TEMP/n2tree-$v"; rm -rf "$vt"; cp -a "$tree" "$vt"
             echo "=== N2_PROF=$v ==="
-            N2_LMTRACE="p_setup.c,g_game.c" N2_PROF=$v python3 experiments/DOOM_SCD_SubPort/n2/build_n2.py "$vt" "$out/prof$v" || echo "variant $v build failed"
+            N2_SHOW="p_setup.c:440-560" N2_LMTRACE="p_setup.c" N2_PROF=$v python3 experiments/DOOM_SCD_SubPort/n2/build_n2.py "$vt" "$out/prof$v" || echo "variant $v build failed"
             rm -rf "$vt"
           done
           echo "N2_OUT=$out" >> "$GITHUB_ENV"

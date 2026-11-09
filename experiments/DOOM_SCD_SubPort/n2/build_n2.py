@@ -47,6 +47,10 @@ if os.environ.get("N2_GREP"):
         if f.suffix not in (".c", ".inc", ".h", ".s") or f.stat().st_size > 400000 or "table" in f.name or "lut" in f.name: continue
         for i, l in enumerate(f.read_text(errors="replace").splitlines()):
             if rx.search(l): print("N2GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:200]))
+for spec in filter(None, os.environ.get("N2_SHOW", "").split(";")):
+    name, rng = spec.split(":"); lo, hi = map(int, rng.split("-"))
+    ls = (src / name).read_text(errors="replace").splitlines()
+    for i in range(lo - 1, min(hi, len(ls))): print("N2SHOW %s:%d: %s" % (name, i + 1, ls[i]))
 if os.environ.get("N2_LMTRACE"):
     # Diagnostic: check the sub vector table after every call statement of these files.
     for name in os.environ["N2_LMTRACE"].split(","):
