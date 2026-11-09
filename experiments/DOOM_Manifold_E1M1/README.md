@@ -14,6 +14,15 @@ Goal: make the **actual Doom E1M1 geometry** render in Manifold's Sega Mega Driv
 - Original `src/python/editor/wad.py` reads a custom **BWAD** file, not a Doom IWAD; use our *existing* Doom WAD parsers or an explicit IWAD importer for source geometry.
 - Original `src/my_bmp.c` documents a column framebuffer / staggered DMA; this is a promising test target, not a measured speedup.
 
+## M01 progress update — 2026-11-09
+
+- Real E1M1 (pinned Doom shareware WAD): 237 subsectors, 732 original segs, 467 original vertices. Original SSECTORS alone leave 182 open boundaries.
+- Rebuilding cells from BSP NODES yields 237 closed convex cells with zero degenerate areas. A further strict audit found 14 SEG midpoint disagreements (threshold 0.75 geometric sign units); updated code now measures normalized deviations in map units. This is not yet approved topology.
+- First C portal_map candidate requires 1112 atomic wall pieces after splitting, above Manifold's 1024 static budget. Experimental-only limit raised to 2048.
+- Added guarded `emit_portal_map.py`, `stage_rom.py`, and `manifold-e1m1-rom.yml`. The pipeline stages the real spawn point, registers the E1M1 map, and attempts compilation with the locally installed SGDK into the runner's private directory.
+- **No playable Manifold E1M1 ROM has passed build or BlastEm yet**. Check the latest `Manifold E1M1 M01 experimental ROM` run before using any generated file. Current structural placeholders: one common wall texture, conservative PVS/PHS, no objects, door scripting pending.
+- Original Doom R128 / SCD M1.5 branches are unaffected.
+
 ## First technical milestones
 
 1. M01-A: stage pinned upstream in a **disposable directory**, inventory map and renderer dependencies, and record source provenance. Script: `m01/bootstrap.py`. It creates `audit.json` and deliberately does NOT certify or compile a ROM.
