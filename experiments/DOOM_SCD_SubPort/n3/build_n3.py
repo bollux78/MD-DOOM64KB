@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""N3: R128 on the MD + the Sega CD sub running the same logic in lockstep and rendering the view
+with the R128 Pair-V drawers. Usage: build_n3.py TREE OUT   (env N3_AUTOSTART=1: title -> E1M1,
+N3_OFF=1: same ROM without the sub, for the baseline)."""
+import os, re, shutil, struct, subprocess, sys
+from pathlib import Path
+
+here = Path(__file__).resolve().parent
+common = here.parent
+n2 = common / "n2"
+tree, out = (Path(a).resolve() for a in sys.argv[1:])
+out.mkdir(parents=True, exist_ok=True)
+gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
+b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
+opt = (tree / "out/.render_options").read_text().split()
+defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
+       ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)"]
+
+def sub_patch(path, old, new, count=1):
+    t = path.read_text(errors="replace")
+    assert t.count(old) >= 1, (path.name, old[:60])
+    path.write_text(t.replace(old, new, count))
+
+# 1. Sub source copy: cartridge SRAM -> PRG-RAM array (odd-lane layout kept), no mapper writes.
+src = out / "src-sub"
+if src.exists(): shutil.rmtree(src)
+shutil.copytree(tree / "src", src)
+for f in src.rglob("*"):
+    if f.suffix not in (".c", ".h", ".inc"): continue
+    t = f.read_text(errors="replace"); o = t
+    t = t.replace("#define R22_SRAM_BASE 0x00200000UL", "#define R22_SRAM_BASE SCD_SRAM_BASE")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x0020F001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+0xF001UL)")
+    t = t.replace("#define DOOM_SRAM_FIRST 0x00200001UL", "#define DOOM_SRAM_FIRST (SCD_SRAM_BASE+1UL)")
+    t = t.replace("#define DOOM_SRAM_CONTROL 0x00A130F1UL", "#define DOOM_SRAM_CONTROL (SCD_SRAM_BASE+0x11FFEUL)")
+    t = t.replace("(*(volatile uint8_t*)0x00A130F1UL=1)", "((void)0)").replace("(*(volatile uint8_t*)0x00A130F1UL=0)", "((void)0)")
+    if t != o: f.write_text("extern unsigned char scd_sram[];\n" + t)
+(src / "g_game.c").write_text((src / "g_game.c").read_text() +
+    "\nvoid N3_SetCmd(const void *c){memcpy(&netcmd,c,sizeof netcmd);}\n"
+    "void N3_LoadLevel(void){G_DoLoadLevel();}\n")
+RND = "\nuint8_t N3_GetPRnd(void){return prndindex;}\nvoid N3_SetPRnd(uint8_t v){prndindex=v;}\n"
+(src / "m_random.c").write_text((src / "m_random.c").read_text() + RND)
+rv = src / "r22_video.inc"
+sub_patch(rv, "#define R59_CURRENT (r59_color_tables[r59_color_mode])", "#define R59_CURRENT (r59_color_tables[0])")
+sub_patch(rv, "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
+for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
+    sub_patch(rv, fn, fn + "\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }")
+
+# 2. R84 composite pool: E1M1 subset (sub PRG-RAM cannot hold the whole pool).
+hdr = (src / "r84_columns.h").read_text()
+def arr(name):
+    m = re.search(r"static const \w+ " + name + r"\[\]=\{([^}]*)\};", hdr)
+    return [int(x.rstrip("u")) for x in m.group(1).split(",") if x.strip()]
+pool, offs, starts = bytes(arr("r84_pixels")), arr("r84_offsets"), arr("r84_starts")
+wad = (tree / "scripts/doom64.wad").read_bytes()
+n, dirofs = struct.unpack_from(">hI", wad, 4)[0], struct.unpack_from(">I", wad, 8)[0]
+lumps = []
+for i in range(n):
+    o = dirofs + i * 16; p, z = struct.unpack_from(">IH", wad, o)
+    lumps.append((wad[o + 8:o + 16].rstrip(b"\0").decode("latin1"), p, z))
+names = [l[0] for l in lumps]
+m = names.index("E1M1")
+side = next(i for i in range(m + 1, m + 12) if names[i] == "SIDEDEFS")
+_, p, z = lumps[side]
+used = set()
+for o in range(p, p + z - z % 7, 7):
+    x, y, top, bottom, mid, sec = struct.unpack_from(">hBbbbB", wad, o)
+    for t in (top, bottom, mid):
+        if t > 0: used.add(t)
+newpool = bytearray(bytes([0xB0]) * 128); remap = {}
+for t in sorted(used):
+    if t >= len(starts): continue
+    end = starts[t + 1] if t + 1 < len(starts) else len(offs)
+    for e in range(starts[t], end):
+        o = offs[e]
+        if o == 0xFFFFFFFF: continue
+        if o not in remap: remap[o] = len(newpool); newpool.extend(pool[o:o + 128])
+newoffs = [remap.get(o, 0) if o != 0xFFFFFFFF else o for o in offs]
+hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "static const uint8_t r84_pixels[]={" + ",".join(str(v) for v in newpool) + "};", hdr)
+hdr = re.sub(r"static const uint32_t r84_offsets\[\]=\{[^}]*\};", "static const uint32_t r84_offsets[]={" + ",".join(str(v) + "u" for v in newoffs) + "};", hdr)
+(src / "r84_columns.h").write_text(hdr)
+print("N3 R84 subset: textures %d, columns %d, bytes %d" % (len(used), len(remap), len(newpool)))
+
+# 3. Sub transport (exported exchange, patient spins) and WAD client.
+w = out / "sub"; w.mkdir(exist_ok=True)
+tr = (common / "scd_sub_transport.c").read_text()
+tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPINS 400000000UL")
+tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
+       "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
+(w / "transport.c").write_text(tr)
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (96UL * 1024UL)")
+ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
+    if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
+    if (!size) return;
+    if (scd_slots[n]) { memcpy(ptr, scd_slots[n], size); return; }
+    if (!scd_fetch_lump((uint16_t)n, ptr, size)) I_Error("SCD LUMP READ FAILED %d", n);""")
+ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
+    '{ static char nf[26] = "LUMP NOT FOUND: "; for (uint16_t j = 0; j < 8u; j++) nf[16 + j] = name[j] ? name[j] : 32; nf[24] = 0; I_Error(nf); }')
+(w / "w_wad_client.c").write_text(ww)
+
+# 4. Compile + link the sub program.
+cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
+          "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
+          "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
+          "-I" + str(src), "-I" + str(common), "-I" + str(here),
+          "-I" + str(tree / "compat")] + defs
+skip = ("w_wad.c", "i_genesis.c", "r25_music.c", "s_sound.c", "i_audio.c")
+sources = [n2 / "n2_video_stubs.c", common / "m2/scd_n1_platform.c"]
+sources += sorted(p for p in src.glob("*.c") if p.name not in skip) + sorted(src.glob("*.s"))
+sources += [common / "s1e/engine_libc.c", common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c",
+            w / "transport.c", w / "w_wad_client.c", here / "n3_sub_main.c", n2 / "sub_sound_stubs.c", n2 / "sub_sound_stubs2.c"]
+objs = []
+for s in sources:
+    obj = w / (s.name + ".o")
+    extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
+    zone = ["-DSCD_SUB_ZONE_BYTES=65536"] if s.name == "scd_sub_system.c" else []
+    hot = s.name.startswith("r") or s.name == "tables.c"
+    r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) + zone + extra +
+                       ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
+    if r.returncode:
+        print("N3 compile FAIL", s.name, r.stderr[-2500:]); raise SystemExit(1)
+    objs.append(str(obj))
+subprocess.run([b("as"), "-m68000", str(n2 / "sub_boot_n2.s"), "-o", str(w / "boot.o")], check=True)
+libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
+ld_script = w / "sub_engine_n3.ld"
+ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
+elf = w / "n3-sub.elf"
+r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
+                    "-Wl,-T," + str(ld_script), "-Wl,--allow-multiple-definition", "-Wl,-Map," + str(w / "n3-sub.map"),
+                    "-o", str(elf), str(w / "boot.o")] + objs + [str(gdk / "lib" / "libmd.a"), libgcc],
+                   capture_output=True, text=True, env=dict(os.environ, LANG="C", LC_ALL="C"))
+if r.returncode:
+    undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
+    print("N3 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:])
+    mt = (w / "n3-sub.map").read_text(errors="replace")
+    e = re.search(r"0x([0-9a-f]+)\s+_end = \.", mt[mt.find("Linker script and memory map"):]); print("N3 _end would be", e.group(1) if e else "?")
+    raise SystemExit(1)
+sym = {}
+for l in subprocess.check_output([b("nm"), str(elf)], text=True).splitlines():
+    f = l.split()
+    if len(f) >= 3: sym[f[-1]] = int(f[0], 16)
+subprocess.run([b("objcopy"), "-O", "binary", "-R", ".bss", str(elf), str(w / "n3-sub.bin")], check=True)
+size = (w / "n3-sub.bin").stat().st_size
+print("N3 sub image %d bytes, bss end 0x%X" % (size, sym["_end"]))
+assert size <= 4 * 128 * 1024 and sym["_end"] < 0x7F000
+
+# 5. MD side, patched into the R128 tree.
+def md_patch(name, old, new, count=1, regex=False):
+    f = tree / "src" / name; t = f.read_text(errors="replace")
+    if regex:
+        t2, k = re.subn(old, new, t)
+        assert k >= 1, (name, old)
+    else:
+        assert t.count(old) >= 1, (name, old[:70]); t2 = t.replace(old, new, count)
+    f.write_text(t2)
+off = bool(os.environ.get("N3_OFF"))
+subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tools/make_sub_header.py"),
+                str(w / "n3-sub.bin"), str(tree / "src/n3_sub.h")], check=True)
+shutil.copyfile(here / "n3_md.c", tree / "src/n3_md.c")
+shutil.copyfile(here / "n3_proto.h", tree / "src/n3_proto.h")
+shutil.copyfile(common / "scd_proto.h", tree / "src/scd_proto.h")
+sv = (common / "scd_md_server.c").read_text()
+a = "    else if (cmd == SCD_CMD_LUMP)\n        status = prepare_lump(arg, &size);\n"
+assert sv.count(a) == 1
+sv = sv.replace(a, a + "    else if (cmd == SCD_CMD_FRAME)\n    {\n        extern uint16_t N3_MdFramePayload(volatile uint8_t *);\n"
+                "        size = N3_MdFramePayload((volatile uint8_t *)(SCD_MD_BANK_BASE + SCD_PAYLOAD_OFFSET)); status = size != 0;\n    }\n")
+a = "            transactions++;\n"
+assert sv.count(a) == 1
+sv = sv.replace(a, "            transactions++;\n            if (cmd == SCD_CMD_FRAME) { extern void N3_MdFrameArrived(uint16_t); N3_MdFrameArrived(arg); }\n")
+sv += ("\n/* New request pending? Its command, else 0 (does not consume it). */\n"
+       "uint16_t SCD_MdPendingCmd(void){ const uint16_t seq=SCD_MD_REG16(SCD_MD_REQUEST_REG);"
+       " return (!seq || seq==last_request) ? 0 : SCD_MD_REG16(SCD_MD_CMD_REG); }\n")
+(tree / "src/scd_md_server.c").write_text(sv)
+ws = (tree / "src/w_wad.c").read_text()
+needle = "const char __far* PUREFUNC W_GetNameForNum(int16_t num)"
+if "SCD_MdLumpCount" not in ws:
+    assert ws.count(needle) == 1
+    (tree / "src/w_wad.c").write_text(ws.replace(needle, "uint16_t SCD_MdLumpCount(void) { const wadinfo_t *header=(const wadinfo_t *)&doom_iwad[0]; return (uint16_t)header->numlumps; }\n\n" + needle))
+if not off:
+    md_patch("i_genesis.c", "\tD_DoomMain(argc, argv);", "\t{ void N3_Boot(void); N3_Boot(); }\n\tD_DoomMain(argc, argv);")
+md_patch("g_game.c", "static void G_DoLoadLevel (void)\n{", "static void G_DoLoadLevel (void)\n{\n    { extern void N3_OnLoadLevel(void); N3_OnLoadLevel(); }")
+gg = tree / "src/g_game.c"
+gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeof netcmd);}\n"
+              "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n")
+(tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
+md_patch("d_main.c", r"G_Ticker \(\);", "G_Ticker (); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); }", regex=True)
+md_patch("d_main.c", "    R22_BeginFrame();\n#endif", "    R22_BeginFrame();\n#endif\n    { extern void N3_Pump(void); N3_Pump(); }")
+md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Display(void); if (!N3_Display()) R_RenderPlayerView (&_g_player); }", regex=True)
+if os.environ.get("N3_AUTOSTART"):
+    md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
+md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
+env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
+render = " ".join(o for o in opt if o.startswith("-"))
+subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
+                "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + render, "LIBGCC=" + libgcc + " -lgcc"], check=True, cwd=str(tree), env=env)
+rom = out / "doom-md-scd-n3.bin"
+subprocess.run(["python3", "scripts/lab/finish_r35_rom.py", "out/rom.bin", str(out / "linear.bin")], check=True, cwd=str(tree))
+tools = common.parent
+subprocess.run(["python3", str(tools / "DOOM_SCD_Bench03D_Transport/tools/mark_mode1.py"), str(out / "linear.bin"), str(rom)], check=True)
+subprocess.run(["python3", str(tools / "DOOM_SCD_03E/rom_identity.py"), str(rom)], check=True)
+(out / "linear.bin").unlink()
+shutil.copyfile(tree / "out/release/rom.out", out / "doom-md-scd-n3.elf")
+print("N3 ROM:", rom)
