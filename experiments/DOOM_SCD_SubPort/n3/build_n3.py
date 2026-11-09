@@ -118,6 +118,20 @@ sub_patch(rv, "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
     sub_patch(rv, fn, fn + "\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }")
 
+# R128 sight staggering keyed on the mobj ADDRESS differs between the MD and the sub (different
+# memory): key it on map position instead, and let the one-entry sight cache live for one tic only.
+def sight_patch(f):
+    t = f.read_text(errors="replace")
+    old = "(uint16_t)(((uintptr_t)t1) >> 5)) % 12u;"
+    assert old in t, "sight stagger anchor"
+    t = t.replace(old, "(uint16_t)(((uint16_t)(t1->x >> 16) ^ (uint16_t)(t1->y >> 16)) >> 3)) % 12u;")
+    old = "  if (prevlat1 == linearAddress(t1)\n   && prevlat2 == linearAddress(t2))\n    return prevr;\n  prevlat1 = linearAddress(t1);\n  prevlat2 = linearAddress(t2);"
+    assert old in t, "sight cache anchor"
+    t = t.replace(old, "  static int32_t prevtic;\n  if (prevlat1 == linearAddress(t1)\n   && prevlat2 == linearAddress(t2) && prevtic == _g_gametic)\n    return prevr;\n"
+                  "  prevlat1 = linearAddress(t1);\n  prevlat2 = linearAddress(t2);\n  prevtic = _g_gametic;")
+    f.write_text(t)
+sight_patch(src / "p_sight.c")
+
 # Split-screen windows (both CPUs): columns outside [N3_X0, N3_X1) are solid (no BSP/wall work)
 # and sprites are clamped to the window.
 def split_patch(rd):
@@ -439,6 +453,7 @@ md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Dis
 if os.environ.get("N3_AUTOSTART"):
     md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
 split_patch(tree / "src" / "r_draw.c")
+sight_patch(tree / "src" / "p_sight.c")
 rdm = tree / "src" / "r_draw.c"
 rdm.write_text(rdm.read_text() + "\nconst uint8_t *N3_R84Pixels(void){return r84_pixels;}\n")
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
