@@ -96,14 +96,19 @@ for i in range(n):
     lumps.append((wad[o + 8:o + 16].rstrip(b"\0").decode("latin1"), p, z))
 names = [l[0] for l in lumps]
 print("N3 WAD lumps", n, [(i, lumps[i][0], lumps[i][2]) for i in (605,611,631,640)], "markers:", [(i, nm_) for i, (nm_, p_, z_) in enumerate(lumps) if nm_.endswith("_START") or nm_.endswith("_END")])
-m = names.index("E1M1")
-side = next(i for i in range(m + 1, m + 12) if names[i] == "SIDEDEFS")
-_, p, z = lumps[side]
-used = set()
-for o in range(p, p + z - z % 7, 7):
-    x, y, top, bottom, mid, sec = struct.unpack_from(">hBbbbB", wad, o)
-    for t in (top, bottom, mid):
-        if t > 0: used.add(t)
+# Union of the wall textures of every map in the WAD (the sub keeps one resident subset).
+used = set(); map_names = []
+for mi, mn in enumerate(names):
+    if not re.fullmatch(r"E\dM\d|MAP\d\d", mn): continue
+    sd = next((i for i in range(mi + 1, min(mi + 12, len(names))) if names[i] == "SIDEDEFS"), None)
+    if sd is None: continue
+    map_names.append(mn)
+    _, p, z = lumps[sd]
+    print("N3 map %s SIDEDEFS at %d, %d bytes" % (mn, p, z))
+    for o in range(p, p + z - z % 7, 7):
+        x, y, top, bottom, mid, sec = struct.unpack_from(">hBbbbB", wad, o)
+        for t in (top, bottom, mid):
+            if t > 0: used.add(t)
 # texture names in index order (TEXTURE1 then TEXTURE2): add switch partners and whole animations
 tex_names = []
 def _parse_textures(endian):

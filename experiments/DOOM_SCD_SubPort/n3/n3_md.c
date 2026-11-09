@@ -164,8 +164,8 @@ void N3_OnLoadLevel(void)
 {
     N3State *s = state();
     if (!s || !s->active) return;
-    /* demos stay on the MD; the sub only has the E1M1 texture subset for now */
-    if ((_g_demoplayback && !N3_DEMO_OK) || (_g_gamemap != 1 && !N3_DEMO_OK)) { s->lock = 0; s->snap_pending = 0; s->ntics = 0; return; }
+    /* demos stay on the MD; the sub holds the wall textures of every map */
+    if (_g_demoplayback && !N3_DEMO_OK) { s->lock = 0; s->snap_pending = 0; s->ntics = 0; return; }
     s->snap.gamemap = _g_gamemap; s->snap.gameskill = (int16_t)_g_gameskill;
     s->snap.respawnmonsters = (uint8_t)_g_respawnmonsters; s->snap.usergame = (uint8_t)_g_usergame;
     s->snap.prnd = N3_GetPRnd(); s->snap.menuactive = (uint8_t)_g_menuactive;
