@@ -391,9 +391,10 @@ int N3_Display(void)
          * the sub has slack -> it gets columns. ~70 lines per column swing, half-step damping. */
         {
             const int32_t sub_idle = (int32_t)((s->sub_idle_units * 31u) >> 6);
-            int32_t d = (sub_idle - md_wait) / 9;
-            if (d > 48) d = 48; else if (d < -48) d = -48;
-            int32_t f = s->split_fp - d;
+            /* md_wait always contains the B exchange itself (~40 lines): deadband, one column/frame */
+            const int32_t e = sub_idle - (md_wait - 40);
+            int32_t f = s->split_fp;
+            if (e > 60) f -= 16; else if (e < -60) f += 16;
             if (f < 10 * 16) f = 10 * 16; else if (f > 66 * 16) f = 66 * 16;
             s->split_fp = (int16_t)f; s->split = (int16_t)(f >> 4);
         }
