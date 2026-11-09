@@ -68,7 +68,11 @@ jobs:
           if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
             ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
           fi
-          make -C "$MANIFOLD_STAGE/candidate" -f "$GDK/makefile.gen" -j2 release
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc" || { echo "::error::MARSDEV compiler missing: ${tc}gcc"; exit 1; }
+          make -C "$MANIFOLD_STAGE/candidate" -f "$GDK/makefile.gen" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy"
           test -s "$MANIFOLD_STAGE/candidate/out/rom.bin"
           out="$HOME/Projetos/Personal/manifold-e1m1/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
