@@ -78,8 +78,8 @@ def normalize_legacy_asm(out):
     for filename in ("fire_native.s","my_bmp_a.s"):
         path=out/"src"/filename
         source=path.read_text()
-        filtered="\\n".join(line.split("|",1)[0].rstrip()
-                              for line in source.splitlines())+"\\n"
+        filtered="\n".join(line.split("|",1)[0].rstrip()
+                              for line in source.splitlines())+"\n"
         if not filtered.strip() or len(filtered)>len(source):
             raise ValueError(f"unexpected ASM comment conversion: {filename}")
         path.write_text(filtered)
