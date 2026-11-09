@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [alloc, copy]
+        mode: [params, init]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     steps:
@@ -53,6 +53,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Probe whether legacy SGDK KLog debugger traps block headless startup.
+          python3 - "$MANIFOLD_STAGE/candidate/src" <<'PY'
+          from pathlib import Path
+          import sys
+          base=Path(sys.argv[1])
+          defs='#include <genesis.h>\\n'
+          for name in ('KLog','KLog_U1','KLog_U2','KLog_U3','KLog_U4',
+                       'KLog_U1_','KLog_U2_','KLog_U3_','KLog_U4_',
+                       'KLog_U1x','KLog_U2x','KLog_U3x','KLog_U4x'):
+              defs += f'#define {name}(...) ((void)0)\\n'
+          header=base/'diag_mute_klog.h'
+          header.write_text(defs)
+          for c in base.glob('*.c'):
+              c.write_text('#include "diag_mute_klog.h"\\n'+c.read_text())
+          print('Legacy emulator logging suppressed in diagnostic staging')
+          PY
           case "${{ matrix.mode }}" in
             video)
               cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
