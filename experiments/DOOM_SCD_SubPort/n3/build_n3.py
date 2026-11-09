@@ -22,6 +22,10 @@ if os.environ.get("N3_GREP"):
         if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 400000 or "table" in f.name: continue
         for i, l in enumerate(f.read_text(errors="replace").splitlines()):
             if rx.search(l): print("N3GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:220]))
+for spec in filter(None, os.environ.get("N3_SHOW", "").split(";")):
+    name, rng = spec.split(":"); lo, hi = map(int, rng.split("-"))
+    ls = (tree / "src" / name).read_text(errors="replace").splitlines()
+    for i in range(lo - 1, min(hi, len(ls))): print("N3SHOW %s:%d: %s" % (name, i + 1, ls[i]))
 def sub_patch(path, old, new, count=1):
     t = path.read_text(errors="replace")
     assert t.count(old) >= 1, (path.name, old[:60])
