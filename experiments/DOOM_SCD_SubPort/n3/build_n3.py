@@ -224,7 +224,7 @@ tr = tr.replace("#define SCD_SUB_MAX_SPINS 4000000UL", "#define SCD_SUB_MAX_SPIN
 tr += ("\nconst volatile uint8_t *SCD_SubExchange(uint16_t c, uint16_t a, uint16_t *len)"
        "{ return scd_exchange(c, a, len); }\nvoid SCD_SubSetTime(uint32_t t){ (void)t; }\n")
 (w / "transport.c").write_text(tr)
-ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "118") + "UL * 1024UL)")
+ww = (common / "scd_sub_w_wad.c").read_text().replace("#define SCD_WAD_CACHE_BYTES (128UL * 1024UL)", "#define SCD_WAD_CACHE_BYTES (" + os.environ.get("N3_CACHE_KIB", "112") + "UL * 1024UL)")
 ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
     if (!size) return;
