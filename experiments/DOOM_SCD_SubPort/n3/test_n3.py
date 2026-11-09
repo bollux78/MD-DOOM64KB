@@ -38,6 +38,8 @@ try:
         gs, tic, vb = rd(g, "_g_gamestate"), rd(g, "_g_gametic"), rd(g, "_g_vblankCount")
         last = (frames, tic, vb)
         if gs == 0 and start is None and tic > 0: start = (frames, tic, vb)
+        if start and gs != 0:
+            res["left_level_at_tic"] = tic; break
         if start:
             k = frames - start[0]
             if os.environ.get("N3_MOVE"):

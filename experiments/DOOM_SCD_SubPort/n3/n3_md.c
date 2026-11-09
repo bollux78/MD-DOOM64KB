@@ -152,13 +152,9 @@ static N3State *state(void)
     return n3;
 }
 
-#if defined(N3_DEMO_TEST)
-static bool user_level(void) { return _g_gamestate == GS_LEVEL; }   /* test: demos run in lockstep too */
+/* Sega CD exclusive: demos (and the benchmark built on them) run in lockstep too. */
+static bool user_level(void) { return _g_gamestate == GS_LEVEL; }
 #define N3_DEMO_OK 1
-#else
-static bool user_level(void) { return _g_gamestate == GS_LEVEL && !_g_demoplayback && _g_usergame; }
-#define N3_DEMO_OK 0
-#endif
 
 /* G_DoLoadLevel entry (any cause: new game, next map, death): snapshot what the level load reads. */
 void N3_OnLoadLevel(void)
