@@ -373,7 +373,7 @@ for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\
     md_patch("r22_video.inc", fn, fn + "\n    { extern void N3_Poll(void); N3_Poll(); }")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 rvm = tree / "src/r22_video.inc"
-rvm.write_text(rvm.read_text() + "\nuint8_t N3_ColorMode(void){return (uint8_t)(R59_CURRENT == &r59_color_tables[" + os.environ.get("N3_R59_MODE", "1") + "] ? " + os.environ.get("N3_R59_MODE", "1") + " : 255);}\n")
+rvm.write_text(rvm.read_text() + "\nuint8_t N3_ColorMode(void){return (uint8_t)(&R59_CURRENT == &r59_color_tables[" + os.environ.get("N3_R59_MODE", "1") + "] ? " + os.environ.get("N3_R59_MODE", "1") + " : 255);}\n")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
 md_patch("d_main.c", "static void TryRunTics (void)", "static void TryRunTics (void)")
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
