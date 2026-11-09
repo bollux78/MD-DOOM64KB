@@ -24,11 +24,57 @@ def point_inside(poly,p):
             signs.append(z>0)
     return not signs or all(v==signs[0] for v in signs)
 
+def stage_missing_resources(out):
+    """Generate neutral 4bpp indexed PNGs and reuse valid public sample WAVs.
+
+    Upstream's .res manifest references files absent from its own repository.
+    Generated assets exist only inside the disposable working directory.
+    """
+    import struct
+    import zlib
+    def png(path,w,h):
+        # PNG indexed (palette size=16), palette slot 0 transparent/black.
+        def chunk(typ,payload):
+            body=typ+payload
+            return struct.pack(">I",len(payload))+body+struct.pack(">I",zlib.crc32(body)&0xffffffff)
+        ihdr=struct.pack(">IIBBBBB",w,h,8,3,0,0,0)
+        pal=bytes(i*12 for i in range(16) for _ in range(3))
+        pixels=bytearray()
+        for y in range(h):
+            pixels.append(0)
+            pixels.extend(1+((x//8+y//8)%3) for x in range(w))
+        data=(b"\\x89PNG\\r\\n\\x1a\\n"+chunk(b"IHDR",ihdr)
+              +chunk(b"PLTE",pal)+chunk(b"IDAT",zlib.compress(bytes(pixels)))
+              +chunk(b"IEND",b""))
+        path.write_bytes(data)
+    required={
+        "images/green_key_inv.png":(32,32),
+        "images/red_key_inv.png":(32,32),
+        "images/pause_checker.png":(16,16),
+        "images/SHOTGUN_RELOAD.png":(64,128),
+        "images/SMILE.png":(16,16),
+        "images/FROWN.png":(16,16),
+    }
+    for file,(w,h) in required.items():
+        dest=out/"res"/file
+        if not dest.exists():
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            png(dest,w,h)
+    sample=out/"res/sfx/select.wav"
+    if not sample.exists():
+        raise ValueError("Upstream valid WAV sample is missing")
+    for file in ["shotgun.wav","jump1.wav","jump2.wav",
+                 "liftgoup.wav","enemya_wake.wav"]:
+        dest=out/"res/sfx"/file
+        if not dest.exists():
+            shutil.copyfile(sample,dest)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
+    stage_missing_resources(out)
     map_lumps=read_map(wad)
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
