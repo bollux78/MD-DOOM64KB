@@ -148,7 +148,7 @@ sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_gene
 sources += sorted(p for p in src.glob("*.s"))
 sources = [common / "m2/scd_n1_platform.c"] + sources
 sources += ([] if R128DRAW else [common / "m2/scd_draw.c"]) + [ common / "s1e/engine_libc.c",
-            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c", here / "prof_inst.c", here / "sub_sound_stubs.c"]
+            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c", here / "prof_inst.c", here / "sub_sound_stubs.c", here / "sub_sound_stubs2.c"]
 objs = []
 for s in sources:
     obj = w / (s.name + ".o")
@@ -167,7 +167,7 @@ subprocess.run([b("as"), "-m68000", str(common / "s1a/sub_boot.s"), "-o", str(w 
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "n2-sub.elf"
 ld_script = common / "s1e/sub_engine.ld"
-if int(os.environ.get("N2_PROF", "0")) & 2:   # profiling build: stack use is < 1 KiB, the trace area is unused in N2
+if True:   # N2: measured stack use is < 1 KiB and the s1e trace area is unused, keep 4 KiB for stack
     ld_script = w / "sub_engine_prof.ld"
     ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
@@ -198,7 +198,7 @@ _img = (w / "n2-sub.bin").read_bytes()
 for _pat in (b"\x00\x0f\x00\x0f", b"\x00\x1f\x00\x1f"):
     print("N2 pattern", _pat.hex(), [hex(i) for i in range(0, len(_img) - 3, 2) if _img[i:i + 4] == _pat][:24])
 print("N2 largest functions:", sorted(((int(l.split()[1], 16), l.split()[3]) for l in subprocess.check_output([b("nm"), "-S", "--size-sort", str(elf)], text=True).splitlines() if len(l.split()) == 4 and l.split()[2] in "Tt"), reverse=True)[:8])
-assert size <= 4 * 128 * 1024 and sym["_end"] < (0x7F000 if int(os.environ.get("N2_PROF", "0")) & 2 else 0x7C000)
+assert size <= 4 * 128 * 1024 and sym["_end"] < 0x7F000
 
 # 4. MD side.
 subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tools/make_sub_header.py"),
