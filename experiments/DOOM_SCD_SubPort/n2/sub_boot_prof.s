@@ -3,6 +3,7 @@
     .section .text.vectors,"ax"
     .globl subcpu_vectors
     .weak scd_prof_bins
+    .globl prof_isr
 subcpu_vectors:
     .long 0x00080000, entry
     .rept 25

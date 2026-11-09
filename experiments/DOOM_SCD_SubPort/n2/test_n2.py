@@ -33,14 +33,15 @@ try:
                 for x in range(0, 152, 2):
                     hist[raw[y * 256 + x] & 15] += 1
             print("frame", shown, "colour histogram (sample index: count):", dict(sorted(hist.items())), flush=True)
-    rep = struct.unpack(">4H9I", bytes(g.readmem(0x61F000, 44)))
-    keys = ("stage", "frames", "errors", "timeouts", "bytes", "render_units", "expand_units", "columns", "pixels", "vblanks", "min_render", "column_units", "stack_depth")
+    rep = struct.unpack(">4H10I", bytes(g.readmem(0x61F000, 48)))
+    keys = ("stage", "frames", "errors", "timeouts", "bytes", "render_units", "expand_units", "columns", "pixels", "vblanks", "min_render", "column_units", "stack_depth", "lowmem")
     r = dict(zip(keys, rep))
     if r["frames"]:
         r["render_ms_per_frame"] = round(r["render_units"] * 0.03072 / r["frames"], 2)
         r["column_ms_per_frame"] = round(r["column_units"] * 0.03072 / r["frames"], 2)
         r["min_render_ms"] = round(r["min_render"] * 0.03072, 2)
         r["expand_ms_per_frame"] = round(r["expand_units"] * 0.03072 / r["frames"], 2)
+    r["lowmem"] = "first changed vector byte 0x%X, %d longs" % (r["lowmem"] >> 16, r["lowmem"] & 0xFFFF)
     print("N2 report:", r, flush=True)
     if r["stage"] == 6:
         msg = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")

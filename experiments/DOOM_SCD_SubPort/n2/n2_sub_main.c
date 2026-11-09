@@ -25,8 +25,10 @@ extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
 #if N2_PROF & 2
 uint16_t scd_prof_bins[4096];
+extern void prof_isr(void);
 static void prof_on(void)
 {
+    *(void (* volatile *)(void))0x6CUL = prof_isr;   /* vector 27 gets clobbered after boot: restore */
 #if !(N2_PROF & 4)
     REG16(0xFF8030UL) = (N2_PROF & 32) ? 255 : 10;
 #endif
@@ -72,9 +74,11 @@ static uint16_t stack_depth(void)
     return (uint16_t)(0x80000UL - (uint32_t)p);
 }
 
+static uint32_t lowmem_copy[64];
 void sub_main(void)
 {
     stack_paint();
+    for (uint16_t i = 0; i < 64; i++) lowmem_copy[i] = ((volatile const uint32_t *)0)[i];
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
     Z_Init(); W_Init(); REG16(0xFF8024UL) = 0x4E31;           /* 'N1': directory loaded */
     R_Init(); P_Init();                                      /* D_DoomMain order */
@@ -109,6 +113,11 @@ void sub_main(void)
 #else
     REG16(0xFF802AUL) = 0xFFFF;
 #endif
+    {   uint16_t first = 0xFFFF, count = 0;
+        for (uint16_t i = 0; i < 64; i++)
+            if (((volatile const uint32_t *)0)[i] != lowmem_copy[i] && i != 27) { if (first == 0xFFFF) first = i * 4; count++; }
+        REG16(0xFF8026UL) = first; REG16(0xFF8028UL) = count;
+    }
     REG16(0xFF802EUL) = stack_depth();                       /* deepest stack use in bytes */
     REG16(0xFF8020UL) = 0x51B1u;                             /* done */
     for (;;) {}
