@@ -34,6 +34,14 @@ def stage(src, wad, out):
     if missing:
         raise ValueError(f"cannot stage {len(missing)} unpaired boundaries")
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells))
+    # E1M1's split BSP contours have 1112 atomic walls; expand only this
+    # isolated candidate's static budget, leaving upstream and R128 unchanged.
+    header=out/"src/portal_map.h"
+    h=header.read_text()
+    old="#define MAX_WALLS        1024"
+    if h.count(old)!=1:
+        raise ValueError("upstream MAX_WALLS definition changed")
+    header.write_text(h.replace(old,"#define MAX_WALLS        2048"))
     # Manifold's map chooser reads a fixed pointer table, not the Doom BSP.
     p=out/"src/maps.h"
     s=p.read_text()
