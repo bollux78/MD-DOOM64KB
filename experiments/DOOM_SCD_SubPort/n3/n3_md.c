@@ -275,7 +275,7 @@ void N3_Pump(void)
         else if (_g_vblankCount - t0 > 60u * 8u) { s->active = 0; s->timeouts++; return; }
     }
     s->wait_vblanks += _g_vblankCount - t0;
-#if defined(N3_VERIFY)
+#if defined(N3_VERIFY) && !defined(N3_SPLIT)
     /* Second exchange with no new tics: receive the frame of exactly the MD's current state. */
     if (s->lock)
         for (;;)
@@ -327,7 +327,20 @@ int N3_Display(void)
         /* Balance: the CPU that waits gets more columns next frame. */
         if (w > 1 && s->split < 66) s->split += 2;
         else if (w == 0 && s->split > 10) s->split -= 1;
-        if (ok && s->have_frame) { s->have_frame = 0; return 1; }
+        if (ok && s->have_frame)
+        {
+            s->have_frame = 0;
+#if defined(N3_VERIFY)
+            /* merged frame vs the MD's own full render of the same state */
+            uint8_t *fb = N2_DrawBuffer();
+            for (uint16_t i = 1; i < SCD_FRAME_BYTES; i += 2) s->verify_buf[i] = fb[i];
+            R_RenderPlayerView(&_g_player);
+            uint32_t d = 0;
+            for (uint16_t i = 1; i < SCD_FRAME_BYTES; i += 2) d += fb[i] != s->verify_buf[i];
+            s->verify_frames++; s->verify_diff_bytes += d; if (d > s->verify_max) s->verify_max = d; if (!d) s->verify_zero++;
+#endif
+            return 1;
+        }
         /* No sub half: draw it ourselves. */
         s->md_x0 = s->md_x1; s->md_x1 = 76; s->rendering = 1;
         R_RenderPlayerView(&_g_player);

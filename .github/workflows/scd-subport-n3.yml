@@ -93,10 +93,11 @@ jobs:
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           out="$HOME/Projetos/Personal/scd-subport-n3/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          for v in split on off play; do
+          for v in splitverify split play; do
             vt="$RUNNER_TEMP/n3tree-$v"; rm -rf "$vt"; cp -a "$tree" "$vt"
             echo "=== N3 build $v ==="
             case $v in
+              splitverify) N3_AUTOSTART=1 N3_SPLIT=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               split) N3_AUTOSTART=1 N3_SPLIT=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               on) N3_AUTOSTART=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               off) N3_AUTOSTART=1 N3_OFF=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
@@ -118,6 +119,6 @@ jobs:
           cp "$cfg" "$work/config/blastem/blastem.cfg"
           sed -i -E 's/(m68k_divider[[:space:]]+)[0-9]+/\17/' "$work/config/blastem/blastem.cfg"
           for v in split on off play; do
-            N3_TICS=$([ $v = verify ] && echo 210 || echo 700) N3_VERIFY_OFFSET=60 XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
+            N3_TICS=$([ $v = splitverify ] && echo 210 || echo 700) N3_VERIFY_OFFSET=60 XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" PYTHONPATH="$GITHUB_WORKSPACE/scripts/lab" \
               python3 experiments/DOOM_SCD_SubPort/n3/test_n3.py "$N3_OUT/$v/doom-md-scd-n3.bin" "$N3_OUT/$v/doom-md-scd-n3.elf" "$v"
           done
