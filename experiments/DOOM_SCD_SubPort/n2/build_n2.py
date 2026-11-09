@@ -12,6 +12,10 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
+N2X2 = bool(os.environ.get("N2_2X2"))
+if N2X2:   # 2x2 probe: 152x88 samples (each 2x2 px) on the same 304x176 image
+    opt = [{"-DVIEWWINDOWWIDTH=76": "-DVIEWWINDOWWIDTH=152", "-DVIEWWINDOWHEIGHT=44": "-DVIEWWINDOWHEIGHT=88",
+            "-DMAPWIDTH=76": "-DMAPWIDTH=152"}.get(o, o) for o in opt] + ["-DN2_2X2"]
 PROF = int(os.environ.get("N2_PROF", "0"))
 if os.environ.get("N2_DUMP"):
     # Code-only dump of the R128 drawers the native port will reuse (no table headers).
@@ -55,6 +59,10 @@ for spec in filter(None, os.environ.get("N2_SHOW", "").split(";")):
     name, rng = spec.split(":"); lo, hi = map(int, rng.split("-"))
     ls = (src / name).read_text(errors="replace").splitlines()
     for i in range(lo - 1, min(hi, len(ls))): print("N2SHOW %s:%d: %s" % (name, i + 1, ls[i]))
+if N2X2:
+    p4 = src / "r22_pixel4.h"; t4 = p4.read_text()
+    assert "#define R22_W 76" in t4 and "#define R22_H 44" in t4
+    p4.write_text(t4.replace("#define R22_W 76", "#define R22_W 152").replace("#define R22_H 44", "#define R22_H 88"))
 if os.environ.get("N2_LMTRACE"):
     # Diagnostic: check the sub vector table after every call statement of these files.
     for name in os.environ["N2_LMTRACE"].split(","):

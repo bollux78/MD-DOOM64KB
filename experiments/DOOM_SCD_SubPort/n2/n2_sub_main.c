@@ -60,6 +60,27 @@ static void prof_off(void) {}
 #endif
 
 /* Report for the MD (sub status words are taken by the transport): last words of the bank. */
+#if defined(N2_2X2)
+static void expand(void)
+{
+    /* 2x2 px per sample: 4 samples -> one long (8 nibbles) per pixel row, 2 rows; stride 256 B */
+    static const uint16_t nib2[16] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                       0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+    for (uint16_t y = 0; y < R22_H; y++)
+    {
+        volatile uint32_t *r0 = (volatile uint32_t *)(BANK + (uint32_t)y * 512u);
+        const uint8_t *s = scd_fb[y];
+        for (uint16_t x = 0; x < R22_W / 4; x++)
+        {
+            const uint32_t w = ((uint32_t)nib2[s[0]] << 24) | ((uint32_t)nib2[s[1]] << 16) | ((uint32_t)nib2[s[2]] << 8) | nib2[s[3]];
+            s += 4;
+            r0[0] = w; r0[64] = w;
+            r0++;
+        }
+        if (!(y & 15)) SCD_ClockPoll();
+    }
+}
+#else
 static void expand(void)
 {
     /* 4x4 px per sample: 2 samples -> one long (8 nibbles) per pixel row, 4 rows; stride 256 B. */
@@ -79,6 +100,7 @@ static void expand(void)
         if (!(y & 7)) SCD_ClockPoll();
     }
 }
+#endif
 
 extern uint8_t _end[];
 static void stack_paint(void)

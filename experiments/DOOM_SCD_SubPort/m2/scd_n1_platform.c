@@ -4,7 +4,11 @@
 #include "doomdef.h"
 #include "r57_viewport.h"
 #if defined(DOOM_R57_CROP16) && defined(DOOM_R57_VIEW_MENU) && !defined(N2_R128_DRAW)
+#if defined(N2_2X2)
+R57ViewConfig r57_view = {0, 0, 0, 4, 152, 4, 88};
+#else
 R57ViewConfig r57_view = {0, 0, 0, 2, 76, 2, 44};
+#endif
 #endif
 volatile uint32_t _g_vblankCount;
 /* Cartridge SRAM emulated in PRG-RAM (odd-lane layout kept): R22 block links, R23 map memory up to
