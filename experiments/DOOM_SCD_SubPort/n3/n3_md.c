@@ -5,7 +5,6 @@
  * Any problem (no Sega CD, sub error, desync, timeout) falls back to the plain R128 renderer. */
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 #include <genesis.h>
 #include "doomdef.h"
 #include "d_player.h"
