@@ -12,7 +12,8 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
-defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "2")]
+PROF = int(os.environ.get("N2_PROF", "0"))
+defs = [o for o in opt if o.startswith("-D") and (PROF & 64 or not o.startswith("-DDOOM_R12_RECIP"))] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "0")]
 
 # 1. Patched source copy: cartridge SRAM -> sub PRG-RAM (same odd-lane layout), no mapper writes.
 src = out / "src-n2"
@@ -115,9 +116,9 @@ for s in sources:
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
     zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N2_ZONE", "98304")] if s.name == "scd_sub_system.c" else []
     # Speed where it matters (renderer, -O3 like the MD build), size elsewhere (-Os) to fit PRG-RAM.
-    hot = s.name.startswith("r_") or s.name in ("scd_draw.c", "tables.c")
+    hot = s.name.startswith("r_" if not PROF & 128 else "r") or s.name in ("scd_draw.c", "tables.c")
     opt_flags = (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) if os.environ.get("N2_OPT", "split") == "split" else []
-    if int(os.environ.get("N2_PROF", "2")) & 2 and s.suffix == ".c" and (s.name.startswith("r") or s.name == "scd_draw.c") and s.name != "r20_stackguard.c":
+    if int(os.environ.get("N2_PROF", "0")) & 2 and s.suffix == ".c" and (s.name.startswith("r") or s.name == "scd_draw.c") and s.name != "r20_stackguard.c":
         opt_flags = (["-O2"] if os.environ.get("N2_PROF_O2") else opt_flags) + ["-finstrument-functions"]
     r = subprocess.run([b("gcc")] + cflags + opt_flags + zone + extra + ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
@@ -127,7 +128,7 @@ subprocess.run([b("as"), "-m68000", str(common / "s1a/sub_boot.s"), "-o", str(w 
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "n2-sub.elf"
 ld_script = common / "s1e/sub_engine.ld"
-if int(os.environ.get("N2_PROF", "2")) & 2:   # profiling build: stack use is < 1 KiB, the trace area is unused in N2
+if int(os.environ.get("N2_PROF", "0")) & 2:   # profiling build: stack use is < 1 KiB, the trace area is unused in N2
     ld_script = w / "sub_engine_prof.ld"
     ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
@@ -137,7 +138,7 @@ r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
     print("N2 sub link FAIL; undefined:", " ".join(undef)); print(r.stderr[-3000:])
-    if int(os.environ.get("N2_PROF", "2")) & 2 and not os.environ.get("N2_PROF_O2") and "overlaps" in r.stderr:
+    if int(os.environ.get("N2_PROF", "0")) & 2 and not os.environ.get("N2_PROF_O2") and "overlaps" in r.stderr:
         print("N2 profiling build too big at -O3: retrying instrumented files at -O2", flush=True)
         os.environ["N2_PROF_O2"] = "1"; os.execv(sys.executable, [sys.executable] + sys.argv)
     raise SystemExit(1)
@@ -158,7 +159,7 @@ _img = (w / "n2-sub.bin").read_bytes()
 for _pat in (b"\x00\x0f\x00\x0f", b"\x00\x1f\x00\x1f"):
     print("N2 pattern", _pat.hex(), [hex(i) for i in range(0, len(_img) - 3, 2) if _img[i:i + 4] == _pat][:24])
 print("N2 largest functions:", sorted(((int(l.split()[1], 16), l.split()[3]) for l in subprocess.check_output([b("nm"), "-S", "--size-sort", str(elf)], text=True).splitlines() if len(l.split()) == 4 and l.split()[2] in "Tt"), reverse=True)[:8])
-assert size <= 4 * 128 * 1024 and sym["_end"] < (0x7F000 if int(os.environ.get("N2_PROF", "2")) & 2 else 0x7C000)
+assert size <= 4 * 128 * 1024 and sym["_end"] < (0x7F000 if int(os.environ.get("N2_PROF", "0")) & 2 else 0x7C000)
 
 # 4. MD side.
 subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tools/make_sub_header.py"),
