@@ -114,7 +114,7 @@ def normalize_legacy_fixed_point_api(out):
     replacements = {
         "fix32Mul": "F32_mul",
         "fix32ToInt": "F32_toInt",
-        "FIX32": "F32",
+        "intToFix32": "FIX32",
     }
     import re
     counts = {k: 0 for k in replacements}
@@ -129,7 +129,7 @@ def normalize_legacy_fixed_point_api(out):
             counts[old] += n
         if updated != original:
             p.write_text(updated)
-    if not counts["fix32Mul"] or not counts["FIX32"]:
+    if not counts["fix32Mul"] or not counts["intToFix32"]:
         raise ValueError(f"legacy fixed-point API signatures changed: {counts}")
     print("Legacy SGDK fixed-point API rewrites:", counts)
 
