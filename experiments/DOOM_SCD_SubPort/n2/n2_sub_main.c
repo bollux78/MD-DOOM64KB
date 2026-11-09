@@ -23,6 +23,9 @@ extern uint8_t scd_fb[R22_H][R22_W];
 extern uint32_t scd_columns, scd_pixels;
 extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
+uint16_t scd_prof_bins[4096];
+static void prof_on(void)  { REG16(0xFF8030UL) = 10; REG16(0xFF8032UL) = 0x08; __asm__ volatile ("move.w #0x2200,%sr"); }
+static void prof_off(void) { __asm__ volatile ("move.w #0x2700,%sr"); REG16(0xFF8032UL) = 0; REG16(0xFF8030UL) = 0; }
 
 /* Report for the MD (sub status words are taken by the transport): last words of the bank. */
 static void expand(void)
@@ -56,7 +59,9 @@ void sub_main(void)
     {
         SCD_ClockPoll();
         const uint32_t t0 = scd_clock_units;
+        prof_on();
         R_RenderPlayerView(&_g_player);
+        prof_off();
         SCD_ClockPoll();
         const uint32_t t1 = scd_clock_units;
         expand();
@@ -70,6 +75,8 @@ void sub_main(void)
         scd_columns = scd_pixels = 0;
         if (!SCD_SubFrame(f, input)) I_Error("N2 FRAME TRANSPORT");
     }
+    REG16(0xFF802AUL) = (uint16_t)((uint32_t)(uintptr_t)scd_prof_bins >> 16);
+    REG16(0xFF802CUL) = (uint16_t)(uintptr_t)scd_prof_bins;  /* MD fetches the histogram */
     REG16(0xFF8020UL) = 0x51B1u;                             /* done */
     for (;;) {}
 }

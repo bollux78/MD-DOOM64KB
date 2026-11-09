@@ -129,6 +129,23 @@ static void fetch_sub_error(void)
     CD_MEMCTRL_LO = 0;
 }
 
+/* Profiler histogram (4096 x u16 at the address in $A1202A/2C) -> Word RAM 0x61C000. */
+static void fetch_profile(void)
+{
+    const u32 addr = ((u32)*(volatile const u16 *)0xA1202A << 16) | *(volatile const u16 *)0xA1202C;
+    if (addr >= 0x80000UL) return;
+    CD_SUB_BYTE = 3;
+    if (!wait_sub(2, 2)) return;
+    volatile u16 *dst = (volatile u16 *)0x61C000;
+    for (u16 i = 0; i < 4096; i++)
+    {
+        const u32 a = addr + i * 2u;
+        CD_MEMCTRL_LO = (u8)((a >> 17) << 6);
+        dst[i] = *(volatile const u16 *)(0x420000UL + (a & 0x1FFFFUL));
+    }
+    CD_MEMCTRL_LO = 0;
+}
+
 static void run(void)
 {
     if ((HW_VERSION & 0x20u) || CD_BIOS_HEADER != 0x53454741UL) { rep->stage = 1; return; }
@@ -142,7 +159,7 @@ static void run(void)
         const int16_t served = SCD_MdServeOnce();
         if (served < 0) { rep->stage = 4; break; }
         if (served > 0 && rep->frames) n2_frame_shown();
-        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; break; }
+        if (CD_SUB_SIG == 0x51B1u) { rep->stage = 5; fetch_profile(); break; }
         if (CD_SUB_SIG == 0xDEADu) { rep->stage = 6; fetch_sub_error(); break; }
     }
     rep->errors = SCD_MdErrors(); rep->timeouts = SCD_MdTimeouts(); rep->bytes = SCD_MdBytes();
