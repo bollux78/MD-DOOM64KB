@@ -16,6 +16,12 @@ opt = (tree / "out/.render_options").read_text().split()
 defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + \
        ["-DN2_R128_DRAW", "-DSCD_SRAM_BASE=((unsigned long)scd_sram)"]
 
+if os.environ.get("N3_GREP"):
+    rx = re.compile(os.environ["N3_GREP"])
+    for f in sorted((tree / "src").glob("*")):
+        if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 400000 or "table" in f.name: continue
+        for i, l in enumerate(f.read_text(errors="replace").splitlines()):
+            if rx.search(l): print("N3GREP %s:%d: %s" % (f.name, i + 1, l.strip()[:220]))
 def sub_patch(path, old, new, count=1):
     t = path.read_text(errors="replace")
     assert t.count(old) >= 1, (path.name, old[:60])

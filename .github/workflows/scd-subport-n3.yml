@@ -99,7 +99,7 @@ jobs:
             case $v in
               on) N3_AUTOSTART=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               off) N3_AUTOSTART=1 N3_OFF=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
-              verify) N3_AUTOSTART=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
+              verify) N3_GREP="r59_color_mode\s*=|r57_view\s*=|R57ViewConfig r57_view|R57_CROP_ACTIVE\b.*define|define R57_(XMIN|XEND|YMIN|YEND)" N3_AUTOSTART=1 N3_VERIFY=1 python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
               play) python3 experiments/DOOM_SCD_SubPort/n3/build_n3.py "$vt" "$out/$v" ;;
             esac
             rm -rf "$vt"
