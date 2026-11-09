@@ -88,10 +88,10 @@ def build(lumps, nodes):
         if child>=len(nodes):
             raise ValueError(f"invalid BSP node {child}")
         node=nodes[child]
-        # DOOM BSP convention: side 0 = cross > 0, child RIGHT;
-        # side 1 = cross < 0, child LEFT.
-        right=clipped(poly,node,True)
-        left=clipped(poly,node,False)
+        # Doom R_PointOnSide: side 0 / child[0] = geometric RIGHT
+        # (negative cross); side 1 / child[1] = geometric LEFT.
+        right=clipped(poly,node,False)
+        left=clipped(poly,node,True)
         stack.append((node[13],left))
         stack.append((node[12],right))
     if len(cells)!=len(lumps["SSECTORS"]):
@@ -164,8 +164,8 @@ def synthetic():
     cells=build(lumps,nodes)
     assert len(cells)==2 and len(cells[0])==4 and len(cells[1])==4
     assert abs(sum(abs(area(x)) for x in cells.values())-18*18)<1e-6
-    assert max(p[0] for p in cells[0])<=5+EPS
-    assert min(p[0] for p in cells[1])>=5-EPS
+    assert min(p[0] for p in cells[0])>=5-EPS
+    assert max(p[0] for p in cells[1])<=5+EPS
     print("BSP synthetic closed cells: PASS")
 
 def main():
