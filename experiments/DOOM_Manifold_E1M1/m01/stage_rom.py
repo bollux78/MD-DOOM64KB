@@ -408,10 +408,10 @@ def stage(src, wad, out):
     # The intro uses a separate fire/bitmap renderer unrelated to this port.
     init=out/"src/init.c"
     init_source=init.read_text()
-    old="0xFEEDBEEF,\\n\\t0\\n"
+    old="0xFEEDBEEF,\n\t0\n"
     if init_source.count(old)!=1:
         raise ValueError("upstream start-in-game flag initializer changed")
-    init.write_text(init_source.replace(old,"0xFEEDBEEF,\\n\\t1\\n"))
+    init.write_text(init_source.replace(old,"0xFEEDBEEF,\n\t1\n"))
     map_lumps=read_map(wad)
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
