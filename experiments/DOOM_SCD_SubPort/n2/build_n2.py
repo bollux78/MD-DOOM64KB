@@ -144,6 +144,9 @@ _i = next((i for i, l in enumerate(_dis) if "<prof_isr>:" in l), None)
 if _i is not None: print("\n".join(_dis[_i:_i + 16]))
 for _k, l in enumerate(_dis):
     if "ff8030" in l or "ff8032" in l or "#8704" in l or "#9984" in l: print("\n".join(_dis[max(0, _k - 3):_k + 3])); print("--")
+_img = (w / "n2-sub.bin").read_bytes()
+for _pat in (b"\x00\x0f\x00\x0f", b"\x00\x1f\x00\x1f"):
+    print("N2 pattern", _pat.hex(), [hex(i) for i in range(0, len(_img) - 3, 2) if _img[i:i + 4] == _pat][:24])
 print("N2 largest functions:", sorted(((int(l.split()[1], 16), l.split()[3]) for l in subprocess.check_output([b("nm"), "-S", "--size-sort", str(elf)], text=True).splitlines() if len(l.split()) == 4 and l.split()[2] in "Tt"), reverse=True)[:8])
 assert size <= 4 * 128 * 1024 and sym["_end"] < 0x7C000
 

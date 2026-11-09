@@ -41,7 +41,7 @@ try:
         r["column_ms_per_frame"] = round(r["column_units"] * 0.03072 / r["frames"], 2)
         r["min_render_ms"] = round(r["min_render"] * 0.03072, 2)
         r["expand_ms_per_frame"] = round(r["expand_units"] * 0.03072 / r["frames"], 2)
-    r["lowmem"] = "first changed vector byte 0x%X, %d longs" % (r["lowmem"] >> 16, r["lowmem"] & 0xFFFF)
+    r["lowmem"] = "hot vector %d, first changed vector byte 0x%X, count %d" % (r["lowmem"] >> 24, (r["lowmem"] >> 16) & 0xFF, r["lowmem"] & 0xFFFF)
     print("N2 report:", r, flush=True)
     if r["stage"] == 6:
         msg = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")
