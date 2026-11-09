@@ -13,6 +13,15 @@ gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
 PROF = int(os.environ.get("N2_PROF", "0"))
+if os.environ.get("N2_DUMP"):
+    # Code-only dump of the R128 drawers the native port will reuse (no table headers).
+    want = os.environ["N2_DUMP"].split(",")
+    for f in sorted((tree / "src").glob("*")):
+        if f.suffix not in (".c", ".inc", ".h") or f.stat().st_size > 150000 or "table" in f.name or "lut" in f.name: continue
+        lines = f.read_text(errors="replace").splitlines()
+        for i, l in enumerate(lines):
+            if any(re.match(r"^[A-Za-z].*\b" + w + r"\s*\(", l) and not l.rstrip().endswith(";") for w in want):
+                print("N2DUMP %s:%d" % (f.name, i + 1)); print("\n".join("N2DUMP| " + x for x in lines[i:i + 70]))
 defs = [o for o in opt if o.startswith("-D") and (PROF & 64 or not o.startswith("-DDOOM_R12_RECIP"))] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "0")]
 
 # 1. Patched source copy: cartridge SRAM -> sub PRG-RAM (same odd-lane layout), no mapper writes.
