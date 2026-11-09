@@ -53,6 +53,7 @@ static void apply_snapshot(const uint8_t *p)
     _g_gameaction = ga_nothing;
     { extern void SCD_WadFlushToMark(void); SCD_WadFlushToMark(); }
     N3_LoadLevel();
+    { extern void SCD_WadLevelDone(void); SCD_WadLevelDone(); }
 }
 
 void sub_main(void)

@@ -241,6 +241,9 @@ static uint8_t scd_ring[SCD_RING_BYTES];
 static struct { int16_t lump; uint16_t start, end; } scd_ring_e[SCD_RING_ENTRIES];
 static uint16_t scd_ring_n, scd_ring_pos;
 static int16_t scd_s_start = -1, scd_s_end = -1, scd_p_start = 0x7FFF, scd_p_end = 0;
+/* After a level is set up, every new lump is per-frame data (sprites, patches): ring only. */
+static uint8_t scd_level_done;
+void SCD_WadLevelDone(void) { scd_level_done = 1; }
 static void scd_find_sprites(void)
 {
     scd_s_start = scd_s_end = -1;
@@ -277,7 +280,7 @@ const void __far* W_GetLumpByNum(int16_t n)
     if (scd_s_start < 0 && scd_s_end < 0) scd_find_sprites();
     /* the sky patch pointer is held for a whole frame (R_LoadSkyPatch): keep it resident */
     const char *nm3 = scd_directory[n].name;
-    if (((n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size &&
+    if ((scd_level_done || (n > scd_s_start && n < scd_s_end) || (n > scd_p_start && n < scd_p_end)) && scd_directory[n].size &&
         !(nm3[0] == 'S' && nm3[1] == 'K' && nm3[2] == 'Y'))
         return scd_ring_get(n, scd_directory[n].size);""")
 assert "scd_ring_get" in ww
@@ -292,7 +295,7 @@ void SCD_WadFlushToMark(void)
 {
     for (uint16_t i = 0; i < scd_lump_count; i++)
         if (scd_slots[i] && (uint32_t)(scd_slots[i] - scd_cache) >= scd_cache_mark) scd_slots[i] = 0;
-    scd_cache_used = scd_cache_mark;
+    scd_cache_used = scd_cache_mark; scd_level_done = 0;
     for (uint16_t i = 0; i < scd_ring_n; i++) scd_slots[scd_ring_e[i].lump] = 0;
     scd_ring_n = 0; scd_ring_pos = 0;
 }
