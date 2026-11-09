@@ -26,6 +26,33 @@ g = RSP(os.environ["BLASTEM"], rom, 9500, 900)
 res = {"label": label}
 try:
     g.req("qSupported")
+    trace_tic = int(os.environ.get("N3_TRACE_TIC", "-1"))
+    if trace_tic >= 0:
+        # MD P_Random callers during one tic (return address at (SP) on entry)
+        funcs = sorted((a, n) for n, a in sym.items())
+        import bisect
+        def fname(a):
+            i = bisect.bisect_right([f[0] for f in funcs], a) - 1
+            return "%s+0x%x" % (funcs[i][1], a - funcs[i][0]) if i >= 0 else hex(a)
+        assert g.req(f"Z0,{sym['G_Ticker']:x},2") == "OK"
+        callers = []; tracing = False
+        for _ in range(200000):
+            g.cont()
+            regs = g.req("g")
+            pc = int(regs[17 * 8:18 * 8], 16) & 0xffffff
+            if pc == sym["G_Ticker"]:
+                tic = rd(g, "_g_gametic")
+                if tracing: break
+                if tic == trace_tic:
+                    tracing = True
+                    assert g.req(f"Z0,{sym['P_Random']:x},2") == "OK"
+                continue
+            if pc == sym["P_Random"]:
+                sp = int(regs[15 * 8:16 * 8], 16) & 0xffffff
+                ra = int.from_bytes(g.readmem(sp, 4), "big") & 0xffffff
+                callers.append(fname(ra))
+        print("N3 TRACE tic %d: %d P_Random calls:" % (trace_tic, len(callers)), callers, flush=True)
+        g.close(); raise SystemExit(0)
     assert g.req(f"Z0,{sym['I_FinishUpdate']:x},2") == "OK"
     frames = 0; start = None; hashes = {}
     while True:
