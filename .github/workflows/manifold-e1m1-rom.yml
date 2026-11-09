@@ -68,8 +68,23 @@ jobs:
           if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
             ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
           fi
-          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
-          test -x "${tc}gcc" || { echo "::error::MARSDEV compiler missing: ${tc}gcc"; exit 1; }
+          # Installed libmd.a uses GCC LTO 13; GCC 15 creates incompatible LTO streams.
+          # Probe independent installed toolchains; do not mutate the shared SDK.
+          tc=""
+          while IFS= read -r gcc; do
+            test -x "$gcc" || continue
+            ver="$("$gcc" -dumpfullversion -dumpversion 2>/dev/null || true)"
+            echo "Found cross compiler: $gcc (GCC $ver)"
+            if [[ "${ver%%.*}" == "13" ]]; then
+              tc="${gcc%gcc}"
+              break
+            fi
+          done < <(find "$HOME" /opt -maxdepth 12 \\( -type f -o -type l \\) -name m68k-elf-gcc 2>/dev/null | sort -u)
+          if test -z "$tc"; then
+            echo "::error::No matching GCC 13 toolchain found for SGDK libmd.a LTO 13"
+            exit 1
+          fi
+          echo "Using compatible cross compiler: ${tc}gcc"
           make -C "$MANIFOLD_STAGE/candidate" -f "$GDK/makefile.gen" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
             NM="${tc}nm" OBJCPY="${tc}objcopy"
