@@ -19,10 +19,36 @@
 extern void SCD_SubTransportReset(void), SCD_SubSetTime(uint32_t), SCD_MetadataInit(void);
 extern int SCD_SubFrame(uint16_t arg, uint8_t out[16]);
 extern void N2_InitGame(void), N2_SetCommand(int8_t, int8_t, int16_t, uint8_t);
+#if defined(N2_R128_DRAW)
+/* R128's own Pair-V drawers (i_genesisv.c) render into r115_draw; decode to samples here. */
+uint8_t scd_fb[R22_H][R22_W];
+uint32_t scd_columns, scd_pixels, scd_clock_units, scd_column_units;
+static uint16_t scd_clock_prev;
+void SCD_ClockPoll(void)
+{
+    const uint16_t now = *(volatile const uint16_t *)0xFF800CUL & 4095u;
+    scd_clock_units += (uint16_t)(now - scd_clock_prev) & 4095u;
+    scd_clock_prev = now;
+}
+extern uint8_t *r115_draw;
+static void pairv_decode(void)
+{
+    const uint8_t *p = r115_draw;
+    if (!p) return;
+    for (uint16_t y = 0; y < R22_H; y++)
+        for (uint16_t x = 0; x < R22_W; x++)
+        {
+            const uint8_t b = p[(y >> 1) * 152u + (x & 1u) * 76u + (x >> 1) * 2u + 1u];
+            scd_fb[y][x] = (y & 1u) ? (b & 15u) : (b >> 4);
+        }
+}
+#else
 extern uint8_t scd_fb[R22_H][R22_W];
 extern uint32_t scd_columns, scd_pixels;
 extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
+static void pairv_decode(void) {}
+#endif
 #if N2_PROF & 2
 extern void scd_prof_start(void), scd_prof_stop(void);
 extern uint8_t scd_prof_tab[];
@@ -98,6 +124,7 @@ void sub_main(void)
         prof_off();
         SCD_ClockPoll();
         const uint32_t t1 = scd_clock_units;
+        pairv_decode();
         expand();
         SCD_ClockPoll();
         const uint32_t t2 = scd_clock_units;

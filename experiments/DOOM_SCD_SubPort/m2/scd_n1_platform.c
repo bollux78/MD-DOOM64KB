@@ -13,8 +13,10 @@ unsigned char scd_sram[0x12000] __attribute__((aligned(16)));
 void R64A_FrameBegin(void) {}
 void R64A_FrameEnd(void) {}
 /* NULL = the R128 seg loop falls back to R_DrawColumnFlat/Wall, i.e. to scd_draw.c. */
+#if !defined(N2_R128_DRAW)
 uint8_t *R95_FlatSetup(const uint8_t **lut) { (void)lut; return 0; }
 uint8_t *R96_WallSetup(const uint8_t *colormap, const uint8_t **lut) { (void)colormap; (void)lut; return 0; }
+#endif
 void R115_LevelStart(void) {}
 void R115_LevelEnd(void) {}
 void R117_LoadDone(void) {}

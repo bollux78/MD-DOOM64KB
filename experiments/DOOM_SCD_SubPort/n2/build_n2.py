@@ -22,7 +22,9 @@ if os.environ.get("N2_DUMP"):
         for i, l in enumerate(lines):
             if any(re.match(r"^[A-Za-z].*\b" + w + r"\s*\(", l) and not l.rstrip().endswith(";") for w in want):
                 print("N2DUMP %s:%d" % (f.name, i + 1)); print("\n".join("N2DUMP| " + x for x in lines[i:i + 70]))
-defs = [o for o in opt if o.startswith("-D") and (PROF & 64 or not o.startswith("-DDOOM_R12_RECIP"))] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "0")]
+            if re.search(r"\br115_(draw|show)\b\s*(=[^=]|;)|uint8_t\s*\*\s*r115_", l):
+                print("N2DUMP %s:%d (r115)" % (f.name, i + 1)); print("\n".join("N2DUMP| " + x for x in lines[max(0, i - 6):i + 8]))
+defs = [o for o in opt if o.startswith("-D") and (PROF & 64 or not o.startswith("-DDOOM_R12_RECIP"))] + (["-DN2_R128_DRAW"] if PROF & 256 else []) + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "0")]
 
 # 1. Patched source copy: cartridge SRAM -> sub PRG-RAM (same odd-lane layout), no mapper writes.
 src = out / "src-n2"
@@ -39,6 +41,12 @@ for f in src.rglob("*"):
     if t != o:
         # the emulated SRAM is a linker-placed array (inside the checked PRG-RAM map), not a fixed address
         f.write_text("extern unsigned char scd_sram[];\n" + t)
+if PROF & 256:
+    # The R128 seg loop calls these once per seg: poll the 12-bit sub stopwatch there.
+    rv = src / "r22_video.inc"; t = rv.read_text()
+    t = t.replace("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }", 1)
+    t = t.replace("uint8_t *R95_FlatSetup(const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }", 1)
+    rv.write_text(t)
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
     "\nvoid N2_InitGame(void){G_InitNew(sk_medium,1);}\n"
     "void N2_SetCommand(int8_t f,int8_t s,int16_t a,uint8_t b){netcmd.forwardmove=f;netcmd.sidemove=s;netcmd.angleturn=a;netcmd.buttons=b;}\n")
@@ -115,9 +123,11 @@ cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "
           "-m68000", "-O2", "-fno-builtin", "-ffreestanding", "-fomit-frame-pointer", "-fms-extensions",
           "-ffunction-sections", "-fdata-sections", "-std=gnu11", "-w",
           "-I" + str(src), "-I" + str(common), "-I" + str(tree / "compat")] + defs
-sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_genesisv.c", "i_genesis.c", "r25_music.c"))
+R128DRAW = bool(PROF & 256)
+sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_genesis.c", "r25_music.c") + (() if R128DRAW else ("i_genesisv.c",)))
 sources += sorted(p for p in src.glob("*.s"))
-sources += [common / "m2/scd_draw.c", common / "m2/scd_n1_platform.c", common / "s1e/engine_libc.c",
+sources = [common / "m2/scd_n1_platform.c"] + sources
+sources += ([] if R128DRAW else [common / "m2/scd_draw.c"]) + [ common / "s1e/engine_libc.c",
             common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c", here / "prof_inst.c"]
 objs = []
 for s in sources:
@@ -142,7 +152,7 @@ if int(os.environ.get("N2_PROF", "0")) & 2:   # profiling build: stack use is < 
     ld_script.write_text((common / "s1e/sub_engine.ld").read_text().replace("_end < 0x7C000", "_end < 0x7F000"))
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",
                     "-Wl,-T," + str(ld_script), "-Wl,--allow-multiple-definition",
-                    "-Wl,-Map," + str(w / "n2-sub.map"), "-o", str(elf), str(w / "boot.o")] + objs + [libgcc],
+                    "-Wl,-Map," + str(w / "n2-sub.map"), "-o", str(elf), str(w / "boot.o")] + objs + ([str(gdk / "lib" / "libmd.a")] if R128DRAW else []) + [libgcc],
                    capture_output=True, text=True)
 undef = sorted(set(re.findall(r"undefined reference to [`'\"]([^'`\"]+)", r.stderr)))
 if r.returncode:
