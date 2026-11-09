@@ -24,6 +24,9 @@ extern uint8_t *N2_DrawBuffer(void);
 
 
 uint32_t scd_clock_units, scd_column_units;
+static int16_t win_x0 = 0, win_x1 = 76;
+int16_t N3_X0(void) { return win_x0; }
+int16_t N3_X1(void) { return win_x1; }
 static uint16_t scd_clock_prev;
 void SCD_ClockPoll(void)
 {
@@ -76,6 +79,8 @@ void sub_main(void)
         N3PayHead h; memcpy(&h, pay, sizeof h);
         if (h.magic != N3_PAY_MAGIC || h.ntics > N3_MAX_TICS) I_Error("N3 BAD PAYLOAD");
         const uint8_t *q = pay + sizeof h;
+        win_x0 = (int16_t)h.x0; win_x1 = (int16_t)h.x1;
+        if (win_x0 < 0 || win_x0 > 76 || win_x1 < win_x0 || win_x1 > 76) { win_x0 = 0; win_x1 = 76; }
         valid = 0; render_units = tic_units = 0;
         SCD_ClockPoll(); uint32_t t0 = scd_clock_units;
         if (h.flags & N3_F_STOP) lock = 0;

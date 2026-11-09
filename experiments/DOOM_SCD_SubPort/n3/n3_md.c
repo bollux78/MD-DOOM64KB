@@ -41,6 +41,9 @@ typedef struct {
     /* N3_VERIFY: the sub's frame of the same game state vs the MD's own R128 render (offset 60). */
     uint32_t verify_frames, verify_diff_bytes, verify_max, verify_zero;
     uint8_t *verify_buf;
+    /* split screen: MD renders [md_x0, split), the sub renders [split, 76) of the same state */
+    int16_t split, md_x0, md_x1; uint8_t expect_frame, rendering;
+    uint32_t split_sum, wait_b_vblanks, md_render_vblanks;
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -131,6 +134,7 @@ static N3State *state(void)
         N3State *s = (N3State *)Z_MallocStatic(sizeof(N3State));
         memset(s, 0, sizeof *s);
         s->active = 1;
+        s->split = 38;
 #if defined(N3_VERIFY)
         s->verify_buf = (uint8_t *)Z_MallocStatic(SCD_FRAME_BYTES);
 #endif
@@ -176,7 +180,11 @@ uint16_t N3_MdFramePayload(volatile uint8_t *p)
     if (!s->lock) flags |= N3_F_STOP;
     else if (s->snap_pending) { flags |= N3_F_SNAP; snaplen = sizeof(N3SnapHead) + sizeof(player_t); }
     const uint16_t ntics = s->lock ? s->ntics : 0;
-    N3PayHead h = { N3_PAY_MAGIC, flags, ntics, snaplen };
+#if defined(N3_SPLIT)
+    N3PayHead h = { N3_PAY_MAGIC, flags, ntics, snaplen, (uint16_t)s->split, 76 };
+#else
+    N3PayHead h = { N3_PAY_MAGIC, flags, ntics, snaplen, 0, 76 };
+#endif
     uint16_t o = 0;
     for (uint16_t i = 0; i < sizeof h; i++) p[o++] = ((const uint8_t *)&h)[i];
     if (snaplen)
@@ -210,8 +218,24 @@ void N3_MdFrameArrived(uint16_t arg)
     {
         s->desyncs++; s->lock = 0; return;       /* until the next level load */
     }
-    /* Pair-V: copy only the sample bytes (odd); MD attribute bytes stay as R128 set them. */
     volatile const uint8_t *src = (volatile const uint8_t *)(SCD_MD_BANK_BASE + SCD_FRAME_OFFSET);
+#if defined(N3_SPLIT)
+    /* Only the frame of exactly the MD's state (second exchange) is merged: the sub's columns. */
+    if (!s->expect_frame) return;
+    {
+        uint8_t *dst = N2_DrawBuffer();
+        const int16_t x0 = s->split;
+        for (uint16_t y = 0; y < 22u; y++)
+            for (int16_t x = x0; x < 76; x++)
+            {
+                const uint16_t o = (uint16_t)(y * 152u + (uint16_t)(x & 1) * 76u + (uint16_t)(x >> 1) * 2u + 1u);
+                dst[o] = src[o];
+            }
+        s->have_frame = 1; s->frames_sub++;
+        return;
+    }
+#endif
+    /* Pair-V: copy only the sample bytes (odd); MD attribute bytes stay as R128 set them. */
 #if defined(N3_VERIFY)
     uint8_t *dst = s->verify_buf;
 #else
@@ -258,10 +282,52 @@ void N3_Pump(void)
 #endif
 }
 
-/* Replaces R_RenderPlayerView: 1 = the sub's frame is already in the draw buffer. */
+/* Serve requests until the sub's next FRAME request has been answered (0 new tics). */
+static int wait_frame(N3State *s)
+{
+    const uint32_t t0 = _g_vblankCount;
+    for (;;)
+    {
+        if (CD_SUB_SIG == 0xDEADu) { fetch_sub_error(); s->active = 0; s->last_error = 1; return 0; }
+        const uint16_t cmd = SCD_MdPendingCmd();
+        if (!cmd) { if (_g_vblankCount - t0 > 60u * 8u) { s->active = 0; s->timeouts++; return 0; } continue; }
+        if (SCD_MdServeOnce() < 0) { s->active = 0; s->last_error = 2; return 0; }
+        if (cmd == SCD_CMD_FRAME) return 1;
+    }
+}
+int16_t N3_X0(void) { N3State *s = n3; return (s && s != N3_BOOTED && s->rendering) ? s->md_x0 : 0; }
+int16_t N3_X1(void) { N3State *s = n3; return (s && s != N3_BOOTED && s->rendering) ? s->md_x1 : 76; }
+
+/* Replaces R_RenderPlayerView: 1 = the frame is already in the draw buffer. */
 int N3_Display(void)
 {
     N3State *s = n3;
+#if defined(N3_SPLIT)
+    if (s && s != N3_BOOTED && s->active && s->lock && s->chk_valid)
+    {
+        extern void R_RenderPlayerView(player_t *);
+        /* The sub is already rendering [split, 76) of this exact state; render ours meanwhile. */
+        const uint32_t t0 = _g_vblankCount;
+        s->md_x0 = 0; s->md_x1 = s->split; s->rendering = 1;
+        R_RenderPlayerView(&_g_player);
+        s->rendering = 0;
+        const uint32_t t1 = _g_vblankCount;
+        s->expect_frame = 1; s->have_frame = 0;
+        const int ok = wait_frame(s);
+        s->expect_frame = 0;
+        const uint32_t w = _g_vblankCount - t1;
+        s->md_render_vblanks += t1 - t0; s->wait_b_vblanks += w; s->split_sum += (uint32_t)s->split;
+        /* Balance: the CPU that waits gets more columns next frame. */
+        if (w > 1 && s->split < 66) s->split += 2;
+        else if (w == 0 && s->split > 10) s->split -= 1;
+        if (ok && s->have_frame) { s->have_frame = 0; return 1; }
+        /* No sub half: draw it ourselves. */
+        s->md_x0 = s->md_x1; s->md_x1 = 76; s->rendering = 1;
+        R_RenderPlayerView(&_g_player);
+        s->rendering = 0; s->frames_md++;
+        return 1;
+    }
+#endif
 #if defined(N3_VERIFY)
     if (s && s != N3_BOOTED && s->have_frame)
     {

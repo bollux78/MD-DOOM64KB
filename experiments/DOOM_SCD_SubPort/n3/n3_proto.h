@@ -12,7 +12,7 @@
 #define N3_HDR_OFFSET 0x0F00u
 #define N3_F_SNAP 1u   /* level (re)load: snapshot follows, sub runs G_DoLoadLevel */
 #define N3_F_STOP 2u   /* MD left lockstep (menu-less non-level state, demo, desync) */
-typedef struct { uint16_t magic, flags, ntics, snaplen; } N3PayHead;
+typedef struct { uint16_t magic, flags, ntics, snaplen, x0, x1; } N3PayHead;   /* x0..x1: sub render window */
 typedef struct {
     int16_t gamemap, gameskill;
     uint8_t respawnmonsters, usergame, prnd, menuactive;

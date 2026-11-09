@@ -50,10 +50,9 @@ try:
                     "timeouts", "wait_vblanks", "exchanges", "sub_render_units", "sub_tic_units", "chk_gametic", "chk_x",
                     "chk_y", "chk_angle", "chk_valid", "prev_valid", "last_error", "pad")
             st = dict(zip(keys, struct.unpack(">BBBBHH8I4i4B", raw)))
-            vo = int(os.environ.get("N3_VERIFY_OFFSET", "0"))
-            if vo:
-                vf, vd, vm, vz = struct.unpack(">4I", g.readmem(ptr + vo, 16))
-                st.update(verify_frames=vf, verify_avg_diff=round(vd / max(vf, 1), 1), verify_max=vm, verify_identical=vz)
+            vf, vd, vm, vz, _vb, split, mx0, mx1, ef, rend, ss, wb, mr = struct.unpack(">4II3hBB3I", g.readmem(ptr + 60, 40))
+            if vf: st.update(verify_frames=vf, verify_avg_diff=round(vd / max(vf, 1), 1), verify_max=vm, verify_identical=vz)
+            if ss: st.update(split_now=split, split_avg=round(ss / max(st["frames_sub"], 1), 1), wait_b_vblanks=wb, md_render_vblanks=mr)
             if st["exchanges"]:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)

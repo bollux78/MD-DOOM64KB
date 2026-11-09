@@ -63,6 +63,25 @@ sub_patch(rv, "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
     sub_patch(rv, fn, fn + "\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }")
 
+# Split-screen windows (both CPUs): columns outside [N3_X0, N3_X1) are solid (no BSP/wall work)
+# and sprites are clamped to the window.
+def split_patch(rd):
+    t = rd.read_text(errors="replace")
+    old = "    solidcol[0] = 1;\n#endif\n}"
+    assert t.count(old) == 1, "R_ClearClipSegs anchor"
+    t = t.replace(old, "    solidcol[0] = 1;\n#endif\n    { extern int16_t N3_X0(void), N3_X1(void); const int16_t a = N3_X0(), b = N3_X1();\n"
+                  "      if (a > 0) memset(solidcol, 1, a); if (b < VIEWWINDOWWIDTH) memset(solidcol + b, 1, VIEWWINDOWWIDTH - b); }\n}")
+    for old in ("    vis->x2 = x2 >= VIEWWINDOWWIDTH ? VIEWWINDOWWIDTH - 1 : x2;\n",
+                "    vis->x2              = x2 >= VIEWWINDOWWIDTH ? VIEWWINDOWWIDTH - 1 : x2;\n"):
+        assert t.count(old) == 1, "vis->x2 anchor"
+        t = t.replace(old, old + "    { extern int16_t N3_X0(void), N3_X1(void); const int16_t a = N3_X0(), b = N3_X1();\n"
+                      "      if (vis->x1 < a) vis->x1 = a; if (vis->x2 > b - 1) vis->x2 = b - 1; }\n")
+    old = "    while (dcvars.x < sprite_end)"
+    assert t.count(old) == 1, "sprite loop anchor"
+    t = t.replace(old, "    while (dcvars.x < sprite_end && dcvars.x <= vis->x2)")
+    rd.write_text(t)
+split_patch(src / "r_draw.c")
+
 # 2. R84 composite pool: E1M1 subset (sub PRG-RAM cannot hold the whole pool).
 hdr = (src / "r84_columns.h").read_text()
 def arr(name):
@@ -205,9 +224,11 @@ md_patch("d_main.c", "    R22_BeginFrame();\n#endif", "    R22_BeginFrame();\n#e
 md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Display(void); if (!N3_Display()) R_RenderPlayerView (&_g_player); }", regex=True)
 if os.environ.get("N3_AUTOSTART"):
     md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
+split_patch(tree / "src" / "r_draw.c")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
-render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "")
+render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
+         (" -DN3_SPLIT" if os.environ.get("N3_SPLIT") else "")
 subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
                 "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + render, "LIBGCC=" + libgcc + " -lgcc"], check=True, cwd=str(tree), env=env)
 rom = out / "doom-md-scd-n3.bin"
