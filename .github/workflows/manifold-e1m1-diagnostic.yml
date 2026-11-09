@@ -1,0 +1,181 @@
+name: Manifold E1M1 M01 isolation diagnostics
+on:
+  push:
+    branches: [exp-manifold-e1m1-m01]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/m01/**'
+      - '.github/workflows/manifold-e1m1-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[manifold-diag]') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [video, init]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify local private WAD (no uploads)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MANIFOLD_E1M1_WAD=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          python3 - <<'PY'
+          import os,pathlib,hashlib
+          p=pathlib.Path(os.environ["MANIFOLD_E1M1_WAD"])
+          assert p.is_file() and p.stat().st_size==4196020
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=="1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771"
+          print("Private E1M1 WAD pinned and present")
+          PY
+          echo "MANIFOLD_E1M1_WAD=$MANIFOLD_E1M1_WAD" >> "$GITHUB_ENV"
+      - name: Fetch pinned Manifold upstream into isolated directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/manifold-e1m1-diag-${{ matrix.mode }}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage"
+          echo "MANIFOLD_STAGE=$stage" >> "$GITHUB_ENV"
+      - name: Convert actual E1M1 geometry and stage source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/candidate"
+      - name: Isolate startup phase and disable renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.mode }}" in
+            video)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          int main(void) {
+              VDP_init();
+              VDP_setScreenWidth320();
+              VDP_setScreenHeight224();
+              VDP_drawText("MANIFOLD VIDEO BASELINE", 3, 10);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            init)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "game_mode.h"
+          int main(void) {
+              VDP_init();
+              DMA_setBufferSize(2048);
+              set_game_mode(IN_GAME);
+              VDP_drawText("MANIFOLD INIT COMPLETE", 3, 1);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+          esac
+      - name: Locate SDK and compile stand-alone Manifold ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdk=""
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          if test -z "$gdk"; then
+            echo "Searching installed SGDK makefiles in HOME and /opt"
+            while IFS= read -r sdkfile; do
+              case "$sdkfile" in */makefile.gen) gdk="${sdkfile%/makefile.gen}"; break;; esac
+            done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -30)
+          fi
+          if test -z "$gdk"; then
+            echo "::error::SGDK makefile.gen not found on runner"; exit 1
+          fi
+          echo "Using SGDK: $gdk"
+          export GDK="$gdk" PREFIX=m68k-elf-
+          export PATH="$HOME/mars/m68k-elf/bin:$HOME/toolchains/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
+            ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
+          fi
+          # SGDK libmd.a was compiled with GCC 13 but has -ffat-lto-objects:
+          # link its native 68000 code with GCC 15, disabling cross-version LTO.
+          # Patch a disposable copy of makefile.gen, never the installed SDK.
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc" || { echo "::error::Cross compiler not found"; exit 1; }
+          portable_makefile="$MANIFOLD_STAGE/makefile-no-cross-lto.gen"
+          python3 - "$gdk/makefile.gen" "$portable_makefile" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          pat="-flto -flto=auto -ffat-lto-objects"
+          if s.count(pat)<2:
+              raise SystemExit("unexpected SGDK LTO flags in makefile")
+          pathlib.Path(sys.argv[2]).write_text(s.replace(pat,"-fno-lto"))
+          PY
+          echo "Linking with original SGDK fat-object library, native 68000 fallback"
+          make -C "$MANIFOLD_STAGE/candidate" -f "$portable_makefile" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy"
+          test -s "$MANIFOLD_STAGE/candidate/out/rom.bin"
+          out="$HOME/Projetos/Personal/manifold-e1m1/diag-${{ matrix.mode }}-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cp "$MANIFOLD_STAGE/candidate/out/rom.bin" "$out/doom-md-manifold-diag-${{ matrix.mode }}.bin"
+          cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
+          echo "ROM_PATH=$out/doom-md-manifold-e1m1-m01.bin" >> "$GITHUB_ENV"
+          echo "Candidate ROM: $out/doom-md-manifold-e1m1-m01.bin"
+      - name: Verify ROM header and record digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$ROM_PATH" <<'PY'
+          import hashlib, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          data = path.read_bytes()
+          if len(data) < 131072 or len(data) % 131072:
+              raise SystemExit(f"invalid aligned ROM size: {len(data)}")
+          if data[0x100:0x104] != b"SEGA":
+              raise SystemExit(f"invalid Sega ROM header: {data[0x100:0x104]!r}")
+          print(f"ROM verification: size={len(data)}, sha256={hashlib.sha256(data).hexdigest()}")
+          PY
+      - name: BlastEm diagnostic 90-frame smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$(command -v blastem || true)"
+          if test -z "$emu"; then
+            while IFS= read -r file; do
+              if test -x "$file"; then emu="$file"; break; fi
+            done < <(find "$HOME" /opt -maxdepth 8 -type f -name blastem 2>/dev/null | head -20)
+          fi
+          if test -z "$emu"; then
+            echo "::warning::BlastEm executable not found; emulator smoke NOT RUN"
+            echo "BLASTEM_VERDICT=NOT_RUN" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "BlastEm executable: $emu"
+          set +e
+          timeout 20s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH"
+          rc=$?
+          set -e
+          if test "$rc" -ne 0; then
+            echo "BLASTEM_VERDICT=FAIL" >> "$GITHUB_ENV"
+            echo "::error::BlastEm 90-frame smoke failed: exit $rc"
+            exit 1
+          fi
+          echo "BLASTEM_VERDICT=PASS_HEADLESS_90_FRAMES" >> "$GITHUB_ENV"
+          echo "BlastEm 90 emulated frames: PASS (visual/gameplay not validated)"
+      - name: Explicit validation verdicts
+        if: always()
+        shell: bash
+        run: |
+          echo "build/candidate: ${{ job.status }}"
+          echo "blastem: ${BLASTEM_VERDICT:-NOT_RUN}"
+          echo "physical console: NOT TESTED; diagnostic isolation builds only"
+          echo "No binary or private WAD is uploaded to GitHub"
