@@ -70,6 +70,8 @@ try:
             st = dict(zip(keys, struct.unpack(">BBBBHH8I4i4B", raw)))
             vf, vd, vm, vz, _vb, split, mx0, mx1, ef, rend, ss, wb, mr = struct.unpack(">4II3hBB3I", g.readmem(ptr + 60, 40))
             if vf: st.update(verify_frames=vf, verify_avg_diff=round(vd / max(vf, 1), 1), verify_max=vm, verify_identical=vz)
+            dd = struct.unpack(">6i4H", g.readmem(ptr + 100 + 4 + 4 + 4, 32))
+            if st["desyncs"]: st["first_desync_md_vs_sub"] = dd
             if ss: st.update(split_now=split, split_avg=round(ss / max(st["frames_sub"], 1), 1), wait_b_vblanks=wb, md_render_vblanks=mr)
             if st["exchanges"]:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)

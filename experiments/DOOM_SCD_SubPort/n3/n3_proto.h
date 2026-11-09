@@ -29,5 +29,6 @@ typedef struct {
     uint32_t render_units, tic_units, frames;
     uint16_t lump_misses, error;
     uint32_t idle_units;   /* sub clock units spent waiting in its previous exchange */
+    uint16_t prnd, health;
 } N3FrameHead;
 #endif

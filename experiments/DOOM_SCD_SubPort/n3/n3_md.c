@@ -46,6 +46,9 @@ typedef struct {
     uint32_t split_sum, wait_b_vblanks, md_render_vblanks;
     uint8_t early, pad2[3];
     int16_t split_fp; uint16_t pad3; uint32_t sub_idle_units;
+    /* first desync: MD reference vs sub report */
+    int32_t d_tic, d_x, d_y, s_tic, s_x, s_y; uint16_t d_prnd, s_prnd, d_health, s_health;
+    uint8_t chk_prnd, prev_prnd; uint16_t chk_health, prev_health;
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -233,6 +236,8 @@ uint16_t N3_MdFramePayload(volatile uint8_t *p)
     s->ntics = 0;
     /* What the sub must report next time: the MD state right after these tics. */
     s->prev_valid = s->chk_valid; s->prev_gametic = s->chk_gametic; s->prev_x = s->chk_x; s->prev_y = s->chk_y; s->prev_angle = s->chk_angle;
+    s->prev_prnd = s->chk_prnd; s->prev_health = s->chk_health;
+    s->chk_prnd = N3_GetPRnd(); s->chk_health = (uint16_t)_g_player.health;
     s->chk_valid = s->lock && _g_player.mo;
     if (s->chk_valid) { s->chk_gametic = _g_gametic; s->chk_x = _g_player.mo->x; s->chk_y = _g_player.mo->y; s->chk_angle = _g_player.mo->angle; }
     s->exchanges++;
@@ -250,8 +255,11 @@ void N3_MdFrameArrived(uint16_t arg)
     s->sub_render_units += h->render_units; s->sub_tic_units += h->tic_units;
     if (!s->expect_frame) s->sub_idle_units = h->idle_units;   /* A header: how long the sub waited for B */
     if (!h->valid || !s->lock || !s->prev_valid) return;
-    if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle)
+    if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle ||
+        h->prnd != s->prev_prnd || h->health != s->prev_health)
     {
+        if (!s->desyncs) { s->d_tic = s->prev_gametic; s->d_x = s->prev_x; s->d_y = s->prev_y; s->d_prnd = s->prev_prnd; s->d_health = s->prev_health;
+                           s->s_tic = h->gametic; s->s_x = h->x; s->s_y = h->y; s->s_prnd = h->prnd; s->s_health = h->health; }
         s->desyncs++; s->lock = 0; return;       /* until the next level load */
     }
     volatile const uint8_t *src = (volatile const uint8_t *)(SCD_MD_BANK_BASE + SCD_FRAME_OFFSET);
