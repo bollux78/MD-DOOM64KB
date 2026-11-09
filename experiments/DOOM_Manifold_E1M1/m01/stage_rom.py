@@ -133,6 +133,18 @@ def normalize_legacy_fixed_point_api(out):
         raise ValueError(f"legacy fixed-point API signatures changed: {counts}")
     print("Legacy SGDK fixed-point API rewrites:", counts)
 
+def normalize_wide_sprite_registers(out):
+    """Restore missing pointer types in upstream's wide sprite ASM bridge."""
+    p=out/"src/draw.c"
+    s=p.read_text()
+    old0='register const a0 asm ("%a0") = (u32)cur_texel_ptr;'
+    old1='register const a1 asm ("%a1") = (u32)cur_column_ptr;'
+    if s.count(old0)!=1 or s.count(old1)!=1:
+        raise ValueError("upstream wide sprite register bridge changed")
+    s=s.replace(old0,'register const u8* a0 asm ("%a0") = cur_texel_ptr;')
+    s=s.replace(old1,'register const u8* a1 asm ("%a1") = cur_column_ptr;')
+    p.write_text(s)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -143,6 +155,7 @@ def stage(src, wad, out):
     namespace_legacy_allocators(out)
     normalize_legacy_s16_bounds(out)
     normalize_legacy_fixed_point_api(out)
+    normalize_wide_sprite_registers(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
