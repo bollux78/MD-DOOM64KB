@@ -63,6 +63,16 @@ try:
     if res["sub_sig"] == "0xdead":
         res["sub_error"] = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")
         res["sub_error_regs"] = g.readmem(0x61F0F8, 4).hex()
+        regs = int(res["sub_error_regs"], 16)
+        subelf = elf.parent / "sub" / "n3-sub.elf"
+        if subelf.exists() and regs:
+            addr = regs & (0x0FFFFFFF if (regs >> 28) == 0xE else 0xFFFF)
+            if (regs >> 28) != 0xE: addr = 0   # exception: high word of PC + vector, not mappable
+            best = None
+            for line in subprocess.check_output([nm, subelf], text=True).splitlines():
+                f = line.split()
+                if len(f) == 3 and f[1] in "Tt" and int(f[0], 16) <= addr and (best is None or int(f[0], 16) > best[0]): best = (int(f[0], 16), f[2])
+            res["sub_error_caller"] = (hex(addr), best[1] if best else None)
 finally:
     g.close()
 print("N3 RESULT", res, flush=True)
