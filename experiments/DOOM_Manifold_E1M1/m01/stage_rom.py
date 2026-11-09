@@ -94,6 +94,18 @@ def namespace_legacy_allocators(out):
             if changed!=source:
                 p.write_text(changed)
 
+def normalize_legacy_s16_bounds(out):
+    """Resolve legacy Manifold s16 extrema absent in installed SGDK headers.
+
+    Patch only the disposable renderer source, without changing its algorithm.
+    Fail closed if upstream stops using the expected expressions.
+    """
+    p=out/"src/bunch_render.c"
+    source=p.read_text()
+    if source.count("MAX_S16") != 1 or source.count("MIN_S16") != 1:
+        raise ValueError("unexpected legacy s16 bounds usage")
+    p.write_text(source.replace("MAX_S16","32767").replace("MIN_S16","(-32768)"))
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -102,6 +114,7 @@ def stage(src, wad, out):
     stage_missing_resources(out)
     normalize_legacy_asm(out)
     namespace_legacy_allocators(out)
+    normalize_legacy_s16_bounds(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
