@@ -93,7 +93,7 @@ jobs:
           stamp=$(ls -d "$RUNNER_TEMP"/r92-shadow-c-all-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-work/*/out/.render_options | head -1)
           tree=$(dirname "$(dirname "$stamp")")
           out="$HOME/Projetos/Personal/scd-subport-n3/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          for v in splitverify split play; do
+          for v in splitverify; do
             vt="$RUNNER_TEMP/n3tree-$v"; rm -rf "$vt"; cp -a "$tree" "$vt"
             echo "=== N3 build $v ==="
             case $v in
