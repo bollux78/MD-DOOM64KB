@@ -100,6 +100,7 @@ print("N3 WAD lumps", n, [(i, lumps[i][0], lumps[i][2]) for i in (605,611,631,64
 used = set(); map_names = []
 for mi, mn in enumerate(names):
     if not re.fullmatch(r"E\dM\d|MAP\d\d", mn): continue
+    if os.environ.get("N3_SUBSET") and mn not in os.environ["N3_SUBSET"].split(","): continue
     sd = next((i for i in range(mi + 1, min(mi + 12, len(names))) if names[i] == "SIDEDEFS"), None)
     if sd is None: continue
     map_names.append(mn)
