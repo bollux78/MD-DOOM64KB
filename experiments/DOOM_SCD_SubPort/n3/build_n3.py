@@ -141,7 +141,9 @@ if tex_names:
     for a, z_ in ANIMS:
         if a in idx and z_ in idx and any(idx[a] <= t <= idx[z_] for t in used):
             extra.update(range(idx[a], idx[z_] + 1))
-    print("N3 R84 extra textures (switch/anim):", sorted(tex_names[t] for t in extra - used))
+    for sky in ("SKY1", "SKY2", "SKY3", "SKY4"):   # sky is not on any sidedef
+        if sky in idx: extra.add(idx[sky])
+    print("N3 R84 extra textures (switch/anim/sky):", sorted(tex_names[t] for t in extra - used))
     used |= extra
 newpool = bytearray(bytes([0xB0]) * 128); remap = {}
 for t in sorted(used):
