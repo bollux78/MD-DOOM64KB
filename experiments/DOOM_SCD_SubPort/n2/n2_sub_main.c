@@ -36,16 +36,19 @@ static void prof_off(void) {}
 /* Report for the MD (sub status words are taken by the transport): last words of the bank. */
 static void expand(void)
 {
-    /* 4x4 px per sample: one 16-bit word (4 nibbles) per row, 4 rows; stride 256 B. */
+    /* 4x4 px per sample: 2 samples -> one long (8 nibbles) per pixel row, 4 rows; stride 256 B. */
+    static const uint16_t nib4[16] = { 0x0000, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666, 0x7777,
+                                       0x8888, 0x9999, 0xAAAA, 0xBBBB, 0xCCCC, 0xDDDD, 0xEEEE, 0xFFFF };
     for (uint16_t y = 0; y < R22_H; y++)
     {
-        volatile uint16_t *row = (volatile uint16_t *)(BANK + (uint32_t)y * 1024u);
+        volatile uint32_t *r0 = (volatile uint32_t *)(BANK + (uint32_t)y * 1024u);
         const uint8_t *s = scd_fb[y];
-        for (uint16_t x = 0; x < R22_W; x++)
+        for (uint16_t x = 0; x < R22_W / 2; x++)
         {
-            const uint16_t c = s[x];
-            const uint16_t w = (uint16_t)(c * 0x1111u);
-            row[x] = w; row[x + 128] = w; row[x + 256] = w; row[x + 384] = w;
+            const uint32_t w = ((uint32_t)nib4[s[0]] << 16) | nib4[s[1]];
+            s += 2;
+            r0[0] = w; r0[64] = w; r0[128] = w; r0[192] = w;
+            r0++;
         }
         if (!(y & 7)) SCD_ClockPoll();
     }
