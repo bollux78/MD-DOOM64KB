@@ -323,8 +323,8 @@ for s in sources:
     obj = w / (s.name + ".o")
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
     zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N3_ZONE", "40960")] if s.name == "scd_sub_system.c" else []
-    hot = s.name.startswith("r") or s.name == "tables.c" or (os.environ.get("N3_LOGIC_O3") and s.name[:2] in ("p_", "g_", "m_"))
-    r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) + zone + extra +
+    hot = s.name.startswith("r") or s.name == "tables.c"
+    r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else (["-O2", "-fno-web", "-fno-gcse"] if os.environ.get("N3_LOGIC_O2") and s.name[:2] in ("p_", "g_", "m_") else ["-Os"])) + zone + extra +
                        ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
         print("N3 compile FAIL", s.name, r.stderr[-2500:]); raise SystemExit(1)
