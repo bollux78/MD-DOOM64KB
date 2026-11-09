@@ -124,7 +124,7 @@ def normalize_legacy_fixed_point_api(out):
         original = p.read_text()
         updated = original
         for old, new in replacements.items():
-            pattern = r"\\b" + old + r"(?=\\s*\\()"
+            pattern = r"\b" + old + r"(?=\s*\()"
             updated, n = re.subn(pattern, new, updated)
             counts[old] += n
         if updated != original:
