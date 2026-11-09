@@ -376,7 +376,9 @@ int N3_Display(void)
 {
     N3State *s = n3;
 #if defined(N3_SPLIT)
-    if (s && s != N3_BOOTED && s->active && s->lock && s->chk_valid)
+    extern uint8_t N3_ColorMode(void);
+    /* the sub only has the default colour profile's tables: other modes render on the MD */
+    if (s && s != N3_BOOTED && s->active && s->lock && s->chk_valid && N3_ColorMode() == N3_R59_MODE)
     {
         extern void R_RenderPlayerView(player_t *);
         /* The sub is already rendering [split, 76) of this exact state; render ours meanwhile. */

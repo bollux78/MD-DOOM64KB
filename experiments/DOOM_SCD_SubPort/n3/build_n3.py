@@ -372,10 +372,12 @@ rdm.write_text(rdm.read_text() + "\nconst uint8_t *N3_R84Pixels(void){return r84
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
     md_patch("r22_video.inc", fn, fn + "\n    { extern void N3_Poll(void); N3_Poll(); }")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
+rvm = tree / "src/r22_video.inc"
+rvm.write_text(rvm.read_text() + "\nuint8_t N3_ColorMode(void){return (uint8_t)(R59_CURRENT == &r59_color_tables[" + os.environ.get("N3_R59_MODE", "1") + "] ? " + os.environ.get("N3_R59_MODE", "1") + " : 255);}\n")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
 md_patch("d_main.c", "static void TryRunTics (void)", "static void TryRunTics (void)")
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
-         (" -DN3_SPLIT" if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
+         (" -DN3_SPLIT -DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1") if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
 subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
                 "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + render, "LIBGCC=" + libgcc + " -lgcc"], check=True, cwd=str(tree), env=env)
 rom = out / "doom-md-scd-n3.bin"
