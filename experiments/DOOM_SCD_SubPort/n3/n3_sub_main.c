@@ -86,7 +86,7 @@ void sub_main(void)
         fh->gametic = _g_gametic;
         fh->x = _g_player.mo ? _g_player.mo->x : 0; fh->y = _g_player.mo ? _g_player.mo->y : 0;
         fh->angle = _g_player.mo ? _g_player.mo->angle : 0;
-        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health; fh->lump_misses = rnd_fixes;
+        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units; { extern uint8_t N3_GetPRnd(void); fh->prnd = N3_GetPRnd(); } fh->health = (uint16_t)_g_player.health; { extern uint32_t scd_ring_fetches; fh->lump_misses = (uint16_t)scd_ring_fetches; }
         if (valid)
         {
             /* only our window's sample bytes (MD merges exactly these) */

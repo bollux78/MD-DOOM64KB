@@ -91,7 +91,8 @@ try:
         res["n3_ptr"] = hex(ptr)
         if ptr > 1:
             tn = int.from_bytes(g.readmem(ptr, 4), "big")
-            if tn:
+            res["sub_ring_fetches"] = tn
+            if tn and os.environ.get("N3_TRACE_TIC"):
                 funcs = sorted((a, n) for n, a in sym.items())
                 import bisect
                 keys_ = [f[0] for f in funcs]

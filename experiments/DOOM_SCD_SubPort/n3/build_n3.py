@@ -271,6 +271,7 @@ ww = ww.replace("const void __far* W_GetLumpByNum(int16_t n)\n{\n    scd_check_n
 static uint8_t scd_ring[SCD_RING_BYTES];
 static struct { int16_t lump; uint16_t start, end; } scd_ring_e[SCD_RING_ENTRIES];
 static uint16_t scd_ring_n, scd_ring_pos;
+uint32_t scd_ring_fetches, scd_ring_bytes;
 static int16_t scd_s_start = -1, scd_s_end = -1, scd_p_start = 0x7FFF, scd_p_end = 0;
 /* After a level is set up, every new lump is per-frame data (sprites, patches): ring only. */
 static uint8_t scd_level_done;
@@ -299,6 +300,7 @@ static const void *scd_ring_get(int16_t n, uint16_t size)
         else i++;
     if (scd_ring_n >= SCD_RING_ENTRIES) { scd_slots[scd_ring_e[0].lump] = 0; scd_ring_e[0] = scd_ring_e[--scd_ring_n]; }
     if (!scd_fetch_lump((uint16_t)n, scd_ring + a, size)) I_Error("SCD SPRITE TRANSFER FAILED %d", n);
+    scd_ring_fetches++; scd_ring_bytes += size;
     scd_ring_e[scd_ring_n].lump = n; scd_ring_e[scd_ring_n].start = a; scd_ring_e[scd_ring_n].end = z; scd_ring_n++;
     scd_ring_pos = (uint16_t)((z + 3u) & ~3u);
     scd_slots[n] = scd_ring + a;
