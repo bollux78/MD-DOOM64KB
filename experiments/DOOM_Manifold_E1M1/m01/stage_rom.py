@@ -106,6 +106,33 @@ def normalize_legacy_s16_bounds(out):
         raise ValueError("legacy s16 bounds not found in expected renderer")
     p.write_text(source.replace("MAX_S16","32767").replace("MIN_S16","(-32768)"))
 
+def normalize_legacy_fixed_point_api(out):
+    """Translate SGDK deprecated legacy fixed-point spellings to current API.
+
+    Only patch the isolated candidate. Preserve fixed-point types and scaling.
+    """
+    replacements = {
+        "fix32Mul": "F32_mul",
+        "fix32ToInt": "F32_toInt",
+        "FIX32": "F32",
+    }
+    import re
+    counts = {k: 0 for k in replacements}
+    for p in (out/"src").rglob("*"):
+        if not p.is_file() or p.suffix not in (".c", ".h"):
+            continue
+        original = p.read_text()
+        updated = original
+        for old, new in replacements.items():
+            pattern = r"\\b" + old + r"(?=\\s*\\()"
+            updated, n = re.subn(pattern, new, updated)
+            counts[old] += n
+        if updated != original:
+            p.write_text(updated)
+    if not counts["fix32Mul"] or not counts["FIX32"]:
+        raise ValueError(f"legacy fixed-point API signatures changed: {counts}")
+    print("Legacy SGDK fixed-point API rewrites:", counts)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -115,6 +142,7 @@ def stage(src, wad, out):
     normalize_legacy_asm(out)
     namespace_legacy_allocators(out)
     normalize_legacy_s16_bounds(out)
+    normalize_legacy_fixed_point_api(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
