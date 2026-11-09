@@ -89,6 +89,11 @@ static inline void R39C_MovepWrite16(uint32_t a, uint16_t v)
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
     "\nvoid N3_SetCmd(const void *c){memcpy(&netcmd,c,sizeof netcmd);}\n"
     "void N3_LoadLevel(void){G_DoLoadLevel();}\n")
+# game-logic uses of demoplayback follow the MD (demo sync), demo reading stays off on the sub
+for fn, old in (("p_mobj.c", "  if (!_g_demoplayback)\n"), ("p_tick.c", "if (_g_menuactive && !_g_demoplayback"), ("g_game.c", "if (!_g_demoplayback && _g_menuactive)")):
+    f = src / fn; t = f.read_text(errors="replace")
+    assert old in t, (fn, old)
+    f.write_text("extern uint8_t n3_demoplayback;\n" + t.replace(old, old.replace("_g_demoplayback", "n3_demoplayback")))
 RND = "\nuint8_t N3_GetPRnd(void){return prndindex;}\nvoid N3_SetPRnd(uint8_t v){prndindex=v;}\n"
 (src / "m_random.c").write_text((src / "m_random.c").read_text() + RND)
 rv = src / "r22_video.inc"

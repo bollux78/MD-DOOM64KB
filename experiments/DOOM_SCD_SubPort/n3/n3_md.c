@@ -169,7 +169,7 @@ void N3_OnLoadLevel(void)
     s->snap.gamemap = _g_gamemap; s->snap.gameskill = (int16_t)_g_gameskill;
     s->snap.respawnmonsters = (uint8_t)_g_respawnmonsters; s->snap.usergame = (uint8_t)_g_usergame;
     s->snap.prnd = N3_GetPRnd(); s->snap.menuactive = (uint8_t)_g_menuactive;
-    s->snap.gametic = _g_gametic; s->snap.basetic = _g_basetic;
+    s->snap.gametic = _g_gametic; s->snap.basetic = _g_basetic; s->snap.demoplayback = (uint8_t)_g_demoplayback;
     memcpy(&s->snap_player, &_g_player, sizeof(player_t));
     s->snap_pending = 1; s->lock = 1; s->ntics = 0; s->chk_valid = 0;
 }

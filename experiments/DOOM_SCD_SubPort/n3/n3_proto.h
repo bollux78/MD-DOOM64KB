@@ -20,6 +20,7 @@ typedef struct {
     int16_t gamemap, gameskill;
     uint8_t respawnmonsters, usergame, prnd, menuactive;
     int32_t gametic, basetic;
+    uint8_t demoplayback, pad[3];
 } N3SnapHead;
 typedef struct {
     uint32_t magic;

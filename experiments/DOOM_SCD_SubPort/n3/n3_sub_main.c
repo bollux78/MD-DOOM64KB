@@ -25,6 +25,7 @@ extern uint8_t *N2_DrawBuffer(void);
 
 
 uint32_t scd_clock_units, scd_column_units;
+uint8_t n3_demoplayback;   /* MD's demoplayback for game logic (the sub itself never reads the demo) */
 static int16_t win_x0 = 0, win_x1 = 76;
 int16_t N3_X0(void) { return win_x0; }
 int16_t N3_X1(void) { return win_x1; }
@@ -47,6 +48,7 @@ static void apply_snapshot(const uint8_t *p)
     _g_gamemap = h.gamemap; _g_gameskill = (skill_t)h.gameskill;
     _g_respawnmonsters = h.respawnmonsters; _g_usergame = h.usergame;
     _g_menuactive = h.menuactive; _g_demoplayback = 0;
+    { extern uint8_t n3_demoplayback; n3_demoplayback = h.demoplayback; }
     _g_gametic = h.gametic; _g_basetic = h.basetic;
     N3_SetPRnd(h.prnd);
     _g_gameaction = ga_nothing;
