@@ -106,15 +106,21 @@ for o in range(p, p + z - z % 7, 7):
         if t > 0: used.add(t)
 # texture names in index order (TEXTURE1 then TEXTURE2): add switch partners and whole animations
 tex_names = []
-for tl in ("TEXTURE1", "TEXTURE2"):
-    if tl in names:
+def _parse_textures(endian):
+    out = []
+    for tl in ("TEXTURE1", "TEXTURE2"):
+        if tl not in names: continue
         _, tp, tz = lumps[names.index(tl)]
-        cnt = struct.unpack_from(">i", wad, tp)[0] if False else None
-        # Doom texture lumps are little-endian
-        cnt = struct.unpack_from("<i", wad, tp)[0]
+        cnt = struct.unpack_from(endian + "i", wad, tp)[0]
+        if not 0 < cnt < 2000 or 4 + 4 * cnt > tz: raise ValueError("count")
         for k in range(cnt):
-            o2 = tp + struct.unpack_from("<i", wad, tp + 4 + 4 * k)[0]
-            tex_names.append(wad[o2:o2 + 8].rstrip(b"\0").decode("latin1").upper())
+            o2 = struct.unpack_from(endian + "i", wad, tp + 4 + 4 * k)[0]
+            if not 0 < o2 < tz - 8: raise ValueError("offset")
+            out.append(wad[tp + o2:tp + o2 + 8].rstrip(b"\0").decode("latin1").upper())
+    return out
+for _e in ("<", ">"):
+    try: tex_names = _parse_textures(_e); break
+    except Exception as ex: print("N3 texture names", _e, "failed:", ex)
 ANIMS = [("BLODGR1", "BLODGR4"), ("BLODRIP1", "BLODRIP4"), ("FIREBLU1", "FIREBLU2"), ("FIRELAV3", "FIRELAVA"),
          ("FIREMAG1", "FIREMAG3"), ("FIREWALA", "FIREWALL"), ("GSTFONT1", "GSTFONT3"), ("ROCKRED1", "ROCKRED3"),
          ("SLADRIP1", "SLADRIP3"), ("BFALL1", "BFALL4"), ("SFALL1", "SFALL4"), ("WFALL1", "WFALL4"), ("DBRAIN1", "DBRAIN4")]
