@@ -277,7 +277,7 @@ void N3_MdFrameArrived(uint16_t arg)
     if (h->magic != N3_FR_MAGIC) return;
     s->sub_render_units += h->render_units; s->sub_tic_units += h->tic_units;
     if (!s->expect_frame) s->sub_idle_units = h->idle_units;   /* A header: how long the sub waited for B */
-    if (!h->valid || !s->lock || !s->prev_valid) return;
+    if (!s->lock || !s->prev_valid || !h->lock) return;
     if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle ||
         h->health != s->prev_health)   /* RNG index is adopted from the MD every tic */
     {
@@ -285,6 +285,7 @@ void N3_MdFrameArrived(uint16_t arg)
                            s->s_tic = h->gametic; s->s_x = h->x; s->s_y = h->y; s->s_prnd = h->prnd; s->s_health = h->health; }
         s->desyncs++; s->lock = 0; return;       /* until the next level load */
     }
+    if (!h->valid) return;
     volatile const uint8_t *src = (volatile const uint8_t *)(SCD_MD_BANK_BASE + SCD_FRAME_OFFSET);
 #if defined(N3_SPLIT)
     /* Only the frame of exactly the MD's state (second exchange) is merged: the sub's columns. */

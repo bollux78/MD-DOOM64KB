@@ -148,7 +148,11 @@ void sub_main(void)
             SCD_ClockPoll();
         }
         SCD_ClockPoll(); tic_units = scd_clock_units - t0;
+#if defined(N3_NO_SUB_RENDER)
+        if (0)
+#else
         if (!(h.flags & N3_F_NORENDER) && lock && _g_gamestate == GS_LEVEL && _g_gameaction == ga_nothing)
+#endif
         {
             t0 = scd_clock_units;
             R_RenderPlayerView(&_g_player);

@@ -35,6 +35,7 @@ for spec in filter(None, os.environ.get("N3_SHOW", "").split(";")):
     ls = (tree / "src" / name).read_text(errors="replace").splitlines()
     for i in range(lo - 1, min(hi, len(ls))): print("N3SHOW %s:%d: %s" % (name, i + 1, ls[i]))
 ODD = bool(os.environ.get("N3_SRAM_ODD"))
+if os.environ.get("N3_NO_SUB_RENDER"): defs.append("-DN3_NO_SUB_RENDER")
 if ODD:
     defs = [d for d in defs if d not in ("-DN3_SRAM_COMPACT", "-DSCD_SRAM_BASE=0x00200000UL")] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)"]
 def sub_patch(path, old, new, count=1):
