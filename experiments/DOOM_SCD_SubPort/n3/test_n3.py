@@ -90,6 +90,17 @@ try:
         ptr = rd(g, "n3", 4)
         res["n3_ptr"] = hex(ptr)
         if ptr > 1:
+            tn = int.from_bytes(g.readmem(ptr, 4), "big")
+            if tn:
+                funcs = sorted((a, n) for n, a in sym.items())
+                import bisect
+                keys_ = [f[0] for f in funcs]
+                def fname(a):
+                    i = bisect.bisect_right(keys_, a) - 1
+                    return "%s+0x%x" % (funcs[i][1], a - funcs[i][0]) if i >= 0 else hex(a)
+                tr = struct.unpack(">24I", g.readmem(ptr + 4, 96))
+                res["md_rnd_trace"] = (tn, [fname(a & 0xffffff) for a in tr[:min(tn, 24)]])
+            ptr += 100
             raw = g.readmem(ptr, 60)
             keys = ("active", "lock", "snap_pending", "have_frame", "ntics", "seq", "frames_sub", "frames_md", "desyncs",
                     "timeouts", "wait_vblanks", "exchanges", "sub_render_units", "sub_tic_units", "chk_gametic", "chk_x",

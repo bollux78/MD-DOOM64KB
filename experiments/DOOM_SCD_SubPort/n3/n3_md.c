@@ -34,6 +34,7 @@ extern uint8_t N3_GetPRnd(void);
 extern volatile uint32_t _g_vblankCount;
 
 typedef struct {
+    uint32_t trace_n, trace[24];   /* N3_TRACE_TIC: MD P_Random callers in that tic */
     uint8_t active, lock, snap_pending, have_frame;
     uint16_t ntics, seq;
     uint32_t frames_sub, frames_md, desyncs, timeouts, wait_vblanks, exchanges, sub_render_units, sub_tic_units;
@@ -175,6 +176,15 @@ void N3_OnLoadLevel(void)
     s->snap_pending = 1; s->lock = 1; s->ntics = 0; s->chk_valid = 0;
 }
 
+void N3_RndLog(void *ra)
+{
+#if defined(N3_TRACE_TIC)
+    N3State *s = n3;
+    if (s && s != N3_BOOTED && _g_gametic == N3_TRACE_TIC) { if (s->trace_n < 24) s->trace[s->trace_n] = (uint32_t)ra; s->trace_n++; }
+#else
+    (void)ra;
+#endif
+}
 void N3_CaptureCmd(void)
 {
     N3State *s = n3;

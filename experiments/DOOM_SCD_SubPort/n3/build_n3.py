@@ -404,7 +404,12 @@ gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeo
               ("void N3_AutoStart(void){ G_DeferedPlayDemo(\"demo3\"); }\n" if os.environ.get("N3_AUTOSTART") == "demo3" else
                "void N3_AutoStart(void){ G_InitNew(sk_medium, %s); }\n" % os.environ["N3_AUTOSTART"][3:] if os.environ.get("N3_AUTOSTART", "").startswith("map") else
                "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n"))
-(tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
+mr_t = (tree / "src/m_random.c").read_text() + RND
+if os.environ.get("N3_TRACE_TIC"):
+    old = "int16_t P_Random (void)\n{\n    return rndtable[++prndindex];"
+    assert old in mr_t
+    mr_t = mr_t.replace(old, "__attribute__((noinline)) int16_t P_Random (void)\n{\n    { extern void N3_RndLog(void *); N3_RndLog(__builtin_return_address(0)); }\n    return rndtable[++prndindex];")
+(tree / "src/m_random.c").write_text(mr_t)
 md_patch("d_main.c", r"G_Ticker \(\);", "G_Ticker (); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); }", regex=True)
 md_patch("d_main.c", "    int32_t entertime = I_GetTime();\n", "    int32_t entertime = I_GetTime();\n"
          "    { extern int N3_SkipWait(void); if (N3_SkipWait()) { D_BuildNewTiccmds(); runtics = maketic - _g_gametic; if (runtics <= 0) return; goto n3_run; } }\n")
@@ -428,7 +433,7 @@ rvm.write_text(rvm.read_text() + "\nuint8_t N3_ColorMode(void){return (uint8_t)(
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
 md_patch("d_main.c", "static void TryRunTics (void)", "static void TryRunTics (void)")
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \
-         (" -DN3_SPLIT -DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1") if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
+         (" -DN3_TRACE_TIC=" + os.environ["N3_TRACE_TIC"] if os.environ.get("N3_TRACE_TIC") else "") + (" -DN3_SPLIT -DN3_R59_MODE=" + os.environ.get("N3_R59_MODE", "1") if os.environ.get("N3_SPLIT") else "") + (" -DN3_DEMO_TEST" if os.environ.get("N3_DEMO_TEST") else "")
 subprocess.run(["make", "GDK=" + str(gdk), "PREFIX=m68k-elf-", "JAVA=java",
                 "EXTRA_FLAGS=-Isrc -Icompat -std=gnu11 " + render, "LIBGCC=" + libgcc + " -lgcc"], check=True, cwd=str(tree), env=env)
 rom = out / "doom-md-scd-n3.bin"
