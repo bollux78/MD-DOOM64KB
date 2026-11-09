@@ -343,6 +343,39 @@ def normalize_weapon_sprite_frame_layout(out):
         src=src.replace(old,new)
     p.write_text(src)
 
+def normalize_header_global_definitions(out):
+    """Make global data declarations extern; retain one definition per TU."""
+    patches={
+        "obj_sprite.h":[
+            ("const u32 scaled_sprite_run_lengths[64*513];",
+             "extern const u32 scaled_sprite_run_lengths[64*513];"),
+            ("const u32 scaled_sprite_texel_per_pixel_lut[513];",
+             "extern const u32 scaled_sprite_texel_per_pixel_lut[513];"),
+            ("const u16* const sprite_scale_coefficients_pointer_lut[513];",
+             "extern const u16* const sprite_scale_coefficients_pointer_lut[513];"),
+        ],
+        "clip_buf.h":[("clip_buf* clip_buffers;","extern clip_buf* clip_buffers;")],
+        "portal.h":[("u8* sector_rendered_cache;","extern u8* sector_rendered_cache;")],
+        "map_table.h":[("const uint32_t map_table[MAX_MAPS+2];",
+                        "extern const uint32_t map_table[MAX_MAPS+2];")],
+    }
+    for filename,replacements in patches.items():
+        p=out/"src"/filename
+        data=p.read_text()
+        for old,new in replacements:
+            if data.count(old)!=1:
+                raise ValueError(f"unexpected header definition: {filename}, {old}")
+            data=data.replace(old,new)
+        p.write_text(data)
+    # The copied bitmap engine and SGDK BMP both declare bmp_plane_addr.
+    # Keep independent state names, since they are distinct implementations.
+    p=out/"src/my_bmp.c"
+    data=p.read_text()
+    if data.count("bmp_plane_addr")<2:
+        raise ValueError("missing custom bitmap plane state")
+    import re
+    p.write_text(re.sub(r"\\bbmp_plane_addr\\b","manifold_bmp_plane_addr",data))
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -364,6 +397,7 @@ def stage(src, wad, out):
     normalize_pvs_entry_types(out)
     normalize_toggle_declarations(out)
     normalize_weapon_sprite_frame_layout(out)
+    normalize_header_global_definitions(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
