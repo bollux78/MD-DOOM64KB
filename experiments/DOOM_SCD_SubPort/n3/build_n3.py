@@ -104,6 +104,33 @@ for o in range(p, p + z - z % 7, 7):
     x, y, top, bottom, mid, sec = struct.unpack_from(">hBbbbB", wad, o)
     for t in (top, bottom, mid):
         if t > 0: used.add(t)
+# texture names in index order (TEXTURE1 then TEXTURE2): add switch partners and whole animations
+tex_names = []
+for tl in ("TEXTURE1", "TEXTURE2"):
+    if tl in names:
+        _, tp, tz = lumps[names.index(tl)]
+        cnt = struct.unpack_from(">i", wad, tp)[0] if False else None
+        # Doom texture lumps are little-endian
+        cnt = struct.unpack_from("<i", wad, tp)[0]
+        for k in range(cnt):
+            o2 = tp + struct.unpack_from("<i", wad, tp + 4 + 4 * k)[0]
+            tex_names.append(wad[o2:o2 + 8].rstrip(b"\0").decode("latin1").upper())
+ANIMS = [("BLODGR1", "BLODGR4"), ("BLODRIP1", "BLODRIP4"), ("FIREBLU1", "FIREBLU2"), ("FIRELAV3", "FIRELAVA"),
+         ("FIREMAG1", "FIREMAG3"), ("FIREWALA", "FIREWALL"), ("GSTFONT1", "GSTFONT3"), ("ROCKRED1", "ROCKRED3"),
+         ("SLADRIP1", "SLADRIP3"), ("BFALL1", "BFALL4"), ("SFALL1", "SFALL4"), ("WFALL1", "WFALL4"), ("DBRAIN1", "DBRAIN4")]
+if tex_names:
+    idx = {nm_: i for i, nm_ in enumerate(tex_names)}
+    extra = set()
+    for t in list(used):
+        if t < len(tex_names):
+            nm_ = tex_names[t]
+            if nm_.startswith("SW1") and "SW2" + nm_[3:] in idx: extra.add(idx["SW2" + nm_[3:]])
+            if nm_.startswith("SW2") and "SW1" + nm_[3:] in idx: extra.add(idx["SW1" + nm_[3:]])
+    for a, z_ in ANIMS:
+        if a in idx and z_ in idx and any(idx[a] <= t <= idx[z_] for t in used):
+            extra.update(range(idx[a], idx[z_] + 1))
+    print("N3 R84 extra textures (switch/anim):", sorted(tex_names[t] for t in extra - used))
+    used |= extra
 newpool = bytearray(bytes([0xB0]) * 128); remap = {}
 for t in sorted(used):
     if t >= len(starts): continue
@@ -293,6 +320,8 @@ md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Dis
 if os.environ.get("N3_AUTOSTART"):
     md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
 split_patch(tree / "src" / "r_draw.c")
+for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
+    md_patch("r22_video.inc", fn, fn + "\n    { extern void N3_Poll(void); N3_Poll(); }")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
 env = dict(os.environ, PATH=str(gdk / "bin") + ":" + os.environ["PATH"])
 render = " ".join(o for o in opt if o.startswith("-")) + (" -DN3_VERIFY" if os.environ.get("N3_VERIFY") else "") + \

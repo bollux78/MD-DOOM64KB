@@ -310,6 +310,15 @@ static int wait_frame(N3State *s)
         if (cmd == SCD_CMD_FRAME) return 1;
     }
 }
+/* Called per seg while the MD renders its window: serve the sub's lump requests right away so it
+ * never stalls behind our render (FRAME requests wait for wait_frame). */
+void N3_Poll(void)
+{
+    N3State *s = n3;
+    if (!s || s == N3_BOOTED || !s->active || !s->rendering) return;
+    const uint16_t cmd = SCD_MdPendingCmd();
+    if (cmd && cmd != SCD_CMD_FRAME && SCD_MdServeOnce() < 0) { s->active = 0; s->last_error = 3; }
+}
 int16_t N3_X0(void) { N3State *s = n3; return (s && s != N3_BOOTED && s->rendering) ? s->md_x0 : 0; }
 int16_t N3_X1(void) { N3State *s = n3; return (s && s != N3_BOOTED && s->rendering) ? s->md_x1 : 76; }
 
