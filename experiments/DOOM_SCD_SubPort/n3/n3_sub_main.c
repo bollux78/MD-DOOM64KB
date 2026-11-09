@@ -71,7 +71,7 @@ void sub_main(void)
     R_Init(); P_Init(); SCD_SubSetTime(0);
     { extern void SCD_WadMark(void); SCD_WadMark(); }
     uint16_t lock = 0, valid = 0, frame = 0;
-    uint32_t render_units = 0, tic_units = 0;
+    uint32_t render_units = 0, tic_units = 0, idle_units = 0;
     for (;;)
     {
         volatile N3FrameHead *fh = (volatile N3FrameHead *)(BANK + N3_HDR_OFFSET);
@@ -79,7 +79,7 @@ void sub_main(void)
         fh->gametic = _g_gametic;
         fh->x = _g_player.mo ? _g_player.mo->x : 0; fh->y = _g_player.mo ? _g_player.mo->y : 0;
         fh->angle = _g_player.mo ? _g_player.mo->angle : 0;
-        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame;
+        fh->render_units = render_units; fh->tic_units = tic_units; fh->frames = frame; fh->idle_units = idle_units;
         if (valid)
         {
             /* only our window's sample bytes (MD merges exactly these) */
@@ -99,7 +99,9 @@ void sub_main(void)
             }
         }
         uint16_t len = 0;
+        SCD_ClockPoll(); const uint32_t w0 = scd_clock_units;
         const volatile uint8_t *p = SCD_SubExchange(SCD_CMD_FRAME, ++frame, &len);
+        SCD_ClockPoll(); idle_units = scd_clock_units - w0;
         if (!p || len < sizeof(N3PayHead) || len > sizeof pay) I_Error("N3 FRAME EXCHANGE %u", (unsigned)len);
         for (uint16_t i = 0; i < len; i++) pay[i] = p[i];
         N3PayHead h; memcpy(&h, pay, sizeof h);

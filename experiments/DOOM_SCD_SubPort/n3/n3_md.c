@@ -45,6 +45,7 @@ typedef struct {
     int16_t split, md_x0, md_x1; uint8_t expect_frame, rendering;
     uint32_t split_sum, wait_b_vblanks, md_render_vblanks;
     uint8_t early, pad2[3];
+    int16_t split_fp; uint16_t pad3; uint32_t sub_idle_units;
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -142,7 +143,7 @@ static N3State *state(void)
         N3State *s = (N3State *)Z_MallocStatic(sizeof(N3State));
         memset(s, 0, sizeof *s);
         s->active = 1;
-        s->split = 38;
+        s->split = 38; s->split_fp = 38 * 16;
 #if defined(N3_VERIFY)
         s->verify_buf = (uint8_t *)Z_MallocStatic(SCD_FRAME_BYTES);
 #endif
@@ -251,6 +252,7 @@ void N3_MdFrameArrived(uint16_t arg)
     volatile const N3FrameHead *h = (volatile const N3FrameHead *)(SCD_MD_BANK_BASE + N3_HDR_OFFSET);
     if (h->magic != N3_FR_MAGIC) return;
     s->sub_render_units += h->render_units; s->sub_tic_units += h->tic_units;
+    if (!s->expect_frame) s->sub_idle_units = h->idle_units;   /* A header: how long the sub waited for B */
     if (!h->valid || !s->lock || !s->prev_valid) return;
     if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle)
     {
@@ -329,6 +331,16 @@ void N3_Pump(void)
 }
 
 /* Serve requests until the sub's next FRAME request has been answered (0 new tics). */
+/* Time in scanlines (63.5 us): VBlank count + VDP V counter (VBlank IRQ comes at line 224). */
+static uint32_t lines_now(void)
+{
+    for (;;)
+    {
+        const uint32_t vb = _g_vblankCount;
+        const uint16_t v = *(volatile const uint8_t *)0xC00008;
+        if (vb == _g_vblankCount) return vb * 262u + (v >= 224u ? v - 224u : v + 38u);
+    }
+}
 static int wait_frame(N3State *s)
 {
     const uint32_t t0 = _g_vblankCount;
@@ -368,15 +380,23 @@ int N3_Display(void)
         s->rendering = 0;
         /* Overlap: run the next frame's game logic while the sub is still drawing its half. */
         { extern void N3_EarlyTics(void); s->early = 1; N3_EarlyTics(); }
-        const uint32_t t1 = _g_vblankCount;
+        const uint32_t t1 = _g_vblankCount, l1 = lines_now();
         s->expect_frame = 1; s->have_frame = 0;
         const int ok = wait_frame(s);
         s->expect_frame = 0;
         const uint32_t w = _g_vblankCount - t1;
+        const int32_t md_wait = (int32_t)(lines_now() - l1);
         s->md_render_vblanks += t1 - t0; s->wait_b_vblanks += w; s->split_sum += (uint32_t)s->split;
-        /* Balance: the CPU that waits gets more columns next frame. */
-        if (w > 1 && s->split < 66) s->split += 2;
-        else if (w == 0 && s->split > 10) s->split -= 1;
+        /* Balance in scanlines: sub idle time (its report, 30.72 us units) vs our wait. Positive =
+         * the sub has slack -> it gets columns. ~70 lines per column swing, half-step damping. */
+        {
+            const int32_t sub_idle = (int32_t)((s->sub_idle_units * 31u) >> 6);
+            int32_t d = (sub_idle - md_wait) / 9;
+            if (d > 48) d = 48; else if (d < -48) d = -48;
+            int32_t f = s->split_fp - d;
+            if (f < 10 * 16) f = 10 * 16; else if (f > 66 * 16) f = 66 * 16;
+            s->split_fp = (int16_t)f; s->split = (int16_t)(f >> 4);
+        }
         if (ok && s->have_frame)
         {
             s->have_frame = 0;
