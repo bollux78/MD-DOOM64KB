@@ -145,6 +145,22 @@ def normalize_wide_sprite_registers(out):
     s=s.replace(old1,'register const u8* a1 asm ("%a1") = cur_column_ptr;')
     p.write_text(s)
 
+def normalize_legacy_palette_and_asm(out):
+    """Match current palette API and constrain arithmetic ASM operands to Dn."""
+    fire=out/"src/fire.c"
+    data=fire.read_text()
+    old="PAL_setPalette(PAL1, fire_cols);"
+    if data.count(old)!=1:
+        raise ValueError("Manifold fire palette invocation changed")
+    fire.write_text(data.replace(old,"PAL_setPalette(PAL1, fire_cols, DMA);"))
+    draw=out/"src/draw.c"
+    data=draw.read_text()
+    old=': "+a" (tex_col_ptr), "+r" (u_11_start), "+r" (u_11_tmp), "+r" (one_over_z_16)'
+    new=': "+a" (tex_col_ptr), "+r" (u_11_start), "+d" (u_11_tmp), "+r" (one_over_z_16)'
+    if data.count(old)!=1:
+        raise ValueError("Manifold horizontal texture ASM constraint changed")
+    draw.write_text(data.replace(old,new))
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -156,6 +172,7 @@ def stage(src, wad, out):
     normalize_legacy_s16_bounds(out)
     normalize_legacy_fixed_point_api(out)
     normalize_wide_sprite_registers(out)
+    normalize_legacy_palette_and_asm(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
