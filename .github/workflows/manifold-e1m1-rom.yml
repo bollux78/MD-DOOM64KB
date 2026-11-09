@@ -68,23 +68,22 @@ jobs:
           if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
             ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
           fi
-          # Installed libmd.a uses GCC LTO 13; GCC 15 creates incompatible LTO streams.
-          # Probe independent installed toolchains; do not mutate the shared SDK.
-          tc=""
-          while IFS= read -r gcc; do
-            test -x "$gcc" || continue
-            ver="$("$gcc" -dumpfullversion -dumpversion 2>/dev/null || true)"
-            echo "Found cross compiler: $gcc (GCC $ver)"
-            if [[ "${ver%%.*}" == "13" ]]; then
-              tc="${gcc%gcc}"
-              break
-            fi
-          done < <(find "$HOME" /opt -maxdepth 12 \( -type f -o -type l \) -name m68k-elf-gcc 2>/dev/null | sort -u)
-          if test -z "$tc"; then
-            echo "::error::No matching GCC 13 toolchain found for SGDK libmd.a LTO 13"
-            exit 1
-          fi
-          echo "Using compatible cross compiler: ${tc}gcc"
+          # libmd.a is LTO 13 but installed GCC is 15. Rebuild SGDK only in
+          # disposable runner staging; never change the system-wide SDK.
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc" || { echo "::error::Cross compiler not found"; exit 1; }
+          echo "Rebuilding isolated SGDK runtime with $("${tc}gcc" -dumpfullversion -dumpversion)"
+          sdk_stage="$MANIFOLD_STAGE/sgdk-compatible"
+          cp -a "$gdk" "$sdk_stage"
+          rm -rf "$sdk_stage/out"
+          rm -f "$sdk_stage/lib/libmd.a"
+          test -f "$sdk_stage/makelib.gen" || { echo "::error::SGDK makelib.gen missing"; exit 1; }
+          make -C "$sdk_stage" -f makelib.gen -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy"
+          test -s "$sdk_stage/lib/libmd.a"
+          export GDK="$sdk_stage"
+          echo "Isolated SGDK library rebuilt: $GDK/lib/libmd.a"
           make -C "$MANIFOLD_STAGE/candidate" -f "$GDK/makefile.gen" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
             NM="${tc}nm" OBJCPY="${tc}objcopy"
