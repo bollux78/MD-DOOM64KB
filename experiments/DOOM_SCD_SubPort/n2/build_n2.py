@@ -63,6 +63,30 @@ if N2X2:
     p4 = src / "r22_pixel4.h"; t4 = p4.read_text()
     assert "#define R22_W 76" in t4 and "#define R22_H 44" in t4
     p4.write_text(t4.replace("#define R22_W 76", "#define R22_W 152").replace("#define R22_H 44", "#define R22_H 88"))
+    # projection tables for 152 columns (same generator as scripts/lab/gen_r22_pixel4.py)
+    import math
+    w = 152; cx = w // 2; v = []; raw = []
+    for i in range(4096):
+        t = int(math.tan((i - 2048 + 0.5) * math.pi / 4096) * 65536)
+        z = (cx * 65536 - cx * t + 65535) // 65536; raw.append(z); v.append(max(0, min(w, z)))
+    start = next(i for i, x in enumerate(v) if x < w)
+    xt = [(next(i for i, val in enumerate(raw) if val <= x) - 2048) * 8 & 65535 for x in range(w + 1)]
+    xt[-1] = (-xt[0]) & 65535
+    (src / "r22_projection_max.h").write_text("#define VIEWANGLETOXMAX %d\n" % start)
+    a = v[start:3073]
+    (src / "r22_viewangletox.h").write_text(",\n".join(",".join(map(str, a[i:i + 32])) for i in range(0, len(a), 32)) + "\n")
+    (src / "r22_xtoviewangle.h").write_text(",".join(map(str, xt)) + "\n")
+    rd = src / "r_draw.c"; t = rd.read_text(errors="replace")
+    t = t.replace("#if VIEWWINDOWWIDTH == 76", "#if VIEWWINDOWWIDTH == 76 || VIEWWINDOWWIDTH == 152")
+    t = re.sub(r"static int16_t screenheightarray\[VIEWWINDOWWIDTH\] =\s*\{.*?\n\};",
+               "static int16_t screenheightarray[VIEWWINDOWWIDTH] = { [0 ... VIEWWINDOWWIDTH - 1] = VIEWWINDOWHEIGHT };", t, count=1, flags=re.S)
+    t = re.sub(r"static int16_t negonearray\[VIEWWINDOWWIDTH\] =\s*\{.*?\n\};",
+               "static int16_t negonearray[VIEWWINDOWWIDTH] = { [0 ... VIEWWINDOWWIDTH - 1] = -1 };", t, count=1, flags=re.S)
+    t = t.replace("static const angle16_t clipangle = 0x2008;", "static const angle16_t clipangle = 0x%04x;" % xt[0])
+    rd.write_text(t)
+    tb = src / "tables.c"; tt = tb.read_text(errors="replace")
+    tb.write_text(tt.replace("#if VIEWWINDOWWIDTH == 76", "#if VIEWWINDOWWIDTH == 76 || VIEWWINDOWWIDTH == 152"))
+    print("N2 2x2 projection: VIEWANGLETOXMAX %d, clipangle 0x%04x" % (start, xt[0]))
 if os.environ.get("N2_LMTRACE"):
     # Diagnostic: check the sub vector table after every call statement of these files.
     for name in os.environ["N2_LMTRACE"].split(","):
