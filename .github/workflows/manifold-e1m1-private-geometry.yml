@@ -42,7 +42,8 @@ jobs:
             'warning_count':len(d['warnings']), 'playable':d['playable']
           }))
           PY
-          rm -f "$RUNNER_TEMP/manifold-e1m1-geometry.json"
+          python3 experiments/DOOM_Manifold_E1M1/m01/bsp_cells.py --wad "$WAD" --out "$RUNNER_TEMP/manifold-e1m1-bsp-report.json"
+          rm -f "$RUNNER_TEMP/manifold-e1m1-geometry.json" "$RUNNER_TEMP/manifold-e1m1-bsp-report.json"
       - name: Show separate validation status
         if: always()
         run: |
