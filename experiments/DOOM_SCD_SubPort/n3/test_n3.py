@@ -60,6 +60,7 @@ try:
     for name in ("r59_color_mode", "r57_view"):
         if name in sym: res[name] = g.readmem(sym[name], max(1, size.get(name, 1))).hex()
     res["sub_sig"] = hex(int.from_bytes(g.readmem(0xA12020, 2), "big"))
+    res["boot_diag"] = g.readmem(0x61F0F0, 8).hex()
     if res["sub_sig"] == "0xdead":
         res["sub_error"] = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")
         res["sub_error_regs"] = g.readmem(0x61F0F8, 4).hex()

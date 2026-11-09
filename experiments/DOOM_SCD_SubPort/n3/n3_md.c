@@ -117,12 +117,18 @@ void N3_Boot(void)
     {
         W_Init();
         SCD_MdServeReset();
-        for (u32 spins = 0; spins < 600000000UL; spins++)
+        volatile u16 *diag = (volatile u16 *)0x61F0F0;   /* boot diagnostics in our Word RAM bank */
+        diag[0] = 0xB007; diag[1] = 0; diag[2] = 0; diag[3] = 0;
+        u32 spins = 0;
+        for (; spins < 600000000UL; spins++)
         {
-            if (CD_SUB_SIG == 0xDEADu) { fetch_sub_error(); break; }
-            if (SCD_MdPendingCmd() == SCD_CMD_FRAME) { n3 = N3_BOOTED; break; }
-            if (SCD_MdServeOnce() < 0) break;
+            if (CD_SUB_SIG == 0xDEADu) { diag[1] = 1; fetch_sub_error(); break; }
+            const u16 cmd = SCD_MdPendingCmd();
+            if (cmd == SCD_CMD_FRAME) { diag[1] = 2; n3 = N3_BOOTED; break; }
+            if (cmd) { diag[2] = cmd; diag[3] = *(volatile const u16 *)0xA12024; }
+            if (SCD_MdServeOnce() < 0) { diag[1] = 3; break; }
         }
+        if (spins >= 600000000UL) diag[1] = 4;
     }
     SYS_enableInts();
 }
