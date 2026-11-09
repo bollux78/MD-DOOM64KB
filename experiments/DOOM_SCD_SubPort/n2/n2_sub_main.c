@@ -59,7 +59,7 @@ void sub_main(void)
     {
         SCD_ClockPoll();
         const uint32_t t0 = scd_clock_units;
-        prof_on();
+        if (f) prof_on();   /* frame 0 loads every lump through the MD; sample cached frames only */
         R_RenderPlayerView(&_g_player);
         prof_off();
         SCD_ClockPoll();
