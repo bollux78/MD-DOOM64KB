@@ -79,7 +79,7 @@ jobs:
               tc="${gcc%gcc}"
               break
             fi
-          done < <(find "$HOME" /opt -maxdepth 12 \\( -type f -o -type l \\) -name m68k-elf-gcc 2>/dev/null | sort -u)
+          done < <(find "$HOME" /opt -maxdepth 12 \( -type f -o -type l \) -name m68k-elf-gcc 2>/dev/null | sort -u)
           if test -z "$tc"; then
             echo "::error::No matching GCC 13 toolchain found for SGDK libmd.a LTO 13"
             exit 1
