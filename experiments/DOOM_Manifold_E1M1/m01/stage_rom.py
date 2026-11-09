@@ -237,6 +237,20 @@ static void select_toggle_dither(int menu_idx) { (void)menu_idx; toggle_dither_m
         src=src.replace(old,new)
     p.write_text(src)
 
+def normalize_math_and_menu(out):
+    """Fix vector array pointer scaling and obsolete clear_menu argument."""
+    p=out/"src/math3d.c"
+    src=p.read_text()
+    old="s16* last_out_ptr = out + (num_walls*2);"
+    if src.count(old)!=1:
+        raise ValueError("upstream vector pointer arithmetic changed")
+    p.write_text(src.replace(old,"s16* last_out_ptr = ((s16*)out) + (num_walls*2);"))
+    p=out/"src/menu_helper.c"
+    src=p.read_text()
+    if src.count("clear_menu(cur_menu);")!=2:
+        raise ValueError("upstream obsolete menu-clear calls changed")
+    p.write_text(src.replace("clear_menu(cur_menu);","clear_menu();"))
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -253,6 +267,7 @@ def stage(src, wad, out):
     normalize_weapon_api_declaration(out)
     normalize_remaining_palettes(out)
     normalize_menu_callbacks(out)
+    normalize_math_and_menu(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     for file in ("sega.s","rom_head.c"):
