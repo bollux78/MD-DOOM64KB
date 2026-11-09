@@ -95,6 +95,7 @@ for i in range(n):
     o = dirofs + i * 16; p, z = struct.unpack_from(">IH", wad, o)
     lumps.append((wad[o + 8:o + 16].rstrip(b"\0").decode("latin1"), p, z))
 names = [l[0] for l in lumps]
+print("N3 WAD lumps", n, "722:", lumps[722] if n > 722 else None, "largest:", sorted(((z, nm_) for nm_, p_, z in lumps), reverse=True)[:4])
 m = names.index("E1M1")
 side = next(i for i in range(m + 1, m + 12) if names[i] == "SIDEDEFS")
 _, p, z = lumps[side]
