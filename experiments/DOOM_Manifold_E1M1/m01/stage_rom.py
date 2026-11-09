@@ -279,7 +279,7 @@ def normalize_bitmap_legacy_symbols(out):
     import re
     count=0
     for old,new in tokens.items():
-        source,n=re.subn(r"\\b"+old+r"\\b",new,source)
+        source,n=re.subn(r"\b"+old+r"\b",new,source)
         count+=n
     if count<30:
         raise ValueError(f"unexpected bitmap compatibility rewrite count {count}")
