@@ -299,7 +299,8 @@ def normalize_pvs_entry_types(out):
           "const s8* entries = &mp->sector_phs_entries[phs_offset];",
     }
     for old,new in replacements.items():
-        if src.count(old)!=1:
+        expected = 2 if old == "s8* entries = &mp->sector_pvs_entries[pvs_offset];" else 1
+        if src.count(old)!=expected:
             raise ValueError(f"upstream PVS stream changed: {old}")
         src=src.replace(old,new)
     p.write_text(src)
