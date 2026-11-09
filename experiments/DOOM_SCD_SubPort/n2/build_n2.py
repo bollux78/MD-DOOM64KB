@@ -143,6 +143,15 @@ ww = ww.replace('I_Error("SCD LUMP TRANSFER FAILED %d", n);',
     '{ extern uint16_t n2_bad[6]; extern uint32_t SCD_SubTimeouts(void); I_Error("X%d Z%u T%lu L%u K%X S%u", n, (unsigned)size, (unsigned long)SCD_SubTimeouts(), n2_bad[4], n2_bad[5], n2_bad[2]); }')
 ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
     '{ static char nf[26] = "LUMP NOT FOUND: "; for (uint16_t j = 0; j < 8u; j++) nf[16 + j] = name[j] ? name[j] : 32; nf[24] = 0; I_Error(nf); }')
+# Directory sized to this WAD; copies (W_ReadLumpByNum) go straight to the engine's buffer
+# instead of also occupying the resident cache.
+ww = ww.replace("#define SCD_WAD_MAX_LUMPS 2048u", "#define SCD_WAD_MAX_LUMPS %du" % ((n + 31) & ~15))
+ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
+    if (size) memcpy(ptr, W_GetLumpByNum(n), size);""", """    const uint16_t size = W_LumpLength(n);
+    if (!size) return;
+    if (scd_slots[n]) { memcpy(ptr, scd_slots[n], size); return; }
+    if (!scd_fetch_lump((uint16_t)n, ptr, size)) I_Error("SCD LUMP READ FAILED %d", n);""")
+assert "SCD LUMP READ FAILED" in ww and "SCD_WAD_MAX_LUMPS 2048u" not in ww
 (w / "w_wad_client.c").write_text(ww)
 
 cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "inc"), "-isystem", str(gdk / "lib"),
