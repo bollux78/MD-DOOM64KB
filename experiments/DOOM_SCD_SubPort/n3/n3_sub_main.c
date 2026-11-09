@@ -49,6 +49,7 @@ static void apply_snapshot(const uint8_t *p)
     _g_gametic = h.gametic; _g_basetic = h.basetic;
     N3_SetPRnd(h.prnd);
     _g_gameaction = ga_nothing;
+    { extern void SCD_WadFlushToMark(void); SCD_WadFlushToMark(); }
     N3_LoadLevel();
 }
 
@@ -56,6 +57,7 @@ void sub_main(void)
 {
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
     Z_Init(); W_Init(); R_Init(); P_Init(); SCD_SubSetTime(0);
+    { extern void SCD_WadMark(void); SCD_WadMark(); }
     uint16_t lock = 0, valid = 0, frame = 0;
     uint32_t render_units = 0, tic_units = 0;
     for (;;)

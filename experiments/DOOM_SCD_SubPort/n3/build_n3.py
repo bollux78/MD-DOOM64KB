@@ -133,6 +133,18 @@ ww = ww.replace("""    const uint16_t size = W_LumpLength(n);
     if (!scd_fetch_lump((uint16_t)n, ptr, size)) I_Error("SCD LUMP READ FAILED %d", n);""")
 ww = ww.replace('I_Error("SCD LUMP %.8s NOT FOUND", name);',
     '{ static char nf[26] = "LUMP NOT FOUND: "; for (uint16_t j = 0; j < 8u; j++) nf[16 + j] = name[j] ? name[j] : 32; nf[24] = 0; I_Error(nf); }')
+ww += """
+/* Level-scoped cache: everything fetched after the mark (level data, sprites) is dropped at the
+ * next level load; init-time lumps (colormaps, texture metadata) stay. */
+static uint32_t scd_cache_mark;
+void SCD_WadMark(void) { scd_cache_mark = scd_cache_used; }
+void SCD_WadFlushToMark(void)
+{
+    for (uint16_t i = 0; i < scd_lump_count; i++)
+        if (scd_slots[i] && (uint32_t)(scd_slots[i] - scd_cache) >= scd_cache_mark) scd_slots[i] = 0;
+    scd_cache_used = scd_cache_mark;
+}
+"""
 (w / "w_wad_client.c").write_text(ww)
 
 # 4. Compile + link the sub program.
