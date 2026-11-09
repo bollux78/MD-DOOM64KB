@@ -84,6 +84,25 @@ static bool boot_sub(void)
     return FALSE;
 }
 
+/* Sub I_Error / exception: message address in $A1202A/2C; halt the sub and copy the text from
+ * PRG-RAM (128 KiB window) into the MD's Word RAM bank at 0x61F100 for diagnostics. */
+static void fetch_sub_error(void)
+{
+    const u32 addr = ((u32)*(volatile const u16 *)0xA1202A << 16) | *(volatile const u16 *)0xA1202C;
+    volatile u8 *msg = (volatile u8 *)0x61F100;
+    msg[0] = 0;
+    *(volatile u32 *)0x61F0F8 = ((u32)*(volatile const u16 *)0xA12026 << 16) | *(volatile const u16 *)0xA12028;
+    if (addr >= 0x80000UL) return;
+    CD_SUB_BYTE = 3;
+    if (!wait_sub(2, 2)) return;
+    CD_MEMCTRL_LO = (u8)((addr >> 17) << 6);
+    volatile const u8 *p = (volatile const u8 *)(0x420000UL + (addr & 0x1FFFFUL));
+    u16 i = 0;
+    for (; i < 39 && p[i] >= 32 && p[i] < 127; i++) msg[i] = p[i];
+    msg[i] = 0;
+    CD_MEMCTRL_LO = 0;
+}
+
 /* Before D_DoomMain: boot the sub and serve its engine init (WAD directory, R_Init lumps) until
  * it asks for its first FRAME, which stays pending for the first D_Display. */
 void N3_Boot(void)
@@ -97,7 +116,7 @@ void N3_Boot(void)
         SCD_MdServeReset();
         for (u32 spins = 0; spins < 600000000UL; spins++)
         {
-            if (CD_SUB_SIG == 0xDEADu) break;
+            if (CD_SUB_SIG == 0xDEADu) { fetch_sub_error(); break; }
             if (SCD_MdPendingCmd() == SCD_CMD_FRAME) { n3 = N3_BOOTED; break; }
             if (SCD_MdServeOnce() < 0) break;
         }
@@ -214,7 +233,7 @@ void N3_Pump(void)
     const uint32_t t0 = _g_vblankCount;
     for (;;)
     {
-        if (CD_SUB_SIG == 0xDEADu) { s->active = 0; s->last_error = 1; return; }
+        if (CD_SUB_SIG == 0xDEADu) { fetch_sub_error(); s->active = 0; s->last_error = 1; return; }
         const uint16_t cmd = SCD_MdPendingCmd();
         if (cmd)
         {
