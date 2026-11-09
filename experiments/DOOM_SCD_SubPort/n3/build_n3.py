@@ -204,6 +204,11 @@ sv = sv.replace(a, a + "    else if (cmd == SCD_CMD_FRAME)\n    {\n        exter
 a = "            transactions++;\n"
 assert sv.count(a) == 1
 sv = sv.replace(a, "            transactions++;\n            if (cmd == SCD_CMD_FRAME) { extern void N3_MdFrameArrived(uint16_t); N3_MdFrameArrived(arg); }\n")
+# The sub may finish (ACK/DONE) and publish its next request before we sample ACK/DONE: a newer
+# request seq also proves completion.
+old = "        if (SCD_MD_REG16(SCD_MD_ACK_REG) == seq &&\n            SCD_MD_REG16(SCD_MD_DONE_REG) == seq &&\n            (SCD_MD_REG16(SCD_MD_MEMCTRL_REG) & 5u) != previous)"
+assert sv.count(old) == 1
+sv = sv.replace(old, "        if ((SCD_MD_REG16(SCD_MD_ACK_REG) == seq &&\n            SCD_MD_REG16(SCD_MD_DONE_REG) == seq &&\n            (SCD_MD_REG16(SCD_MD_MEMCTRL_REG) & 5u) != previous) ||\n            (SCD_MD_REG16(SCD_MD_REQUEST_REG) != seq && SCD_MD_REG16(SCD_MD_REQUEST_REG) != 0))")
 sv += ("\n/* New request pending? Its command, else 0 (does not consume it). */\n"
        "uint16_t SCD_MdPendingCmd(void){ const uint16_t seq=SCD_MD_REG16(SCD_MD_REQUEST_REG);"
        " return (!seq || seq==last_request) ? 0 : SCD_MD_REG16(SCD_MD_CMD_REG); }\n")
