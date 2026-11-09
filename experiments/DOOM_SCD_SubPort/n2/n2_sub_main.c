@@ -94,15 +94,22 @@ static uint16_t stack_depth(void)
 }
 
 static uint32_t lowmem_copy[64];
+/* Low PRG-RAM (vectors) must never change after boot: name the first step that clobbers it. */
+static void lm_check(int stage)
+{
+    for (uint16_t i = 0; i < 64; i++)
+        if (((volatile const uint32_t *)0)[i] != lowmem_copy[i])
+            I_Error("LOWMEM CLOBBER st%d @%x %lx", stage, i * 4, (unsigned long)((volatile const uint32_t *)0)[i]);
+}
 void sub_main(void)
 {
     stack_paint();
     for (uint16_t i = 0; i < 64; i++) lowmem_copy[i] = ((volatile const uint32_t *)0)[i];
-    REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
-    Z_Init(); W_Init(); REG16(0xFF8024UL) = 0x4E31;           /* 'N1': directory loaded */
-    R_Init(); P_Init();                                      /* D_DoomMain order */
-    N2_InitGame();                                           /* G_InitNew(sk_medium, 1) -> E1M1 */
-    N2_SetCommand(0, 0, 0, 0); SCD_SubSetTime(0); G_Ticker(); _g_gametic++;
+    REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u; lm_check(1);
+    Z_Init(); lm_check(2); W_Init(); REG16(0xFF8024UL) = 0x4E31; lm_check(3);   /* 'N1': directory loaded */
+    R_Init(); lm_check(4); P_Init(); lm_check(5);             /* D_DoomMain order */
+    N2_InitGame(); lm_check(6);                              /* G_InitNew(sk_medium, 1) -> E1M1 */
+    N2_SetCommand(0, 0, 0, 0); SCD_SubSetTime(0); G_Ticker(); _g_gametic++; lm_check(7);
     if (!_g_player.mo || _g_gamestate != GS_LEVEL) I_Error("N2 NO LEVEL");
     uint8_t input[16];
     uint32_t min_render = 0;
@@ -122,6 +129,7 @@ void sub_main(void)
         if (f) prof_on();   /* frame 0 loads every lump through the MD; sample cached frames only */
         R_RenderPlayerView(&_g_player);
         prof_off();
+        lm_check(10 + f);
         SCD_ClockPoll();
         const uint32_t t1 = scd_clock_units;
         pairv_decode();
