@@ -63,7 +63,8 @@ try:
     res["boot_diag"] = g.readmem(0x61F0F0, 8).hex()
     if res["sub_sig"] == "0xdead":
         res["sub_error"] = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")
-        res["sub_error_regs"] = g.readmem(0x61F0F8, 4).hex()
+        res["sub_error_regs"] = g.readmem(0xA12026, 4).hex()
+        res["sub_error_addr"] = g.readmem(0xA1202A, 4).hex()
         regs = int(res["sub_error_regs"], 16)
         subelf = elf.parent / "sub" / "n3-sub.elf"
         if subelf.exists() and regs:
