@@ -187,16 +187,21 @@ void N3_OnTicEnd(void)
     t[7] = (uint8_t)_g_menuactive;
 }
 
-extern const uint8_t n3_r84_pool[];
-extern const uint16_t n3_r84_pool_bytes;
-/* Server hook: the resident R84 pool (requested twice by the sub at boot, once per bank). */
+extern const uint16_t n3_r84_blocks[];
+extern const uint16_t n3_r84_nblocks;
+extern const uint8_t *N3_R84Pixels(void);
+/* Server hook: the sub's R84 subset, gathered from our own pool (block 0 = missing marker). */
 uint16_t N3_MdPoolPayload(volatile uint8_t *p)
 {
-    const uint16_t n = n3_r84_pool_bytes;
-    volatile uint16_t *d = (volatile uint16_t *)p;
-    const uint16_t *src = (const uint16_t *)n3_r84_pool;
-    for (uint16_t i = 0; i < (uint16_t)((n + 1u) >> 1); i++) d[i] = src[i];
-    return n;
+    const uint8_t *pool = N3_R84Pixels();
+    volatile uint8_t *d = p;
+    for (uint16_t i = 0; i < 128u; i++) *d++ = 0xB0;
+    for (uint16_t b = 0; b < n3_r84_nblocks; b++)
+    {
+        const uint8_t *src = pool + (uint32_t)n3_r84_blocks[b] * 128u;   /* byte copy: pool may be odd-aligned */
+        for (uint16_t i = 0; i < 128u; i++) *d++ = src[i];
+    }
+    return (uint16_t)(128u * (n3_r84_nblocks + 1u));
 }
 
 /* Server hook: build the FRAME response (runs before the swap). */

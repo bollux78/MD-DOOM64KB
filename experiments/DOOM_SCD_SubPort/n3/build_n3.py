@@ -155,8 +155,12 @@ newoffs = [remap.get(o, 0) if o != 0xFFFFFFFF else o for o in offs]
 # The pool lives in Word RAM (same copy in both 1M banks), loaded from the MD at sub boot.
 hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "extern uint8_t n3_r84_pool_ram[];\n#define r84_pixels ((const uint8_t *)n3_r84_pool_ram)\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
 assert 0x10200 + len(newpool) < 0x1F000, "R84 pool does not fit the Word RAM bank"
-pool_c = "/* N3: resident R84 wall-texture pool for the Sega CD sub (all maps). */\n#include <stdint.h>\n" \
-         "const uint8_t n3_r84_pool[%d] = {%s};\nconst uint16_t n3_r84_pool_bytes = %d;\n" % (len(newpool), ",".join(str(v) for v in newpool), len(newpool))
+# MD side: no second copy of the pool in ROM, just the list of source blocks (offsets/128) in the
+# MD's own r84_pixels, in subset order; block 0 of the subset is the 0xB0 "missing" marker.
+order = sorted(remap.items(), key=lambda kv: kv[1])
+pool_c = "/* N3: R84 wall-texture subset for the Sega CD sub = these blocks of the MD's r84_pixels. */\n#include <stdint.h>\n" \
+         "const uint16_t n3_r84_blocks[%d] = {%s};\nconst uint16_t n3_r84_nblocks = %d;\n" % (
+             len(order), ",".join(str(o // 128) for o, _ in order), len(order))
 hdr = re.sub(r"static const uint32_t r84_offsets\[\]=\{[^}]*\};", "static const uint32_t r84_offsets[]={" + ",".join(str(v) + "u" for v in newoffs) + "};", hdr)
 (src / "r84_columns.h").write_text(hdr)
 print("N3 R84 subset: textures %d, columns %d, bytes %d" % (len(used), len(remap), len(newpool)))
@@ -363,6 +367,8 @@ md_patch("d_main.c", r"R_RenderPlayerView \(&_g_player\);", "{ extern int N3_Dis
 if os.environ.get("N3_AUTOSTART"):
     md_patch("d_main.c", "    demosequence = -1;\n    D_AdvanceDemo();", "    { extern void N3_AutoStart(void); N3_AutoStart(); }")
 split_patch(tree / "src" / "r_draw.c")
+rdm = tree / "src" / "r_draw.c"
+rdm.write_text(rdm.read_text() + "\nconst uint8_t *N3_R84Pixels(void){return r84_pixels;}\n")
 for fn in ("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{"):
     md_patch("r22_video.inc", fn, fn + "\n    { extern void N3_Poll(void); N3_Poll(); }")
 md_patch("r22_video.inc", "static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}")
