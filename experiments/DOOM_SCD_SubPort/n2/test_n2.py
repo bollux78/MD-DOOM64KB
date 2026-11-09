@@ -47,22 +47,17 @@ try:
         msg = bytes(g.readmem(0x61F100, 40)).split(b"\0")[0].decode("latin1")
         print("sub I_Error message:", repr(msg), flush=True)
     if r["stage"] == 5:
-        bins = struct.unpack(">4096H", bytes(g.readmem(0x61C000, 8192)))
+        tab = struct.unpack(">1536I", bytes(g.readmem(0x61C000, 6144)))
         sub_elf = elf.parent / "sub" / "n2-sub.elf"
-        funcs = []
-        for line in subprocess.check_output([nm, "-S", "--size-sort", str(sub_elf)], text=True).splitlines():
+        names = {}
+        for line in subprocess.check_output([nm, str(sub_elf)], text=True).splitlines():
             f = line.split()
-            if len(f) == 4 and f[2] in "Tt": funcs.append((int(f[0], 16), int(f[1], 16), f[3]))
-        total = sum(bins) or 1
-        per = Counter()
-        for i, c in enumerate(bins):
-            if not c: continue
-            a = i * 64 + 32
-            name = next((n for s0, sz, n in funcs if s0 <= a < s0 + sz), "0x%05x" % (i * 64))
-            per[name] += c
-        print("sub profile (%d samples during R_RenderPlayerView):" % total)
-        for name, c in per.most_common(25):
-            print("  %5.1f%%  %s" % (100.0 * c / total, name))
+            if len(f) == 3 and f[1] in "Tt": names.setdefault(int(f[0], 16), f[2])
+        rows = [(tab[i + 1], tab[i + 2], names.get(tab[i], "0x%x" % tab[i])) for i in range(0, 1536, 3) if tab[i]]
+        total = sum(u for u, c, n in rows) or 1
+        print("sub function profile, frames 2-24, %.1f ms/frame instrumented:" % (total * 0.03072 / 23))
+        for u, c, n in sorted(rows, reverse=True)[:30]:
+            print("  %5.1f%%  %7.2f ms/frame  %6d calls/frame  %s" % (100.0 * u / total, u * 0.03072 / 23, c // 23, n))
     ok = r["stage"] == 5 and r["frames"] == 24 and not r["errors"] and not r["timeouts"]
     for n in ("n2_frame_shown", "n2_complete", "I_Error"):
         g.req(f"z0,{sym[n]:x},2")

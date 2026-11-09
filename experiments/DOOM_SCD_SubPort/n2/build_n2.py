@@ -12,7 +12,7 @@ out.mkdir(parents=True, exist_ok=True)
 gdk = Path(os.environ.get("SGDK", str(Path.home() / "mars/m68k-elf")))
 b = lambda t: str(gdk / "bin" / ("m68k-elf-" + t))
 opt = (tree / "out/.render_options").read_text().split()
-defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "3")]
+defs = [o for o in opt if o.startswith("-D") and not o.startswith("-DDOOM_R12_RECIP")] + ["-DSCD_SRAM_BASE=((unsigned long)scd_sram)", "-DN2_PROF=" + os.environ.get("N2_PROF", "2")]
 
 # 1. Patched source copy: cartridge SRAM -> sub PRG-RAM (same odd-lane layout), no mapper writes.
 src = out / "src-n2"
@@ -108,7 +108,7 @@ cflags = ["-DSGDK_GCC", "-I.", "-I" + str(tree / "out"), "-isystem", str(gdk / "
 sources = sorted(p for p in src.glob("*.c") if p.name not in ("w_wad.c", "i_genesisv.c", "i_genesis.c", "r25_music.c"))
 sources += sorted(p for p in src.glob("*.s"))
 sources += [common / "m2/scd_draw.c", common / "m2/scd_n1_platform.c", common / "s1e/engine_libc.c",
-            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c"]
+            common / "s1d/scd_sub_system.c", common / "s1a/sub_libc.c", w / "transport.c", w / "w_wad_client.c", here / "n2_sub_main.c", here / "prof_inst.c"]
 objs = []
 for s in sources:
     obj = w / (s.name + ".o")
@@ -117,11 +117,13 @@ for s in sources:
     # Speed where it matters (renderer, -O3 like the MD build), size elsewhere (-Os) to fit PRG-RAM.
     hot = s.name.startswith("r_") or s.name in ("scd_draw.c", "tables.c")
     opt_flags = (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) if os.environ.get("N2_OPT", "split") == "split" else []
+    if int(os.environ.get("N2_PROF", "2")) & 2 and s.suffix == ".c" and (s.name.startswith("r") or s.name == "scd_draw.c") and s.name != "r20_stackguard.c":
+        opt_flags = opt_flags + ["-finstrument-functions"]
     r = subprocess.run([b("gcc")] + cflags + opt_flags + zone + extra + ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
     if r.returncode:
         print("N2 compile FAIL", s.name, r.stderr[-2000:]); raise SystemExit(1)
     objs.append(str(obj))
-subprocess.run([b("as"), "-m68000"] + (["--defsym", "PROF_MIN=1"] if int(os.environ.get("N2_PROF", "3")) & 16 else []) + [str(here / "sub_boot_prof.s") if int(os.environ.get("N2_PROF", "3")) & 1 else str(common / "s1a/sub_boot.s"), "-o", str(w / "boot.o")], check=True)
+subprocess.run([b("as"), "-m68000", str(common / "s1a/sub_boot.s"), "-o", str(w / "boot.o")], check=True)
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "n2-sub.elf"
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",

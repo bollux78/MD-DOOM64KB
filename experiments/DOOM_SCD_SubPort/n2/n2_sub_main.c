@@ -24,20 +24,10 @@ extern uint32_t scd_columns, scd_pixels;
 extern uint32_t scd_clock_units, scd_column_units;
 extern void SCD_ClockPoll(void);
 #if N2_PROF & 2
-uint16_t scd_prof_bins[4096];
-uint16_t scd_vec_hits[256];
-extern void prof_isr(void);
-static void prof_on(void)
-{
-#if !(N2_PROF & 4)
-    REG16(0xFF8030UL) = (N2_PROF & 32) ? 255 : 10;
-#endif
-    REG16(0xFF8032UL) = 0x08;
-#if !(N2_PROF & 8)
-    __asm__ volatile ("move.w #0x2200,%sr");
-#endif
-}
-static void prof_off(void) { __asm__ volatile ("move.w #0x2700,%sr"); REG16(0xFF8032UL) = 0; REG16(0xFF8030UL) = 0; }
+extern void scd_prof_start(void), scd_prof_stop(void);
+extern uint8_t scd_prof_tab[];
+static void prof_on(void) { scd_prof_start(); }
+static void prof_off(void) { scd_prof_stop(); }
 #else
 static void prof_on(void) {}
 static void prof_off(void) {}
@@ -108,18 +98,14 @@ void sub_main(void)
         if (!SCD_SubFrame(f, input)) I_Error("N2 FRAME TRANSPORT");
     }
 #if N2_PROF & 2
-    REG16(0xFF802AUL) = (uint16_t)((uint32_t)(uintptr_t)scd_prof_bins >> 16);
-    REG16(0xFF802CUL) = (uint16_t)(uintptr_t)scd_prof_bins;  /* MD fetches the histogram */
+    REG16(0xFF802AUL) = (uint16_t)((uint32_t)(uintptr_t)scd_prof_tab >> 16);
+    REG16(0xFF802CUL) = (uint16_t)(uintptr_t)scd_prof_tab;  /* MD fetches the histogram */
 #else
     REG16(0xFF802AUL) = 0xFFFF;
 #endif
     {   uint16_t first = 0xFFFF, count = 0;
         for (uint16_t i = 0; i < 64; i++)
             if (((volatile const uint32_t *)0)[i] != lowmem_copy[i]) { if (first == 0xFFFF) first = i * 4; count++; }
-#if N2_PROF & 2
-        uint16_t best = 0; for (uint16_t i = 24; i < 256; i++) if (scd_vec_hits[i] > scd_vec_hits[best]) best = i;
-        first = (uint16_t)((best << 8) | (first & 0xFF)); count = scd_vec_hits[best];
-#endif
         REG16(0xFF8026UL) = first; REG16(0xFF8028UL) = count;
     }
     REG16(0xFF802EUL) = stack_depth();                       /* deepest stack use in bytes */

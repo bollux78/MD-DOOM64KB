@@ -129,7 +129,7 @@ static void fetch_sub_error(void)
     CD_MEMCTRL_LO = 0;
 }
 
-/* Profiler histogram (4096 x u16 at the address in $A1202A/2C) -> Word RAM 0x61C000. */
+/* Profiler table (512 x {fn, units, calls}, 6 KiB at the address in $A1202A/2C) -> Word RAM 0x61C000. */
 static void fetch_profile(void)
 {
     const u32 addr = ((u32)*(volatile const u16 *)0xA1202A << 16) | *(volatile const u16 *)0xA1202C;
@@ -137,7 +137,7 @@ static void fetch_profile(void)
     CD_SUB_BYTE = 3;
     if (!wait_sub(2, 2)) return;
     volatile u16 *dst = (volatile u16 *)0x61C000;
-    for (u16 i = 0; i < 4096; i++)
+    for (u16 i = 0; i < 3072; i++)
     {
         const u32 a = addr + i * 2u;
         CD_MEMCTRL_LO = (u8)((a >> 17) << 6);
