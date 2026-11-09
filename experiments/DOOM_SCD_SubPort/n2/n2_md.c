@@ -10,6 +10,7 @@
 #include "r22_palette.h"
 #include "scd_proto.h"
 #include "n2_sub.h"
+#include "n2_mode.h"
 
 #define HW_VERSION (*(volatile const u8 *)0xA10001)
 #define CD_BIOS_HEADER (*(volatile const u32 *)0x400100)
@@ -111,7 +112,7 @@ static void setup_screen(void)
     for (u16 c = 0; c < COLS; c++)
         for (u16 r = 0; r < ROWS; r++)
             VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 0, 0, 0, TILE_BASE + c * ROWS + r), 1 + c, 3 + r);
-    VDP_drawText("doom-md-scd-n2.bin  SEGA CD RENDER", 1, 1);
+    VDP_drawText(N2_IMAGE_2X2 ? "SEGA CD RENDER 2X2 (152X88)" : "SEGA CD RENDER 4X4 (76X44)", 1, 1);
 }
 
 /* Sub I_Error leaves the message address in $A1202A/2C. Halt the sub (bus request) and read the
@@ -186,7 +187,7 @@ void N2_Test(void)
     VDP_drawText("START: PLAY R128 ON MEGA DRIVE", 1, 2);
     volatile u8 *const data = (volatile u8 *)0xA10003, *const ctrl = (volatile u8 *)0xA10009;
     *ctrl = 0x40;
-    for (u16 frames = 0; frames < 900; frames++)
+    for (u16 frames = 0; frames < 3600; frames++)   /* 60 s to look at the image, START skips */
     {
         wait_vblank();
         *data = 0; __asm__ volatile ("nop; nop; nop; nop");

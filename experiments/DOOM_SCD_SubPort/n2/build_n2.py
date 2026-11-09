@@ -285,6 +285,7 @@ subprocess.run(["python3", str(common.parent / "DOOM_SCD_Bench03D_Transport/tool
 hp = tree / "src/n2_sub.h"
 hp.write_text(hp.read_text().replace("SUB_PROGRAM_WORDS", "SUB_PROGRAM_WORDS"))
 shutil.copyfile(here / "n2_md.c", tree / "src/n2_md.c")
+(tree / "src/n2_mode.h").write_text("#define N2_IMAGE_2X2 %d\n" % (1 if N2X2 else 0))
 shutil.copyfile(common / "scd_proto.h", tree / "src/scd_proto.h")
 sv = (common / "scd_md_server.c").read_text()
 a = "    else if (cmd == SCD_CMD_LUMP)\n        status = prepare_lump(arg, &size);\n"
