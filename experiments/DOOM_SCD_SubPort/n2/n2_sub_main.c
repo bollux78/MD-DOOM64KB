@@ -28,7 +28,7 @@ uint16_t scd_prof_bins[4096];
 static void prof_on(void)
 {
 #if !(N2_PROF & 4)
-    REG16(0xFF8030UL) = 10;
+    REG16(0xFF8030UL) = (N2_PROF & 32) ? 255 : 10;
 #endif
     REG16(0xFF8032UL) = 0x08;
 #if !(N2_PROF & 8)

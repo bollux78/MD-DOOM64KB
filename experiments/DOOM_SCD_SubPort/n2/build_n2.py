@@ -121,7 +121,7 @@ for s in sources:
     if r.returncode:
         print("N2 compile FAIL", s.name, r.stderr[-2000:]); raise SystemExit(1)
     objs.append(str(obj))
-subprocess.run([b("as"), "-m68000", str(here / "sub_boot_prof.s") if int(os.environ.get("N2_PROF", "3")) & 1 else str(common / "s1a/sub_boot.s"), "-o", str(w / "boot.o")], check=True)
+subprocess.run([b("as"), "-m68000"] + (["--defsym", "PROF_MIN=1"] if int(os.environ.get("N2_PROF", "3")) & 16 else []) + [str(here / "sub_boot_prof.s") if int(os.environ.get("N2_PROF", "3")) & 1 else str(common / "s1a/sub_boot.s"), "-o", str(w / "boot.o")], check=True)
 libgcc = subprocess.check_output([b("gcc"), "-m68000", "-print-libgcc-file-name"], text=True).strip()
 elf = w / "n2-sub.elf"
 r = subprocess.run([b("gcc"), "-m68000", "-nostdlib", "-Wl,--gc-sections", "-Wl,-e,subcpu_vectors",

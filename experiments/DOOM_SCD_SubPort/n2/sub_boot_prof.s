@@ -23,6 +23,9 @@ entry:
 2:  jsr sub_main
 3:  bra.s 3b
 prof_isr:
+.ifdef PROF_MIN
+    rte
+.endif
     movem.l %d0/%a0,-(%sp)
     move.l 10(%sp),%d0          /* stacked PC (after SR word, under the two saved longs) */
     cmpi.l #0x40000,%d0
