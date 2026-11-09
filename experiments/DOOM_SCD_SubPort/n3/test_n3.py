@@ -22,7 +22,10 @@ try:
     assert g.req(f"Z0,{sym['I_FinishUpdate']:x},2") == "OK"
     frames = 0; start = None; hashes = {}
     while True:
-        g.cont(); frames += 1
+        try:
+            g.cont(); frames += 1
+        except RuntimeError as e:
+            print("N3 stopped early:", e, "frames", frames, "start", start, "last tic", locals().get("tic"), flush=True); raise
         gs, tic, vb = rd(g, "_g_gamestate"), rd(g, "_g_gametic"), rd(g, "_g_vblankCount")
         if gs == 0 and start is None and tic > 0: start = (frames, tic, vb)
         if start:
@@ -30,7 +33,7 @@ try:
             if k in (40, 80):
                 fb = g.readmem(sym["r22_fb"] + 4, 3344)
                 hashes[k] = (tic, hashlib.sha1(fb).hexdigest()[:12])
-            if tic - start[1] >= 700 or k >= 400: break
+            if tic - start[1] >= int(os.environ.get("N3_TICS", "700")) or k >= 400: break
         if frames > 3000: break
     if start:
         res.update(frames=frames - start[0], tics=tic - start[1], seconds=round((vb - start[2]) / 60.0, 2))
