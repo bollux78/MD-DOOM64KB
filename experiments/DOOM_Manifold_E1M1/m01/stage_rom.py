@@ -69,12 +69,28 @@ def stage_missing_resources(out):
         if not dest.exists():
             shutil.copyfile(sample,dest)
 
+def normalize_legacy_asm(out):
+    """Legacy Manifold 68k .s uses '|' trailing comments rejected by our GAS.
+
+    Strip comments on the two authored .s files; never modify SGDK or the
+    original upstream checkout. Validate source still contains instructions.
+    """
+    for filename in ("fire_native.s","my_bmp_a.s"):
+        path=out/"src"/filename
+        source=path.read_text()
+        filtered="\\n".join(line.split("|",1)[0].rstrip()
+                              for line in source.splitlines())+"\\n"
+        if not filtered.strip() or len(filtered)>len(source):
+            raise ValueError(f"unexpected ASM comment conversion: {filename}")
+        path.write_text(filtered)
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     stage_missing_resources(out)
+    normalize_legacy_asm(out)
     map_lumps=read_map(wad)
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
