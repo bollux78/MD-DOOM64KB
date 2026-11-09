@@ -42,6 +42,7 @@ try:
         r["min_render_ms"] = round(r["min_render"] * 0.03072, 2)
         r["expand_ms_per_frame"] = round(r["expand_units"] * 0.03072 / r["frames"], 2)
     r["fault_pc"] = hex(r["lowmem"])
+    r["zone_free_raw"] = r["lowmem"] & 0xFFFF; r["zone_largest_raw"] = r["lowmem"] >> 16
     r["wad_cache_peak_kib"] = (r["stack_depth"] >> 16) / 4.0; r["stack_depth"] &= 0xFFFF
     r["lowmem"] = "hot vector %d, first changed vector byte 0x%X, count %d" % (r["lowmem"] >> 24, (r["lowmem"] >> 16) & 0xFF, r["lowmem"] & 0xFFFF)
     cal = r.get("column_units", 0)

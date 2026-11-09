@@ -158,6 +158,8 @@ void sub_main(void)
         REG16(0xFF8026UL) = first; REG16(0xFF8028UL) = count;
     }
     { extern uint32_t SCD_WadCachePeak(void); REG16(0xFF8022UL) = (uint16_t)(SCD_WadCachePeak() >> 8); }
+    { extern void Z_R20Probe(uint16_t *, uint16_t *, uint8_t *); uint16_t tf = 0, lf = 0; uint8_t bad = 0;
+      Z_R20Probe(&tf, &lf, &bad); REG16(0xFF8028UL) = tf; REG16(0xFF8026UL) = lf; }
     REG16(0xFF802EUL) = stack_depth();                       /* deepest stack use in bytes */
     REG16(0xFF8020UL) = 0x51B1u;                             /* done */
     for (;;) {}
