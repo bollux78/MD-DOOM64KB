@@ -55,6 +55,7 @@ static void column(const draw_column_vars_t *v, const uint8_t *map)
         frac = (uint16_t)(frac + step);
     }
     scd_columns++; scd_pixels += (uint32_t)(y1 - first + 1);
+    if (!(scd_columns & 31)) SCD_ClockPoll();   /* keep the 12-bit stopwatch from wrapping unseen */
 #if defined(SCD_COLUMN_TIMING)
     SCD_ClockPoll();
     scd_column_units += scd_clock_units - c0;
