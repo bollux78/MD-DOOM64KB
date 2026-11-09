@@ -27,14 +27,14 @@ def inspect(root):
     table = (src / "map_table.c").read_text()
     maps = (src / "maps.h").read_text()
     e1 = (src / "python/e1m1.c").read_text()
-    included = bool(re.search(r'[#]include\\s+["<]e1m1\\.h', maps))
-    table_used = bool(re.search(r'&(?:e1m1|e1m1_map)\\b', table))
+    included = bool(re.search(r'[#]include\s+["<]e1m1\.h', maps))
+    table_used = bool(re.search(r'&(?:e1m1|e1m1_map)\b', table))
     # The upstream E1M1 data is a separate Doom-oriented generated structure.
     # Its presence does NOT imply a portal_map instance that the runtime can load.
     result = {
         "upstream": UPSTREAM, "pin": PIN,
         "e1m1_source_bytes": (src / "python/e1m1.c").stat().st_size,
-        "e1m1_has_things": bool(re.search(r'static\\s+const\\s+thing\\s+things\\s*\\[', e1)),
+        "e1m1_has_things": bool(re.search(r'static\s+const\s+thing\s+things\s*\[', e1)),
         "registered_in_map_table": table_used,
         "declared_in_maps_header": included,
         "requires_doom_to_portal_map_conversion": not (included and table_used),
