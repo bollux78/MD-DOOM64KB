@@ -38,6 +38,9 @@ typedef struct {
     uint16_t ntics, seq;
     uint32_t frames_sub, frames_md, desyncs, timeouts, wait_vblanks, exchanges, sub_render_units, sub_tic_units;
     int32_t chk_gametic, chk_x, chk_y; uint32_t chk_angle; uint8_t chk_valid, prev_valid, last_error, pad;
+    /* N3_VERIFY: the sub's frame of the same game state vs the MD's own R128 render (offset 60). */
+    uint32_t verify_frames, verify_diff_bytes, verify_max, verify_zero;
+    uint8_t *verify_buf;
     int32_t prev_gametic, prev_x, prev_y; uint32_t prev_angle;
     N3SnapHead snap;
     player_t snap_player;
@@ -109,6 +112,9 @@ static N3State *state(void)
         N3State *s = (N3State *)Z_MallocStatic(sizeof(N3State));
         memset(s, 0, sizeof *s);
         s->active = 1;
+#if defined(N3_VERIFY)
+        s->verify_buf = (uint8_t *)Z_MallocStatic(SCD_FRAME_BYTES);
+#endif
         n3 = s;
     }
     return n3;
@@ -187,7 +193,11 @@ void N3_MdFrameArrived(uint16_t arg)
     }
     /* Pair-V: copy only the sample bytes (odd); MD attribute bytes stay as R128 set them. */
     volatile const uint8_t *src = (volatile const uint8_t *)(SCD_MD_BANK_BASE + SCD_FRAME_OFFSET);
+#if defined(N3_VERIFY)
+    uint8_t *dst = s->verify_buf;
+#else
     uint8_t *dst = N2_DrawBuffer();
+#endif
     for (uint16_t i = 1; i < SCD_FRAME_BYTES; i += 2) dst[i] = src[i];
     s->have_frame = 1;
     s->frames_sub++;
@@ -215,12 +225,37 @@ void N3_Pump(void)
         else if (_g_vblankCount - t0 > 60u * 8u) { s->active = 0; s->timeouts++; return; }
     }
     s->wait_vblanks += _g_vblankCount - t0;
+#if defined(N3_VERIFY)
+    /* Second exchange with no new tics: receive the frame of exactly the MD's current state. */
+    if (s->lock)
+        for (;;)
+        {
+            if (CD_SUB_SIG == 0xDEADu) { s->active = 0; s->last_error = 1; return; }
+            const uint16_t cmd = SCD_MdPendingCmd();
+            if (!cmd) { if (_g_vblankCount - t0 > 60u * 8u) { s->active = 0; s->timeouts++; return; } continue; }
+            if (SCD_MdServeOnce() < 0) { s->active = 0; s->last_error = 2; return; }
+            if (cmd == SCD_CMD_FRAME) break;
+        }
+#endif
 }
 
 /* Replaces R_RenderPlayerView: 1 = the sub's frame is already in the draw buffer. */
 int N3_Display(void)
 {
     N3State *s = n3;
+#if defined(N3_VERIFY)
+    if (s && s != N3_BOOTED && s->have_frame)
+    {
+        s->have_frame = 0;
+        extern void R_RenderPlayerView(player_t *);
+        R_RenderPlayerView(&_g_player);
+        const uint8_t *md = N2_DrawBuffer();
+        uint32_t d = 0;
+        for (uint16_t i = 1; i < SCD_FRAME_BYTES; i += 2) d += md[i] != s->verify_buf[i];
+        s->verify_frames++; s->verify_diff_bytes += d; if (d > s->verify_max) s->verify_max = d; if (!d) s->verify_zero++;
+        return 1;
+    }
+#endif
     if (s && s != N3_BOOTED && s->have_frame) { s->have_frame = 0; return 1; }
     if (s && s != N3_BOOTED) s->frames_md++;
     return 0;

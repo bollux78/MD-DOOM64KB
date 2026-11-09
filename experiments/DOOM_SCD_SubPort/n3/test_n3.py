@@ -42,11 +42,15 @@ try:
         ptr = rd(g, "n3", 4)
         res["n3_ptr"] = hex(ptr)
         if ptr > 1:
-            v = struct.unpack(">BBBBHH8I4i4B", g.readmem(ptr, 60))
+            raw = g.readmem(ptr, 60)
             keys = ("active", "lock", "snap_pending", "have_frame", "ntics", "seq", "frames_sub", "frames_md", "desyncs",
                     "timeouts", "wait_vblanks", "exchanges", "sub_render_units", "sub_tic_units", "chk_gametic", "chk_x",
                     "chk_y", "chk_angle", "chk_valid", "prev_valid", "last_error", "pad")
-            st = dict(zip(keys, v))
+            st = dict(zip(keys, struct.unpack(">BBBBHH8I4i4B", raw)))
+            vo = int(os.environ.get("N3_VERIFY_OFFSET", "0"))
+            if vo:
+                vf, vd, vm, vz = struct.unpack(">4I", g.readmem(ptr + vo, 16))
+                st.update(verify_frames=vf, verify_avg_diff=round(vd / max(vf, 1), 1), verify_max=vm, verify_identical=vz)
             if st["exchanges"]:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)
