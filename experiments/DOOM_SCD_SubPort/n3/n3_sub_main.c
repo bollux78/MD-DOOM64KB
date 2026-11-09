@@ -36,6 +36,7 @@ void SCD_ClockPoll(void)
     scd_clock_prev = now;
 }
 
+uint8_t n3_r84_pool_ram[(N3_POOL_BYTES + 1u) & ~1u] __attribute__((aligned(4)));
 static uint8_t pay[sizeof(N3PayHead) + sizeof(N3SnapHead) + sizeof(player_t) + N3_MAX_TICS * N3_TIC_BYTES + 16];
 
 static void apply_snapshot(const uint8_t *p)
@@ -58,14 +59,13 @@ void sub_main(void)
 {
     REG16(0xFF8002UL) = 4; SCD_SubTransportReset(); REG16(0xFF8020UL) = 0x5343u;
     Z_Init(); W_Init();
-    /* R84 wall pool into both Word RAM banks (each exchange swaps the bank we see) */
-    for (uint16_t k = 0; k < 2u; k++)
+    /* R84 wall pool (all maps) into PRG-RAM, from the MD's ROM */
     {
         uint16_t len = 0;
-        const volatile uint8_t *pp = SCD_SubExchange(N3_CMD_POOL, k, &len);
+        const volatile uint8_t *pp = SCD_SubExchange(N3_CMD_POOL, 0, &len);
         if (!pp || len != N3_POOL_BYTES) I_Error("N3 POOL %u", (unsigned)len);
-        volatile uint16_t *d = (volatile uint16_t *)(BANK + N3_POOL_OFFSET);
         const volatile uint16_t *ps = (const volatile uint16_t *)pp;
+        uint16_t *d = (uint16_t *)n3_r84_pool_ram;
         for (uint16_t i = 0; i < (uint16_t)((len + 1u) >> 1); i++) d[i] = ps[i];
     }
     R_Init(); P_Init(); SCD_SubSetTime(0);

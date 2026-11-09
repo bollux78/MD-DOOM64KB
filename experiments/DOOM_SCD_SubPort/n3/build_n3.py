@@ -152,7 +152,7 @@ for t in sorted(used):
         if o not in remap: remap[o] = len(newpool); newpool.extend(pool[o:o + 128])
 newoffs = [remap.get(o, 0) if o != 0xFFFFFFFF else o for o in offs]
 # The pool lives in Word RAM (same copy in both 1M banks), loaded from the MD at sub boot.
-hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "#define r84_pixels ((const uint8_t *)(0x0C0000UL + 0x10200UL))\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
+hdr = re.sub(r"static const uint8_t r84_pixels\[\]=\{[^}]*\};", "extern uint8_t n3_r84_pool_ram[];\n#define r84_pixels ((const uint8_t *)n3_r84_pool_ram)\n#define N3_POOL_BYTES %du" % len(newpool), hdr)
 assert 0x10200 + len(newpool) < 0x1F000, "R84 pool does not fit the Word RAM bank"
 pool_c = "/* N3: resident R84 wall-texture pool for the Sega CD sub (all maps). */\n#include <stdint.h>\n" \
          "const uint8_t n3_r84_pool[%d] = {%s};\nconst uint16_t n3_r84_pool_bytes = %d;\n" % (len(newpool), ",".join(str(v) for v in newpool), len(newpool))
@@ -269,7 +269,7 @@ objs = []
 for s in sources:
     obj = w / (s.name + ".o")
     extra = ["-x", "assembler-with-cpp", "-Wa,--register-prefix-optional,--bitwise-or"] if s.suffix == ".s" else []
-    zone = ["-DSCD_SUB_ZONE_BYTES=65536"] if s.name == "scd_sub_system.c" else []
+    zone = ["-DSCD_SUB_ZONE_BYTES=" + os.environ.get("N3_ZONE", "49152")] if s.name == "scd_sub_system.c" else []
     hot = s.name.startswith("r") or s.name == "tables.c"
     r = subprocess.run([b("gcc")] + cflags + (["-O3", "-fno-web", "-fno-gcse"] if hot else ["-Os"]) + zone + extra +
                        ["-c", str(s), "-o", str(obj)], cwd=str(tree), capture_output=True, text=True)
@@ -346,6 +346,7 @@ md_patch("g_game.c", "static void G_DoLoadLevel (void)\n{", "static void G_DoLoa
 gg = tree / "src/g_game.c"
 gg.write_text(gg.read_text() + "\nvoid N3_GetCmd(void *o){memcpy(o,&netcmd,sizeof netcmd);}\n" +
               ("void N3_AutoStart(void){ G_DeferedPlayDemo(\"demo3\"); }\n" if os.environ.get("N3_AUTOSTART") == "demo3" else
+               "void N3_AutoStart(void){ G_InitNew(sk_medium, %s); }\n" % os.environ["N3_AUTOSTART"][3:] if os.environ.get("N3_AUTOSTART", "").startswith("map") else
                "void N3_AutoStart(void){ d_skill = sk_medium; _g_gameaction = ga_newgame; }\n"))
 (tree / "src/m_random.c").write_text((tree / "src/m_random.c").read_text() + RND)
 md_patch("d_main.c", r"G_Ticker \(\);", "G_Ticker (); { extern void N3_OnTicEnd(void); N3_OnTicEnd(); }", regex=True)
