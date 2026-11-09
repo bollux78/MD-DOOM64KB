@@ -69,6 +69,8 @@ if PROF & 256:
     rv = src / "r22_video.inc"; t = rv.read_text()
     t = t.replace("uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{", "uint8_t *R96_WallSetup(const uint8_t *colormap,const uint8_t **lut)\n{\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }", 1)
     t = t.replace("uint8_t *R95_FlatSetup(const uint8_t **lut)\n{", "uint8_t *R95_FlatSetup(const uint8_t **lut)\n{\n    { extern void SCD_ClockPoll(void); SCD_ClockPoll(); }", 1)
+    # one colour profile on the sub (mode 0): lets the compiler drop the other comp LUT sets
+    t = t.replace("#define R59_CURRENT (r59_color_tables[r59_color_mode])", "#define R59_CURRENT (r59_color_tables[0])")
     t = t.replace("static uint8_t *r115_fb2;", "static uint8_t *r115_fb2;\nuint8_t *N2_DrawBuffer(void){return r115_draw;}", 1)
     rv.write_text(t)
 (src / "g_game.c").write_text((src / "g_game.c").read_text() +
