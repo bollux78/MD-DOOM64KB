@@ -82,7 +82,8 @@ def stage(src, wad, out):
         "source":UPSTREAM,"pin":PIN,"map":"E1M1",
         "format":"Manifold portal_map C proof of concept",
         "player_spawn":{"x":x,"y":y,"doom_angle":angle,"manifold_cell":spawn_cell},
-        "geometry":stats,"safe_for_runtime":not missing,\n        "unpaired_edges_are_solid":len(missing),
+        "geometry":stats,"safe_for_runtime":not missing,
+        "unpaired_edges_are_solid":len(missing),
         "renderer_unchanged":True,"lighting_color_placeholder":True,
         "thing_spawns_pending":True,"doors_triggers_pending":True
     }
