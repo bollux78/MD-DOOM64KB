@@ -393,16 +393,11 @@ int N3_Display(void)
         const uint32_t w = _g_vblankCount - t1;
         const int32_t md_wait = (int32_t)(lines_now() - l1);
         s->md_render_vblanks += t1 - t0; s->wait_b_vblanks += w; s->split_sum += (uint32_t)s->split;
-        /* Balance in scanlines: sub idle time (its report, 30.72 us units) vs our wait. Positive =
-         * the sub has slack -> it gets columns. ~70 lines per column swing, half-step damping. */
-        {
-            /* Our wait for B, in scanlines (the exchange itself is ~40): sub late -> MD takes a
-             * column; sub ready on arrival -> the sub takes one. */
-            int32_t f = s->split_fp;
-            if (md_wait > 40 + N3_LATE_LINES) f += 16; else if (md_wait < 40 + N3_READY_LINES) f -= 16;
-            if (f < 10 * 16) f = 10 * 16; else if (f > 66 * 16) f = 66 * 16;
-            s->split_fp = (int16_t)f; s->split = (int16_t)(f >> 4);
-        }
+        /* Balance (measured best in BlastEm, vs finer scanline controllers): the CPU that waits
+         * gets more columns next frame. */
+        (void)md_wait;
+        if (w > 1 && s->split < 66) s->split += 2;
+        else if (w == 0 && s->split > 10) s->split -= 1;
         if (ok && s->have_frame)
         {
             s->have_frame = 0;
