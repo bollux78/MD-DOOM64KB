@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [map, init]
+        mode: [pointer, params, pos]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     steps:
@@ -62,6 +62,56 @@ jobs:
               VDP_setScreenWidth320();
               VDP_setScreenHeight224();
               VDP_drawText("MANIFOLD VIDEO BASELINE", 3, 10);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            pointer)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "portal_map.h"
+          #include "map_table.h"
+          int main(void) {
+              VDP_init();
+              const portal_map *p = (const portal_map*)map_table[2];
+              if (p && p->num_sectors == 237) {
+                  VDP_drawText("E1M1 POINTER OK", 3, 9);
+              } else { VDP_drawText("E1M1 POINTER BAD", 3, 9); }
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            params)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "level.h"
+          #include "map_table.h"
+          extern void init_sector_parameters(portal_map*);
+          int main(void) {
+              VDP_init();
+              cur_portal_map = (portal_map*)map_table[2];
+              init_sector_parameters(cur_portal_map);
+              VDP_drawText("E1M1 PARAMS OK", 3, 9);
+              while (1) { VDP_waitVSync(); }
+              return 0;
+          }
+          C
+              ;;
+            pos)
+              cat > "$MANIFOLD_STAGE/candidate/src/main.c" <<'C'
+          #include <genesis.h>
+          #include "level.h"
+          #include "map_table.h"
+          extern void init_sector_parameters(portal_map*);
+          extern void init_player_pos(void);
+          int main(void) {
+              VDP_init();
+              cur_portal_map = (portal_map*)map_table[2];
+              init_sector_parameters(cur_portal_map);
+              init_player_pos();
+              VDP_drawText("E1M1 PLAYER POS OK", 3, 9);
               while (1) { VDP_waitVSync(); }
               return 0;
           }
@@ -176,7 +226,7 @@ jobs:
           fi
           echo "BlastEm executable: $emu"
           set +e
-          timeout 20s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH"
+          ( ulimit -v 1048576; timeout 8s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH" )
           rc=$?
           set -e
           if test "$rc" -ne 0; then
