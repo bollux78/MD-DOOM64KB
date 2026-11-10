@@ -170,23 +170,54 @@ jobs:
           echo "Testing 1200 emulated frames with bounded time and memory"
           ( ulimit -v 1048576; timeout 45s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 1200 "$ROM_PATH" )
           echo "BlastEm 1200 emulated frames: PASS (no visual validation)"
-      - name: Probe emulators and BlastEm timing (diagnostic)
+      - name: BlastEm stop reason (first 40 lines)
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          for t in retroarch mame ares picodrive gens dgen Xvfb xvfb-run ffmpeg python3 gdb; do printf '%-10s %s\n' "$t" "$(command -v $t)"; done
-          find / -xdev -name '*genesis*libretro*.so' -o -xdev -name '*picodrive*libretro*.so' 2>/dev/null | head
-          ls "$HOME/Projetos/blastem64-1.0.0" | head -40
-          python3 -c "import PIL;print('PIL',PIL.__version__)" 2>&1
           emu="$HOME/Projetos/blastem64-1.0.0/blastem"
-          for n in 30 90 300; do
-            start=$(date +%s.%N)
-            timeout 90s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b $n "$ROM_PATH" >/tmp/bl_$n.log 2>&1
-            rc=$?
-            echo "blastem -b $n rc=$rc secs=$(echo "$(date +%s.%N) - $start" | bc)"
-            tail -3 /tmp/bl_$n.log
-          done
+          timeout 20s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH" </dev/null 2>&1 | head -40
+      - name: MAME trace + snapshots (megadriv, headless)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          shots="$RUNNER_TEMP/manifold-shots-$GITHUB_RUN_ID"
+          mkdir -p "$shots/snap"
+          echo "SHOTS_DIR=$shots" >> "$GITHUB_ENV"
+          cat > "$shots/trace.lua" <<'LUA'
+          local frame = 0
+          local cpu = manager.machine.devices[":maincpu"]
+          local scr = manager.machine.screens[":megadriv"]
+          if scr == nil then for k,v in pairs(manager.machine.screens) do scr = v end end
+          emu.register_frame_done(function()
+            frame = frame + 1
+            if frame % 15 == 0 or frame < 6 then
+              local st = cpu.state
+              print(string.format("F%04d PC=%06X SR=%04X SP=%08X A7=%08X D0=%08X A0=%08X",
+                frame, st["PC"].value, st["SR"].value, st["SP"].value, st["A7"].value, st["D0"].value, st["A0"].value))
+            end
+            if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 then
+              scr:snapshot(string.format("f%04d.png", frame))
+            end
+            if frame >= 720 then manager.machine:exit() end
+          end)
+          LUA
+          cd "$shots"
+          timeout 240s mame megadriv -cart "$ROM_PATH" -rompath /nonexistent \
+            -video none -sound none -nothrottle -skip_gameinfo -window \
+            -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
+            -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | tail -80
+          find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \; 
+          python3 - "$shots" <<'PY'
+          import sys,pathlib
+          from PIL import Image
+          for p in sorted(pathlib.Path(sys.argv[1]).glob("f*.png")):
+              im=Image.open(p).convert("RGB")
+              cols=im.getcolors(1<<20)
+              print(p.name, im.size, "unique colors:", len(cols) if cols else ">1M")
+              im.resize((im.width*3, im.height*3), Image.NEAREST).save(p.with_name("frame_"+p.name))
+          PY
       - name: Visual capture (RetroArch + Genesis Plus GX headless, real frames)
         shell: bash
         run: |
