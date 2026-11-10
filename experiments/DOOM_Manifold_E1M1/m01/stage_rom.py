@@ -456,6 +456,28 @@ def _asm_operands(section):
     clean=re.sub(r'//[^\n]*','',section).replace('\\\n',' ')
     return [(c,e.strip()) for c,e in re.findall(r'"([^"]*)"\s*\(([^()]*)\)',clean)]
 
+def fail_loud_on_heap_exhaustion(out):
+    """Upstream malloc wrapper returned MEM_alloc's NULL unchecked.
+
+    Under SGDK 2.x (bigger system RAM reservation) a NULL here makes object
+    lists/bitmap buffers alias ROM at 0x000000: reads return vector bytes,
+    so linked lists cycle forever (MAME hang in process_objects_in_sector).
+    Stop with an on-screen message instead of corrupting state.
+    """
+    p=out/"src/utils.c"
+    s=p.read_text()
+    old="    void* p = MEM_alloc(size);\n"
+    if s.count(old)!=1:
+        raise ValueError("upstream malloc wrapper changed")
+    s=s.replace(old,old+"""    if (p == NULL) {
+        static char oom[80];
+        sprintf(oom, "OOM %s %u B, heap free %u", thing, size, MEM_getFree());
+        SYS_die(oom);
+    }
+""")
+    p.write_text(s)
+    print("Heap exhaustion now fails loudly via SYS_die")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -629,6 +651,7 @@ def stage(src, wad, out, control=False):
     replace_generated_vertical_scalers_with_checked_c(out)
     fix_sgdk2_hint_callbacks(out)
     harden_inline_asm(out)
+    fail_loud_on_heap_exhaustion(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.

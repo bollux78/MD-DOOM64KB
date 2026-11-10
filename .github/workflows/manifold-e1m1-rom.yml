@@ -210,8 +210,14 @@ jobs:
             if frame % 30 == 0 or frame < 4 then
               local st = cpu.state
               local function g(n) local r = st[n]; if r then return r.value else return -1 end end
-              print(string.format("%s F%04d PC=%06X SR=%04X SP=%08X D0=%08X A0=%08X",
-                pfx, frame, g("PC"), g("SR"), g("SP"), g("D0"), g("A0")))
+              local extra = ""
+              local mem = cpu.spaces["program"]
+              for name, addr in string.gmatch(os.getenv("WATCH") or "", "([%w_]+)=(%x+)") do
+                local a = tonumber(addr, 16) & 0xFFFFFF
+                extra = extra .. string.format(" %s=%08X", name, mem:read_u32(a))
+              end
+              print(string.format("%s F%04d PC=%06X SR=%04X SP=%08X D0=%08X A0=%08X%s",
+                pfx, frame, g("PC"), g("SR"), g("SP"), g("D0"), g("A0"), extra))
             end
             if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
@@ -224,6 +230,14 @@ jobs:
             pfx="${pair%%:*}"; rom="${pair#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
+            v=$([ $pfx = e1m1 ] && echo candidate || echo $pfx)
+            ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"
+            WATCH=""
+            if test -s "$ELF"; then
+              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"{printf "%s=%s,", $3, $1}')
+            fi
+            echo "watch: $WATCH"
+            export WATCH
             SNAP_PREFIX="$pfx" timeout 240s mame megadriv -cart "$rom" -rompath /nonexistent \
               -video none -sound none -nothrottle -skip_gameinfo -noplugins -seconds_to_run 60 \
               -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
