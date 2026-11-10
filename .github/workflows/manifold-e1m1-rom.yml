@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
@@ -46,6 +46,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
+          MANIFOLD_VERT_CACHE=1 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m11vcache"
           python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -148,6 +152,16 @@ jobs:
           else
             echo "::error::M10 doom HUD build failed"; grep -m20 -iE "error|undefined" "$out/doomhud-build.log"; exit 1
           fi
+          # M11 A/B: H32 Doom HUD control (candidate) versus cached vertices.
+          [ ! -e "$MANIFOLD_STAGE/m11vcache/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/m11vcache/src/math3D.h"
+          make -C "$MANIFOLD_STAGE/m11vcache" -f "$portable_makefile" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/m11vcache-build.log" 2>&1 || {
+              grep -m20 -iE "error|undefined" "$out/m11vcache-build.log"; exit 1;
+            }
+          cp "$MANIFOLD_STAGE/m11vcache/out/rom.bin" "$out/m11-vertexcache-h32.bin"
+          echo "M11_VERTEXCACHE_ROM_PATH=$out/m11-vertexcache-h32.bin" >> "$GITHUB_ENV"
+          sha256sum "$ROM_PATH" "$out/m11-vertexcache-h32.bin"
           [ ! -e "$MANIFOLD_STAGE/tour/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/tour/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/tour" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -432,7 +446,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11vcache:genesis:${M11_VERTEXCACHE_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -536,6 +550,8 @@ jobs:
             ${{ env.TOUR_ROM_PATH }}
             ${{ env.M10_CONTROL_ROM_PATH }}
             ${{ env.M10_DOOM_ROM_PATH }}
+            ${{ env.M11_VERTEXCACHE_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m11vcache/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/doomhud/out/release/symbol.txt
             ${{ env.SGDK_KIT }}
             ${{ env.TC_KIT }}
@@ -560,7 +576,7 @@ jobs:
       - name: Publish ROM to stable release (requires explicit approval)
         # Never overwrite the tested M06 release with an unreviewed experiment.
         # The runner integration also lacks release-write permission (HTTP 403).
-        if: success() && vars.MANIFOLD_RELEASE_APPROVED == 'true'
+        if: success() && github.ref_name == 'exp-manifold-e1m1-m01' && vars.MANIFOLD_RELEASE_APPROVED == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
