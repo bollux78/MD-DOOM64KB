@@ -490,7 +490,7 @@ def fail_loud_on_heap_exhaustion(out):
     p.write_text(s)
     print("Heap exhaustion now fails loudly via SYS_die")
 
-MAX_WALLS_PER_SECTOR=255
+MAX_WALLS_PER_SECTOR=32  # E1M1 BSP cells have <=11 walls; 255 made visit_graph frames 2.3KB -> stack overflow into heap
 def widen_sector_vertex_buffers(out):
     """portal.c keeps per-sector transformed vertices on the stack in
     `Vect2D_s16 buf[62]`, and load_transform_and_duplicate_verts writes
@@ -542,6 +542,31 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
+def guard_portal_recursion_stack(out):
+    """visit_graph recurses once per portal hop. E1M1 chains far deeper than
+    upstream maps and the stack (above the heap/framebuffers) grew down into
+    the heap, corrupting object lists -> wild jump. Track the heap top in
+    man_malloc and stop recursing when the stack gets close to it."""
+    u=out/"src/utils.c"
+    s=u.read_text()
+    old="    void* p = MEM_alloc(size);\n"
+    if s.count(old)!=1: raise ValueError("man_malloc changed")
+    s=s.replace("void* man_malloc(u16 size, const char* thing) {","u32 manifold_heap_high = 0;\nvoid* man_malloc(u16 size, const char* thing) {",1)
+    s=s.replace(old,old+"    if (p && ((u32)p + size) > manifold_heap_high) { manifold_heap_high = (u32)p + size; }\n",1)
+    u.write_text(s)
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="void visit_graph(u16 src_sector, u16 sector, u16 x1, u16 x2, u32 cur_frame, uint8_t depth) {"
+    if s.count(old)!=1: raise ValueError("visit_graph signature changed")
+    s=s.replace(old,"extern u32 manifold_heap_high;\n"+old+"""
+    {
+        u32 sp_now;
+        __asm volatile("move.l %%sp,%0" : "=d" (sp_now));
+        if (depth > 48 || (sp_now & 0xFFFFFF) < ((manifold_heap_high & 0xFFFFFF) + 3072)) { return; }
+    }""",1)
+    p.write_text(s)
+    print("portal recursion bounded by stack/heap guard")
+
 def clamp_native_vertical_lines(out):
     """Flat-colour column filler jumps into an unrolled table sized for
     dy<=158 and writes from col_ptr+y0*2 with no bounds checks. E1M1 feeds
@@ -568,7 +593,16 @@ u16 manifold_autopilot_joy(u16 j);
 """)
     j=base/"joy_helper.c"
     j.write_text(j.read_text()+"""
+static void manifold_test_crash_to_emulator(void) {
+    /* make SGDK's exception screen fatal for headless emulators */
+    ((void (*)(void))0x00C00020)();
+}
 u16 manifold_autopilot_joy(u16 j) {
+    static u8 hooked = 0;
+    if (!hooked) {
+        hooked = 1;
+        busErrorCB = addressErrorCB = illegalInstCB = zeroDivideCB = line1x1xCB = errorExceptionCB = manifold_test_crash_to_emulator;
+    }
     (void)(JOY_readJoypad)(j);
     u32 f = vtimer;
     if (f < 120) { return 0; }   /* map autoloads; START would pause */
@@ -932,7 +966,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
