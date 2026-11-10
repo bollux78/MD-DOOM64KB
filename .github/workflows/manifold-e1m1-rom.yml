@@ -71,6 +71,8 @@ jobs:
                 --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" \
                 --out "$MANIFOLD_STAGE/m11$variant"
           done
+          # Prevent experimental option leakage into baseline/autowalk/control stages.
+          unset MANIFOLD_NEAR_SAFE MANIFOLD_HUD_REPAIR MANIFOLD_HIDE_WEAPON MANIFOLD_EXTRA
           MANIFOLD_NEAR_SAFE=1 MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_EXTRA=autopilot_input \
              python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
                --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" \
