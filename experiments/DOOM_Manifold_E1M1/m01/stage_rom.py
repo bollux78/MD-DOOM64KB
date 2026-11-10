@@ -503,6 +503,38 @@ def widen_sector_vertex_buffers(out):
     p.write_text(s)
     print("Per-sector vertex stack buffers widened to",n,"entries")
 
+def relocate_free_tiles_after_sgdk2_framebuffer(out):
+    """Manifold hardcodes free_tile_loc = 0x390 = 16 + 896 framebuffer tiles,
+    i.e. SGDK 1.x TILE_USERINDEX=16. SGDK 2.x puts the font first
+    (TILE_USER_INDEX = 112), so the double framebuffer spans up to 0x3F0 and
+    the game zeroed/overwrote tiles 0x390..0x3F0 inside it (black bands,
+    missing weapon). Start game tiles after the real framebuffer and stop
+    before the H-scroll table (0xA800 -> tile 0x540)."""
+    p=out/"src/game.c"
+    s=p.read_text()
+    reps={
+        "    free_tile_loc = 0x390;\n":
+        "    free_tile_loc = MANIFOLD_FREE_TILE_BASE;\n",
+        "    VDP_fillTileData(0x00, 0x0390, 0x170, 1);\n":
+        "    VDP_fillTileData(0x00, MANIFOLD_FREE_TILE_BASE, MANIFOLD_FREE_TILE_LIMIT - MANIFOLD_FREE_TILE_BASE, 1);\n",
+        "    free_tile_loc = console_init(free_tile_loc);\n":
+        "    free_tile_loc = console_init(free_tile_loc);\n"
+        "    if (free_tile_loc > MANIFOLD_FREE_TILE_LIMIT) {\n"
+        "        static char vram_msg[48];\n"
+        "        sprintf(vram_msg, \"VRAM tiles %X > %X\", free_tile_loc, MANIFOLD_FREE_TILE_LIMIT);\n"
+        "        SYS_die(vram_msg);\n"
+        "    }\n",
+    }
+    for old,new in reps.items():
+        if s.count(old)!=1:
+            raise ValueError(f"game.c tile layout changed: {old!r}")
+        s=s.replace(old,new)
+    s=("#include <genesis.h>\n"
+       "#define MANIFOLD_FREE_TILE_BASE (TILE_USER_INDEX + 32*20/2 + 32*18)\n"
+       "#define MANIFOLD_FREE_TILE_LIMIT 0x540\n")+s
+    p.write_text(s)
+    print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -656,7 +688,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,replace_generated_vertical_scalers_with_checked_c,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,replace_generated_vertical_scalers_with_checked_c,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
