@@ -560,4 +560,5 @@ jobs:
           echo "blastem: ${BLASTEM_VERDICT:-NOT_RUN}"
           echo "blastem autowalk: ${AUTOWALK_VERDICT:-NOT_RUN}"
           echo "physical console: NOT TESTED"
-          echo "Only the ROM is published to the manifold-e1m1-latest release; no WAD is uploaded"
+          echo "M06 stable release preserved; new experimental ROM stored in runner/artifacts"
+          echo "No WAD uploaded; release update requires explicit MANIFOLD_RELEASE_APPROVED=true"
