@@ -397,6 +397,74 @@ def mute_legacy_emulator_debug_logging(out):
         count+=1
     print("Legacy emulator debug log calls suppressed in",count,"C units")
 
+def replace_generated_vertical_scalers_with_checked_c(out):
+    """Diagnostic: remove computed jumps into 512 generated 68000 scaler routines.
+
+    Screenshot PC 0x08001D lands one byte before scale_64_450_jump
+    (0x08001E); the corresponding entry is scale_64_450_bot_clip
+    (0x080004). Invalid parameters or registers must never reach it.
+    Use simple, bounded, equivalent nearest-neighbor C pixel writes until
+    the original 68k register constraints and clip values are audited.
+    """
+    p=out/"src/texture.c"
+    source=p.read_text()
+    replacements={
+        "draw_texture_vertical_line": """
+void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
+                                u8* col_ptr, const u16* tex_column) {
+    s32 full=(s32)unclipped_y1-(s32)unclipped_y0;
+    if (!col_ptr || !tex_column || full<=0 || full>512 || y0>=144) return;
+    if (((u32)col_ptr & 1) || ((u32)tex_column & 1)) return;
+    s32 start=(s32)y0-(s32)unclipped_y0;
+    if (start<0 || start>=full) return;
+    u16* dst=(u16*)col_ptr;
+    s32 visible=full-start;
+    if (visible>144-(s32)y0) visible=144-(s32)y0;
+    for (s32 i=0; i<visible; ++i) {
+        s32 t=((start+i)*64)/full;
+        dst[(y0+i)] = tex_column[t>63?63:t];
+    }
+}
+""",
+        "draw_bottom_clipped_texture_vertical_line": """
+void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
+                                                s16 unclipped_y1, u16 y1,
+                                                u8* col_ptr, const u16* tex_column) {
+    s32 full=(s32)unclipped_y1-(s32)unclipped_y0;
+    if (!col_ptr || !tex_column || full<=0 || full>512 || y0>=144 || y1<=y0) return;
+    if (((u32)col_ptr & 1) || ((u32)tex_column & 1)) return;
+    s32 start=(s32)y0-(s32)unclipped_y0;
+    if (start<0 || start>=full) return;
+    s32 visible=(s32)y1-(s32)y0;
+    if (visible>full-start) visible=full-start;
+    if (visible>144-(s32)y0) visible=144-(s32)y0;
+    u16* dst=(u16*)col_ptr;
+    for (s32 i=0; i<visible; ++i) {
+        s32 t=((start+i)*64)/full;
+        dst[(y0+i)] = tex_column[t>63?63:t];
+    }
+}
+"""
+    }
+    for name,replacement in replacements.items():
+        import re
+        matches=list(re.finditer(r"\\bvoid\\s+"+name+r"\\s*\\(",source))
+        if len(matches)!=1:
+            raise ValueError(f"expected one generated scaler caller {name}, got {len(matches)}")
+        start=matches[0].start()
+        opening=source.index("{",matches[0].end())
+        depth=1
+        end=opening+1
+        while depth and end<len(source):
+            if source[end]=="{": depth+=1
+            elif source[end]=="}": depth-=1
+            end+=1
+        if depth:
+            raise ValueError("unterminated generated texture function")
+        source=source[:start]+replacement+source[end:]
+    p.write_text(source)
+    print("Using bounded C fallbacks; NO generated vertical-scaler calls")
+
 def stage(src, wad, out):
     out=out.resolve()
     if out.exists():
@@ -420,6 +488,7 @@ def stage(src, wad, out):
     normalize_weapon_sprite_frame_layout(out)
     normalize_header_global_definitions(out)
     mute_legacy_emulator_debug_logging(out)
+    replace_generated_vertical_scalers_with_checked_c(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
