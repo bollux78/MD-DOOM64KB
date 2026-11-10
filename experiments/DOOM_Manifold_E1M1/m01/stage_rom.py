@@ -831,6 +831,34 @@ def fix_fps_font_base(out):
     p.write_text(s.replace(old,"    u16 base = TILE_FONT_INDEX;\n",1))
     print("fps font base -> TILE_FONT_INDEX")
 
+def install_doom_hud(out, wad):
+    """M10 (MANIFOLD_HUD=doom): replace Manifold's inventory HUD rendering with
+    the R128 HUD-WAD status bar. Inventory logic (keys) is kept."""
+    import shutil, subprocess, sys as _sys
+    root=Path(__file__).resolve().parents[3]
+    m10=Path(__file__).resolve().parents[1]/"m10"
+    hdr=out/"src/hud_wad_assets.h"
+    subprocess.run([_sys.executable,str(m10/"gen_hud_manifold.py"),"--wad",str(wad),"--out",str(hdr)],check=True)
+    _sys.path.insert(0,str(m10))
+    import gen_hud_manifold
+    gen_hud_manifold.single_palette(str(hdr))
+    # SGDK provides uint8_t & co. as macros; no libc <stdint.h> in the m68k-elf kit
+    (out/"src/hud_wad_logic.h").write_text((root/"src/hud_wad_logic.h").read_text().replace("#include <stdint.h>",""))
+    hdr.write_text(hdr.read_text().replace("#include <stdint.h>",""))
+    shutil.copy(m10/"doom_statusbar.c",out/"src/doom_statusbar.c")
+    inv=out/"src/inventory.c"
+    s=inv.read_text()
+    old_init_start="    u32 new_free_tile_loc = load_inventory_items_to_vram(free_tile_loc);\n"
+    old_init_end="    inventory_reset();\n    return new_free_tile_loc;\n"
+    a=s.index(old_init_start); b=s.index(old_init_end,a)
+    s=s[:a]+"    u32 new_free_tile_loc = doom_hud_init(free_tile_loc);\n"+s[b:]
+    old_draw="void inventory_draw() {\n"
+    if s.count(old_draw)!=1: raise ValueError("inventory_draw changed")
+    s=s.replace(old_draw,old_draw+"    doom_hud_update();\n    return;\n",1)
+    s=s.replace('#include "inventory.h"\n','#include "inventory.h"\nu32 doom_hud_init(u32 free_tile_loc);\nvoid doom_hud_update(void);\n',1)
+    inv.write_text(s)
+    print("doom HUD installed (R128 HUD-WAD)")
+
 def install_sky(out, res):
     """SKY1 band on BG_B behind the framebuffer (BG_A colour 0 = sky
     ceilings), 256px wide like Doom (90 degrees), tiles stored in VRAM
@@ -1367,6 +1395,8 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
         tex=apply_doom_textures(out,map_lumps,cells,wad)
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
+    if os.environ.get("MANIFOLD_HUD")=="doom":
+        install_doom_hud(out,wad)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
         h=out/"src/manifold_mute_klog.h"
         h.write_text(h.read_text()+"\nu16 manifold_autopilot_joy(u16 j);\n#define JOY_readJoypad(j) manifold_autopilot_joy(j)\n")

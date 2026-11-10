@@ -50,7 +50,11 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/control" --control
-          MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+          MANIFOLD_HUD=doom python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/doomhud"
+          MANIFOLD_HUD=doom MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/autowalk"
@@ -117,6 +121,19 @@ jobs:
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m02-hintfix.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m02-hintfix.bin"
           [ -f "$MANIFOLD_STAGE/control/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/control/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/control/src/math3D.h"
+          # M10 pair: control = candidate (M08 inventory HUD), doom = R128 HUD-WAD status bar, same commit
+          cp "$out/doom-md-manifold-e1m1-m02-hintfix.bin" "$out/m10-hud-control.bin"
+          [ ! -e "$MANIFOLD_STAGE/doomhud/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/doomhud/src/math3D.h"
+          if make -C "$MANIFOLD_STAGE/doomhud" -f "$portable_makefile" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/doomhud-build.log" 2>&1; then
+            cp "$MANIFOLD_STAGE/doomhud/out/rom.bin" "$out/m10-hud-doom.bin"
+            echo "M10_DOOM_ROM_PATH=$out/m10-hud-doom.bin" >> "$GITHUB_ENV"
+            echo "M10_CONTROL_ROM_PATH=$out/m10-hud-control.bin" >> "$GITHUB_ENV"
+            sha256sum "$out/m10-hud-control.bin" "$out/m10-hud-doom.bin"
+          else
+            echo "::error::M10 doom HUD build failed"; grep -m20 -iE "error|undefined" "$out/doomhud-build.log"; exit 1
+          fi
           [ ! -e "$MANIFOLD_STAGE/tour/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/tour/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/tour" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -401,7 +418,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -503,6 +520,9 @@ jobs:
             ${{ env.ROM_PATH }}
             ${{ env.AUTOWALK_ROM_PATH }}
             ${{ env.TOUR_ROM_PATH }}
+            ${{ env.M10_CONTROL_ROM_PATH }}
+            ${{ env.M10_DOOM_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/doomhud/out/release/symbol.txt
             ${{ env.SGDK_KIT }}
             ${{ env.TC_KIT }}
             ${{ env.MANIFOLD_STAGE }}/tour/out/release/symbol.txt
