@@ -29,6 +29,16 @@
 - O caso E1 apresenta **grande plano cinza triangular**, com parede ao redor visível. Para diagnosticar: depurar z, projeção de teto/piso, `clip_map_vertex_16`, janela dos portais e `yclip`. Não simplesmente remover um suposto bloco de fog.
 - A variante opt-in `MANIFOLD_VERT_CACHE=1` mantém buffer de recorte por parede, cacheia transformação dos vértices até uma vez/frame e guarda 6 bytes/vertex em WRAM. O build anterior de autowalk divergiu de percurso por timing; não provaria regressão causal. Necessário testar especificamente ROM **autowalk com cache ligado**, não apenas autopilot baseline (a Action #42860868221 foi configurada para isso).
 
+
+## Validação posterior da ROM jogável com cache (Action #42860868221)
+
+- [Run #42860868221](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42860868221): **SUCCESS**, compilou `m11play-h32.bin` (jogável, H32/HUD Doom, cache de vértices, sem travamento de câmera) e `m11autowalk-h32.bin` (mesmo cache, com entrada automática).
+- **Teste estrito específico da variante otimizada** `M11_CACHE_AUTOWALK=PASS_3600_FRAMES` no BlastEm headless, com vetores de exceção fatais. Diferente dos experimentos anteriores, este teste rodou de fato com `MANIFOLD_VERT_CACHE=1` e movimento ativo.
+- ROM jogável candidata no runner: `/home/dan/Projetos/Personal/manifold-e1m1/run-42860868221-1/m11play-h32.bin`, 1.835.008 bytes, header `SEGA`, SHA-256 `b04aadeca9606a088181465673a56615ada8cd6f74056eacd5dbb7ac4f2c0816`.
+- ROM de controle com câmeras fixas: `m11fixed-h32.bin`, SHA-256 `a75d7e5462830e9e939e019c2c28d956b3ccb0798fcf8405535bb455f421db95`. A ROM de autowalk altera intencionalmente os vetores de exceção e não deve ser entregue como jogável.
+- FPS fixo nessa Action repetiu o mesmo relatório da primeira, confirmando reprodutibilidade dos seis pontos no MAME. **Aprovação limitada:** estabilidade automatizada e capturas; ainda requer navegação real no BlastEm gráfico do usuário, especialmente escadas, portas e área externa.
+- Não promover ainda à branch principal nem à release; cache permanece opt-in `MANIFOLD_VERT_CACHE=1`.
+
 ## Próximas etapas
 1. Verificar Action #42860868221, que gera `m11play-h32.bin` (ROM jogável, cache) e `m11autowalk-h32.bin` (cache+autopilot) e executa BlastEm 3600 quadros com exceções fatais. **Só promover cache após aprovação.**
 2. Repetir métricas em mais uma execução e testar jogabilidade real no BlastEm gráfico; procurar regressões invisíveis nas câmeras fixas.
