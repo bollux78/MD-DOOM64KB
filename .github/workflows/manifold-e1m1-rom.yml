@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
@@ -46,6 +46,17 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
+          # Restore the already-vetted R128 E1M1 VGM in disposable workspace only.
+          DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
+          test -s res/r25-e1m1.vgm
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m11music"
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m11musicaw"
           MANIFOLD_CAMERAS=fixed python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -170,7 +181,7 @@ jobs:
           fi
           # M11 reproducible benchmark: same 6 fixed positions, exact angles,
           # no movement: regular portals vs fog off vs vertex-cache test.
-          for variant in m11fixed m11cache m11play m11autowalk; do
+          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw; do
             [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
             make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
               OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -183,13 +194,16 @@ jobs:
           echo "M11_CACHE_ROM_PATH=$out/m11cache-h32.bin" >> "$GITHUB_ENV"
           echo "M11_PLAY_ROM_PATH=$out/m11play-h32.bin" >> "$GITHUB_ENV"
           echo "M11_AW_ROM_PATH=$out/m11autowalk-h32.bin" >> "$GITHUB_ENV"
-          python3 - "$out/m11autowalk-h32.bin" <<'PY'
+          echo "M11_MUSIC_ROM_PATH=$out/m11music-h32.bin" >> "$GITHUB_ENV"
+          echo "M11_MUSIC_AW_PATH=$out/m11musicaw-h32.bin" >> "$GITHUB_ENV"
+          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" <<'PY'
           import struct,sys,pathlib
-          p=pathlib.Path(sys.argv[1])
-          b=bytearray(p.read_bytes())
-          for vector in range(2,12):
-              b[vector*4:vector*4+4]=struct.pack('>I',0x00C00020)
-          p.write_bytes(b)
+          for name in sys.argv[1:]:
+              p=pathlib.Path(name)
+              b=bytearray(p.read_bytes())
+              for vector in range(2,12):
+                  b[vector*4:vector*4+4]=struct.pack('>I',0x00C00020)
+              p.write_bytes(b)
           PY
           # M11 visual A/B: H32 Doom HUD control (candidate) vs no distant portal fog.
           [ ! -e "$MANIFOLD_STAGE/m11fogoff/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/m11fogoff/src/math3D.h"
@@ -369,6 +383,27 @@ jobs:
             tail -60 "$RUNNER_TEMP/m11-aw.log"; cat "$M11_DEBUG_LOG"; exit 1
           fi
           echo "M11_CACHE_AUTOWALK=PASS_3600_FRAMES"
+      - name: M11 E1M1 music-specific autowalk and boot check
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          fake="$RUNNER_TEMP/m11-music-no-debug"; mkdir -p "$fake"
+          cat >"$fake/x-terminal-emulator" <<'SH'
+          #!/bin/sh
+          echo DEBUGGER_INVOKED >> "$M11_MUSIC_DEBUG"
+          exit 0
+          SH
+          chmod +x "$fake/x-terminal-emulator"
+          export M11_MUSIC_DEBUG="$RUNNER_TEMP/music-debug.log"; : > "$M11_MUSIC_DEBUG"
+          for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH"; do
+            n="${testset%%:*}"; rom="${testset#*:}"
+            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b "$n" "$rom" </dev/null >"$RUNNER_TEMP/music-$n.log" 2>&1 ) || { tail -60 "$RUNNER_TEMP/music-$n.log"; exit 1; }
+            if grep -qiE "unmapped|fatal|exception|error|lock up" "$RUNNER_TEMP/music-$n.log" || test -s "$M11_MUSIC_DEBUG"; then
+              cat "$M11_MUSIC_DEBUG"; tail -60 "$RUNNER_TEMP/music-$n.log"; exit 1
+            fi
+          done
+          echo "M11_MUSIC_AUTOWALK=PASS_3600_FRAMES (headless; audio fidelity not verified)"
       - name: Extended BlastEm 1200-frame stress smoke
         continue-on-error: true
         shell: bash
@@ -527,7 +562,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}" "m11fixed:genesis:${M11_FIXED_ROM_PATH:-}" "m11cache:genesis:${M11_CACHE_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}" "m11fixed:genesis:${M11_FIXED_ROM_PATH:-}" "m11cache:genesis:${M11_CACHE_ROM_PATH:-}" "m11music:genesis:${M11_MUSIC_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -677,6 +712,10 @@ jobs:
             ${{ env.M11_CACHE_ROM_PATH }}
             ${{ env.M11_PLAY_ROM_PATH }}
             ${{ env.M11_AW_ROM_PATH }}
+            ${{ env.M11_MUSIC_ROM_PATH }}
+            ${{ env.M11_MUSIC_AW_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m11music/out/release/symbol.txt
+            ${{ env.MANIFOLD_STAGE }}/m11musicaw/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11play/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11autowalk/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11fixed/out/release/symbol.txt
