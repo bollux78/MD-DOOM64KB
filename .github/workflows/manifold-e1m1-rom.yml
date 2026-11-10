@@ -166,7 +166,6 @@ jobs:
           print(f"ROM verification: size={len(data)}, sha256={hashlib.sha256(data).hexdigest()}")
           PY
       - name: BlastEm headless 90-frame boot smoke
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -183,7 +182,10 @@ jobs:
           fi
           echo "BlastEm executable: $emu"
           set +e
-          ( ulimit -v 1048576; timeout 12s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH" )
+          # BlastEm opens a terminal for KDebug text; give it a no-op one.
+          fake="$RUNNER_TEMP/fakebin-smoke"; mkdir -p "$fake"
+          printf '#!/bin/sh\nexit 0\n' > "$fake/x-terminal-emulator"; chmod +x "$fake/x-terminal-emulator"
+          ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 30s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 90 "$ROM_PATH" </dev/null )
           rc=$?
           set -e
           if test "$rc" -ne 0; then

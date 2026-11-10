@@ -398,6 +398,9 @@ def mute_legacy_emulator_debug_logging(out):
            "KLog_f1","KLog_f2","KLog_f3","KLog_f4")
     for name in names:
         definitions+=f"#define {name}(...) ((void)0)\n"
+    # MEM_dump() prints via KDebug; BlastEm opens a terminal window for it
+    # and blocks when none is available (headless runner / some desktops).
+    definitions+="#define MEM_dump() ((void)0)\n"
     (base/"manifold_mute_klog.h").write_text(definitions)
     count=0
     for c in base.glob("*.c"):
