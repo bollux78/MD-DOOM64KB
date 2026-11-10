@@ -523,8 +523,10 @@ jobs:
             ${{ env.SHOTS_DIR }}/*_bmp_buffer_*.bin
           retention-days: 3
           if-no-files-found: warn
-      - name: Publish ROM to stable release (shareware WAD, ROM only)
-        if: success()
+      - name: Publish ROM to stable release (requires explicit approval)
+        # Never overwrite the tested M06 release with an unreviewed experiment.
+        # The runner integration also lacks release-write permission (HTTP 403).
+        if: success() && vars.MANIFOLD_RELEASE_APPROVED == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
