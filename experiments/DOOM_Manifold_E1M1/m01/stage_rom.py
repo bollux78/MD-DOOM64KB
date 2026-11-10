@@ -542,6 +542,36 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
+def autopilot_input(out):
+    """Test-only: replace JOY_readJoypad with a scripted walk so headless
+    BlastEm (no pad input) exercises movement/turning. Enabled via
+    MANIFOLD_EXTRA=autopilot_input for the 'autowalk' ROM only."""
+    base=out/"src"
+    h=base/"manifold_mute_klog.h"
+    h.write_text(h.read_text()+"""
+u16 manifold_autopilot_joy(u16 j);
+#define JOY_readJoypad(j) manifold_autopilot_joy(j)
+""")
+    j=base/"joy_helper.c"
+    j.write_text(j.read_text()+"""
+u16 manifold_autopilot_joy(u16 j) {
+    (void)(JOY_readJoypad)(j);
+    u32 f = vtimer;
+    if (f < 400) { return ((f/40) & 1) ? BUTTON_START : 0; }
+    u32 t = (f - 400) % 1400;
+    if (t < 240) return BUTTON_UP;
+    if (t < 290) return BUTTON_RIGHT;
+    if (t < 500) return BUTTON_UP;
+    if (t < 600) return BUTTON_LEFT;
+    if (t < 840) return BUTTON_UP | BUTTON_LEFT;
+    if (t < 960) return BUTTON_DOWN;
+    if (t < 1100) return BUTTON_RIGHT;
+    if (t < 1300) return BUTTON_UP | BUTTON_RIGHT;
+    return BUTTON_LEFT;
+}
+""")
+    print("autopilot joypad script installed (test ROM only)")
+
 def keep_display_enabled_in_hblank(out):
     """Diagnostic/optional: never blank the display from the H-Int phase
     machine (VBlank DMA then spills into active display instead)."""

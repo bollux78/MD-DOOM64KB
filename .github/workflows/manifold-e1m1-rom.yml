@@ -49,10 +49,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/control" --control
-          MANIFOLD_WINDING=ccw python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+          MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
-            --out "$MANIFOLD_STAGE/e1m1ccw"
+            --out "$MANIFOLD_STAGE/autowalk"
           MANIFOLD_EXTRA=keep_display_enabled_in_hblank python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -106,12 +106,14 @@ jobs:
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m02-hintfix.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m02-hintfix.bin"
           [ -f "$MANIFOLD_STAGE/control/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/control/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/control/src/math3D.h"
-          [ ! -e "$MANIFOLD_STAGE/e1m1ccw/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/e1m1ccw/src/math3D.h"
-          if make -C "$MANIFOLD_STAGE/e1m1ccw" -f "$portable_makefile" -j2 release \
+          [ ! -e "$MANIFOLD_STAGE/autowalk/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/autowalk/src/math3D.h"
+          if make -C "$MANIFOLD_STAGE/autowalk" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
-            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/e1m1ccw-build.log" 2>&1; then
-            cp "$MANIFOLD_STAGE/e1m1ccw/out/rom.bin" "$out/doom-md-manifold-e1m1ccw-m02.bin"
-            echo "E1M1CCW_ROM_PATH=$out/doom-md-manifold-e1m1ccw-m02.bin" >> "$GITHUB_ENV"
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/autowalk-build.log" 2>&1; then
+            cp "$MANIFOLD_STAGE/autowalk/out/rom.bin" "$out/doom-md-manifold-e1m1-autowalk-m02.bin"
+            echo "AUTOWALK_ROM_PATH=$out/doom-md-manifold-e1m1-autowalk-m02.bin" >> "$GITHUB_ENV"
+          else
+            echo "::warning::autowalk build failed"; grep -m10 -i error "$out/autowalk-build.log"
           fi
           [ ! -e "$MANIFOLD_STAGE/controlnh/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/controlnh/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/controlnh" -f "$portable_makefile" -j2 release \
@@ -195,6 +197,38 @@ jobs:
           fi
           echo "BLASTEM_VERDICT=PASS_HEADLESS_90_FRAMES" >> "$GITHUB_ENV"
           echo "BlastEm 90 emulated frames: PASS (visual/gameplay not validated)"
+      - name: BlastEm autowalk stress (scripted walking, strict)
+        id: autowalk
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          test -s "${AUTOWALK_ROM_PATH:-}" || { echo "::error::autowalk ROM missing"; exit 1; }
+          fake="$RUNNER_TEMP/fakebin-aw"; mkdir -p "$fake"
+          export BLASTEM_DBG_LOG="$RUNNER_TEMP/blastem-autowalk-dbg.log"; : > "$BLASTEM_DBG_LOG"
+          cat > "$fake/x-terminal-emulator" <<'SH'
+          #!/bin/bash
+          echo "ARGS: $*" >> "$BLASTEM_DBG_LOG"
+          while [ $# -gt 0 ] && [ "$1" != "-e" ]; do shift; done
+          shift
+          printf 'bt\ndi\nq\n' | timeout 10s "$@" >> "$BLASTEM_DBG_LOG" 2>&1
+          SH
+          chmod +x "$fake/x-terminal-emulator"
+          fail=0
+          for n in 1500 3600; do
+            outlog="$RUNNER_TEMP/aw-$n.log"
+            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy TERM=dumb "$emu" -b $n "$AUTOWALK_ROM_PATH" </dev/null >"$outlog" 2>&1 )
+            rc=$?
+            echo "== autowalk $n frames rc=$rc"; grep -v SRAM "$outlog" | head -20
+            if [ $rc -ne 0 ] || grep -qiE "unmapped|fatal|exception|error" "$outlog" || [ -s "$BLASTEM_DBG_LOG" ]; then fail=1; fi
+          done
+          echo "-- debugger transcript:"; head -60 "$BLASTEM_DBG_LOG"
+          if [ $fail -ne 0 ]; then
+            echo "AUTOWALK_VERDICT=FAIL" >> "$GITHUB_ENV"
+            echo "::error::BlastEm autowalk detected a crash/invalid access"; exit 1
+          fi
+          echo "AUTOWALK_VERDICT=PASS_3600_FRAMES_WALKING" >> "$GITHUB_ENV"
       - name: Extended BlastEm 1200-frame stress smoke
         continue-on-error: true
         shell: bash
@@ -334,7 +368,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "e1m1ccw:genesis:${E1M1CCW_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -448,6 +482,7 @@ jobs:
             echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo "- SHA-256: $sha"
             echo "- Controls: START enters the map; D-pad moves/turns."
+            echo "- BlastEm scripted-walk test: ${AUTOWALK_VERDICT:-NOT_RUN}"
             echo "- Map geometry converted from the Doom shareware doom1.wad (E1M1); no WAD data/textures included. Renderer: Manifold (MIT) + SGDK 2.11 (MIT)."
             echo "- Details: experiments/DOOM_Manifold_E1M1/README.md"
           } > "$notes"
@@ -463,5 +498,6 @@ jobs:
         run: |
           echo "build/candidate: ${{ job.status }}"
           echo "blastem: ${BLASTEM_VERDICT:-NOT_RUN}"
+          echo "blastem autowalk: ${AUTOWALK_VERDICT:-NOT_RUN}"
           echo "physical console: NOT TESTED"
           echo "Only the ROM is published to the manifold-e1m1-latest release; no WAD is uploaded"
