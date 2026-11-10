@@ -384,19 +384,21 @@ jobs:
           PY
       - name: Symbolize MAME hang PCs (diagnostic)
         continue-on-error: true
+        env:
+          EXTRA_PCS: "00114A 0081DA 001100"
         shell: bash
         run: |
           set +e
           NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"; OD="$HOME/mars/m68k-elf/bin/m68k-elf-objdump"
-          for v in candidate control; do
+          for v in candidate; do
             ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"; test -s "$ELF" || ELF="$MANIFOLD_STAGE/$v/out/rom.out"
             echo "=== $v $ELF"
-            pcs=$(grep -ho "PC=[0-9A-F]*" "$RUNNER_TEMP/mame-$v.log" 2>/dev/null | tail -6 | cut -d= -f2 | sort -u)
+            pcs="$(grep -ho "PC=[0-9A-F]*" "$RUNNER_TEMP/mame-$v.log" 2>/dev/null | tail -6 | cut -d= -f2 | sort -u) ${EXTRA_PCS:-}"
             echo "hang PCs: $pcs"
             for pc in $pcs; do
               "$NM" -n -S "$ELF" | awk -v t=$((16#$pc)) '{a=strtonum("0x"$1); if(a<=t) last=$0} END{print "'"$pc"' in:", last}'
             done
-            first=$(echo $pcs | awk '{print $1}')
+            first=$(echo ${EXTRA_PCS:-$pcs} | awk '{print $1}')
             test -n "$first" && "$OD" -d --start-address=$((16#$first - 0x60)) --stop-address=$((16#$first + 0x60)) "$ELF" | tail -70
           done
       - name: Upload screenshots only (no ROM, no WAD)
