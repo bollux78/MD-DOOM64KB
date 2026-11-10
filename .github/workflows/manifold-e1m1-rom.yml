@@ -227,7 +227,7 @@ jobs:
             SNAP_PREFIX="$pfx" timeout 240s mame megadriv -cart "$rom" -rompath /nonexistent \
               -video none -sound none -nothrottle -skip_gameinfo -noplugins -seconds_to_run 60 \
               -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
-              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tail -40
+              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tee "$RUNNER_TEMP/mame-$( [ $pfx = e1m1 ] && echo candidate || echo $pfx ).log" | tail -40
           done
           find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \;
           python3 - "$shots" <<'PY'
@@ -279,6 +279,23 @@ jobs:
           for p in sorted(pathlib.Path(sys.argv[1]).glob("frame_*.png")):
               print(p.name, p.stat().st_size, "bytes")
           PY
+      - name: Symbolize MAME hang PCs (diagnostic)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"; OD="$HOME/mars/m68k-elf/bin/m68k-elf-objdump"
+          for v in candidate control; do
+            ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"; test -s "$ELF" || ELF="$MANIFOLD_STAGE/$v/out/rom.out"
+            echo "=== $v $ELF"
+            pcs=$(grep -ho "PC=[0-9A-F]*" "$RUNNER_TEMP/mame-$v.log" 2>/dev/null | tail -6 | cut -d= -f2 | sort -u)
+            echo "hang PCs: $pcs"
+            for pc in $pcs; do
+              "$NM" -n -S "$ELF" | awk -v t=$((16#$pc)) '{a=strtonum("0x"$1); if(a<=t) last=$0} END{print "'"$pc"' in:", last}'
+            done
+            first=$(echo $pcs | awk '{print $1}')
+            test -n "$first" && "$OD" -d --start-address=$((16#$first - 0x60)) --stop-address=$((16#$first + 0x60)) "$ELF" | tail -70
+          done
       - name: Upload screenshots only (no ROM, no WAD)
         if: env.SHOTS_DIR != ''
         uses: actions/upload-artifact@v4
