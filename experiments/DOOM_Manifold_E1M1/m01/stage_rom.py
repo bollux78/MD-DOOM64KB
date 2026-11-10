@@ -878,6 +878,12 @@ def stage(src, wad, out, control=False):
     if len(sp)!=1:
         raise ValueError(f"player spawn {x,y} falls in {len(sp)} BSP cells: {sp}")
     spawn_cell=sp[0]
+    sc=[c for c in cells if c["id"]==spawn_cell][0]
+    print("SPAWN CELL", spawn_cell, "index", cells.index(sc), "doom_sector", sc["doom_sector"])
+    for w in sc["walls"]:
+        print("  wall", [v/16 for v in w["a"]], "->", [v/16 for v in w["b"]], "neighbor", w["neighbor"], "seg", w["seg"])
+    ids=[c["id"] for c in cells]
+    print("cell ids contiguous:", ids==list(range(len(ids))), "first ids", ids[:8])
     p=out/"src/level.c"
     s=p.read_text()
     if s.count("MAX_S32") != 1:
