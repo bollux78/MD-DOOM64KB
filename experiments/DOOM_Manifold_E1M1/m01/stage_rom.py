@@ -1162,7 +1162,7 @@ def m11_safe_near_clipping(out):
     # Match both endpoint blocks even when upstream has trailing spaces.
     import re
     t, clipped_count = re.subn(
-        r"s32\\s+x_adjust_10\\s*=\\s*dx_over_dz_6\\s*\\*\\s*z_adjust_12_4;\\s*s16\\s+x_adjust_int\\s*=\\s*x_adjust_10\\s*>>\\s*\\(6\\+TRANS_Z_FRAC_BITS\\);",
+        r"s32\s+x_adjust_10\s*=\s*dx_over_dz_6\s*\*\s*z_adjust_12_4;\s*s16\s+x_adjust_int\s*=\s*x_adjust_10\s*>>\s*\(6\+TRANS_Z_FRAC_BITS\);",
         "s32 x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near;",
         t)
     if clipped_count!=2:
