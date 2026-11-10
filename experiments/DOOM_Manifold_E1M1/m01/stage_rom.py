@@ -1106,7 +1106,7 @@ def install_e1m1_music(out):
     target=res/"music_res.res"
     if not target.is_file() or target.read_text().strip():
         raise ValueError("Expected empty Manifold music_res.res, refusing overwrite")
-    target.write_text('XGM bgm_e1m1 "manifold_e1m1.vgm"\\n')
+    target.write_text('XGM bgm_e1m1 "manifold_e1m1.vgm"\n')
     p=out/"src/game.c"
     src=p.read_text()
     anchor="    MEM_dump();"
