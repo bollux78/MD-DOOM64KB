@@ -603,7 +603,7 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     p.write_text(source)
     print("Using bounded C fallbacks; NO generated vertical-scaler calls")
 
-def stage(src, wad, out):
+def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
         raise ValueError("destination already exists: "+str(out))
@@ -643,6 +643,19 @@ def stage(src, wad, out):
     if init_source.count(old)!=1:
         raise ValueError("upstream start-in-game flag initializer changed")
     init.write_text(init_source.replace(old,"0xFEEDBEEF,\n\t1\n"))
+    if control:
+        # Engine control ROM: same compat/asm fixes, upstream test maps and
+        # spawn. Separates renderer/VDP faults from E1M1 conversion faults.
+        p=out/"src/level.c"
+        p.write_text(p.read_text().replace("MAX_S32","2147483647"))
+        p=out/"src/map_table.c"
+        t=p.read_text()
+        for m in ("overlapping_map","editor_test_map","building_test_map"):
+            t=t.replace("&"+m+",","(uint32_t)&"+m+",")
+        p.write_text(t)
+        report={"source":UPSTREAM,"pin":PIN,"map":"upstream-control","control":True}
+        (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
+        return report
     map_lumps=read_map(wad)
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
@@ -712,8 +725,9 @@ def main():
     ap.add_argument("--source",type=Path,required=True)
     ap.add_argument("--wad",type=Path,required=True)
     ap.add_argument("--out",type=Path,required=True)
+    ap.add_argument("--control",action="store_true")
     args=ap.parse_args()
-    print(json.dumps(stage(args.source,args.wad,args.out),indent=2))
+    print(json.dumps(stage(args.source,args.wad,args.out,args.control),indent=2))
 
 if __name__=="__main__":
     main()

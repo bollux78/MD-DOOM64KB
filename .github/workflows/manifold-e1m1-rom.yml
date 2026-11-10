@@ -45,6 +45,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
+          python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/control" --control
       - name: Locate SDK and compile stand-alone Manifold ROM
         shell: bash
         run: |
@@ -93,6 +97,16 @@ jobs:
           cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m02-hintfix.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m02-hintfix.bin"
+          [ -f "$MANIFOLD_STAGE/control/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/control/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/control/src/math3D.h"
+          if make -C "$MANIFOLD_STAGE/control" -f "$portable_makefile" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/control-build.log" 2>&1; then
+            cp "$MANIFOLD_STAGE/control/out/rom.bin" "$out/doom-md-manifold-control-m02.bin"
+            echo "CONTROL_ROM_PATH=$out/doom-md-manifold-control-m02.bin" >> "$GITHUB_ENV"
+            echo "Control ROM built"
+          else
+            echo "::warning::control build failed"; grep -m10 -i error "$out/control-build.log"
+          fi
       - name: Decode 68000 address error from user screenshot
         shell: bash
         run: |
@@ -188,31 +202,38 @@ jobs:
           cat > "$shots/trace.lua" <<'LUA'
           local frame = 0
           local cpu = manager.machine.devices[":maincpu"]
-          local scr = manager.machine.screens[":megadriv"]
-          if scr == nil then for k,v in pairs(manager.machine.screens) do scr = v end end
+          local scr = nil
+          for k,v in pairs(manager.machine.screens) do scr = v end
+          local pfx = os.getenv("SNAP_PREFIX") or "x"
           emu.register_frame_done(function()
             frame = frame + 1
-            if frame % 15 == 0 or frame < 6 then
+            if frame % 30 == 0 or frame < 4 then
               local st = cpu.state
-              print(string.format("F%04d PC=%06X SR=%04X SP=%08X A7=%08X D0=%08X A0=%08X",
-                frame, st["PC"].value, st["SR"].value, st["SP"].value, st["A7"].value, st["D0"].value, st["A0"].value))
+              local function g(n) local r = st[n]; if r then return r.value else return -1 end end
+              print(string.format("%s F%04d PC=%06X SR=%04X SP=%08X D0=%08X A0=%08X",
+                pfx, frame, g("PC"), g("SR"), g("SP"), g("D0"), g("A0")))
             end
             if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 then
-              scr:snapshot(string.format("f%04d.png", frame))
+              scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
             if frame >= 720 then manager.machine:exit() end
           end)
           LUA
           cd "$shots"
-          timeout 240s mame megadriv -cart "$ROM_PATH" -rompath /nonexistent \
-            -video none -sound none -nothrottle -skip_gameinfo -window \
-            -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
-            -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | tail -80
-          find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \; 
+          for pair in "e1m1:$ROM_PATH" "control:${CONTROL_ROM_PATH:-}"; do
+            pfx="${pair%%:*}"; rom="${pair#*:}"
+            test -s "$rom" || continue
+            echo "=== MAME $pfx ==="
+            SNAP_PREFIX="$pfx" timeout 240s mame megadriv -cart "$rom" -rompath /nonexistent \
+              -video none -sound none -nothrottle -skip_gameinfo -noplugins \
+              -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
+              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tail -40
+          done
+          find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \;
           python3 - "$shots" <<'PY'
           import sys,pathlib
           from PIL import Image
-          for p in sorted(pathlib.Path(sys.argv[1]).glob("f*.png")):
+          for p in sorted(pathlib.Path(sys.argv[1]).glob("*_f*.png")):
               im=Image.open(p).convert("RGB")
               cols=im.getcolors(1<<20)
               print(p.name, im.size, "unique colors:", len(cols) if cols else ">1M")
