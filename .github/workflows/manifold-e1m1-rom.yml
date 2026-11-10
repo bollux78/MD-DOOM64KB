@@ -46,10 +46,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
-          MANIFOLD_OCCLUSION=1 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+          MANIFOLD_SKIP=far_portal_fog python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
-            --out "$MANIFOLD_STAGE/m11occlusion"
+            --out "$MANIFOLD_STAGE/m11fogoff"
           python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -152,16 +152,16 @@ jobs:
           else
             echo "::error::M10 doom HUD build failed"; grep -m20 -iE "error|undefined" "$out/doomhud-build.log"; exit 1
           fi
-          # M11 A/B: H32 Doom HUD control (candidate) vs fully-occluded portal skip.
-          [ ! -e "$MANIFOLD_STAGE/m11occlusion/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/m11occlusion/src/math3D.h"
-          make -C "$MANIFOLD_STAGE/m11occlusion" -f "$portable_makefile" -j2 release \
+          # M11 visual A/B: H32 Doom HUD control (candidate) vs no distant portal fog.
+          [ ! -e "$MANIFOLD_STAGE/m11fogoff/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/m11fogoff/src/math3D.h"
+          make -C "$MANIFOLD_STAGE/m11fogoff" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
-            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/m11occlusion-build.log" 2>&1 || {
-              grep -m20 -iE "error|undefined" "$out/m11occlusion-build.log"; exit 1;
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/m11fogoff-build.log" 2>&1 || {
+              grep -m20 -iE "error|undefined" "$out/m11fogoff-build.log"; exit 1;
             }
-          cp "$MANIFOLD_STAGE/m11occlusion/out/rom.bin" "$out/m11-occlusion-h32.bin"
-          echo "M11_OCCLUSION_ROM_PATH=$out/m11-occlusion-h32.bin" >> "$GITHUB_ENV"
-          sha256sum "$out/doom-md-manifold-e1m1-m02-hintfix.bin" "$out/m11-occlusion-h32.bin"
+          cp "$MANIFOLD_STAGE/m11fogoff/out/rom.bin" "$out/m11-fogoff-h32.bin"
+          echo "M11_FOGOFF_ROM_PATH=$out/m11-fogoff-h32.bin" >> "$GITHUB_ENV"
+          sha256sum "$out/doom-md-manifold-e1m1-m02-hintfix.bin" "$out/m11-fogoff-h32.bin"
           [ ! -e "$MANIFOLD_STAGE/tour/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/tour/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/tour" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -446,7 +446,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11occlusion:genesis:${M11_OCCLUSION_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -550,8 +550,8 @@ jobs:
             ${{ env.TOUR_ROM_PATH }}
             ${{ env.M10_CONTROL_ROM_PATH }}
             ${{ env.M10_DOOM_ROM_PATH }}
-            ${{ env.M11_OCCLUSION_ROM_PATH }}
-            ${{ env.MANIFOLD_STAGE }}/m11occlusion/out/release/symbol.txt
+            ${{ env.M11_FOGOFF_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m11fogoff/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/doomhud/out/release/symbol.txt
             ${{ env.SGDK_KIT }}
             ${{ env.TC_KIT }}
