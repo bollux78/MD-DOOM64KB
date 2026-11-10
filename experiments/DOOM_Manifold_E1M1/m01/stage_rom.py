@@ -397,10 +397,140 @@ def mute_legacy_emulator_debug_logging(out):
         count+=1
     print("Legacy emulator debug log calls suppressed in",count,"C units")
 
+def fix_sgdk2_hint_callbacks(out):
+    """SGDK 2.x H-Int vector is `hintCaller: JMP callback.L` (sys.c).
+
+    The callback is entered directly from the exception, so it must save
+    every register it uses and return with RTE. Manifold's bitmap H-Int
+    handlers were plain C functions (RTS, d0/d1/a0/a1 clobbered): returning
+    pops SR+PC as a PC, misaligns SSP by 2 and lands on random/odd code,
+    matching the ADDRESS ERROR with Hint=bmp_do_hblank_process_vertical.
+    """
+    p=out/"src/my_bmp.c"
+    s=p.read_text()
+    for name in ("bmp_do_hblank_process_vertical","bmp_do_hblank_process_horizontal"):
+        old=f"void {name}() {{"
+        if s.count(old)!=1:
+            raise ValueError(f"H-Int handler definition changed: {name}")
+        s=s.replace(old,f"HINTERRUPT_CALLBACK {name}() {{")
+    p.write_text(s)
+    print("H-Int bitmap handlers now __attribute__((interrupt)) (RTE, full save)")
+
+def _asm_blocks(s):
+    import re
+    for m in re.finditer(r'__asm\s*(?:volatile|__volatile__)?\s*\(',s):
+        i=m.end();d=1;instr=False
+        while d:
+            c=s[i]
+            if instr:
+                if c=='\\': i+=1
+                elif c=='"': instr=False
+            else:
+                if c=='"': instr=True
+                elif c=='(': d+=1
+                elif c==')': d-=1
+            i+=1
+        yield m.end(),i-1
+
+def _split_asm_sections(body):
+    parts=[];cur='';instr=False;d=0;i=0
+    while i<len(body):
+        c=body[i]
+        if instr:
+            cur+=c
+            if c=='\\': cur+=body[i+1]; i+=1
+            elif c=='"': instr=False
+        else:
+            if c=='"': instr=True
+            elif c=='(': d+=1
+            elif c==')': d-=1
+            if c==':' and d==0:
+                parts.append(cur); cur=''; i+=1; continue
+            cur+=c
+        i+=1
+    parts.append(cur)
+    return parts
+
+def _asm_operands(section):
+    import re
+    clean=re.sub(r'//[^\n]*','',section).replace('\\\n',' ')
+    return [(c,e.strip()) for c,e in re.findall(r'"([^"]*)"\s*\(([^()]*)\)',clean)]
+
+def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
+    """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
+
+    1. Input operands the template writes (dy scratch, `addq.l #1,%2`,
+       zero-initialised temporaries) become "+" outputs, renumbering %N.
+       Writing an input is undefined: newer GCC shares that register with
+       other live values, silently corrupting pointers/loop counters.
+    2. Every block gets "cc" and "memory" clobbers (they store through
+       (%0)+ and JSR into generated code without telling the compiler).
+    Fail closed on unparsable blocks.
+    """
+    import re
+    written=re.compile(r'^\s*(?:(neg|not|ext|swap|clr)\S*\s+%(\d+)\b|(?!cmp|tst|btst)\w+(?:\.\w)?\s+.*,\s*%(\d+)\s*$)')
+    total_promoted=0;total_blocks=0
+    for f in files:
+        p=out/"src"/f
+        s=p.read_text()
+        edits=[]
+        for b,e in _asm_blocks(s):
+            line_start=s.rfind("\n",0,b)+1
+            if s[line_start:b].lstrip().startswith("//"):
+                continue  # commented-out upstream experiment
+            body=s[b:e]
+            parts=_split_asm_sections(body)
+            if len(parts)==1:
+                continue  # basic asm, no operands
+            total_blocks+=1
+            tmpl_src=parts[0]
+            tmpl=''.join(re.findall(r'"((?:[^"\\]|\\.)*)"',tmpl_src,re.S)).replace('\\\n','')
+            outs=_asm_operands(parts[1])
+            ins=_asm_operands(parts[2]) if len(parts)>2 else []
+            clob=parts[3] if len(parts)>3 else ''
+            n=len(outs)
+            promote=set()
+            for line in re.split(r'\\t\\n|\\n|;',tmpl):
+                line=line.split('|')[0]
+                m=written.match(line)
+                if m:
+                    idx=int(m.group(2) or m.group(3))
+                    if idx>=n: promote.add(idx-n)
+            if promote:
+                bad=[ins[k] for k in promote if not re.fullmatch(r'[A-Za-z_]\w*',ins[k][1])]
+                if bad:
+                    raise ValueError(f"{f}: cannot promote non-lvalue asm inputs {bad}")
+                new_outs=outs+[("+"+ins[k][0].lstrip("=+&"),ins[k][1]) for k in sorted(promote)]
+                kept=[k for k in range(len(ins)) if k not in promote]
+                mapping={i:i for i in range(n)}
+                for j,k in enumerate(sorted(promote)): mapping[n+k]=n+j
+                for j,k in enumerate(kept): mapping[n+k]=len(new_outs)+j
+                tmpl_src=re.sub(r'(?<!%)%(\d+)',lambda m:'%'+str(mapping[int(m.group(1))]),tmpl_src)
+                outs=new_outs; ins=[ins[k] for k in kept]
+                total_promoted+=len(promote)
+            cl=[c.strip() for c in re.findall(r'"([^"]*)"',clob)]
+            for c in ("cc","memory"):
+                if c not in cl: cl.append(c)
+            fmt=lambda L:", ".join(f'"{c}" ({e})' for c,e in L)
+            nl="\\\n" if '\\\n' in body else "\n"   # macro continuation
+            head=tmpl_src.rstrip()
+            if head.endswith("\\"): head=head[:-1].rstrip()
+            new_body=(head+nl+"        : "+fmt(outs)+nl+"        : "+fmt(ins)
+                      +nl+"        : "+", ".join(f'"{c}"' for c in cl)+nl+"    ")
+            edits.append((b,e,new_body))
+        for b,e,nb in reversed(edits):
+            s=s[:b]+nb+s[e:]
+        # promoted register-asm locals must be writable
+        s=s.replace('register const u8* a1 asm ("%a1")','register u8* a1 asm ("%a1")')
+        p.write_text(s)
+    if total_blocks<60 or total_promoted<8:
+        raise ValueError(f"unexpected asm hardening counts blocks={total_blocks} promoted={total_promoted}")
+    print(f"Inline asm hardened: {total_blocks} blocks, {total_promoted} written inputs promoted")
+
 def replace_generated_vertical_scalers_with_checked_c(out):
     """Diagnostic: remove computed jumps into 512 generated 68000 scaler routines.
 
-    Screenshot PC 0x08001D lands one byte before scale_64_450_jump
+    Screenshot Address 0x08001D (accessed address, not proven PC) lands one byte before scale_64_450_jump
     (0x08001E); the corresponding entry is scale_64_450_bot_clip
     (0x080004). Invalid parameters or registers must never reach it.
     Use simple, bounded, equivalent nearest-neighbor C pixel writes until
@@ -420,9 +550,13 @@ void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
     u16* dst=(u16*)col_ptr;
     s32 visible=full-start;
     if (visible>144-(s32)y0) visible=144-(s32)y0;
+    u32 step=(64UL<<16)/(u32)full;
+    u32 u=(u32)start*step;
+    dst+=y0;
     for (s32 i=0; i<visible; ++i) {
-        s32 t=((start+i)*64)/full;
-        dst[(y0+i)] = tex_column[t>63?63:t];
+        u16 t=(u16)(u>>16);
+        *dst++ = tex_column[t>63?63:t];
+        u+=step;
     }
 }
 """,
@@ -439,9 +573,13 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     if (visible>full-start) visible=full-start;
     if (visible>144-(s32)y0) visible=144-(s32)y0;
     u16* dst=(u16*)col_ptr;
+    u32 step=(64UL<<16)/(u32)full;
+    u32 u=(u32)start*step;
+    dst+=y0;
     for (s32 i=0; i<visible; ++i) {
-        s32 t=((start+i)*64)/full;
-        dst[(y0+i)] = tex_column[t>63?63:t];
+        u16 t=(u16)(u>>16);
+        *dst++ = tex_column[t>63?63:t];
+        u+=step;
     }
 }
 """
@@ -489,6 +627,8 @@ def stage(src, wad, out):
     normalize_header_global_definitions(out)
     mute_legacy_emulator_debug_logging(out)
     replace_generated_vertical_scalers_with_checked_c(out)
+    fix_sgdk2_hint_callbacks(out)
+    harden_inline_asm(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.

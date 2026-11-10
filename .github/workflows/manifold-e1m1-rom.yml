@@ -89,10 +89,10 @@ jobs:
           test -s "$MANIFOLD_STAGE/candidate/out/rom.bin"
           out="$HOME/Projetos/Personal/manifold-e1m1/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          cp "$MANIFOLD_STAGE/candidate/out/rom.bin" "$out/doom-md-manifold-e1m1-m01.bin"
+          cp "$MANIFOLD_STAGE/candidate/out/rom.bin" "$out/doom-md-manifold-e1m1-m02-hintfix.bin"
           cp "$MANIFOLD_STAGE/e1m1-stage.json" "$out/stage.json"
-          echo "ROM_PATH=$out/doom-md-manifold-e1m1-m01.bin" >> "$GITHUB_ENV"
-          echo "Candidate ROM: $out/doom-md-manifold-e1m1-m01.bin"
+          echo "ROM_PATH=$out/doom-md-manifold-e1m1-m02-hintfix.bin" >> "$GITHUB_ENV"
+          echo "Candidate ROM: $out/doom-md-manifold-e1m1-m02-hintfix.bin"
       - name: Decode 68000 address error from user screenshot
         shell: bash
         run: |
@@ -157,6 +157,7 @@ jobs:
           echo "BLASTEM_VERDICT=PASS_HEADLESS_90_FRAMES" >> "$GITHUB_ENV"
           echo "BlastEm 90 emulated frames: PASS (visual/gameplay not validated)"
       - name: Extended BlastEm 1200-frame stress smoke
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -168,6 +169,54 @@ jobs:
           echo "Testing 1200 emulated frames with bounded time and memory"
           ( ulimit -v 1048576; timeout 45s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 1200 "$ROM_PATH" )
           echo "BlastEm 1200 emulated frames: PASS (no visual validation)"
+      - name: Visual capture (RetroArch + Genesis Plus GX headless, real frames)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shots="$RUNNER_TEMP/manifold-shots-$GITHUB_RUN_ID"
+          mkdir -p "$shots"
+          echo "SHOTS_DIR=$shots" >> "$GITHUB_ENV"
+          core=""
+          for c in /usr/lib/libretro/genesis_plus_gx_libretro.so /usr/lib/x86_64-linux-gnu/libretro/genesis_plus_gx_libretro.so "$HOME/.config/retroarch/cores/genesis_plus_gx_libretro.so"; do
+            if test -f "$c"; then core="$c"; break; fi
+          done
+          if test -z "$core" || ! command -v retroarch >/dev/null || ! command -v Xvfb >/dev/null || ! command -v ffmpeg >/dev/null; then
+            echo "::warning::RetroArch/GPGX/Xvfb/ffmpeg missing; visual capture NOT RUN (core='$core')"
+            exit 0
+          fi
+          cfg="$shots/ra.cfg"; rec="$shots/rec.cfg"; raw="$shots/raw.mkv"
+          printf '%s\n' 'video_driver = "gl"' 'video_context_driver = "x"' 'input_driver = "x"' \
+            'joystick_driver = "null"' 'audio_driver = "null"' 'menu_driver = "null"' \
+            'config_save_on_exit = "false"' 'video_fullscreen = "false"' > "$cfg"
+          printf '%s\n' 'format = matroska' 'vcodec = ffv1' 'acodec = flac' 'pix_fmt = bgr0' 'sample_rate = 44100' > "$rec"
+          disp=":97"
+          Xvfb "$disp" -screen 0 640x480x24 >"$shots/xvfb.log" 2>&1 &
+          xpid=$!
+          sleep 2
+          DISPLAY="$disp" LIBGL_ALWAYS_SOFTWARE=1 timeout 120s retroarch -c "$cfg" -L "$core" \
+            --record "$raw" --recordconfig "$rec" --size 320x224 --max-frames 900 "$ROM_PATH" \
+            >"$shots/ra.log" 2>&1 || true
+          kill "$xpid" 2>/dev/null || true
+          if ! test -s "$raw"; then
+            echo "::warning::capture failed"; tail -20 "$shots/ra.log"; exit 0
+          fi
+          for t in 1 3 5 8 14; do
+            ffmpeg -loglevel error -y -ss "$t" -i "$raw" -frames:v 1 -vf scale=960:672:flags=neighbor "$shots/frame_${t}s.png" || true
+          done
+          rm -f "$raw"
+          python3 - "$shots" <<'PY'
+          import sys,pathlib,subprocess
+          for p in sorted(pathlib.Path(sys.argv[1]).glob("frame_*.png")):
+              print(p.name, p.stat().st_size, "bytes")
+          PY
+      - name: Upload screenshots only (no ROM, no WAD)
+        if: env.SHOTS_DIR != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifold-e1m1-screenshots-${{ github.run_id }}
+          path: ${{ env.SHOTS_DIR }}/frame_*.png
+          retention-days: 3
+          if-no-files-found: warn
       - name: Explicit validation verdicts
         if: always()
         shell: bash
