@@ -178,6 +178,11 @@ def as_c_array(typ,name_,values,per_line=12):
     return f"static const {typ} {name_}[{len(values)}] = {{\n"+ "".join(
         "  "+", ".join(map(str,values[i:i+per_line]))+",\n" for i in range(0,len(values),per_line))+"};\n"
 
+# colors.h indices: 6 light steel, 12 steel, 7 yellow, 13 dark yellow, 3 light green, 9 green
+WALL_COLOR_CYCLE=(12,6,13,7,9,3)
+FLOOR_COLOR=13   # dark yellow/brown
+CEIL_COLOR=12    # steel
+
 def emit(lumps,cells):
     vertices={}
     sectors=[]
@@ -208,7 +213,11 @@ def emit(lumps,cells):
             quad.append(7 if ang==0 else 0 if ang<90 else 4 if ang==90 else 1 if ang<180
                         else 5 if ang==180 else 2 if ang<270 else 6 if ang==270 else 3)
             # Until valid texture resources exist, NEVER enter the texture path.
-            colors.extend([0,1,1,1])
+            # [texture, upper-step color, lower-step color, solid color].
+            # Non-zero solid color = untextured wall in that colors.h index;
+            # vary by Doom sector so rooms read apart (placeholder palette).
+            wc=WALL_COLOR_CYCLE[cell["doom_sector"] % len(WALL_COLOR_CYCLE)]
+            colors.extend([0,wc,wc,wc])
         # Manifold walls use a closing vertex per cell.
         walls.append(vertices[cell["walls"][0]["a"]])
         sectors.extend([offset,first_portal,len(cell["walls"]),cell["doom_sector"]])
@@ -219,7 +228,10 @@ def emit(lumps,cells):
         floor_h=floor*16;ceil_h=ceil*16
         if not (-32768<=floor_h<=32767 and -32768<=ceil_h<=32767):
             raise ValueError("sector height exceeds Manifold 12.4 format")
-        sector_params.extend([light_level,0,0,0,floor_h,ceil_h,12,12])
+        # param 0 is packed {s8 light_level; u8 ceil<<4 | floor} (sector_group.h)
+        packed=((light_level & 0xFF) << 8) | (CEIL_COLOR << 4) | FLOOR_COLOR
+        if packed >= 0x8000: packed -= 0x10000
+        sector_params.extend([packed,0,0,0,floor_h,ceil_h,0,0])
     text="#include <genesis.h>\n#include \"portal_map.h\"\n#include \"sector_group.h\"\n"
     text+="/* GENERATED, geometry proof-of-concept; textures/colors NOT final */\n"
     text+=as_c_array("s16","e1_sectors",sectors)
