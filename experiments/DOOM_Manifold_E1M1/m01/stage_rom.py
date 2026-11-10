@@ -1099,7 +1099,7 @@ def fixed_camera_input(out, cells, lumps):
     Three expensive step/bridge candidate cells are selected deterministically
     from floor-height transitions and portal fanout (diagnostic, not asserted
     to represent named WAD rooms). Last view is the actual player spawn.
-    Camera switches every 140 VBlanks after frame 60, and is reasserted
+    Camera switches every 300 VBlanks after frame 60, and is reasserted
     on each joy poll; test render does not affect the next camera position.
     """
     import math
@@ -1163,7 +1163,7 @@ u16 manifold_fixed_joy(u16 j) {{
     (void)(JOY_readJoypad)(j);
     u32 frame=vtimer;
     if (frame<60) return 0;
-    u16 idx=(u16)(((frame-60)/140)%6);
+    u16 idx=(u16)(((frame-60)/300)%6);
     m11_camera_index=idx;
     cur_player_pos.x=FIX32(m11_fixed_cameras[idx][0]);
     cur_player_pos.y=FIX32(m11_fixed_cameras[idx][1]);
@@ -1174,7 +1174,7 @@ u16 manifold_fixed_joy(u16 j) {{
     return 0;
 }}
 """)
-    print("M11 FIXED CAMERA TABLE (140 VBlank each after frame 60):",cameras)
+    print("M11 FIXED CAMERA TABLE (300 VBlank each after frame 60):",cameras)
 
 
 def tour_input(out, cells, lumps):
