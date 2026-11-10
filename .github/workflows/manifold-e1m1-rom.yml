@@ -235,6 +235,36 @@ jobs:
                 end
               end
             end
+            if frame == 600 and pfx ~= "upstream" then
+              local mem = cpu.spaces["program"]
+              for name, addr in string.gmatch(os.getenv("WATCH") or "", "(bmp_buffer_%d)=(%x+)") do
+                local ptr = mem:read_u32(tonumber(addr,16) & 0xFFFFFF) & 0xFFFFFF
+                local nz, hist = 0, {}
+                for i = 0, 128*144-1 do
+                  local b = mem:read_u8(ptr + i)
+                  if b ~= 0 then nz = nz + 1 end
+                  hist[b] = (hist[b] or 0) + 1
+                end
+                local top = ""
+                for k, v in pairs(hist) do if v > 200 then top = top .. string.format("%02X:%d ", k, v) end end
+                print(string.format("%s BUF %s @%06X nonzero=%d top=%s", pfx, name, ptr, nz, top))
+              end
+              for tag, dev in pairs(manager.machine.devices) do
+                local sp = ""
+                for n, _ in pairs(dev.spaces) do sp = sp .. n .. "," end
+                if sp ~= "" then print("DEV " .. tag .. " spaces=" .. sp) end
+              end
+              local vdp = nil
+              for tag, dev in pairs(manager.machine.devices) do
+                if dev.spaces["videoram"] then vdp = dev.spaces["videoram"] end
+              end
+              if vdp then
+                local f = io.open(pfx .. "_vram.bin", "wb")
+                for i = 0, 0xFFFF do f:write(string.char(vdp:read_u8(i))) end
+                f:close()
+                print(pfx .. " VRAM dumped")
+              end
+            end
             if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 or frame == 890 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
