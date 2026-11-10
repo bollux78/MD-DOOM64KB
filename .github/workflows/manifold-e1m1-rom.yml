@@ -170,6 +170,23 @@ jobs:
           echo "Testing 1200 emulated frames with bounded time and memory"
           ( ulimit -v 1048576; timeout 45s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 1200 "$ROM_PATH" )
           echo "BlastEm 1200 emulated frames: PASS (no visual validation)"
+      - name: Probe emulators and BlastEm timing (diagnostic)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          for t in retroarch mame ares picodrive gens dgen Xvfb xvfb-run ffmpeg python3 gdb; do printf '%-10s %s\n' "$t" "$(command -v $t)"; done
+          find / -xdev -name '*genesis*libretro*.so' -o -xdev -name '*picodrive*libretro*.so' 2>/dev/null | head
+          ls "$HOME/Projetos/blastem64-1.0.0" | head -40
+          python3 -c "import PIL;print('PIL',PIL.__version__)" 2>&1
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          for n in 30 90 300; do
+            start=$(date +%s.%N)
+            timeout 90s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b $n "$ROM_PATH" >/tmp/bl_$n.log 2>&1
+            rc=$?
+            echo "blastem -b $n rc=$rc secs=$(echo "$(date +%s.%N) - $start" | bc)"
+            tail -3 /tmp/bl_$n.log
+          done
       - name: Visual capture (RetroArch + Genesis Plus GX headless, real frames)
         shell: bash
         run: |
