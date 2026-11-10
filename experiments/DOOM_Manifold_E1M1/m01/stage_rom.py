@@ -661,6 +661,31 @@ def limit_repeated_sector_overdraw(out):
     print("Portals: per-frame repeated-sector bound reduced 7 -> 5")
 
 
+def distant_wall_flat_lod(out):
+    """Experimental: render only distant opaque walls as average flat colors.
+
+    The stairs show ~4 FPS on the original texture-heavy long view. Keep nearby
+    textures, preserve portal step details and outdoor sky, but fill opaque walls
+    beyond 768 Doom map units with their palette-average color instead of
+    invoking per-column texture perspective/sampling.
+    """
+    p=out/"src/portal.c"
+    source=p.read_text()
+    needle="        u8 is_solid_color = map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_SOLID_COLOR_IDX];\\n"
+    if source.count(needle)!=1:
+        raise ValueError("wall solid-color read anchor changed")
+    replacement=needle+"""        if (!is_portal && !is_solid_color
+            && trans_v1.y > (768<<TRANS_Z_FRAC_BITS)
+            && trans_v2.y > (768<<TRANS_Z_FRAC_BITS)) {
+            u8 color=map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_HIGH_COLOR_IDX];
+            is_solid_color=(color & 0x0f) ? (color & 0x0f) : 1;
+        }
+"""
+    source=source.replace(needle,replacement,1)
+    p.write_text(source)
+    print("Opaque walls >768 units: flat palette-average LOD (portals unchanged)")
+
+
 def far_portal_fog(out):
     """E1M1 views reach 40-90 cell visits per frame (2-7 fps) and recursion
     depth 18+, where the stack guard starts dropping portals (flicker).
@@ -1326,7 +1351,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,limit_repeated_sector_overdraw,far_portal_fog,distant_wall_flat_lod,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
