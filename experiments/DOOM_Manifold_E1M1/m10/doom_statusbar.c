@@ -20,7 +20,11 @@ static u16 manifold_hud_base;
 #include "hud_wad_assets.h"
 #include "hud_wad_logic.h"
 
+#ifdef MANIFOLD_H32
+#define DHUD_X 0            /* H32: the 256 px bar is the full screen width */
+#else
 #define DHUD_X 4
+#endif
 #define DHUD_Y 22
 #define DHUD_PAL2(w) ((u16)(((w) & ~0x6000) | 0x4000))   /* logic emits PAL3/PAL2 words -> force line 2 */
 
@@ -40,6 +44,7 @@ static void dhud_draw_bar(void) {
 }
 
 static void dhud_draw_margins(void) {
+#ifndef MANIFOLD_H32
     for (u8 r = 0; r < HUDW_ROWS; r++) {
         u16 left = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][0]));
         u16 right = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][HUDW_COLS - 1]));
@@ -48,6 +53,7 @@ static void dhud_draw_margins(void) {
             VDP_setTileMapXY(BG_B, right, 36 + c, DHUD_Y + r);
         }
     }
+#endif
     VDP_clearTileMapRect(BG_B, 0, DHUD_Y + HUDW_ROWS, 40, 2);   /* rows 26-27 */
 }
 

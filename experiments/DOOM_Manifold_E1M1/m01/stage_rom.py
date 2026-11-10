@@ -831,6 +831,30 @@ def fix_fps_font_base(out):
     p.write_text(s.replace(old,"    u16 base = TILE_FONT_INDEX;\n",1))
     print("fps font base -> TILE_FONT_INDEX")
 
+def h32_mode(out):
+    """MANIFOLD_H32=1: H32 (256 px) screen, 3D rendered on columns 2..61
+    (240 px, 8 px black border each side, upstream H32_MODE path), HUD bar
+    full width without stone margins, smaller VBlank DMA batches."""
+    cfg=out/"src/config.h"; cs=cfg.read_text()
+    if "//#define H32_MODE" not in cs: raise ValueError("config.h H32 switch changed")
+    cfg.write_text(cs.replace("//#define H32_MODE","//#define H32_MODE (upstream path needs pvs_scan, not used)\n#define MANIFOLD_H32 1",1))
+    g=out/"src/game.c"; gs=g.read_text()
+    o="    #else \n    VDP_setScreenWidth320();\n    #endif\n"
+    if o not in gs: raise ValueError("screen width switch changed")
+    g.write_text(gs.replace(o,"    #else \n    VDP_setScreenWidth256();   /* MANIFOLD_H32 */\n    #endif\n",1))
+    pc=out/"src/portal.c"; ps=pc.read_text()
+    o="            visit_graph(src_sector, src_sector, 0, RENDER_WIDTH, cur_frame, 0);\n"
+    if ps.count(o)!=1: raise ValueError("portal_rend window changed")
+    pc.write_text(ps.replace(o,"            visit_graph(src_sector, src_sector, 2, RENDER_WIDTH-2, cur_frame, 0);   /* H32: 240 px view */\n",1))
+    for f in ("manifold_sky.c","doom_statusbar.c","my_bmp.c"):
+        q=out/"src"/f
+        if q.exists():
+            q.write_text('#include "config.h"\n'+q.read_text())
+    b=out/"src/my_bmp.c"; bs=b.read_text()
+    if "#define NTSC_TILES_BW           7\n" not in bs: raise ValueError("bmp DMA batch changed")
+    b.write_text(bs.replace("#define NTSC_TILES_BW           7\n","#define NTSC_TILES_BW           5   /* H32: ~20% less DMA per blank line */\n",1))
+    print("H32 mode: 240px view, H32 screen")
+
 def install_doom_hud(out, wad):
     """M10 (MANIFOLD_HUD=doom): replace Manifold's inventory HUD rendering with
     the R128 HUD-WAD status bar. Inventory logic (keys) is kept."""
@@ -874,6 +898,13 @@ def install_sky(out, res):
 #include <genesis.h>
 #include "game.h"
 /* GENERATED: Doom SKY1 band, 3D palette (PAL1) */
+#ifdef MANIFOLD_H32
+#define SKY_X0 0
+#define SKY_CLEAR_BORDERS(y, h) do {{ VDP_clearTileMapRect(BG_B, 0, (y), 1, (h)); VDP_clearTileMapRect(BG_B, 31, (y), 1, (h)); }} while (0)
+#else
+#define SKY_X0 4
+#define SKY_CLEAR_BORDERS(y, h) do {{ }} while (0)
+#endif
 static const u32 sky_tiles[{n}*8] = {{
 {tiles}
 }};
@@ -900,7 +931,8 @@ u16 manifold_sky_init(u16 free_tile_loc) {{
         u16 t = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[1]);
         if (r >= {band_top - 4} && r < {band_top - 4 + rows}) continue;
         for (u16 c = 0; c < 32; c++) sky_row_buf[c] = t;
-        VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 4 + r, 32, 1, 32, CPU);
+        VDP_setTileMapDataRect(BG_B, sky_row_buf, SKY_X0, 4 + r, 32, 1, 32, CPU);
+        SKY_CLEAR_BORDERS(4 + r, 1);
     }}
     sky_ready = 1; sky_last = -1;
     return free_tile_loc;
@@ -913,7 +945,8 @@ void manifold_sky_update(void) {{
     for (u16 r = 0; r < {rows}; r++)
         for (u16 c = 0; c < 32; c++)
             sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[sky_map[r][(c + off) & {cols - 1}]]);
-    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, {band_top}, 32, {rows}, 32, CPU);
+    VDP_setTileMapDataRect(BG_B, sky_row_buf, SKY_X0, {band_top}, 32, {rows}, 32, CPU);
+    SKY_CLEAR_BORDERS({band_top}, {rows});
 }}
 """
     (out/"src/manifold_sky.c").write_text(c)
@@ -1397,6 +1430,8 @@ def stage(src, wad, out, control=False):
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
     if os.environ.get("MANIFOLD_HUD")=="doom":
         install_doom_hud(out,wad)
+    if os.environ.get("MANIFOLD_H32")=="1":
+        h32_mode(out)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
         h=out/"src/manifold_mute_klog.h"
         h.write_text(h.read_text()+"\nu16 manifold_autopilot_joy(u16 j);\n#define JOY_readJoypad(j) manifold_autopilot_joy(j)\n")

@@ -54,6 +54,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/doomhud"
+          MANIFOLD_HUD=doom MANIFOLD_H32=1 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/doomh32"
           MANIFOLD_HUD=doom MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -131,6 +135,16 @@ jobs:
             echo "M10_DOOM_ROM_PATH=$out/m10-hud-doom.bin" >> "$GITHUB_ENV"
             echo "M10_CONTROL_ROM_PATH=$out/m10-hud-control.bin" >> "$GITHUB_ENV"
             sha256sum "$out/m10-hud-control.bin" "$out/m10-hud-doom.bin"
+            [ ! -e "$MANIFOLD_STAGE/doomh32/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/doomh32/src/math3D.h"
+            if make -C "$MANIFOLD_STAGE/doomh32" -f "$portable_makefile" -j2 release \
+              OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+              NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/doomh32-build.log" 2>&1; then
+              cp "$MANIFOLD_STAGE/doomh32/out/rom.bin" "$out/m11-hud-doom-h32.bin"
+              echo "M11_H32_ROM_PATH=$out/m11-hud-doom-h32.bin" >> "$GITHUB_ENV"
+              sha256sum "$out/m11-hud-doom-h32.bin"
+            else
+              echo "::warning::H32 variant build failed"; grep -m20 -iE "error|undefined" "$out/doomh32-build.log"
+            fi
           else
             echo "::error::M10 doom HUD build failed"; grep -m20 -iE "error|undefined" "$out/doomhud-build.log"; exit 1
           fi
@@ -418,7 +432,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11h32:genesis:${M11_H32_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -522,6 +536,7 @@ jobs:
             ${{ env.TOUR_ROM_PATH }}
             ${{ env.M10_CONTROL_ROM_PATH }}
             ${{ env.M10_DOOM_ROM_PATH }}
+            ${{ env.M11_H32_ROM_PATH }}
             ${{ env.MANIFOLD_STAGE }}/doomhud/out/release/symbol.txt
             ${{ env.SGDK_KIT }}
             ${{ env.TC_KIT }}
