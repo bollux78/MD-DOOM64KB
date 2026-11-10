@@ -759,6 +759,24 @@ def scale_light_distances(out):
     p.write_text(s)
     print("light distance bands scaled for E1M1")
 
+def weapon_buffers_fit_vram(out):
+    """SGDK 2 rescomp gives shotgun_reload 128 tiles/frame (MAX_SPRITE_TILES
+    was 97 -> assert 'Weapon has too many sprite tiles' when pressing A).
+    Use 128-tile buffers: buffer 0 in the normal tile area, buffer 1 in the
+    reclaimed WINDOW nametable (exactly 128 tiles; window is never shown)."""
+    p=out/"src/weapon_sprites.c"
+    s=p.read_text()
+    reps=[("#define MAX_SPRITE_TILES 97\n","#define MAX_SPRITE_TILES 128\n"),
+          ("        return start_tile_loc + MAX_SPRITE_TILES;\n","        return manifold_weapon_buf1;\n"),
+          ("    start_tile_loc = tile_loc;\n","    start_tile_loc = tile_loc;\n    VDP_setWindowAddress(bgb_addr);   /* window unused: reuse its 4KB */\n    manifold_weapon_buf1 = window_addr_tiles_before_move;\n"),
+          ("    return tile_loc+(MAX_SPRITE_TILES*2);\n","    return tile_loc+MAX_SPRITE_TILES;\n")]
+    for a,b in reps:
+        if s.count(a)!=1: raise ValueError(f"weapon_sprites layout changed: {a!r}")
+        s=s.replace(a,b,1)
+    s=s.replace("u32 init_weapon_sprites(u32 tile_loc) {\n","static u16 manifold_weapon_buf1;\nu32 init_weapon_sprites(u32 tile_loc) {\n    u16 window_addr_tiles_before_move = window_addr >> 5;\n",1)
+    p.write_text(s)
+    print("weapon: 2x128-tile buffers (second in reclaimed window VRAM)")
+
 def fix_fps_font_base(out):
     """Upstream fps counter hard-codes the SGDK 1.x font tile base 0x5A0;
     SGDK 2 puts the font at TILE_FONT_INDEX (0x4E0 here). 0x5A0 is the
@@ -776,7 +794,7 @@ def install_sky(out, res):
     reclaimed from the unused WINDOW nametable and the never-displayed
     rows 28-63 of the 64x64 BG_B nametable (~272 tiles)."""
     import wad_textures as WT
-    sk=WT.sky_tiles(res, band_rows=10, band_cols=32, max_tiles=270)
+    sk=WT.sky_tiles(res, band_rows=10, band_cols=16, max_tiles=134)
     n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
     tiles=",\n".join("  "+",".join(f"0x{v:08x}" for v in t) for t in sk["tiles"])
     tmap=",".join(str(v) for row in sk["map"] for v in row)
@@ -798,14 +816,13 @@ u16 manifold_reclaimed_tiles = 0;
    BG_B and use its 4KB for tiles; BG_B rows 28..63 are never displayed
    (no BG_B scroll) -> 4.5KB more. */
 u16 manifold_sky_init(u16 free_tile_loc) {{
-    u16 r1 = window_addr >> 5;                     /* 128 tiles */
+    /* WINDOW area is taken by the weapon's second buffer */
     u16 r2 = (bgb_addr + 30 * 128) >> 5;           /* rows 30-63: HUD reaches row 28 */
     u16 r2n = ((bgb_addr + 0x2000) >> 5) - r2;
-    VDP_setWindowAddress(bgb_addr);
     manifold_reclaimed_tiles = 128 + r2n;
-    if ({n} > 128 + r2n) return free_tile_loc;
+    if ({n} > r2n) return free_tile_loc;
     for (u16 k = 0; k < {n}; k++) {{
-        sky_index[k] = (k < 128) ? (r1 + k) : (r2 + k - 128);
+        sky_index[k] = r2 + k;
         VDP_loadTileData(&sky_tiles[k*8], sky_index[k], 1, CPU);
     }}
     for (u16 r = 0; r < 18; r++) {{
@@ -1266,7 +1283,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
