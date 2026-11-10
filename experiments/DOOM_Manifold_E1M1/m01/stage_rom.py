@@ -657,7 +657,7 @@ def far_portal_fog(out):
 """
     if s.count(old)<1: raise ValueError("visit_graph transform layout changed")
     new=old+f"""        u8 manifold_fogged = 0;
-        if (is_portal && trans_v1.y > ({far}<<TRANS_Z_FRAC_BITS) && trans_v2.y > ({far}<<TRANS_Z_FRAC_BITS)) {{
+        if (is_portal && ceil_color != 0 /* outdoors sky is transparent */\n             && get_sector_group_ceil_color(sector_group(portal_sector, map)) != 0\n             && trans_v1.y > ({far}<<TRANS_Z_FRAC_BITS) && trans_v2.y > ({far}<<TRANS_Z_FRAC_BITS)) {{
             is_portal = 0; portal_sector = -1; manifold_fogged = 1;
         }}
 """
