@@ -896,20 +896,20 @@ def stage(src, wad, out, control=False):
     old="    cur_player_pos.x = sector_0_center.x;\n    cur_player_pos.y = sector_0_center.y;"
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.x = FIX32({x});\n    cur_player_pos.y = FIX32({y});")
-    # Doom eye height (41 units); Manifold keeps the camera on the floor.
+    # Doom eye height 41 units x HEIGHT_SCALE 2; Manifold keeps the camera on the floor.
     eye="(FIX32_FRAC_BITS-4));// + FIX32(50);"
     if s.count(eye)!=1:
         raise ValueError("level.c player z init changed")
-    s=s.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(41);")
+    s=s.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(82);")
     g=out/"src/game.c"
     gs=g.read_text()
     if gs.count(eye)!=1:
         raise ValueError("game.c rest z changed")
-    gs=gs.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(41);")
+    gs=gs.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(82);")
     feet="        s16 cur_player_z = cur_player_pos.z >> (FIX32_FRAC_BITS-4);"
     if gs.count(feet)!=1:
         raise ValueError("game.c collision z changed")
-    gs=gs.replace(feet,"        s16 cur_player_z = (cur_player_pos.z - FIX32(41)) >> (FIX32_FRAC_BITS-4); /* feet, not eye */")
+    gs=gs.replace(feet,"        s16 cur_player_z = (cur_player_pos.z - FIX32(82)) >> (FIX32_FRAC_BITS-4); /* feet, not eye */")
     g.write_text(gs)
     old="    cur_player_pos.ang = 0;"
     assert s.count(old)==1

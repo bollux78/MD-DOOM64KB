@@ -179,6 +179,7 @@ def as_c_array(typ,name_,values,per_line=12):
         "  "+", ".join(map(str,values[i:i+per_line]))+",\n" for i in range(0,len(values),per_line))+"};\n"
 
 # colors.h indices: 6 light steel, 12 steel, 7 yellow, 13 dark yellow, 3 light green, 9 green
+HEIGHT_SCALE=2
 WALL_COLOR_CYCLE=(12,6,13,7,9,3)
 FLOOR_COLOR=13   # dark yellow/brown
 CEIL_COLOR=12    # steel
@@ -225,7 +226,9 @@ def emit(lumps,cells):
     sector_params=[]
     for floor,ceil,fl,ce,light,special,tag in lumps["SECTORS"]:
         light_level=max(-2,min(2,round((light-160)/40)))  # colors.c tables cover -2..2
-        floor_h=floor*16;ceil_h=ceil*16
+        # 12.4 heights, doubled: Manifold projects 64x144 with a wide FOV and
+        # treats openings <=60 as closed doors / steps >=40 as walls.
+        floor_h=floor*16*HEIGHT_SCALE;ceil_h=ceil*16*HEIGHT_SCALE
         if not (-32768<=floor_h<=32767 and -32768<=ceil_h<=32767):
             raise ValueError("sector height exceeds Manifold 12.4 format")
         # param 0 is packed {s8 light_level; u8 ceil<<4 | floor} (sector_group.h)
