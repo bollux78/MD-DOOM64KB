@@ -259,6 +259,9 @@ jobs:
                 local top = ""
                 for k, v in pairs(hist) do if v > 200 then top = top .. string.format("%02X:%d ", k, v) end end
                 print(string.format("%s BUF %s @%06X nonzero=%d top=%s", pfx, name, ptr, nz, top))
+                local f = io.open(pfx .. "_" .. name .. ".bin", "wb")
+                for i = 0, 128*144-1 do f:write(string.char(mem:read_u8(ptr + i))) end
+                f:close()
               end
               for tag, dev in pairs(manager.machine.devices) do
                 local sp = ""
@@ -383,6 +386,7 @@ jobs:
           path: |
             ${{ env.SHOTS_DIR }}/frame_*.png
             ${{ env.SHOTS_DIR }}/*_vram.bin
+            ${{ env.SHOTS_DIR }}/*_bmp_buffer_*.bin
           retention-days: 3
           if-no-files-found: warn
       - name: Explicit validation verdicts
