@@ -640,6 +640,109 @@ def clamp_native_vertical_lines(out):
     p.write_text(s)
     print("flat column filler clamped to 0..SCREEN_HEIGHT")
 
+def apply_doom_textures(out, lumps, cells, wad):
+    """M04: real Doom wall textures, flats colours and a dedicated palette."""
+    import re
+    import wad_textures as WT
+    from emit_portal_map import assign_wall_textures, _nm
+    names=assign_wall_textures(lumps,cells)
+    default="STARTAN3" if "STARTAN3" in names else names[0]
+    if len(names)>64: raise ValueError(f"{len(names)} textures > Manifold limit 64")
+    flats=sorted({_nm(x) for sec in lumps["SECTORS"] for x in (sec[2],sec[3])})
+    res=WT.build_resources(wad,names,[f for f in flats if f!="F_SKY1"])
+    pal=res["pal"]
+    tex={"index":{n:i for i,n in enumerate(names)},"default":default,
+         "avg":{n:WT.nearest(pal,WT.average(res["tex"][n][2])) for n in names},
+         "width":{n:res["tex"][n][0] for n in names},
+         "flat_color":{f:WT.nearest(pal,WT.average(img)) for f,img in res["flats"].items()},
+         "vdp_palette":[WT.vdp(c) for c in pal]}
+    tex["flat_color"]["F_SKY1"]=0          # transparent: sky shows behind
+    tex["floor_color"]={i:tex["flat_color"].get(_nm(sec[2]),13) for i,sec in enumerate(lumps["SECTORS"])}
+    # textures.c: replace upstream atlas + table, keep the rest of the file
+    t=out/"src/textures.c"
+    src=t.read_text()
+    a=src.index("const u16 raw_texture_atlas")
+    b=src.index("const lit_texture* const textures[")
+    b=src.index("};",b)+2
+    gen=WT.emit_textures_c(res,names)
+    gen=gen.split('/* GENERATED',1)[1]
+    src=src[:a]+"/* GENERATED"+gen+src[b:]
+    t.write_text(src)
+    # colors.c light tables recomputed for the new palette
+    c=out/"src/colors.c"
+    cs=c.read_text()
+    dith,nodith=WT.colors_tables(pal)
+    for name_,body in (("dither_color_calc_table",dith),("no_dither_color_calc_table",nodith)):
+        m=re.search(r"(const u32 "+name_+r"\[16\*5\*2\] = \{)(.*?)(\n\};)",cs,re.S)
+        if not m: raise ValueError(f"{name_} not found in colors.c")
+        cs=cs[:m.start(2)]+"\n"+body+cs[m.end(2):]
+    c.write_text(cs)
+    if res.get("sky"): install_sky(out,res)
+    print("doom textures:",len(names),"flats:",len(flats),"palette:",[hex(v) for v in tex["vdp_palette"]])
+    return tex
+
+def install_sky(out, res):
+    """SKY1 band on BG_B behind the framebuffer (BG_A colour 0 = sky
+    ceilings). Coarse 8px horizontal steps by redrawing 6 tilemap rows."""
+    import wad_textures as WT
+    sk=WT.sky_tiles(res)
+    n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
+    tiles=",\n".join("  "+",".join(f"0x{v:08x}" for v in t) for t in sk["tiles"])
+    tmap=",".join(str(v) for row in sk["map"] for v in row)
+    band_top=13-rows
+    c=f"""#include "manifold_mute_klog.h"
+#include <genesis.h>
+#include "game.h"
+/* GENERATED: Doom SKY1 band, 3D palette (PAL1) */
+static const u32 sky_tiles[{n}*8] = {{
+{tiles}
+}};
+static const u8 sky_map[{rows}][{cols}] = {{ {tmap} }};
+static u16 sky_base = 0;
+static s16 sky_last = -1;
+static u8 sky_ready = 0;
+static u16 sky_row_buf[{rows}*32];
+u16 manifold_sky_init(u16 free_tile_loc) {{
+    if (free_tile_loc + {n} > MANIFOLD_FREE_TILE_LIMIT) {{ return free_tile_loc; }}
+    sky_base = free_tile_loc;
+    VDP_loadTileData(sky_tiles, sky_base, {n}, DMA);
+    VDP_fillTileMapRect(BG_B, TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 0), 4, 4, 32, {band_top - 4});
+    VDP_fillTileMapRect(BG_B, TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 1), 4, 13, 32, 9);
+    sky_ready = 1; sky_last = -1;
+    return free_tile_loc + {n};
+}}
+void manifold_sky_update(void) {{
+    if (!sky_ready) return;
+    s16 off = (s16)((cur_player_pos.ang >> 3) & {cols - 1});
+    if (off == sky_last) return;
+    sky_last = off;
+    for (u16 r = 0; r < {rows}; r++)
+        for (u16 c = 0; c < 32; c++)
+            sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + sky_map[r][(c + off) & {cols - 1}]);
+    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, {band_top}, 32, {rows}, 32, CPU);
+}}
+"""
+    (out/"src/manifold_sky.c").write_text(c)
+    g=out/"src/game.c"
+    gs=g.read_text()
+    old="    free_tile_loc = init_weapon_sprites(free_tile_loc);\n"
+    if gs.count(old)!=1: raise ValueError("init_weapon_sprites call changed")
+    gs=gs.replace(old,old+"    free_tile_loc = manifold_sky_init(free_tile_loc);\n",1)
+    gs=gs.replace("u16 free_tile_loc;\n","u16 free_tile_loc;\nu16 manifold_sky_init(u16 free_tile_loc);\n",1)
+    m="#define MANIFOLD_FREE_TILE_LIMIT"
+    if m not in gs: raise ValueError("free tile limit macro missing")
+    g.write_text(gs)
+    # sky file needs the limit macro
+    lim=[l for l in gs.splitlines() if l.startswith(m)][0]
+    (out/"src/manifold_sky.c").write_text(lim+"\n"+c)
+    j=out/"src/joy_helper.c"
+    js=j.read_text()
+    old="void update_joy() {\n"
+    if js.count(old)!=1: raise ValueError("update_joy changed")
+    js=js.replace(old,"void manifold_sky_update(void);\n"+old+"    manifold_sky_update();\n",1)
+    j.write_text(js)
+    print("sky tiles:",n,"band rows:",rows)
+
 def tour_input(out, cells, lumps):
     """Test-only camera tour: every 90 frames teleport to the centroid of the
     largest cell of each Doom sector and spin (LEFT held). Exercises the whole
@@ -1096,7 +1199,10 @@ def stage(src, wad, out, control=False):
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
     # Never synthesize an unsafe portal or mark this build geometry-validated.
-    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells))
+    tex=None
+    if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
+        tex=apply_doom_textures(out,map_lumps,cells,wad)
+    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
         h=out/"src/manifold_mute_klog.h"
         h.write_text(h.read_text()+"\nu16 manifold_autopilot_joy(u16 j);\n#define JOY_readJoypad(j) manifold_autopilot_joy(j)\n")

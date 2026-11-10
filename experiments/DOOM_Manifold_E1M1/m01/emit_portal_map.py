@@ -199,6 +199,45 @@ def legacy_candidate(lumps,nodes,allow_gaps=False):
         raise ValueError(f"{len(missing)} unpaired BSP edges; first {missing[:4]}")
     return cells,stats,missing
 
+
+def _nm(raw):
+    return raw.rstrip(b"\0").decode("ascii","replace").upper()
+
+def assign_wall_textures(lumps,cells):
+    """Attach Doom linedef/sidedef textures to every wall (exact cells)."""
+    V=lumps["VERTEXES"];LD=lumps["LINEDEFS"];SD=lumps["SIDEDEFS"]
+    lines=[]
+    for li,ld in enumerate(LD):
+        a=V[ld[0]];b=V[ld[1]];dx=b[0]-a[0];dy=b[1]-a[1];L=math.hypot(dx,dy)
+        if L: lines.append((li,a,dx,dy,L))
+    names=set()
+    for c in cells:
+        for w in c["walls"]:
+            ax,ay=w["a"][0]/SCALE,w["a"][1]/SCALE;bx,by=w["b"][0]/SCALE,w["b"][1]/SCALE
+            mx,my=(ax+bx)/2,(ay+by)/2
+            best=None
+            for li,a,dx,dy,L in lines:
+                if abs(dx*(my-a[1])-dy*(mx-a[0]))>1.5*L: continue
+                t=((mx-a[0])*dx+(my-a[1])*dy)/(L*L)
+                if not -0.01<=t<=1.01: continue
+                if abs(dx*(by-ay)-dy*(bx-ax))>0.05*L*math.hypot(bx-ax,by-ay): continue
+                best=li;break
+            w["line"]=best;w["side"]=-1
+            w["mid"]=w["upper"]=w["lower"]=None
+            if best is None: continue
+            ld=LD[best]
+            sides=[s_ for s_ in (ld[5],ld[6]) if s_!=65535]
+            side=next((s_ for s_ in sides if SD[s_][5]==c["doom_sector"]),sides[0])
+            w["side"]=side
+            up,lo,mid=_nm(SD[side][2]),_nm(SD[side][3]),_nm(SD[side][4])
+            w["upper"]=None if up=="-" else up
+            w["lower"]=None if lo=="-" else lo
+            w["mid"]=None if mid=="-" else mid
+            w["xoff"]=SD[side][0]
+            for t in (w["upper"],w["lower"],w["mid"]):
+                if t: names.add(t)
+    return sorted(names)
+
 def as_c_array(typ,name_,values,per_line=12):
     return f"static const {typ} {name_}[{len(values)}] = {{\n"+ "".join(
         "  "+", ".join(map(str,values[i:i+per_line]))+",\n" for i in range(0,len(values),per_line))+"};\n"
@@ -209,13 +248,15 @@ WALL_COLOR_CYCLE=(12,6,13,7,9,3)
 FLOOR_COLOR=13   # dark yellow/brown
 CEIL_COLOR=12    # steel
 
-def emit(lumps,cells):
+def emit(lumps,cells,tex=None):
+    tex=tex or {}
     vertices={}
     sectors=[]
     walls=[]
     portals=[]
     quad=[]
     colors=[]
+    reps=[]
     collision_verts=[]
     for cell in cells:
         offset=len(walls)
@@ -243,7 +284,23 @@ def emit(lumps,cells):
             # Non-zero solid color = untextured wall in that colors.h index;
             # vary by Doom sector so rooms read apart (placeholder palette).
             wc=WALL_COLOR_CYCLE[cell["doom_sector"] % len(WALL_COLOR_CYCLE)]
-            colors.extend([0,wc,wc,wc])
+            if tex:
+                idx=tex["index"];avg=tex["avg"]
+                fl=tex["floor_color"][cell["doom_sector"]]
+                if w["neighbor"]<0:
+                    nm=w.get("mid") or w.get("upper") or w.get("lower") or tex["default"]
+                    hi=lo_=avg.get(nm,fl)
+                    colors.extend([idx[nm],hi,lo_,0])
+                    tw=tex["width"][nm]
+                    reps.append(max(1,min(255,round(math.hypot(dx,dy)/SCALE/tw))))
+                else:
+                    hi=avg.get(w.get("upper") or w.get("mid") or "",fl)
+                    lo_=avg.get(w.get("lower") or w.get("mid") or "",fl)
+                    colors.extend([0,hi,lo_,hi])
+                    reps.append(1)
+            else:
+                colors.extend([0,wc,wc,wc])
+                reps.append(1)
         # Manifold walls use a closing vertex per cell.
         walls.append(vertices[cell["walls"][0]["a"]])
         sectors.extend([offset,first_portal,len(cell["walls"]),cell["doom_sector"]])
@@ -257,17 +314,21 @@ def emit(lumps,cells):
         if not (-32768<=floor_h<=32767 and -32768<=ceil_h<=32767):
             raise ValueError("sector height exceeds Manifold 12.4 format")
         # param 0 is packed {s8 light_level; u8 ceil<<4 | floor} (sector_group.h)
-        packed=((light_level & 0xFF) << 8) | (CEIL_COLOR << 4) | FLOOR_COLOR
+        fc,cc=FLOOR_COLOR,CEIL_COLOR
+        if tex:
+            fc=tex["flat_color"].get(_nm(fl),FLOOR_COLOR); cc=tex["flat_color"].get(_nm(ce),CEIL_COLOR)
+        packed=((light_level & 0xFF) << 8) | (cc << 4) | fc
         if packed >= 0x8000: packed -= 0x10000
         sector_params.extend([packed,0,0,0,floor_h,ceil_h,0,0])
     text="#include <genesis.h>\n#include \"portal_map.h\"\n#include \"sector_group.h\"\n"
     text+="/* GENERATED, geometry proof-of-concept; textures/colors NOT final */\n"
     text+=as_c_array("s16","e1_sectors",sectors)
+    if tex: text+=as_c_array("u16","e1_palette",tex["vdp_palette"])
     text+=as_c_array("u16","e1_walls",walls)
     text+=as_c_array("s16","e1_portals",portals)
     text+=as_c_array("u8","e1_quadrants",quad)
     text+=as_c_array("u8","e1_wall_colors",colors)
-    text+=as_c_array("u8","e1_wall_repetitions",[1]*len(portals))
+    text+=as_c_array("u8","e1_wall_repetitions",reps)
     text+=as_c_array("s16","e1_group_params",sector_params)
     text+=as_c_array("u8","e1_group_types",[0]*len(lumps["SECTORS"]))
     text+=as_c_array("s16","e1_group_triggers",[0]*(len(lumps["SECTORS"])*8))
@@ -292,6 +353,7 @@ def emit(lumps,cells):
     for x,y in collision_verts:
         text+=f"  {{.x={round(x/SCALE)},.y={round(y/SCALE)}}},\n"
     text+="};\n"
+    pal_field=",.palette=(u16*)e1_palette" if tex else ""
     text+=f"""const portal_map e1m1_map = {{
   .num_sector_groups={len(lumps["SECTORS"])},
   .num_sectors={len(cells)}, .num_walls={len(portals)},
@@ -301,7 +363,7 @@ def emit(lumps,cells):
   .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,\n  .collision_vertexes=e1_collision_vertices,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
   .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
-  .num_things=0,.things=0
+  .num_things=0,.things=0{pal_field}
 }};
 """
     return text
