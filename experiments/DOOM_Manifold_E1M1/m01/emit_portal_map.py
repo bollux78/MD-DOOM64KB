@@ -214,7 +214,7 @@ def emit(lumps,cells):
     actual_points=list(vertices)
     sector_params=[]
     for floor,ceil,fl,ce,light,special,tag in lumps["SECTORS"]:
-        light_level=max(-4,min(3,round((light-160)/32)))
+        light_level=max(-2,min(2,round((light-160)/40)))  # colors.c tables cover -2..2
         floor_h=floor*16;ceil_h=ceil*16
         if not (-32768<=floor_h<=32767 and -32768<=ceil_h<=32767):
             raise ValueError("sector height exceeds Manifold 12.4 format")

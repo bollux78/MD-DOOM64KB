@@ -549,6 +549,74 @@ def keep_display_enabled_in_hblank(out):
     p.write_text(s)
     print("H-Int no longer disables the display")
 
+def restore_generated_scalers_with_correct_constraints(out):
+    """Use upstream's generated 68000 jump-table texture scalers again.
+
+    The upstream wrappers wrote input-only operands (`f`, unclipped_dy*4)
+    and JSR'd into code that rewrites d0/d1/a0/a1 without telling GCC.
+    Here the table entry is fetched in C and the call declares every
+    register the generated routine touches. The ADDRESS ERROR originally
+    blamed on these tables came from the SGDK2 H-Int callback (fixed).
+    """
+    p=out/"src/texture.c"
+    source=p.read_text()
+    replacements={
+        "draw_texture_vertical_line": """
+void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
+                                u8* col_ptr, const u16* tex_column) {
+    u16 unclipped_dy = (u16)(unclipped_y1 - unclipped_y0);
+    if (unclipped_dy > 512) { return; }
+    u16 clip_top = (u16)(y0 - unclipped_y0);
+    void* f = (void*)jump_table_top_clip_lut[unclipped_dy];
+    register u32 d0 asm ("%d0") = clip_top;
+    register const u16* a0 asm ("%a0") = tex_column;
+    register u8* a1 asm ("%a1") = col_ptr + (y0 << 1);
+    __asm volatile("jsr (%3)"
+        : "+d" (d0), "+a" (a0), "+a" (a1)
+        : "a" (f)
+        : "d1", "cc", "memory");
+}
+""",
+        "draw_bottom_clipped_texture_vertical_line": """
+void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
+                                                s16 unclipped_y1, u16 y1,
+                                                u8* col_ptr, const u16* tex_column) {
+    u16 unclipped_dy = (u16)(unclipped_y1 - unclipped_y0);
+    if (unclipped_dy > 512) { return; }
+    s16 clipped_dy = y1 - y0;
+    if (clipped_dy <= 0) { return; }
+    u16 clip_top = (u16)(y0 - unclipped_y0);
+    u16 clip_bot = (u16)(unclipped_y1 - y1);
+    void* f = (void*)jump_table_bot_clip_lut[unclipped_dy];
+    register u32 d0 asm ("%d0") = clip_top;
+    register u32 d1 asm ("%d1") = clip_bot;
+    register const u16* a0 asm ("%a0") = tex_column;
+    register u8* a1 asm ("%a1") = col_ptr + (y0 << 1);
+    __asm volatile("jsr (%4)"
+        : "+d" (d0), "+d" (d1), "+a" (a0), "+a" (a1)
+        : "a" (f)
+        : "cc", "memory");
+}
+"""
+    }
+    import re
+    for name,replacement in replacements.items():
+        matches=list(re.finditer(r"\bvoid\s+"+name+r"\s*\(",source))
+        if len(matches)!=1:
+            raise ValueError(f"expected one scaler wrapper {name}, got {len(matches)}")
+        start=matches[0].start()
+        opening=source.index("{",matches[0].end())
+        depth=1;end=opening+1
+        while depth and end<len(source):
+            if source[end]=="{": depth+=1
+            elif source[end]=="}": depth-=1
+            end+=1
+        source=source[:start]+replacement+source[end:]
+    if "tex_tables_lookup.h" not in source:
+        source='#include "tex_tables_lookup.h"\n'+source
+    p.write_text(source)
+    print("Generated jump-table scalers restored with explicit register contracts")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -702,7 +770,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,replace_generated_vertical_scalers_with_checked_c,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
