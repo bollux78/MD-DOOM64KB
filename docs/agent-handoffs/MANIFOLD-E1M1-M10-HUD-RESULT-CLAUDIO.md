@@ -57,3 +57,18 @@ As diferenças por ponto ficam entre −5 e +5 renders a cada 1,5 s, centradas e
 - Vida, munição e armadura reais dependem de um sistema de jogador que a Manifold ainda não tem.
 - A arma continua invisível (pendência independente).
 - Aguardando: aprovação do usuário no BlastEm gráfico antes de liberar `MANIFOLD_RELEASE_APPROVED`; depois, teste no console real.
+
+## Integração com o plano M11/M12 do Werk (`fac313c`)
+- **Correção de nomenclatura:** a M10 é H40. O H32 é uma variante de teste separada (`MANIFOLD_H32=1`, ROM `m11-hud-doom-h32.bin`, commit `c7c3ed3`). Apesar do nome do arquivo, ela **não** faz parte da M11 do Werk e deve ser tratada como "variante H32".
+- **Interruptores independentes**, todos variáveis de ambiente do `stage_rom.py` e desligados por padrão:
+  - `MANIFOLD_HUD=doom`: só a renderização do HUD em `inventory.c`, mais `doom_statusbar.c`;
+  - `MANIFOLD_H32=1`: `config.h`, a largura da tela em `game.c`, a janela inicial do `visit_graph` (2..62), o lote de DMA em `my_bmp.c` e as bordas do céu.
+
+  As mudanças de render, PVS e LOD da M11/M12 podem ser compiladas com o HUD ligado ou desligado e com H40 ou H32 sem conflito. Os pontos de contato são o workflow (lista de variantes) e a ordem dos passos no `stage_rom.py`.
+- **Dados já medidos que servem à M11B:**
+  - Trace do MAME (68000) num ponto lento do tour: `visit_graph` ~37 %, transformação de vértices ~9 %, recorte ~6 %. Travessia e geometria dominam, não o preenchimento.
+  - Há de 40 a 65 visitas de célula por quadro nas cenas lentas, com revisitas permitidas por `sector_rendered_cache` (até 7).
+  - Isso favorece PVS, cache de vértices por quadro e agrupamento de render, e não troca de textura por cor; o resultado bate com a M09 revertida.
+- **`bunch_render.c` não entra na ROM:** `first_wall_is_behind_second` e `draw_bunches` não aparecem no `symbol.txt` (o `--gc-sections` os remove), e `portal_rend` só chama `visit_graph`. O possível erro `w1y2` não afeta a E1M1 atual.
+- **Fog:** está em 1600 unidades, com a cor mais escura da paleta (desde a M06). Os blocos azuis grandes das capturas antigas eram paredes de fog pintadas com a cor do piso, antes da M06. O teste F1 do Werk (desligar o fog em E0) é o certo para confirmar se ainda sobra algo.
+- **VRAM para LOD/PVS:** as tabelas devem ficar em ROM. Em H40 sobram cerca de 70 tiles na área normal (1210 de 1280). O H32 com framebuffer de 30 colunas, ainda não feito, liberaria mais.
