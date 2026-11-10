@@ -119,6 +119,19 @@ jobs:
             echo "::error::SGDK makefile.gen not found on runner"; exit 1
           fi
           echo "Using SGDK: $gdk"
+          # The self-hosted runner has a native Linux xgmtool under mars/m68k-elf,
+          # while the SDK in marsdev/sgdk/SGDK has only xgmtool.exe. ResComp
+          # resolves exactly $GDK/bin/xgmtool. Link the already installed native
+          # binary; never download an unverified executable.
+          native_xgm="$HOME/mars/m68k-elf/bin/xgmtool"
+          if test ! -x "$gdk/bin/xgmtool"; then
+            test -x "$native_xgm" || { echo "::error::Linux xgmtool missing: $native_xgm"; exit 1; }
+            if test -e "$gdk/bin/xgmtool" || test -L "$gdk/bin/xgmtool"; then
+              echo "::error::Non-executable xgmtool already occupies SDK destination"; exit 1
+            fi
+            ln -s "$native_xgm" "$gdk/bin/xgmtool"
+          fi
+          test -x "$gdk/bin/xgmtool"
           echo "== XGM converters on runner =="
           find "$HOME" /opt -maxdepth 12 \( -iname '*xgm*tool*' -o -name 'xgmtool' -o -name 'xgm2tool' \) -type f 2>/dev/null | head -40 || true
           ls -l "$gdk/bin/"*xgm* 2>/dev/null || true
