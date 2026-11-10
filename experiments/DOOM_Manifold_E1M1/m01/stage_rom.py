@@ -1160,7 +1160,7 @@ def m11_safe_near_clipping(out):
 """
     t=t[:left]+replacement+t[right:]
     # Upstream right-clipping line has one trailing space after ';'.
-    t=t.replace("dx_over_dz_6 * z_adjust_12_4; \\n","dx_over_dz_6 * z_adjust_12_4;\\n")
+    t=t.replace("dx_over_dz_6 * z_adjust_12_4; "+chr(10),"dx_over_dz_6 * z_adjust_12_4;"+chr(10))
     t=t.replace("""        s32 x_adjust_10 = dx_over_dz_6 * z_adjust_12_4;
         s16 x_adjust_int = x_adjust_10>>(6+TRANS_Z_FRAC_BITS);""","""        s32 x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near;""")
     t=t.replace("""        rx1 += x_adjust_int;    // modify x coord""","""        rx1 = MANIFOLD_SAT16((s32)rx1 + x_adjust_int);  // near-plane intersection""")
