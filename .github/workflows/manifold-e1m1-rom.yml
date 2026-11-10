@@ -467,10 +467,10 @@ jobs:
           path: |
             ${{ env.ROM_PATH }}
             ${{ env.AUTOWALK_ROM_PATH }}
-            ${{ env.MANIFOLD_STAGE }}/candidate/out/rom.out
-            ${{ env.MANIFOLD_STAGE }}/candidate/out/symbol.txt
-            ${{ env.MANIFOLD_STAGE }}/autowalk/out/rom.out
-            ${{ env.MANIFOLD_STAGE }}/autowalk/out/symbol.txt
+            ${{ env.MANIFOLD_STAGE }}/candidate/out/release/rom.out
+            ${{ env.MANIFOLD_STAGE }}/candidate/out/release/symbol.txt
+            ${{ env.MANIFOLD_STAGE }}/autowalk/out/release/rom.out
+            ${{ env.MANIFOLD_STAGE }}/autowalk/out/release/symbol.txt
           retention-days: 7
           if-no-files-found: warn
       - name: Upload screenshots only (no ROM, no WAD)
