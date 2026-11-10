@@ -215,7 +215,9 @@ jobs:
           fake="$RUNNER_TEMP/fakebin"; mkdir -p "$fake"
           cat > "$fake/x-terminal-emulator" <<'SH'
           #!/bin/bash
-          [ "$1" = "-e" ] && shift
+          echo "ARGS: $*" >> "$BLASTEM_DBG_LOG"
+          while [ $# -gt 0 ] && [ "$1" != "-e" ]; do shift; done
+          shift
           printf 'bt\ndi\nq\n' | timeout 10s "$@" >> "$BLASTEM_DBG_LOG" 2>&1
           SH
           chmod +x "$fake/x-terminal-emulator"
