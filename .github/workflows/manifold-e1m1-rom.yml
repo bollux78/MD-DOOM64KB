@@ -111,6 +111,14 @@ jobs:
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
             NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/autowalk-build.log" 2>&1; then
             cp "$MANIFOLD_STAGE/autowalk/out/rom.bin" "$out/doom-md-manifold-e1m1-autowalk-m02.bin"
+            # Test ROM only: point CPU exception vectors 2..11 at VDP I/O so any
+            # exception becomes a hard BlastEm fatal instead of a debug screen.
+            python3 - "$out/doom-md-manifold-e1m1-autowalk-m02.bin" <<'PY'
+          import struct,sys
+          p=sys.argv[1]; b=bytearray(open(p,'rb').read())
+          for v in range(2,12): b[v*4:v*4+4]=struct.pack('>I',0x00C00020)
+          open(p,'wb').write(b)
+          PY
             echo "AUTOWALK_ROM_PATH=$out/doom-md-manifold-e1m1-autowalk-m02.bin" >> "$GITHUB_ENV"
           else
             echo "::warning::autowalk build failed"; grep -m10 -i error "$out/autowalk-build.log"
