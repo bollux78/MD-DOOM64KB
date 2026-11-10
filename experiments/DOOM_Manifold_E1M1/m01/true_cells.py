@@ -211,5 +211,26 @@ def weld_and_pair(cells, lumps, clockwise=True):
             if len(nb) > 1:
                 raise ValueError(f"ambiguous edge {a}->{b}")
             walls.append({"a": a, "b": b, "neighbor": nb[0] if nb else -1})
-        out.append({"id": ci, "doom_sector": sec, "walls": walls})
+        out.append({"id": ci, "doom_sector": sec, "walls": merge_collinear(walls)})
     return out
+
+
+def merge_collinear(walls):
+    """Join consecutive collinear pieces with the same neighbour: each
+    portal piece is recursed separately by the renderer, so T-junction
+    splits towards one neighbour multiply visits for nothing."""
+    def coll(w1, w2):
+        a, b, c = w1["a"], w1["b"], w2["b"]
+        return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]) == 0
+    ws = list(walls)
+    changed = True
+    while changed and len(ws) > 3:
+        changed = False
+        for k in range(len(ws)):
+            w1, w2 = ws[k], ws[(k+1) % len(ws)]
+            if w1["neighbor"] == w2["neighbor"] and coll(w1, w2):
+                ws[k] = {"a": w1["a"], "b": w2["b"], "neighbor": w1["neighbor"]}
+                del ws[(k+1) % len(ws)]
+                changed = True
+                break
+    return ws
