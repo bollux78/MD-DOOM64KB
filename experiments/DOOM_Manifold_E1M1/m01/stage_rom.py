@@ -649,6 +649,18 @@ def default_texture_repetitions(out):
     p.write_text(s)
     print("texture repetitions default to 1 when map has none:",n)
 
+def poll_joypad_each_frame(out):
+    """SGDK 1.x refreshed joypad state inside its V-Int handler; SGDK 2.x
+    only does it in SYS_doVBlankProcess(), which Manifold never calls (it
+    owns V-Int via do_vint_flip). Without this the pad reads as idle."""
+    p=out/"src/joy_helper.c"
+    s=p.read_text()
+    old="void update_joy() {\n"
+    if s.count(old)!=1: raise ValueError("update_joy changed")
+    s=s.replace(old,old+"    JOY_update();\n")
+    p.write_text(s)
+    print("JOY_update() polled once per game frame")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -802,7 +814,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
