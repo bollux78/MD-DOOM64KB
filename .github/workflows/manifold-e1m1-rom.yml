@@ -254,13 +254,15 @@ jobs:
                 for n, _ in pairs(dev.spaces) do sp = sp .. n .. "," end
                 if sp ~= "" then print("DEV " .. tag .. " spaces=" .. sp) end
               end
-              local vdp = nil
-              for tag, dev in pairs(manager.machine.devices) do
-                if dev.spaces["videoram"] then vdp = dev.spaces["videoram"] end
+              for tag, sh in pairs(manager.machine.memory.shares) do print("SHARE " .. tag .. " size=" .. sh.size) end
+              for tag, rg in pairs(manager.machine.memory.regions) do print("REGION " .. tag .. " size=" .. rg.size) end
+              local src = nil
+              for tag, sh in pairs(manager.machine.memory.shares) do
+                if string.find(tag, "vram") and sh.size >= 0x10000 then src = sh end
               end
-              if vdp then
+              if src then
                 local f = io.open(pfx .. "_vram.bin", "wb")
-                for i = 0, 0xFFFF do f:write(string.char(vdp:read_u8(i))) end
+                for i = 0, 0xFFFF do f:write(string.char(src:read_u8(i))) end
                 f:close()
                 print(pfx .. " VRAM dumped")
                 for name, addr in string.gmatch(os.getenv("WATCH") or "", "(regValues)=(%x+)") do
