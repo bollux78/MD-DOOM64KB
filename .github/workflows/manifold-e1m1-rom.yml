@@ -227,7 +227,7 @@ jobs:
               end
             end
             if pfx == "upstream" then
-              local pad = manager.machine.ioport.ports[":PAD1"]
+              local pad = manager.machine.ioport.ports[":ctrl1:mdpad:PAD"]
               if pad then
                 local press = (frame % 90) >= 0 and (frame % 90) < 6 and frame > 150
                 for n, f in pairs(pad.fields) do
