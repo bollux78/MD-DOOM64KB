@@ -61,3 +61,19 @@ Do not put private WADs, generated copyrighted assets, ROM binaries, or private 
 
 ## Acceptance gate
 No performance claims until equivalent images and independent timings exist. No accepted release without both build and BlastEm passing. Hardware testing is a separate additional gate.
+
+## VRAM map (M04, SGDK 2.12 layout with 64x64 planes)
+
+| VRAM | Use |
+|---|---|
+| 0x0000-0x01FF | SGDK system tiles (16) |
+| 0x0200-0x71FF | 3D framebuffer tiles, double buffered (896 tiles, 28 KB) |
+| 0x7200-0x9BFF | HUD, inventory, weapon sprites, console (~300 tiles) |
+| 0x9C00-0xA7FF | SGDK font (96 tiles) |
+| 0xA800 / 0xAC00 | H-scroll table / sprite list |
+| 0xB000-0xBFFF | **reclaimed**: WINDOW nametable is unused -> sky tiles (128) |
+| 0xC000-0xCDFF | BG_B rows 0-27 (HUD + sky tilemap) |
+| 0xCE00-0xDFFF | **reclaimed**: BG_B rows 28-63, never displayed -> sky tiles (144) |
+| 0xE000-0xFFFF | BG_A 64x64 = the two framebuffer tilemaps (vertical-scroll flip) |
+
+Enemies/objects are rasterised into the software framebuffer, so they cost no VRAM.

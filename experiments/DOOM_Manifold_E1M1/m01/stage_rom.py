@@ -693,15 +693,58 @@ def apply_doom_textures(out, lumps, cells, wad):
     print("doom textures:",len(names),"flats:",len(flats),"palette:",[hex(v) for v in tex["vdp_palette"]])
     return tex
 
+def textured_portal_steps(out):
+    """Upper/lower portal walls (steps, door frames, window sills) were only
+    textured for DOOR/LIFT groups. The emitter now encodes a texture index
+    as 0x80|idx in the high/low colour bytes; use the textured step drawers
+    whenever that flag is set (top-pegged upper, bottom-pegged lower)."""
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old_u="""                if(neighbor_sector_group_type == DOOR && !is_solid_color) {
+                    //continue;
+                    draw_top_pegged_textured_upper_step("""
+    new_u="""                if((neighbor_sector_group_type == DOOR && !is_solid_color) || (upper_color & 0x80)) {
+                    if (upper_color & 0x80) {
+                        tmap_info.tex = get_texture(upper_color & 0x7F, light_level);
+                        if (neighbor_sector_group_type != DOOR) { x1_pegged = x1_ytop; x2_pegged = x2_ytop; }
+                    }
+                    draw_top_pegged_textured_upper_step("""
+    old_l="""                if(neighbor_sector_group_type == LIFT && !is_solid_color) {
+                    draw_bottom_pegged_textured_lower_step("""
+    new_l="""                if((neighbor_sector_group_type == LIFT && !is_solid_color) || (lower_color & 0x80)) {
+                    if (lower_color & 0x80) {
+                        tmap_info.tex = get_texture(lower_color & 0x7F, light_level);
+                        if (neighbor_sector_group_type != LIFT) { x1_pegged = x1_ybot; x2_pegged = x2_ybot; }
+                    }
+                    draw_bottom_pegged_textured_lower_step("""
+    for o,n_ in ((old_u,new_u),(old_l,new_l)):
+        if s.count(o)!=1: raise ValueError("portal step layout changed")
+        s=s.replace(o,n_,1)
+    p.write_text(s)
+    print("portal upper/lower steps textured")
+
+def fix_fps_font_base(out):
+    """Upstream fps counter hard-codes the SGDK 1.x font tile base 0x5A0;
+    SGDK 2 puts the font at TILE_FONT_INDEX (0x4E0 here). 0x5A0 is the
+    WINDOW nametable area that we now reclaim for tiles."""
+    p=out/"src/game.c"
+    s=p.read_text()
+    old="    u16 base = 0x05A0;\n"
+    if s.count(old)!=1: raise ValueError("fps font base changed")
+    p.write_text(s.replace(old,"    u16 base = TILE_FONT_INDEX;\n",1))
+    print("fps font base -> TILE_FONT_INDEX")
+
 def install_sky(out, res):
     """SKY1 band on BG_B behind the framebuffer (BG_A colour 0 = sky
-    ceilings). Coarse 8px horizontal steps by redrawing 6 tilemap rows."""
+    ceilings), 256px wide like Doom (90 degrees), tiles stored in VRAM
+    reclaimed from the unused WINDOW nametable and the never-displayed
+    rows 28-63 of the 64x64 BG_B nametable (~272 tiles)."""
     import wad_textures as WT
-    sk=WT.sky_tiles(res, max_tiles=46)  # VRAM free ends at 0x500; weapons/HUD leave ~45-70 tiles
+    sk=WT.sky_tiles(res, band_rows=10, band_cols=32, max_tiles=270)
     n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
     tiles=",\n".join("  "+",".join(f"0x{v:08x}" for v in t) for t in sk["tiles"])
     tmap=",".join(str(v) for row in sk["map"] for v in row)
-    band_top=13-rows
+    band_top=4   # Doom: sky texture top at the top of the view, mountains reach the horizon
     c=f"""#include "manifold_mute_klog.h"
 #include <genesis.h>
 #include "game.h"
@@ -710,20 +753,33 @@ static const u32 sky_tiles[{n}*8] = {{
 {tiles}
 }};
 static const u8 sky_map[{rows}][{cols}] = {{ {tmap} }};
-static u16 sky_base = 0;
+static u16 sky_index[{n}];
 static s16 sky_last = -1;
 static u8 sky_ready = 0;
-static u16 sky_row_buf[9*32];
+static u16 sky_row_buf[{rows}*32];
+u16 manifold_reclaimed_tiles = 0;
+/* VRAM reclaim: WINDOW map is unused (window disabled) -> point it at
+   BG_B and use its 4KB for tiles; BG_B rows 28..63 are never displayed
+   (no BG_B scroll) -> 4.5KB more. */
 u16 manifold_sky_init(u16 free_tile_loc) {{
-    if (free_tile_loc + {n} > MANIFOLD_FREE_TILE_LIMIT) {{ return free_tile_loc; }}
-    sky_base = free_tile_loc;
-    VDP_loadTileData(sky_tiles, sky_base, {n}, DMA);
-    for (u16 i = 0; i < 9*32; i++) sky_row_buf[i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 0);
-    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 4, 32, {band_top - 4}, 32, CPU);
-    for (u16 i = 0; i < 9*32; i++) sky_row_buf[i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 1);
-    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 13, 32, 9, 32, CPU);
+    u16 r1 = window_addr >> 5;                     /* 128 tiles */
+    u16 r2 = (bgb_addr + 28 * 128) >> 5;           /* up to 144 tiles */
+    u16 r2n = ((bgb_addr + 0x2000) >> 5) - r2;
+    VDP_setWindowAddress(bgb_addr);
+    manifold_reclaimed_tiles = 128 + r2n;
+    if ({n} > 128 + r2n) return free_tile_loc;
+    for (u16 k = 0; k < {n}; k++) {{
+        sky_index[k] = (k < 128) ? (r1 + k) : (r2 + k - 128);
+        VDP_loadTileData(&sky_tiles[k*8], sky_index[k], 1, CPU);
+    }}
+    for (u16 r = 0; r < 18; r++) {{
+        u16 t = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[1]);
+        if (r >= {band_top - 4} && r < {band_top - 4 + rows}) continue;
+        for (u16 c = 0; c < 32; c++) sky_row_buf[c] = t;
+        VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 4 + r, 32, 1, 32, CPU);
+    }}
     sky_ready = 1; sky_last = -1;
-    return free_tile_loc + {n};
+    return free_tile_loc;
 }}
 void manifold_sky_update(void) {{
     if (!sky_ready) return;
@@ -732,7 +788,7 @@ void manifold_sky_update(void) {{
     sky_last = off;
     for (u16 r = 0; r < {rows}; r++)
         for (u16 c = 0; c < 32; c++)
-            sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + sky_map[r][(c + off) & {cols - 1}]);
+            sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[sky_map[r][(c + off) & {cols - 1}]]);
     VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, {band_top}, 32, {rows}, 32, CPU);
 }}
 """
@@ -743,25 +799,14 @@ void manifold_sky_update(void) {{
     if gs.count(old)!=1: raise ValueError("console_init call changed")
     gs=gs.replace(old,old+"    free_tile_loc = manifold_sky_init(free_tile_loc);\n",1)
     gs=gs.replace("u16 free_tile_loc;\n","u16 free_tile_loc;\nu16 manifold_sky_init(u16 free_tile_loc);\n",1)
-    m="#define MANIFOLD_FREE_TILE_LIMIT"
-    if m not in gs: raise ValueError("free tile limit macro missing")
     g.write_text(gs)
-    # sky file needs the limit macro
-    lim=[l for l in gs.splitlines() if l.startswith(m)][0]
-    (out/"src/manifold_sky.c").write_text(lim+"\n"+c)
     j=out/"src/joy_helper.c"
     js=j.read_text()
     old="void update_joy() {\n"
     if js.count(old)!=1: raise ValueError("update_joy changed")
     js=js.replace(old,"void manifold_sky_update(void);\n"+old+"    manifold_sky_update();\n",1)
     j.write_text(js)
-    b=out/"src/my_bmp.c"
-    bs=b.read_text()
-    o="void bmp_show_fps(u16 float_display) {\n"
-    if bs.count(o)!=1: raise ValueError("bmp_show_fps changed")
-    bs=bs.replace(o,o+"",1)
-    b.write_text(bs)
-    print("sky tiles:",n,"band rows:",rows)
+    print("sky tiles:",n,"band rows:",rows,"cols:",cols)
 
 def tour_input(out, cells, lumps):
     """Test-only camera tour: every 90 frames teleport to the centroid of the
@@ -1182,7 +1227,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)

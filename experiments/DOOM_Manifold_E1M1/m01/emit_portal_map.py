@@ -294,10 +294,16 @@ def emit(lumps,cells,tex=None):
                     tw=tex["width"][nm]
                     reps.append(max(1,min(255,round(math.hypot(dx,dy)/SCALE/tw))))
                 else:
-                    hi=avg.get(w.get("upper") or w.get("mid") or "",fl)
-                    lo_=avg.get(w.get("lower") or w.get("mid") or "",fl)
-                    colors.extend([0,hi,lo_,hi])
-                    reps.append(1)
+                    up_t=w.get("upper");lo_t=w.get("lower")
+                    hi=(0x80|idx[up_t]) if up_t else avg.get(w.get("mid") or "",fl)
+                    lo_=(0x80|idx[lo_t]) if lo_t else avg.get(w.get("mid") or "",fl)
+                    if up_t or lo_t:
+                        t0=up_t or lo_t
+                        colors.extend([idx[t0],hi,lo_,0])
+                        reps.append(max(1,min(255,round(math.hypot(dx,dy)/SCALE/tex["width"][t0]))))
+                    else:
+                        colors.extend([0,hi,lo_,hi])
+                        reps.append(1)
             else:
                 colors.extend([0,wc,wc,wc])
                 reps.append(1)
