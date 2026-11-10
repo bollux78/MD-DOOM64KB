@@ -156,6 +156,18 @@ jobs:
           fi
           echo "BLASTEM_VERDICT=PASS_HEADLESS_90_FRAMES" >> "$GITHUB_ENV"
           echo "BlastEm 90 emulated frames: PASS (visual/gameplay not validated)"
+      - name: Extended BlastEm 1200-frame stress smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          if test ! -x "$emu"; then
+            echo "::warning::BlastEm extended smoke unavailable"
+            exit 0
+          fi
+          echo "Testing 1200 emulated frames with bounded time and memory"
+          ( ulimit -v 1048576; timeout 45s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 1200 "$ROM_PATH" )
+          echo "BlastEm 1200 emulated frames: PASS (no visual validation)"
       - name: Explicit validation verdicts
         if: always()
         shell: bash
