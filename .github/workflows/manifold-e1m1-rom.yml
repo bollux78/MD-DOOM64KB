@@ -212,11 +212,21 @@ jobs:
         run: |
           set +e
           emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          fake="$RUNNER_TEMP/fakebin"; mkdir -p "$fake"
+          cat > "$fake/x-terminal-emulator" <<'SH'
+          #!/bin/bash
+          [ "$1" = "-e" ] && shift
+          printf 'bt\ndi\nq\n' | timeout 10s "$@" >> "$BLASTEM_DBG_LOG" 2>&1
+          SH
+          chmod +x "$fake/x-terminal-emulator"
+          export PATH="$fake:$PATH"
           for r in "$MANIFOLD_STAGE/manifold/built_rom.bin" "$ROM_PATH" "${CONTROL_ROM_PATH:-}"; do
+            export BLASTEM_DBG_LOG="$RUNNER_TEMP/blastem-dbg-$(basename "$r").log"; : > "$BLASTEM_DBG_LOG"
             test -s "$r" || continue
             echo "== $(basename "$r")"
             timeout 60s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy TERM=dumb stdbuf -oL -eL "$emu" -b 600 "$r" </dev/null 2>&1 | head -30
             echo "rc=${PIPESTATUS[0]}"
+            echo "-- debugger transcript:"; head -40 "$BLASTEM_DBG_LOG"
           done
       - name: MAME trace + snapshots (megadriv, headless)
         continue-on-error: true
