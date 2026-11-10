@@ -391,7 +391,13 @@ def mute_legacy_emulator_debug_logging(out):
     definitions="#include <genesis.h>\n"
     names=("KLog","KLog_U1","KLog_U2","KLog_U3","KLog_U4",
            "KLog_U1_","KLog_U2_","KLog_U3_","KLog_U4_",
-           "KLog_U1x","KLog_U2x","KLog_U3x","KLog_U4x")
+           "KLog_U1x","KLog_U2x","KLog_U3x","KLog_U4x",
+           "KLog_S1","KLog_S2","KLog_S3","KLog_S4",
+           "KLog_S1_","KLog_S2_","KLog_S3_","KLog_S4_",
+           "KLog_F1","KLog_F2","KLog_F3","KLog_F4",
+           "KLog_f1","KLog_f2","KLog_f3","KLog_f4",
+           "KDebug_Alert","KDebug_AlertNumber","KDebug_Halt",
+           "KDebug_StartTimer","KDebug_StopTimer")
     for name in names:
         definitions+=f"#define {name}(...) ((void)0)\n"
     (base/"manifold_mute_klog.h").write_text(definitions)
