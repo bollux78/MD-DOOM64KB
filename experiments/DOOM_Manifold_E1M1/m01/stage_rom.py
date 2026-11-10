@@ -661,6 +661,38 @@ def poll_joypad_each_frame(out):
     p.write_text(s)
     print("JOY_update() polled once per game frame")
 
+def saturate_far_depth_and_guard_windows(out):
+    """Upstream test maps fit in +-2047 units; E1M1 spans ~4000, so the
+    12.4 view depth `ry >> 2` wrapped in s16 and far vertices reappeared as
+    near ghosts with absurd projections (seen as an odd column pointer /
+    ADDRESS ERROR while turning). Saturate depth and lateral values, and
+    reject degenerate portal windows on entry to visit_graph."""
+    p=out/"src/math3d.c"
+    s=p.read_text()
+    reps={
+        "    s16 cur_res_x = rx>>(FIX16_FRAC_BITS);\n":
+        "    s16 cur_res_x = MANIFOLD_SAT16(rx>>(FIX16_FRAC_BITS));\n",
+        "    s16 cur_res_y = ry>>(FIX16_FRAC_BITS-TRANS_Z_FRAC_BITS); // 12.4\n":
+        "    s16 cur_res_y = MANIFOLD_SAT16(ry>>(FIX16_FRAC_BITS-TRANS_Z_FRAC_BITS)); // 12.4\n",
+        "        cur_res_x = rx >> (FIX16_FRAC_BITS);                   \n":
+        "        cur_res_x = MANIFOLD_SAT16(rx >> (FIX16_FRAC_BITS));\n",
+        "        cur_res_y = ry >> (FIX16_FRAC_BITS-TRANS_Z_FRAC_BITS);     \n":
+        "        cur_res_y = MANIFOLD_SAT16(ry >> (FIX16_FRAC_BITS-TRANS_Z_FRAC_BITS));\n",
+    }
+    for old,new in reps.items():
+        if s.count(old)!=1:
+            raise ValueError(f"math3d transform line changed: {old!r}")
+        s=s.replace(old,new)
+    s=("#define MANIFOLD_SAT16(v) ((s16)(((s32)(v)) > 32767 ? 32767 : (((s32)(v)) < -32768 ? -32768 : (s32)(v))))\n"+s)
+    p.write_text(s)
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="    manifold_dbg[0]++;"
+    if s.count(old)!=1: raise ValueError("instrumentation anchor missing")
+    s=s.replace(old,old+"\n    if (x2 > RENDER_WIDTH) x2 = RENDER_WIDTH;\n    if (x1 >= x2) return;",1)
+    p.write_text(s)
+    print("far depth saturated; visit_graph windows validated")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -814,7 +846,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
