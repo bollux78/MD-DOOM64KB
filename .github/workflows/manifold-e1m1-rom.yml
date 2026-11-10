@@ -218,10 +218,15 @@ jobs:
           fail=0
           for n in 1500 3600; do
             outlog="$RUNNER_TEMP/aw-$n.log"
-            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy TERM=dumb "$emu" -b $n "$AUTOWALK_ROM_PATH" </dev/null >"$outlog" 2>&1 )
-            rc=$?
+            for attempt in 1 2 3; do
+              ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy TERM=dumb "$emu" -b $n "$AUTOWALK_ROM_PATH" </dev/null >"$outlog" 2>&1 )
+              rc=$?
+              # BlastEm host-JIT relocation glitch (ASLR), not a game fault: retry
+              grep -q "out of range for a 32-bit displacement" "$outlog" || break
+              echo "(BlastEm host JIT displacement glitch, retry $attempt)"
+            done
             echo "== autowalk $n frames rc=$rc"; grep -v SRAM "$outlog" | head -20
-            if [ $rc -ne 0 ] || grep -qiE "unmapped|fatal|exception|error" "$outlog" || [ -s "$BLASTEM_DBG_LOG" ]; then fail=1; fi
+            if [ $rc -ne 0 ] || grep -qiE "unmapped|fatal|exception|error|lock up" "$outlog" || [ -s "$BLASTEM_DBG_LOG" ]; then fail=1; fi
           done
           echo "-- debugger transcript:"; head -60 "$BLASTEM_DBG_LOG"
           if [ $fail -ne 0 ]; then

@@ -557,8 +557,8 @@ u16 manifold_autopilot_joy(u16 j);
 u16 manifold_autopilot_joy(u16 j) {
     (void)(JOY_readJoypad)(j);
     u32 f = vtimer;
-    if (f < 400) { return ((f/40) & 1) ? BUTTON_START : 0; }
-    u32 t = (f - 400) % 1400;
+    if (f < 120) { return 0; }   /* map autoloads; START would pause */
+    u32 t = (f - 120) % 1400;
     if (t < 240) return BUTTON_UP;
     if (t < 290) return BUTTON_RIGHT;
     if (t < 500) return BUTTON_UP;
