@@ -783,7 +783,7 @@ u8 manifold_window_fully_occluded(u16 lo, u16 hi) {
     if c.count(entry)!=1: raise ValueError("portal early return anchor changed")
     c=c.replace(entry,entry+"""    if (depth >= 2 && manifold_window_fully_occluded(x1,x2)) { return; }
 """,1)
-    c=c.replace("#include <genesis.h>\\n","#include <genesis.h>\\nu8 manifold_window_fully_occluded(u16 lo, u16 hi);\\n",1)
+    c=c.replace("#include <genesis.h>\n","#include <genesis.h>\nu8 manifold_window_fully_occluded(u16 lo, u16 hi);\n",1)
     p.write_text(c)
     print("M11 conservative occlusion: skip cells behind fully covered columns")
 
