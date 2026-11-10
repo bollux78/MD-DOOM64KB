@@ -542,6 +542,20 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
+def clamp_native_vertical_lines(out):
+    """Flat-colour column filler jumps into an unrolled table sized for
+    dy<=158 and writes from col_ptr+y0*2 with no bounds checks. E1M1 feeds
+    it y0<0 / y1>SCREEN_HEIGHT / y1<y0, which wrote below the framebuffer
+    into the heap (objects[]), later crashing via a garbage object state
+    pointer (LINE 1111 / 'execute at unmapped address' in BlastEm)."""
+    p=out/"src/draw.c"
+    s=p.read_text()
+    old="void draw_native_vertical_line_unrolled(s16 y0, s16 y1, u32 full_col,  u8* col_ptr) {\n"
+    if s.count(old)!=1: raise ValueError("draw_native_vertical_line_unrolled signature changed")
+    s=s.replace(old,old+"    if (y0 < 0) { y0 = 0; }\n    if (y1 > SCREEN_HEIGHT) { y1 = SCREEN_HEIGHT; }\n    if (y1 <= y0) { return; }\n",1)
+    p.write_text(s)
+    print("flat column filler clamped to 0..SCREEN_HEIGHT")
+
 def autopilot_input(out):
     """Test-only: replace JOY_readJoypad with a scripted walk so headless
     BlastEm (no pad input) exercises movement/turning. Enabled via
@@ -617,6 +631,8 @@ void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
                                 u8* col_ptr, const u16* tex_column) {
     s16 sy0 = (s16)y0;
     if (sy0 < unclipped_y0) { sy0 = unclipped_y0; }
+    if (sy0 < 0) { sy0 = 0; }
+    if (unclipped_y1 > SCREEN_HEIGHT) { draw_bottom_clipped_texture_vertical_line(unclipped_y0, (u16)sy0, unclipped_y1, SCREEN_HEIGHT, col_ptr, tex_column); return; }
     if (sy0 >= unclipped_y1) { return; }
     s16 dy = unclipped_y1 - unclipped_y0;
     if (dy <= 0) { return; }
@@ -644,6 +660,8 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     s16 sy1 = (s16)y1;
     if (sy0 < unclipped_y0) { sy0 = unclipped_y0; }
     if (sy1 > unclipped_y1) { sy1 = unclipped_y1; }
+    if (sy0 < 0) { sy0 = 0; }
+    if (sy1 > SCREEN_HEIGHT) { sy1 = SCREEN_HEIGHT; }
     if (sy1 <= sy0) { return; }
     s16 dy = unclipped_y1 - unclipped_y0;
     if (dy <= 0) { return; }
@@ -681,6 +699,7 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
         source=source[:start]+replacement+source[end:]
     if "tex_tables_lookup.h" not in source:
         source='#include "tex_tables_lookup.h"\n'+source
+    source='#include "utils.h"\nvoid draw_bottom_clipped_texture_vertical_line(s16, u16, s16, u16, u8*, const u16*);\n'+source
     p.write_text(source)
     print("Generated jump-table scalers restored with explicit register contracts")
 
@@ -913,7 +932,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
