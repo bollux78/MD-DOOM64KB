@@ -1159,10 +1159,14 @@ def m11_safe_near_clipping(out):
     if (dz_near == 0) return NEAR_Z_CULLED;
 """
     t=t[:left]+replacement+t[right:]
-    # Upstream right-clipping line has one trailing space after ';'.
-    t=t.replace("dx_over_dz_6 * z_adjust_12_4; "+chr(10),"dx_over_dz_6 * z_adjust_12_4;"+chr(10))
-    t=t.replace("""        s32 x_adjust_10 = dx_over_dz_6 * z_adjust_12_4;
-        s16 x_adjust_int = x_adjust_10>>(6+TRANS_Z_FRAC_BITS);""","""        s32 x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near;""")
+    # Match both endpoint blocks even when upstream has trailing spaces.
+    import re
+    t, clipped_count = re.subn(
+        r"s32\\s+x_adjust_10\\s*=\\s*dx_over_dz_6\\s*\\*\\s*z_adjust_12_4;\\s*s16\\s+x_adjust_int\\s*=\\s*x_adjust_10\\s*>>\\s*\\(6\\+TRANS_Z_FRAC_BITS\\);",
+        "s32 x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near;",
+        t)
+    if clipped_count!=2:
+        raise ValueError(f"Expected two near plane interpolation edits; got {clipped_count}")
     t=t.replace("""        rx1 += x_adjust_int;    // modify x coord""","""        rx1 = MANIFOLD_SAT16((s32)rx1 + x_adjust_int);  // near-plane intersection""")
     t=t.replace("""        rx2 += x_adjust_int;""","""        rx2 = MANIFOLD_SAT16((s32)rx2 + x_adjust_int);""")
     t=t.replace("""        rz1_12_4 = NEAR_Z_FIX;
