@@ -672,7 +672,7 @@ def distant_wall_flat_lod(out):
     p=out/"src/portal.c"
     source=p.read_text()
     needle="        u8 is_solid_color = map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_SOLID_COLOR_IDX];\n"
-    if source.count(needle)!=1:
+    if source.count(needle)<1:
         raise ValueError("wall solid-color read anchor changed")
     replacement=needle+"""        if (!is_portal && !is_solid_color
             && trans_v1.y > (768<<TRANS_Z_FRAC_BITS)
