@@ -41,6 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -c 'import shapely' 2>/dev/null || python3 -m pip install --user --break-system-packages -q shapely || python3 -m pip install --user -q shapely
           python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \

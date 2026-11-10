@@ -113,6 +113,31 @@ def source_wall(lumps,cell,a,b):
     return edges[0] if edges else None
 
 def candidate(lumps,nodes,allow_gaps=False):
+    import os
+    if os.environ.get("MANIFOLD_CELLS","exact")=="exact":
+        return exact_candidate(lumps,nodes)
+    return legacy_candidate(lumps,nodes,allow_gaps)
+
+def exact_candidate(lumps,nodes):
+    import true_cells as T
+    merge=__import__("os").environ.get("MANIFOLD_MERGE","1")=="1"
+    raw,tstats=T.true_cells(lumps,nodes,merge=merge)
+    clockwise=__import__("os").environ.get("MANIFOLD_WINDING","cw")!="ccw"
+    cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
+    for c in cells:
+        for w in c["walls"]:
+            w["a"]=(w["a"][0]*SCALE,w["a"][1]*SCALE)
+            w["b"]=(w["b"][0]*SCALE,w["b"][1]*SCALE)
+            w["seg"]=-1
+    pairs={tuple(sorted((c["id"],w["neighbor"]))) for c in cells for w in c["walls"] if w["neighbor"]>=0}
+    points={p for c in cells for w in c["walls"] for p in (w["a"],w["b"])}
+    stats=dict(tstats,walls=sum(len(c["walls"]) for c in cells),vertices=len(points),
+               portal_pairs=len(pairs),nonmatching_internal_edges=0,method="exact")
+    for k,limit in [("cells",MAX_CELLS),("walls",MAX_WALLS),("vertices",MAX_VERTICES)]:
+        if stats[k]>limit: raise ValueError(f"limit {k} {stats[k]}>{limit}")
+    return cells,stats,[]
+
+def legacy_candidate(lumps,nodes,allow_gaps=False):
     leaves=clip_to_seg_front(lumps,build(lumps,nodes))
     vanished=[i for i,p in leaves.items() if len(p)<3]
     if vanished:

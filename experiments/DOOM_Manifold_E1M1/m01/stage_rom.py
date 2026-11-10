@@ -567,6 +567,44 @@ def guard_portal_recursion_stack(out):
     p.write_text(s)
     print("portal recursion bounded by stack/heap guard")
 
+def robust_sector_crossing(out):
+    """Upstream collision lets the player cross a portal line even when the
+    new point is not inside the neighbour (corner cut into a 3rd cell); the
+    player then sits outside its sector and walks through walls into void.
+    Search the neighbour's neighbours; if still not found, block the move."""
+    p=out/"src/collision.c"
+    s=p.read_text()
+    helper="""
+static s16 manifold_locate2(fix32 x, fix32 y, s16 sect) {
+    portal_map* mp = (portal_map*)cur_portal_map;
+    u16 n = sector_num_walls(sect, mp);
+    u16 po = sector_portal_offset(sect, mp);
+    for (u16 i = 0; i < n; i++) {
+        s16 d = mp->portals[po + i];
+        if (d >= 0 && within_sector(x, y, d)) { return d; }
+    }
+    return -1;
+}
+"""
+    anchor="f32 sq_shortest_dist_to_point("
+    if s.count(anchor)!=1: raise ValueError("collision layout changed")
+    s=s.replace(anchor,helper+anchor,1)
+    for axis,args,pos in (("x","newx, cury","curx = newx;"),("y","curx, newy","cury = newy;")):
+        old=f"""                }} else {{
+                    //KLog("{axis} moved over line but not blocked or in sector, stay in current sector");
+                    continue;
+                }}"""
+        new=f"""                }} else {{
+                    s16 found = manifold_locate2({args}, portal_sect);
+                    if (found >= 0) {{ cur_sector = found; {pos} break; }}
+                    crossed_line_{axis} = 1;
+                    continue;
+                }}"""
+        if s.count(old)!=1: raise ValueError(f"{axis} crossing branch changed")
+        s=s.replace(old,new,1)
+    p.write_text(s)
+    print("collision: corner crossings resolved or blocked")
+
 def clamp_native_vertical_lines(out):
     """Flat-colour column filler jumps into an unrolled table sized for
     dy<=158 and writes from col_ptr+y0*2 with no bounds checks. E1M1 feeds
@@ -957,7 +995,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
