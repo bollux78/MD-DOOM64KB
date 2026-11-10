@@ -569,15 +569,37 @@ def restore_generated_scalers_with_correct_constraints(out):
     source=p.read_text()
     replacements={
         "draw_texture_vertical_line": """
+static void manifold_wall_column_c(s16 uy0, s16 y0, s16 uy1, s16 y1,
+                                   u8* col_ptr, const u16* tex_column) {
+    s16 dy = uy1 - uy0;
+    if (dy <= 0 || y1 <= y0) { return; }
+    u32 step = (((u32)64) << 16) / (u32)dy;
+    u32 pos = (u32)(y0 - uy0) * step;
+    u16* dst = (u16*)(col_ptr + ((u16)y0 << 1));
+    s16 n = y1 - y0;
+    while (n-- > 0) {
+        *dst++ = tex_column[pos >> 16];
+        pos += step;
+    }
+}
+
 void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
                                 u8* col_ptr, const u16* tex_column) {
-    u16 unclipped_dy = (u16)(unclipped_y1 - unclipped_y0);
-    if (unclipped_dy > 512) { return; }
-    u16 clip_top = (u16)(y0 - unclipped_y0);
+    s16 sy0 = (s16)y0;
+    if (sy0 < unclipped_y0) { sy0 = unclipped_y0; }
+    if (sy0 >= unclipped_y1) { return; }
+    s16 dy = unclipped_y1 - unclipped_y0;
+    if (dy <= 0) { return; }
+    if (dy > 512) {
+        manifold_wall_column_c(unclipped_y0, sy0, unclipped_y1, unclipped_y1, col_ptr, tex_column);
+        return;
+    }
+    u16 unclipped_dy = (u16)dy;
+    u16 clip_top = (u16)(sy0 - unclipped_y0);
     void* f = (void*)jump_table_top_clip_lut[unclipped_dy];
     register u32 d0 asm ("%d0") = clip_top;
     register const u16* a0 asm ("%a0") = tex_column;
-    register u8* a1 asm ("%a1") = col_ptr + (y0 << 1);
+    register u8* a1 asm ("%a1") = col_ptr + ((u16)sy0 << 1);
     __asm volatile("jsr (%3)"
         : "+d" (d0), "+a" (a0), "+a" (a1)
         : "a" (f)
@@ -588,17 +610,25 @@ void draw_texture_vertical_line(s16 unclipped_y0, u16 y0, s16 unclipped_y1,
 void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
                                                 s16 unclipped_y1, u16 y1,
                                                 u8* col_ptr, const u16* tex_column) {
-    u16 unclipped_dy = (u16)(unclipped_y1 - unclipped_y0);
-    if (unclipped_dy > 512) { return; }
-    s16 clipped_dy = y1 - y0;
-    if (clipped_dy <= 0) { return; }
-    u16 clip_top = (u16)(y0 - unclipped_y0);
-    u16 clip_bot = (u16)(unclipped_y1 - y1);
+    s16 sy0 = (s16)y0;
+    s16 sy1 = (s16)y1;
+    if (sy0 < unclipped_y0) { sy0 = unclipped_y0; }
+    if (sy1 > unclipped_y1) { sy1 = unclipped_y1; }
+    if (sy1 <= sy0) { return; }
+    s16 dy = unclipped_y1 - unclipped_y0;
+    if (dy <= 0) { return; }
+    if (dy > 512) {
+        manifold_wall_column_c(unclipped_y0, sy0, unclipped_y1, sy1, col_ptr, tex_column);
+        return;
+    }
+    u16 unclipped_dy = (u16)dy;
+    u16 clip_top = (u16)(sy0 - unclipped_y0);
+    u16 clip_bot = (u16)(unclipped_y1 - sy1);
     void* f = (void*)jump_table_bot_clip_lut[unclipped_dy];
     register u32 d0 asm ("%d0") = clip_top;
     register u32 d1 asm ("%d1") = clip_bot;
     register const u16* a0 asm ("%a0") = tex_column;
-    register u8* a1 asm ("%a1") = col_ptr + (y0 << 1);
+    register u8* a1 asm ("%a1") = col_ptr + ((u16)sy0 << 1);
     __asm volatile("jsr (%4)"
         : "+d" (d0), "+d" (d1), "+a" (a0), "+a" (a1)
         : "a" (f)
