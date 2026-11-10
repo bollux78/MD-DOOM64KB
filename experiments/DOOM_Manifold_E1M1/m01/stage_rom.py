@@ -603,6 +603,18 @@ static s16 manifold_locate2(fix32 x, fix32 y, s16 sect) {
                 }}"""
         if s.count(old)!=1: raise ValueError(f"{axis} crossing branch changed")
         s=s.replace(old,new,1)
+    # final validation: never leave the player outside its claimed cell
+    sig="collision_result check_for_collision_radius(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {\n"
+    if s.count(sig)!=1: raise ValueError("radius collision signature changed")
+    s=s.replace(sig,sig+"    fix32 manifold_ox = curx, manifold_oy = cury; u16 manifold_os = cur_sector;\n",1)
+    start=s.index(sig)
+    k=s.index("    collision_result res;\n",start)
+    s=s[:k]+"""    if (!within_sector(curx, cury, cur_sector)) {
+        s16 f = manifold_locate2(curx, cury, cur_sector);
+        if (f >= 0) { cur_sector = f; }
+        else { curx = manifold_ox; cury = manifold_oy; cur_sector = manifold_os; }
+    }
+"""+s[k:]
     p.write_text(s)
     print("collision: corner crossings resolved or blocked")
 
