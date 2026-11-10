@@ -248,6 +248,16 @@ jobs:
                 print("PORT " .. tag .. " " .. names)
               end
             end
+            if pfx == "e1m1" then
+              local pad = manager.machine.ioport.ports[":ctrl1:mdpad:PAD"]
+              if pad then
+                for n, f in pairs(pad.fields) do
+                  if n == "P1 Up" then f:set_value((frame > 320 and frame < 560) and 1 or 0) end
+                  if n == "P1 Right" then f:set_value((frame > 600 and frame < 680) and 1 or 0) end
+                  if n == "P1 Left" then f:set_value((frame > 760 and frame < 800) and 1 or 0) end
+                end
+              end
+            end
             if pfx == "upstream" then
               local pad = manager.machine.ioport.ports[":ctrl1:mdpad:PAD"]
               if pad then
@@ -298,7 +308,7 @@ jobs:
                 end
               end
             end
-            if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 or frame == 890 then
+            if frame == 60 or frame == 180 or frame == 300 or frame == 420 or frame == 560 or frame == 700 or frame == 890 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
             if frame >= 900 then manager.machine:exit() end
