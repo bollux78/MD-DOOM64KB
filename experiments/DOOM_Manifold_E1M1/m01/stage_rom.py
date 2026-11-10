@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import os
 """Stage a disposable Manifold candidate with an E1M1 portal_map.
 
 NOT an acceptance claim. Runs after source audit and emission gate; only
 writes to --out directory. The R128/Sega CD build tree is never modified.
 """
 from __future__ import annotations
+import os
 import argparse
 import json
 from pathlib import Path
