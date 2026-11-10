@@ -220,12 +220,12 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "e1m1:$ROM_PATH" "control:${CONTROL_ROM_PATH:-}"; do
+          for pair in "upstream:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:$ROM_PATH" "control:${CONTROL_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rom="${pair#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
             SNAP_PREFIX="$pfx" timeout 240s mame megadriv -cart "$rom" -rompath /nonexistent \
-              -video none -sound none -nothrottle -skip_gameinfo -noplugins \
+              -video none -sound none -nothrottle -skip_gameinfo -noplugins -seconds_to_run 60 \
               -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
               -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tail -40
           done
