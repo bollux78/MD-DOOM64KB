@@ -119,6 +119,10 @@ jobs:
             echo "::error::SGDK makefile.gen not found on runner"; exit 1
           fi
           echo "Using SGDK: $gdk"
+          echo "== XGM converters on runner =="
+          find "$HOME" /opt -maxdepth 12 \( -iname '*xgm*tool*' -o -name 'xgmtool' -o -name 'xgm2tool' \) -type f 2>/dev/null | head -40 || true
+          ls -l "$gdk/bin/"*xgm* 2>/dev/null || true
+          if test -e "$gdk/bin/xgmtool"; then file "$gdk/bin/xgmtool" || true; ldd "$gdk/bin/xgmtool" 2>&1 | head -20 || true; fi
           export GDK="$gdk" PREFIX=m68k-elf-
           export PATH="$HOME/mars/m68k-elf/bin:$HOME/toolchains/mars/m68k-elf/bin:$GDK/bin:$PATH"
           if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
