@@ -478,6 +478,26 @@ def fail_loud_on_heap_exhaustion(out):
     p.write_text(s)
     print("Heap exhaustion now fails loudly via SYS_die")
 
+MAX_WALLS_PER_SECTOR=255
+def widen_sector_vertex_buffers(out):
+    """portal.c keeps per-sector transformed vertices on the stack in
+    `Vect2D_s16 buf[62]`, and load_transform_and_duplicate_verts writes
+    2 entries per wall: upstream maps never exceed 30 walls per sector,
+    E1M1 BSP cells do -> stack smash. Size for MAX_WALLS_PER_SECTOR."""
+    p=out/"src/portal.c"
+    s=p.read_text()
+    n=2*MAX_WALLS_PER_SECTOR+4
+    count=0
+    for name in ("transformed_vert_buffer","transformed_vertex_buffer"):
+        old=f"Vect2D_s16 {name}[62];"
+        c=s.count(old)
+        s=s.replace(old,f"Vect2D_s16 {name}[{n}];")
+        count+=c
+    if count!=2:
+        raise ValueError(f"expected 2 per-sector vertex buffers, got {count}")
+    p.write_text(s)
+    print("Per-sector vertex stack buffers widened to",n,"entries")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -652,6 +672,7 @@ def stage(src, wad, out, control=False):
     fix_sgdk2_hint_callbacks(out)
     harden_inline_asm(out)
     fail_loud_on_heap_exhaustion(out)
+    widen_sector_vertex_buffers(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
@@ -684,6 +705,13 @@ def stage(src, wad, out, control=False):
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
     # Never synthesize an unsafe portal or mark this build geometry-validated.
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells))
+    max_walls=max(len(c["walls"]) for c in cells)
+    stats=dict(stats) if isinstance(stats,dict) else {"stats":stats}
+    stats["max_walls_per_cell"]=max_walls
+    stats["cells_over_30_walls"]=sum(1 for c in cells if len(c["walls"])>30)
+    print("E1M1 max walls per cell:",max_walls,"cells >30:",stats["cells_over_30_walls"])
+    if max_walls>MAX_WALLS_PER_SECTOR:
+        raise ValueError(f"cell with {max_walls} walls exceeds renderer buffer")
     # E1M1's split BSP contours have 1112 atomic walls; expand only this
     # isolated candidate's static budget, leaving upstream and R128 unchanged.
     header=out/"src/portal_map.h"

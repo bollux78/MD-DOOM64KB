@@ -219,10 +219,26 @@ jobs:
               print(string.format("%s F%04d PC=%06X SR=%04X SP=%08X D0=%08X A0=%08X%s",
                 pfx, frame, g("PC"), g("SR"), g("SP"), g("D0"), g("A0"), extra))
             end
-            if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 then
+            if frame == 2 and pfx == "upstream" then
+              for tag, port in pairs(manager.machine.ioport.ports) do
+                local names = ""
+                for n, f in pairs(port.fields) do names = names .. n .. "|" end
+                print("PORT " .. tag .. " " .. names)
+              end
+            end
+            if pfx == "upstream" then
+              local pad = manager.machine.ioport.ports[":PAD1"]
+              if pad then
+                local press = (frame % 90) >= 0 and (frame % 90) < 6 and frame > 150
+                for n, f in pairs(pad.fields) do
+                  if n == "P1 Start" or n == "Start" or n == "1 Player Start" then f:set_value(press and 1 or 0) end
+                end
+              end
+            end
+            if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 or frame == 890 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
-            if frame >= 720 then manager.machine:exit() end
+            if frame >= 900 then manager.machine:exit() end
           end)
           LUA
           cd "$shots"
