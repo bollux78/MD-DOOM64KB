@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
@@ -57,6 +57,24 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m11musicaw"
+          # Independent playable variants for near-clipping and HUD artifacts.
+          for variant in nearsafe hudrepair noweapon nh; do
+            export MANIFOLD_NEAR_SAFE=0 MANIFOLD_HUD_REPAIR=0 MANIFOLD_HIDE_WEAPON=0 MANIFOLD_EXTRA=
+            case "$variant" in
+              nearsafe) export MANIFOLD_NEAR_SAFE=1 ;;
+              hudrepair) export MANIFOLD_HUD_REPAIR=1 ;;
+              noweapon) export MANIFOLD_HIDE_WEAPON=1 ;;
+              nh) export MANIFOLD_EXTRA=keep_display_enabled_in_hblank ;;
+            esac
+            MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
+              python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+                --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" \
+                --out "$MANIFOLD_STAGE/m11$variant"
+          done
+          MANIFOLD_NEAR_SAFE=1 MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_EXTRA=autopilot_input \
+             python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+               --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" \
+               --out "$MANIFOLD_STAGE/m11nearaw"
           MANIFOLD_CAMERAS=fixed python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -198,7 +216,7 @@ jobs:
           fi
           # M11 reproducible benchmark: same 6 fixed positions, exact angles,
           # no movement: regular portals vs fog off vs vertex-cache test.
-          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw; do
+          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw; do
             [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
             make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
               OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -213,7 +231,11 @@ jobs:
           echo "M11_AW_ROM_PATH=$out/m11autowalk-h32.bin" >> "$GITHUB_ENV"
           echo "M11_MUSIC_ROM_PATH=$out/m11music-h32.bin" >> "$GITHUB_ENV"
           echo "M11_MUSIC_AW_PATH=$out/m11musicaw-h32.bin" >> "$GITHUB_ENV"
-          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" <<'PY'
+          for name in nearsafe hudrepair noweapon nh nearaw; do
+            v="m11${name}-h32.bin"
+            echo "M11_${name^^}_ROM_PATH=$out/$v" >> "$GITHUB_ENV"
+          done
+          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" "$out/m11nearaw-h32.bin" <<'PY'
           import struct,sys,pathlib
           for name in sys.argv[1:]:
               p=pathlib.Path(name)
@@ -421,6 +443,15 @@ jobs:
             fi
           done
           echo "M11_MUSIC_AUTOWALK=PASS_3600_FRAMES (headless; audio fidelity not verified)"
+      - name: M11 nearclip corrected 3600-frame autowalk
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          log="$RUNNER_TEMP/m11-near-autowalk.log"
+          timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b 3600 "$M11_NEARAW_ROM_PATH" </dev/null >"$log" 2>&1 || { tail -50 "$log"; exit 1; }
+          if grep -qiE "unmapped|fatal|exception|error|lock up" "$log"; then tail -50 "$log"; exit 1; fi
+          echo "M11_NEARCLIP_AUTOWALK=PASS_3600"
       - name: Extended BlastEm 1200-frame stress smoke
         continue-on-error: true
         shell: bash
@@ -579,7 +610,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}" "m11fixed:genesis:${M11_FIXED_ROM_PATH:-}" "m11cache:genesis:${M11_CACHE_ROM_PATH:-}" "m11music:genesis:${M11_MUSIC_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}" "m11fixed:genesis:${M11_FIXED_ROM_PATH:-}" "m11cache:genesis:${M11_CACHE_ROM_PATH:-}" "m11music:genesis:${M11_MUSIC_ROM_PATH:-}" "m11near:genesis:${M11_NEARSAFE_ROM_PATH:-}" "m11hud:genesis:${M11_HUDREPAIR_ROM_PATH:-}" "m11weapon:genesis:${M11_NOWEAPON_ROM_PATH:-}" "m11nh:genesis:${M11_NH_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -731,6 +762,11 @@ jobs:
             ${{ env.M11_AW_ROM_PATH }}
             ${{ env.M11_MUSIC_ROM_PATH }}
             ${{ env.M11_MUSIC_AW_PATH }}
+            ${{ env.M11_NEARSAFE_ROM_PATH }}
+            ${{ env.M11_HUDREPAIR_ROM_PATH }}
+            ${{ env.M11_NOWEAPON_ROM_PATH }}
+            ${{ env.M11_NH_ROM_PATH }}
+            ${{ env.M11_NEARAW_ROM_PATH }}
             ${{ env.MANIFOLD_STAGE }}/m11music/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11musicaw/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11play/out/release/symbol.txt
