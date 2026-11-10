@@ -278,22 +278,22 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:$ROM_PATH" "control:${CONTROL_ROM_PATH:-}"; do
-            pfx="${pair%%:*}"; rom="${pair#*:}"
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "e1m1pal:megadriv:$ROM_PATH"; do
+            pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
-            v=$([ $pfx = e1m1 ] && echo candidate || echo $pfx)
+            v=$(case $pfx in e1m1*) echo candidate;; *) echo $pfx;; esac)
             ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"
             WATCH=""
             if test -s "$ELF"; then
-              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="phase"{printf "%s=%s,", $3, $1}')
+              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="sectors_scanned"{printf "%s=%s,", $3, $1} $3=="cur_player_pos"{a=strtonum("0x"$1); printf "px=%x,py=%x,pz=%x,psec_ang=%x,", a, a+4, a+8, a+12}')
             fi
             echo "watch: $WATCH"
             export WATCH
-            SNAP_PREFIX="$pfx" timeout 240s mame megadriv -cart "$rom" -rompath /nonexistent \
+            SNAP_PREFIX="$pfx" timeout 240s mame "$sys" -cart "$rom" -rompath /nonexistent \
               -video none -sound none -nothrottle -skip_gameinfo -noplugins -seconds_to_run 60 \
               -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
-              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tee "$RUNNER_TEMP/mame-$( [ $pfx = e1m1 ] && echo candidate || echo $pfx ).log" | tail -40
+              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tee "$RUNNER_TEMP/mame-$pfx.log" | tail -40
           done
           find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \;
           python3 - "$shots" <<'PY'
