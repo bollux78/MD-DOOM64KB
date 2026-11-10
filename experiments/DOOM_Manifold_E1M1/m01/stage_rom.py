@@ -1428,9 +1428,11 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
         tex=apply_doom_textures(out,map_lumps,cells,wad)
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
-    if os.environ.get("MANIFOLD_HUD")=="doom":
+    # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
+    # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
+    if os.environ.get("MANIFOLD_HUD","doom")=="doom":
         install_doom_hud(out,wad)
-    if os.environ.get("MANIFOLD_H32")=="1":
+    if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
         h=out/"src/manifold_mute_klog.h"

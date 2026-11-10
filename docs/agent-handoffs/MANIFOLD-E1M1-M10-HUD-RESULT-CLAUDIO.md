@@ -72,3 +72,11 @@ As diferenças por ponto ficam entre −5 e +5 renders a cada 1,5 s, centradas e
 - **`bunch_render.c` não entra na ROM:** `first_wall_is_behind_second` e `draw_bunches` não aparecem no `symbol.txt` (o `--gc-sections` os remove), e `portal_rend` só chama `visit_graph`. O possível erro `w1y2` não afeta a E1M1 atual.
 - **Fog:** está em 1600 unidades, com a cor mais escura da paleta (desde a M06). Os blocos azuis grandes das capturas antigas eram paredes de fog pintadas com a cor do piso, antes da M06. O teste F1 do Werk (desligar o fog em E0) é o certo para confirmar se ainda sobra algo.
 - **VRAM para LOD/PVS:** as tabelas devem ficar em ROM. Em H40 sobram cerca de 70 tiles na área normal (1210 de 1280). O H32 com framebuffer de 30 colunas, ainda não feito, liberaria mais.
+
+## Padrão unificado (decisão do usuário, 10/11, 12:33)
+**H32 + HUD do Doom passam a ser o padrão.** Toda ROM principal, autowalk e tour sai assim, sem flag nenhuma. M11/M12 e os próximos marcos devem partir desse padrão.
+- Controles do mesmo commit, gerados pelo workflow:
+  - `m10-hud-doom.bin`: H40 com HUD do Doom (`MANIFOLD_H32=0`);
+  - `h40-m08-control.bin`: H40 com o inventário antigo da Manifold (`MANIFOLD_HUD=manifold MANIFOLD_H32=0`).
+- `h32-doomhud-main.bin` é uma cópia da ROM principal, com nome explícito.
+- O nome `m11-hud-doom-h32.bin` foi abandonado, para não confundir com a M11 do Werk.
