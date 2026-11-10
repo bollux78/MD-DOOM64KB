@@ -1120,6 +1120,84 @@ def install_e1m1_music(out):
     print("M11 music: E1M1 classic XGM started after game init, source",vgm.name)
 
 
+
+def m11_safe_near_clipping(out):
+    """M11: guard reciprocal lookup and interpolate crossing near plane in s32.
+
+    Prior code reads z_recip_table_16[y>>4] even for negative y, BEFORE
+    checking the clip status. Near clipping also subtracts x/z in s16 and
+    can overflow on long E1M1 walls; fix the overflowing interpolation only.
+    """
+    p=out/"src/portal.c"
+    c=p.read_text()
+    old="""        u16 z_recip_v1 = z_recip_table_16[trans_v1.y>>TRANS_Z_FRAC_BITS];
+        u16 z_recip_v2 = z_recip_table_16[trans_v2.y>>TRANS_Z_FRAC_BITS];"""
+    if c.count(old)!=1:
+        raise ValueError("portal primary reciprocal lookup changed")
+    new="""        /* Guard negative depth *before* indexing the reciprocal LUT.
+           Near-z-culled portals still use the special fallback below. */
+        u16 z_recip_v1 = z_recip_table_16[(trans_v1.y < NEAR_Z_FIX ? NEAR_Z_FIX : trans_v1.y)>>TRANS_Z_FRAC_BITS];
+        u16 z_recip_v2 = z_recip_table_16[(trans_v2.y < NEAR_Z_FIX ? NEAR_Z_FIX : trans_v2.y)>>TRANS_Z_FRAC_BITS];"""
+    c=c.replace(old,new,1)
+    # Another dormant rendering path contains the same out-of-bounds lookup.
+    old2="""            u16 z_recip_v1 = z_recip_table_16[trans_v1.y>>TRANS_Z_FRAC_BITS];
+            u16 z_recip_v2 = z_recip_table_16[trans_v2.y>>TRANS_Z_FRAC_BITS];"""
+    if c.count(old2)!=1:
+        raise ValueError("portal secondary reciprocal lookup changed")
+    c=c.replace(old2,old2.replace("[trans_v1.y>>TRANS_Z_FRAC_BITS]","[(trans_v1.y < NEAR_Z_FIX ? NEAR_Z_FIX : trans_v1.y)>>TRANS_Z_FRAC_BITS]").replace("[trans_v2.y>>TRANS_Z_FRAC_BITS]","[(trans_v2.y < NEAR_Z_FIX ? NEAR_Z_FIX : trans_v2.y)>>TRANS_Z_FRAC_BITS]"),1)
+    p.write_text(c)
+    m=out/"src/math3d.c"
+    t=m.read_text()
+    left=t.index("    s16 dx = rx2-rx1;",t.index("clip_result clip_map_vertex_16("))
+    right=t.index("    // left near clip",left)
+    chunk=t[left:right]
+    replacement="""    /* Crosses the near plane: 32-bit interpolation only on clipped walls.
+       The old s16 dx and reciprocal path overflowed for long E1M1 edges.
+       The coordinates remain fixed-point 12.4 for depth and 16-bit for x. */
+    s32 dx_near = (s32)rx2 - rx1;
+    s32 dz_near = (s32)rz2_12_4 - rz1_12_4;
+    if (dz_near == 0) return NEAR_Z_CULLED;
+"""
+    t=t[:left]+replacement+t[right:]
+    t=t.replace("""        s32 x_adjust_10 = dx_over_dz_6 * z_adjust_12_4;
+        s16 x_adjust_int = x_adjust_10>>(6+TRANS_Z_FRAC_BITS);""","""        s32 x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near;""")
+    t=t.replace("""        rx1 += x_adjust_int;    // modify x coord""","""        rx1 = MANIFOLD_SAT16((s32)rx1 + x_adjust_int);  // near-plane intersection""")
+    t=t.replace("""        rx2 += x_adjust_int;""","""        rx2 = MANIFOLD_SAT16((s32)rx2 + x_adjust_int);""")
+    t=t.replace("""        rz1_12_4 = NEAR_Z_FIX;
+        trans_v2->x = rx2;
+        trans_v2->y = rz1_12_4;""","""        rz2_12_4 = NEAR_Z_FIX;
+        trans_v2->x = rx2;
+        trans_v2->y = rz2_12_4;""")
+    if t.count("x_adjust_int = (dx_near * (s32)z_adjust_12_4) / dz_near")!=2:
+        raise ValueError("near clipping both sides not patched")
+    m.write_text(t)
+    print("M11 near clipping: signed LUT guard; 32-bit intersection x; corrected right z")
+
+
+def m11_hud_recompose_diagnostic(out):
+    """Recompose BG_B bar every update to test tilemap corruption; may cost FPS."""
+    p=out/"src/doom_statusbar.c"
+    t=p.read_text()
+    anchor="    u16 h = HUDW_Hash(&dhud_state);"
+    if t.count(anchor)!=1: raise ValueError("M10 hash anchor changed")
+    t=t.replace(anchor,"    dhud_draw_bar(); /* M11 diagnostic: rewrite BG_B HUD tilemap */\n"+anchor,1)
+    p.write_text(t)
+    print("M11 HUD tilemap recomposition diagnostic enabled")
+
+
+def m11_hide_weapon_sprites_diagnostic(out):
+    """Move hardware weapon sprites off-screen to isolate HUD black blocks."""
+    p=out/"src/weapon_sprites.c"
+    s=p.read_text()
+    anchor="    VDP_updateSprites(cur_num_sprites, transfer_type);"
+    if s.count(anchor)!=1: raise ValueError("weapon sprite transfer anchor changed")
+    s=s.replace(anchor,"    for (u16 si=0; si<cur_num_sprites; ++si) VDP_setSpritePosition(sprite_idx_start+si, 0, 0);\n"+anchor,1)
+    anchor2="    VDP_updateSprites(cur_num_sprites, DMA_QUEUE);"
+    if s.count(anchor2)!=1: raise ValueError("weapon sprite offset anchor changed")
+    s=s.replace(anchor2,"    for (u16 si=0; si<cur_num_sprites; ++si) VDP_setSpritePosition(sprite_idx_start+si, 0, 0);\n"+anchor2,1)
+    p.write_text(s)
+    print("M11 hardware weapon sprites moved off-screen (diagnostic)")
+
 def fixed_camera_input(out, cells, lumps):
     """M11 controlled A/B: six repeatable views with NO joypad movement.
 
@@ -1680,6 +1758,12 @@ def stage(src, wad, out, control=False):
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
         install_e1m1_music(out)
+    if os.environ.get("MANIFOLD_NEAR_SAFE","0")=="1":
+        m11_safe_near_clipping(out)
+    if os.environ.get("MANIFOLD_HUD_REPAIR","0")=="1":
+        m11_hud_recompose_diagnostic(out)
+    if os.environ.get("MANIFOLD_HIDE_WEAPON","0")=="1":
+        m11_hide_weapon_sprites_diagnostic(out)
     if os.environ.get("MANIFOLD_CAMERAS")=="fixed":
         fixed_camera_input(out,cells,map_lumps)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
