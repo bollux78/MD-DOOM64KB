@@ -161,7 +161,7 @@ jobs:
             }
           cp "$MANIFOLD_STAGE/m11vcache/out/rom.bin" "$out/m11-vertexcache-h32.bin"
           echo "M11_VERTEXCACHE_ROM_PATH=$out/m11-vertexcache-h32.bin" >> "$GITHUB_ENV"
-          sha256sum "$ROM_PATH" "$out/m11-vertexcache-h32.bin"
+          sha256sum "$out/doom-md-manifold-e1m1-m02-hintfix.bin" "$out/m11-vertexcache-h32.bin"
           [ ! -e "$MANIFOLD_STAGE/tour/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/tour/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/tour" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
