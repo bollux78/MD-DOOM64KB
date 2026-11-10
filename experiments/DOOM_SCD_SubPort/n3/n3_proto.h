@@ -31,6 +31,7 @@ typedef struct {
     uint16_t lump_misses, error;
     uint32_t idle_units;   /* sub clock units spent waiting in its previous exchange */
     uint16_t prnd, health;
-    uint32_t tic_fetch_units, render_fetch_units;   /* lump waits inside the tics / the render */
+    uint32_t tic_fetch_units, render_fetch_units;
+    uint16_t c_mobjs, c_sectors;   /* option C estimate: mobjs alive / sectors changed this exchange */   /* lump waits inside the tics / the render */
 } N3FrameHead;
 #endif

@@ -94,6 +94,8 @@ try:
             res["sub_ring_fetches"] = tn
             tf, rf = struct.unpack(">2I", g.readmem(ptr + 4, 8))
             res["_tf_rf"] = (tf, rf)
+            cm, cs, mm, ms = struct.unpack(">4I", g.readmem(ptr + 12, 16))
+            res["_c"] = (cm, cs, mm, ms)
             if tn and os.environ.get("N3_TRACE_TIC"):
                 funcs = sorted((a, n) for n, a in sym.items())
                 import bisect
@@ -120,6 +122,10 @@ try:
                                       "sub_render": round((st["sub_render_units"] - rf) * 0.03072 / fr, 1), "sub_render_lump_wait": round(rf * 0.03072 / fr, 1),
                                       "md_render": round(st.get("md_render_vblanks", 0) * 16.68 / fr, 1) if "md_render_vblanks" in st else None,
                                       "md_wait_for_sub": round(st.get("wait_b_vblanks", 0) * 16.68 / fr, 1) if "wait_b_vblanks" in st else None}
+            if "_c" in res:
+                cm, cs, mm, ms = res.pop("_c"); ex = max(st["exchanges"], 1)
+                st["option_c"] = {"mobjs_avg": round(cm / ex * 2, 1), "mobjs_max": mm, "sectors_changed_avg": round(cs / ex * 2, 1), "sectors_changed_max": ms,
+                                  "est_bytes_max": 48 + 12 * mm + 8 * ms}
             if st["exchanges"]:
                 st["sub_render_ms_per_exchange"] = round(st["sub_render_units"] * 0.03072 / st["exchanges"], 1)
                 st["sub_tic_ms_per_exchange"] = round(st["sub_tic_units"] * 0.03072 / st["exchanges"], 1)

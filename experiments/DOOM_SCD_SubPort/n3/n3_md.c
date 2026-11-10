@@ -278,6 +278,7 @@ void N3_MdFrameArrived(uint16_t arg)
     s->sub_render_units += h->render_units; s->sub_tic_units += h->tic_units;
     if (!s->expect_frame) s->sub_idle_units = h->idle_units;
     s->trace_n = h->lump_misses;   /* (debug) sub ring fetches so far */
+    s->trace[2] += h->c_mobjs; s->trace[3] += h->c_sectors; if (h->c_mobjs > s->trace[4]) s->trace[4] = h->c_mobjs; if (h->c_sectors > s->trace[5]) s->trace[5] = h->c_sectors;
     s->trace[0] += h->tic_fetch_units; s->trace[1] += h->render_fetch_units;   /* A header: how long the sub waited for B */
     if (!s->lock || !s->prev_valid || !h->lock) return;
     if (h->gametic != s->prev_gametic || h->x != s->prev_x || h->y != s->prev_y || h->angle != s->prev_angle ||
