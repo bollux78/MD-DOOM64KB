@@ -1092,6 +1092,91 @@ void manifold_sky_update(void) {{
     j.write_text(js)
     print("sky tiles:",n,"band rows:",rows,"cols:",cols)
 
+def fixed_camera_input(out, cells, lumps):
+    """M11 controlled A/B: six repeatable views with NO joypad movement.
+
+    Two exterior cameras are pinned from MAME #42850641871 frame traces.
+    Three expensive step/bridge candidate cells are selected deterministically
+    from floor-height transitions and portal fanout (diagnostic, not asserted
+    to represent named WAD rooms). Last view is the actual player spawn.
+    Camera switches every 140 VBlanks after frame 60, and is reasserted
+    on each joy poll; test render does not affect the next camera position.
+    """
+    import math
+    byid={c["id"]:c for c in cells}
+    bysec={c["id"]:c["doom_sector"] for c in cells}
+    for cell_id in (48,51):
+        if cell_id not in byid: raise ValueError("Pinned external camera cell absent")
+    def floor(c):
+        return lumps["SECTORS"][bysec[c["id"]]][0]
+    def centre(c):
+        ps=[(w["a"][0]/16,w["a"][1]/16) for w in c["walls"]]
+        return tuple(round(sum(p[d] for p in ps)/len(ps)) for d in (0,1))
+    # S0/S1/B0 are *candidate* complexity views, selected by reproducible
+    # topology metrics. Their position & sector IDs are logged in the build.
+    rank=[]
+    for c in cells:
+        if c["id"] in (48,51): continue
+        if lumps["SECTORS"][c["doom_sector"]][3].rstrip(b"\0")==b"F_SKY1": continue
+        neighbors={w["neighbor"] for w in c["walls"] if w["neighbor"]>=0}
+        height_changes=sum(abs(floor(byid[n])-floor(c))>=8 for n in neighbors)
+        distinct={bysec[n] for n in neighbors}
+        score=height_changes*8+len(distinct)*3+len(neighbors)
+        rank.append((-score,c["id"],c))
+    rank.sort()
+    chosen=[]
+    used_sectors=set()
+    for _,_,c in rank:
+        if c["doom_sector"] in used_sectors: continue
+        chosen.append(c);used_sectors.add(c["doom_sector"])
+        if len(chosen)==3: break
+    if len(chosen)!=3: raise ValueError("Not enough stair/bridge candidates")
+    spawns=[(x,y) for x,y,angle,type_id,flags in lumps["THINGS"] if type_id==1]
+    if len(spawns)!=1: raise ValueError("Player1 spawn missing")
+    sx,sy=spawns[0]
+    initial=[c for c in cells if point_inside([w["a"] for w in c["walls"]],(sx*16,sy*16))]
+    if len(initial)!=1: raise ValueError("Spawn cell ambiguous")
+    pinned=[
+      ("E0",1781,-3691,48,0x151),
+      ("E1",2093,-3664,51,0x38b),
+    ]
+    generated=[(f"S{i}",*centre(c),c["id"],angle)
+               for i,(c,angle) in enumerate(zip(chosen,(0,256,512)))]
+    cameras=pinned+generated+[("R0",sx,sy,initial[0]["id"],0)]
+    for label,x,y,ci,ang in cameras:
+        c=byid[ci]
+        if not point_inside([w["a"] for w in c["walls"]],(x*16,y*16)):
+            raise ValueError(f"Fixed camera {label} at {x},{y} outside cell {ci}")
+    arr=",".join("{%d,%d,%d,%d}" % (x,y,ci,ang)
+                 for label,x,y,ci,ang in cameras)
+    p=out/"src/manifold_mute_klog.h"
+    p.write_text(p.read_text()+"\nu16 manifold_fixed_joy(u16 j);\n#define JOY_readJoypad(j) manifold_fixed_joy(j)\n")
+    q=out/"src/joy_helper.c"
+    q.write_text(q.read_text()+f"""
+#include "game.h"
+#include "portal_map.h"
+#include "sector_group.h"
+#include "level.h"
+static const s16 m11_fixed_cameras[6][4]={{{arr}}};
+volatile u16 m11_camera_index=0xffff;
+u16 manifold_fixed_joy(u16 j) {{
+    (void)(JOY_readJoypad)(j);
+    u32 frame=vtimer;
+    if (frame<60) return 0;
+    u16 idx=(u16)(((frame-60)/140)%6);
+    m11_camera_index=idx;
+    cur_player_pos.x=FIX32(m11_fixed_cameras[idx][0]);
+    cur_player_pos.y=FIX32(m11_fixed_cameras[idx][1]);
+    cur_player_pos.cur_sector=m11_fixed_cameras[idx][2];
+    cur_player_pos.ang=m11_fixed_cameras[idx][3];
+    u16 g=sector_group(cur_player_pos.cur_sector,(portal_map*)cur_portal_map);
+    cur_player_pos.z=(get_sector_group_floor_height(g)<<(FIX32_FRAC_BITS-4))+FIX32(64);
+    return 0;
+}}
+""")
+    print("M11 FIXED CAMERA TABLE (140 VBlank each after frame 60):",cameras)
+
+
 def tour_input(out, cells, lumps):
     """Test-only camera tour: every 90 frames teleport to the centroid of the
     largest cell of each Doom sector and spin (LEFT held). Exercises the whole
@@ -1565,6 +1650,8 @@ def stage(src, wad, out, control=False):
         install_doom_hud(out,wad)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
+    if os.environ.get("MANIFOLD_CAMERAS")=="fixed":
+        fixed_camera_input(out,cells,map_lumps)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
         h=out/"src/manifold_mute_klog.h"
         h.write_text(h.read_text()+"\nu16 manifold_autopilot_joy(u16 j);\n#define JOY_readJoypad(j) manifold_autopilot_joy(j)\n")
