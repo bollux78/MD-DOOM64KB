@@ -125,7 +125,8 @@ def candidate(lumps,nodes,allow_gaps=False):
     def _signed_area(poly):
         return sum(poly[i][0]*poly[(i+1)%len(poly)][1]-poly[(i+1)%len(poly)][0]*poly[i][1]
                    for i in range(len(poly)))/2
-    polys={i:(p if _signed_area(p)>0 else list(reversed(p))) for i,p in polys.items()}
+    want_positive = __import__("os").environ.get("MANIFOLD_WINDING","cw")=="ccw"
+    polys={i:(p if (_signed_area(p)>0)==want_positive else list(reversed(p))) for i,p in polys.items()}
     if len(polys)>MAX_CELLS:
         raise ValueError("too many cells")
     indices=defaultdict(list)
