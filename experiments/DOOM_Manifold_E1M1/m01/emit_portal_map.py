@@ -311,8 +311,35 @@ def emit(lumps,cells,tex=None):
         walls.append(vertices[cell["walls"][0]["a"]])
         sectors.extend([offset,first_portal,len(cell["walls"]),cell["doom_sector"]])
     actual_points=list(vertices)
+    # Temporary static-door policy: preserve linedef/portal geometry, but open
+    # only genuinely closed (ceiling<=floor) sectors connected to a higher
+    # adjacent sector. No trigger system exists yet; a closed sector would
+    # otherwise block passage for the entire demo.
+    from collections import defaultdict
+    neighbors=defaultdict(set)
+    for cell in cells:
+        here=cell["doom_sector"]
+        for edge in cell["walls"]:
+            nb=edge["neighbor"]
+            if nb>=0:
+                there=cells[nb]["doom_sector"]
+                if there!=here:
+                    neighbors[here].add(there)
+    ceilings={}
+    opened=[]
+    for si,(floor,ceil,fl,ce,light,special,tag) in enumerate(lumps["SECTORS"]):
+        if ceil>floor:
+            continue
+        # A door can only become passable into an actual adjacent sector.
+        heights=sorted({lumps["SECTORS"][n][1] for n in neighbors[si]
+                        if lumps["SECTORS"][n][1]>floor+32})
+        if heights:
+            ceilings[si]=heights[0]
+            opened.append((si,floor,ceil,heights[0]))
+    print("Temporarily opened closed/connected door-like sectors:",opened)
     sector_params=[]
-    for floor,ceil,fl,ce,light,special,tag in lumps["SECTORS"]:
+    for sector_i,(floor,ceil,fl,ce,light,special,tag) in enumerate(lumps["SECTORS"]):
+        ceil=ceilings.get(sector_i,ceil)
         light_level=max(-2,min(2,round((light-160)/40)))  # colors.c tables cover -2..2
         # 12.4 heights, doubled: Manifold projects 64x144 with a wide FOV and
         # treats openings <=60 as closed doors / steps >=40 as walls.
