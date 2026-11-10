@@ -661,6 +661,87 @@ def limit_repeated_sector_overdraw(out):
     print("Portals: per-frame repeated-sector bound reduced 7 -> 5")
 
 
+
+def cache_transformed_vertices(out):
+    """M11 A/B: cache the 12.4 transformed vertex once per 3D frame.
+
+    Upstream transforms every vertex again for every cell/portal revisit.
+    Cache all (x,z) transformed coordinates by map vertex ID. No geometric
+    clipping or portal traversal is cached: every call still receives a fresh
+    per-wall buffer and can clip it independently. 6 bytes per map vertex.
+    """
+    p=out/"src/portal.c"
+    source=p.read_text()
+    decl="u8* sector_rendered_cache; // i don't know if this helps much, but we might be able to use it\n"
+    if source.count(decl)!=1:
+        raise ValueError("portal vertex cache allocation anchor changed")
+    code=r"""
+static Vect2D_s16 *m11_vertex_xy;
+static u16 *m11_vertex_stamp;
+static u16 m11_vertex_epoch = 1;
+volatile u32 m11_vertex_cache_hits;
+volatile u32 m11_vertex_cache_misses;
+
+/* Caches ONLY rigid camera-space transformations, not clipping/visibility.
+   Inputs playerXInt/angleSin16 are set before portal_rend. The source map
+   must stay unchanged during a frame. */
+static void m11_load_cached_walls(u16 count, const u16 *ids,
+                                   const vertex *verts, Vect2D_s16 *dest)
+{
+    if (!m11_vertex_xy || !m11_vertex_stamp) {
+        load_transform_and_duplicate_verts(count, (u16*)ids, (vertex*)verts, dest);
+        return;
+    }
+    for (u16 i=0; i+1<count; ++i) {
+        u16 a=ids[i], b=ids[i+1];
+        if (a >= cur_portal_map->num_verts || b >= cur_portal_map->num_verts) {
+            load_transform_and_duplicate_verts(count, (u16*)ids, (vertex*)verts, dest);
+            return;
+        }
+        if (m11_vertex_stamp[a] != m11_vertex_epoch) {
+            m11_vertex_xy[a]=transform_map_vert_16(verts[a].x,verts[a].y);
+            m11_vertex_stamp[a]=m11_vertex_epoch;
+            m11_vertex_cache_misses++;
+        } else m11_vertex_cache_hits++;
+        if (m11_vertex_stamp[b] != m11_vertex_epoch) {
+            m11_vertex_xy[b]=transform_map_vert_16(verts[b].x,verts[b].y);
+            m11_vertex_stamp[b]=m11_vertex_epoch;
+            m11_vertex_cache_misses++;
+        } else m11_vertex_cache_hits++;
+        dest[(i<<1)] = m11_vertex_xy[a];
+        dest[(i<<1)+1] = m11_vertex_xy[b];
+    }
+}
+"""
+    source=source.replace(decl,decl+code,1)
+    alloc='    sector_rendered_cache = malloc(sizeof(u8) * cur_portal_map->num_sectors, "sector visited cache");\n'
+    if source.count(alloc)!=1: raise ValueError("portal init allocation changed")
+    source=source.replace(alloc,alloc+'''    m11_vertex_xy = malloc(sizeof(Vect2D_s16)*cur_portal_map->num_verts, "M11 vertex transforms");
+    m11_vertex_stamp = malloc(sizeof(u16)*cur_portal_map->num_verts, "M11 vertex epochs");
+    if (m11_vertex_stamp) memset(m11_vertex_stamp,0,sizeof(u16)*cur_portal_map->num_verts);
+''',1)
+    cleanup='    free(sector_rendered_cache, "sector visited cache");\n'
+    if source.count(cleanup)!=1: raise ValueError("portal cleanup changed")
+    source=source.replace(cleanup,cleanup+'''    if (m11_vertex_stamp) free(m11_vertex_stamp, "M11 vertex epochs");
+    if (m11_vertex_xy) free(m11_vertex_xy, "M11 vertex transforms");
+    m11_vertex_stamp=0; m11_vertex_xy=0;
+''',1)
+    transform="    load_transform_and_duplicate_verts(num_walls+1, &map->walls[wall_offset], map->vertexes, transformed_vert_buffer);\n"
+    if source.count(transform)!=1: raise ValueError("visit_graph transform call changed")
+    source=source.replace(transform,'    m11_load_cached_walls(num_walls+1, &map->walls[wall_offset], map->vertexes, transformed_vert_buffer);\n',1)
+    entry='void portal_rend(u16 src_sector, u32 cur_frame) {\n'
+    if source.count(entry)!=1: raise ValueError("portal_rend entry changed")
+    source=source.replace(entry,entry+'''    if (++m11_vertex_epoch == 0) {
+        if (m11_vertex_stamp) memset(m11_vertex_stamp,0,sizeof(u16)*cur_portal_map->num_verts);
+        m11_vertex_epoch=1;
+    }
+    m11_vertex_cache_hits=0;
+    m11_vertex_cache_misses=0;
+''',1)
+    p.write_text(source)
+    print("M11 vertex cache: 6 bytes per vertex; fresh clip buffer per portal visit")
+
+
 def far_portal_fog(out):
     """E1M1 views reach 40-90 cell visits per frame (2-7 fps) and recursion
     depth 18+, where the stack guard starts dropping portals (flicker).
@@ -1391,6 +1472,8 @@ def stage(src, wad, out, control=False):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
+    if os.environ.get("MANIFOLD_VERT_CACHE","0")=="1":
+        cache_transformed_vertices(out)
     for extra in filter(None,os.environ.get('MANIFOLD_EXTRA','').split(',')):
         print('EXTRA stage step:',extra); globals()[extra](out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
