@@ -756,6 +756,38 @@ static void m11_load_cached_walls(u16 count, const u16 *ids,
     print("M11 vertex cache: 6 bytes per vertex; fresh clip buffer per portal visit")
 
 
+def skip_fully_occluded_portals(out):
+    """M11 A/B: conservative early-out for a completely filled clip window.
+
+    The renderer cannot draw new pixels once every yclip column has top>=bot.
+    The test costs O(window width); use only beyond the first portal depth,
+    leaving source-sector drawing unchanged.
+    """
+    d=out/"src/draw.c"
+    t=d.read_text()
+    anchor="static u8* yclip;\n"
+    if t.count(anchor)!=1: raise ValueError("draw.c yclip anchor changed")
+    t=t.replace(anchor,anchor+"""
+u8 manifold_window_fully_occluded(u16 lo, u16 hi) {
+    if (!yclip || hi > RENDER_WIDTH || lo >= hi) return 0;
+    for (u16 x=lo; x<hi; ++x) {
+        if (yclip[(x<<1)] < yclip[(x<<1)+1]) return 0;
+    }
+    return 1;
+}
+""",1)
+    d.write_text(t)
+    p=out/"src/portal.c"
+    c=p.read_text()
+    entry="    if (x1 >= x2) return;\n"
+    if c.count(entry)!=1: raise ValueError("portal early return anchor changed")
+    c=c.replace(entry,entry+"""    if (depth >= 2 && manifold_window_fully_occluded(x1,x2)) { return; }
+""",1)
+    c="u8 manifold_window_fully_occluded(u16 lo, u16 hi);\n"+c
+    p.write_text(c)
+    print("M11 conservative occlusion: skip cells behind fully covered columns")
+
+
 def far_portal_fog(out):
     """E1M1 views reach 40-90 cell visits per frame (2-7 fps) and recursion
     depth 18+, where the stack guard starts dropping portals (flicker).
@@ -1488,6 +1520,8 @@ def stage(src, wad, out, control=False):
         step(out)
     if os.environ.get("MANIFOLD_VERT_CACHE","0")=="1":
         cache_transformed_vertices(out)
+    if os.environ.get("MANIFOLD_OCCLUSION","0")=="1":
+        skip_fully_occluded_portals(out)
     for extra in filter(None,os.environ.get('MANIFOLD_EXTRA','').split(',')):
         print('EXTRA stage step:',extra); globals()[extra](out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
