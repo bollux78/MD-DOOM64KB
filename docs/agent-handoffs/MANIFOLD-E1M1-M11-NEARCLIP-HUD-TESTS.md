@@ -38,3 +38,20 @@ No `src/math3d.c`, quando um segmento cruza o plano próximo (`NEAR_Z_FIX=10*16`
 
 ## Pendências
 O grande bloco/triângulo cinza do exterior já persiste com neblina desativada nas câmeras fixas M11 anteriores. A nova correção de near plane não prova resolver esse problema ou piscadas à distância: recursão de portais, overflow de profundidade, recorte vertical e sobreposição de janelas seguem sujeitos a investigação e eventual LOD.
+
+## Resultado da compilação e testes (2026-11-10)
+
+**Action [#42907326397](https://github.com/bollux78/MD-DOOM64KB/actions/runs/42907326397): SUCCESS**. Commit efetivamente compilado: `90d531681065ad02194112a2cb93c46502d3b66d`. A documentação foi atualizada em commit posterior, sem alterar a ROM. Diretório local: `/home/dan/Projetos/Personal/manifold-e1m1/run-42907326397-1/`.
+
+- `m11music-h32.bin` SHA256 `bd0fcdd8a61abfc45130e0ae6d84ab91f26b17661156421c356fe8df2762098c` (controle musical, mesmo hash da versão aprovada antes pelo usuário).
+- `m11nearsafe-h32.bin` SHA256 `bc57668595f12ff01a66b75cce3058fe6e3e40fd623bb9c5ebde4b934ff8c352`.
+- `m11hudrepair-h32.bin` SHA256 `9f23b77fc95703f5219462760d59399878281e90a15796275ecc9da5ee3b1633`.
+- `m11noweapon-h32.bin` SHA256 `09fc5c0aa7e863c36e91cb8f60aede3103f36ef9336a4f92a385d862bfd14080`.
+- `m11nh-h32.bin` SHA256 `cc10b5c255547a7945f093feab7633c844cf7fad6792eebea7e48d588fcd11d9`.
+
+As cinco têm 1.966.080 bytes, header SEGA, música XGM. `M11_MUSIC_AUTOWALK=PASS_3600_FRAMES` e **`M11_NEARCLIP_AUTOWALK=PASS_3600`** foram emitidos pelo workflow. MAME capturou f60–f890 das variantes e não houve falha no job. 
+
+**Exame visual das capturas MAME:** a geometria inicial das cinco variantes permaneceu reconhecível e semelhante. Isso **não é prova de que o flicker próximo foi eliminado**, pois o MAME headless nessas cenas não reproduz necessariamente o ângulo/dinâmica da parede do usuário. As variantes de HUD sem sprites e com recomposição ainda carecem de teste gráfico perto dos retângulos pretos observados pelo usuário. As paredes distantes e o plano cinza exterior **não foram corrigidos comprovadamente nesta rodada**.
+
+**Importante:** a variante `m11nearsafe` utiliza aproximação de `x` na interseção da near-plane com `s32` + saturação; portanto, testar se altera espessura e continuidade das paredes, especialmente ao girar encostado na geometria. A 3600 frames do BlastEm testa estabilidade, não fidelidade. Não promover à release principal sem testes gráficos específicos. Os diagnósticos `hudrepair`, `noweapon` e `nh` não devem ser integrados ao renderer principal.
+
