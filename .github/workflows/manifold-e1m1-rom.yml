@@ -302,7 +302,7 @@ jobs:
             ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"
             WATCH=""
             if test -s "$ELF"; then
-              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="sectors_scanned"{printf "%s=%s,", $3, $1} $3=="cur_player_pos"{a=strtonum("0x"$1); printf "px=%x,py=%x,pz=%x,psec_ang=%x,", a, a+4, a+8, a+12}')
+              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="sectors_scanned"{printf "%s=%s,", $3, $1} $3=="manifold_dbg"{a=strtonum("0x"$1); for(i=0;i<7;i++) printf "dbg%d=%x,", i, a+4*i} 0{printf "%s=%s,", $3, $1} $3=="cur_player_pos"{a=strtonum("0x"$1); printf "px=%x,py=%x,pz=%x,psec_ang=%x,", a, a+4, a+8, a+12}')
             fi
             echo "watch: $WATCH"
             export WATCH

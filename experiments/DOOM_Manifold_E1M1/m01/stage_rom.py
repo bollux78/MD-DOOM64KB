@@ -617,6 +617,38 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     p.write_text(source)
     print("Generated jump-table scalers restored with explicit register contracts")
 
+def instrument_portal_renderer(out):
+    """Cumulative counters readable from an emulator (no behavior change):
+    manifold_dbg[0]=visit_graph calls, [1]=walls seen, [2]=unclipped,
+    [3]=near-z culled, [4]=frustum culled, [5]=other clip results,
+    [6]=portal_rend calls."""
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="void visit_graph(u16 src_sector, u16 sector, u16 x1, u16 x2, u32 cur_frame, uint8_t depth) {"
+    if s.count(old)!=1: raise ValueError("visit_graph signature changed")
+    s=s.replace(old,"volatile u32 manifold_dbg[8];\n"+old+"\n    manifold_dbg[0]++;",1)
+    old="        clip_result clipped = clip_map_vertex_16((Vect2D_s16*)&trans_v1, (Vect2D_s16*)&trans_v2, &tmap_info);\n"
+    if s.count(old)<1: raise ValueError("clip call changed")
+    s=s.replace(old,old+"        manifold_dbg[1]++; manifold_dbg[clipped==UNCLIPPED?2:clipped==NEAR_Z_CULLED?3:clipped==FRUSTUM_CULLED?4:5]++;\n",1)
+    old="void portal_rend(u16 src_sector, u32 cur_frame) {"
+    if s.count(old)!=1: raise ValueError("portal_rend changed")
+    s=s.replace(old,old+"\n    manifold_dbg[6]++;",1)
+    p.write_text(s)
+    print("portal renderer instrumented (manifold_dbg)")
+
+def default_texture_repetitions(out):
+    """Upstream test maps leave wall_tex_repetitions NULL; the renderer then
+    read ROM vector bytes as repetition counts (0 under SGDK2 boot -> every
+    column sampled texture column 0). Default to 1 when absent."""
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="map->wall_tex_repetitions[portal_idx]"
+    n=s.count(old)
+    if n<1: raise ValueError("repetition lookup changed")
+    s=s.replace(old,"(map->wall_tex_repetitions ? map->wall_tex_repetitions[portal_idx] : 1)")
+    p.write_text(s)
+    print("texture repetitions default to 1 when map has none:",n)
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -770,7 +802,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
