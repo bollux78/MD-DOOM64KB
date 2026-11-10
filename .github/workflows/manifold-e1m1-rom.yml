@@ -461,9 +461,9 @@ jobs:
               end
             end
             if pfx == "m11fixed" or pfx == "m11fogoff" or pfx == "m11cache" then
-              if frame == 105 or frame == 175 or frame == 245 or frame == 315 or
-                 frame == 385 or frame == 455 or frame == 525 or frame == 595 or
-                 frame == 665 or frame == 735 or frame == 805 or frame == 875 then
+              if frame == 120 or frame == 330 or frame == 420 or frame == 630 or
+                 frame == 720 or frame == 930 or frame == 1020 or frame == 1230 or
+                 frame == 1320 or frame == 1530 or frame == 1620 or frame == 1830 then
                 local addr = string.match(os.getenv("WATCH") or "", "dbg6=(%x+)")
                 local camera = string.match(os.getenv("WATCH") or "", "m11_camera_index=(%x+)")
                 if addr then
@@ -476,7 +476,13 @@ jobs:
             if frame == 60 or frame == 180 or frame == 300 or frame == 420 or frame == 560 or frame == 700 or frame == 890 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
-            if frame >= 900 then manager.machine:exit() end
+            if pfx == "m11fixed" or pfx == "m11fogoff" or pfx == "m11cache" then
+              if frame == 180 or frame == 480 or frame == 780 or
+                 frame == 1080 or frame == 1380 or frame == 1680 then
+                scr:snapshot(string.format("%s_fixed_f%04d.png",pfx,frame))
+              end
+              if frame >= 1920 then manager.machine:exit() end
+            elseif frame >= 900 then manager.machine:exit() end
           end)
           LUA
           cd "$shots"
@@ -495,8 +501,49 @@ jobs:
             SNAP_PREFIX="$pfx" timeout 240s mame "$sys" -cart "$rom" -rompath /nonexistent \
               -video none -sound none -nothrottle -skip_gameinfo -noplugins -seconds_to_run 60 \
               -snapshot_directory "$shots/snap" -autoboot_script "$shots/trace.lua" \
-              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tee "$RUNNER_TEMP/mame-$pfx.log" | tail -40
+              -nvram_directory "$shots/nv" -cfg_directory "$shots/cfg" 2>&1 | grep -v "^Warning: -video none" | tee "$RUNNER_TEMP/mame-$pfx.log" | tail -100
           done
+          python3 - "$RUNNER_TEMP" "$shots" <<'PY'
+          import csv,pathlib,re,sys
+          source=pathlib.Path(sys.argv[1]); shots=pathlib.Path(sys.argv[2])
+          pat=re.compile(r'M11_METRIC (m11fixed|m11fogoff|m11cache) frame=(\d+) camera=(\d+) renders=(\d+)')
+          measurements={}
+          for name in ('m11fixed','m11fogoff','m11cache'):
+              p=source/f'mame-{name}.log'
+              found={}
+              for match in pat.finditer(p.read_text(errors='replace') if p.exists() else ''):
+                  _,frame,cam,count=match.groups()
+                  found[int(frame)]=(int(cam),int(count))
+              measurements[name]=found
+          starts=(120,420,720,1020,1320,1620)
+          ends=(330,630,930,1230,1530,1830)
+          labels=('E0','E1','S0','S1','S2','R0')
+          rows=[]
+          for ix,(start,end,label) in enumerate(zip(starts,ends,labels)):
+              for name,log in measurements.items():
+                  if start not in log or end not in log:
+                      raise SystemExit(f'M11 missing sample: {name} {label}, frames {start}..{end}; found {sorted(log)}')
+                  cam1,r1=log[start];cam2,r2=log[end]
+                  if cam1!=ix or cam2!=ix:
+                      raise SystemExit(f'M11 camera mismatch: {name} {label} cameras {cam1},{cam2}')
+                  fps=60.0*(r2-r1)/(end-start)
+                  rows.append((label,ix,name,r1,r2,r2-r1,round(fps,3)))
+          with (shots/'m11-fixed-results.csv').open('w',newline='') as out:
+              writer=csv.writer(out)
+              writer.writerow(('camera','index','variant','render_start','render_end','rendered_frames','fps'))
+              writer.writerows(rows)
+          lines=['# M11 fixed-camera A/B', '',
+              'Identical coordinates, sector, height and angle; 210 VBlank samples at 60 Hz.', '',
+              '| Camera | Baseline FPS | Cache FPS | Fog off FPS | Cache vs baseline |',
+              '|---|---:|---:|---:|---:|']
+          for label in labels:
+              r={t[2]:t[6] for t in rows if t[0]==label}
+              base=r['m11fixed'];cache=r['m11cache'];fog=r['m11fogoff']
+              change=100*(cache/base-1) if base else 0
+              lines.append(f'| {label} | {base:.2f} | {cache:.2f} | {fog:.2f} | {change:+.1f}% |')
+          (shots/'m11-fixed-results.md').write_text('\n'.join(lines)+'\n')
+          print('\n'.join(lines))
+          PY
           find "$shots/snap" -name '*.png' -exec cp {} "$shots/" \;
           python3 - "$shots" <<'PY'
           import sys,pathlib
@@ -608,6 +655,7 @@ jobs:
           path: |
             ${{ env.SHOTS_DIR }}/frame_*.png
             ${{ env.SHOTS_DIR }}/*_vram.bin
+            ${{ env.SHOTS_DIR }}/m11-fixed-results.*
             ${{ env.SHOTS_DIR }}/*_bmp_buffer_*.bin
           retention-days: 3
           if-no-files-found: warn
