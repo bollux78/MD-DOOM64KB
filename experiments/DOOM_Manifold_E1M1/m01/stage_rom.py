@@ -611,7 +611,7 @@ def far_portal_fog(out):
     depth 18+, where the stack guard starts dropping portals (flicker).
     Portals entirely beyond MANIFOLD_FAR map units are drawn as solid walls
     instead of being entered: bounded cost and depth, stable image."""
-    far=int(os.environ.get("MANIFOLD_FAR","1024"))
+    far=int(os.environ.get("MANIFOLD_FAR","768"))
     p=out/"src/portal.c"
     s=p.read_text()
     old="""        Vect2D_s16 trans_v1 = *transformed_vert_buffer_ptr++;
