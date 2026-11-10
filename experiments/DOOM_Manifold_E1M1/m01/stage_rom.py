@@ -535,6 +535,20 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
+def keep_display_enabled_in_hblank(out):
+    """Diagnostic/optional: never blank the display from the H-Int phase
+    machine (VBlank DMA then spills into active display instead)."""
+    p=out/"src/my_bmp.c"
+    s=p.read_text()
+    a=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_vertical() {")
+    b=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_horizontal() {")
+    body=s[a:b]
+    if body.count("VDP_setEnable(0);")!=1:
+        raise ValueError("vertical H-Int body changed")
+    s=s[:a]+body.replace("VDP_setEnable(0);","/* display kept on */")+s[b:]
+    p.write_text(s)
+    print("H-Int no longer disables the display")
+
 def harden_inline_asm(out, files=("draw.c","math3d.c","utils.c","vwf.c","bunch_render.c")):
     """Make upstream GCC-6-era inline asm legal for GCC 13/15 -O3.
 
@@ -692,6 +706,8 @@ def stage(src, wad, out, control=False):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
+    for extra in filter(None,os.environ.get('MANIFOLD_EXTRA','').split(',')):
+        print('EXTRA stage step:',extra); globals()[extra](out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
