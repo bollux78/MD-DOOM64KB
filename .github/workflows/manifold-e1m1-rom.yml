@@ -46,7 +46,15 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
-          MANIFOLD_SKIP=far_portal_fog MANIFOLD_TOUR_SKY=1 MANIFOLD_TOUR=tour_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+          MANIFOLD_CAMERAS=fixed python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m11fixed"
+          MANIFOLD_CAMERAS=fixed MANIFOLD_VERT_CACHE=1 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m11cache"
+          MANIFOLD_SKIP=far_portal_fog MANIFOLD_CAMERAS=fixed python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m11fogoff"
@@ -152,6 +160,19 @@ jobs:
           else
             echo "::error::M10 doom HUD build failed"; grep -m20 -iE "error|undefined" "$out/doomhud-build.log"; exit 1
           fi
+          # M11 reproducible benchmark: same 6 fixed positions, exact angles,
+          # no movement: regular portals vs fog off vs vertex-cache test.
+          for variant in m11fixed m11cache; do
+            [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
+            make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
+              OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+              NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/$variant-build.log" 2>&1 || {
+                grep -m20 -iE "error|undefined" "$out/$variant-build.log"; exit 1;
+              }
+            cp "$MANIFOLD_STAGE/$variant/out/rom.bin" "$out/$variant-h32.bin"
+          done
+          echo "M11_FIXED_ROM_PATH=$out/m11fixed-h32.bin" >> "$GITHUB_ENV"
+          echo "M11_CACHE_ROM_PATH=$out/m11cache-h32.bin" >> "$GITHUB_ENV"
           # M11 visual A/B: H32 Doom HUD control (candidate) vs no distant portal fog.
           [ ! -e "$MANIFOLD_STAGE/m11fogoff/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/m11fogoff/src/math3D.h"
           make -C "$MANIFOLD_STAGE/m11fogoff" -f "$portable_makefile" -j2 release \
@@ -439,6 +460,19 @@ jobs:
                 end
               end
             end
+            if pfx == "m11fixed" or pfx == "m11fogoff" or pfx == "m11cache" then
+              if frame == 105 or frame == 175 or frame == 245 or frame == 315 or
+                 frame == 385 or frame == 455 or frame == 525 or frame == 595 or
+                 frame == 665 or frame == 735 or frame == 805 or frame == 875 then
+                local addr = string.match(os.getenv("WATCH") or "", "dbg6=(%x+)")
+                local camera = string.match(os.getenv("WATCH") or "", "m11_camera_index=(%x+)")
+                if addr then
+                  local value=cpu.spaces["program"]:read_u32(tonumber(addr,16) & 0xFFFFFF)
+                  local cam=camera and cpu.spaces["program"]:read_u16(tonumber(camera,16) & 0xFFFFFF) or -1
+                  print(string.format("M11_METRIC %s frame=%d camera=%d renders=%d",pfx,frame,cam,value))
+                end
+              end
+            end
             if frame == 60 or frame == 180 or frame == 300 or frame == 420 or frame == 560 or frame == 700 or frame == 890 then
               scr:snapshot(string.format("%s_f%04d.png", pfx, frame))
             end
@@ -446,7 +480,7 @@ jobs:
           end)
           LUA
           cd "$shots"
-          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}"; do
+          for pair in "upstream:megadriv:$MANIFOLD_STAGE/manifold/built_rom.bin" "e1m1:genesis:$ROM_PATH" "control:genesis:${CONTROL_ROM_PATH:-}" "controlnh:genesis:${CONTROLNH_ROM_PATH:-}" "autowalk:genesis:${AUTOWALK_ROM_PATH:-}" "tour:genesis:${TOUR_ROM_PATH:-}" "m10control:genesis:${M10_CONTROL_ROM_PATH:-}" "m10doom:genesis:${M10_DOOM_ROM_PATH:-}" "m11fogoff:genesis:${M11_FOGOFF_ROM_PATH:-}" "m11fixed:genesis:${M11_FIXED_ROM_PATH:-}" "m11cache:genesis:${M11_CACHE_ROM_PATH:-}"; do
             pfx="${pair%%:*}"; rest="${pair#*:}"; sys="${rest%%:*}"; rom="${rest#*:}"
             test -s "$rom" || continue
             echo "=== MAME $pfx ==="
@@ -454,7 +488,7 @@ jobs:
             ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"
             WATCH=""
             if test -s "$ELF"; then
-              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="sectors_scanned"{printf "%s=%s,", $3, $1} $3=="manifold_dbg"{a=strtonum("0x"$1); for(i=0;i<7;i++) printf "dbg%d=%x,", i, a+4*i} 0{printf "%s=%s,", $3, $1} $3=="cur_player_pos"{a=strtonum("0x"$1); printf "px=%x,py=%x,pz=%x,psec_ang=%x,", a, a+4, a+8, a+12}')
+              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="sectors_scanned"{printf "%s=%s,", $3, $1} $3=="manifold_dbg"{a=strtonum("0x"$1); for(i=0;i<7;i++) printf "dbg%d=%x,", i, a+4*i} $3=="m11_camera_index"{printf "m11_camera_index=%s,", $1} 0{printf "%s=%s,", $3, $1} $3=="cur_player_pos"{a=strtonum("0x"$1); printf "px=%x,py=%x,pz=%x,psec_ang=%x,", a, a+4, a+8, a+12}')
             fi
             echo "watch: $WATCH"
             export WATCH
@@ -551,6 +585,10 @@ jobs:
             ${{ env.M10_CONTROL_ROM_PATH }}
             ${{ env.M10_DOOM_ROM_PATH }}
             ${{ env.M11_FOGOFF_ROM_PATH }}
+            ${{ env.M11_FIXED_ROM_PATH }}
+            ${{ env.M11_CACHE_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m11fixed/out/release/symbol.txt
+            ${{ env.MANIFOLD_STAGE }}/m11cache/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11fogoff/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/doomhud/out/release/symbol.txt
             ${{ env.SGDK_KIT }}
