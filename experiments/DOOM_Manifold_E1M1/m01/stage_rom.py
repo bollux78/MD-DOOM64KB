@@ -606,6 +606,26 @@ static s16 manifold_locate2(fix32 x, fix32 y, s16 sect) {
     p.write_text(s)
     print("collision: corner crossings resolved or blocked")
 
+def far_portal_fog(out):
+    """E1M1 views reach 40-90 cell visits per frame (2-7 fps) and recursion
+    depth 18+, where the stack guard starts dropping portals (flicker).
+    Portals entirely beyond MANIFOLD_FAR map units are drawn as solid walls
+    instead of being entered: bounded cost and depth, stable image."""
+    far=int(os.environ.get("MANIFOLD_FAR","1024"))
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="""        Vect2D_s16 trans_v1 = *transformed_vert_buffer_ptr++;
+        Vect2D_s16 trans_v2 = *transformed_vert_buffer_ptr++;
+"""
+    if s.count(old)<1: raise ValueError("visit_graph transform layout changed")
+    new=old+f"""        if (is_portal && trans_v1.y > ({far}<<TRANS_Z_FRAC_BITS) && trans_v2.y > ({far}<<TRANS_Z_FRAC_BITS)) {{
+            is_portal = 0; portal_sector = -1;
+        }}
+"""
+    s=s.replace(old,new,1)
+    p.write_text(s)
+    print("far portals fogged at",far)
+
 def clamp_native_vertical_lines(out):
     """Flat-colour column filler jumps into an unrolled table sized for
     dy<=158 and writes from col_ptr+y0*2 with no bounds checks. E1M1 feeds
@@ -1039,7 +1059,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
