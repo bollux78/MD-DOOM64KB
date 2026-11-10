@@ -538,7 +538,7 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
         s=s.replace(old,new)
     s=("#include <genesis.h>\n"
        "#define MANIFOLD_FREE_TILE_BASE (TILE_USER_INDEX + 32*20/2 + 32*18)\n"
-       "#define MANIFOLD_FREE_TILE_LIMIT 0x540\n")+s
+       "#define MANIFOLD_FREE_TILE_LIMIT 0x500\n")+s
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
@@ -677,7 +677,7 @@ def apply_doom_textures(out, lumps, cells, wad):
         if not m: raise ValueError(f"{name_} not found in colors.c")
         cs=cs[:m.start(2)]+"\n"+body+cs[m.end(2):]
     c.write_text(cs)
-    if res.get("sky"): install_sky(out,res)
+    if res.get("sky") and os.environ.get("MANIFOLD_SKY","1")=="1": install_sky(out,res)
     print("doom textures:",len(names),"flats:",len(flats),"palette:",[hex(v) for v in tex["vdp_palette"]])
     return tex
 
@@ -685,7 +685,7 @@ def install_sky(out, res):
     """SKY1 band on BG_B behind the framebuffer (BG_A colour 0 = sky
     ceilings). Coarse 8px horizontal steps by redrawing 6 tilemap rows."""
     import wad_textures as WT
-    sk=WT.sky_tiles(res)
+    sk=WT.sky_tiles(res, max_tiles=46)  # VRAM free ends at 0x500; weapons/HUD leave ~45-70 tiles
     n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
     tiles=",\n".join("  "+",".join(f"0x{v:08x}" for v in t) for t in sk["tiles"])
     tmap=",".join(str(v) for row in sk["map"] for v in row)
@@ -701,13 +701,15 @@ static const u8 sky_map[{rows}][{cols}] = {{ {tmap} }};
 static u16 sky_base = 0;
 static s16 sky_last = -1;
 static u8 sky_ready = 0;
-static u16 sky_row_buf[{rows}*32];
+static u16 sky_row_buf[9*32];
 u16 manifold_sky_init(u16 free_tile_loc) {{
     if (free_tile_loc + {n} > MANIFOLD_FREE_TILE_LIMIT) {{ return free_tile_loc; }}
     sky_base = free_tile_loc;
     VDP_loadTileData(sky_tiles, sky_base, {n}, DMA);
-    VDP_fillTileMapRect(BG_B, TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 0), 4, 4, 32, {band_top - 4});
-    VDP_fillTileMapRect(BG_B, TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 1), 4, 13, 32, 9);
+    for (u16 i = 0; i < 9*32; i++) sky_row_buf[i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 0);
+    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 4, 32, {band_top - 4}, 32, CPU);
+    for (u16 i = 0; i < 9*32; i++) sky_row_buf[i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_base + 1);
+    VDP_setTileMapDataRect(BG_B, sky_row_buf, 4, 13, 32, 9, 32, CPU);
     sky_ready = 1; sky_last = -1;
     return free_tile_loc + {n};
 }}
@@ -725,8 +727,8 @@ void manifold_sky_update(void) {{
     (out/"src/manifold_sky.c").write_text(c)
     g=out/"src/game.c"
     gs=g.read_text()
-    old="    free_tile_loc = init_weapon_sprites(free_tile_loc);\n"
-    if gs.count(old)!=1: raise ValueError("init_weapon_sprites call changed")
+    old="    free_tile_loc = console_init(free_tile_loc);\n"
+    if gs.count(old)!=1: raise ValueError("console_init call changed")
     gs=gs.replace(old,old+"    free_tile_loc = manifold_sky_init(free_tile_loc);\n",1)
     gs=gs.replace("u16 free_tile_loc;\n","u16 free_tile_loc;\nu16 manifold_sky_init(u16 free_tile_loc);\n",1)
     m="#define MANIFOLD_FREE_TILE_LIMIT"
@@ -741,6 +743,12 @@ void manifold_sky_update(void) {{
     if js.count(old)!=1: raise ValueError("update_joy changed")
     js=js.replace(old,"void manifold_sky_update(void);\n"+old+"    manifold_sky_update();\n",1)
     j.write_text(js)
+    b=out/"src/my_bmp.c"
+    bs=b.read_text()
+    o="void bmp_show_fps(u16 float_display) {\n"
+    if bs.count(o)!=1: raise ValueError("bmp_show_fps changed")
+    bs=bs.replace(o,o+"",1)
+    b.write_text(bs)
     print("sky tiles:",n,"band rows:",rows)
 
 def tour_input(out, cells, lumps):

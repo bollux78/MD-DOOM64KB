@@ -261,10 +261,10 @@ def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1"):
         for y in range(0, hgt, 4):
             for x in range(0, wdt, 4):
                 samples.append(img[y][x])
-    for img in flatrgb.values():
-        for y in range(0, 64, 8):
-            for x in range(0, 64, 8):
-                samples.append(img[y][x])
+    for img in flatrgb.values():          # flats cover large screen areas
+        for y in range(0, 64, 4):
+            for x in range(0, 64, 4):
+                samples.extend([img[y][x]] * 3)
     pal = build_palette(samples)
     return {"pal": pal, "tex": texrgb, "flats": flatrgb, "sky": sky}
 
