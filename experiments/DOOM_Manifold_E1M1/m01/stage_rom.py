@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """Stage a disposable Manifold candidate with an E1M1 portal_map.
 
 NOT an acceptance claim. Runs after source audit and emission gate; only
@@ -245,7 +246,11 @@ def normalize_math_and_menu(out):
     old="s16* last_out_ptr = out + (num_walls*2);"
     if src.count(old)!=1:
         raise ValueError("upstream vector pointer arithmetic changed")
-    p.write_text(src.replace(old,"s16* last_out_ptr = ((s16*)out) + (num_walls*2);"))
+    # out is Vect2D_s16* (4 bytes): upstream advanced by num_walls*2 VECTORS
+    # (8 bytes/wall, the loop writes 4 words per wall backwards). Casting
+    # before adding halves the offset and smashes memory below `out`, so
+    # every sector transformed garbage and nothing was drawn. Cast after.
+    p.write_text(src.replace(old,"s16* last_out_ptr = (s16*)(out + (num_walls*2));"))
     p=out/"src/menu_helper.c"
     src=p.read_text()
     if src.count("clear_menu(cur_menu);")!=2:
@@ -650,29 +655,11 @@ def stage(src, wad, out, control=False):
     if out.exists():
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
-    stage_missing_resources(out)
-    normalize_legacy_asm(out)
-    namespace_legacy_allocators(out)
-    normalize_legacy_s16_bounds(out)
-    normalize_legacy_fixed_point_api(out)
-    normalize_wide_sprite_registers(out)
-    normalize_legacy_palette_and_asm(out)
-    normalize_game_integration(out)
-    normalize_weapon_api_declaration(out)
-    normalize_remaining_palettes(out)
-    normalize_menu_callbacks(out)
-    normalize_math_and_menu(out)
-    normalize_bitmap_legacy_symbols(out)
-    normalize_pvs_entry_types(out)
-    normalize_toggle_declarations(out)
-    normalize_weapon_sprite_frame_layout(out)
-    normalize_header_global_definitions(out)
-    mute_legacy_emulator_debug_logging(out)
-    replace_generated_vertical_scalers_with_checked_c(out)
-    fix_sgdk2_hint_callbacks(out)
-    harden_inline_asm(out)
-    fail_loud_on_heap_exhaustion(out)
-    widen_sector_vertex_buffers(out)
+    skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,replace_generated_vertical_scalers_with_checked_c,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,):
+        if step.__name__ in skip:
+            print('SKIPPED stage step:',step.__name__); continue
+        step(out)
     # Use SGDK standard Sega boot/header instead of upstream custom startup
     # that requires an unpublished out/rom_head.bin at assembler time.
     # The upstream Python-generated demo E1M1 is superseded by src/e1m1_map.c.
