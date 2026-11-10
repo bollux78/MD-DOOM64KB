@@ -471,7 +471,7 @@ jobs:
       - name: Symbolize MAME hang PCs (diagnostic)
         continue-on-error: true
         env:
-          EXTRA_PCS: "00114A 0081DA 001100"
+          EXTRA_PCS: "003530 0086E6 00114A"
         shell: bash
         run: |
           set +e
@@ -483,6 +483,13 @@ jobs:
             echo "hang PCs: $pcs"
             for pc in $pcs; do
               "$NM" -n -S "$ELF" | awk -v t=$((16#$pc)) '{a=strtonum("0x"$1); if(a<=t) last=$0} END{print "'"$pc"' in:", last}'
+            done
+            echo "-- disassembly of ZERO DIVIDE offset 0x3530 and hint 0x86E6 --"
+            for target in 003530 0086E6; do
+              echo "=== target 0x$target"
+              t=$((16#$target))
+              "$NM" -n -S "$ELF" | awk -v t="$t" '{a=strtonum("0x"$1); if (a<=t) prev=$0; else if (!next++) following=$0} END{print "preceding",prev;print "following",following}'
+              "$OD" -d --start-address=$((t-0x70)) --stop-address=$((t+0x100)) "$ELF" | tail -140
             done
             first=$(echo ${EXTRA_PCS:-$pcs} | awk '{print $1}')
             test -n "$first" && "$OD" -d --start-address=$((16#$first - 0x60)) --stop-address=$((16#$first + 0x60)) "$ELF" | tail -70
