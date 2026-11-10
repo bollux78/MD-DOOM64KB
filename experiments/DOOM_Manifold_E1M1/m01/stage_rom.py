@@ -1092,6 +1092,34 @@ void manifold_sky_update(void) {{
     j.write_text(js)
     print("sky tiles:",n,"band rows:",rows,"cols:",cols)
 
+def install_e1m1_music(out):
+    """Add the existing R128 E1M1 VGM arrangement to Manifold's XGM driver.
+
+    Music is opt-in for comparison. Runtime staging never modifies the R128.
+    VGM is restored by prepare_r25_music.py in the disposable runner workspace.
+    """
+    vgm=Path(os.environ["MANIFOLD_MUSIC_VGM"])
+    if not vgm.is_file() or vgm.stat().st_size<1024:
+        raise ValueError(f"R128 E1M1 music VGM missing: {vgm}")
+    res=out/"res"
+    (res/"manifold_e1m1.vgm").write_bytes(vgm.read_bytes())
+    target=res/"music_res.res"
+    if not target.is_file() or target.read_text().strip():
+        raise ValueError("Expected empty Manifold music_res.res, refusing overwrite")
+    target.write_text('XGM bgm_e1m1 "manifold_e1m1.vgm"\\n')
+    p=out/"src/game.c"
+    src=p.read_text()
+    anchor="    MEM_dump();"
+    if src.count(anchor)!=1: raise ValueError("Manifold init_game music start anchor changed")
+    src=src.replace(anchor,anchor+"""
+    /* M11 music variant: E1M1 starts only after Z80 PCM setup and stage load.
+       XGM driver plays in the background; no per-render or frame FM writes. */
+    if (music_on) XGM_startPlay(bgm_e1m1);
+""",1)
+    p.write_text(src)
+    print("M11 music: E1M1 classic XGM started after game init, source",vgm.name)
+
+
 def fixed_camera_input(out, cells, lumps):
     """M11 controlled A/B: six repeatable views with NO joypad movement.
 
@@ -1650,6 +1678,8 @@ def stage(src, wad, out, control=False):
         install_doom_hud(out,wad)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
+    if os.environ.get("MANIFOLD_MUSIC","0")=="1":
+        install_e1m1_music(out)
     if os.environ.get("MANIFOLD_CAMERAS")=="fixed":
         fixed_camera_input(out,cells,map_lumps)
     if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
