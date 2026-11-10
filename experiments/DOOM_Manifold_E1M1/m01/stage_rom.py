@@ -448,7 +448,7 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     }
     for name,replacement in replacements.items():
         import re
-        matches=list(re.finditer(r"\\bvoid\\s+"+name+r"\\s*\\(",source))
+        matches=list(re.finditer(r"\bvoid\s+"+name+r"\s*\(",source))
         if len(matches)!=1:
             raise ValueError(f"expected one generated scaler caller {name}, got {len(matches)}")
         start=matches[0].start()
