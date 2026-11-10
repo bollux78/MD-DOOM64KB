@@ -263,6 +263,12 @@ jobs:
                 for i = 0, 0xFFFF do f:write(string.char(vdp:read_u8(i))) end
                 f:close()
                 print(pfx .. " VRAM dumped")
+                for name, addr in string.gmatch(os.getenv("WATCH") or "", "(regValues)=(%x+)") do
+                  local a = tonumber(addr,16) & 0xFFFFFF
+                  local r = ""
+                  for i = 0, 23 do r = r .. string.format("%02X ", cpu.spaces["program"]:read_u8(a+i)) end
+                  print(pfx .. " REGS " .. r)
+                end
               end
             end
             if frame == 60 or frame == 180 or frame == 300 or frame == 480 or frame == 700 or frame == 890 then
@@ -280,7 +286,7 @@ jobs:
             ELF="$MANIFOLD_STAGE/$v/out/release/rom.out"
             WATCH=""
             if test -s "$ELF"; then
-              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"{printf "%s=%s,", $3, $1}')
+              WATCH=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$ELF" | awk '$3=="vtimer"||$3=="vints"||$3=="vint_flipping"||$3=="intTrace"||$3=="objects"||$3=="bmp_buffer_0"||$3=="bmp_buffer_1"||$3=="bga_addr"||$3=="bgb_addr"||$3=="regValues"||$3=="manifold_bmp_plane_addr"||$3=="phase"{printf "%s=%s,", $3, $1}')
             fi
             echo "watch: $WATCH"
             export WATCH
@@ -361,7 +367,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: manifold-e1m1-screenshots-${{ github.run_id }}
-          path: ${{ env.SHOTS_DIR }}/frame_*.png
+          path: |
+            ${{ env.SHOTS_DIR }}/frame_*.png
+            ${{ env.SHOTS_DIR }}/*_vram.bin
           retention-days: 3
           if-no-files-found: warn
       - name: Explicit validation verdicts

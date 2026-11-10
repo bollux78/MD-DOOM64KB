@@ -119,6 +119,13 @@ def candidate(lumps,nodes,allow_gaps=False):
         raise ValueError(f'{len(vanished)} empty cells after SEG clipping; examples {vanished[:12]}')
     polys={i:quantize(p) for i,p in leaves.items()}
     polys=split_edges(polys)
+    # Manifold cells are counter-clockwise (positive signed area, like the
+    # upstream test maps); its renderer culls walls by projected order, so a
+    # clockwise cell draws nothing. Normalise every cell before pairing.
+    def _signed_area(poly):
+        return sum(poly[i][0]*poly[(i+1)%len(poly)][1]-poly[(i+1)%len(poly)][0]*poly[i][1]
+                   for i in range(len(poly)))/2
+    polys={i:(p if _signed_area(p)>0 else list(reversed(p))) for i,p in polys.items()}
     if len(polys)>MAX_CELLS:
         raise ValueError("too many cells")
     indices=defaultdict(list)
@@ -194,7 +201,11 @@ def emit(lumps,cells):
             collision_verts.extend([w["a"],w["b"]])
             dx=w["b"][0]-w["a"][0]
             dy=w["b"][1]-w["a"][1]
-            quad.append(4 if dy==0 and dx>0 else 6 if dy==0 else 5 if dx==0 and dy>0 else 7 if dx==0 else 0)
+            # upstream editor/line.py normal_quadrant: angle = atan2(dx, dy)
+            import math
+            ang=math.degrees(math.atan2(dx,dy))%360
+            quad.append(7 if ang==0 else 0 if ang<90 else 4 if ang==90 else 1 if ang<180
+                        else 5 if ang==180 else 2 if ang<270 else 6 if ang==270 else 3)
             # Until valid texture resources exist, NEVER enter the texture path.
             colors.extend([0,1,1,1])
         # Manifold walls use a closing vertex per cell.
