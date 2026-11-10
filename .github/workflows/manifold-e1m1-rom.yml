@@ -102,6 +102,8 @@ jobs:
           if [ ! -f "$RUNNER_TEMP/sgdk-kit.tgz" ]; then
             tar -C "$gdk" -czf "$RUNNER_TEMP/sgdk-kit.tgz" lib inc res makefile.gen common.mk md.ld $(cd "$gdk" && ls bin/*.jar 2>/dev/null) 2>/dev/null || true
             echo "SGDK_KIT=$RUNNER_TEMP/sgdk-kit.tgz" >> "$GITHUB_ENV"
+            tar -C "$HOME/mars" -czf "$RUNNER_TEMP/m68k-elf-kit.tgz" m68k-elf 2>/dev/null || true
+            echo "TC_KIT=$RUNNER_TEMP/m68k-elf-kit.tgz" >> "$GITHUB_ENV"
           fi
           echo "Linking with original SGDK fat-object library, native 68000 fallback"
           make -C "$MANIFOLD_STAGE/candidate" -f "$portable_makefile" -j2 release \
@@ -495,6 +497,7 @@ jobs:
             ${{ env.AUTOWALK_ROM_PATH }}
             ${{ env.TOUR_ROM_PATH }}
             ${{ env.SGDK_KIT }}
+            ${{ env.TC_KIT }}
             ${{ env.MANIFOLD_STAGE }}/tour/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/candidate/out/release/rom.out
             ${{ env.MANIFOLD_STAGE }}/candidate/out/release/symbol.txt
