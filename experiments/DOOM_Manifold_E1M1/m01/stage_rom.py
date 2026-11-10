@@ -623,18 +623,22 @@ def far_portal_fog(out):
     depth 18+, where the stack guard starts dropping portals (flicker).
     Portals entirely beyond MANIFOLD_FAR map units are drawn as solid walls
     instead of being entered: bounded cost and depth, stable image."""
-    far=int(os.environ.get("MANIFOLD_FAR","768"))
+    far=int(os.environ.get("MANIFOLD_FAR","1600"))
     p=out/"src/portal.c"
     s=p.read_text()
     old="""        Vect2D_s16 trans_v1 = *transformed_vert_buffer_ptr++;
         Vect2D_s16 trans_v2 = *transformed_vert_buffer_ptr++;
 """
     if s.count(old)<1: raise ValueError("visit_graph transform layout changed")
-    new=old+f"""        if (is_portal && trans_v1.y > ({far}<<TRANS_Z_FRAC_BITS) && trans_v2.y > ({far}<<TRANS_Z_FRAC_BITS)) {{
-            is_portal = 0; portal_sector = -1;
+    new=old+f"""        u8 manifold_fogged = 0;
+        if (is_portal && trans_v1.y > ({far}<<TRANS_Z_FRAC_BITS) && trans_v2.y > ({far}<<TRANS_Z_FRAC_BITS)) {{
+            is_portal = 0; portal_sector = -1; manifold_fogged = 1;
         }}
 """
     s=s.replace(old,new,1)
+    o2="        u8 is_solid_color = map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_SOLID_COLOR_IDX];\n"
+    if s.count(o2)<1: raise ValueError("solid colour read changed")
+    s=s.replace(o2,o2+"        if (manifold_fogged) { is_solid_color = 1; }  /* darkest palette entry = distance fog */\n",1)
     p.write_text(s)
     print("far portals fogged at",far)
 
@@ -723,6 +727,38 @@ def textured_portal_steps(out):
     p.write_text(s)
     print("portal upper/lower steps textured")
 
+def keep_overlays_off_sky(out):
+    """The console line (BG_B row 4) and the fps counter (BG_B row 5) were
+    drawn over the sky band rows. Move them into the black top border."""
+    c=out/"src/console.c"; cs=c.read_text()
+    if "#define CONSOLE_BASE_Y 4\n" not in cs: raise ValueError("console row changed")
+    c.write_text(cs.replace("#define CONSOLE_BASE_Y 4\n","#define CONSOLE_BASE_Y 1\n",1))
+    g=out/"src/game.c"; gs=g.read_text()
+    old="void showStats() {\n    char str[32];\n    u16 y = 5;\n"
+    if old not in gs: raise ValueError("showStats layout changed")
+    gs=gs.replace(old,"void showStats() {\n    char str[32];\n    u16 y = 5;\n",1)
+    # rows outside the 3D view are blanked by the bitmap's extended blank:
+    # keep the counter in the left border columns 0-3 of a viewport row
+    o="    u16 base = TILE_FONT_INDEX;\n    u8 x = 2;\n"
+    if o not in gs: raise ValueError("showStats x layout changed")
+    gs=gs.replace(o,"    u16 base = TILE_FONT_INDEX;\n    u8 x = 0;\n",1)
+    g.write_text(gs)
+    print("console/fps moved to top border")
+
+def scale_light_distances(out):
+    """Upstream lighting bands (mid 150 / dark 350 / fade 400 units) suit its
+    small test maps. In E1M1 walls beyond 400 units hit the FADE band, which
+    writes colour 0 = transparent (BG_B shows through: 'texture lost far
+    away'). Scale the bands to E1M1 and push FADE beyond the fog distance."""
+    p=out/"src/colors.h"
+    s=p.read_text()
+    for a,b in (("#define MID_DIST 150","#define MID_DIST 320"),("#define MID_DARK_DIST 250","#define MID_DARK_DIST 520"),
+                ("#define DARK_DIST 350","#define DARK_DIST 760"),("#define FADE_DIST 400","#define FADE_DIST 4000")):
+        if a not in s: raise ValueError(f"colors.h changed: {a}")
+        s=s.replace(a,b,1)
+    p.write_text(s)
+    print("light distance bands scaled for E1M1")
+
 def fix_fps_font_base(out):
     """Upstream fps counter hard-codes the SGDK 1.x font tile base 0x5A0;
     SGDK 2 puts the font at TILE_FONT_INDEX (0x4E0 here). 0x5A0 is the
@@ -763,7 +799,7 @@ u16 manifold_reclaimed_tiles = 0;
    (no BG_B scroll) -> 4.5KB more. */
 u16 manifold_sky_init(u16 free_tile_loc) {{
     u16 r1 = window_addr >> 5;                     /* 128 tiles */
-    u16 r2 = (bgb_addr + 28 * 128) >> 5;           /* up to 144 tiles */
+    u16 r2 = (bgb_addr + 30 * 128) >> 5;           /* rows 30-63: HUD reaches row 28 */
     u16 r2n = ((bgb_addr + 0x2000) >> 5) - r2;
     VDP_setWindowAddress(bgb_addr);
     manifold_reclaimed_tiles = 128 + r2n;
@@ -821,7 +857,10 @@ def tour_input(out, cells, lumps):
         cy=sum((pts[k][1]+pts[(k+1)%len(pts)][1])*(pts[k][0]*pts[(k+1)%len(pts)][1]-pts[(k+1)%len(pts)][0]*pts[k][1]) for k in range(len(pts)))/(3*a2)
         s_=c["doom_sector"]
         if s_ not in best or abs(a2)>best[s_][0]: best[s_]=(abs(a2),round(cx),round(cy),c["id"])
-    pts=[best[k] for k in sorted(best)]
+    keys=sorted(best)
+    if os.environ.get("MANIFOLD_TOUR_SKY")=="1":
+        keys=[k for k in keys if lumps["SECTORS"][k][3].rstrip(b"\0")==b"F_SKY1"] or keys
+    pts=[best[k] for k in keys]
     j=out/"src/joy_helper.c"
     code=j.read_text()
     arr=",".join(f"{{{x},{y},{cid}}}" for _,x,y,cid in pts)
@@ -1227,7 +1266,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
