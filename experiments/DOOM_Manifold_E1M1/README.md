@@ -1,6 +1,25 @@
 # Manifold E1M1 — M01 (isolated research branch)
 
-**Status (2026-11-09): source audit/bootstrap committed; ROM: NOT BUILT; BlastEm: NOT RUN; console: NOT TESTED.**
+**Status (2026-11-10): M02 ROM builds, boots and is walkable in MAME and BlastEm (headless). Physical console: NOT TESTED.**
+
+## Download (stable URL)
+
+Latest ROM: https://github.com/bollux78/MD-DOOM64KB/releases/tag/manifold-e1m1-latest
+
+Direct file: `https://github.com/bollux78/MD-DOOM64KB/releases/download/manifold-e1m1-latest/doom-md-manifold-e1m1-m02-hintfix.bin`
+
+The tag is moved to the newest successful build; the release notes carry the build commit, run link and SHA-256. Open the `.bin` in BlastEm (or any Mega Drive emulator / flash cart). Press START to enter the map; D-pad moves/turns.
+
+### What works / what does not (M02)
+- Works: boot without ADDRESS ERROR, E1M1 geometry as portal cells, walking and turning, ~6-12 fps in the start room (control ROM ~20 fps).
+- Missing: HUD weapon sprite, WAD textures (flat colours), THINGS (monsters/items), doors/triggers, real PVS. Some ceiling clipping artifacts at certain angles. 112 unpaired BSP edges are kept as solid walls.
+- Verified only in emulators; behaviour on real hardware is unknown.
+
+### Licensing / provenance
+- Renderer: Manifold by ehaliewicz (MIT), pinned commit `b6fe52a`; built with SGDK 2.11 (MIT).
+- The map is converted from E1M1 of the Doom **shareware** `doom1.wad` (id Software). The ROM contains derived level geometry only, no WAD textures, sprites or sound. Doom's data remains id Software's/ZeniMax's; this experiment is unofficial and non-commercial.
+
+Handoff with root causes and diagnostics: `docs/agent-handoffs/MANIFOLD-E1M1-M02-PLAYABLE-CLAUDE.md`.
 
 Goal: make the **actual Doom E1M1 geometry** render in Manifold's Sega Mega Drive portal renderer, with honest pixel/time comparison to R128. The existing R128 and Sega CD M1.5 remain untouched.
 

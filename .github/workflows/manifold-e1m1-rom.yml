@@ -7,7 +7,7 @@ on:
       - '.github/workflows/manifold-e1m1-rom.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     if: contains(github.event.head_commit.message, '[manifold-rom]') || github.event_name == 'workflow_dispatch'
@@ -431,6 +431,32 @@ jobs:
             ${{ env.SHOTS_DIR }}/*_bmp_buffer_*.bin
           retention-days: 3
           if-no-files-found: warn
+      - name: Publish ROM to stable release (shareware WAD, ROM only)
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=manifold-e1m1-latest
+          sha=$(sha256sum "$ROM_PATH" | cut -d' ' -f1)
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "Manifold E1M1 M02 experimental ROM (emulator-tested only; real console NOT tested)."
+            echo
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- SHA-256: $sha"
+            echo "- Controls: START enters the map; D-pad moves/turns."
+            echo "- Map geometry converted from the Doom shareware doom1.wad (E1M1); no WAD data/textures included. Renderer: Manifold (MIT) + SGDK 2.11 (MIT)."
+            echo "- Details: experiments/DOOM_Manifold_E1M1/README.md"
+          } > "$notes"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+          gh release create "$tag" "$ROM_PATH" --target "${{ github.sha }}" \
+            --title "Manifold E1M1 M02 (latest)" --notes-file "$notes" --prerelease
+          echo "Stable URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/$tag/$(basename "$ROM_PATH")"
       - name: Explicit validation verdicts
         if: always()
         shell: bash
@@ -438,4 +464,4 @@ jobs:
           echo "build/candidate: ${{ job.status }}"
           echo "blastem: ${BLASTEM_VERDICT:-NOT_RUN}"
           echo "physical console: NOT TESTED"
-          echo "No binary or private WAD is uploaded to GitHub"
+          echo "Only the ROM is published to the manifold-e1m1-latest release; no WAD is uploaded"
