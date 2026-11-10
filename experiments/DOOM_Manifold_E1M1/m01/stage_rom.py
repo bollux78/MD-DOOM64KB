@@ -1148,7 +1148,7 @@ def m11_safe_near_clipping(out):
     p.write_text(c)
     m=out/"src/math3d.c"
     t=m.read_text()
-    left=t.index("    s16 dx = rx2-rx1;",t.index("clip_result clip_map_vertex_16("))
+    left=t.index("    s16 dx = rx2-rx1;",t.index("    if(rz1_12_4 >= NEAR_Z_FIX && rz2_12_4 >= NEAR_Z_FIX)"))
     right=t.index("    // left near clip",left)
     chunk=t[left:right]
     replacement="""    /* Crosses the near plane: 32-bit interpolation only on clipped walls.
