@@ -836,7 +836,7 @@ u16 manifold_sky_init(u16 free_tile_loc) {{
 }}
 void manifold_sky_update(void) {{
     if (!sky_ready) return;
-    s16 off = (s16)((cur_player_pos.ang >> 3) & {cols - 1});
+    s16 off = (s16)((cur_player_pos.ang >> 4) & {cols - 1});
     if (off == sky_last) return;
     sky_last = off;
     for (u16 r = 0; r < {rows}; r++)
