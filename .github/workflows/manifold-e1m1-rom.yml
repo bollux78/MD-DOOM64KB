@@ -54,6 +54,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/autowalk"
+          MANIFOLD_TOUR=tour_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/tour"
           MANIFOLD_EXTRA=keep_display_enabled_in_hblank python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
@@ -107,6 +111,15 @@ jobs:
           echo "ROM_PATH=$out/doom-md-manifold-e1m1-m02-hintfix.bin" >> "$GITHUB_ENV"
           echo "Candidate ROM: $out/doom-md-manifold-e1m1-m02-hintfix.bin"
           [ -f "$MANIFOLD_STAGE/control/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/control/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/control/src/math3D.h"
+          [ ! -e "$MANIFOLD_STAGE/tour/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/tour/src/math3D.h"
+          if make -C "$MANIFOLD_STAGE/tour" -f "$portable_makefile" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/tour-build.log" 2>&1; then
+            cp "$MANIFOLD_STAGE/tour/out/rom.bin" "$out/doom-md-manifold-e1m1-tour-m03.bin"
+            echo "TOUR_ROM_PATH=$out/doom-md-manifold-e1m1-tour-m03.bin" >> "$GITHUB_ENV"
+          else
+            echo "::warning::tour build failed"; grep -m10 -i error "$out/tour-build.log"
+          fi
           [ ! -e "$MANIFOLD_STAGE/autowalk/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/autowalk/src/math3D.h"
           if make -C "$MANIFOLD_STAGE/autowalk" -f "$portable_makefile" -j2 release \
             OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -476,6 +489,8 @@ jobs:
           path: |
             ${{ env.ROM_PATH }}
             ${{ env.AUTOWALK_ROM_PATH }}
+            ${{ env.TOUR_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/tour/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/candidate/out/release/rom.out
             ${{ env.MANIFOLD_STAGE }}/candidate/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/autowalk/out/release/rom.out

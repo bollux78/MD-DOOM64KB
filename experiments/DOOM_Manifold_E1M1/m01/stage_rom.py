@@ -490,7 +490,7 @@ def fail_loud_on_heap_exhaustion(out):
     p.write_text(s)
     print("Heap exhaustion now fails loudly via SYS_die")
 
-MAX_WALLS_PER_SECTOR=32  # E1M1 BSP cells have <=11 walls; 255 made visit_graph frames 2.3KB -> stack overflow into heap
+MAX_WALLS_PER_SECTOR=16  # E1M1 BSP cells have <=11 walls; 255 made visit_graph frames 2.3KB -> stack overflow into heap
 def widen_sector_vertex_buffers(out):
     """portal.c keeps per-sector transformed vertices on the stack in
     `Vect2D_s16 buf[62]`, and load_transform_and_duplicate_verts writes
@@ -558,11 +558,12 @@ def guard_portal_recursion_stack(out):
     s=p.read_text()
     old="void visit_graph(u16 src_sector, u16 sector, u16 x1, u16 x2, u32 cur_frame, uint8_t depth) {"
     if s.count(old)!=1: raise ValueError("visit_graph signature changed")
-    s=s.replace(old,"extern u32 manifold_heap_high;\n"+old+"""
+    s=s.replace(old,"extern u32 manifold_heap_high;\nextern volatile u32 manifold_dbg[8];\nvolatile u32 manifold_dbg_maxdepth;\n"+old+"""
     {
         u32 sp_now;
         __asm volatile("move.l %%sp,%0" : "=d" (sp_now));
-        if (depth > 48 || (sp_now & 0xFFFFFF) < ((manifold_heap_high & 0xFFFFFF) + 3072)) { return; }
+        if (depth > 48 || (sp_now & 0xFFFFFF) < ((manifold_heap_high & 0xFFFFFF) + 3072)) { manifold_dbg[7]++; return; }
+        if (depth > manifold_dbg_maxdepth) { manifold_dbg_maxdepth = depth; }
     }""",1)
     p.write_text(s)
     print("portal recursion bounded by stack/heap guard")
@@ -618,6 +619,49 @@ def clamp_native_vertical_lines(out):
     s=s.replace(old,old+"    if (y0 < 0) { y0 = 0; }\n    if (y1 > SCREEN_HEIGHT) { y1 = SCREEN_HEIGHT; }\n    if (y1 <= y0) { return; }\n",1)
     p.write_text(s)
     print("flat column filler clamped to 0..SCREEN_HEIGHT")
+
+def tour_input(out, cells, lumps):
+    """Test-only camera tour: every 90 frames teleport to the centroid of the
+    largest cell of each Doom sector and spin (LEFT held). Exercises the whole
+    map's geometry/renderer for screenshots, fps and recursion-guard counts."""
+    best={}
+    for c in cells:
+        pts=[(w["a"][0]/16,w["a"][1]/16) for w in c["walls"]]
+        a2=sum(pts[k][0]*pts[(k+1)%len(pts)][1]-pts[(k+1)%len(pts)][0]*pts[k][1] for k in range(len(pts)))
+        if a2==0: continue
+        cx=sum((pts[k][0]+pts[(k+1)%len(pts)][0])*(pts[k][0]*pts[(k+1)%len(pts)][1]-pts[(k+1)%len(pts)][0]*pts[k][1]) for k in range(len(pts)))/(3*a2)
+        cy=sum((pts[k][1]+pts[(k+1)%len(pts)][1])*(pts[k][0]*pts[(k+1)%len(pts)][1]-pts[(k+1)%len(pts)][0]*pts[k][1]) for k in range(len(pts)))/(3*a2)
+        s_=c["doom_sector"]
+        if s_ not in best or abs(a2)>best[s_][0]: best[s_]=(abs(a2),round(cx),round(cy),c["id"])
+    pts=[best[k] for k in sorted(best)]
+    j=out/"src/joy_helper.c"
+    code=j.read_text()
+    arr=",".join(f"{{{x},{y},{cid}}}" for _,x,y,cid in pts)
+    code+=f"""
+#include "game.h"
+#include "sector_group.h"
+#include "portal_map.h"
+#include "level.h"
+static const s16 manifold_tour[][3] = {{{arr}}};
+volatile u16 manifold_tour_idx = 0xFFFF;
+u16 manifold_autopilot_joy(u16 j) {{
+    (void)(JOY_readJoypad)(j);
+    u32 f = vtimer;
+    if (f < 60) return 0;
+    u16 idx = ((f - 60) / 90) % {len(pts)};
+    if (idx != manifold_tour_idx) {{
+        manifold_tour_idx = idx;
+        cur_player_pos.x = FIX32(manifold_tour[idx][0]);
+        cur_player_pos.y = FIX32(manifold_tour[idx][1]);
+        cur_player_pos.cur_sector = manifold_tour[idx][2];
+        u16 g = sector_group(manifold_tour[idx][2], (portal_map*)cur_portal_map);
+        cur_player_pos.z = (get_sector_group_floor_height(g)<<(FIX32_FRAC_BITS-4)) + FIX32(82);
+    }}
+    return BUTTON_LEFT;
+}}
+"""
+    j.write_text(code)
+    print("tour points:",len(pts))
 
 def autopilot_input(out):
     """Test-only: replace JOY_readJoypad with a scripted walk so headless
@@ -1033,6 +1077,10 @@ def stage(src, wad, out, control=False):
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
     # Never synthesize an unsafe portal or mark this build geometry-validated.
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells))
+    if "tour_input" in os.environ.get("MANIFOLD_TOUR",""):
+        h=out/"src/manifold_mute_klog.h"
+        h.write_text(h.read_text()+"\nu16 manifold_autopilot_joy(u16 j);\n#define JOY_readJoypad(j) manifold_autopilot_joy(j)\n")
+        tour_input(out,cells,map_lumps)
     max_walls=max(len(c["walls"]) for c in cells)
     stats=dict(stats) if isinstance(stats,dict) else {"stats":stats}
     stats["max_walls_per_cell"]=max_walls
