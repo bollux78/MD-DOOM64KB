@@ -459,6 +459,20 @@ jobs:
             first=$(echo ${EXTRA_PCS:-$pcs} | awk '{print $1}')
             test -n "$first" && "$OD" -d --start-address=$((16#$first - 0x60)) --stop-address=$((16#$first + 0x60)) "$ELF" | tail -70
           done
+      - name: Upload test ROMs + ELF symbols (shareware-derived, no WAD)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifold-e1m1-roms-${{ github.run_id }}
+          path: |
+            ${{ env.ROM_PATH }}
+            ${{ env.AUTOWALK_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/candidate/out/rom.out
+            ${{ env.MANIFOLD_STAGE }}/candidate/out/symbol.txt
+            ${{ env.MANIFOLD_STAGE }}/autowalk/out/rom.out
+            ${{ env.MANIFOLD_STAGE }}/autowalk/out/symbol.txt
+          retention-days: 7
+          if-no-files-found: warn
       - name: Upload screenshots only (no ROM, no WAD)
         if: env.SHOTS_DIR != ''
         uses: actions/upload-artifact@v4
