@@ -593,6 +593,7 @@ u16 manifold_autopilot_joy(u16 j);
 """)
     j=base/"joy_helper.c"
     j.write_text(j.read_text()+"""
+extern VoidCallback *busErrorCB, *addressErrorCB, *illegalInstCB, *zeroDivideCB, *line1x1xCB, *errorExceptionCB;
 static void manifold_test_crash_to_emulator(void) {
     /* make SGDK's exception screen fatal for headless emulators */
     ((void (*)(void))0x00C00020)();
