@@ -46,7 +46,7 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/candidate"
-          MANIFOLD_SKIP=far_portal_fog python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+          MANIFOLD_SKIP=far_portal_fog MANIFOLD_TOUR_SKY=1 MANIFOLD_TOUR=tour_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m11fogoff"
