@@ -618,6 +618,32 @@ static s16 manifold_locate2(fix32 x, fix32 y, s16 sect) {
     p.write_text(s)
     print("collision: corner crossings resolved or blocked")
 
+def guard_zero_reciprocal_in_texture_columns(out):
+    """Prevent 68000 DIVU-by-zero in far-away outdoor texture perspective.
+
+    M06 BlastEm ZERO DIVIDE: PC offset 0x3530, preceding instruction
+    0x352e = divu.w %d4,%d2, in calculate_tex_coords_for_wall.
+    %d4 is one_over_z_16_span_end, rounded to zero at far depth.
+    Prefer the previous reciprocal rather than discontinuous near/infinite U.
+    """
+    p=out/"src/draw.c"
+    s=p.read_text()
+    start="    u16 one_over_z_16 = one_over_z_26>>10;\n"
+    n=s.count(start)
+    if n<2:
+        raise ValueError(f"unexpected starting reciprocal count: {n}")
+    s=s.replace(start,start+"    if (one_over_z_16 == 0) one_over_z_16 = 1; /* far-depth Q16 underflow */\n")
+    for old in (
+        "        one_over_z_16_span_end = one_over_z_16 + d_one_over_z_16_times_4;\n",
+        "        u16 one_over_z_16_span_end = one_over_z_16 + d_one_over_z_16_times_2;\n",
+    ):
+        if s.count(old)!=1:
+            raise ValueError(f"unexpected ending reciprocal expression {old!r}")
+        s=s.replace(old,old+"        if (one_over_z_16_span_end == 0) one_over_z_16_span_end = one_over_z_16;\n",1)
+    p.write_text(s)
+    print("Guarded zero reciprocal for far outdoor texture columns")
+
+
 def far_portal_fog(out):
     """E1M1 views reach 40-90 cell visits per frame (2-7 fps) and recursion
     depth 18+, where the stack guard starts dropping portals (flicker).
@@ -1283,7 +1309,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
