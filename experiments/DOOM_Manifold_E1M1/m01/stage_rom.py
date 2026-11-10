@@ -728,16 +728,16 @@ static void m11_load_cached_walls(u16 count, const u16 *ids,
 }
 """
     source=source.replace(decl,decl+code,1)
-    alloc='    sector_rendered_cache = malloc(sizeof(u8) * cur_portal_map->num_sectors, "sector visited cache");\n'
+    alloc='    sector_rendered_cache = man_malloc(sizeof(u8) * cur_portal_map->num_sectors, "sector visited cache");\n'
     if source.count(alloc)!=1: raise ValueError("portal init allocation changed")
-    source=source.replace(alloc,alloc+'''    m11_vertex_xy = malloc(sizeof(Vect2D_s16)*cur_portal_map->num_verts, "M11 vertex transforms");
-    m11_vertex_stamp = malloc(sizeof(u16)*cur_portal_map->num_verts, "M11 vertex epochs");
+    source=source.replace(alloc,alloc+'''    m11_vertex_xy = man_malloc(sizeof(Vect2D_s16)*cur_portal_map->num_verts, "M11 vertex transforms");
+    m11_vertex_stamp = man_malloc(sizeof(u16)*cur_portal_map->num_verts, "M11 vertex epochs");
     if (m11_vertex_stamp) memset(m11_vertex_stamp,0,sizeof(u16)*cur_portal_map->num_verts);
 ''',1)
-    cleanup='    free(sector_rendered_cache, "sector visited cache");\n'
+    cleanup='    man_free(sector_rendered_cache, "sector visited cache");\n'
     if source.count(cleanup)!=1: raise ValueError("portal cleanup changed")
-    source=source.replace(cleanup,cleanup+'''    if (m11_vertex_stamp) free(m11_vertex_stamp, "M11 vertex epochs");
-    if (m11_vertex_xy) free(m11_vertex_xy, "M11 vertex transforms");
+    source=source.replace(cleanup,cleanup+'''    if (m11_vertex_stamp) man_free(m11_vertex_stamp, "M11 vertex epochs");
+    if (m11_vertex_xy) man_free(m11_vertex_xy, "M11 vertex transforms");
     m11_vertex_stamp=0; m11_vertex_xy=0;
 ''',1)
     transform="    load_transform_and_duplicate_verts(num_walls+1, &map->walls[wall_offset], map->vertexes, transformed_vert_buffer);\n"
