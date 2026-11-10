@@ -682,6 +682,20 @@ static u16 m11_vertex_epoch = 1;
 volatile u32 m11_vertex_cache_hits;
 volatile u32 m11_vertex_cache_misses;
 
+/* Preserve M06/M08 saturated transform at far depth: plain upstream
+   transform_map_vert_16 wraps at s16 and can create fake near walls. */
+static s16 m11_sat16(s32 value) {
+    return (s16)(value > 32767 ? 32767 : (value < -32768 ? -32768 : value));
+}
+static Vect2D_s16 m11_transform_saturated(s16 x,s16 y) {
+    s16 tlx=x-playerXInt, tly=y-playerYInt;
+    s32 rx=((s32)tlx*angleSin16)-((s32)tly*angleCos16);
+    s32 ry=((s32)tlx*angleCos16)+((s32)tly*angleSin16);
+    Vect2D_s16 v;
+    v.x=m11_sat16(rx>>FIX16_FRAC_BITS);
+    v.y=m11_sat16(ry>>(FIX16_FRAC_BITS-TRANS_Z_FRAC_BITS));
+    return v;
+}
 /* Caches ONLY rigid camera-space transformations, not clipping/visibility.
    Inputs playerXInt/angleSin16 are set before portal_rend. The source map
    must stay unchanged during a frame. */
@@ -699,12 +713,12 @@ static void m11_load_cached_walls(u16 count, const u16 *ids,
             return;
         }
         if (m11_vertex_stamp[a] != m11_vertex_epoch) {
-            m11_vertex_xy[a]=transform_map_vert_16(verts[a].x,verts[a].y);
+            m11_vertex_xy[a]=m11_transform_saturated(verts[a].x,verts[a].y);
             m11_vertex_stamp[a]=m11_vertex_epoch;
             m11_vertex_cache_misses++;
         } else m11_vertex_cache_hits++;
         if (m11_vertex_stamp[b] != m11_vertex_epoch) {
-            m11_vertex_xy[b]=transform_map_vert_16(verts[b].x,verts[b].y);
+            m11_vertex_xy[b]=m11_transform_saturated(verts[b].x,verts[b].y);
             m11_vertex_stamp[b]=m11_vertex_epoch;
             m11_vertex_cache_misses++;
         } else m11_vertex_cache_hits++;
