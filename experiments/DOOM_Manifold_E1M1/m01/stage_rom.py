@@ -900,9 +900,9 @@ def m13_sky_merge_upper_wall(out):
     old="            if(neighbor_ceil_height < ceil_height) {"
     new="""            if(neighbor_ceil_height < ceil_height &&
                map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_HIGH_COLOR_IDX] != 0xFE) {"""
-    if s.count(old)!=1:
-        raise ValueError("M13 sky merge: upper-step test moved")
-    p.write_text(s.replace(old,new,1))
+    if s.count(old)!=2:
+        raise ValueError("M13 sky merge: expected two upper-step branches")
+    p.write_text(s.replace(old,new,2))
     print("M13 DOOM sky merging: upper walls suppressed on F_SKY1/F_SKY1 portals")
 
 def textured_portal_steps(out):
