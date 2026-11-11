@@ -71,8 +71,7 @@ def install_templates(out,templates):
     externs="".join(f"extern const rle_sprite {ident};\n" for ident,*_ in templates)
     entries=['{.name="player",.type=OBJECT}']
     for ident,name,width,height in templates:
-        # portal.c computes half_width=template.width>>2 in integer world units.
-        # E1M1 uses 2x Doom geometry, so desired half-width is 1x Doom width.
-        # Set 2x width as a conservative midpoint for the isolated rendering test.
-        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*2},.height={height*32},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
+        # The visual test showed an oversized barrel; reduce both projected
+        # dimensions by 25% while preserving the same sprite pixels/THINGS.
+        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
     p.write_text(s[:a]+externs+"const object_template object_types[32+1] = {\n"+",\n".join(entries)+"\n};"+s[b:])
