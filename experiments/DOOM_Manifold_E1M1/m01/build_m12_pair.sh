@@ -11,9 +11,9 @@ stage="$RUNNER_TEMP/manifold-m12-pair-$GITHUB_RUN_ID"
 python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage"
 DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
 test -s res/r25-e1m1.vgm
-for variant in control objects; do
-  if [ "$variant" = objects ]; then with_objects=1; else with_objects=0; fi
-  MANIFOLD_OBJECTS="$with_objects" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
+for variant in objects-control pickups; do
+  if [ "$variant" = pickups ]; then with_pickups=1; else with_pickups=0; fi
+  MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS="$with_pickups" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
   python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source "$stage/manifold" --wad "$WAD" --out "$stage/$variant"
 done
 gdk=""
@@ -42,7 +42,7 @@ assert s.count(pat)>=2
 pathlib.Path(sys.argv[2]).write_text(s.replace(pat,'-fno-lto'))
 PY
 mkdir -p "$RUNNER_TEMP/m12-pair"
-for variant in control objects; do
+for variant in objects-control pickups; do
   test -e "$stage/$variant/src/math3D.h" || ln -s math3d.h "$stage/$variant/src/math3D.h"
   make -C "$stage/$variant" -f "$stage/portable.gen" -j2 release \
     OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -52,9 +52,12 @@ for variant in control objects; do
 done
 (cd "$RUNNER_TEMP/m12-pair" && sha256sum M12-*.bin) > "$RUNNER_TEMP/m12-pair/SHA256SUMS.txt"
 cat > "$RUNNER_TEMP/m12-pair/LEIA-ME.txt" <<'TXT'
-M12-control-H32.bin: E1M1 M11 musical, sem objetos adicionados.
-M12-objects-H32.bin: mesma base, com sprites e THINGS estaticas da E1M1.
-Ambas: H32, HUD DOOM, musica XGM. Objetos ainda sao apenas visuais.
-Testar as duas no mesmo percurso; ROMs experimentais, console nao validado.
+M12-objects-control-H32.bin: M12 visual aprovada, sem coleta (controle).
+M12-pickups-H32.bin: mesma M12 com coleta de itens e contadores no HUD.
+Ambas: H32, HUD DOOM, musica XGM, sprites estaticos completos.
+Itens sao coletados por proximidade dentro da mesma celula convexa.
+Kits medicos exigem saude inferior a 100; barris/lampadas nao sao coletaveis.
+Teste recolher municao/bonus, veja numeros HUD e desaparecimento do item.
+ROMs experimentais: nao publicar como release estavel sem aprovacao.
 TXT
 echo 'M12: only 2 ROMs staged and built'
