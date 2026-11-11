@@ -57,3 +57,24 @@ Dois testes opt-in, sem mudar o padrão dos builds (`stage_rom.py`):
 Conclusão revisada: o culling explica a perda de teto e piso (buracos grandes e azuis do controle). O resíduo que sobra no all-leaves é outro mecanismo, de faces de degrau (portal) no meio da coluna. Próximo passo: nas posições da seção 2, listar as paredes de portal dos dois lados do degrau e verificar qual lado deveria desenhar a face entre os pisos.
 
 Scripts novos em `experiments/DOOM_Manifold_E1M1/tools/m13/`: `span.lua` (registra quadro, linhas abertas, vão, posição do jogador).
+
+## 7. Causa mais provável e ROM de teste
+
+**Testes com uma condição de rejeição desligada por vez** (`MANIFOLD_BSP_CULL_OFF`, controle com 7191 quadros de passeio):
+
+| Teste desligado | Quadros com buraco | Média de linhas abertas | Média de células |
+|---|---|---|---|
+| Nenhum (controle) | 3857 | 984 | 7,0 |
+| `rnx` | 2359 | 533 | 8,2 |
+| `lnx` | 2318 | 468 | 8,6 |
+| `far`, `front`, `empty`, `cols` | 3850 a 3940 | ~1000 | 7,2 a 8,7 |
+| **`rnx,lnx` juntos** | **626** | **6,9** | **9,3** |
+| All-leaves (referência) | 379 | 3,1 | 42,6 |
+
+As duas condições de semiplano lateral de `bsp_box_visible()` são as que rejeitam células cujas colunas ainda estavam abertas. Desligá-las juntas reduz o buraco quase ao nível do all-leaves, com custo de ~2 células por quadro em vez de ~35. A álgebra dos semiplanos parece correta à primeira vista, então a causa exata da rejeição indevida ainda não foi achada. Já descartados: overflow de 16 bits em `project_and_adjust_x` (`lsl.w #5`, opção `MANIFOLD_PROJ_FIX`, sem efeito) e escala da tabela de recíprocos (confere: `65536/i`).
+
+**No spawn (parado, 1798 quadros):** o controle tem buraco em 1441 quadros; o ROM de teste não tem nenhum.
+
+**ROM de teste:** `claudio-m13-sides-off-h40.bin` (H40, jogável, sem tour e sem câmeras fixas; construído com `MANIFOLD_BSP=1 MANIFOLD_BSP_CULL_OFF=rnx,lnx` e o resto das flags do M13 A/B). Tag na tela: `CLAUDIO M13 SIDES`. SHA-256 no envio. Não é fix definitivo: é um desligamento conservador de rejeição, que visita mais células.
+
+Para o console, o que medir: buracos azuis no passeio externo, mesmo ponto do M13.2 e FPS com a mesma câmera contra o `werk-m13-bsp-baseline-h40`.
