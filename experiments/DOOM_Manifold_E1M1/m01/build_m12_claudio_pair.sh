@@ -11,9 +11,9 @@ stage="$RUNNER_TEMP/manifold-m12-claudio-$GITHUB_RUN_ID"
 python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage"
 DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
 test -s res/r25-e1m1.vgm
-for variant in h32 h40; do
-  if [ "$variant" = h40 ]; then width=0; else width=1; fi
-  MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32="$width" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
+for variant in h40-control h40-fixed; do
+  if [ "$variant" = h40-fixed ]; then bsp_fix=1; doom_blocking=1; else bsp_fix=0; doom_blocking=0; fi
+  MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_BSP_PRECISION="$bsp_fix" MANIFOLD_DOOM_BLOCKING="$doom_blocking" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
   python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source "$stage/manifold" --wad "$WAD" --out "$stage/$variant"
 done
 gdk=""
@@ -42,21 +42,22 @@ assert s.count(pat)>=2
 pathlib.Path(sys.argv[2]).write_text(s.replace(pat,'-fno-lto'))
 PY
 mkdir -p "$RUNNER_TEMP/m12-claudio"
-for variant in h32 h40; do
+for variant in h40-control h40-fixed; do
   test -e "$stage/$variant/src/math3D.h" || ln -s math3d.h "$stage/$variant/src/math3D.h"
   make -C "$stage/$variant" -f "$stage/portable.gen" -j2 release \
     OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
     NM="${tc}nm" OBJCPY="${tc}objcopy"
   test -s "$stage/$variant/out/rom.bin"
-  cp "$stage/$variant/out/rom.bin" "$RUNNER_TEMP/m12-claudio/m12stable-${variant}.bin"
+  cp "$stage/$variant/out/rom.bin" "$RUNNER_TEMP/m12-claudio/m12-${variant}.bin"
 done
-(cd "$RUNNER_TEMP/m12-claudio" && sha256sum m12stable-*.bin) > "$RUNNER_TEMP/m12-claudio/SHA256SUMS.txt"
+(cd "$RUNNER_TEMP/m12-claudio" && sha256sum m12-*.bin) > "$RUNNER_TEMP/m12-claudio/SHA256SUMS.txt"
 cat > "$RUNNER_TEMP/m12-claudio/LEIA-ME.txt" <<'TXT'
-M12 Claudio: renderer BSP, camera estavel e colisao de raio 16.
-m12stable-h32.bin: M12 Claudio H32 musical, candidata.
-m12stable-h40.bin: M12 Claudio H40 musical, candidata.
-Apenas duas ROMs jogaveis para testes de flicker e velocidade em hardware.
-Nao incluem nossas THINGS, pickups ou portas. Sao um teste isolado de renderer.
-Comparar ao M11music H32 de referencia; preservar release.
+M12 H40 control vs corrected. Both: BSP renderer, stable view,
+radius 16, music, Doom HUD, same E1M1, no items or doors.
+m12-h40-control.bin: original Claudio H40, as previously tested in BlastEm.
+m12-h40-fixed.bin: signed 32-bit BSP frustum coefficients (scaled)
+and collision honoring DOOM LINEDEF BLOCKING flag for windows.
+TEST: outside intermittent missing walls/triangles, passage through
+spawn room window, and FPS. No physical hardware validation yet.
 TXT
-echo 'M12 Claudio: two renderer ROMs staged and built'
+echo 'M12 H40: two strictly comparable ROMs staged and built'
