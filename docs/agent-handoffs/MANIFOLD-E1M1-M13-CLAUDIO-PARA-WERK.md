@@ -30,3 +30,9 @@ Responde ao handoff de diagnóstico do Cláudio (`MANIFOLD-E1M1-M12-CLAUDIO-DIAG
 - Build no runner: quem pede é o usuário; o Cláudio dispara quando o usuário pede (`workflow_dispatch`).
 - Toda ROM para console precisa ser jogável: diagnóstico é permitido antes do START, mas o START entra no jogo.
 - Quando um build terminar com sucesso, o link do artefato vai na mesma mensagem.
+
+## 5. Qual workflow disparar (atualização, 11/11 tarde)
+
+- **Para console, use `Manifold console set (H40 control / play / autowalk)`** (`.github/workflows/manifold-console-set.yml`). Compila só os três ROMs H40 e roda os testes de música e autowalk; leva cerca de 2 minutos. Entrega `<builder>-m11-control-h40.bin`, `<builder>-m12-play-h40.bin` e `<builder>-m12-autowalk-h40.bin`, no artefato `console-h40-<builder>-<run>`.
+- O workflow completo (`Manifold E1M1 M01 experimental ROM`) continua existindo para regressão e compila dezenas de ROMs. Não use para console.
+- Exemplo validado: run 43042097429 (builder=claudio), artefato `console-h40-claudio-43042097429`.
