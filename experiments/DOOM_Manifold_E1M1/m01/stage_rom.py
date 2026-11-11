@@ -2004,6 +2004,48 @@ void manifold_diag_clear(void) {
     p.write_text(s2)
     print("M13.3 marker-clear diagnostic enabled")
 
+def m13_fall_snap(out):
+    """M13.3 candidate: floor following on steps and accelerating fall.
+
+    game.c lowers the eye by a fixed FIX32(8) per frame toward the rest height
+    of the current sector group. On a staircase the eye lags the floor, so the
+    player seems to float along the diagonal while the eye falls at a constant
+    slow rate. This patch snaps down any drop up to FIX32(24) (the Doom step
+    height) and accelerates longer falls from FIX32(4) by FIX32(2) per frame to
+    a FIX32(32) cap. Opt-in with MANIFOLD_FALL=1 until measured on the console.
+    """
+    p=out/"src/game.c"
+    s=p.read_text()
+    old="""    if(cur_player_pos.z > rest_player_pos) {
+        cur_player_pos.z -= FIX32(8);
+    } else if (cur_player_pos.z < rest_player_pos) {
+        cur_player_pos.z = rest_player_pos;
+    }"""
+    if s.count(old)!=1:
+        raise ValueError("M13.3 fall: vertical block moved")
+    new="""    {
+        /* M13.3: step-down snap up to Doom step height, then accelerating fall */
+        static s32 fall_vel = 0;
+        s32 drop = cur_player_pos.z - rest_player_pos;
+        if (drop > 0) {
+            if (drop <= FIX32(24)) {
+                cur_player_pos.z = rest_player_pos;
+                fall_vel = 0;
+            } else {
+                fall_vel = fall_vel < FIX32(4) ? FIX32(4) : fall_vel + FIX32(2);
+                if (fall_vel > FIX32(32)) fall_vel = FIX32(32);
+                cur_player_pos.z -= fall_vel;
+                if (cur_player_pos.z < rest_player_pos) cur_player_pos.z = rest_player_pos;
+            }
+        } else {
+            fall_vel = 0;
+            if (drop < 0) cur_player_pos.z = rest_player_pos;
+        }
+    }"""
+    s=s.replace(old,new,1)
+    p.write_text(s)
+    print("M13.3 fall: step snap and accelerating fall enabled")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2594,6 +2636,8 @@ def stage(src, wad, out, control=False):
             m13_bsp_far_fog(out)
         if os.environ.get("MANIFOLD_BSP_ALL_LEAVES","0")=="1":
             m13_bsp_all_leaves_diagnostic(out)
+    if os.environ.get("MANIFOLD_FALL","0")=="1":
+        m13_fall_snap(out)
     if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
         stable_view(out)
     if os.environ.get("MANIFOLD_RADIUS","0")=="1":

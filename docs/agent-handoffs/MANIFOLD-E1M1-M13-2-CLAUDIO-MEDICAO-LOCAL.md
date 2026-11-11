@@ -115,3 +115,15 @@ Observações:
 - O relatório `e1m1-stage.json` continua com o rótulo "E1M1" mesmo quando o mapa é outro; é só rótulo.
 - O passeio automático é o do E1M1, então no E1M9 ele anda aleatoriamente e não cobre o mesmo trajeto.
 - O E1M9 mostrou outro defeito visível: listras verticais fortes em várias paredes. Não investigado; pode ser outro problema de coluna de textura.
+
+## 11. Feedback do console: E1M9 renderiza certo; altura da câmera e queda
+
+- Usuário: no E1M9 o render está correto (sem o defeito), então o E1M9 não é um caso do defeito de render. A medição de quadros com buraco no controle do E1M9 (seção 10) aparece aqui como resíduo pequeno, invisível na prática. Isso é coerente com o ROM sides-off.
+- Câmera alta demais em todos os mapas: aceito por enquanto.
+- Gravidade: ao descer escadas, o personagem flutua na diagonal e cai devagar, a cerca de 0,1 g. O resto está bom.
+
+**Causa no código** (`game.c`, bloco da altura de repouso): a altura do olho cai de forma fixa, `FIX32(8)` por quadro, até a altura de repouso do grupo de setores atual. Numa escada, o olho fica atrás do piso e a queda é constante e lenta. Não há aceleração.
+
+**Candidato** (`MANIFOLD_FALL=1`, ROM `claudio-m13-e1m9-fall-h40.bin`): acompanha o piso em degraus de até `FIX32(24)` (altura de degrau de Doom) e acelera quedas maiores, de 4 até 32 por quadro. Não consegui reproduzir a flutuação na MAME, porque o passeio automático quase não desce escadas. A verificação é no console.
+
+Registrado aqui e no commit seguinte.
