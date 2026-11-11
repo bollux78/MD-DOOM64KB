@@ -78,3 +78,17 @@ As duas condições de semiplano lateral de `bsp_box_visible()` são as que reje
 **ROM de teste:** `claudio-m13-sides-off-h40.bin` (H40, jogável, sem tour e sem câmeras fixas; construído com `MANIFOLD_BSP=1 MANIFOLD_BSP_CULL_OFF=rnx,lnx` e o resto das flags do M13 A/B). Tag na tela: `CLAUDIO M13 SIDES`. SHA-256 no envio. Não é fix definitivo: é um desligamento conservador de rejeição, que visita mais células.
 
 Para o console, o que medir: buracos azuis no passeio externo, mesmo ponto do M13.2 e FPS com a mesma câmera contra o `werk-m13-bsp-baseline-h40`.
+
+## 8. Feedback do console no ROM sides-off: buracos que mudam com o passo
+
+O usuário viu, no `claudio-m13-sides-off-h40`, paredes com altura correta e céu atrás, mas no espaço aberto faltam trechos do cenário, em azul-escuro. Ao andar um passo para frente ou para trás, o trecho volta, e ao virar também muda.
+
+**Causa provável: o framebuffer não é limpo.** O renderer só limpa `bmp_buffer_write` no modo wireframe e no debug (`game.c:127`, `draw.c:757`). Num span de coluna que nenhum desenho pinta neste quadro, aparece o conteúdo de dois quadros antes, que depende da posição. Por isso o buraco aparece e some ao andar um passo. Isso confirma e completa a nota do handoff M12 sobre os dois buffers.
+
+**Teste de marcador (`MANIFOLD_CLEAR_DIAG=1`):** limpa o buffer com `0xFFFF` a cada quadro. Nas capturas do passeio, as áreas que ficam com essa cor são as que nenhum desenho cobriu. Atenção: no palette atual, o índice `F` também é azul-escuro, a mesma cor do preenchimento de névoa (`0x1111`). O marcador por si não separa os dois casos, então a leitura exige uma cor de marcador distinta.
+
+**Teste de névoa por quadro (`MANIFOLD_CLEAR_VALUE=0x1111`):** ROM `claudio-m13-sides-clearfog-h40.bin`. Limpa o buffer com a mesma cor da névoa em todo quadro. Se o buraco some ou fica fixo, o mecanismo é o do buffer. Se continua variando com o passo, a causa é outra.
+
+**Ainda não resolvido:** o que não é pintado. Para corrigir de verdade, falta achar qual desenho deixa de cobrir cada span (piso, teto ou parede) nas posições do passeio. O ROM de névoa só torna o buraco visível e estável; não o elimina.
+
+**Para o console, comparar:** `claudio-m13-sides-off-h40` (v1) e `claudio-m13-sides-clearfog-h40` (v2) no mesmo ponto. Anotar se o azul fica parado na v2 e se o FPS cai.

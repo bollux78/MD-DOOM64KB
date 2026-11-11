@@ -1974,6 +1974,36 @@ def m13_proj_fix(out):
     p.write_text(s)
     print("M13.3 projection widened to 32-bit")
 
+def m13_clear_diag(out):
+    """M13.3 diagnostic only: clear the write buffer to a marker every frame.
+
+    The renderer never clears bmp_buffer_write during play (only wireframe and
+    debug paths do), so a column span that no draw paints shows the buffer from
+    two frames earlier. This patch paints the write buffer with marker index
+    0xFFFF first, so any pixel no draw covers shows as that marker. Not a fix.
+    """
+    d=out/"src/draw.c"
+    ds=d.read_text()
+    colour=os.environ.get("MANIFOLD_CLEAR_VALUE","0xFFFF")
+    ds+="""
+/* M13.3 diagnostic: clear the write buffer before the BSP render (value via MANIFOLD_CLEAR_VALUE) */
+void manifold_diag_clear(void) {
+    for (u16 a = 0; a < RENDER_WIDTH; a++) {
+        u16* dst = (u16*)(bmp_buffer_write + buf_column_offset_table[a]);
+        for (u16 r = 0; r < SCREEN_HEIGHT; r++) { dst[r] = %s; }
+    }
+}
+""" % colour
+    d.write_text(ds)
+    p=out/"src/portal.c"
+    s2=p.read_text()
+    anchor="void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame) {"
+    if s2.count(anchor)!=2 and s2.count(anchor)!=1: raise ValueError("clear diag: anchor count %d"%s2.count(anchor))
+    s2=s2.replace("    manifold_bsp_cells = 0;\n","    manifold_bsp_cells = 0;\n    manifold_diag_clear();\n",1)
+    s2=s2.replace("void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame);","void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame);\nvoid manifold_diag_clear(void);",1)
+    p.write_text(s2)
+    print("M13.3 marker-clear diagnostic enabled")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2553,6 +2583,8 @@ def stage(src, wad, out, control=False):
             m13_bsp_normal_precision(out)
         if os.environ.get("MANIFOLD_BSP_FILL_DIAG","0")=="1":
             m13_fill_span_diag(out)
+        if os.environ.get("MANIFOLD_CLEAR_DIAG","0")=="1":
+            m13_clear_diag(out)
         if os.environ.get("MANIFOLD_PROJ_FIX","0")=="1":
             m13_proj_fix(out)
         if os.environ.get("MANIFOLD_BSP_CULL_OFF"):
