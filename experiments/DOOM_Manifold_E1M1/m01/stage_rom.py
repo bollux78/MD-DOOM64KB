@@ -1708,10 +1708,9 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
 def m12_safe_sprite_raster(out):
     """Diagnostic M12-only portable RLE sprite rasterizer.
 
-    Avoids upstream self-modifying 68000 sprite scaler AND its per-column
-    y-occlusion clip buffer. This is intentionally NOT a final renderer:
-    it can overdraw objects behind walls. If sprite silhouettes appear,
-    the test isolates sprite RLE/scale vs portal clipping.
+    Portable, low-cost version of the confirmed working C sprite path.
+    Restores the portal clip buffer and replaces per-pixel divisions with
+    fixed-point stepping plus a per-sprite vertical lookup table.
     """
     p=out/"src/draw.c"
     s=p.read_text()
@@ -1728,49 +1727,72 @@ def m12_safe_sprite_raster(out):
     replacement=r"""void draw_rle_sprite(s16 x1, s16 x2, s16 ytop, s16 ybot,
     u16 window_min, u16 window_max, clip_buf* clipping_buffer,
     const rle_sprite* obj, object_link obj_link, obj_type type, u16 sector) {
-    (void)clipping_buffer;
-    if (!obj || !obj->num_columns || x2 <= x1 || ybot <= ytop) return;
-    /* Safety clamps. This test intentionally ignores wall y-clipping,
-       to separate portal occlusion errors from decoding/raster errors. */
-    s16 xa = x1 > (s16)window_min ? x1 : (s16)window_min;
-    s16 xb = x2 < (s16)window_max ? x2 : (s16)window_max;
-    if (xa < 0) xa=0;
-    if (xb > RENDER_WIDTH) xb=RENDER_WIDTH;
-    s16 ya = ytop < 0 ? 0 : ytop;
-    s16 yb = ybot > SCREEN_HEIGHT ? SCREEN_HEIGHT : ybot;
-    if (xb <= xa || yb <= ya) return;
-    s32 dx=(s32)x2-x1, dy=(s32)ybot-ytop;
-    for (s16 x=xa; x<xb; x++) {
-        /* Decode one complete 64-pixel source column at a time. */
-        u16 sx=(u16)(((s32)(x-x1)*obj->num_columns)/dx);
-        if (sx>=obj->num_columns) sx=obj->num_columns-1;
-        const column* col=&obj->columns[sx];
-        u8 pixels[64];
-        memset(pixels,0,sizeof(pixels));
-        u16 pos=0,texpos=0;
-        for (u16 j=0; j<col->num_spans && j<64; j++) {
-            const u16 skip=col->spans[j*2], len=col->spans[j*2+1];
-            if (skip>64 || len>64 || pos+skip>64 || pos+skip+len>64) break;
-            pos+=skip;
-            for (u16 k=0;k<len;k++) pixels[pos+k]=col->texels[texpos+k];
-            pos+=len;
-            texpos+=len;
-        }
-        u8* dest=bmp_buffer_write+buf_column_offset_table[x];
-        for (s16 y=ya; y<yb; y++) {
-            s16 sy=(s16)(((s32)(y-ytop)*64)/dy);
-            if (sy>=0 && sy<64) {
-                u8 pix=pixels[sy];
-                if (pix) {
-                    /* A Manifold framebuffer column is two adjacent bytes,
-                       with each byte holding a pair of 4bpp pixels. */
-                    dest[y*2]=pix;
-                    dest[y*2+1]=pix;
-                }
+    if (!obj || obj->num_columns != 64 || x2<=x1 || ybot<=ytop) return;
+    s16 xa=x1>(s16)window_min ? x1 : (s16)window_min;
+    s16 xb=x2<(s16)window_max ? x2 : (s16)window_max;
+    if (xa<0) xa=0;
+    if (xb>RENDER_WIDTH) xb=RENDER_WIDTH;
+    s16 ya=ytop<0 ? 0 : ytop;
+    s16 yb=ybot>SCREEN_HEIGHT ? SCREEN_HEIGHT : ybot;
+    if (xb<=xa || yb<=ya) return;
+
+    /* Divisions only twice per sprite, NEVER per screen pixel. */
+    u32 dx=(u16)(x2-x1),dy=(u16)(ybot-ytop);
+    u32 xstep=((u32)64<<16)/dx, ystep=((u32)64<<16)/dy;
+    u32 xphase=(u32)(xa-x1)*xstep;
+    u32 yphase=(u32)(ya-ytop)*ystep;
+    /* Precompute scaled source rows once per sprite instead of per column.
+       SCREEN_HEIGHT is 144 in the current engine. */
+    u8 source_rows[SCREEN_HEIGHT];
+    for (s16 y=ya; y<yb; y++) {
+        u16 sy=(u16)(yphase>>16);
+        source_rows[y]=sy<64 ? sy : 63;
+        yphase+=ystep;
+    }
+    /* Avoid repeatedly RLE-decoding the same source column when upscaled. */
+    u8 pixels[64];
+    s16 cached_src=-1;
+    u8 hit_center=0;
+    for (s16 x=xa; x<xb; x++,xphase+=xstep) {
+        s16 sx=(s16)(xphase>>16);
+        if (sx>63) sx=63;
+        if (sx!=cached_src) {
+            cached_src=sx;
+            memset(pixels,0,sizeof(pixels));
+            const column* col=&obj->columns[sx];
+            u16 pos=0,texpos=0;
+            if (col->num_spans && (!col->spans || !col->texels)) continue;
+            for (u16 j=0;j<col->num_spans && j<64;j++) {
+                u16 skip=col->spans[j*2],len=col->spans[j*2+1];
+                if (skip>64 || len>64 || pos+skip+len>64) break;
+                pos+=skip;
+                for (u16 k=0;k<len;k++) pixels[pos+k]=col->texels[texpos+k];
+                pos+=len;
+                texpos+=len;
             }
         }
+        s16 col_top=ya,col_bot=yb;
+        /* Restore the portal visibility mask, so covered pixels do not
+           need raster work and objects cannot draw through solid walls. */
+        if (clipping_buffer) {
+            u8 clip_top=clipping_buffer->y_clip_buffer[x*2];
+            u8 clip_bot=clipping_buffer->y_clip_buffer[x*2+1];
+            if (col_top<clip_top) col_top=clip_top;
+            if (col_bot>clip_bot) col_bot=clip_bot;
+        }
+        if (col_bot<=col_top) continue;
+        u8* dest=bmp_buffer_write+buf_column_offset_table[x];
+        for (s16 y=col_top;y<col_bot;y++) {
+            u8 pix=pixels[source_rows[y]];
+            if (pix) {
+                /* 2 duplicated packed 4bpp pixels per framebuffer byte.
+                   One aligned 16-bit store paints both bytes of a column. */
+                ((u16*)dest)[y]=(u16)(((u16)pix<<8)|pix);
+            }
+        }
+        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2)) hit_center=1;
     }
-    if (x1<=RENDER_WIDTH/2 && x2>=RENDER_WIDTH/2) {
+    if (hit_center) {
         drawn_to_center_cols=type;
         sprite_on_center_col=obj_link;
         center_object_sector=sector;
@@ -1779,7 +1801,7 @@ def m12_safe_sprite_raster(out):
 }
 """
     p.write_text(s[:m.start()]+replacement+s[end:])
-    print("M12 C RLE raster test installed, portal y-clip temporarily bypassed")
+    print("M12 optimized C RLE sprite raster installed with portal y-clipping")
 
 def stage(src, wad, out, control=False):
     out=out.resolve()
