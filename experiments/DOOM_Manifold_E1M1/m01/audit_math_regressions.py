@@ -31,7 +31,7 @@ def bsp_reference_normal(sin: int, cos: int, half: int, screen_edge: int) -> int
 def test_x_reference_boundaries() -> None:
     # Cases which expose the original sign and 16-bit shift bugs.
     for x, inv_z in ((1024, 4096), (100, 40000), (32, 65535),
-                     (2048, 2048), (-1024, 4096)):
+                     (2048, 2048), (-2048, 4096)):
         legacy, exact = upstream_x(x, inv_z), reference_x(x, inv_z)
         assert legacy != exact, (x, inv_z, legacy, exact)
         print(f"X overflow/sign: x={x:5d} invz={inv_z:5d} old={legacy:6d} reference={exact:6d}")
