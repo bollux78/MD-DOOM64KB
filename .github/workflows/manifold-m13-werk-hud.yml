@@ -1,5 +1,5 @@
 name: Manifold M13 Werk VDP atomic A-B H40
-# Lean H40 A/B, two playable ROMs; corrected sky-generated source patch.
+# Lean H40 A/B, two playable ROMs; validated Python regex and newline fix.
 # The full regression workflow (manifold-e1m1-rom.yml) is unchanged.
 on:
   workflow_dispatch:
