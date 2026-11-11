@@ -889,6 +889,22 @@ def apply_doom_textures(out, lumps, cells, wad):
     print("doom textures:",len(names),"flats:",len(flats),"palette:",[hex(v) for v in tex["vdp_palette"]])
     return tex
 
+def m13_sky_merge_upper_wall(out):
+    """M13.2 DOOM sky-to-sky portal: suppress spurious upper wall.
+
+    The emitter tags high color 0xFE only when both sector ceiling flats
+    are F_SKY1. This branch must be tested independently of BSP precision.
+    The branch now draws sky ceiling into the old upper-wall screen region.
+    """
+    p=out/"src/portal.c";s=p.read_text()
+    old="            if(neighbor_ceil_height < ceil_height) {"
+    new="""            if(neighbor_ceil_height < ceil_height &&
+               map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_HIGH_COLOR_IDX] != 0xFE) {"""
+    if s.count(old)!=1:
+        raise ValueError("M13 sky merge: upper-step test moved")
+    p.write_text(s.replace(old,new,1))
+    print("M13 DOOM sky merging: upper walls suppressed on F_SKY1/F_SKY1 portals")
+
 def textured_portal_steps(out):
     """Upper/lower portal walls (steps, door frames, window sills) were only
     textured for DOOR/LIFT groups. The emitter now encodes a texture index
@@ -2396,6 +2412,8 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
         tex=apply_doom_textures(out,map_lumps,cells,wad)
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
+    if os.environ.get("MANIFOLD_SKY_MERGE","0")=="1":
+        m13_sky_merge_upper_wall(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
