@@ -937,6 +937,46 @@ def keep_overlays_off_sky(out):
     g.write_text(gs)
     print("console/fps moved to top border")
 
+def hud_fps_and_build_tag(out):
+    """M13: show FPS and the ROM name on the black band under the HUD bar
+    (BG_B row 26), not in the top border. The counter is text on the
+    background plane, not a sprite, so it does not touch the 3D view.
+    showStats() is replaced whole so it does not depend on earlier layouts.
+    MANIFOLD_BUILD_TAG (set by the workflow) is the label, e.g. CLAUDIO M12 PLAY H40.
+    """
+    tag=os.environ.get("MANIFOLD_BUILD_TAG","MANIFOLD").upper()
+    if len(tag)>28 or any(not (32<=ord(ch)<127) or ch in '"\\' for ch in tag):
+        raise ValueError(f"bad MANIFOLD_BUILD_TAG: {tag!r}")
+    g=out/"src/game.c"; s=g.read_text()
+    start=s.find("void showStats() {")
+    if start<0: raise ValueError("showStats not found")
+    end=s.find("\n}\n",start)
+    if end<0: raise ValueError("showStats end not found")
+    end+=3
+    new=f'''#define MANIFOLD_BUILD_TAG "{tag}"
+static void manifold_hud_text(const char *t, u16 x, u16 y) {{
+    while (*t) {{
+        VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, y);
+        t++;
+    }}
+}}
+
+/* M13: FPS (left) and ROM name (right) on row 26, under the HUD bar.
+   Row 27 is outside the visible 224-line frame in H40, so it is not used. */
+void showStats() {{
+    char num[16];
+    fix32ToStr(SYS_getFPSAsFloat(), num, 1);
+    VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
+    manifold_hud_text("FPS ", 1, 26);
+    manifold_hud_text(num, 5, 26);
+    u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
+    manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
+}}
+'''
+    s=s[:start]+new+s[end:]
+    g.write_text(s)
+    print(f"FPS on HUD band, build tag {tag!r}")
+
 def scale_light_distances(out):
     """Upstream lighting bands (mid 150 / dark 350 / fade 400 units) suit its
     small test maps. In E1M1 walls beyond 400 units hit the FADE band, which
@@ -2090,7 +2130,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
