@@ -1841,6 +1841,37 @@ void manifold_fill_open(u16 a, u16 b) {
     d.write_text(ds)
     print("BSP-ordered renderer installed, far =",far)
 
+def m13_bsp_normal_precision(out):
+    """M13.2 G-02: preserve full BSP frustum normal signs.
+
+    Original s16 normals wrap after multiplying fix16 sine/cosine by a
+    render-column offset. Shift 12 bits *after* wide multiplication, then
+    keep scaled coefficients in s32; bounding-box dot products stay
+    comfortably within signed 32-bit for E1M1 coordinates.
+    """
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="static s16 bsp_rnx, bsp_rny, bsp_lnx, bsp_lny;"
+    if s.count(old)!=1:
+        raise ValueError("BSP precision: expected normal declaration once")
+    s=s.replace(old,"static s32 bsp_rnx, bsp_rny, bsp_lnx, bsp_lny;",1)
+    updates=(
+        ("bsp_rnx = (RENDER_WIDTH/2) * angleSin16 - hi * angleCos16;",
+         "bsp_rnx = ((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)hi * angleCos16) >> 12;"),
+        ("bsp_rny = -(RENDER_WIDTH/2) * angleCos16 - hi * angleSin16;",
+         "bsp_rny = (-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)hi * angleSin16) >> 12;"),
+        ("bsp_lnx = (RENDER_WIDTH/2) * angleSin16 - lo * angleCos16;",
+         "bsp_lnx = ((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)lo * angleCos16) >> 12;"),
+        ("bsp_lny = -(RENDER_WIDTH/2) * angleCos16 - lo * angleSin16;",
+         "bsp_lny = (-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)lo * angleSin16) >> 12;"),
+    )
+    for old,new in updates:
+        if s.count(old)!=1:
+            raise ValueError("BSP precision: expected "+old)
+        s=s.replace(old,new,1)
+    p.write_text(s)
+    print("M13 BSP precision: frustum normals now correctly scaled s32")
+
 def stable_view(out):
     """MANIFOLD_STABLE_VIEW=1. Measured in MAME: standing still, the idle
     'breathing' bob changes ~1/3 of the 3D pixels every frame (15 distinct
@@ -2383,6 +2414,8 @@ def stage(src, wad, out, control=False):
         install_e1m1_music(out)
     if os.environ.get("MANIFOLD_BSP","0")=="1":
         bsp_order_renderer(out)
+        if os.environ.get("MANIFOLD_BSP_PRECISION","0")=="1":
+            m13_bsp_normal_precision(out)
     if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
         stable_view(out)
     if os.environ.get("MANIFOLD_RADIUS","0")=="1":
