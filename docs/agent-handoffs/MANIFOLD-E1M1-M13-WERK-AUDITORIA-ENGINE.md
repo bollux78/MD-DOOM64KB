@@ -48,6 +48,12 @@ add.w #32, %0
 - Esta é **uma falha de faixa de representação**, e não uma afirmação de qual fotografia ela explica. O caminho do renderer utiliza esse projetor também após near clipping. Consertar isoladamente com aritmética `s32` e recíproco `u16`, saturando antes de converter a coordenada de volta para `s16`. Comparar a projeção contra referência numérica, sobretudo para `x∈{-2048,-1024,-1,0,1,1024,2048}` e `z_recip∈{1,32767,32768,65535}`.
 - Corrigir este defeito **em rodada posterior ao teste G-01**, sem confundir mudanças de clipping e projeção.
 
+### G-04c — projeção vertical: recíproco sem sinal passado como `s16` (CONFIRMADO na assinatura)
+
+**Local:** `src/math3d.c`, `project_and_adjust_y_fix(s16 y, s16 z_recip)`: recebe os mesmos `u16 z_recip_v1/v2` de `src/portal.c` como `s16` e faz `s32 const4RyMulRecipZ = const4Ry * z_recip;`. Portanto, quando o recíproco é maior que 32767, o sinal do fator de perspectiva muda; isso também pode inverter a ordem visual entre topo e base de uma parede. A multiplicação seguinte por 72 na assembly pode exceder 32 bits caso seja reescrita ingenuamente em C; usar intermediários de 64 bits no modelo de referência e escolher um caminho 68000 otimizado e saturado ao portar.
+
+**Prioridade:** tão alta quanto G-04b. Para comparação visual, corrigir projeção X e Y em *um único teste de modelo de projeção* (mesma definição `unsigned reciprocal`), mantendo o recorte e BSP constantes, e depois separar X/Y se surgir regressão.
+
 ### G-05 — lógica de dados WAD e células BSP (RISCO DE INTEGRAÇÃO)
 
 Auditar `emit_portal_map.py` e gerador de folhas: coordenadas, winding, arestas compartilhadas, alturas em unidades corretas, flags DOOM BLOCKING e correspondência `LINEDEF/SIDEDEF/SECTOR`. Testes determinísticos devem exigir que cada portal `A→B` tenha aresta reversa geométrica no destino, e que upper/lower use a mesma aresta recortada. Reportar lacunas `allow_gaps=True`, não tratá-las como portais válidos.
