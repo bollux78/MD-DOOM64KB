@@ -90,3 +90,9 @@ Em ordem:
 - **Não explicado:** o ROM H32 do runner (`a3deb8…`) passa localmente no mesmo BlastEm 1.0.0 sem o fix. Ou o caminho de execução depende de algo do host/config do runner, ou o build do runner difere do local (toolchain). O próximo run mede isso com logs e config do emulador (`blastem-diag-<run>`).
 - Workflow: variante `m12stableaw40` (H40 autowalk) adicionada ao teste de música; logs por execução e config do BlastEm vão para o artefato `blastem-diag-<run>` (`if: always()`).
 - Decisão do usuário (11/11): seguir com **H40** como modo padrão do M12.
+
+## 9. Padrão do M12 agora é H40 (11/11, decisão do usuário)
+
+- **ROM de teste do M12 para console:** `m12stable-h40.bin` (base sem autowalk) e `m12stableaw-h40.bin` (autowalk de 3601 quadros). Ambos estão no artefato `manifold-e1m1-roms-43029620433`, do run verde https://github.com/bollux78/MD-DOOM64KB/actions/runs/43029620433 (todos os testes de música e autowalk passaram).
+- As variantes `-h32` continuam no workflow só para comparação. O `stage_rom.py` mantém H32 como padrão global; a troca foi feita por variante, para não mexer no ROM principal nem nos controles, que não validamos em H40.
+- Teste de console pendente: `m12stable-h40.bin` contra `m11music-h32.bin` (controle), olhando piscar parado e empurrando parede, e FPS em escadas.
