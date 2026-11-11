@@ -295,7 +295,16 @@ def blocking_segments(lumps,cells):
         for w in c["walls"]:
             a,b=pt(w["a"]),pt(w["b"])
             if a==b: continue
-            if w["neighbor"]<0: solid.append((a,b,None))
+            # DOOM LINEDEFS flag 0x0001 is BLOCKING even on a
+            # two-sided opening (e.g. windows). Vanilla Manifold treated
+            # these as regular portals and let the player cross the sill.
+            is_blocked_linedef=(
+                __import__("os").environ.get("MANIFOLD_DOOM_BLOCKING","0")=="1"
+                and w.get("line") is not None
+                and (lumps["LINEDEFS"][w["line"]][2] & 1)!=0
+            )
+            if w["neighbor"]<0 or is_blocked_linedef:
+                solid.append((a,b,None))
             else:
                 n=cells[w["neighbor"]]
                 if abs(floor(c)-floor(n))>=LEDGE_DOOM:
