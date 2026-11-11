@@ -1064,6 +1064,68 @@ static void m13_hud_replay_tiles(void) {
     p.write_text(s)
     print("M13 Werk VRAM HUD diagnostic: replay 8 static tiles each game update")
 
+def m13_werk_vdp_atomic(out):
+    """M13.1 A/B: keep V-Int bitmap DMA and H-Int register writes from
+    interrupting SGDK multiwrite VDP operations on HUD/sky.
+
+    Interrupt masking is ONLY around the static initialization copies,
+    HUD row tilemaps and sky's once-per-angle BG_B update. No recurring
+    HUD replay, no changes to renderer/viewport/SGDK or main VBlank DMA.
+    """
+    p=out/"src/doom_statusbar.c"
+    if not p.is_file(): raise ValueError("M13 atomic needs Doom HUD")
+    s=p.read_text()
+    src="    VDP_loadTileData((const u32 *)hudw_tiles, manifold_hud_base, HUDW_NTILES, CPU);"
+    dst="    VDP_waitDMACompletion();\n    SYS_disableInts(); /* M13: no HInt/VInt during initial HUD VRAM work */\n"+src
+    if s.count(src)!=1: raise ValueError("M13 HUD upload missing")
+    s=s.replace(src,dst,1)
+    src="    return free_tile_loc + doom_hud_vram_count;"
+    if s.count(src)!=1: raise ValueError("M13 HUD init return missing")
+    s=s.replace(src,"    SYS_enableInts();\n"+src,1)
+    # A changed HUD can involve several BG_B rows: guard the tilemap
+    # sequence while leaving status calculation outside the critical region.
+    src="static void dhud_draw_bar(void) {\n"
+    if s.count(src)!=1: raise ValueError("M13 HUD row function missing")
+    s=s.replace(src,src+"    SYS_disableInts();\n",1)
+    src="        VDP_setTileMapDataRect(BG_B, dhud_row, DHUD_X, DHUD_Y + r, HUDW_COLS, 1, HUDW_COLS, CPU);\n    }\n}"
+    if s.count(src)!=1: raise ValueError("M13 HUD row end missing")
+    s=s.replace(src,src[:-1]+"    SYS_enableInts();\n}",1)
+    # Important: init already masks interrupts; don't nest nested
+    # SYS_disableInts/SYS_enableInts in dhud_draw_bar during init.
+    # The init-time bar uses the same function, so temporarily keep
+    # the masking solely on the short row update and make the init
+    # sequence one large but non-nested critical section.
+    s=s.replace("    SYS_disableInts();\n    for (u8 r = 0; r < HUDW_ROWS; r++) {",
+                "    if (!m13_init_atomic) SYS_disableInts();\n    for (u8 r = 0; r < HUDW_ROWS; r++) {",1)
+    s=s.replace("    SYS_enableInts();\n}\n\nstatic void dhud_draw_margins",
+                "    if (!m13_init_atomic) SYS_enableInts();\n}\n\nstatic void dhud_draw_margins",1)
+    src="static u16 manifold_hud_base;"
+    if s.count(src)!=1: raise ValueError("M13 HUD base missing")
+    s=s.replace(src,"static u8 m13_init_atomic = 0;\n"+src,1)
+    src="    SYS_disableInts(); /* M13: no HInt/VInt during initial HUD VRAM work */"
+    s=s.replace(src,src+"\n    m13_init_atomic = 1;",1)
+    src="    SYS_enableInts();\n    return free_tile_loc + doom_hud_vram_count;"
+    if s.count(src)!=1: raise ValueError("M13 HUD final critical end missing")
+    s=s.replace(src,"    m13_init_atomic = 0;\n"+src,1)
+    p.write_text(s)
+
+    p=out/"src/manifold_sky.c"
+    s=p.read_text()
+    src="    for (u16 k = 0; k < {n}; k++) {{"
+    if s.count(src)!=1: raise ValueError("M13 sky tile loop missing")
+    s=s.replace(src,"    VDP_waitDMACompletion();\n    SYS_disableInts(); /* M13 sky initial VRAM upload + BG_B */\n"+src,1)
+    src="    sky_ready = 1; sky_last = -1;"
+    if s.count(src)!=1: raise ValueError("M13 sky init final missing")
+    s=s.replace(src,"    SYS_enableInts();\n"+src,1)
+    src="    sky_last = off;"
+    if s.count(src)!=1: raise ValueError("M13 sky update anchor missing")
+    s=s.replace(src,src+"\n    SYS_disableInts(); /* M13 per-angle BG_B tilemap writes */",1)
+    src="    SKY_CLEAR_BORDERS({band_top}, {rows});"
+    if s.count(src)!=1: raise ValueError("M13 sky update end missing")
+    s=s.replace(src,src+"\n    SYS_enableInts();",1)
+    p.write_text(s)
+    print("M13 Werk VDP atomic: HUD+sky main-thread writes protected from bitmap interrupts")
+
 def scale_light_distances(out):
     """Upstream lighting bands (mid 150 / dark 350 / fade 400 units) suit its
     small test maps. In E1M1 walls beyond 400 units hit the FADE band, which
@@ -2270,6 +2332,8 @@ def stage(src, wad, out, control=False):
             m13_werk_hud_timing(out)
         if os.environ.get("MANIFOLD_HUD_VRAM_REPAIR","0")=="1":
             m13_werk_hud_vram_repair(out)
+    if os.environ.get("MANIFOLD_VDP_ATOMIC","0")=="1":
+        m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
