@@ -425,6 +425,27 @@ def emit(lumps,cells,tex=None):
             ceilings[si]=heights[0]
             opened.append((si,floor,ceil,heights[0]))
     print("Temporarily opened closed/connected door-like sectors:",opened)
+    # M13 diagnostic only. Doom F_SKY1 is a sky portal, not a physical
+    # roof; test whether varying outdoor ceiling Z exposes a geometry bug.
+    # Keep ALL other sector parameters and BSP/portal topology identical.
+    # Do not change closed doors or non-sky ceilings.
+    sky_uniform=os.environ.get("MANIFOLD_SKY_CEIL_UNIFORM","0")=="1"
+    if sky_uniform:
+        sky_sectors=[
+            si for si,(floor,ceil,fl,ce,light,special,tag)
+            in enumerate(lumps["SECTORS"])
+            if _nm(ce)=="F_SKY1" and ceil>floor
+        ]
+        sky_heights=sorted({lumps["SECTORS"][si][1] for si in sky_sectors})
+        if len(sky_sectors)<2 or len(sky_heights)<2:
+            raise ValueError("M13 outdoor ceiling diagnostic needs varied sky heights")
+        target=sky_heights[-1]  # Never shorten a valid outdoor sightline.
+        for si in sky_sectors:
+            ceilings[si]=target
+        print("M13 OUTDOOR SKY CEILING DIAGNOSTIC: sky sectors",
+              len(sky_sectors),"original heights",sky_heights,
+              "unified height",target,"changed",
+              sum(lumps["SECTORS"][si][1]!=target for si in sky_sectors))
     if sky_merge:
         print("M13 SKY1 upper-wall suppression: edges",len(sky_merge_edges),
               "sector pairs",sorted(set((a,b) for a,b,_ in sky_merge_edges))[:32])
