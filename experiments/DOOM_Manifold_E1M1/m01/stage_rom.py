@@ -1755,7 +1755,15 @@ def stage(src, wad, out, control=False):
     tex=None
     if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
         tex=apply_doom_textures(out,map_lumps,cells,wad)
-    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
+    m12_things=None
+    if os.environ.get("MANIFOLD_OBJECTS","0")=="1":
+        if not tex:
+            raise ValueError("M12 static sprites require the DOOM map palette")
+        from m12_objects import generate, install_templates
+        sprite_c, templates, m12_things=generate(wad,map_lumps,cells,tex["vdp_palette"],point_inside)
+        (out/"src/m12_doom_objects.c").write_text(sprite_c)
+        install_templates(out,templates)
+    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things))
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
