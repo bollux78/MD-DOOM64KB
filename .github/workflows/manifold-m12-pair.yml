@@ -1,4 +1,4 @@
-name: Manifold M12 - two ROM comparison
+name: Manifold M12 - pickups vs static control
 on:
   push:
     branches: [exp-manifold-m12-objects]
@@ -16,15 +16,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Build control and objects
+      - name: Build approved objects control and pickup candidate
         shell: bash
         run: bash experiments/DOOM_Manifold_E1M1/m01/build_m12_pair.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: manifold-m12-control-vs-objects
+          name: manifold-m12-pickups-vs-control
           path: |
-            ${{ runner.temp }}/m12-pair/M12-control-H32.bin
-            ${{ runner.temp }}/m12-pair/M12-objects-H32.bin
+            ${{ runner.temp }}/m12-pair/M12-objects-control-H32.bin
+            ${{ runner.temp }}/m12-pair/M12-pickups-H32.bin
             ${{ runner.temp }}/m12-pair/SHA256SUMS.txt
             ${{ runner.temp }}/m12-pair/LEIA-ME.txt
           retention-days: 7
