@@ -21,7 +21,7 @@ MAX_WALLS=2048
 MAX_VERTICES=1024
 MAX_PORTALS=512
 
-def nodes_from_wad(path):
+def nodes_from_wad(path, map_name="E1M1"):
     data=Path(path).read_bytes()
     if len(data)<12 or data[:4] not in (b"IWAD",b"PWAD"):
         raise ValueError("bad WAD")
@@ -34,9 +34,9 @@ def nodes_from_wad(path):
         if pos+size>len(data):
             raise ValueError("invalid lump")
         entries.append((name(nm),pos,size))
-    starts=[i for i,x in enumerate(entries) if x[0]=="E1M1"]
+    starts=[i for i,x in enumerate(entries) if x[0]==map_name]
     if len(starts)!=1:
-        raise ValueError("ambiguous E1M1")
+        raise ValueError("ambiguous "+map_name)
     for nm,pos,size in entries[starts[0]+1:starts[0]+12]:
         if nm=="NODES":
             if size%struct.calcsize(NODE_FORMAT):

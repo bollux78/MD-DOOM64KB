@@ -2551,8 +2551,9 @@ def stage(src, wad, out, control=False):
         report={"source":UPSTREAM,"pin":PIN,"map":"upstream-control","control":True}
         (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
         return report
-    map_lumps=read_map(wad)
-    cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad),allow_gaps=True)
+    map_name=os.environ.get("MANIFOLD_MAP","E1M1")
+    map_lumps=read_map(wad,map_name)
+    cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad,map_name),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
     # Never synthesize an unsafe portal or mark this build geometry-validated.
     tex=None

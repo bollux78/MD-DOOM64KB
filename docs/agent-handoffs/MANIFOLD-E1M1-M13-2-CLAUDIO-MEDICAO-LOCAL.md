@@ -98,3 +98,20 @@ O usuário viu, no `claudio-m13-sides-off-h40`, paredes com altura correta e cé
 - O console confirmou que `claudio-m13-sides-clearfog-h40` piora o FPS e não elimina o defeito. Ele não é a solução e fica só como ferramenta de diagnóstico (`MANIFOLD_CLEAR_DIAG`, desligado por padrão).
 - O defeito continua sem localização: não sabemos qual desenho (piso, teto ou parede) deixa de cobrir os trechos no passeio externo.
 - Sugestão: comparar o ramo atual com a build corrigida do Werk, que o usuário considera boa, e bisseccionar as mudanças por flag. Isso é mais barato do que seguir instrumentando o renderer às cegas.
+
+## 10. O defeito não é só do E1M1
+
+Pipeline parametrizado por `MANIFOLD_MAP` (padrão E1M1). Medido com o mesmo passeio, 7191 quadros:
+
+| Build | E1M1 quadros com buraco (média de linhas) | E1M9 quadros com buraco (média de linhas) |
+|---|---|---|
+| Controle (culling ligado) | 3857 (984) | 3410 (913) |
+| Culling lateral desligado (`rnx,lnx`) | 626 (6,9) | 217 (1,1) |
+| All-leaves | 379 (3,1) | 33 (0,1) |
+
+O mesmo mecanismo aparece nos dois mapas. O ROM `claudio-m13-e1m9-sides-off-h40.bin` é o teste no E1M9 (sem tour, jogável, tag `CLAUDIO M13 E1M9 SIDES`).
+
+Observações:
+- O relatório `e1m1-stage.json` continua com o rótulo "E1M1" mesmo quando o mapa é outro; é só rótulo.
+- O passeio automático é o do E1M1, então no E1M9 ele anda aleatoriamente e não cobre o mesmo trajeto.
+- O E1M9 mostrou outro defeito visível: listras verticais fortes em várias paredes. Não investigado; pode ser outro problema de coluna de textura.
