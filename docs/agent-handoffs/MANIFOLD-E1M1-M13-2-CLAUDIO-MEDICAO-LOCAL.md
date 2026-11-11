@@ -127,3 +127,9 @@ Observações:
 **Candidato** (`MANIFOLD_FALL=1`, ROM `claudio-m13-e1m9-fall-h40.bin`): acompanha o piso em degraus de até `FIX32(24)` (altura de degrau de Doom) e acelera quedas maiores, de 4 até 32 por quadro. Não consegui reproduzir a flutuação na MAME, porque o passeio automático quase não desce escadas. A verificação é no console.
 
 Registrado aqui e no commit seguinte.
+
+## 12. Decisão do usuário: só a correção de paredes que piscam
+
+- A única correção de visão que vale aplicar é a de paredes que piscam ao se aproximar, já feita em versões anteriores (guardas de largura zero e de reciprocal).
+- As tentativas de melhorar a visão à distância (culling lateral desligado, all-leaves, limpeza do buffer) aumentaram a carga de CPU sem resultado aceitável. Ficam como diagnóstico, não como candidatas. Os ROMs `claudio-m13-sides-off-h40`, `claudio-m13-sides-clearfog-h40` e `claudio-m13-e1m9-sides-off-h40` não devem ser usados como base.
+- O ajuste de queda e degraus (`MANIFOLD_FALL`) não mexe na visão; é de gravidade e custa quase nada de CPU. É o único candidato desta rodada.
