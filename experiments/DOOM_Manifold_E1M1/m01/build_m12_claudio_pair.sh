@@ -57,10 +57,10 @@ for variant in h32 h40; do
       "${tc}nm" -n "$ELF" | python3 -c 'import sys; wanted=(0xE5EC,0x7F3E); rows=[]; [(rows.append((int(p[0],16),p[-1]))) for l in sys.stdin if (p:=l.split()) and len(p)>=3 and all(c in "0123456789abcdefABCDEF" for c in p[0])]; print("\\n".join("address 0x%X nearest symbol %s @ 0x%X"%(a, *(lambda q:(q[1],q[0]))(max((r for r in rows if r[0]<=a),default=(0,"none")))) for a in wanted))' || true
     fi
   fi
-  cp "$stage/$variant/out/rom.bin" "$RUNNER_TEMP/m12-pair/m12stable-${variant}.bin"
+  cp "$stage/$variant/out/rom.bin" "$RUNNER_TEMP/m12-claudio/m12stable-${variant}.bin"
 done
-(cd "$RUNNER_TEMP/m12-claudio" && sha256sum m12stable-*.bin) > "$RUNNER_TEMP/m12-pair/SHA256SUMS.txt"
-cat > "$RUNNER_TEMP/m12-pair/LEIA-ME.txt" <<'TXT'
+(cd "$RUNNER_TEMP/m12-claudio" && sha256sum m12stable-*.bin) > "$RUNNER_TEMP/m12-claudio/SHA256SUMS.txt"
+cat > "$RUNNER_TEMP/m12-claudio/LEIA-ME.txt" <<'TXT'
 M12-pickups-control-H32.bin: M12 com coleta APROVADA; portas permanentemente abertas.
 M12-doors-H32.bin: mesma M12 com quatro setores de porta inicialmente fechados.
 Ambas: H32, HUD DOOM, musica XGM, objetos e itens coletaveis.
