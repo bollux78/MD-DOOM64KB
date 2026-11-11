@@ -1,0 +1,32 @@
+name: Manifold M12 H40 stability A/B
+on:
+  push:
+    branches: [exp-manifold-m12-h40-stability]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/m01/**'
+      - '.github/workflows/manifold-m12-h40-stability.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build H40 control and precision-window fix
+        shell: bash
+        run: bash experiments/DOOM_Manifold_E1M1/m01/build_m12_claudio_pair.sh
+      - name: Upload only H40 control and fix
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifold-m12-h40-precision-window-ab
+          path: |
+            ${{ runner.temp }}/m12-claudio/m12-h40-control.bin
+            ${{ runner.temp }}/m12-claudio/m12-h40-fixed.bin
+            ${{ runner.temp }}/m12-claudio/SHA256SUMS.txt
+            ${{ runner.temp }}/m12-claudio/LEIA-ME.txt
+          retention-days: 7
+          if-no-files-found: error
