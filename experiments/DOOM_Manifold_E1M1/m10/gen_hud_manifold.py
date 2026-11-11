@@ -73,7 +73,8 @@ def single_palette(header_path, free_slots=5):
     keep = [i for i in range(1, 16) if i not in give]
     barmap = {i: i for i in range(16)}
     for i in give:
-        barmap[i] = min(keep, key=lambda j: d2(rgb(pal[i]), rgb(pal[j])))
+        # index 0 (backdrop black) is a valid target: a dark navy must not snap to the key-card blue
+        barmap[i] = min([0] + keep, key=lambda j: d2(rgb(pal[i]), (0, 0, 0) if j == 0 else rgb(pal[j])))
     # most used face colours not already well matched by kept bar colours
     fcols = sorted((i for i in range(1, 16) if fuse.get(i, 0)), key=lambda i: -fuse[i] * min(d2(rgb(fpal[i]), rgb(pal[j])) for j in keep))
     newpal = list(pal)

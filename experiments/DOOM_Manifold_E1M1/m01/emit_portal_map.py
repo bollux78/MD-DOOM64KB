@@ -120,7 +120,11 @@ def candidate(lumps,nodes,allow_gaps=False):
 
 def exact_candidate(lumps,nodes):
     import true_cells as T
-    merge=__import__("os").environ.get("MANIFOLD_MERGE","1")=="1"
+    bsp=__import__("os").environ.get("MANIFOLD_BSP","0")=="1"
+    # BSP-ordered renderer needs cells == BSP leaves (strict front-to-back order)
+    merge=__import__("os").environ.get("MANIFOLD_MERGE","0" if bsp else "1")=="1"
+    global _BSP_NODES
+    _BSP_NODES=nodes if bsp else None
     raw,tstats=T.true_cells(lumps,nodes,merge=merge)
     clockwise=__import__("os").environ.get("MANIFOLD_WINDING","cw")!="ccw"
     cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
@@ -237,6 +241,78 @@ def assign_wall_textures(lumps,cells):
             for t in (w["upper"],w["lower"],w["mid"]):
                 if t: names.add(t)
     return sorted(names)
+
+_BSP_NODES=None
+
+def bsp_tables(cells):
+    """Doom BSP for front-to-back cell order: 14 s16 per node =
+    x,y,dx,dy, right bbox (top,bottom,left,right), left bbox, right child, left child.
+    child >= 0: node index; child < 0: leaf, cell = -child-2 (-1: no cell)."""
+    leaf={c["ss"]:c["id"] for c in cells if c.get("ss",-1)>=0}
+    EMPTY=(-32768,32767,32767,-32768)          # top,bottom,left,right of nothing
+    def cell_box(cid):
+        xs=[round(w["a"][0]/SCALE) for w in cells[cid]["walls"]];ys=[round(w["a"][1]/SCALE) for w in cells[cid]["walls"]]
+        return (max(ys),min(ys),min(xs),max(xs))
+    def join(a,b): return (max(a[0],b[0]),min(a[1],b[1]),min(a[2],b[2]),max(a[3],b[3]))
+    boxes={}
+    def box(ch):
+        # bbox of the real cell polygons below this child (Doom's node boxes only
+        # cover SEGs, not the convex leaf area, so they are not conservative here)
+        if ch&0x8000:
+            cid=leaf.get(ch&0x7FFF,-1)
+            return cell_box(cid) if cid>=0 else EMPTY
+        if ch not in boxes:
+            n=_BSP_NODES[ch]
+            boxes[ch]=(box(n[12]),box(n[13]))
+        return join(*boxes[ch])
+    import sys
+    sys.setrecursionlimit(10000)
+    box(len(_BSP_NODES)-1)
+    out=[]
+    for i,n in enumerate(_BSP_NODES):
+        row=list(n[:4])+list(boxes[i][0])+list(boxes[i][1])
+        for ch in n[12:14]:
+            row.append(-(leaf.get(ch&0x7FFF,-1)+2) if ch&0x8000 else ch)
+        out.extend(row)
+    return out
+
+PLAYER_RADIUS=16          # Doom's player radius; must stay > NEAR_Z*sqrt(2) = 14.2
+BLOCK_MARGIN=24           # extra reach so a one-frame move cannot outrun the per-cell list
+LEDGE_DOOM=30             # runtime blocks rises >= (60<<4) in 2x-scaled heights
+
+def blocking_segments(lumps,cells):
+    """Per cell: solid walls and too-high ledges (of ANY cell) within reach.
+    Upstream Manifold expects collision_vertexes pre-inset by the editor; ours
+    were the raw walls, so the player could touch walls -> wall inside the
+    near plane -> NEAR_Z_CULLED -> undrawn columns -> stale double-buffer
+    flicker. Runtime keeps the player PLAYER_RADIUS away from these segments."""
+    from shapely.geometry import Polygon, LineString
+    S=lumps["SECTORS"]
+    floor=lambda c: S[c["doom_sector"]][0]
+    pt=lambda p:(round(p[0]/SCALE),round(p[1]/SCALE))
+    solid=[];ledges={}
+    for c in cells:
+        for w in c["walls"]:
+            a,b=pt(w["a"]),pt(w["b"])
+            if a==b: continue
+            if w["neighbor"]<0: solid.append((a,b,None))
+            else:
+                n=cells[w["neighbor"]]
+                if abs(floor(c)-floor(n))>=LEDGE_DOOM:
+                    ledges[tuple(sorted((a,b)))]=(a,b,max(floor(c),floor(n)))
+    segs=solid+list(ledges.values())
+    lines=[LineString([a,b]) for a,b,_ in segs]
+    offs=[0];flat=[]
+    for c in cells:
+        poly=Polygon([pt(w["a"]) for w in c["walls"]])
+        reach=PLAYER_RADIUS+BLOCK_MARGIN
+        for (a,b,high),ln in zip(segs,lines):
+            if high is not None and floor(c)+LEDGE_DOOM>high: continue   # on/near the high side: may walk off
+            if poly.distance(ln)<=reach:
+                L=max(1,round(math.hypot(b[0]-a[0],b[1]-a[1])))
+                flat.extend([a[0],a[1],b[0],b[1],L])
+        offs.append(len(flat)//5)
+    return offs,flat,segs
 
 def as_c_array(typ,name_,values,per_line=12):
     return f"static const {typ} {name_}[{len(values)}] = {{\n"+ "".join(
@@ -386,6 +462,13 @@ def emit(lumps,cells,tex=None):
     for x,y in collision_verts:
         text+=f"  {{.x={round(x/SCALE)},.y={round(y/SCALE)}}},\n"
     text+="};\n"
+    if _BSP_NODES is not None:
+        bt=bsp_tables(cells)
+        text+=f"const u16 e1_bsp_num_nodes = {len(bt)//14};\n"
+        text+="const s16 e1_bsp_nodes[] = {"+",".join(map(str,bt))+"};\n"
+    boffs,bflat,_=blocking_segments(lumps,cells)
+    text+="const u16 e1_block_offsets[] = {"+",".join(map(str,boffs))+"};\n"
+    text+="const s16 e1_block_segs[] = {"+",".join(map(str,bflat or [0]))+"};\n"
     pal_field=",.palette=(u16*)e1_palette" if tex else ""
     text+=f"""const portal_map e1m1_map = {{
   .num_sector_groups={len(lumps["SECTORS"])},

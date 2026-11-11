@@ -1335,6 +1335,337 @@ u16 manifold_autopilot_joy(u16 j) {{
     j.write_text(code)
     print("tour points:",len(pts))
 
+def player_radius_collision(out):
+    """Keep the player PLAYER_RADIUS (16) away from solid walls and ledges it
+    cannot climb. Root cause of the 'walls flicker when you touch them' bug:
+    the map's collision_vertexes are the raw walls (upstream insets them in
+    its editor), so a wall could get inside the 10-unit near plane, be
+    NEAR_Z_CULLED as a whole and leave its columns undrawn; the two display
+    buffers then alternate stale images. Also removes the x==wall ZERO DIVIDE."""
+    p=out/"src/collision.c"
+    s=p.read_text()
+    sig="collision_result check_for_collision_radius(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {\n"
+    if s.count(sig)!=1: raise ValueError("radius collision signature changed")
+    wrapper="""
+extern const u16 e1_block_offsets[] __attribute__((weak));
+extern const s16 e1_block_segs[] __attribute__((weak));
+extern const portal_map e1m1_map __attribute__((weak));
+#define MANIFOLD_R 16
+#define MANIFOLD_R2 (MANIFOLD_R*MANIFOLD_R)
+static u32 manifold_seg_d2(s16 px, s16 py, const s16* s) {
+    s16 ax = s[0], ay = s[1];
+    s16 ex = s[2] - ax, ey = s[3] - ay;
+    s16 dx = px - ax, dy = py - ay;
+    s32 t = (s32)dx * ex + (s32)dy * ey;
+    if (t <= 0) { return (u32)((s32)dx * dx + (s32)dy * dy); }
+    if (t >= (s32)ex * ex + (s32)ey * ey) {
+        s16 bx = px - s[2], by = py - s[3];
+        return (u32)((s32)bx * bx + (s32)by * by);
+    }
+    s32 cr = (s32)dx * ey - (s32)dy * ex;
+    if (cr < 0) { cr = -cr; }
+    u32 q = (u32)cr / (u16)s[4];
+    return q * q;
+}
+static u8 manifold_radius_blocked(s16 cx, s16 cy, s16 nx, s16 ny, u16 sect) {
+    const s16* s = &e1_block_segs[e1_block_offsets[sect] * 5];
+    u16 n = e1_block_offsets[sect + 1] - e1_block_offsets[sect];
+    for (; n; n--, s += 5) {
+        s16 lo = s[0] < s[2] ? s[0] : s[2], hi = s[0] < s[2] ? s[2] : s[0];
+        if (nx < lo - MANIFOLD_R || nx > hi + MANIFOLD_R) { continue; }
+        lo = s[1] < s[3] ? s[1] : s[3]; hi = s[1] < s[3] ? s[3] : s[1];
+        if (ny < lo - MANIFOLD_R || ny > hi + MANIFOLD_R) { continue; }
+        u32 dn = manifold_seg_d2(nx, ny, s);
+        if (dn >= MANIFOLD_R2) { continue; }
+        u32 dc = manifold_seg_d2(cx, cy, s);
+        if (dc < MANIFOLD_R2 && dn >= dc) { continue; }   /* already inside: may only back away */
+        return 1;
+    }
+    return 0;
+}
+static collision_result manifold_collision_inner(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector);
+collision_result check_for_collision_radius(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {
+    if (&e1m1_map && cur_portal_map == &e1m1_map) {
+        s16 cx = F32_toInt(curx), cy = F32_toInt(cury);
+        if (newx != curx && manifold_radius_blocked(cx, cy, F32_toInt(newx), cy, cur_sector)) { newx = curx; }
+        s16 mx = F32_toInt(newx);
+        if (newy != cury && manifold_radius_blocked(mx, cy, mx, F32_toInt(newy), cur_sector)) { newy = cury; }
+    }
+    return manifold_collision_inner(curx, cury, cur_z, newx, newy, radius_sqr, cur_sector);
+}
+"""
+    s=s.replace(sig,wrapper+"static collision_result manifold_collision_inner(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {\n",1)
+    p.write_text(s)
+    print("collision: player radius 16 vs solid walls and ledges")
+
+def bsp_order_renderer(out):
+    """MANIFOLD_BSP=1: visit every cell at most once per frame, in strict
+    front-to-back order from Doom's own BSP tree, relying on the per-column
+    clip spans (yclip) for occlusion instead of recursive portal windows.
+
+    Why: with the recursive portal walk a cell is re-entered once per portal
+    window that shows it (40-65 visits/frame in E1M1, each re-transforming the
+    cell), and the walk gives up after 10 visits / on stack pressure, leaving
+    the window undrawn. Undrawn spans show the other display buffer's old
+    image: distant walls that blink and the big 'triangles' outdoors.
+    Requires cells == BSP leaves (emitter turns the same-sector merge off).
+    Remaining open spans (beyond BSP_FAR) are filled with the fog colour, so a
+    frame can never contain stale pixels."""
+    import re
+    far=int(os.environ.get("MANIFOLD_FAR","1600"))
+    p=out/"src/portal.c"
+    s=p.read_text()
+    a="    // if this sector has been visited 32 times, or is already being currently rendered, skip it\n"
+    if s.count(a)!=1: raise ValueError("visit_graph cache anchor changed")
+    s=s.replace(a,a+"    if (manifold_bsp_mode) goto manifold_bsp_enter;\n",1)
+    a="    sector_rendered_cache[sector]++; // = cur_frame;\n"
+    if s.count(a)!=1: raise ValueError("visit_graph cache increment changed")
+    s=s.replace(a,"manifold_bsp_enter:\n"+a,1)
+    a="visit_graph(src_sector, portal_sector,"
+    if s.count(a)<4: raise ValueError("portal recursion sites changed")
+    s=s.replace(a,"if (!manifold_bsp_mode) visit_graph(src_sector, portal_sector,")
+    a="        u8 manifold_fogged = 0;\n        if (is_portal &&"
+    if s.count(a)==1:
+        s=s.replace(a,"        u8 manifold_fogged = 0;\n        if (!manifold_bsp_mode && is_portal &&",1)
+    s,n=re.subn(r"(?m)^(\s*)visit_graph\(src_sector, src_sector, ([^,]+), ([^,]+), cur_frame, 0\);",
+                r"\1manifold_bsp_render(src_sector, \2, \3, cur_frame);",s)
+    if n<1: raise ValueError("portal_rend root call changed")
+    decl="""
+u8 manifold_bsp_mode = 0;
+void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame);
+"""
+    a="void visit_graph(u16 src_sector, u16 sector, u16 x1, u16 x2, u32 cur_frame, uint8_t depth) {"
+    if s.count(a)!=1: raise ValueError("visit_graph signature changed")
+    s=s.replace(a,decl+a,1)
+    s+=f"""
+/* ---- BSP-ordered traversal (generated by stage_rom.py: bsp_order_renderer) ---- */
+extern const s16 e1_bsp_nodes[] __attribute__((weak));
+extern const u16 e1_bsp_num_nodes __attribute__((weak));
+extern const portal_map e1m1_map __attribute__((weak));
+u8 manifold_open_cols(u16 a, u16 b);
+void manifold_fill_open(u16 a, u16 b);
+#define BSP_FAR {far}
+static u16 bsp_wmin, bsp_wmax, bsp_src;
+static u32 bsp_frame;
+volatile u16 manifold_bsp_cells;
+
+static u8 bsp_done;
+static u16 bsp_cell_x1, bsp_cell_x2;   /* column window for the next cell: open range ∩ its bbox */
+static u16 bsp_open_x1, bsp_open_x2;
+/* world-space half-planes through the player bounding the still-open columns */
+static s16 bsp_rnx, bsp_rny, bsp_lnx, bsp_lny;
+u8 manifold_open_range(u16 a, u16 b, s16* lo, s16* hi);
+static void bsp_refresh_open(void) {{
+    s16 lo, hi;
+    /* columns only ever close during a frame: shrink the previous range */
+    if (!manifold_open_range(bsp_open_x1, bsp_open_x2, &lo, &hi)) {{ bsp_done = 1; return; }}
+    bsp_open_x1 = lo; bsp_open_x2 = hi + 1;
+    lo = lo - (RENDER_WIDTH/2) - 1;
+    hi = hi - (RENDER_WIDTH/2) + 2;
+    /* view: rx = tx*S - ty*C, rz = tx*C + ty*S ; column-(W/2) = rx*(W/2)/rz
+       right of column hi:  rx*(W/2) - hi*rz > 0 ;  left of column lo: rx*(W/2) - lo*rz < 0 */
+    bsp_rnx = (RENDER_WIDTH/2) * angleSin16 - hi * angleCos16;
+    bsp_rny = -(RENDER_WIDTH/2) * angleCos16 - hi * angleSin16;
+    bsp_lnx = (RENDER_WIDTH/2) * angleSin16 - lo * angleCos16;
+    bsp_lny = -(RENDER_WIDTH/2) * angleCos16 - lo * angleSin16;
+}}
+
+/* exact = also test the individual columns (worth it before a cell visit) */
+static u8 bsp_box_visible(const s16* bb, u8 exact) {{   /* top, bottom, left, right */
+    s16 xs0 = bb[2] - playerXInt, xs1 = bb[3] - playerXInt;
+    s16 ys0 = bb[1] - playerYInt, ys1 = bb[0] - playerYInt;
+    bsp_cell_x1 = bsp_open_x1; bsp_cell_x2 = bsp_open_x2;
+    if (xs0 <= 0 && xs1 >= 0 && ys0 <= 0 && ys1 >= 0) {{ return 1; }}
+    /* whole box right of the open range / left of it / beyond the far distance */
+    if ((s32)bsp_rnx * (bsp_rnx > 0 ? xs0 : xs1) + (s32)bsp_rny * (bsp_rny > 0 ? ys0 : ys1) > 0) {{ return 0; }}
+    if ((s32)bsp_lnx * (bsp_lnx > 0 ? xs1 : xs0) + (s32)bsp_lny * (bsp_lny > 0 ? ys1 : ys0) < 0) {{ return 0; }}
+    if ((s32)angleCos16 * (angleCos16 > 0 ? xs0 : xs1) + (s32)angleSin16 * (angleSin16 > 0 ? ys0 : ys1) > ((s32)BSP_FAR << FIX16_FRAC_BITS)) {{ return 0; }}
+    bsp_cell_x1 = bsp_open_x1; bsp_cell_x2 = bsp_open_x2;
+    if (!exact) {{ return 1; }}
+    s16 cmin = 32767, cmax = -32768;
+    u8 front = 0;
+    for (u8 k = 0; k < 4; k++) {{
+        s16 tlx = (k & 1) ? xs1 : xs0;
+        s16 tly = (k & 2) ? ys1 : ys0;
+        s32 rx = ((tlx * angleSin16) - (tly * angleCos16)) >> FIX16_FRAC_BITS;
+        s16 rz = ((tlx * angleCos16) + (tly * angleSin16)) >> FIX16_FRAC_BITS;
+        s16 c;
+        if (rz > 0) {{ front = 1; }}
+        if (rz < 16) {{ c = rx < 0 ? -1000 : 1000; }}   /* beside/behind the eye: unbounded on that side */
+        else {{
+            if (rx > rz + rz) {{ rx = rz + rz; }}
+            if (rx < -(rz + rz)) {{ rx = -(rz + rz); }}
+            c = (RENDER_WIDTH/2) + divs_32_by_16(rx * (RENDER_WIDTH/2), rz);
+        }}
+        if (c < cmin) {{ cmin = c; }}
+        if (c > cmax) {{ cmax = c; }}
+    }}
+    if (!front) {{ return 0; }}
+    cmin -= 1; cmax += 2;
+    if (cmin < (s16)bsp_cell_x1) {{ cmin = bsp_cell_x1; }}
+    if (cmax > (s16)bsp_cell_x2) {{ cmax = bsp_cell_x2; }}
+    if (cmin >= cmax) {{ return 0; }}
+    if (!manifold_open_cols(cmin, cmax)) {{ return 0; }}
+    bsp_cell_x1 = cmin; bsp_cell_x2 = cmax;
+    return 1;
+}}
+
+static void bsp_walk(s16 child) {{
+    for (;;) {{
+        if (child < 0) {{
+            s16 cell = -child - 2;
+            if (cell >= 0) {{
+                manifold_bsp_cells++;
+                visit_graph(bsp_src, cell, bsp_cell_x1, bsp_cell_x2, bsp_frame, 0);
+                bsp_refresh_open();
+            }}
+            return;
+        }}
+        const s16* n = &e1_bsp_nodes[child * 14];
+        s32 cr = (s32)n[2] * (playerYInt - n[1]) - (s32)n[3] * (playerXInt - n[0]);
+        u8 side = cr > 0 ? 1 : 0;
+        s16 ch = n[12 + side];
+        if (bsp_box_visible(n + 4 + side * 4, ch < 0)) {{ bsp_walk(ch); }}
+        if (bsp_done) {{ return; }}
+        side ^= 1;
+        ch = n[12 + side];
+        if (!bsp_box_visible(n + 4 + side * 4, ch < 0)) {{ return; }}
+        child = ch;
+    }}
+}}
+
+void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame) {{
+    if (!(&e1m1_map && cur_portal_map == &e1m1_map && e1_bsp_nodes)) {{
+        manifold_bsp_mode = 0;
+        visit_graph(src_sector, src_sector, wmin, wmax, cur_frame, 0);
+        return;
+    }}
+    manifold_bsp_mode = 1;
+    bsp_wmin = wmin; bsp_wmax = wmax; bsp_src = src_sector; bsp_frame = cur_frame;
+    manifold_bsp_cells = 0;
+    bsp_done = 0;
+    bsp_open_x1 = wmin; bsp_open_x2 = wmax;
+    bsp_refresh_open();
+    if (!bsp_done) {{ bsp_walk(e1_bsp_num_nodes - 1); }}
+    manifold_fill_open(wmin, wmax);
+}}
+"""
+    p.write_text(s)
+    d=out/"src/draw.c"
+    ds=d.read_text()
+    ds+="""
+u8 manifold_open_range(u16 a, u16 b, s16* lo, s16* hi) {
+    u8* yp = &yclip[a<<1];
+    while (a < b && yp[1] <= yp[0]) { a++; yp += 2; }
+    if (a >= b) { return 0; }
+    yp = &yclip[(b-1)<<1];
+    while (yp[1] <= yp[0]) { b--; yp -= 2; }
+    *lo = a; *hi = b - 1;
+    return 1;
+}
+u8 manifold_open_cols(u16 a, u16 b) {
+    u8* yp = &yclip[a<<1];
+    for (; a < b; a++, yp += 2) { if (yp[1] > yp[0]) { return 1; } }
+    return 0;
+}
+/* close every still-open span with the fog colour (darkest entry, index 1) */
+volatile u16 manifold_filled_rows;
+void manifold_fill_open(u16 a, u16 b) {
+    u8* yp = &yclip[a<<1];
+    u16 filled = 0;
+    for (; a < b; a++, yp += 2) {
+        u8 lo = yp[0], hi = yp[1];
+        if (hi > lo) {
+            u16* dst = (u16*)(bmp_buffer_write + buf_column_offset_table[a] + ((u16)lo << 1));
+            u8 n = hi - lo;
+            filled += n;
+            while (n--) { *dst++ = 0x1111; }
+            yp[0] = 0; yp[1] = 0;
+        }
+    }
+    manifold_filled_rows = filled;
+}
+"""
+    d.write_text(ds)
+    print("BSP-ordered renderer installed, far =",far)
+
+def stable_view(out):
+    """MANIFOLD_STABLE_VIEW=1. Measured in MAME: standing still, the idle
+    'breathing' bob changes ~1/3 of the 3D pixels every frame (15 distinct
+    images) and the dithered textures shimmer; pushing against a wall keeps the
+    run bob going (z +-10 units while x/y are fixed), hugely magnified at
+    close range. Doom has no idle bob and bobs from real momentum: drop the
+    idle bob and advance the run bob only when the player actually moved."""
+    p=out/"src/game.c"
+    s=p.read_text()
+    a="    fix32 idle_bob_amt = bobs[idle_bob_idx] * FIX32(.2);\n"
+    if s.count(a)!=2: raise ValueError("idle bob layout changed")
+    s=s.replace(a,"    fix32 idle_bob_amt = 0;   /* no idle breathing */\n")
+    a="""        idle_bob_idx = 27;
+        wait_idle_bob_idx = 16;
+
+        run_bob_idx++;
+        if(run_bob_idx >= 28) {
+            run_bob_idx = 0;
+        }
+"""
+    b="""        idle_bob_idx = 27;
+        wait_idle_bob_idx = 16;
+
+        if (cur_player_pos.x != curx || cur_player_pos.y != cury) {
+            run_bob_idx++;
+            if(run_bob_idx >= 28) {
+                run_bob_idx = 0;
+            }
+        } else {
+            run_bob_idx = 27;   /* blocked by a wall: no bob */
+        }
+"""
+    if s.count(a)!=1: raise ValueError("run bob layout changed")
+    p.write_text(s.replace(a,b,1))
+    print("stable view: idle bob off, run bob only on real movement")
+
+def hole_diag(out):
+    """Diagnostic only (MANIFOLD_EXTRA=hole_diag): zero the write buffer before
+    each 3D frame, so any column span the renderer leaves undrawn stays colour 0
+    and can be counted from the emulator (in a normal ROM it shows 2-frame-old
+    content from the other buffer = flicker)."""
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="void portal_rend(u16 src_sector, u32 cur_frame) {\n"
+    if s.count(old)!=1: raise ValueError("portal_rend changed")
+    s=s.replace(old,"extern u8* bmp_buffer_write;\nu16 manifold_open_rows(void);\nvolatile u16 manifold_holes;\nvolatile u32 manifold_hole_frames;\n"+old+"    memset(bmp_buffer_write, 0, 128*144);\n",1)
+    s=s.replace("volatile u16 manifold_holes;\n","volatile u16 manifold_holes;\nvolatile u16 manifold_why[8];\nvolatile u16 manifold_why_last[8];\n",1)
+    s=s.replace("    memset(bmp_buffer_write, 0, 128*144);\n","    memset(bmp_buffer_write, 0, 128*144);\n    for (u8 k = 0; k < 8; k++) manifold_why[k] = 0;\n",1)
+    s=s.replace("volatile u32 manifold_dbg_maxdepth;\n","volatile u32 manifold_dbg_maxdepth;\nextern volatile u16 manifold_why[8];\n",1)
+    reasons=[("{ manifold_dbg[7]++; return; }","{ manifold_dbg[7]++; manifold_why[0]++; return; }"),
+             ("    if(depth >= MAX_DEPTH ) {    \n","    if(depth >= MAX_DEPTH ) {    \n        manifold_why[1]++;\n"),
+             ("    if(sector_rendered_cache[sector] & 0b1) {","    if(sector_rendered_cache[sector] & 0b1) { manifold_why[2]++;"),
+             ("    if(sector_rendered_cache[sector] >= 10) {\n","    if(sector_rendered_cache[sector] >= 10) {\n        manifold_why[3]++;\n"),
+             ("    if(sector == src_sector && depth != 0) { return; }","    if(sector == src_sector && depth != 0) { manifold_why[4]++; return; }"),
+             ("                }\n\n            }\n\n            continue;\n        }\n\n        //KLog(\"potentially on-screen\");","                }\n\n            } else { manifold_why[is_portal ? 5 : 6]++; }\n\n            continue;\n        }\n\n        //KLog(\"potentially on-screen\");")]
+    for a,b in reasons:
+        if s.count(a)!=1: raise ValueError(f"hole_diag anchor changed: {a!r} x{s.count(a)}")
+        s=s.replace(a,b,1)
+    old2="    #ifdef DEBUG_PORTAL_CLIP\n    KLog(\"Rendered.\");\n    #endif\n    return;\n"
+    if s.count(old2)!=1: raise ValueError("portal_rend tail changed")
+    s=s.replace(old2,"    manifold_holes = manifold_open_rows(); if (manifold_holes) { manifold_hole_frames++; }\n    for (u8 k = 0; k < 8; k++) manifold_why_last[k] = manifold_why[k];\n    return;\n",1)
+    p.write_text(s)
+    d=out/"src/draw.c"
+    ds=d.read_text()
+    ds+="""
+u16 manifold_open_rows(void) {
+    u16 n = 0;
+    for (u16 x = 2; x < RENDER_WIDTH-2; x++) {
+        u8 lo = yclip[x<<1], hi = yclip[(x<<1)+1];
+        if (hi > lo) { n += hi - lo; }
+    }
+    return n;
+}
+"""
+    d.write_text(ds)
+    print("hole diagnostic: write buffer zeroed per frame")
+
 def autopilot_input(out):
     """Test-only: replace JOY_readJoypad with a scripted walk so headless
     BlastEm (no pad input) exercises movement/turning. Enabled via
@@ -1394,15 +1725,41 @@ def restore_generated_scalers_with_correct_constraints(out):
         "draw_texture_vertical_line": """
 static void manifold_wall_column_c(s16 uy0, s16 y0, s16 uy1, s16 y1,
                                    u8* col_ptr, const u16* tex_column) {
+    /* magnified wall (taller than the 512-entry scaler tables): every texel
+       covers >= 8 rows -> fill texel runs; no per-row or per-run mul/div */
     s16 dy = uy1 - uy0;
     if (dy <= 0 || y1 <= y0) { return; }
-    u32 step = (((u32)64) << 16) / (u32)dy;
-    u32 pos = (u32)(y0 - uy0) * step;
-    u16* dst = (u16*)(col_ptr + ((u16)y0 << 1));
-    s16 n = y1 - y0;
-    while (n-- > 0) {
-        *dst++ = tex_column[pos >> 16];
-        pos += step;
+    u32 rpt = (u32)(u16)dy << 10;                         /* rows per texel, 16.16 */
+    u16 t = (u16)divs_32_by_16((s32)(u16)(y0 - uy0) << 6, dy);
+    if (t > 63) { t = 63; }
+    u32 b = (u32)((u16)(t + 1) * (u16)dy) << 10;          /* end row of texel t, 16.16 */
+    register u16* dst = (u16*)(col_ptr + ((u16)y0 << 1));
+    s16 y = y0;
+    for (;;) {
+        s16 end = uy0 + (s16)(b >> 16);
+        if (end > y1 || t >= 63) { end = y1; }
+        s16 n = end - y;
+        if (n > 0) {
+            register u16 w = tex_column[t];
+            y = end;
+            switch (n & 7) {
+                do {
+                    *dst++ = w;
+                    case 7: *dst++ = w;
+                    case 6: *dst++ = w;
+                    case 5: *dst++ = w;
+                    case 4: *dst++ = w;
+                    case 3: *dst++ = w;
+                    case 2: *dst++ = w;
+                    case 1: *dst++ = w;
+                    case 0: ;
+                    n -= 8;
+                } while (n >= 0);
+            }
+        }
+        if (y >= y1) { break; }
+        t++;
+        b += rpt;
     }
 }
 
@@ -1764,6 +2121,12 @@ def stage(src, wad, out, control=False):
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
         install_e1m1_music(out)
+    if os.environ.get("MANIFOLD_BSP","0")=="1":
+        bsp_order_renderer(out)
+    if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
+        stable_view(out)
+    if os.environ.get("MANIFOLD_RADIUS","0")=="1":
+        player_radius_collision(out)
     if os.environ.get("MANIFOLD_NEAR_SAFE","0")=="1":
         m11_safe_near_clipping(out)
     if os.environ.get("MANIFOLD_HUD_REPAIR","0")=="1":

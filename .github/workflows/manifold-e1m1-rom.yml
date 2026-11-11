@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud, exp-manifold-m12-claudio]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
@@ -57,6 +57,19 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m11musicaw"
+          # M12 (Claudio): BSP-ordered renderer + player radius + stable view, same music base.
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m12stable"
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m12stableaw"
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m12stable40"
           # Independent playable variants for near-clipping and HUD artifacts.
           for variant in nearsafe hudrepair noweapon nh; do
             export MANIFOLD_NEAR_SAFE=0 MANIFOLD_HUD_REPAIR=0 MANIFOLD_HIDE_WEAPON=0 MANIFOLD_EXTRA=
@@ -218,7 +231,7 @@ jobs:
           fi
           # M11 reproducible benchmark: same 6 fixed positions, exact angles,
           # no movement: regular portals vs fog off vs vertex-cache test.
-          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw; do
+          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw m12stable m12stableaw m12stable40; do
             [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
             make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
               OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -233,11 +246,16 @@ jobs:
           echo "M11_AW_ROM_PATH=$out/m11autowalk-h32.bin" >> "$GITHUB_ENV"
           echo "M11_MUSIC_ROM_PATH=$out/m11music-h32.bin" >> "$GITHUB_ENV"
           echo "M11_MUSIC_AW_PATH=$out/m11musicaw-h32.bin" >> "$GITHUB_ENV"
+          mv "$out/m12stable40-h32.bin" "$out/m12stable-h40.bin"
+          echo "M12_STABLE_ROM_PATH=$out/m12stable-h32.bin" >> "$GITHUB_ENV"
+          echo "M12_STABLE40_ROM_PATH=$out/m12stable-h40.bin" >> "$GITHUB_ENV"
+          echo "M12_STABLE_AW_PATH=$out/m12stableaw-h32.bin" >> "$GITHUB_ENV"
+          sha256sum "$out/m12stable-h32.bin" "$out/m12stable-h40.bin"
           for name in nearsafe hudrepair noweapon nh nearaw; do
             v="m11${name}-h32.bin"
             echo "M11_${name^^}_ROM_PATH=$out/$v" >> "$GITHUB_ENV"
           done
-          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" "$out/m11nearaw-h32.bin" <<'PY'
+          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" "$out/m11nearaw-h32.bin" "$out/m12stableaw-h32.bin" <<'PY'
           import struct,sys,pathlib
           for name in sys.argv[1:]:
               p=pathlib.Path(name)
@@ -437,7 +455,7 @@ jobs:
           SH
           chmod +x "$fake/x-terminal-emulator"
           export M11_MUSIC_DEBUG="$RUNNER_TEMP/music-debug.log"; : > "$M11_MUSIC_DEBUG"
-          for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH"; do
+          for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH" "91:$M12_STABLE_ROM_PATH" "92:$M12_STABLE40_ROM_PATH" "3601:$M12_STABLE_AW_PATH"; do
             n="${testset%%:*}"; rom="${testset#*:}"
             ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b "$n" "$rom" </dev/null >"$RUNNER_TEMP/music-$n.log" 2>&1 ) || { tail -60 "$RUNNER_TEMP/music-$n.log"; exit 1; }
             if grep -qiE "unmapped|fatal|exception|error|lock up" "$RUNNER_TEMP/music-$n.log" || test -s "$M11_MUSIC_DEBUG"; then
@@ -445,6 +463,7 @@ jobs:
             fi
           done
           echo "M11_MUSIC_AUTOWALK=PASS_3600_FRAMES (headless; audio fidelity not verified)"
+          echo "M12_STABLE_AUTOWALK=PASS_3601_FRAMES"
       - name: M11 nearclip corrected 3600-frame autowalk
         shell: bash
         run: |
@@ -763,6 +782,10 @@ jobs:
             ${{ env.M11_PLAY_ROM_PATH }}
             ${{ env.M11_AW_ROM_PATH }}
             ${{ env.M11_MUSIC_ROM_PATH }}
+            ${{ env.M12_STABLE_ROM_PATH }}
+            ${{ env.M12_STABLE40_ROM_PATH }}
+            ${{ env.M12_STABLE_AW_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m12stable/out/release/symbol.txt
             ${{ env.M11_MUSIC_AW_PATH }}
             ${{ env.M11_NEARSAFE_ROM_PATH }}
             ${{ env.M11_HUDREPAIR_ROM_PATH }}

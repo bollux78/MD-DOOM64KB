@@ -126,7 +126,7 @@ def true_cells(lumps, nodes, merge=True):
         if ring is None:
             dropped += 1
             continue
-        cells.append([sec, Polygon(ring)])
+        cells.append([sec, Polygon(ring), ss])
     if merge:
         merged = True
         while merged:
@@ -160,7 +160,8 @@ def weld_and_pair(cells, lumps, clockwise=True):
     """Integer vertices, T-junction split, exact reverse-edge pairing."""
     # global weld: round to integer map units
     polys = []
-    for sec, poly in cells:
+    for ent in cells:
+        sec, poly, ss = ent[0], ent[1], (ent[2] if len(ent) > 2 else -1)
         pts = [(round(x), round(y)) for x, y in poly.exterior.coords[:-1]]
         out = []
         for p in pts:
@@ -174,8 +175,8 @@ def weld_and_pair(cells, lumps, clockwise=True):
             continue
         if (area2 < 0) != clockwise:
             out.reverse()
-        polys.append((sec, out))
-    allpts = set(p for _, poly in polys for p in poly)
+        polys.append((sec, out, ss))
+    allpts = set(p for _, poly, _ss in polys for p in poly)
 
     def on_seg(a, b, p):
         if p == a or p == b:
@@ -188,7 +189,7 @@ def weld_and_pair(cells, lumps, clockwise=True):
         return 1e-9 < t < 1 - 1e-9
 
     split = []
-    for sec, poly in polys:
+    for sec, poly, ss in polys:
         pts = []
         for k, a in enumerate(poly):
             b = poly[(k + 1) % len(poly)]
@@ -196,14 +197,14 @@ def weld_and_pair(cells, lumps, clockwise=True):
             mids.sort(key=lambda p: (p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1]))
             pts.append(a)
             pts.extend(mids)
-        split.append((sec, pts))
+        split.append((sec, pts, ss))
     index = {}
-    for ci, (_, poly) in enumerate(split):
+    for ci, (_, poly, _ss) in enumerate(split):
         for k, a in enumerate(poly):
             index.setdefault((a, poly[(k + 1) % len(poly)]), []).append(ci)
     out = []
     unpaired_internal = 0
-    for ci, (sec, poly) in enumerate(split):
+    for ci, (sec, poly, ss) in enumerate(split):
         walls = []
         for k, a in enumerate(poly):
             b = poly[(k + 1) % len(poly)]
@@ -211,7 +212,7 @@ def weld_and_pair(cells, lumps, clockwise=True):
             if len(nb) > 1:
                 raise ValueError(f"ambiguous edge {a}->{b}")
             walls.append({"a": a, "b": b, "neighbor": nb[0] if nb else -1})
-        out.append({"id": ci, "doom_sector": sec, "walls": merge_collinear(walls)})
+        out.append({"id": ci, "doom_sector": sec, "ss": ss, "walls": merge_collinear(walls)})
     return out
 
 
