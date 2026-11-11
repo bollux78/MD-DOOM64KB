@@ -1032,6 +1032,38 @@ def m13_werk_hud_timing(out):
     p.write_text(s.replace(old,new,1))
     print("M13 Werk HUD timing: initial face/bar in init, FPS/tag only on changes")
 
+def m13_werk_hud_vram_repair(out):
+    """M13.1 VRAM diagnosis: periodically reload static Doom HUD tile graphics.
+
+    Eight 32-byte tiles per game update, CPU mode, no DMA queue. All tile IDs
+    stay fixed, without reloading the BG_B tilemap. This isolates whether
+    the observed overclock-sensitive missing rectangles are caused by
+    incomplete/corrupted VRAM tile patterns rather than the tilemap.
+    """
+    p=out/"src/doom_statusbar.c"
+    if not p.exists():
+        raise ValueError("HUD tile repair requires the Doom HUD")
+    s=p.read_text()
+    hook="void doom_hud_update(void) {"
+    if s.count(hook)!=1:
+        raise ValueError("M13 HUD update entry changed")
+    added="""static u16 m13_hud_upload_cursor = 0;
+static void m13_hud_replay_tiles(void) {
+    /* HUDW_NTILES static tiles; face slot is managed separately. */
+    if (m13_hud_upload_cursor >= HUDW_NTILES)
+        m13_hud_upload_cursor = 0;
+    u16 count = HUDW_NTILES - m13_hud_upload_cursor;
+    if (count > 8) count = 8;
+    VDP_loadTileData((const u32 *)hudw_tiles[m13_hud_upload_cursor],
+                     manifold_hud_base + m13_hud_upload_cursor,
+                     count, CPU);
+    m13_hud_upload_cursor += count;
+}
+"""
+    s=s.replace(hook,added+hook+"\n    m13_hud_replay_tiles();",1)
+    p.write_text(s)
+    print("M13 Werk VRAM HUD diagnostic: replay 8 static tiles each game update")
+
 def scale_light_distances(out):
     """Upstream lighting bands (mid 150 / dark 350 / fade 400 units) suit its
     small test maps. In E1M1 walls beyond 400 units hit the FADE band, which
@@ -2236,6 +2268,8 @@ def stage(src, wad, out, control=False):
         install_doom_hud(out,wad)
         if os.environ.get("MANIFOLD_HUD_TIMING","0")=="1":
             m13_werk_hud_timing(out)
+        if os.environ.get("MANIFOLD_HUD_VRAM_REPAIR","0")=="1":
+            m13_werk_hud_vram_repair(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
