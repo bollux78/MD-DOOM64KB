@@ -1064,6 +1064,45 @@ static void m13_hud_replay_tiles(void) {
     p.write_text(s)
     print("M13 Werk VRAM HUD diagnostic: replay 8 static tiles each game update")
 
+def m13_werk_static_repair_once(out):
+    """One-time, small VRAM refresh of HUD and sky; no HInt/VInt masking."""
+    p=out/"src/doom_statusbar.c"; s=p.read_text()
+    anchor="void doom_hud_update(void) {"
+    if s.count(anchor)!=1: raise ValueError("HUD update changed")
+    helper="""static u16 hud_repair_pos;
+static void hud_repair_once(void) {
+    if (hud_repair_pos >= HUDW_NTILES) return;
+    u16 n = HUDW_NTILES - hud_repair_pos;
+    if (n > 8) n = 8;
+    VDP_loadTileData((const u32 *)hudw_tiles[hud_repair_pos],
+                     manifold_hud_base + hud_repair_pos, n, CPU);
+    hud_repair_pos += n;
+}
+"""
+    s=s.replace(anchor,helper+anchor+"\\n    hud_repair_once();",1)
+    p.write_text(s)
+    p=out/"src/manifold_sky.c";s=p.read_text()
+    anchor="void manifold_sky_update(void) {"
+    if s.count(anchor)!=1: raise ValueError("sky update changed")
+    helper="""static u16 sky_repair_pos;
+static void sky_repair_once(void) {
+    if (!sky_ready || sky_repair_pos >= SKY_REPAIR_TILE_COUNT) return;
+    u16 n = SKY_REPAIR_TILE_COUNT - sky_repair_pos;
+    if (n > 4) n = 4;
+    for (u16 k=0; k<n; ++k) {
+        u16 i=sky_repair_pos+k;
+        VDP_loadTileData(&sky_tiles[i*8], sky_index[i], 1, CPU);
+    }
+    sky_repair_pos += n;
+}
+"""
+    import re
+    m=re.search(r"static const u32 sky_tiles\\[(\\d+)\\*8\\]",s)
+    if not m: raise ValueError("sky array declaration changed")
+    s=s.replace(anchor,helper.replace("SKY_REPAIR_TILE_COUNT",m.group(1))+anchor+"\\n    sky_repair_once();",1)
+    p.write_text(s)
+    print("M13 one-time HUD/sky VRAM recovery, no interrupt masking")
+
 def m13_werk_vdp_atomic(out):
     """M13.1 A/B: keep V-Int bitmap DMA and H-Int register writes from
     interrupting SGDK multiwrite VDP operations on HUD/sky.
@@ -2336,6 +2375,8 @@ def stage(src, wad, out, control=False):
             m13_werk_hud_vram_repair(out)
     if os.environ.get("MANIFOLD_VDP_ATOMIC","0")=="1":
         m13_werk_vdp_atomic(out)
+    if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
+        m13_werk_static_repair_once(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
