@@ -1112,19 +1112,19 @@ def m13_werk_vdp_atomic(out):
     p=out/"src/manifold_sky.c"
     s=p.read_text()
     import re
-    src=re.search(r"    for \\(u16 k = 0; k < \\d+; k\\+\\+\\) \\{",s)
+    src=re.search(r"    for \(u16 k = 0; k < \d+; k\+\+\) \{",s)
     if not src: raise ValueError("M13 sky tile loop missing")
-    s=s[:src.start()]+"    VDP_waitDMACompletion();\\n    SYS_disableInts(); /* M13 sky initial VRAM upload + BG_B */\\n"+s[src.start():]
+    s=s[:src.start()]+"    VDP_waitDMACompletion();\n    SYS_disableInts(); /* M13 sky initial VRAM upload + BG_B */\n"+s[src.start():]
     src="    sky_ready = 1; sky_last = -1;"
     if s.count(src)!=1: raise ValueError("M13 sky init final missing")
     s=s.replace(src,"    SYS_enableInts();\n"+src,1)
     src="    sky_last = off;"
     if s.count(src)!=1: raise ValueError("M13 sky update anchor missing")
     s=s.replace(src,src+"\n    SYS_disableInts(); /* M13 per-angle BG_B tilemap writes */",1)
-    src=re.search(r"    SKY_CLEAR_BORDERS\\(\\d+, \\d+\\);",s[s.index("    sky_last = off;"):])
+    src=re.search(r"    SKY_CLEAR_BORDERS\(\d+, \d+\);",s[s.index("    sky_last = off;"):])
     if not src: raise ValueError("M13 sky update end missing")
     ix=s.index("    sky_last = off;")+src.end()
-    s=s[:ix]+"\\n    SYS_enableInts();"+s[ix:]
+    s=s[:ix]+"\n    SYS_enableInts();"+s[ix:]
     p.write_text(s)
     print("M13 Werk VDP atomic: HUD+sky main-thread writes protected from bitmap interrupts")
 
