@@ -1,0 +1,31 @@
+name: Manifold M12 - two ROM comparison
+on:
+  push:
+    branches: [exp-manifold-m12-objects]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/m01/**'
+      - '.github/workflows/manifold-m12-pair.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build control and objects
+        shell: bash
+        run: bash experiments/DOOM_Manifold_E1M1/m01/build_m12_pair.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifold-m12-control-vs-objects
+          path: |
+            ${{ runner.temp }}/m12-pair/M12-control-H32.bin
+            ${{ runner.temp }}/m12-pair/M12-objects-H32.bin
+            ${{ runner.temp }}/m12-pair/SHA256SUMS.txt
+            ${{ runner.temp }}/m12-pair/LEIA-ME.txt
+          retention-days: 7
+          if-no-files-found: error
