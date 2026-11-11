@@ -1,5 +1,5 @@
 name: Manifold M13 Werk VDP atomic A-B H40
-# Lean build for the console test: only the three H40 ROMs.
+# Lean H40 A/B, two playable ROMs; corrected sky-generated source patch.
 # The full regression workflow (manifold-e1m1-rom.yml) is unchanged.
 on:
   workflow_dispatch:
