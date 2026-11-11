@@ -32,6 +32,22 @@
 - `src/draw.c`: interpolação de U/z realiza divisão por `u16 one_over_z_16` e pelo valor ao fim de spans de quatro colunas; já existe patch de segurança para denominadores nulos. Verificar overflow/arredondamento e assimetria upper/lower.
 - `src/portal.c`: `z_recip_table_16[]` originalmente acessado antes de verificar retorno de clipping; `m11_safe_near_clipping` também contém guarda para isso.
 
+### G-04b — projeção horizontal: overflow e sinal no assembly (CONFIRMADO em inspeção de instruções)
+
+**Local:** Manifold original `src/math3d.c`, função `project_and_adjust_x(s16 x, s16 z_recip)`:
+
+```asm
+lsl.w #5, %0
+muls.w %1, %0
+swap %0
+add.w #32, %0
+```
+
+- `lsl.w #5` opera **só nos 16 bits baixos**. Em `x=1024`, a multiplicação por 32 já vira zero por overflow de 16 bits; isso pode colocar uma aresta lateral enorme no centro da tela.
+- O `z_recip` é retirado como `u16` de `z_recip_table_16`, mas passado como `s16` e multiplicado por `muls.w` (signed). Para `z_recip>=32768`, o assembly interpreta a profundidade recíproca como número negativo. Exemplo: `z_recip=65535` é interpretado como `-1`.
+- Esta é **uma falha de faixa de representação**, e não uma afirmação de qual fotografia ela explica. O caminho do renderer utiliza esse projetor também após near clipping. Consertar isoladamente com aritmética `s32` e recíproco `u16`, saturando antes de converter a coordenada de volta para `s16`. Comparar a projeção contra referência numérica, sobretudo para `x∈{-2048,-1024,-1,0,1,1024,2048}` e `z_recip∈{1,32767,32768,65535}`.
+- Corrigir este defeito **em rodada posterior ao teste G-01**, sem confundir mudanças de clipping e projeção.
+
 ### G-05 — lógica de dados WAD e células BSP (RISCO DE INTEGRAÇÃO)
 
 Auditar `emit_portal_map.py` e gerador de folhas: coordenadas, winding, arestas compartilhadas, alturas em unidades corretas, flags DOOM BLOCKING e correspondência `LINEDEF/SIDEDEF/SECTOR`. Testes determinísticos devem exigir que cada portal `A→B` tenha aresta reversa geométrica no destino, e que upper/lower use a mesma aresta recortada. Reportar lacunas `allow_gaps=True`, não tratá-las como portais válidos.
