@@ -52,7 +52,11 @@ Resultados com `BSP=1 RADIUS=1 STABLE_VIEW=1` (MAME):
 
 ## 5. Mudanças não commitadas no workflow
 
-`manifold-e1m1-rom.yml` (commitado junto, **ainda sem run**): gatilho na branch nova e três variantes sobre a base musical — `m12stable-h32.bin`, `m12stable-h40.bin`, `m12stableaw-h32.bin` (autowalk com vetores de exceção fatais, 3601 quadros no BlastEm). Estava validando a compilação H40 e o autowalk localmente quando parei; **não sei se compilam**.
+`manifold-e1m1-rom.yml` (commitado junto, **ainda sem run no runner**): gatilho na branch nova e três variantes sobre a base musical — `m12stable-h32.bin`, `m12stable-h40.bin`, `m12stableaw-h32.bin` (autowalk com vetores de exceção fatais, 3600 quadros no BlastEm).
+
+**Validação local (11/11, sem runner):** as três variantes compilam com o mesmo toolchain do workflow (fonte `b6fe52a`, `prepare_r25_music.py` antes do build, `xgmtool` do kit m68k-elf). O autowalk passou em BlastEm headless com 1500 e 3600 quadros, sem exceção, sem `unmapped`/`fatal` e com o debugger silencioso. Os boots de 90 quadros de H32 e H40 também passaram. Isso prova que não trava e não tem exceção; **não prova que o jogador anda sem prender nas passagens**, porque o autowalk aqui é só checado por falha. Visual não foi avaliado.
+
+Dois detalhes para quem reproduzir: (a) o workflow precisa de `res/r25-e1m1.vgm`, gerado por `scripts/lab/prepare_r25_music.py` com `DOOM_R25_MUSIC=1`; esse script regrava `res/music.res` (versionado), então restaure com `git checkout` depois; (b) no ambiente local o `xgmtool` não estava em `sgdkr/bin` e foi preciso um link para `mars/m68k-elf/bin/xgmtool`.
 
 ## 6. Proposta do que falta
 
