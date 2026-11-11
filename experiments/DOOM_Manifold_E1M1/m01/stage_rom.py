@@ -1606,13 +1606,13 @@ def bsp_visibility_precision_fix(out):
     s=s.replace(old,new,1)
     pairs=(
         ("bsp_rnx = (RENDER_WIDTH/2) * angleSin16 - hi * angleCos16;",
-         "bsp_rnx = (((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)hi * angleCos16) >> 12;"),
+         "bsp_rnx = ((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)hi * angleCos16) >> 12;"),
         ("bsp_rny = -(RENDER_WIDTH/2) * angleCos16 - hi * angleSin16;",
-         "bsp_rny = ((-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)hi * angleSin16) >> 12;"),
+         "bsp_rny = (-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)hi * angleSin16) >> 12;"),
         ("bsp_lnx = (RENDER_WIDTH/2) * angleSin16 - lo * angleCos16;",
-         "bsp_lnx = (((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)lo * angleCos16) >> 12;"),
+         "bsp_lnx = ((s32)(RENDER_WIDTH/2) * angleSin16 - (s32)lo * angleCos16) >> 12;"),
         ("bsp_lny = -(RENDER_WIDTH/2) * angleCos16 - lo * angleSin16;",
-         "bsp_lny = ((-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)lo * angleSin16) >> 12;")
+         "bsp_lny = (-(s32)(RENDER_WIDTH/2) * angleCos16 - (s32)lo * angleSin16) >> 12;")
     )
     for old,new in pairs:
         if s.count(old)!=1: raise ValueError("M12 BSP frustum term moved: "+old)
