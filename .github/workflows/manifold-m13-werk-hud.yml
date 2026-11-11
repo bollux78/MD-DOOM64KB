@@ -1,0 +1,180 @@
+name: Manifold M13 Werk HUD A-B H40
+# Lean build for the console test: only the three H40 ROMs.
+# The full regression workflow (manifold-e1m1-rom.yml) is unchanged.
+on:
+  workflow_dispatch:
+    inputs:
+      builder:
+        description: 'Who compiled this build (prefixes the ROM file names)'
+        type: choice
+        options: [claudio, werk]
+        default: claudio
+  push:
+    branches: [exp-manifold-m12-claudio]
+    paths:
+      - '.github/workflows/manifold-m13-werk-hud.yml'
+permissions:
+  contents: read
+jobs:
+  console:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    env:
+      MANIFOLD_BUILDER: werk
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify local private WAD (no uploads)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MANIFOLD_E1M1_WAD=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          python3 - <<'PY'
+          import os,pathlib,hashlib
+          p=pathlib.Path(os.environ["MANIFOLD_E1M1_WAD"])
+          assert p.is_file() and p.stat().st_size==4196020
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=="1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771"
+          print("Private E1M1 WAD pinned and present")
+          PY
+          echo "MANIFOLD_E1M1_WAD=$MANIFOLD_E1M1_WAD" >> "$GITHUB_ENV"
+      - name: Fetch pinned Manifold upstream into isolated directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/manifold-e1m1-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage"
+          echo "MANIFOLD_STAGE=$stage" >> "$GITHUB_ENV"
+      - name: Stage two identical renderer variants, HUD timing off vs on
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import shapely' 2>/dev/null || python3 -m pip install --user --break-system-packages -q shapely || python3 -m pip install --user -q shapely
+          DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
+          test -s res/r25-e1m1.vgm
+          vgm="$GITHUB_WORKSPACE/res/r25-e1m1.vgm"
+          S=experiments/DOOM_Manifold_E1M1/m01/stage_rom.py
+          B="${MANIFOLD_BUILDER^^}"
+          # Strict A/B: same H40 BSP/radius/stable renderer and music.
+          MANIFOLD_BUILD_TAG="WERK M13 CONTROL H40" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_HUD_TIMING=0 \
+            python3 $S --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" --out "$MANIFOLD_STAGE/m13control"
+          MANIFOLD_BUILD_TAG="WERK M13 HUD FIX H40" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_HUD_TIMING=1 \
+            python3 $S --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" --out "$MANIFOLD_STAGE/m13fixed"
+      - name: Compile two H40 playable ROMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/console-out"; mkdir -p "$out"
+          gdk=""
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          if test -z "$gdk"; then
+            echo "Searching installed SGDK makefiles in HOME and /opt"
+            while IFS= read -r sdkfile; do
+              case "$sdkfile" in */makefile.gen) gdk="${sdkfile%/makefile.gen}"; break;; esac
+            done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -30)
+          fi
+          if test -z "$gdk"; then
+            echo "::error::SGDK makefile.gen not found on runner"; exit 1
+          fi
+          echo "Using SGDK: $gdk"
+          # The self-hosted runner has a native Linux xgmtool under mars/m68k-elf,
+          # while the SDK in marsdev/sgdk/SGDK has only xgmtool.exe. ResComp
+          # resolves exactly $GDK/bin/xgmtool. Link the already installed native
+          # binary; never download an unverified executable.
+          native_xgm="$HOME/mars/m68k-elf/bin/xgmtool"
+          if test ! -x "$gdk/bin/xgmtool"; then
+            test -x "$native_xgm" || { echo "::error::Linux xgmtool missing: $native_xgm"; exit 1; }
+            if test -e "$gdk/bin/xgmtool" || test -L "$gdk/bin/xgmtool"; then
+              echo "::error::Non-executable xgmtool already occupies SDK destination"; exit 1
+            fi
+            ln -s "$native_xgm" "$gdk/bin/xgmtool"
+          fi
+          test -x "$gdk/bin/xgmtool"
+          echo "== XGM converters on runner =="
+          find "$HOME" /opt -maxdepth 12 \( -iname '*xgm*tool*' -o -name 'xgmtool' -o -name 'xgm2tool' \) -type f 2>/dev/null | head -40 || true
+          ls -l "$gdk/bin/"*xgm* 2>/dev/null || true
+          if test -e "$gdk/bin/xgmtool"; then file "$gdk/bin/xgmtool" || true; ldd "$gdk/bin/xgmtool" 2>&1 | head -20 || true; fi
+          export GDK="$gdk" PREFIX=m68k-elf-
+          export PATH="$HOME/mars/m68k-elf/bin:$HOME/toolchains/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          if [ -f "$MANIFOLD_STAGE/candidate/src/math3d.h" ] && [ ! -e "$MANIFOLD_STAGE/candidate/src/math3D.h" ]; then
+            ln -s math3d.h "$MANIFOLD_STAGE/candidate/src/math3D.h"
+          fi
+          # SGDK libmd.a was compiled with GCC 13 but has -ffat-lto-objects:
+          # link its native 68000 code with GCC 15, disabling cross-version LTO.
+          # Patch a disposable copy of makefile.gen, never the installed SDK.
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc" || { echo "::error::Cross compiler not found"; exit 1; }
+          portable_makefile="$MANIFOLD_STAGE/makefile-no-cross-lto.gen"
+          python3 - "$gdk/makefile.gen" "$portable_makefile" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          pat="-flto -flto=auto -ffat-lto-objects"
+          if s.count(pat)<2:
+              raise SystemExit("unexpected SGDK LTO flags in makefile")
+          pathlib.Path(sys.argv[2]).write_text(s.replace(pat,"-fno-lto"))
+          PY
+          if [ ! -f "$RUNNER_TEMP/sgdk-kit.tgz" ]; then
+            tar -C "$gdk" -czf "$RUNNER_TEMP/sgdk-kit.tgz" lib inc res makefile.gen common.mk md.ld $(cd "$gdk" && ls bin/*.jar 2>/dev/null) 2>/dev/null || true
+            echo "SGDK_KIT=$RUNNER_TEMP/sgdk-kit.tgz" >> "$GITHUB_ENV"
+            tar -C "$HOME/mars" -czf "$RUNNER_TEMP/m68k-elf-kit.tgz" m68k-elf 2>/dev/null || true
+            echo "TC_KIT=$RUNNER_TEMP/m68k-elf-kit.tgz" >> "$GITHUB_ENV"
+          fi
+          echo "Linking with original SGDK fat-object library, native 68000 fallback"
+          for variant in m13control m13fixed; do
+            [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
+            make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
+              OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+              NM="${tc}nm" OBJCPY="${tc}objcopy" >"$out/$variant-build.log" 2>&1 || {
+                grep -m20 -iE "error|undefined" "$out/$variant-build.log"; exit 1; }
+          done
+          cp "$MANIFOLD_STAGE/m13control/out/release/rom.bin" "$out/werk-m13-hud-control-h40.bin"
+          cp "$MANIFOLD_STAGE/m13fixed/out/release/rom.bin" "$out/werk-m13-hud-timing-h40.bin"
+          echo "M13_CONTROL_PATH=$out/werk-m13-hud-control-h40.bin" >> "$GITHUB_ENV"
+          echo "M13_FIXED_PATH=$out/werk-m13-hud-timing-h40.bin" >> "$GITHUB_ENV"
+          sha256sum "$out"/*.bin
+      - name: BlastEm 120-frame boot and no-exception smoke check
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          fake="$RUNNER_TEMP/m11-music-no-debug"; mkdir -p "$fake"
+          cat >"$fake/x-terminal-emulator" <<'SH'
+          #!/bin/sh
+          echo DEBUGGER_INVOKED >> "$M11_MUSIC_DEBUG"
+          exit 0
+          SH
+          chmod +x "$fake/x-terminal-emulator"
+          export M11_MUSIC_DEBUG="$RUNNER_TEMP/music-debug.log"; : > "$M11_MUSIC_DEBUG"
+          # Diagnostics kept for upload even when a test fails: per-run logs + emulator config.
+          diag="$RUNNER_TEMP/blastem-diag"; mkdir -p "$diag"
+          for cfg in "$HOME"/Projetos/blastem64-1.0.0/*.cfg; do [ -f "$cfg" ] && cp "$cfg" "$diag/"; done
+          for testset in "120:$M13_CONTROL_PATH" "120:$M13_FIXED_PATH"; do
+            n="${testset%%:*}"; rom="${testset#*:}"; tag="$(basename "$rom" .bin)"
+            log="$diag/music-$n-$tag.log"
+            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b "$n" "$rom" </dev/null >"$log" 2>&1 ) || { tail -60 "$log"; exit 1; }
+            if grep -qiE "unmapped|fatal|exception|error|lock up" "$log" || test -s "$M11_MUSIC_DEBUG"; then
+              cat "$M11_MUSIC_DEBUG"; tail -60 "$log"; exit 1
+            fi
+          done
+          echo "M13_HUD_AB=PASS (both playable H40 ROMs boot 120 frames in BlastEm headless; visual not verified)"
+      - name: Upload BlastEm diagnostics (per-run logs + emulator config)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blastem-diag-${{ github.run_id }}
+          path: ${{ runner.temp }}/blastem-diag
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Upload only two M13 Werk HUD ROMs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-werk-hud-h40-${{ github.run_id }}
+          path: |
+            ${{ env.M13_CONTROL_PATH }}
+            ${{ env.M13_FIXED_PATH }}
+          retention-days: 14
+          if-no-files-found: warn
