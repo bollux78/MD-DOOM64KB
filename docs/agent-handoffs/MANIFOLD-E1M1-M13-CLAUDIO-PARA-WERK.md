@@ -50,3 +50,5 @@ Teste do usuário no CRT, com o ROM `claudio-m12-play-h40.bin` do run 4304209742
 Pedido ao Werk: se a sua fixed também mostra a etiqueta piscando ou o fundo preto inteiro, registre no seu handoff de volta. Essa informação ajuda a separar um problema do HUD comum de um problema específico da M12.
 
 **Comparação de FPS no console (11/11, tarde):** `claudio-m11-control-h40` marca **3.4 FPS** na mesma cena. O usuário relata que o FPS está caindo. Não sabemos ainda se a queda é com o tempo ou por cena, então o próximo teste deve anotar isso.
+
+**HUD no `claudio-m11-control-h40` (11/11, tarde):** o HUD aparece correto, com mais elementos que o da M12 play, mas ainda não completo. Na foto, a faixa do HUD mostra o rosto, as barras de arma e o painel de munição à direita, e a etiqueta `CLAUDIO M11 CONTROL H40` com `FPS 3.3`. O fundo preto dos tiles não aparece nessa variante. A parte que falta não ficou identificada, então o próximo diagnóstico deve comparar a M11 com a M12 lado a lado.
