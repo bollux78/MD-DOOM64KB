@@ -1803,6 +1803,24 @@ def m12_safe_sprite_raster(out):
     p.write_text(s[:m.start()]+replacement+s[end:])
     print("M12 optimized C RLE sprite raster installed with portal y-clipping")
 
+def m12_safe_attack_probe(out):
+    """Isolate the A-button crash until actual actors/combat are enabled.
+
+    E1M1 currently has zero active monsters: all imported THINGS are IDLE
+    decorations. Preserve animation, but skip unneeded AI wake traversal and
+    shotgun PCM that were both entered by A. No impact on B/door logic.
+    """
+    p=out/"src/game.c"
+    s=p.read_text()
+    old="""        play_sfx(SFX_SHOTGUN_ID, 15);
+        run_in_phs(cur_player_pos.cur_sector, wake_enemies_in_sector, cur_portal_map);"""
+    if s.count(old)!=1:
+        raise ValueError("M12 attack path changed")
+    s=s.replace(old,"""        /* M12 A-button crash probe: animation remains enabled.
+           No monsters exist yet. Omit shotgun PCM and PHS callback. */""",1)
+    p.write_text(s)
+    print("M12 attack safety probe: no shotgun PCM / enemy PHS until diagnosed")
+
 def m12_tune_doors(out):
     """Use the Manifold sector-group DOOR state machine, but give the
     player time to cross, and do not close a door while inside it.
@@ -1899,6 +1917,7 @@ def stage(src, wad, out, control=False):
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
     if m12_doors:
         m12_tune_doors(out)
+        m12_safe_attack_probe(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
