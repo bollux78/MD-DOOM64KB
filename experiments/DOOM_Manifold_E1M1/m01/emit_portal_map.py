@@ -334,6 +334,9 @@ def emit(lumps,cells,tex=None):
     colors=[]
     reps=[]
     collision_verts=[]
+    import os
+    sky_merge=os.environ.get("MANIFOLD_SKY_MERGE","0")=="1"
+    sky_merge_edges=[]
     for cell in cells:
         offset=len(walls)
         first_portal=len(portals)
@@ -373,6 +376,15 @@ def emit(lumps,cells,tex=None):
                     up_t=w.get("upper");lo_t=w.get("lower")
                     hi=(0x80|idx[up_t]) if up_t else avg.get(w.get("mid") or "",fl)
                     lo_=(0x80|idx[lo_t]) if lo_t else avg.get(w.get("mid") or "",fl)
+                    if sky_merge:
+                        source_ceiling=_nm(lumps["SECTORS"][cell["doom_sector"]][3])
+                        target_sector=cells[w["neighbor"]]["doom_sector"]
+                        target_ceiling=_nm(lumps["SECTORS"][target_sector][3])
+                        if source_ceiling=="F_SKY1" and target_ceiling=="F_SKY1":
+                            # DOOM sky hack: no upper wall between two sky ceilings.
+                            # 0xFE is reserved (texture indices are < 64).
+                            hi=0xFE
+                            sky_merge_edges.append((cell["doom_sector"],target_sector,w.get("line")))
                     if up_t or lo_t:
                         t0=up_t or lo_t
                         colors.extend([idx[t0],hi,lo_,0])
@@ -413,6 +425,11 @@ def emit(lumps,cells,tex=None):
             ceilings[si]=heights[0]
             opened.append((si,floor,ceil,heights[0]))
     print("Temporarily opened closed/connected door-like sectors:",opened)
+    if sky_merge:
+        print("M13 SKY1 upper-wall suppression: edges",len(sky_merge_edges),
+              "sector pairs",sorted(set((a,b) for a,b,_ in sky_merge_edges))[:32])
+        if not sky_merge_edges:
+            raise ValueError("M13 expected sky-to-sky portals but found none")
     sector_params=[]
     for sector_i,(floor,ceil,fl,ce,light,special,tag) in enumerate(lumps["SECTORS"]):
         ceil=ceilings.get(sector_i,ceil)
