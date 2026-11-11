@@ -32,7 +32,8 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         cols=[]
         for x in range(64):
             seq=[img[min(ph-1,y*ph//64)][min(pw-1,x*pw//64)] for y in range(64)]
-            seq=[None if p is None else WT.nearest(palette,rgb[p]) for p in seq]
+            # Manifold draw_col writes a byte encoding TWO horizontal 4bpp pixels.
+            seq=[None if p is None else (lambda c: (c << 4) | c)(WT.nearest(palette,rgb[p])) for p in seq]
             spans=[];texels=[];y=0
             while y<64:
                 skip=0
