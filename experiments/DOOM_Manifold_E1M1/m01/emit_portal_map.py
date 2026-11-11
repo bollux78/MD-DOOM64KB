@@ -248,7 +248,7 @@ WALL_COLOR_CYCLE=(12,6,13,7,9,3)
 FLOOR_COLOR=13   # dark yellow/brown
 CEIL_COLOR=12    # steel
 
-def emit(lumps,cells,tex=None):
+def emit(lumps,cells,tex=None,things=None):
     tex=tex or {}
     vertices={}
     sectors=[]
@@ -386,6 +386,11 @@ def emit(lumps,cells,tex=None):
     for x,y in collision_verts:
         text+=f"  {{.x={round(x/SCALE)},.y={round(y/SCALE)}}},\n"
     text+="};\n"
+    if things is not None:
+        text+="static map_object e1_m12_things[] = {\n"
+        for sector,x,y,typ in things:
+            text+=f"  {{.sector_num={sector},.x={x},.y={y},.z=0,.type={typ}}},\n"
+        text+="};\n"
     pal_field=",.palette=(u16*)e1_palette" if tex else ""
     text+=f"""const portal_map e1m1_map = {{
   .num_sector_groups={len(lumps["SECTORS"])},
@@ -396,7 +401,7 @@ def emit(lumps,cells,tex=None):
   .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,\n  .collision_vertexes=e1_collision_vertices,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
   .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
-  .num_things=0,.things=0{pal_field}
+  .num_things={len(things) if things is not None else 0},.things={"e1_m12_things" if things is not None else "0"}{pal_field}
 }};
 """
     return text
