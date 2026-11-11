@@ -44,3 +44,16 @@ Visitar todas as folhas multiplica as células por ~6 (7,0 → 42,6). O FPS do c
 3. Só depois disso propor uma seleção de folhas que mantenha o resultado sem as 42 células por quadro.
 
 Scripts usados em `experiments/DOOM_Manifold_E1M1/tools/m13/` (`build_ab.sh` gera os dois ROMs; `counters.lua` grava `quadro, linhas_abertas, dbg[0], dbg[7], células` por quadro).
+
+## 6. Continuação (11/11, noite): o que sobra no all-leaves
+
+Dois testes opt-in, sem mudar o padrão dos builds (`stage_rom.py`):
+
+- **`MANIFOLD_BSP_FAR_FOG=1`** aplica a regra de névoa de parede distante também no modo BSP (em `visit_graph`, hoje desligada com `manifold_bsp_mode`). Resultado: quadros com resíduo caem de 379 para 340, mas o máximo de linhas sobe de 207 para 316. **Não é a causa.** Descartada a hipótese de paredes distantes sem parede parceira.
+- **`MANIFOLD_BSP_FILL_DIAG=1`** registra o último vão que `manifold_fill_open` pinta (lo, hi, coluna). Resultado, nos quadros com resíduo:
+  - **All-leaves:** 291 de 291 casos são **vão no meio** da coluna (lo > 0 e hi < 144), com faixas de 10 a 30 linhas, em colunas 0 a 12 e 63, com posições em área externa. São aberturas de portal entre degraus de altura de piso/teto, cuja face não foi fechada por nenhuma parede visitada.
+  - **Controle:** 1191 casos no topo (lo = 0, teto ou céu não desenhado), 489 na base (hi = 144, piso não desenhado) e 2214 no meio. O controle perde sobretudo teto e piso, o que é coerente com o culling removendo folhas.
+
+Conclusão revisada: o culling explica a perda de teto e piso (buracos grandes e azuis do controle). O resíduo que sobra no all-leaves é outro mecanismo, de faces de degrau (portal) no meio da coluna. Próximo passo: nas posições da seção 2, listar as paredes de portal dos dois lados do degrau e verificar qual lado deveria desenhar a face entre os pisos.
+
+Scripts novos em `experiments/DOOM_Manifold_E1M1/tools/m13/`: `span.lua` (registra quadro, linhas abertas, vão, posição do jogador).

@@ -1881,6 +1881,47 @@ def m13_bsp_all_leaves_diagnostic(out):
     p.write_text(s)
     print("M13 BSP all-leaves diagnostic: bbox culling disabled (slow)")
 
+def m13_bsp_far_fog(out):
+    """M13.3 diagnostic only: apply the far-portal fog rule in BSP mode too.
+
+    visit_graph() skips the fog-close rule when manifold_bsp_mode is set, so a
+    far portal wall never closes its columns and relies on the neighbour leaf
+    to do so. Where that neighbour wall is absent or culled, the columns stay
+    open and manifold_fill_open() paints them blue. This patch closes them with
+    the fog colour, as the non-BSP renderer does. It changes far-wall look and
+    is NOT a fix; it measures how many holes are far-portal holes.
+    """
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="if (!manifold_bsp_mode && is_portal && ceil_color != 0"
+    if s.count(old)!=1:
+        raise ValueError("M13.3 far-fog: fog condition moved")
+    s=s.replace(old,"if (is_portal && ceil_color != 0",1)
+    p.write_text(s)
+    print("M13.3 BSP far-portal fog diagnostic enabled")
+
+def m13_fill_span_diag(out):
+    """M13.3 diagnostic only: record the span of the last unclosed column.
+
+    Writes manifold_fill_last_lo / _hi (rows) and manifold_fill_last_col for
+    the last column that manifold_fill_open() paints. Lets the harness tell a
+    top gap (lo == 0: ceiling or sky not drawn) from a floor gap (hi == SCREEN_HEIGHT)
+    or a mid gap (wall not covering the column). Does not change any pixel.
+    """
+    p=out/"src/draw.c"
+    s=p.read_text()
+    old="""        if (hi > lo) {
+            u16* dst = (u16*)(bmp_buffer_write + buf_column_offset_table[a] + ((u16)lo << 1));"""
+    new="""        if (hi > lo) {
+            manifold_fill_last_lo = lo; manifold_fill_last_hi = hi; manifold_fill_last_col = a;
+            u16* dst = (u16*)(bmp_buffer_write + buf_column_offset_table[a] + ((u16)lo << 1));"""
+    if s.count(old)!=1:
+        raise ValueError("M13.3 fill diag: fill loop moved")
+    s=s.replace(old,new,1)
+    s=s.replace("volatile u16 manifold_filled_rows;","volatile u16 manifold_filled_rows;\nvolatile u8 manifold_fill_last_lo, manifold_fill_last_hi, manifold_fill_last_col;",1)
+    p.write_text(s)
+    print("M13.3 fill-span diagnostic enabled")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2458,6 +2499,10 @@ def stage(src, wad, out, control=False):
         bsp_order_renderer(out)
         if os.environ.get("MANIFOLD_BSP_PRECISION","0")=="1":
             m13_bsp_normal_precision(out)
+        if os.environ.get("MANIFOLD_BSP_FILL_DIAG","0")=="1":
+            m13_fill_span_diag(out)
+        if os.environ.get("MANIFOLD_BSP_FAR_FOG","0")=="1":
+            m13_bsp_far_fog(out)
         if os.environ.get("MANIFOLD_BSP_ALL_LEAVES","0")=="1":
             m13_bsp_all_leaves_diagnostic(out)
     if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
