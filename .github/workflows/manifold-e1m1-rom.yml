@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud, exp-manifold-m12-objects]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
