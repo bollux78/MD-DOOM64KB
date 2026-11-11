@@ -11,9 +11,9 @@ stage="$RUNNER_TEMP/manifold-m12-pair-$GITHUB_RUN_ID"
 python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage"
 DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
 test -s res/r25-e1m1.vgm
-for variant in objects-control pickups; do
-  if [ "$variant" = pickups ]; then with_pickups=1; else with_pickups=0; fi
-  MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS="$with_pickups" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
+for variant in pickups-control doors; do
+  if [ "$variant" = doors ]; then with_doors=1; else with_doors=0; fi
+  MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS="$with_doors" MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
   python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source "$stage/manifold" --wad "$WAD" --out "$stage/$variant"
 done
 gdk=""
@@ -42,7 +42,7 @@ assert s.count(pat)>=2
 pathlib.Path(sys.argv[2]).write_text(s.replace(pat,'-fno-lto'))
 PY
 mkdir -p "$RUNNER_TEMP/m12-pair"
-for variant in objects-control pickups; do
+for variant in pickups-control doors; do
   test -e "$stage/$variant/src/math3D.h" || ln -s math3d.h "$stage/$variant/src/math3D.h"
   make -C "$stage/$variant" -f "$stage/portable.gen" -j2 release \
     OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -52,12 +52,12 @@ for variant in objects-control pickups; do
 done
 (cd "$RUNNER_TEMP/m12-pair" && sha256sum M12-*.bin) > "$RUNNER_TEMP/m12-pair/SHA256SUMS.txt"
 cat > "$RUNNER_TEMP/m12-pair/LEIA-ME.txt" <<'TXT'
-M12-objects-control-H32.bin: M12 visual aprovada, sem coleta (controle).
-M12-pickups-H32.bin: mesma M12 com coleta de itens e contadores no HUD.
-Ambas: H32, HUD DOOM, musica XGM, sprites estaticos completos.
-Itens sao coletados por proximidade dentro da mesma celula convexa.
-Kits medicos exigem saude inferior a 100; barris/lampadas nao sao coletaveis.
-Teste recolher municao/bonus, veja numeros HUD e desaparecimento do item.
-ROMs experimentais: nao publicar como release estavel sem aprovacao.
+M12-pickups-control-H32.bin: M12 com coleta APROVADA; portas permanentemente abertas.
+M12-doors-H32.bin: mesma M12 com quatro setores de porta inicialmente fechados.
+Ambas: H32, HUD DOOM, musica XGM, objetos e itens coletaveis.
+M12-doors: botao B perto da porta; teto sobe gradualmente, atravesse, fecha apos 105 ticks (~3 s a 35 Hz).
+Setores E1M1 em teste: 4, 68, 76, 81. Sem tranca/chave, sem triggers do WAD ainda.
+Verifique colisao, visual, FPS e se porta NAO fecha enquanto jogador estiver dentro.
+Nao promover experimental sem aprovacao no console.
 TXT
 echo 'M12: only 2 ROMs staged and built'
