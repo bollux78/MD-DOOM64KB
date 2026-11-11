@@ -1821,6 +1821,23 @@ def m12_safe_attack_probe(out):
     p.write_text(s)
     print("M12 attack safety probe: no shotgun PCM / enemy PHS until diagnosed")
 
+def m12_disable_reload_probe(out):
+    """M12 crash isolation: A still registers but does NOT start the
+    shotgun reload animation. Compare to prior ROM which crashes on A.
+
+    The original animation triggers set_weapon_anim(SHOTGUN_RELOAD_ANIM)
+    after 8 update cycles, which may dereference an invalid SGDK sprite
+    frame. No other gameplay or door behavior is changed.
+    """
+    p=out/"src/game.c"
+    s=p.read_text()
+    old="        shooting = 12;"
+    if s.count(old)!=1:
+        raise ValueError("M12 shooting init anchor changed")
+    s=s.replace(old,"        shooting = 0; /* diagnostic: no reload animation on A */",1)
+    p.write_text(s)
+    print("M12 A probe: suppress reload animation; preserve idle weapon")
+
 def m12_tune_doors(out):
     """Use the Manifold sector-group DOOR state machine, but give the
     player time to cross, and do not close a door while inside it.
@@ -1918,6 +1935,7 @@ def stage(src, wad, out, control=False):
     if m12_doors:
         m12_tune_doors(out)
         m12_safe_attack_probe(out)
+        m12_disable_reload_probe(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
