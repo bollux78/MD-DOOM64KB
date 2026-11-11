@@ -1867,6 +1867,11 @@ def stage(src, wad, out, control=False):
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
         install_doom_hud(out,wad)
+    if os.environ.get("MANIFOLD_PICKUPS","0")=="1":
+        if m12_things is None or os.environ.get("MANIFOLD_HUD","doom")!="doom":
+            raise ValueError("M12 pickups require THINGS and DOOM status bar")
+        from m12_pickups import install as install_m12_pickups
+        install_m12_pickups(out,templates)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
