@@ -568,6 +568,28 @@ def guard_portal_recursion_stack(out):
     p.write_text(s)
     print("portal recursion bounded by stack/heap guard")
 
+def guard_zero_width_edges(out):
+    """M12: 68000 DIVS-by-zero when a wall/floor/ceiling edge has x1 == x2.
+
+    H40 autowalk, BlastEm 1.0.0 (runner run 43020524524): vector 5 (zero divide)
+    at ~frame 1012. Stacked PC 0xA233E = divuw inside __udivsi3; caller
+    __divsi3 at 0x5DD0 = draw_floor_update_clip(+0x14), reached from portal.c.
+    Every edge slope is (dy<<12)/dx with dx = x2-x1, unguarded in draw.c.
+    Only dx == 0 is changed (no visible width); dx < 0 keeps old behaviour.
+    """
+    p=out/"src/draw.c"
+    s=p.read_text()
+    guard="    if (dx == 0) return; /* M12: zero-width edge would trap on DIVS */\n"
+    if guard in s:
+        return
+    old="    s16 dx = x2-x1;\n"
+    n=s.count(old)
+    if n!=9:
+        raise ValueError(f"unexpected dx=x2-x1 site count: {n}")
+    s=s.replace(old,old+guard)
+    p.write_text(s)
+    print("zero-width edges guarded in draw.c (9 sites)")
+
 def robust_sector_crossing(out):
     """Upstream collision lets the player cross a portal line even when the
     new point is not inside the neighbour (corner cut into a 3rd cell); the
@@ -2068,7 +2090,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)

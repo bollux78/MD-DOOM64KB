@@ -81,3 +81,12 @@ Em ordem:
 ## 7. Ferramentas locais
 
 `experiments/DOOM_Manifold_E1M1/tools/lbuild.sh` e `snaps.sh` (caminhos da máquina do Cláudio). Scripts Lua de MAME usados: empurrar parede, parado, perfil por trace, log de registradores do VDP por linha. Não estão no repositório; recriar a partir desta descrição se necessário.
+
+## 8. Crash do autowalk M12 (divisão por zero), 11/11 à tarde
+
+- Run `43020524524` (dispatch em `exp-manifold-m12-claudio`) falhou no teste de música no ROM `m12stableaw-h32`: `M68K attempted to execute code at unmapped or I/O address C00020` (patch de vetores = exceção).
+- Reproduzido localmente com o **mesmo BlastEm 1.0.0 oficial** no ROM **H40** (`m12stableaw40`), em ~1012–1026 quadros, e a causa foi identificada: vetor 5 (divisão por zero). PC empilhado `0xA233E` = `divuw` em `__udivsi3`; chamador `__divsi3` em `0x5DD0` = `draw_floor_update_clip` (`draw.c`), chamada por `portal.c` com `x1 == x2` (aresta de largura zero). Todas as funções de aresta fazem `(dy<<12)/dx` sem guarda.
+- Correção: passo `guard_zero_width_edges` em `stage_rom.py` (só `dx == 0` retorna; `dx < 0` não muda). Com ela, H40 autowalk passa 3601 quadros localmente no BlastEm 1.0.0; H32 autowalk também passa.
+- **Não explicado:** o ROM H32 do runner (`a3deb8…`) passa localmente no mesmo BlastEm 1.0.0 sem o fix. Ou o caminho de execução depende de algo do host/config do runner, ou o build do runner difere do local (toolchain). O próximo run mede isso com logs e config do emulador (`blastem-diag-<run>`).
+- Workflow: variante `m12stableaw40` (H40 autowalk) adicionada ao teste de música; logs por execução e config do BlastEm vão para o artefato `blastem-diag-<run>` (`if: always()`).
+- Decisão do usuário (11/11): seguir com **H40** como modo padrão do M12.

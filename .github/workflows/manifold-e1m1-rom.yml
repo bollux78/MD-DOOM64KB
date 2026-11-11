@@ -70,6 +70,11 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m12stable40"
+          # M12 H40 autowalk (diagnostic: same flags as m12stableaw, H40 mode).
+          MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" MANIFOLD_BSP=1 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_EXTRA=autopilot_input python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" \
+            --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m12stableaw40"
           # Independent playable variants for near-clipping and HUD artifacts.
           for variant in nearsafe hudrepair noweapon nh; do
             export MANIFOLD_NEAR_SAFE=0 MANIFOLD_HUD_REPAIR=0 MANIFOLD_HIDE_WEAPON=0 MANIFOLD_EXTRA=
@@ -231,7 +236,7 @@ jobs:
           fi
           # M11 reproducible benchmark: same 6 fixed positions, exact angles,
           # no movement: regular portals vs fog off vs vertex-cache test.
-          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw m12stable m12stableaw m12stable40; do
+          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw m12stable m12stableaw m12stable40 m12stableaw40; do
             [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
             make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
               OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -255,7 +260,9 @@ jobs:
             v="m11${name}-h32.bin"
             echo "M11_${name^^}_ROM_PATH=$out/$v" >> "$GITHUB_ENV"
           done
-          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" "$out/m11nearaw-h32.bin" "$out/m12stableaw-h32.bin" <<'PY'
+          mv "$out/m12stableaw40-h32.bin" "$out/m12stableaw-h40.bin"
+          echo "M12_STABLE_AW40_PATH=$out/m12stableaw-h40.bin" >> "$GITHUB_ENV"
+          python3 - "$out/m11autowalk-h32.bin" "$out/m11musicaw-h32.bin" "$out/m11nearaw-h32.bin" "$out/m12stableaw-h32.bin" "$out/m12stableaw-h40.bin" <<'PY'
           import struct,sys,pathlib
           for name in sys.argv[1:]:
               p=pathlib.Path(name)
@@ -455,15 +462,28 @@ jobs:
           SH
           chmod +x "$fake/x-terminal-emulator"
           export M11_MUSIC_DEBUG="$RUNNER_TEMP/music-debug.log"; : > "$M11_MUSIC_DEBUG"
-          for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH" "91:$M12_STABLE_ROM_PATH" "92:$M12_STABLE40_ROM_PATH" "3601:$M12_STABLE_AW_PATH"; do
-            n="${testset%%:*}"; rom="${testset#*:}"
-            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b "$n" "$rom" </dev/null >"$RUNNER_TEMP/music-$n.log" 2>&1 ) || { tail -60 "$RUNNER_TEMP/music-$n.log"; exit 1; }
-            if grep -qiE "unmapped|fatal|exception|error|lock up" "$RUNNER_TEMP/music-$n.log" || test -s "$M11_MUSIC_DEBUG"; then
-              cat "$M11_MUSIC_DEBUG"; tail -60 "$RUNNER_TEMP/music-$n.log"; exit 1
+          # Diagnostics kept for upload even when a test fails: per-run logs + emulator config.
+          diag="$RUNNER_TEMP/blastem-diag"; mkdir -p "$diag"
+          for cfg in "$HOME"/Projetos/blastem64-1.0.0/*.cfg; do [ -f "$cfg" ] && cp "$cfg" "$diag/"; done
+          "$emu" -v >"$diag/blastem-version.txt" 2>&1 || true
+          for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH" "91:$M12_STABLE_ROM_PATH" "92:$M12_STABLE40_ROM_PATH" "3601:$M12_STABLE_AW_PATH" "3601:$M12_STABLE_AW40_PATH"; do
+            n="${testset%%:*}"; rom="${testset#*:}"; tag="$(basename "$rom" .bin)"
+            log="$diag/music-$n-$tag.log"
+            ( ulimit -v 1048576; PATH="$fake:$PATH" timeout 240s env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$emu" -b "$n" "$rom" </dev/null >"$log" 2>&1 ) || { tail -60 "$log"; exit 1; }
+            if grep -qiE "unmapped|fatal|exception|error|lock up" "$log" || test -s "$M11_MUSIC_DEBUG"; then
+              cat "$M11_MUSIC_DEBUG"; tail -60 "$log"; exit 1
             fi
           done
           echo "M11_MUSIC_AUTOWALK=PASS_3600_FRAMES (headless; audio fidelity not verified)"
           echo "M12_STABLE_AUTOWALK=PASS_3601_FRAMES"
+      - name: Upload BlastEm diagnostics (per-run logs + emulator config)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blastem-diag-${{ github.run_id }}
+          path: ${{ runner.temp }}/blastem-diag
+          retention-days: 7
+          if-no-files-found: warn
       - name: M11 nearclip corrected 3600-frame autowalk
         shell: bash
         run: |
@@ -785,6 +805,7 @@ jobs:
             ${{ env.M12_STABLE_ROM_PATH }}
             ${{ env.M12_STABLE40_ROM_PATH }}
             ${{ env.M12_STABLE_AW_PATH }}
+            ${{ env.M12_STABLE_AW40_PATH }}
             ${{ env.MANIFOLD_STAGE }}/m12stable/out/release/symbol.txt
             ${{ env.M11_MUSIC_AW_PATH }}
             ${{ env.M11_NEARSAFE_ROM_PATH }}
