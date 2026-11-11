@@ -92,3 +92,9 @@ O usuário viu, no `claudio-m13-sides-off-h40`, paredes com altura correta e cé
 **Ainda não resolvido:** o que não é pintado. Para corrigir de verdade, falta achar qual desenho deixa de cobrir cada span (piso, teto ou parede) nas posições do passeio. O ROM de névoa só torna o buraco visível e estável; não o elimina.
 
 **Para o console, comparar:** `claudio-m13-sides-off-h40` (v1) e `claudio-m13-sides-clearfog-h40` (v2) no mesmo ponto. Anotar se o azul fica parado na v2 e se o FPS cai.
+
+## 9. Resultado do teste de névoa por quadro (v2) e próximo passo
+
+- O console confirmou que `claudio-m13-sides-clearfog-h40` piora o FPS e não elimina o defeito. Ele não é a solução e fica só como ferramenta de diagnóstico (`MANIFOLD_CLEAR_DIAG`, desligado por padrão).
+- O defeito continua sem localização: não sabemos qual desenho (piso, teto ou parede) deixa de cobrir os trechos no passeio externo.
+- Sugestão: comparar o ramo atual com a build corrigida do Werk, que o usuário considera boa, e bisseccionar as mudanças por flag. Isso é mais barato do que seguir instrumentando o renderer às cegas.
