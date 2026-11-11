@@ -465,7 +465,6 @@ jobs:
           # Diagnostics kept for upload even when a test fails: per-run logs + emulator config.
           diag="$RUNNER_TEMP/blastem-diag"; mkdir -p "$diag"
           for cfg in "$HOME"/Projetos/blastem64-1.0.0/*.cfg; do [ -f "$cfg" ] && cp "$cfg" "$diag/"; done
-          "$emu" -v >"$diag/blastem-version.txt" 2>&1 || true
           for testset in "90:$M11_MUSIC_ROM_PATH" "3600:$M11_MUSIC_AW_PATH" "91:$M12_STABLE_ROM_PATH" "92:$M12_STABLE40_ROM_PATH" "3601:$M12_STABLE_AW_PATH" "3601:$M12_STABLE_AW40_PATH"; do
             n="${testset%%:*}"; rom="${testset#*:}"; tag="$(basename "$rom" .bin)"
             log="$diag/music-$n-$tag.log"
