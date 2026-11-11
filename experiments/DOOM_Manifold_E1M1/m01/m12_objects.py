@@ -71,5 +71,8 @@ def install_templates(out,templates):
     externs="".join(f"extern const rle_sprite {ident};\n" for ident,*_ in templates)
     entries=['{.name="player",.type=OBJECT}']
     for ident,name,width,height in templates:
-        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width},.height={height*32},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
+        # portal.c computes half_width=template.width>>2 in integer world units.
+        # E1M1 uses 2x Doom geometry, so desired half-width is 1x Doom width.
+        # Therefore template.width must be 4x the original Doom sprite width.
+        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*4},.height={height*32},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
     p.write_text(s[:a]+externs+"const object_template object_types[32+1] = {\n"+",\n".join(entries)+"\n};"+s[b:])
