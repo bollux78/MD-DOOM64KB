@@ -1079,7 +1079,7 @@ static void hud_repair_once(void) {
     hud_repair_pos += n;
 }
 """
-    s=s.replace(anchor,helper+anchor+"\\n    hud_repair_once();",1)
+    s=s.replace(anchor,helper+anchor+"\n    hud_repair_once();",1)
     p.write_text(s)
     p=out/"src/manifold_sky.c";s=p.read_text()
     anchor="void manifold_sky_update(void) {"
@@ -1097,9 +1097,9 @@ static void sky_repair_once(void) {
 }
 """
     import re
-    m=re.search(r"static const u32 sky_tiles\\[(\\d+)\\*8\\]",s)
+    m=re.search(r"static const u32 sky_tiles\[(\d+)\*8\]",s)
     if not m: raise ValueError("sky array declaration changed")
-    s=s.replace(anchor,helper.replace("SKY_REPAIR_TILE_COUNT",m.group(1))+anchor+"\\n    sky_repair_once();",1)
+    s=s.replace(anchor,helper.replace("SKY_REPAIR_TILE_COUNT",m.group(1))+anchor+"\n    sky_repair_once();",1)
     p.write_text(s)
     print("M13 one-time HUD/sky VRAM recovery, no interrupt masking")
 
