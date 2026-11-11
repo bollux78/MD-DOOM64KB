@@ -1803,6 +1803,34 @@ def m12_safe_sprite_raster(out):
     p.write_text(s[:m.start()]+replacement+s[end:])
     print("M12 optimized C RLE sprite raster installed with portal y-clipping")
 
+def m12_tune_doors(out):
+    """Use the Manifold sector-group DOOR state machine, but give the
+    player time to cross, and do not close a door while inside it.
+
+    Opt-in to the playable E1M1 door ROM only. Geometry/portal arrays and
+    collision processing are unchanged.
+    """
+    p=out/"src/sector_group.c"
+    s=p.read_text()
+    old="                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 30;"
+    if s.count(old)!=2:
+        raise ValueError("M12 expected two DOOR state timer sites")
+    s=s.replace(old,"                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;",2)
+    old="""            if(ticks_left == 0) {
+                //play_sfx(SFX_CLOSE_DOOR_ID, 1);"""
+    new="""            /* A player standing inside the door's own sector must not
+               be crushed or trapped by automatic closing. */
+            if(sector_group(cur_player_pos.cur_sector, cur_portal_map) == sect_group) {
+                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;
+                break;
+            }
+            if(ticks_left == 0) {
+                //play_sfx(SFX_CLOSE_DOOR_ID, 1);"""
+    if s.count(old)!=1:
+        raise ValueError("M12 door OPEN state changed")
+    p.write_text(s.replace(old,new,1))
+    print("M12 door timer 105 ticks, player-safe auto-close")
+
 def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
@@ -1862,7 +1890,10 @@ def stage(src, wad, out, control=False):
         (out/"src/m12_doom_objects.c").write_text(sprite_c)
         install_templates(out,templates)
         m12_safe_sprite_raster(out)
-    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things))
+    m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
+    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
+    if m12_doors:
+        m12_tune_doors(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
