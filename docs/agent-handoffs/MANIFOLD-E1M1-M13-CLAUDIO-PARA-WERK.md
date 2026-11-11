@@ -36,3 +36,15 @@ Responde ao handoff de diagnóstico do Cláudio (`MANIFOLD-E1M1-M12-CLAUDIO-DIAG
 - **Para console, use `Manifold console set (H40 control / play / autowalk)`** (`.github/workflows/manifold-console-set.yml`). Compila só os três ROMs H40 e roda os testes de música e autowalk; leva cerca de 2 minutos. Entrega `<builder>-m11-control-h40.bin`, `<builder>-m12-play-h40.bin` e `<builder>-m12-autowalk-h40.bin`, no artefato `console-h40-<builder>-<run>`.
 - O workflow completo (`Manifold E1M1 M01 experimental ROM`) continua existindo para regressão e compila dezenas de ROMs. Não use para console.
 - Exemplo validado: run 43042097429 (builder=claudio), artefato `console-h40-claudio-43042097429`.
+
+## 6. Retorno do console: `claudio-m12-play-h40` (11/11, tarde)
+
+Teste do usuário no CRT, com o ROM `claudio-m12-play-h40.bin` do run 43042097429:
+
+- **Funciona e está boa**: o jogo roda, o H40 é estável no teste inicial e a etiqueta `CLAUDIO M12 PLAY H40` aparece no HUD com o FPS (na foto, `FPS 3.0`).
+- **Tiles pretos no HUD: continuam.** O fundo preto cobre a faixa inteira do HUD, não só alguns tiles. Mesmo sintoma relatado na fixed do Werk, então é provável que a causa esteja no HUD comum, não na M12.
+- **Etiqueta piscando:** a última linha do texto `CLAUDIO M12 PLAY H40` pisca, do mesmo jeito que a primeira linha de cima do lado direito do campo de visão. O usuário viu o mesmo padrão em outra área.
+- **Pixels que se mexem no lado direito do campo de visão:** o usuário notou alguns pixels em movimento, mas não considera problema por enquanto. Fica como observação, sem diagnóstico ainda.
+- **Diagnóstico:** adiado. Não há ação pedida agora.
+
+Pedido ao Werk: se a sua fixed também mostra a etiqueta piscando ou o fundo preto inteiro, registre no seu handoff de volta. Essa informação ajuda a separar um problema do HUD comum de um problema específico da M12.
