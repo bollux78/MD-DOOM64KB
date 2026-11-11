@@ -977,6 +977,61 @@ void showStats() {{
     g.write_text(s)
     print(f"FPS on HUD band, build tag {tag!r}")
 
+def m13_werk_hud_timing(out):
+    """Experimental H40 A/B for incomplete HUD at normal CPU speed.
+
+    User observation: BlastEm overclock displays complete HUD; normal speed
+    misses tiles. Preload the initial Doom face and compose the complete
+    status bar in init, before the first renderer frame. Keep per-frame
+    updates only for changed state; stop clearing/repainting the whole FPS
+    text band on every frame. Not a blanket VDP timing fix.
+    """
+    p=out/"src/doom_statusbar.c"
+    if not p.exists():
+        raise ValueError("M13 HUD timing requires MANIFOLD_HUD=doom")
+    s=p.read_text()
+    old="""    dhud_have_hash = 0;
+    dhud_draw_margins();
+    return free_tile_loc + doom_hud_vram_count;"""
+    new="""    /* M13 Werk: finish static HUD + initial face before renderer starts.
+       CPU transfer here avoids SGDK's still-unflushed DMA queue. */
+    VDP_loadTileData((const u32 *)hudw_faces[dhud_face.index],
+                     manifold_hud_base + HUDW_FACE_SLOT, 16, CPU);
+    dhud_face.shown = dhud_face.index;
+    dhud_draw_margins();
+    dhud_draw_bar();
+    dhud_last_hash = HUDW_Hash(&dhud_state);
+    dhud_have_hash = 1;
+    return free_tile_loc + doom_hud_vram_count;"""
+    if s.count(old)!=1:
+        raise ValueError("M13 HUD initialization layout changed")
+    p.write_text(s.replace(old,new,1))
+    p=out/"src/game.c";s=p.read_text()
+    old="""    VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
+    manifold_hud_text("FPS ", 1, 26);
+    manifold_hud_text(num, 5, 26);
+    u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
+    manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);"""
+    new="""    static u8 m13_tag_written = 0;
+    static char m13_last_fps[16] = "";
+    if (!m13_tag_written) {
+        VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
+        manifold_hud_text("FPS ", 1, 26);
+        u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
+        manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
+        m13_tag_written = 1;
+    }
+    if (strcmp(m13_last_fps, num) != 0) {
+        /* Only changed digits; clear a fixed 8-character FPS region. */
+        manifold_hud_text("        ", 5, 26);
+        manifold_hud_text(num, 5, 26);
+        strcpy(m13_last_fps, num);
+    }"""
+    if s.count(old)!=1:
+        raise ValueError("M13 FPS tag layout changed")
+    p.write_text(s.replace(old,new,1))
+    print("M13 Werk HUD timing: initial face/bar in init, FPS/tag only on changes")
+
 def scale_light_distances(out):
     """Upstream lighting bands (mid 150 / dark 350 / fade 400 units) suit its
     small test maps. In E1M1 walls beyond 400 units hit the FADE band, which
@@ -2179,6 +2234,8 @@ def stage(src, wad, out, control=False):
     # MANIFOLD_HUD=manifold / MANIFOLD_H32=0 rebuild the old H40 inventory HUD as a control.
     if os.environ.get("MANIFOLD_HUD","doom")=="doom":
         install_doom_hud(out,wad)
+        if os.environ.get("MANIFOLD_HUD_TIMING","0")=="1":
+            m13_werk_hud_timing(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":
