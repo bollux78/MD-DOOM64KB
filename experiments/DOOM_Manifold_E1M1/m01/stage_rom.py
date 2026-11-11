@@ -1812,10 +1812,15 @@ def m12_tune_doors(out):
     """
     p=out/"src/sector_group.c"
     s=p.read_text()
+    # Only patch run_door(), never run_lift() timers.
+    door_start=s.index("void run_door(")
+    door_end=s.index("void run_lift(",door_start)
+    door_code=s[door_start:door_end]
     old="                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 30;"
-    if s.count(old)!=2:
-        raise ValueError("M12 expected two DOOR state timer sites")
-    s=s.replace(old,"                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;",2)
+    if door_code.count(old)!=2:
+        raise ValueError("M12 expected two timers within run_door")
+    door_code=door_code.replace(old,"                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;",2)
+    s=s[:door_start]+door_code+s[door_end:]
     old="""            if(ticks_left == 0) {
                 //play_sfx(SFX_CLOSE_DOOR_ID, 1);"""
     new="""            /* A player standing inside the door's own sector must not
