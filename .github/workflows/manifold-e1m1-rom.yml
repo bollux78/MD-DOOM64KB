@@ -1,7 +1,7 @@
 name: Manifold E1M1 M01 experimental ROM
 on:
   push:
-    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud]
+    branches: [exp-manifold-e1m1-m01, exp-manifold-m11-visual-perf, exp-manifold-m11-music, exp-manifold-m11-nearclip-hud, exp-manifold-m12-objects]
     paths:
       - 'experiments/DOOM_Manifold_E1M1/m01/**'
       - '.github/workflows/manifold-e1m1-rom.yml'
@@ -57,6 +57,10 @@ jobs:
             --source "$MANIFOLD_STAGE/manifold" \
             --wad "$MANIFOLD_E1M1_WAD" \
             --out "$MANIFOLD_STAGE/m11musicaw"
+          # M12 objects are strictly opt-in. No M11/Claudio code is modified.
+          MANIFOLD_OBJECTS=1 MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+            --source "$MANIFOLD_STAGE/manifold" --wad "$MANIFOLD_E1M1_WAD" \
+            --out "$MANIFOLD_STAGE/m12objects"
           # Independent playable variants for near-clipping and HUD artifacts.
           for variant in nearsafe hudrepair noweapon nh; do
             export MANIFOLD_NEAR_SAFE=0 MANIFOLD_HUD_REPAIR=0 MANIFOLD_HIDE_WEAPON=0 MANIFOLD_EXTRA=
@@ -218,7 +222,7 @@ jobs:
           fi
           # M11 reproducible benchmark: same 6 fixed positions, exact angles,
           # no movement: regular portals vs fog off vs vertex-cache test.
-          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw; do
+          for variant in m11fixed m11cache m11play m11autowalk m11music m11musicaw m11nearsafe m11hudrepair m11noweapon m11nh m11nearaw m12objects; do
             [ ! -e "$MANIFOLD_STAGE/$variant/src/math3D.h" ] && ln -s math3d.h "$MANIFOLD_STAGE/$variant/src/math3D.h"
             make -C "$MANIFOLD_STAGE/$variant" -f "$portable_makefile" -j2 release \
               OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
@@ -227,6 +231,7 @@ jobs:
               }
             cp "$MANIFOLD_STAGE/$variant/out/rom.bin" "$out/$variant-h32.bin"
           done
+          echo "M12_OBJECTS_ROM_PATH=$out/m12objects-h32.bin" >> "$GITHUB_ENV"
           echo "M11_FIXED_ROM_PATH=$out/m11fixed-h32.bin" >> "$GITHUB_ENV"
           echo "M11_CACHE_ROM_PATH=$out/m11cache-h32.bin" >> "$GITHUB_ENV"
           echo "M11_PLAY_ROM_PATH=$out/m11play-h32.bin" >> "$GITHUB_ENV"
