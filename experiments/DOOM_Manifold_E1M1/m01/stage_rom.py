@@ -1857,6 +1857,30 @@ void manifold_fill_open(u16 a, u16 b) {
     d.write_text(ds)
     print("BSP-ordered renderer installed, far =",far)
 
+def m13_bsp_all_leaves_diagnostic(out):
+    """M13 diagnostic only: visit all BSP leaves front-to-back.
+
+    Bypass bbox, frustum and depth culling in bsp_box_visible(), while
+    retaining BSP ordering and existing per-column yclip occlusion.
+    A large FPS cost is expected. This is NOT an optimization or a final
+    fix; it isolates false-negative bbox rejection from projection/texture
+    errors. Fog fill remains unchanged.
+    """
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="""    bsp_cell_x1 = bsp_open_x1; bsp_cell_x2 = bsp_open_x2;
+    if (xs0 <= 0 && xs1 >= 0 && ys0 <= 0 && ys1 >= 0) { return 1; }"""
+    new="""    bsp_cell_x1 = bsp_open_x1; bsp_cell_x2 = bsp_open_x2;
+    /* M13 diagnostic: no node/leaf may be discarded by BSP bounding
+       box tests. All remain subject to their wall projection/yclip. */
+    return 1;
+    if (xs0 <= 0 && xs1 >= 0 && ys0 <= 0 && ys1 >= 0) { return 1; }"""
+    if s.count(old)!=1:
+        raise ValueError("M13 all-leaves diagnostic: BSP box entry moved")
+    s=s.replace(old,new,1)
+    p.write_text(s)
+    print("M13 BSP all-leaves diagnostic: bbox culling disabled (slow)")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2434,6 +2458,8 @@ def stage(src, wad, out, control=False):
         bsp_order_renderer(out)
         if os.environ.get("MANIFOLD_BSP_PRECISION","0")=="1":
             m13_bsp_normal_precision(out)
+        if os.environ.get("MANIFOLD_BSP_ALL_LEAVES","0")=="1":
+            m13_bsp_all_leaves_diagnostic(out)
     if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
         stable_view(out)
     if os.environ.get("MANIFOLD_RADIUS","0")=="1":
