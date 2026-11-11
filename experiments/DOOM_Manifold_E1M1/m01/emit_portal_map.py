@@ -248,7 +248,7 @@ WALL_COLOR_CYCLE=(12,6,13,7,9,3)
 FLOOR_COLOR=13   # dark yellow/brown
 CEIL_COLOR=12    # steel
 
-def emit(lumps,cells,tex=None,things=None):
+def emit(lumps,cells,tex=None,things=None,doors=False):
     tex=tex or {}
     vertices={}
     sectors=[]
@@ -336,10 +336,21 @@ def emit(lumps,cells,tex=None,things=None):
         if heights:
             ceilings[si]=heights[0]
             opened.append((si,floor,ceil,heights[0]))
-    print("Temporarily opened closed/connected door-like sectors:",opened)
+    # M12 doors: keep the original closed heights; use the already-proven
+    # neighboring ceilings as each door's target height. The control continues
+    # to use the original permanently-open prototype for a strict A/B.
+    if doors:
+        if sorted(ceilings) != [4,68,76,81]:
+            raise ValueError(f"M12 E1M1 door sectors changed: {sorted(ceilings)}")
+        print("M12 movable DOOR sectors (closed -> target):",opened)
+    else:
+        print("Control: temporarily opened door sectors:",opened)
     sector_params=[]
+    sector_types=[]
     for sector_i,(floor,ceil,fl,ce,light,special,tag) in enumerate(lumps["SECTORS"]):
-        ceil=ceilings.get(sector_i,ceil)
+        is_door=doors and sector_i in ceilings
+        if not is_door:
+            ceil=ceilings.get(sector_i,ceil)
         light_level=max(-2,min(2,round((light-160)/40)))  # colors.c tables cover -2..2
         # 12.4 heights, doubled: Manifold projects 64x144 with a wide FOV and
         # treats openings <=60 as closed doors / steps >=40 as walls.
@@ -352,7 +363,17 @@ def emit(lumps,cells,tex=None,things=None):
             fc=tex["flat_color"].get(_nm(fl),FLOOR_COLOR); cc=tex["flat_color"].get(_nm(ce),CEIL_COLOR)
         packed=((light_level & 0xFF) << 8) | (cc << 4) | fc
         if packed >= 0x8000: packed -= 0x10000
-        sector_params.extend([packed,0,0,0,floor_h,ceil_h,0,0])
+        if is_door:
+            # sector_group.h: index 1 target/orig height, index 2 state
+            # CLOSED=0; index 4 floor and index 5 live ceiling.
+            target_h=ceilings[sector_i]*16*HEIGHT_SCALE
+            if not (-32768<=target_h<=32767) or target_h<=floor_h:
+                raise ValueError(f"M12 door target out of range: {sector_i}")
+            sector_params.extend([packed,target_h,0,0,floor_h,ceil_h,0,0])
+            sector_types.append(2)  # DOOR from sector_group.h
+        else:
+            sector_params.extend([packed,0,0,0,floor_h,ceil_h,0,0])
+            sector_types.append(0)
     text="#include <genesis.h>\n#include \"portal_map.h\"\n#include \"sector_group.h\"\n"
     text+="/* GENERATED, geometry proof-of-concept; textures/colors NOT final */\n"
     text+=as_c_array("s16","e1_sectors",sectors)
@@ -363,7 +384,7 @@ def emit(lumps,cells,tex=None,things=None):
     text+=as_c_array("u8","e1_wall_colors",colors)
     text+=as_c_array("u8","e1_wall_repetitions",reps)
     text+=as_c_array("s16","e1_group_params",sector_params)
-    text+=as_c_array("u8","e1_group_types",[0]*len(lumps["SECTORS"]))
+    text+=as_c_array("u8","e1_group_types",sector_types)
     text+=as_c_array("s16","e1_group_triggers",[0]*(len(lumps["SECTORS"])*8))
     # Conservative all-cells PVS/PHS avoids NULL dereferences in sound/AI.
     # This is temporary and deliberately slow; optimize after live gameplay.
