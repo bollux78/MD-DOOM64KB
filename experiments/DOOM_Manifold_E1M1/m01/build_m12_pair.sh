@@ -48,6 +48,15 @@ for variant in pickups-control doors; do
     OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
     NM="${tc}nm" OBJCPY="${tc}objcopy"
   test -s "$stage/$variant/out/rom.bin"
+  if [ "$variant" = doors ]; then
+    ELF="$stage/$variant/out/release/rom.out"
+    test -s "$ELF" || ELF="$stage/$variant/out/rom.out"
+    if test -s "$ELF"; then
+      echo '=== M12 diagnostics: A-button address error (PC 00E5EC, hint 007F3E) ==='
+      "${tc}addr2line" -f -e "$ELF" 0xE5EC 0x7F3E || true
+      "${tc}nm" -n "$ELF" | python3 -c 'import sys; wanted=(0xE5EC,0x7F3E); rows=[]; [(rows.append((int(p[0],16),p[-1]))) for l in sys.stdin if (p:=l.split()) and len(p)>=3 and all(c in "0123456789abcdefABCDEF" for c in p[0])]; print("\\n".join("address 0x%X nearest symbol %s @ 0x%X"%(a, *(lambda q:(q[1],q[0]))(max((r for r in rows if r[0]<=a),default=(0,"none")))) for a in wanted))' || true
+    fi
+  fi
   cp "$stage/$variant/out/rom.bin" "$RUNNER_TEMP/m12-pair/M12-${variant}-H32.bin"
 done
 (cd "$RUNNER_TEMP/m12-pair" && sha256sum M12-*.bin) > "$RUNNER_TEMP/m12-pair/SHA256SUMS.txt"
@@ -56,6 +65,7 @@ M12-pickups-control-H32.bin: M12 com coleta APROVADA; portas permanentemente abe
 M12-doors-H32.bin: mesma M12 com quatro setores de porta inicialmente fechados.
 Ambas: H32, HUD DOOM, musica XGM, objetos e itens coletaveis.
 M12-doors: botao B perto da porta; teto sobe gradualmente, atravesse, fecha apos 105 ticks (~3 s a 35 Hz).
+M12-doors: A NAO inicia animacao de recarga nesta versao DIAGNOSTICA; testar se o crash desapareceu.
 Setores E1M1 em teste: 4, 68, 76, 81. Sem tranca/chave, sem triggers do WAD ainda.
 Verifique colisao, visual, FPS e se porta NAO fecha enquanto jogador estiver dentro.
 Nao promover experimental sem aprovacao no console.
