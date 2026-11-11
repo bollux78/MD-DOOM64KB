@@ -1,0 +1,32 @@
+name: Manifold M12 Claudio - H32 H40 validation
+on:
+  push:
+    branches: [exp-manifold-m12-claudio-validation]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/m01/**'
+      - '.github/workflows/manifold-m12-claudio-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build M12 Claudio renderer H32 and H40
+        shell: bash
+        run: bash experiments/DOOM_Manifold_E1M1/m01/build_m12_claudio_pair.sh
+      - name: Upload only two playable ROMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifold-m12-claudio-h32-h40
+          path: |
+            ${{ runner.temp }}/m12-claudio/m12stable-h32.bin
+            ${{ runner.temp }}/m12-claudio/m12stable-h40.bin
+            ${{ runner.temp }}/m12-claudio/SHA256SUMS.txt
+            ${{ runner.temp }}/m12-claudio/LEIA-ME.txt
+          retention-days: 7
+          if-no-files-found: error
