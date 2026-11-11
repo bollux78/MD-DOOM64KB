@@ -1922,6 +1922,58 @@ def m13_fill_span_diag(out):
     p.write_text(s)
     print("M13.3 fill-span diagnostic enabled")
 
+def m13_cull_off(out):
+    """M13.3 diagnostic only: disable one bbox rejection test in bsp_box_visible().
+
+    MANIFOLD_BSP_CULL_OFF is a comma list of: rnx, lnx, far, front, empty, cols.
+    Each name removes the 'return 0' of that test, so the cell is kept. Used to
+    find which test rejects cells whose columns the all-leaves build closes.
+    Not a fix: cell count rises when a test is off.
+    """
+    keys=[k for k in os.environ.get("MANIFOLD_BSP_CULL_OFF","").split(",") if k]
+    if not keys: return
+    marks={
+      "rnx":"if ((s32)bsp_rnx * (bsp_rnx > 0 ? xs0 : xs1)",
+      "lnx":"if ((s32)bsp_lnx * (bsp_lnx > 0 ? xs1 : xs0)",
+      "far":"> ((s32)BSP_FAR << FIX16_FRAC_BITS)) { return 0; }",
+      "front":"if (!front) { return 0; }",
+      "empty":"if (cmin >= cmax) { return 0; }",
+      "cols":"if (!manifold_open_cols(cmin, cmax)) { return 0; }",
+    }
+    p=out/"src/portal.c"
+    s=p.read_text()
+    for k in keys:
+        if k not in marks: raise ValueError("unknown cull key "+k)
+        lines=s.split("\n")
+        hit=[i for i,l in enumerate(lines) if marks[k] in l]
+        if len(hit)!=1: raise ValueError(f"M13.3 cull {k}: {len(hit)} matches")
+        lines[hit[0]]=lines[hit[0]].replace("{ return 0; }","{ }",1)
+        s="\n".join(lines)
+    p.write_text(s)
+    print("M13.3 bbox tests disabled:", keys)
+
+def m13_proj_fix(out):
+    """M13.3 candidate: widen the wall column projection past 16 bits.
+
+    project_and_adjust_x() does 'lsl.w #5' on the 16-bit x before muls.w, so any
+    |x| above 1023 wraps and that wall is drawn at a wrong column. The C version
+    keeps x*32 in 32 bits and returns the same value for every in-range input.
+    Opt-in with MANIFOLD_PROJ_FIX=1 until measured.
+    """
+    p=out/"src/math3d.c"
+    s=p.read_text()
+    a=s.index("s16 project_and_adjust_x(s16 x, s16 z_recip) {")
+    b=s.index("    return x;\n}",a)+len("    return x;\n}")
+    old=s[a:b]
+    if "lsl.w #5" not in old:
+        raise ValueError("M13.3 proj fix: asm block moved")
+    new=("s16 project_and_adjust_x(s16 x, s16 z_recip) {\n"
+         "    /* M13.3: 32-bit x*32; the asm lsl.w wrapped for |x| > 1023 */\n"
+         "    return (s16)((((s32)x * 32) * (s32)z_recip) >> 16) + 32;\n}")
+    s=s[:a]+new+s[b:]
+    p.write_text(s)
+    print("M13.3 projection widened to 32-bit")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2501,6 +2553,10 @@ def stage(src, wad, out, control=False):
             m13_bsp_normal_precision(out)
         if os.environ.get("MANIFOLD_BSP_FILL_DIAG","0")=="1":
             m13_fill_span_diag(out)
+        if os.environ.get("MANIFOLD_PROJ_FIX","0")=="1":
+            m13_proj_fix(out)
+        if os.environ.get("MANIFOLD_BSP_CULL_OFF"):
+            m13_cull_off(out)
         if os.environ.get("MANIFOLD_BSP_FAR_FOG","0")=="1":
             m13_bsp_far_fog(out)
         if os.environ.get("MANIFOLD_BSP_ALL_LEAVES","0")=="1":
