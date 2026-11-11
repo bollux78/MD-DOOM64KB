@@ -774,6 +774,8 @@ jobs:
             ${{ env.M11_NOWEAPON_ROM_PATH }}
             ${{ env.M11_NH_ROM_PATH }}
             ${{ env.M11_NEARAW_ROM_PATH }}
+            ${{ env.M12_OBJECTS_ROM_PATH }}
+            ${{ env.MANIFOLD_STAGE }}/m12objects/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11music/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11musicaw/out/release/symbol.txt
             ${{ env.MANIFOLD_STAGE }}/m11play/out/release/symbol.txt
