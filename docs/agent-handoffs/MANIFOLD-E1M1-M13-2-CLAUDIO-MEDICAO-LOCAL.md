@@ -133,3 +133,9 @@ Registrado aqui e no commit seguinte.
 - A única correção de visão que vale aplicar é a de paredes que piscam ao se aproximar, já feita em versões anteriores (guardas de largura zero e de reciprocal).
 - As tentativas de melhorar a visão à distância (culling lateral desligado, all-leaves, limpeza do buffer) aumentaram a carga de CPU sem resultado aceitável. Ficam como diagnóstico, não como candidatas. Os ROMs `claudio-m13-sides-off-h40`, `claudio-m13-sides-clearfog-h40` e `claudio-m13-e1m9-sides-off-h40` não devem ser usados como base.
 - O ajuste de queda e degraus (`MANIFOLD_FALL`) não mexe na visão; é de gravidade e custa quase nada de CPU. É o único candidato desta rodada.
+
+## 13. Correção: o ROM de queda enviado tinha o culling lateral desligado
+
+- O `claudio-m13-e1m9-fall-h40.bin` foi construído com `MANIFOLD_BSP_CULL_OFF=rnx,lnx` além de `MANIFOLD_FALL=1`. Esse culling foi rejeitado pelo usuário. O console mostrou metades da tela piscando com gráfico errado, alternando entre esquerda e direita. Causa provável: a visita extra a células com o culling desligado.
+- ROM corrigido, só com a queda: `claudio-m13-e1m9-fall-only-h40.bin` (E1M9, H40, tag `CLAUDIO M13 E1M9 FALL`). Construído com `MANIFOLD_BSP=1 MANIFOLD_FALL=1`, sem `MANIFOLD_BSP_CULL_OFF`.
+- O ROM anterior (`fall-h40`) não deve ser usado.
