@@ -2602,6 +2602,104 @@ void draw_bottom_clipped_texture_vertical_line(s16 unclipped_y0, u16 y0,
     p.write_text(source)
     print("Using bounded C fallbacks; NO generated vertical-scaler calls")
 
+def m12_safe_sprite_raster(out):
+    """Diagnostic M12-only portable RLE sprite rasterizer.
+
+    Portable, low-cost version of the confirmed working C sprite path.
+    Restores the portal clip buffer and replaces per-pixel divisions with
+    fixed-point stepping plus a per-sprite vertical lookup table.
+    """
+    p=out/"src/draw.c"
+    s=p.read_text()
+    import re
+    m=re.search(r"\bvoid\s+draw_rle_sprite\s*\(",s)
+    if not m: raise ValueError("M12 draw_rle_sprite not found")
+    opening=s.index("{",m.end())
+    depth=1;end=opening+1
+    while depth and end<len(s):
+        if s[end]=="{": depth+=1
+        elif s[end]=="}": depth-=1
+        end+=1
+    if depth: raise ValueError("M12 sprite function braces not balanced")
+    replacement=r"""void draw_rle_sprite(s16 x1, s16 x2, s16 ytop, s16 ybot,
+    u16 window_min, u16 window_max, clip_buf* clipping_buffer,
+    const rle_sprite* obj, object_link obj_link, obj_type type, u16 sector) {
+    if (!obj || obj->num_columns != 64 || x2<=x1 || ybot<=ytop) return;
+    s16 xa=x1>(s16)window_min ? x1 : (s16)window_min;
+    s16 xb=x2<(s16)window_max ? x2 : (s16)window_max;
+    if (xa<0) xa=0;
+    if (xb>RENDER_WIDTH) xb=RENDER_WIDTH;
+    s16 ya=ytop<0 ? 0 : ytop;
+    s16 yb=ybot>SCREEN_HEIGHT ? SCREEN_HEIGHT : ybot;
+    if (xb<=xa || yb<=ya) return;
+
+    /* Divisions only twice per sprite, NEVER per screen pixel. */
+    u32 dx=(u16)(x2-x1),dy=(u16)(ybot-ytop);
+    u32 xstep=((u32)64<<16)/dx, ystep=((u32)64<<16)/dy;
+    u32 xphase=(u32)(xa-x1)*xstep;
+    u32 yphase=(u32)(ya-ytop)*ystep;
+    /* Precompute scaled source rows once per sprite instead of per column.
+       SCREEN_HEIGHT is 144 in the current engine. */
+    u8 source_rows[SCREEN_HEIGHT];
+    for (s16 y=ya; y<yb; y++) {
+        u16 sy=(u16)(yphase>>16);
+        source_rows[y]=sy<64 ? sy : 63;
+        yphase+=ystep;
+    }
+    /* Avoid repeatedly RLE-decoding the same source column when upscaled. */
+    u8 pixels[64];
+    s16 cached_src=-1;
+    u8 hit_center=0;
+    for (s16 x=xa; x<xb; x++,xphase+=xstep) {
+        s16 sx=(s16)(xphase>>16);
+        if (sx>63) sx=63;
+        if (sx!=cached_src) {
+            cached_src=sx;
+            memset(pixels,0,sizeof(pixels));
+            const column* col=&obj->columns[sx];
+            u16 pos=0,texpos=0;
+            if (col->num_spans && (!col->spans || !col->texels)) continue;
+            for (u16 j=0;j<col->num_spans && j<64;j++) {
+                u16 skip=col->spans[j*2],len=col->spans[j*2+1];
+                if (skip>64 || len>64 || pos+skip+len>64) break;
+                pos+=skip;
+                for (u16 k=0;k<len;k++) pixels[pos+k]=col->texels[texpos+k];
+                pos+=len;
+                texpos+=len;
+            }
+        }
+        s16 col_top=ya,col_bot=yb;
+        /* Restore the portal visibility mask, so covered pixels do not
+           need raster work and objects cannot draw through solid walls. */
+        if (clipping_buffer) {
+            u8 clip_top=clipping_buffer->y_clip_buffer[x*2];
+            u8 clip_bot=clipping_buffer->y_clip_buffer[x*2+1];
+            if (col_top<clip_top) col_top=clip_top;
+            if (col_bot>clip_bot) col_bot=clip_bot;
+        }
+        if (col_bot<=col_top) continue;
+        u8* dest=bmp_buffer_write+buf_column_offset_table[x];
+        for (s16 y=col_top;y<col_bot;y++) {
+            u8 pix=pixels[source_rows[y]];
+            if (pix) {
+                /* 2 duplicated packed 4bpp pixels per framebuffer byte.
+                   One aligned 16-bit store paints both bytes of a column. */
+                ((u16*)dest)[y]=(u16)(((u16)pix<<8)|pix);
+            }
+        }
+        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2)) hit_center=1;
+    }
+    if (hit_center) {
+        drawn_to_center_cols=type;
+        sprite_on_center_col=obj_link;
+        center_object_sector=sector;
+    }
+    flip();
+}
+"""
+    p.write_text(s[:m.start()]+replacement+s[end:])
+    print("M12 optimized C RLE sprite raster installed with portal y-clipping")
+
 def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
@@ -2653,7 +2751,16 @@ def stage(src, wad, out, control=False):
     tex=None
     if os.environ.get("MANIFOLD_CELLS","exact")=="exact" and os.environ.get("MANIFOLD_TEXTURES","1")=="1":
         tex=apply_doom_textures(out,map_lumps,cells,wad)
-    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex))
+    m12_things=None
+    if os.environ.get("MANIFOLD_OBJECTS","0")=="1":
+        if not tex:
+            raise ValueError("M12 static sprites require the DOOM map palette")
+        from m12_objects import generate, install_templates
+        sprite_c, templates, m12_things=generate(wad,map_lumps,cells,tex["vdp_palette"],point_inside)
+        (out/"src/m12_doom_objects.c").write_text(sprite_c)
+        install_templates(out,templates)
+        m12_safe_sprite_raster(out)
+    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things))
     if os.environ.get("MANIFOLD_SKY_MERGE","0")=="1":
         m13_sky_merge_upper_wall(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.

@@ -27,3 +27,9 @@ Script: `experiments/DOOM_Manifold_E1M1/tools/m14/run_fps.sh` (lê `cur_frame`, 
 - E1M1 (tour_ctrl): 6,87 FPS
 - E1M9 (e1m9_tourctl): 6,73 FPS
 O MAME não reproduz o clock do console (o usuário vê ~3 a 5 FPS), então vale só como comparação relativa entre builds.
+
+## Fase 1 (porte de objetos estáticos), 12/11
+- `m12_objects.py` e `m12_pickups.py` trazidos do branch do Werk (`exp-manifold-m12-objects-pickups-approved`); raster de sprites e hook `MANIFOLD_OBJECTS=1` reaplicados à mão em `stage_rom.py`; parâmetro `things` em `emit_portal_map.py`. Pickups ainda não ligados (fase 2).
+- E1M9: 82 THINGS inseridos (3 ambíguos descartados). Compila e roda 120 s no MAME sem crash.
+- FPS MAME, E1M9 tour: objetos desligados 7,03; ligados 6,92 (~1,6% de custo).
+- Não verificado: SHA idêntico ao controle com a flag desligada (as flags de build do controle antigo diferem das desta rodada). Não verificado: aparência dos sprites; os 4 snapshots do tour não mostram um objeto claro.
