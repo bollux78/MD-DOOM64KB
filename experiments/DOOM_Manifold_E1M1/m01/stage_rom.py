@@ -3108,21 +3108,47 @@ def m14_weapon_fix(out):
     t=t.replace(anchor,anchor+"""
 extern u32 last_frame_ticks;
 static u8 m14_wpn_wait;
+static u32* m14_up_ptr; static u16 m14_up_left; static u16 m14_up_idx;
+static void m14_up_chunk(TransferMethod tm) {          /* <=32 tiles (1 KB) per game frame */
+    u16 n = (m14_up_left > 32) ? 32 : m14_up_left;
+    if (!n) return;
+    VDP_loadTileData(m14_up_ptr, m14_up_idx, n, tm);
+    m14_up_ptr += n * 8; m14_up_idx += n; m14_up_left -= n;
+}
 static int m14_wpn_ready(void) {
+    if (m14_up_left) { m14_up_chunk(DMA_QUEUE); return 0; }
     if (m14_wpn_wait) { m14_wpn_wait--; return 0; }
     return 1;
 }""",1)
+    t+="""
+void m14_fire_anim(void) {
+    if (M14_FLASH == 0) return;                                  /* diagnostic: no fire frame */
+    if (transfer_pending != DONE || cur_anim_idx != 0) return;   /* one flash at a time */
+    set_weapon_anim(2, DMA_QUEUE);
+    transfer_pending = TILES_LOADING;
+    m14_wpn_wait = 1;
+}
+"""
     old="        transfer_pending = TILES_LOADING;"
     assert t.count(old)==1
     t=t.replace(old,old+"\n        m14_wpn_wait = 1;",1)
     old="    if(cur_frame_timer-- <= 0 && transfer_pending == DONE) {"
     assert t.count(old)==1
     t=t.replace(old,"    if(transfer_pending == DONE && cur_frame_timer-- <= 0) {",1)
+    old="    VDP_loadTileSet(frame->tileset, cur_upload_idx, transfer_type);"
+    assert t.count(old)==1
+    t=t.replace(old,"""    m14_up_ptr = frame->tileset->tiles; m14_up_left = frame->tileset->numTile; m14_up_idx = cur_upload_idx;
+    if (transfer_type == DMA_QUEUE) m14_up_chunk(DMA_QUEUE);
+    else while (m14_up_left) m14_up_chunk(transfer_type);""",1)
     old="    cur_frame_timer = entry.time;"
     assert t.count(old)==1
     t=t.replace(old,"    cur_frame_timer = entry.time;\n    if (entry.time > 0) { if (last_frame_ticks >= 60) cur_frame_timer = 0; else if (last_frame_ticks >= 30) cur_frame_timer = 1; }",1)
+    t="#define M14_FLASH "+("0" if os.environ.get("MANIFOLD_WEAPON_FLASH","1")=="0" else "1")+"\n"+t
     w.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
+    for call in ("set_weapon_anim(SHOTGUN_RELOAD_ANIM, DMA_QUEUE);",):
+        if call in t:
+            t=t.replace(call,"{ extern void m14_fire_anim(void); m14_fire_anim(); }")
     old="    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n}"
     assert t.count(old)==1
     t=t.replace(old,"    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n    { extern void update_weapon_sprites(TransferMethod t); update_weapon_sprites(DMA); }\n}",1)
@@ -3229,7 +3255,14 @@ def m14_weapon(out, wad):
         return o
     d=out/"res/images"
     to_p(idle).save(d/"SHOTGUN.png")
-    to_p(reload_c).save(d/"SHOTGUN_RELOAD.png")
+    if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
+        to_p(fire_c).save(d/"SHOTGUN_RELOAD.png")          # 64x64 = 64 tiles (was 128)
+        rr=out/"res/sprites_res.res"; rt=rr.read_text()
+        o2='"images/SHOTGUN_RELOAD.png" 8 16'
+        assert rt.count(o2)==1
+        rr.write_text(rt.replace(o2,'"images/SHOTGUN_RELOAD.png" 8 8'))
+    else:
+        to_p(reload_c).save(d/"SHOTGUN_RELOAD.png")
     p=out/"src/weapon_sprites.c"
     s=p.read_text()
     old=".anim_idx = 0, .frame_idx = 1,"
@@ -3445,10 +3478,10 @@ def stage(src, wad, out, control=False):
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.ang = {(angle*1024)//360};")
     p.write_text(s)
-    if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
-        m14_weapon_fix(out)
     if os.environ.get("MANIFOLD_MONSTERS","0")=="1":
         m14_monsters(out,x,y,angle,spawn_cell)
+    if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
+        m14_weapon_fix(out)
     report={
         "source":UPSTREAM,"pin":PIN,"map":"E1M1",
         "format":"Manifold portal_map C proof of concept",
