@@ -67,7 +67,11 @@ def main():
     parser.add_argument("wad", type=Path)
     parser.add_argument("frames", type=Path)
     parser.add_argument("--map", default="E1M1")
+    parser.add_argument("--2x2", dest="double", action="store_true")
     args = parser.parse_args()
+    global WIDTH, HEIGHT, FOCAL
+    if args.double:
+        WIDTH, HEIGHT, FOCAL = 80, 60, 40
     data = load_map(directory(args.wad.read_bytes()), args.map)
     raw = args.frames.read_bytes()
     poses = cameras(data)

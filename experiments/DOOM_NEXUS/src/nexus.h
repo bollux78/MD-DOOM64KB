@@ -3,7 +3,16 @@
 
 #include <stdint.h>
 
-enum { NX_WIDTH = 128, NX_HEIGHT = 96, NX_TILE_BYTES = 6144 };
+#ifdef NX_2X2
+enum { NX_WIDTH = 80, NX_HEIGHT = 60, NX_SCALE = 2 };
+#else
+enum { NX_WIDTH = 128, NX_HEIGHT = 96, NX_SCALE = 1 };
+#endif
+enum {
+    NX_VIEW_WIDTH = NX_WIDTH * NX_SCALE,
+    NX_VIEW_HEIGHT = NX_HEIGHT * NX_SCALE,
+    NX_TILE_BYTES = NX_VIEW_WIDTH * NX_VIEW_HEIGHT / 2
+};
 enum { NX_LINEAR, NX_TILES };
 
 typedef struct { int16_t x, y; } NxVertex;

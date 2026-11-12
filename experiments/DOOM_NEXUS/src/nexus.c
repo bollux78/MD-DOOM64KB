@@ -1,7 +1,7 @@
 #include "nexus.h"
 
 enum {
-    SCALE = 256, FOCAL = 64, NEAR = 2 * SCALE, LEAF = 0x8000,
+    SCALE = 256, FOCAL = NX_WIDTH / 2, NEAR = 2 * SCALE, LEAF = 0x8000,
     CEILING_COLOR = 1, FLOOR_COLOR = 2, UPPER_COLOR = 3, LOWER_COLOR = 4
 };
 
@@ -28,6 +28,16 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
         return;
     }
 
+#ifdef NX_2X2
+    unsigned offset = (x >> 2) * 32 + (x & 3);
+    uint8_t ink = color * 17;
+    for (int y = first; y < end; ++y) {
+        uint8_t *dst = r->pixels + (y >> 2) * (NX_VIEW_WIDTH * 4)
+                       + (y & 3) * 8 + offset;
+        dst[0] = ink;
+        dst[4] = ink;
+    }
+#else
     unsigned shift = (x & 1) ? 0 : 4;
     unsigned mask = 15u << shift;
     unsigned ink = color << shift;
@@ -42,10 +52,26 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
             byte[row * 4] = (byte[row * 4] & ~mask) | ink;
         first = stop;
     }
+#endif
 }
 
 void nx_pack(const uint8_t *linear, uint8_t *tiles)
 {
+#ifdef NX_2X2
+    for (int ty = 0; ty < NX_HEIGHT; ty += 4) {
+        for (int tx = 0; tx < NX_WIDTH; tx += 4) {
+            for (int row = 0; row < 4; ++row) {
+                const uint8_t *src = linear + (ty + row) * NX_WIDTH + tx;
+                for (int x = 0; x < 4; ++x) {
+                    uint8_t ink = src[x] * 17;
+                    tiles[x] = ink;
+                    tiles[x + 4] = ink;
+                }
+                tiles += 8;
+            }
+        }
+    }
+#else
     for (int ty = 0; ty < NX_HEIGHT; ty += 8) {
         for (int tx = 0; tx < NX_WIDTH; tx += 8) {
             for (int row = 0; row < 8; ++row) {
@@ -55,6 +81,7 @@ void nx_pack(const uint8_t *linear, uint8_t *tiles)
             }
         }
     }
+#endif
 }
 
 static ViewPoint view_point(const NxCamera *camera, NxVertex vertex)

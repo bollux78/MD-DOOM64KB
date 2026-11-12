@@ -2,8 +2,9 @@
 #include <genesis.h>
 
 enum {
-    TILE_COUNT = NX_WIDTH * NX_HEIGHT / 64,
-    VIEW_X = 12, VIEW_Y = 7, RUN_SAMPLES = 39
+    TILE_COUNT = NX_VIEW_WIDTH * NX_VIEW_HEIGHT / 64,
+    VIEW_X = (320 - NX_VIEW_WIDTH) / 16,
+    VIEW_Y = (208 - NX_VIEW_HEIGHT) / 16, RUN_SAMPLES = 39
 };
 
 extern const NxMap nexus_map;
@@ -34,17 +35,33 @@ static Timing show(const NxCamera *camera, int layout)
     unsigned bank = displayed ^ 1;
     SYS_doVBlankProcessEx(ON_VBLANK_START);
     u32 blank = getSubTick();
-    VDP_loadTileData(packed, TILE_USER_INDEX + bank * TILE_COUNT, TILE_COUNT, DMA);
+    u32 initial_wait = blank - ready;
+    u32 transfer = 0;
+    unsigned tile_base = TILE_USER_INDEX + bank * TILE_COUNT;
+    unsigned first = 0;
+#ifdef NX_2X2
+    first = TILE_COUNT / 2;
+    VDP_loadTileData(packed, tile_base, first, DMA);
+    DMA_waitCompletion();
+    u32 half_done = getSubTick();
+    transfer = half_done - blank;
+    SYS_doVBlankProcessEx(ON_VBLANK_START);
+    blank = getSubTick();
+    time.wait = blank - half_done;
+#else
+    time.wait = 0;
+#endif
+    VDP_loadTileData(packed + first * 8, tile_base + first, TILE_COUNT - first, DMA);
     VDP_setTileMapDataRect(BG_A, tilemap[bank], VIEW_X, VIEW_Y,
-                          NX_WIDTH / 8, NX_HEIGHT / 8, NX_WIDTH / 8, DMA);
+                          NX_VIEW_WIDTH / 8, NX_VIEW_HEIGHT / 8, NX_VIEW_WIDTH / 8, DMA);
     DMA_waitCompletion();
     displayed = bank;
     u32 done = getSubTick();
 
     time.draw = drawn - start;
     time.pack = layout == NX_LINEAR ? ready - drawn : 0;
-    time.wait = blank - ready;
-    time.dma = done - blank;
+    time.wait += initial_wait;
+    time.dma = transfer + done - blank;
     time.frame = done - start;
     return time;
 }
@@ -162,7 +179,11 @@ int main(bool hard_reset)
     VDP_setScreenWidth320();
     PAL_setPalette(PAL1, colors, CPU);
     VDP_setTextPlane(BG_B);
+#ifdef NX_2X2
+    VDP_drawText("NEXUS 2X2", 3, 1);
+#else
     VDP_drawText("NEXUS N02", 3, 1);
+#endif
     VDP_drawText(nexus_map_name, 15, 1);
     VDP_drawText("START camera   A/B layout   C run", 3, 26);
 
