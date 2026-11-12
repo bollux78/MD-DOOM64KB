@@ -11,10 +11,13 @@ python3 tools/import_wad.py "$DOOM1_WAD" --emit src/map_data.c > out/map-audit.j
 cat out/map-audit.json
 
 libgcc="$("${prefix}gcc" -m68000 -print-libgcc-file-name)"
-make release GDK="$GDK" PREFIX="$prefix" JAVA=java EXTRA_FLAGS="-std=gnu11" LIBGCC="$libgcc -lgcc"
+make release GDK="$GDK" PREFIX="$prefix" JAVA=java EXTRA_FLAGS="-std=gnu11 -ffreestanding" LIBGCC="$libgcc -lgcc"
 python3 - <<'PY'
 from pathlib import Path
-rom = bytearray(Path("out/rom.bin").read_bytes())
+raw = Path("out/release/rom.bin")
+if not raw.is_file():
+    raw = Path("out/rom.bin")
+rom = bytearray(raw.read_bytes())
 assert len(rom) > 512 and rom[0x100:0x104] == b"SEGA"
 pc = int.from_bytes(rom[4:8], "big")
 assert 0x200 <= pc < len(rom) and pc % 2 == 0
