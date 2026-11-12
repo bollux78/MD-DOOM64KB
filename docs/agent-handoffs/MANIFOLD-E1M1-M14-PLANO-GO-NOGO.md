@@ -1,0 +1,23 @@
+# M14: E1M1 jogável no Manifold, com go/no-go
+
+Decisão do usuário (12/11/2026): a ideia original era o Manifold superar o desempenho do Doom original, e isso não aconteceu. Tentamos uma E1M1 inteira funcional; se o resultado for ruim, abandonamos o Manifold.
+
+**Prazo:** 3 dias, até 15/11/2026 (~01h, horário de Brasília), para uma E1M1 jogável e a decisão final.
+
+## Escopo de "funcional"
+Começa no jogo (START), percorre o mapa até a saída, com portas, objetos estáticos, pickups, inimigos com IA básica, arma e HUD; sem crash em uma partida completa; sem buracos de render nas áreas já identificadas.
+
+## Critérios de decisão
+1. Desempenho: mesma rota fixa (ou DEMO3), mesmo hardware, comparado ao port de Doom atual. FPS abaixo do port nessa rota = abandonar.
+2. Checkpoint antes dos inimigos: medir FPS com sprites, portas e pickups. Se já estiver muito abaixo do port, decidir ali.
+3. Só correções de defeito no renderer; nada de visão à distância que aumente CPU.
+
+## Referência (não comparável diretamente)
+Série R20 do port: ~11 FPS calculados na DEMO3 (2134 frames). Relatos de console do Manifold: ~3 a 5 FPS. Será remedido na mesma rota.
+
+## Fases
+0. Linha de base (controle E1M1/E1M9 sem objetos).
+1. Porte manual de objetos estáticos (m12_objects.py, raster de sprites, MANIFOLD_OBJECTS), SHA igual com flag desligada.
+2. Portas, pickups, crash do botão A.
+3. Checkpoint de FPS (go/no-go parcial).
+4. Inimigos, grades, ROM final de teste jogável (START entra no jogo).

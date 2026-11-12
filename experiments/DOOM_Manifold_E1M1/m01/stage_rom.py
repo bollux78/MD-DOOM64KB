@@ -2046,6 +2046,58 @@ def m13_fall_snap(out):
     p.write_text(s)
     print("M13.3 fall: step snap and accelerating fall enabled")
 
+def m13_trace(out):
+    """M13.3 diagnostic only: log every wall/floor/ceiling draw call per frame.
+
+    Each draw function appends (fn id, a, b, c, d, e) to a RAM ring trc_buf,
+    reset at the start of manifold_bsp_render(). The Lua harness reads it on
+    frames whose residual span is known. Opt-in with MANIFOLD_TRACE=1. Not a fix.
+    """
+    d = out/"src/draw.c"; ds = d.read_text()
+    helper = """
+volatile u16 trc_count;
+volatile s16 trc_buf[256*6];
+void trc(u16 fn, s16 a, s16 b, s16 c, s16 d, s16 e) {
+    if (trc_count < 256) {
+        u16 i = trc_count * 6;
+        trc_buf[i] = fn; trc_buf[i+1] = a; trc_buf[i+2] = b;
+        trc_buf[i+3] = c; trc_buf[i+4] = d; trc_buf[i+5] = e;
+        trc_count++;
+    }
+}
+"""
+    inc = [m.end() for m in re.finditer(r'^#include[^\n]*\n', ds, re.M)]
+    at = inc[-1] if inc else 0
+    ds = ds[:at] + "void trc(u16 fn, s16 a, s16 b, s16 c, s16 d, s16 e);\n" + ds[at:]
+    ds += helper
+    specs = [
+      ("void draw_upper_step(", "trc(1,x1,x2,x1_ytop,x2_ytop,nx1_ytop);"),
+      ("void draw_lower_step(", "trc(2,x1,x2,x1_ybot,x2_ybot,nx1_ybot);"),
+      ("void draw_ceiling_update_clip(", "trc(3,x1,x2,x1_ytop,x2_ytop,0);"),
+      ("void draw_floor_update_clip(", "trc(4,x1,x2,x1_ybot,x2_ybot,0);"),
+      ("void draw_solid_color_wall(", "trc(5,x1,x2,x1_ytop,x1_ybot,x2_ytop);"),
+      ("void draw_wall(", "trc(6,x1,x2,x1_ytop,x1_ybot,x2_ytop);"),
+      ("void draw_top_pegged_wall(", "trc(7,x1,x2,x1_ytop,x1_ybot,x2_ytop);"),
+      ("void draw_bot_pegged_wall(", "trc(8,x1,x2,x1_ytop,x1_ybot,x2_ytop);"),
+      ("void manifold_fill_open(u16 a, u16 b) {", "trc(9,a,b,0,0,0);"),
+    ]
+    for sig, call in specs:
+        i = ds.index(sig)
+        if sig.endswith("{"):
+            j = i + len(sig)
+        else:
+            j = ds.index("{\n", i) + 2
+        ds = ds[:j] + "    " + call + "\n" + ds[j:]
+    d.write_text(ds)
+    pp = out/"src/portal.c"; ps = pp.read_text()
+    a = "    manifold_bsp_cells = 0;\n"
+    if ps.count(a) != 1: raise ValueError("trace: reset anchor")
+    ps = ps.replace(a, a + "    trc_count = 0;\n", 1)
+    ps = ps.replace("void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame);",
+                    "void manifold_bsp_render(u16 src_sector, u16 wmin, u16 wmax, u32 cur_frame);\nextern volatile u16 trc_count;", 1)
+    pp.write_text(ps)
+    print("M13.3 draw trace enabled")
+
 def m13_bsp_normal_precision(out):
     """M13.2 G-02: preserve full BSP frustum normal signs.
 
@@ -2636,6 +2688,8 @@ def stage(src, wad, out, control=False):
             m13_bsp_far_fog(out)
         if os.environ.get("MANIFOLD_BSP_ALL_LEAVES","0")=="1":
             m13_bsp_all_leaves_diagnostic(out)
+    if os.environ.get("MANIFOLD_TRACE","0")=="1":
+        m13_trace(out)
     if os.environ.get("MANIFOLD_FALL","0")=="1":
         m13_fall_snap(out)
     if os.environ.get("MANIFOLD_STABLE_VIEW","0")=="1":
