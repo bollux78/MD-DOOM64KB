@@ -109,7 +109,11 @@ static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
     VDP_clearText(0, 0, 40);
     VDP_drawText("NEXUS", 1, 0);
     VDP_drawText(nexus_map_name, 8, 0);
+#ifdef NX_4X1
+    VDP_drawText("4X1", 28, 0);
+#else
     VDP_drawText(VARIANT_NAME, 28, 0);
+#endif
     VDP_drawText(mode_name[mode], 15, 0);
     if (free_camera)
         VDP_drawText("FREE", 33, 0);

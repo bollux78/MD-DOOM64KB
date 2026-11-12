@@ -1,7 +1,7 @@
 #include "nexus.h"
 
 enum {
-    SCALE = 256, FOCAL = NX_WIDTH / 2, NEAR = 2 * SCALE, LEAF = 0x8000,
+    SCALE = 256, FOCAL_X = NX_WIDTH / 2, FOCAL_Y = NX_HEIGHT * 2 / 3, NEAR = 2 * SCALE, LEAF = 0x8000,
     CEILING_COLOR = 1, FLOOR_COLOR = 2, UPPER_COLOR = 3, LOWER_COLOR = 4
 };
 
@@ -40,7 +40,16 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
         return;
     }
 
-#ifdef NX_2X2
+#if defined(NX_4X1)
+    unsigned offset = (x >> 1) * 32 + (x & 1) * 2;
+    uint8_t ink = color * 17;
+    for (int y = first; y < end; ++y) {
+        uint8_t *dst = r->pixels + (y >> 3) * (NX_VIEW_WIDTH * 4)
+                       + (y & 7) * 4 + offset;
+        dst[0] = ink;
+        dst[1] = ink;
+    }
+#elif defined(NX_2X2)
     unsigned offset = (x >> 2) * 32 + (x & 3);
     uint8_t ink = color * 17;
     while (first < end) {
@@ -74,6 +83,7 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
 }
 
 #ifdef NX_2X2
+#ifndef NX_4X1
 static void pack_tile(const uint8_t *src, uint8_t *tile)
 {
     for (int row = 0; row < 4; ++row) {
@@ -87,12 +97,36 @@ static void pack_tile(const uint8_t *src, uint8_t *tile)
     }
 }
 
+#endif
 typedef uint32_t AliasWord __attribute__((__may_alias__));
 
 unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,
                        uint16_t mixed_base, uint16_t solid_base)
 {
-#ifdef NX_WIDE
+#if defined(NX_4X1)
+    unsigned mixed = 0;
+    for (unsigned ty = 0; ty < NX_HEIGHT; ty += 8) {
+        for (unsigned tx = 0; tx < NX_WIDTH; tx += 2) {
+            const uint8_t *src = linear + nx_linear_index(tx, ty);
+            unsigned color = src[0];
+            uint32_t uniform = color * UINT32_C(0x01010101);
+            const AliasWord *col = (const AliasWord *)src;
+            if (col[0] == uniform && col[1] == uniform &&
+                col[NX_HEIGHT / 4] == uniform && col[NX_HEIGHT / 4 + 1] == uniform) {
+                *map++ = solid_base + color;
+                continue;
+            }
+            *map++ = mixed_base + mixed++;
+            for (unsigned row = 0; row < 8; ++row) {
+                unsigned a = src[row] * 17, b = src[NX_HEIGHT + row] * 17;
+                tiles[0] = tiles[1] = a;
+                tiles[2] = tiles[3] = b;
+                tiles += 4;
+            }
+        }
+    }
+    return mixed;
+#elif defined(NX_WIDE)
 #define INK_ROW(n) {0u, (n), 2u*(n), 3u*(n), 4u*(n), 5u*(n), 6u*(n), 7u*(n), \
                     8u*(n), 9u*(n), 10u*(n), 11u*(n), 12u*(n), 13u*(n), 14u*(n), 15u*(n)}
     static const uint32_t ink[3][3][16] = {
@@ -176,7 +210,18 @@ unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,
 
 void nx_pack(const uint8_t *linear, uint8_t *tiles)
 {
-#ifdef NX_2X2
+#if defined(NX_4X1)
+    for (unsigned ty = 0; ty < NX_HEIGHT; ty += 8)
+        for (unsigned tx = 0; tx < NX_WIDTH; tx += 2) {
+            const uint8_t *src = linear + nx_linear_index(tx, ty);
+            for (unsigned row = 0; row < 8; ++row) {
+                unsigned a = src[row] * 17, b = src[NX_HEIGHT + row] * 17;
+                tiles[0] = tiles[1] = a;
+                tiles[2] = tiles[3] = b;
+                tiles += 4;
+            }
+        }
+#elif defined(NX_2X2)
     for (int ty = 0; ty < NX_HEIGHT; ty += 4) {
         for (int tx = 0; tx < NX_WIDTH; tx += 4) {
             pack_tile(linear + nx_linear_index(tx, ty), tiles);
@@ -252,7 +297,7 @@ static int32_t scaled_divide(int32_t value, int32_t factor, int32_t divisor)
 static Zoom project_zoom(ViewPoint a, ViewPoint b, int32_t ax, int32_t bx,
                          int first, int end)
 {
-    uint32_t numerator = FOCAL * SCALE * 65536u;
+    uint32_t numerator = FOCAL_Y * SCALE * 65536u;
     int32_t za = numerator / (uint32_t)a.z;
     int32_t zb = numerator / (uint32_t)b.z;
     int32_t delta = bx - ax;
@@ -280,11 +325,17 @@ static Zoom project_zoom(ViewPoint a, ViewPoint b, int32_t ax, int32_t bx,
     };
 }
 
+#ifdef NX_4X1
+enum { EDGE_FRAC = 15 };
+#else
+enum { EDGE_FRAC = 16 };
+#endif
+
 static Edge project_edge(int height, Zoom zoom)
 {
-    int32_t first = ((int64_t)height * zoom.first) >> 8;
-    int32_t step = ((int64_t)height * zoom.step + 128) >> 8;
-    return (Edge){NX_HEIGHT / 2 * 65536u - (uint32_t)first, 0u - (uint32_t)step};
+    int32_t first = ((int64_t)height * zoom.first) >> (24 - EDGE_FRAC);
+    int32_t step = ((int64_t)height * zoom.step + (1 << (23 - EDGE_FRAC))) >> (24 - EDGE_FRAC);
+    return (Edge){(NX_HEIGHT / 2u << EDGE_FRAC) - (uint32_t)first, 0u - (uint32_t)step};
 }
 
 static void update_open_bounds(Renderer *r)
@@ -301,10 +352,10 @@ static void update_open_bounds(Renderer *r)
     const NxCamera *c = r->camera;
     int lo = left - NX_WIDTH / 2;
     int hi = right - NX_WIDTH / 2;
-    r->left_x = FOCAL * c->sine - lo * c->cosine;
-    r->left_y = -FOCAL * c->cosine - lo * c->sine;
-    r->right_x = hi * c->cosine - FOCAL * c->sine;
-    r->right_y = hi * c->sine + FOCAL * c->cosine;
+    r->left_x = FOCAL_X * c->sine - lo * c->cosine;
+    r->left_y = -FOCAL_X * c->cosine - lo * c->sine;
+    r->right_x = hi * c->cosine - FOCAL_X * c->sine;
+    r->right_y = hi * c->sine + FOCAL_X * c->cosine;
     r->left_bias = (int32_t)c->x * r->left_x + (int32_t)c->y * r->left_y;
     r->right_bias = (int32_t)c->x * r->right_x + (int32_t)c->y * r->right_y;
 }
@@ -480,8 +531,8 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     if (b.z < NEAR)
         b = intersect_near(b, a);
 
-    int32_t ax = NX_WIDTH / 2 * SCALE + projected(a.x, a.z, FOCAL * SCALE);
-    int32_t bx = NX_WIDTH / 2 * SCALE + projected(b.x, b.z, FOCAL * SCALE);
+    int32_t ax = NX_WIDTH / 2 * SCALE + projected(a.x, a.z, FOCAL_X * SCALE);
+    int32_t bx = NX_WIDTH / 2 * SCALE + projected(b.x, b.z, FOCAL_X * SCALE);
     if (bx <= ax)
         return;
 
@@ -548,16 +599,16 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
         int top = r->top[x];
         int bottom = r->bottom[x];
         if (top < bottom) {
-            int wall_top = limit(edge((int32_t)ceiling.y >> 8), top, bottom);
-            int wall_end = limit(edge((int32_t)floor.y >> 8), wall_top, bottom);
+            int wall_top = limit(edge((int32_t)ceiling.y >> (EDGE_FRAC - 8)), top, bottom);
+            int wall_end = limit(edge((int32_t)floor.y >> (EDGE_FRAC - 8)), wall_top, bottom);
             span(r, x, top, wall_top, CEILING_COLOR);
             span(r, x, wall_end, bottom, FLOOR_COLOR);
 #ifdef NX_WALLS
             int opening_top = wall_top;
             int opening_end = wall_end;
             if (!solid) {
-                opening_top = limit(edge((int32_t)upper.y >> 8), wall_top, wall_end);
-                opening_end = limit(edge((int32_t)lower.y >> 8), opening_top, wall_end);
+                opening_top = limit(edge((int32_t)upper.y >> (EDGE_FRAC - 8)), wall_top, wall_end);
+                opening_end = limit(edge((int32_t)lower.y >> (EDGE_FRAC - 8)), opening_top, wall_end);
             }
             if (material && (solid ? middle->width && wall_top < wall_end :
                 (high_texture->width && wall_top < opening_top) ||
@@ -608,8 +659,8 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
                 r->top[x] = r->bottom[x];
             } else {
 #ifndef NX_WALLS
-                int opening_top = limit(edge((int32_t)upper.y >> 8), wall_top, wall_end);
-                int opening_end = limit(edge((int32_t)lower.y >> 8), opening_top, wall_end);
+                int opening_top = limit(edge((int32_t)upper.y >> (EDGE_FRAC - 8)), wall_top, wall_end);
+                int opening_end = limit(edge((int32_t)lower.y >> (EDGE_FRAC - 8)), opening_top, wall_end);
 #endif
 #ifdef NX_WALLS
                 if (material) {

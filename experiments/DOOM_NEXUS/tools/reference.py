@@ -6,7 +6,7 @@ from pathlib import Path
 
 from import_wad import cameras, directory, load_map
 
-WIDTH, HEIGHT, FOCAL, NEAR = 128, 96, 64, 2
+WIDTH, HEIGHT, FOCAL_X, FOCAL_Y, NEAR = 128, 96, 64, 64, 2
 
 
 def reference(data, camera):
@@ -17,7 +17,7 @@ def reference(data, camera):
               for vx, vy in vertices]
     image = bytearray([7]) * (WIDTH * HEIGHT)
     for column in range(WIDTH):
-        slope = (column + 0.5 - WIDTH / 2) / FOCAL
+        slope = (column + 0.5 - WIDTH / 2) / FOCAL_X
         hits = []
         for a, b, front, back in segs:
             ax, az = points[a]
@@ -35,7 +35,7 @@ def reference(data, camera):
         hits.sort()
         for row in range(HEIGHT):
             for depth, a, b, front, back in hits:
-                z = eye + (HEIGHT / 2 - row - 0.5) * depth / FOCAL
+                z = eye + (HEIGHT / 2 - row - 0.5) * depth / FOCAL_Y
                 floor, ceiling = sectors[front]
                 if z > ceiling:
                     color = 1
@@ -68,10 +68,13 @@ def main():
     parser.add_argument("frames", type=Path)
     parser.add_argument("--map", default="E1M1")
     parser.add_argument("--2x2", dest="double", action="store_true")
+    parser.add_argument("--4x1", dest="four_by_one", action="store_true")
     args = parser.parse_args()
-    global WIDTH, HEIGHT, FOCAL
+    global WIDTH, HEIGHT, FOCAL_X, FOCAL_Y
     if args.double:
-        WIDTH, HEIGHT, FOCAL = 80, 60, 40
+        WIDTH, HEIGHT, FOCAL_X, FOCAL_Y = 80, 60, 40, 40
+    if args.four_by_one:
+        WIDTH, HEIGHT, FOCAL_X, FOCAL_Y = 40, 120, 20, 80
     data = load_map(directory(args.wad.read_bytes()), args.map)
     raw = args.frames.read_bytes()
     poses = cameras(data)

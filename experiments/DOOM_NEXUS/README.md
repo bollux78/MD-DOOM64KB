@@ -72,3 +72,24 @@ nas 13 poses e nos três modos. UV e ASM foram idênticos à BASE. LUT e
 ALL mudaram nove pixels lógicos no total no modo perspectiva e sete no
 modo em blocos. As paredes lisas foram idênticas em todas as variantes.
 O teste em console da matriz está pendente.
+
+## Colunas de quatro pixels
+
+`bash build.sh E1M1 4x1 uv` renderiza a 40 × 120 e replica cada coluna
+horizontalmente por quatro. O viewport de 160 × 120 e o campo de visão
+coincidem com o da ROM 2x. A projeção usa focais lógicas independentes
+(X=20, Y=80) e a expansão para tiles tem um empacotador dedicado.
+
+Genesis Plus GX, 13 poses de E1M1 repetidas três vezes. Os números
+incluem o quadro inteiro, em milissegundos (mediana / P95).
+
+| Modo | 2×2, 80 × 60 | 4×1, 40 × 120 |
+| --- | ---: | ---: |
+| Liso | 99 / 215 | 82 / 166 |
+| Perspectiva | 216 / 416 | 149 / 299 |
+| Blocos | 199 / 399 | 149 / 299 |
+
+As duas ROMs coincidiram com seus frames de referência do PC nas
+13 poses e nos três modos. O modo liso 4x1 também coincidiu com o
+traçado de raios independente nessas poses. A avaliação visual e
+de velocidade no Mega Drive físico está pendente.

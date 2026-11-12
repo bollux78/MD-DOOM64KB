@@ -19,6 +19,7 @@ esac
 config="$scale-$variant"
 case "$scale" in
     2x) viewport_flag="" ;;
+    4x1) viewport_flag="-DNX_4X1" ;;
     3x) viewport_flag="-DNX_WIDE" ;;
     *) echo "Unsupported viewport scale: $scale" >&2; exit 2 ;;
 esac

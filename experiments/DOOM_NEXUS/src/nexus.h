@@ -3,13 +3,18 @@
 
 #include <stdint.h>
 
-#ifdef NX_2X2
+#if defined(NX_4X1)
+enum { NX_WIDTH = 40, NX_HEIGHT = 120 };
+#elif defined(NX_2X2)
 enum { NX_WIDTH = 80, NX_HEIGHT = 60, NX_SCALE = 2 };
 #else
 enum { NX_WIDTH = 128, NX_HEIGHT = 96, NX_SCALE = 1 };
 #endif
 enum {
-    #ifdef NX_WIDE
+#if defined(NX_4X1)
+    NX_VIEW_WIDTH = NX_WIDTH * 4,
+    NX_VIEW_HEIGHT = NX_HEIGHT,
+#elif defined(NX_WIDE)
     NX_VIEW_WIDTH = NX_WIDTH * 3,
     NX_VIEW_HEIGHT = (NX_HEIGHT * 3 + 7) & ~7,
 #else
