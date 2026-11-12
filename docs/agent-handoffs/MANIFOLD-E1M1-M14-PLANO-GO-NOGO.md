@@ -33,3 +33,10 @@ O MAME não reproduz o clock do console (o usuário vê ~3 a 5 FPS), então vale
 - E1M9: 82 THINGS inseridos (3 ambíguos descartados). Compila e roda 120 s no MAME sem crash.
 - FPS MAME, E1M9 tour: objetos desligados 7,03; ligados 6,92 (~1,6% de custo).
 - Não verificado: SHA idêntico ao controle com a flag desligada (as flags de build do controle antigo diferem das desta rodada). Não verificado: aparência dos sprites; os 4 snapshots do tour não mostram um objeto claro.
+
+## Resultado de console, 12/11 (01h)
+- `claudio-m14-e1m1-objects-h40.bin` (BSP=1 + objetos): objetos corretos (posição e tamanho), mas paredes azuis (colunas abertas pintadas por `manifold_fill_open`).
+- `claudio-m14-e1m1-objects-nobsp-h40.bin` (BSP=0 + objetos): **nenhum azul, objetos presentes; "a melhor até agora"** (usuário).
+- FPS MAME, tour 120 s: BSP=1 6,71; BSP=0 6,67. Sem diferença de custo.
+- Decisão: a base do M14 passa a ser BSP=0. A ser verificado: se o pisca de paredes ao se aproximar volta sem BSP.
+- Hipótese ainda não confirmada: o azul vem do culling lateral do modo BSP (rnx/lnx), não dos objetos.
