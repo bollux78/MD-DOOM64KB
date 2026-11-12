@@ -1119,6 +1119,93 @@ static void sky_repair_once(void) {
     p.write_text(s)
     print("M13 one-time HUD/sky VRAM recovery, no interrupt masking")
 
+def m14_identity(out):
+    """M14 rule: every test ROM carries its name/purpose in the cartridge
+    header (BlastEm shows it in the window title) and opens on a black SGDK
+    text screen with the ROM name, what it tests and
+    'START or wait 15 s'.  MANIFOLD_ROM_NAME (<=48 chars, header + title),
+    MANIFOLD_ROM_TEST ('|' separates lines of <=38 chars)."""
+    import re as _re
+    name=os.environ.get("MANIFOLD_ROM_NAME","").strip()
+    if not name: return
+    clean=lambda t:_re.sub(r'[^A-Za-z0-9 ._:+/()=%,-]','',t)
+    name=clean(name)[:48]
+    test=[clean(x)[:38] for x in os.environ.get("MANIFOLD_ROM_TEST","").split("|") if x.strip()]
+    h=out/"src"/"rom_header.c"
+    # the makefile copies SGDK's template only when src/rom_header.c is absent
+    note=clean(os.environ.get("MANIFOLD_ROM_TEST","").split("|")[0] if os.environ.get("MANIFOLD_ROM_TEST") else "MANIFOLD E1M1")[:40]
+    h.write_text("""#include <genesis.h>
+
+__attribute__((externally_visible))
+const ROMHeader rom_header = {
+#if (MODULE_MEGAWIFI  && (MEGAWIFI_IMPLEMENTATION & MEGAWIFI_IMPLEMENTATION_MW_CART))
+    "SEGA MEGAWIFI   ",
+#elif (ENABLE_BANK_SWITCH != 0)
+    "SEGA SSF        ",
+#else
+    "SEGA MEGA DRIVE ",
+#endif
+    "(C)SGDK 2026    ",
+    "%s",
+    "%s",
+    "GM 00000000-00",
+    0x000,
+    "JD              ",
+    0x00000000,
+#if (ENABLE_BANK_SWITCH != 0)
+    0x003FFFFF,
+#else
+    0x000FFFFF,
+#endif
+    0xE0FF0000,
+    0xE0FFFFFF,
+    "RA",
+    0xF820,
+    0x00200000,
+    0x0020FFFF,
+    "            ",
+    "%s",
+    "JUE             "
+};
+""" % (name.ljust(48), name.ljust(48), note.ljust(40)))
+    lines=["MD-DOOM64KB MANIFOLD E1M1","",name]+[""]+test
+    cl=",\n".join('    "%s"'%l for l in lines)
+    m=out/"src"/"main.c";t=m.read_text()
+    fn=f"""
+static const char* const m14_splash_lines[] = {{
+{cl}
+}};
+static void m14_splash(void) {{
+    PAL_setColor(0, 0x000);
+    PAL_setColor(15, 0xEEE);
+    VDP_setTextPalette(PAL0);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    u16 n = sizeof(m14_splash_lines) / sizeof(m14_splash_lines[0]);
+    for (u16 i = 0; i < n; i++) VDP_drawText(m14_splash_lines[i], 1, 2 + i);
+    VDP_drawText("PRESS START OR WAIT 15 SECONDS", 1, 22);
+    char buf[8];
+    u16 start_seen = 0;
+    for (u16 f = 0; f < 900; f++) {{
+        if (f % 60 == 0) {{
+            intToStr(15 - f / 60, buf, 2);
+            VDP_drawText("STARTING IN        ", 1, 24);
+            VDP_drawText(buf, 13, 24);
+        }}
+        if (JOY_readJoypad(JOY_1) & BUTTON_START) {{ start_seen = 1; break; }}
+        SYS_doVBlankProcess();
+    }}
+    if (start_seen) while (JOY_readJoypad(JOY_1) & BUTTON_START) SYS_doVBlankProcess();
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_waitDMACompletion();
+}}
+"""
+    assert t.count("int main() {\n\tVDP_init();")==1
+    t=t.replace("int main() {\n\tVDP_init();",fn+"\nint main() {\n\tVDP_init();\n\tm14_splash();")
+    m.write_text(t)
+    print("M14 identity:",name,"| splash lines",len(lines))
+
 def m14_nohud(out):
     """M14 diagnostic: no Doom HUD and no FPS/title text (no per-frame VDP
     writes from the main loop except the sky and the queued sprite/palette DMA)."""
@@ -2988,6 +3075,7 @@ def stage(src, wad, out, control=False):
         m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
+    m14_identity(out)
     if os.environ.get("MANIFOLD_NOHUD","0")=="1":
         m14_nohud(out)
     if os.environ.get("MANIFOLD_VDP_SAFE","0")=="1":

@@ -102,3 +102,10 @@ Pedido do usuário: converter todos os objetos. `m12_objects.py` agora cobre 21 
 - Ainda NÃO coberto: `VDP_loadTileSet` do sprite da arma (DMA_QUEUE, enfileirado), paleta (DMA), `VDP_updateSprites` (fila). Se a quebra voltar, procurar aí.
 - Monstros estáticos (sem IA) nas posições do mapa: zumbi (3004), sargento (9), diabrete (3001), sprite frontal A1, caixa pelo mesmo fator da barrica (patch × 1,39 / 1,75); decorações (sem colisão). 29 THINGS (125 de 126 do limite).
 - Flags de bisseção das grades: `MANIFOLD_GRATE_SPRITES=0`, `MANIFOLD_SWEPT=0`.
+
+## Regra de identificação das ROMs de teste (12/11, 09h48, pedido do usuário)
+- Toda ROM nova leva nome/finalidade no cabeçalho do cartucho (BlastEm mostra na janela) e abre numa tela preta com a fonte padrão do SGDK: nome da ROM, o que ela testa e "PRESS START OR WAIT 15 SECONDS" (contagem regressiva; START ou 15 s entram no jogo).
+- Implementação: `m14_identity` em `stage_rom.py`, variáveis `MANIFOLD_ROM_NAME` (≤48 caracteres, cabeçalho e título) e `MANIFOLD_ROM_TEST` (linhas separadas por `|`, ≤38 caracteres, ASCII; `?` e acentos são removidos). Gera `src/rom_header.c` próprio (o makefile só copia o do SGDK se ele não existir) e `m14_splash()` chamada logo após `VDP_init()` em `main.c`. Sem `MANIFOLD_ROM_NAME` nada muda.
+- Verificado no MAME: cabeçalho, tela de abertura, START entra no jogo e a espera de 15 s também (tela de 850 quadros = abertura "STARTING IN 02", 1000 quadros = jogo).
+- Helper de build local: `tools/m14/build_local.sh NAME env...`.
+- Diagnóstico NOHUD: ROMs A (sem vdpsafe) e B (vdpsafe só no céu).
