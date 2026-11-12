@@ -37,6 +37,12 @@ TYPES = (
  (3004,"POSSA1","zombieman",0,0),
  (9,"SPOSA1","sergeant",0,0),
  (3001,"TROOA1","imp",0,0),
+ (9101,"POSSF1","zombieman_atk",0,0),
+ (9102,"SPOSF1","sergeant_atk",0,0),
+ (9103,"TROOF1","imp_atk",0,0),
+ (9111,"POSSL0","zombieman_dead",0,0),
+ (9112,"SPOSL0","sergeant_dead",0,0),
+ (9113,"TROOM0","imp_dead",0,0),
  (9001,"GRATE_L","grate_l",44,224),
  (9002,"GRATE_R","grate_r",44,224),
  (9003,"GRATE_C0","grate_c0",44,224),
@@ -138,17 +144,22 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],((x+(1 if x<3000 else -1))*16,y*16))]
             if len(m)!=1: print("M14 grate slice skipped",x,y,len(m));continue
             placements.append((m[0],x+(1 if x<3000 else -1),y,mapping[kind]))
-    if len(placements)>126:
-        # M14: walk-through maps. Drop monsters first, then thin the rest evenly
-        # (never a whole region) down to the runtime limit.
-        monster_idx={mapping[k] for k in (3004,9,3001) if k in mapping}
-        before=len(placements)
-        keep=[pl for pl in placements if pl[3] not in monster_idx]
-        if len(keep)>126:
-            step=len(keep)/126.0
-            keep=[keep[int(i*step)] for i in range(126)]
-        placements=keep
-        print(f"M14 decorations cut {before} -> {len(placements)}")
+    import os as _os
+    monster_idx={mapping[k] for k in (3004,9,3001) if k in mapping}
+    if _os.environ.get("MANIFOLD_MONSTERS","0")=="1":
+        mons=[pl for pl in placements if pl[3] in monster_idx]
+        decs=[pl for pl in placements if pl[3] not in monster_idx]
+        if len(mons)>60:
+            st=len(mons)/60.0; mons=[mons[int(i*st)] for i in range(60)]
+    else:
+        mons=[]
+        decs=[pl for pl in placements if pl[3] not in monster_idx] if len(placements)>126 else placements
+    cap=126-len(mons)          # every monster may leave a corpse decoration
+    if len(decs)>cap:
+        before=len(decs); st=len(decs)/cap
+        decs=[decs[int(i*st)] for i in range(cap)]
+        print(f"M14 decorations cut {before} -> {len(decs)}")
+    placements=decs+mons
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements
 
@@ -158,8 +169,18 @@ def install_templates(out,templates):
     b=s.index("\n\nint look_for_player(",a)
     externs="".join(f"extern const rle_sprite {ident};\n" for ident,*_ in templates)
     entries=['{.name="player",.type=OBJECT}']
+    import os as _os
+    mon=_os.environ.get("MANIFOLD_MONSTERS","0")=="1"
+    hdr=["#ifndef M14_IDS_H","#define M14_IDS_H"]
+    for i,(ident,name,width,height) in enumerate(templates):
+        hdr.append(f"#define M14_ID_{name.upper()} {i+1}")
+    hdr.append("#endif")
+    (Path(out)/"src/m14_ids.h").write_text("\n".join(hdr)+"\n")
     for ident,name,width,height in templates:
+        if mon and name in ("zombieman","sergeant","imp"):
+            entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=1,.type=OBJECT}}')
+            continue
         # The visual test showed an oversized barrel; reduce both projected
         # dimensions by 25% while preserving the same sprite pixels/THINGS.
         entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
-    p.write_text(s[:a]+externs+"const object_template object_types[32+1] = {\n"+",\n".join(entries)+"\n};"+s[b:])
+    p.write_text(s[:a]+externs+"const object_template object_types[48] = {\n"+",\n".join(entries)+"\n};"+s[b:])

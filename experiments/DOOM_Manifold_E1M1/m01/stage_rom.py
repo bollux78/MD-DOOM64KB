@@ -2894,6 +2894,201 @@ def m12_tune_doors(out):
     p.write_text(s.replace(old,new,1))
     print("M12 door timer 105 ticks, player-safe auto-close")
 
+
+def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
+    """M14: basic enemy AI on top of Manifold's object state machine.
+
+    zombieman / sergeant / imp become active objects (health, wake on sight or
+    on a shot, chase with the engine's cell collision, ranged hitscan or melee
+    attack gated by being visibly drawn, attack-frame flash, corpse decoration).
+    Player shots do 5/10/15 damage to the object under the crosshair.  Player
+    death respawns at the level start with 100% health.
+    """
+    import re
+    # ---- object.h: per-object runtime fields
+    h=out/"src/object.h"; t=h.read_text()
+    old="    uint8_t activate_tick;\n};"
+    assert t.count(old)==1,"object struct changed"
+    h.write_text(t.replace(old,"    uint8_t activate_tick;\n    uint8_t seen;\n    u16 cool;\n};",1))
+    # ---- draw.c: mark objects that actually paint pixels (line of sight)
+    d=out/"src/draw.c"; t=d.read_text()
+    a=t.index("void draw_rle_sprite(")
+    anchor="        if (col_bot<=col_top) continue;\n        u8* dest=bmp_buffer_write+buf_column_offset_table[x];"
+    b=t.index(anchor,a)
+    t=t[:b]+"        if (col_bot<=col_top) continue;\n        if (type==OBJECT && obj_link!=NULL_OBJ_LINK) OBJ_LINK_DEREF(obj_link).seen=1;\n        u8* dest=bmp_buffer_write+buf_column_offset_table[x];"+t[b+len(anchor):]
+    d.write_text(t)
+    # ---- doom_statusbar.c: player damage
+    sb=out/"src/doom_statusbar.c"; t=sb.read_text()
+    t+="""
+u8 m14_player_dead_flag;
+void m14_player_damage(u16 dmg) {
+    if (dhud_state.armor > 0) {
+        u16 a = dmg / 3;
+        if (a > (u16)dhud_state.armor) a = dhud_state.armor;
+        dhud_state.armor -= a; dmg -= a;
+    }
+    if (dmg >= (u16)dhud_state.health) {
+        dhud_state.health = 100; dhud_state.armor = 0;
+        dhud_state.ammo[0] = 50; dhud_state.ammo_r = 50;
+        m14_player_dead_flag = 1;
+    } else dhud_state.health -= dmg;
+}
+"""
+    sb.write_text(t)
+    # ---- object.c
+    o=out/"src/object.c"; t=o.read_text()
+    t=t.replace('#include <genesis.h>','#include <genesis.h>\n#include "m14_ids.h"\n#include "game.h"',1) if '#include <genesis.h>' in t else '#include <genesis.h>\n#include "m14_ids.h"\n#include "game.h"\n'+t
+    for nm in ("look_for_player","follow_player"):
+        old=f"int {nm}(object_link cur_obj, uint16_t cur_sector) {{"
+        assert t.count(old)==1,nm
+        t=t.replace(old,f"static int {nm}_orig(object_link cur_obj, uint16_t cur_sector) {{",1)
+    old="    fix32 speed = FIX32(4.125); //obj_type->speed);"
+    assert t.count(old)==1
+    t=t.replace(old,"    fix32 speed = m14_speed_for(OBJ_LINK_DEREF(cur_obj).object_type);",1)
+    # helpers go before dist_sqr (after the state machine table)
+    helpers="""
+extern u8 m14_player_dead_flag;
+extern void m14_player_damage(u16 dmg);
+static u8 m14_force_wake;
+static u8 m14_kind(u8 t) {
+    if (t==M14_ID_ZOMBIEMAN || t==M14_ID_ZOMBIEMAN_ATK) return 1;
+    if (t==M14_ID_SERGEANT || t==M14_ID_SERGEANT_ATK) return 2;
+    if (t==M14_ID_IMP || t==M14_ID_IMP_ATK) return 3;
+    return 0;
+}
+static const u8 m14_base_id[4]={0,M14_ID_ZOMBIEMAN,M14_ID_SERGEANT,M14_ID_IMP};
+static const u8 m14_atk_id[4]={0,M14_ID_ZOMBIEMAN_ATK,M14_ID_SERGEANT_ATK,M14_ID_IMP_ATK};
+static const u8 m14_dead_id[4]={0,M14_ID_ZOMBIEMAN_DEAD,M14_ID_SERGEANT_DEAD,M14_ID_IMP_DEAD};
+static const u8 m14_hp[4]={0,20,30,60};
+static const u8 m14_ratio[4]={0,35,35,55};      /* % of the player's step */
+static fix32 m14_speed_for(u8 type) {
+    u8 k=m14_kind(type);
+    if (!k) return FIX32(4.125);
+    u32 st=(move_speed*m14_ratio[k])/100;
+    if (st<1) st=1;
+    if (st>12) st=12;
+    return FIX32(st);
+}
+"""
+    anchor="fix32 dist_sqr(player_pos posa, player_pos origin) {"
+    assert t.count(anchor)==1
+    t=t.replace(anchor,helpers+anchor,1)
+    old="    OBJ_LINK_DEREF(res).activate_tick = activate_tick;\n"
+    assert t.count(old)==1
+    t=t.replace(old,old+"    OBJ_LINK_DEREF(res).health = m14_hp[m14_kind(object_type)];\n    OBJ_LINK_DEREF(res).seen = 0;\n    OBJ_LINK_DEREF(res).cool = 0;\n",1)
+    old="void wake_enemies_in_sector(u16 sector) {\n"
+    assert t.count(old)==1
+    t=t.replace(old,old+"    m14_force_wake = 1;\n",1)
+    # reset force flag at the end of wake_enemies_in_sector: find its closing brace
+    a=t.index(old); b=t.index("\n}\n",a)
+    t=t[:b]+"\n    m14_force_wake = 0;"+t[b:]
+    t+="""
+
+static u16 m14_ticks(u16 hundredths) {      /* hundredths of a second -> 300 Hz ticks */
+    return (u16)((u32)hundredths*3);
+}
+extern u16 random(void);
+int look_for_player(object_link cur_obj, uint16_t cur_sector) {
+    u8 k=m14_kind(OBJ_LINK_DEREF(cur_obj).object_type);
+    if (!k) return look_for_player_orig(cur_obj, cur_sector);
+    int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
+    int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
+    if ((m14_force_wake && fastLength(dx,dy)<1600) || (OBJ_LINK_DEREF(cur_obj).seen && fastLength(dx,dy)<1024)) {
+        OBJ_LINK_DEREF(cur_obj).current_state=2;
+        OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(60);
+        play_sfx(SFX_ENEMY_A_WAKE_ID, 8);
+    }
+    OBJ_LINK_DEREF(cur_obj).seen=0;
+    return 1;
+}
+
+int follow_player(object_link cur_obj, uint16_t cur_sector) {
+    u8 t=OBJ_LINK_DEREF(cur_obj).object_type;
+    u8 k=m14_kind(t);
+    if (!k) return follow_player_orig(cur_obj, cur_sector);
+    OBJ_LINK_DEREF(cur_obj).object_type=m14_base_id[k];      /* end attack flash */
+    int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
+    int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
+    u32 d=fastLength(dx,dy);
+    u8 seen=OBJ_LINK_DEREF(cur_obj).seen;
+    OBJ_LINK_DEREF(cur_obj).seen=0;
+    u16 cool=OBJ_LINK_DEREF(cur_obj).cool;
+    cool = (cool>last_frame_ticks) ? (cool-last_frame_ticks) : 0;
+    OBJ_LINK_DEREF(cur_obj).cool=cool;
+    if (cool==0) {
+        if (k==3) {
+            if (d<56) {                                      /* imp: claws */
+                m14_player_damage(3*((random()&7)+1));
+                OBJ_LINK_DEREF(cur_obj).object_type=m14_atk_id[k];
+                OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(90);
+                return 1;
+            }
+        } else if (seen && d<900) {                          /* zombieman / sergeant: hitscan */
+            u8 pellets=(k==2)?3:1;
+            u16 total=0;
+            for (u8 i=0;i<pellets;i++) {
+                u16 hit = (d<300) ? ((random()&3)!=0) : (random()&1);
+                if (hit) total+=3*((random()%5)+1);
+            }
+            if (total) m14_player_damage(total);
+            OBJ_LINK_DEREF(cur_obj).object_type=m14_atk_id[k];
+            OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(k==2?130:100);
+            play_sfx(SFX_SHOTGUN_ID, 5);
+            return 1;
+        }
+    }
+    if (d>40) follow_player_orig(cur_obj, cur_sector);
+    return 1;
+}
+
+void m14_hit_object(object_link o, u16 sector) {
+    u8 k=m14_kind(OBJ_LINK_DEREF(o).object_type);
+    if (!k) { free_object(o, sector); return; }
+    u8 dmg=5*((random()%3)+1);
+    if (dmg>=OBJ_LINK_DEREF(o).health) {
+        alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
+                                   OBJ_LINK_DEREF(o).z, m14_dead_id[k]);
+        free_object(o, sector);
+    } else {
+        OBJ_LINK_DEREF(o).health-=dmg;
+        OBJ_LINK_DEREF(o).current_state=2;
+    }
+}
+"""
+    o.write_text(t)
+    # ---- game.c: damage instead of instant kill, respawn on death
+    g=out/"src/game.c"; t=g.read_text()
+    old="free_object(sprite_on_center_col, center_object_sector);"
+    assert t.count(old)==1
+    t=t.replace(old,"m14_hit_object(sprite_on_center_col, center_object_sector);",1)
+    anchor="    static int jumping = 0;"
+    assert t.count(anchor)==1
+    t=t.replace(anchor,f"""    {{
+        extern u8 m14_player_dead_flag;
+        if (m14_player_dead_flag) {{
+            m14_player_dead_flag = 0;
+            cur_player_pos.x = FIX32({spawn_x});
+            cur_player_pos.y = FIX32({spawn_y});
+            cur_player_pos.cur_sector = {spawn_cell};
+            cur_player_pos.ang = {(spawn_ang*1024)//360};
+            cur_player_pos.z = FIX32(-10000);
+        }}
+    }}
+"""+anchor,1)
+    t=t.replace('#include <genesis.h>','#include <genesis.h>\nextern void m14_hit_object(u8 o, u16 sector);',1)
+    # weapon cooldown by time, not by frame (game runs at 3-10 fps: 12 frames = seconds)
+    old_a="    static int shooting = 0;"
+    assert t.count(old_a)==1
+    t=t.replace(old_a,old_a+"\n    static int m14_anim_at = 4;",1)
+    old_b="        if(shooting == 4) { set_weapon_anim(SHOTGUN_RELOAD_ANIM, DMA_QUEUE); }"
+    assert t.count(old_b)==1
+    t=t.replace(old_b,"        if(shooting == m14_anim_at) { set_weapon_anim(SHOTGUN_RELOAD_ANIM, DMA_QUEUE); }",1)
+    old_c="        shooting = 12;"
+    assert t.count(old_c)==1
+    t=t.replace(old_c,"        { s32 sl = 135 / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 2) sl = 2; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = (sl > 4) ? 4 : 1; }",1)
+    g.write_text(t)
+    print("M14 monsters: AI installed")
+
 def m14_tex_u(out):
     """MANIFOLD_TEX_U=1: per-wall texture U base/span from the emitter
     (Doom mapping, continuous across BSP fragments) instead of an integer
@@ -3210,6 +3405,8 @@ def stage(src, wad, out, control=False):
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.ang = {(angle*1024)//360};")
     p.write_text(s)
+    if os.environ.get("MANIFOLD_MONSTERS","0")=="1":
+        m14_monsters(out,x,y,angle,spawn_cell)
     report={
         "source":UPSTREAM,"pin":PIN,"map":"E1M1",
         "format":"Manifold portal_map C proof of concept",
