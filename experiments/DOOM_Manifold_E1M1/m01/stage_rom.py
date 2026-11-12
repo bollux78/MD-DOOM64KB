@@ -2700,6 +2700,39 @@ def m12_safe_sprite_raster(out):
     p.write_text(s[:m.start()]+replacement+s[end:])
     print("M12 optimized C RLE sprite raster installed with portal y-clipping")
 
+def m12_tune_doors(out):
+    """Use the Manifold sector-group DOOR state machine, but give the
+    player time to cross, and do not close a door while inside it.
+
+    Opt-in to the playable E1M1 door ROM only. Geometry/portal arrays and
+    collision processing are unchanged.
+    """
+    p=out/"src/sector_group.c"
+    s=p.read_text()
+    # Only patch run_door(), never run_lift() timers.
+    door_start=s.index("void run_door(")
+    door_end=s.index("void run_lift(",door_start)
+    door_code=s[door_start:door_end]
+    old="                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 30;"
+    if door_code.count(old)!=2:
+        raise ValueError("M12 expected two timers within run_door")
+    door_code=door_code.replace(old,"                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;",2)
+    s=s[:door_start]+door_code+s[door_end:]
+    old="""            if(ticks_left == 0) {
+                //play_sfx(SFX_CLOSE_DOOR_ID, 1);"""
+    new="""            /* A player standing inside the door's own sector must not
+               be crushed or trapped by automatic closing. */
+            if(sector_group(cur_player_pos.cur_sector, cur_portal_map) == sect_group) {
+                params[SECTOR_GROUP_PARAM_TICKS_LEFT_IDX] = 105;
+                break;
+            }
+            if(ticks_left == 0) {
+                //play_sfx(SFX_CLOSE_DOOR_ID, 1);"""
+    if s.count(old)!=1:
+        raise ValueError("M12 door OPEN state changed")
+    p.write_text(s.replace(old,new,1))
+    print("M12 door timer 105 ticks, player-safe auto-close")
+
 def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
@@ -2760,7 +2793,10 @@ def stage(src, wad, out, control=False):
         (out/"src/m12_doom_objects.c").write_text(sprite_c)
         install_templates(out,templates)
         m12_safe_sprite_raster(out)
-    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things))
+    m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
+    (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
+    if m12_doors:
+        m12_tune_doors(out)
     if os.environ.get("MANIFOLD_SKY_MERGE","0")=="1":
         m13_sky_merge_upper_wall(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.
@@ -2771,6 +2807,11 @@ def stage(src, wad, out, control=False):
             m13_werk_hud_timing(out)
         if os.environ.get("MANIFOLD_HUD_VRAM_REPAIR","0")=="1":
             m13_werk_hud_vram_repair(out)
+    if os.environ.get("MANIFOLD_PICKUPS","0")=="1":
+        if m12_things is None or os.environ.get("MANIFOLD_HUD","doom")!="doom":
+            raise ValueError("M12 pickups require THINGS and DOOM status bar")
+        from m12_pickups import install as install_m12_pickups
+        install_m12_pickups(out,templates)
     if os.environ.get("MANIFOLD_VDP_ATOMIC","0")=="1":
         m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":

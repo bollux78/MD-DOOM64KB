@@ -40,3 +40,15 @@ O MAME não reproduz o clock do console (o usuário vê ~3 a 5 FPS), então vale
 - FPS MAME, tour 120 s: BSP=1 6,71; BSP=0 6,67. Sem diferença de custo.
 - Decisão: a base do M14 passa a ser BSP=0. A ser verificado: se o pisca de paredes ao se aproximar volta sem BSP.
 - Hipótese ainda não confirmada: o azul vem do culling lateral do modo BSP (rnx/lnx), não dos objetos.
+
+## Fase 2 (12/11, testes automatizados no MAME headless; usuário ausente)
+Base: BSP=0 + `MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1`. ROM: `claudio-m14-e1m1-full-h40.bin` (tag CLAUDIO_M14_FULL). Código portado do branch do Werk à mão: modo `doors` em `emit_portal_map.py` (setores 4, 68, 76, 81), `m12_tune_doors`, hook de pickups. Scripts em `tools/m14/test_*.lua`.
+
+| Teste | Resultado |
+|---|---|
+| Botão A seguro por 100 quadros (com PCM do shotgun e `wake_enemies`, sem o probe do Werk) | **Sem crash**: `cur_frame` continua subindo (13→40 entre 250 e 700 VBlanks), nas variantes doors e full. Não reproduz o crash relatado pelo Werk; pode depender do console real. |
+| Pickup de munição (teleporte ao THING em 2736,-4160) | **OK**: HUD ammo 50 → 60. Health/armor não testados (health já está em 100, a regra recusa). |
+| Portas por B perto da parede-portal | **OK nas 4**: setor 4 abre até 2304 (alvo 72·16·2); 81 e 76 sobem; 68 abre por uma das duas paredes (160) e não pela outra (159), que pode estar a mais de MIN_ACTIVATE_DIST. |
+| Tour de 180 s emulados | **Estável**: 1336 quadros, 7,51 FPS médios (rota/duração diferentes das medições anteriores, não comparável 1:1). |
+
+Não testado: inimigos (não existem), colisão com objetos, fechamento automático das portas, pisca de parede ao se aproximar (confirmado só pelo usuário no console), crash do A no console real.
