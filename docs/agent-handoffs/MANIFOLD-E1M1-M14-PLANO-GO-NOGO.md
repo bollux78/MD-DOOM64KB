@@ -64,3 +64,9 @@ Usuário: eye48 é boa (agora o padrão); texturas "um pouco horizontalmente com
 - Correção opt-in `MANIFOLD_TEX_U=1`: o emitter calcula U inicial e final por parede (distância na linedef + xoff, como o Doom); `draw.c` mapeia base + fração·extensão; patch em `draw.c`, `portal.c`, `bunch_render.c`, `texture.h`, `portal_map.h`.
 - `MANIFOLD_TEX_HSTRETCH` (padrão 1,0 = 1 texel por unidade do Doom). Com altura dobrada, 2,0 restaura a proporção do Doom. ROMs: `...eye48-u1-h40.bin` e `...eye48-u2-h40.bin`.
 - MAME: u1 idêntico ao anterior nas paredes inteiras (esperado); u2 mais largo. Sem crash (botão A, 700 VBlanks). Não verificado no console. Pedido ao usuário: foto do Doom original da mesma cena.
+
+## Todos os objetos não-monstros (12/11, 02h)
+Pedido do usuário: converter todos os objetos. `m12_objects.py` agora cobre 21 sprites distintos (candelabro 35, coluna tech 48, poça 24, restos 10/12/15 [10 e 12 compartilham PLAYW0], chaingun, lança-foguetes, cartuchos, armaduras verde/azul, caixas de foguetes/balas/cartuchos), com caixa de exibição = patch × proporção do barril aprovado (largura ×1,39, altura ×1,75). Monstros (9, 3001, 3004) NÃO são convertidos (fase de inimigos). E1M1: 85 THINGS inseridos, 1 ambíguo descartado (2049).
+- `m12_pickups.py`: novos pickups (cartuchos, caixas, armaduras 100/200, chaingun, lança-foguetes).
+- MAME: caixa de balas 50→100, armadura verde 0→100, azul 100→200, caixa de cartuchos 0→20; candelabro visível; botão A sem crash (700 VBlanks).
+- ROM: `claudio-m14-e1m1-allobj-eye48-u1-h40.bin` (TEX_U=1, HSTRETCH=1.0, eye48).

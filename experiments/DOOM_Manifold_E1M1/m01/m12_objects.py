@@ -14,6 +14,22 @@ TYPES = (
  (2001,"SHOTA0","shotgun",32,16),
  (2014,"BON1A0","health",16,16),
  (2015,"BON2A0","armor",16,16),
+ # M14: remaining non-monster THINGS of E1M1. Box = patch size x the barrel's
+ # approved ratios (width x1.39, height x1.75); monsters are NOT converted.
+ (35,"CBRAA0","candelabra",40,107),
+ (48,"ELECA0","techcolumn",53,224),
+ (24,"POL5A0","bloodpool",76,18),
+ (10,"PLAYW0","gibs",79,39),
+ (12,"PLAYW0","gibs",79,39),
+ (15,"PLAYN0","deadplayer",71,25),
+ (2002,"MGUNA0","chaingun",75,28),
+ (2003,"LAUNA0","rocketlauncher",86,28),
+ (2008,"SHELA0","shells",21,12),
+ (2018,"ARM1A0","greenarmor",43,30),
+ (2019,"ARM2A0","bluearmor",43,30),
+ (2046,"BROKA0","rocketbox",75,37),
+ (2048,"AMMOA0","bulletbox",39,28),
+ (2049,"SBOXA0","shellbox",44,21),
 )
 def generate(wad, lumps, cells, vdp_palette, point_inside):
     w=WT.Wad(wad)
@@ -21,7 +37,10 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     palette=[(((v>>1)&7)*255//7,((v>>5)&7)*255//7,((v>>9)&7)*255//7) for v in vdp_palette]
     lines=['#include <genesis.h>','#include "obj_sprite.h"']
     templates=[]; mapping={}
+    seen={}
     for kind,lump,name,width,height in TYPES:
+        if lump in seen:            # several THING kinds, one sprite
+            mapping[kind]=seen[lump]; continue
         try: pw,ph,img=WT.patch_image(w.lump(lump))
         except KeyError:
             print("M12 skipped missing patch:",lump)
@@ -53,6 +72,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         lines.append("}};")
         templates.append((ident,name,width,height))
         mapping[kind]=idx
+        seen[lump]=idx
     if not templates: raise ValueError("M12 needs at least one sprite from local WAD")
     placements=[];skipped=Counter()
     for x,y,angle,kind,flags in lumps["THINGS"]:

@@ -8,7 +8,9 @@ from pathlib import Path
 # Slots in the generated Doom sprite table, resolved by NAME (never assume
 # the WAD contains every optional sprite).
 GRANTS = {"stimpack":1, "medikit":2, "ammo":3, "shotgun":4,
-          "health":5, "armor":6}
+          "health":5, "armor":6,
+          "shells":7, "bulletbox":8, "shellbox":9, "rocketbox":10,
+          "greenarmor":11, "bluearmor":12, "chaingun":13, "rocketlauncher":14}
 
 def install(out,templates):
     out=Path(out)
@@ -108,6 +110,42 @@ u8 doom_hud_grant_pickup(u8 kind) {
     case 6: /* armor bonus */
         if (dhud_state.armor>=200) return 0;
         dhud_state.armor++;
+        return 1;
+    case 7: /* shells */
+        if (dhud_state.ammo[1]>=50) return 0;
+        dhud_state.ammo[1]+=4; if (dhud_state.ammo[1]>50) dhud_state.ammo[1]=50;
+        return 1;
+    case 8: /* box of bullets */
+        if (dhud_state.ammo[0]>=200) return 0;
+        dhud_state.ammo[0]+=50; if (dhud_state.ammo[0]>200) dhud_state.ammo[0]=200;
+        dhud_state.ammo_r=dhud_state.ammo[0];
+        return 1;
+    case 9: /* box of shells */
+        if (dhud_state.ammo[1]>=50) return 0;
+        dhud_state.ammo[1]+=20; if (dhud_state.ammo[1]>50) dhud_state.ammo[1]=50;
+        return 1;
+    case 10: /* box of rockets */
+        if (dhud_state.ammo[2]>=50) return 0;
+        dhud_state.ammo[2]+=5; if (dhud_state.ammo[2]>50) dhud_state.ammo[2]=50;
+        return 1;
+    case 11: /* green armor */
+        if (dhud_state.armor>=100) return 0;
+        dhud_state.armor=100;
+        return 1;
+    case 12: /* blue armor */
+        if (dhud_state.armor>=200) return 0;
+        dhud_state.armor=200;
+        return 1;
+    case 13: /* chaingun */
+        if ((dhud_state.arms & 4) && dhud_state.ammo[0]>=200) return 0;
+        dhud_state.arms|=4;
+        dhud_state.ammo[0]+=20; if (dhud_state.ammo[0]>200) dhud_state.ammo[0]=200;
+        dhud_state.ammo_r=dhud_state.ammo[0];
+        return 1;
+    case 14: /* rocket launcher */
+        if ((dhud_state.arms & 8) && dhud_state.ammo[2]>=50) return 0;
+        dhud_state.arms|=8;
+        dhud_state.ammo[2]+=2; if (dhud_state.ammo[2]>50) dhud_state.ammo[2]=50;
         return 1;
     }
     return 0;
