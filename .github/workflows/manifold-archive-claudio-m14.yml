@@ -1,0 +1,51 @@
+name: Manifold Claudio M14 local ROM archive
+# Private runner: only M14/*.bin and M14/README.md, no GitHub artifacts.
+on:
+  push:
+    branches: [exp-manifold-m14-e1m1]
+    paths:
+      - '.github/workflows/manifold-archive-claudio-m14.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-rom-archive-local
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 100
+    steps:
+      - name: Checkout historical source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check local paths and WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /home/dan/Projetos/manifold-doom/roms
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+      - name: Find installed SGDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then echo "GDK=$d" >> "$GITHUB_ENV"; exit 0; fi
+          done
+          while IFS= read -r f; do
+            if test -f "$f"; then echo "GDK=${f%/makefile.gen}" >> "$GITHUB_ENV"; exit 0; fi
+          done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null)
+          echo "::error::SGDK not found"; exit 1
+      - name: Build six Claudio M14 variants and archive BIN only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/DOOM_Manifold_E1M1/tools/archive_claudio_m14.py
+      - name: List M14 files only (no uploads)
+        if: always()
+        shell: bash
+        run: |
+          find /home/dan/Projetos/manifold-doom/roms/M14 -maxdepth 1 -type f \( -name '*.bin' -o -name 'README.md' \) -printf '%f\n' | sort || true
