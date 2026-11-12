@@ -52,7 +52,7 @@ raios independente para conferir a geometria das poses fixas. A comparação des
 
 Mesmo Genesis Plus GX, 39 quadros por caminho e as mesmas 13 poses.
 Tempos em milissegundos, incluindo a apresentação. A mediana e o P95 são
-medidos pela ROM. O teste no Mega Drive físico está pendente.
+medidos pela ROM. Daniel confirmou que as três ROMs 2 × 2 funcionaram no Mega Drive físico. Os tempos da tabela são do emulador.
 
 | Resolução interna | Viewport | A mediana / P95 | B mediana / P95 |
 | --- | --- | ---: | ---: |
