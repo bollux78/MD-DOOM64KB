@@ -83,6 +83,37 @@ def wire_lines(entries, map_name, data):
     return sorted(edges)
 
 
+def wire_tree(edges, vertices):
+    boxes = []
+    for a, za, b, zb in edges:
+        ax, ay = vertices[a]
+        bx, by = vertices[b]
+        boxes.append((min(ax, bx), min(ay, by), min(za, zb),
+                      max(ax, bx), max(ay, by), max(za, zb)))
+    nodes, order = [], []
+
+    def build(ids):
+        limits = tuple(min(boxes[i][axis] for i in ids) for axis in range(3)) + tuple(
+            max(boxes[i][axis] for i in ids) for axis in range(3, 6))
+        left, bottom, low, right, top, high = limits
+        node = len(nodes)
+        nodes.append(None)
+        if len(ids) <= 10:
+            nodes[node] = ((top, bottom, left, right), low, high, len(order), len(ids))
+            order.extend(ids)
+        else:
+            axis = int(top - bottom > right - left)
+            ids.sort(key=lambda i: boxes[i][axis] + boxes[i][axis + 3])
+            middle = len(ids) // 2
+            build(ids[:middle])
+            build(ids[middle:])
+            nodes[node] = ((top, bottom, left, right), low, high, len(nodes), 0)
+        return node
+
+    build(list(range(len(edges))))
+    return nodes, order
+
+
 def emit(path, entries, map_name, data, kind):
     lines = ['#include "nexus.h"']
     if kind == "lines":
@@ -95,4 +126,12 @@ def emit(path, entries, map_name, data, kind):
         lines += ["    " + initializer(edge) + "," for edge in edges]
         lines += ["};", f"const unsigned int nexus_wire_count = {len(edges)};",
                   f"const unsigned int nexus_wire_vertex_count = {len(data[0])};"]
+        nodes, order = wire_tree(edges, data[0])
+        lines += ["const NxWireNode nexus_wire_nodes[] = {"]
+        lines += ["    " + initializer(node) + "," for node in nodes]
+        lines += ["};", f"const unsigned int nexus_wire_node_count = {len(nodes)};",
+                  "const uint16_t nexus_wire_order[] = {"]
+        for i in range(0, len(order), 20):
+            lines.append("    " + ", ".join(map(str, order[i:i + 20])) + ",")
+        lines += ["};"]
     path.write_text("\n".join(lines) + "\n")

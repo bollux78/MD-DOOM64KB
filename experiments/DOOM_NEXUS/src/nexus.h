@@ -44,6 +44,12 @@ typedef struct { int16_t floor, ceiling; } NxSector;
 typedef struct { uint16_t a, b, front, back; } NxSeg;
 typedef struct { uint16_t first, count; } NxLeaf;
 typedef struct { int16_t top, bottom, left, right; } NxBounds;
+typedef struct {
+    NxBounds bounds;
+    int16_t low, high;
+    uint16_t first_or_skip, count;
+} NxWireNode;
+typedef struct { uint16_t checked, drawn; } NxWireStats;
 typedef struct { int32_t partition; int16_t dx, dy; uint16_t child[2]; NxBounds bounds[2]; } NxNode;
 typedef struct { int16_t x, y, z, cosine, sine; } NxCamera;
 
@@ -59,7 +65,8 @@ typedef struct {
 void nx_camera_floor(const NxMap *map, NxCamera *camera);
 void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout);
 void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int mode);
-void nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels);
+NxWireStats nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels,
+                           int use_tree);
 void nx_pack(const uint8_t *linear, uint8_t *tiles);
 #ifdef NX_2X2
 unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,

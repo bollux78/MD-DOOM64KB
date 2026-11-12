@@ -35,14 +35,17 @@ typedef struct {
     u32 draw, pack, wait, dma, frame;
 } Timing;
 
+#ifdef NX_WIREFRAME_ROM
+static NxWireStats wire_stats;
+#endif
+
 static Timing show(const NxCamera *camera, int mode, int scene)
 {
     Timing time;
     u32 start = getSubTick();
 #ifdef NX_WIREFRAME_ROM
-    (void)mode;
     (void)scene;
-    nx_render_wire(&nexus_map, camera, linear);
+    wire_stats = nx_render_wire(&nexus_map, camera, linear, mode != 0);
 #elif defined(NX_LINE_TEST)
     NxMap single = nexus_map;
     NxLeaf leaf = {nexus_wall_seg, 1};
@@ -123,8 +126,8 @@ static void value(unsigned n, unsigned x, unsigned y)
 #endif
 
 #ifdef NX_WIREFRAME_ROM
-enum { BENCH_MODES = 1 };
-static const char *const mode_name[] = {"WIREFRAME"};
+enum { BENCH_MODES = 2 };
+static const char *const mode_name[] = {"A FULL", "B BVH"};
 #else
 enum { BENCH_MODES = NX_MODE_COUNT };
 static const char *const mode_name[] = {"FLAT", "PERSPECTIVE", "STRIPS",
@@ -155,14 +158,20 @@ static void show_timing(Timing t, unsigned pose, int mode, int free_camera, int 
     else
         value(pose, 34, 0);
     VDP_clearTextArea(0, 25, 40, 3);
+#ifdef NX_WIREFRAME_ROM
+    VDP_drawText("DRAW PACK WAIT DMA  TOTAL EDGE   DRAWN", 1, 25);
+#else
     VDP_drawText("DRAW PACK WAIT DMA  TOTAL (ms)", 1, 25);
+#endif
     value(millis(t.draw), 1, 26);
     value(millis(t.pack), 6, 26);
     value(millis(t.wait), 11, 26);
     value(millis(t.dma), 16, 26);
     value(millis(t.frame), 21, 26);
 #ifdef NX_WIREFRAME_ROM
-    VDP_drawText("LEFT/RIGHT POSES  C BENCH  START CAM", 1, 27);
+    VDP_drawText("A FULL  B BVH  C BENCH  START CAM", 1, 27);
+    value(wire_stats.checked, 26, 26);
+    value(wire_stats.drawn, 33, 26);
 #elif defined(NX_LINE_TEST)
     VDP_drawText("A FLAT/LINE  B TEX  UP WALL  C BENCH", 1, 27);
 #else
@@ -302,7 +311,9 @@ int main(bool hard_reset)
     DMA_waitCompletion();
 
     unsigned pose = 0;
-#if defined(NX_WIREFRAME_ROM) || defined(NX_LINE_TEST)
+#ifdef NX_WIREFRAME_ROM
+    int mode = 1;
+#elif defined(NX_LINE_TEST)
     int mode = NX_FLAT;
 #else
     int mode = NX_PERSPECTIVE;
@@ -328,7 +339,12 @@ int main(bool hard_reset)
             continue;
         }
         int redraw = pressed & (BUTTON_START | BUTTON_A | BUTTON_B);
-#ifndef NX_WIREFRAME_ROM
+#ifdef NX_WIREFRAME_ROM
+        if (pressed & BUTTON_A)
+            mode = 0;
+        if (pressed & BUTTON_B)
+            mode = 1;
+#else
         if (pressed & BUTTON_A) {
 #ifdef NX_LINE_TEST
             mode = mode == NX_FLAT ? NX_OUTLINE : NX_FLAT;

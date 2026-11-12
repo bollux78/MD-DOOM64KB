@@ -39,6 +39,9 @@ if [[ "$kind" != wall ]]; then
         exit 2
     fi
     config="$config-$kind"
+    if [[ "$kind" == wire ]]; then
+        config="$config-ab"
+    fi
     line_args=(--line-data src/line_data.c --line-kind "$kind")
 else
     rm -f src/line_data.c out/{src,release/src}/line_data.o

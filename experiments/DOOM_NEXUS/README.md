@@ -101,3 +101,22 @@ idêntica à de uma folha contendo só o segmento correspondente. A
 mediana do render foi 33 ms com a BSP do mapa e 31 ms com a folha
 isolada. O quadro completo mediu 50 ms de mediana e P95 nos dois casos
 (39 amostras por cenário). O teste no Mega Drive físico está pendente.
+
+## Wireframe A/B com descarte espacial
+
+No wireframe, A percorre as 1.718 arestas de E1M1. B usa uma hierarquia
+de caixas pré-calculada para rejeitar grupos fora do campo de visão,
+com transformação preguiçosa de vértices. Os dois caminhos desenham
+as mesmas linhas, inclusive as que ficam atrás de paredes. EDGE conta
+as arestas enviadas ao recorte individual e DRAWN conta as linhas que
+chegaram à rasterização. C compara os dois caminhos nas mesmas 13 poses.
+
+No Genesis Plus GX, A mediu 116 / 299 ms (mediana / P95 por quadro) e
+B mediu 66 / 282 ms. Na pose inicial, B reduziu EDGE de 1.718 a 487 e
+manteve 390 linhas desenhadas. DRAW foi de 254 para 248 ms nessa pose.
+As 13 poses do emulador e 416 combinações de posição e ângulo no teste
+de PC produziram imagens idênticas entre A e B.
+
+O teste do wireframe anterior no console mostrou DRAW de 83 ms com uma
+linha, 91 ms em uma vista pouco carregada e 499 ms em uma vista ampla.
+A ROM A/B ainda precisa ser medida nessas três poses no console.

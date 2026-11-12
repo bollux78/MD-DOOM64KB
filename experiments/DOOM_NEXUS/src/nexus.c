@@ -797,7 +797,9 @@ void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, 
 
 #ifdef NX_WIREFRAME_ROM
 extern const NxWireEdge nexus_wire_edges[];
-extern const unsigned int nexus_wire_count, nexus_wire_vertex_count;
+extern const unsigned int nexus_wire_count, nexus_wire_vertex_count, nexus_wire_node_count;
+extern const NxWireNode nexus_wire_nodes[];
+extern const uint16_t nexus_wire_order[];
 
 typedef struct {
     ViewPoint view;
@@ -810,14 +812,14 @@ static int screen_outcode(int x, int y)
            (y < 0 ? 4 : y >= NX_HEIGHT ? 8 : 0);
 }
 
-static void wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
+static int wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
 {
     for (;;) {
         int c0 = screen_outcode(x0, y0), c1 = screen_outcode(x1, y1);
         if (!(c0 | c1))
             break;
         if (c0 & c1)
-            return;
+            return 0;
         if (!c0) {
             int t = x0; x0 = x1; x1 = t;
             t = y0; y0 = y1; y1 = t;
@@ -841,7 +843,7 @@ static void wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
         uint8_t *dst = pixels + nx_linear_index(x0, y0);
         for (int y = y0; y <= y1; ++y)
             *dst++ = 15;
-        return;
+        return 1;
     }
     if (y0 == y1) {
         if (x0 > x1) {
@@ -849,7 +851,7 @@ static void wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
         }
         for (int x = x0; x <= x1; ++x)
             pixels[nx_linear_index(x, y0)] = 15;
-        return;
+        return 1;
     }
     int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
     int dx = (x1 - x0) * sx, dy = -(y1 - y0) * sy;
@@ -868,6 +870,7 @@ static void wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
             y0 += sy;
         }
     }
+    return 1;
 }
 
 static void project_wire_point(WirePoint *point)
@@ -877,44 +880,92 @@ static void project_wire_point(WirePoint *point)
     point->scale = (FOCAL * SCALE * 65536u) / (uint32_t)point->view.z;
 }
 
-void nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels)
+static inline __attribute__((always_inline))
+int draw_wire_edge(const Renderer *r, WirePoint *cache, const NxWireEdge *line, int lazy)
+{
+    WirePoint *a = &cache[line->a], *b = &cache[line->b], clipped;
+    if (lazy && a->view.z == INT32_MIN)
+        a->view = view_point(r, r->map->vertices[line->a]);
+    if (lazy && b->view.z == INT32_MIN)
+        b->view = view_point(r, r->map->vertices[line->b]);
+    ViewPoint p = a->view, q = b->view;
+    if ((p.z < NEAR && q.z < NEAR) ||
+        (p.x <= -p.z && q.x <= -q.z) || (p.x >= p.z && q.x >= q.z))
+        return 0;
+    int za = line->za, zb = line->zb;
+    if (p.z < NEAR) {
+        clipped = (WirePoint){.view = intersect_near(p, q)};
+        za += (int64_t)(zb - za) * (NEAR - p.z) / (q.z - p.z);
+        a = &clipped;
+    } else if (q.z < NEAR) {
+        clipped = (WirePoint){.view = intersect_near(q, p)};
+        zb += (int64_t)(za - zb) * (NEAR - q.z) / (p.z - q.z);
+        b = &clipped;
+    }
+    if (!a->scale)
+        project_wire_point(a);
+    if (!b->scale)
+        project_wire_point(b);
+    int y0 = NX_HEIGHT / 2 - (((int32_t)za - r->camera->z) * a->scale >> 16);
+    int y1 = NX_HEIGHT / 2 - (((int32_t)zb - r->camera->z) * b->scale >> 16);
+    return wire_line(r->pixels, a->screen_x, y0, b->screen_x, y1);
+}
+
+static int wire_node_visible(const Renderer *r, const NxWireNode *node)
+{
+    const NxCamera *c = r->camera;
+    const NxBounds *box = &node->bounds;
+    int32_t depth = box_max(box, c->cosine, c->sine) - r->origin_z;
+    if (depth < NEAR)
+        return 0;
+    /* Two pixels of slack cover the edge rasterizer's rounding. */
+    int32_t height = (NX_HEIGHT / 2 + 2) * depth;
+    return ((int32_t)node->low - c->z) * (FOCAL * SCALE) <= height
+           && ((int32_t)c->z - node->high) * (FOCAL * SCALE) <= height
+           && box_max(box, r->left_x, r->left_y) >= r->left_bias
+           && box_max(box, r->right_x, r->right_y) >= r->right_bias;
+}
+
+NxWireStats nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels,
+                           int use_tree)
 {
     clear_lines(pixels);
     WirePoint cache[nexus_wire_vertex_count];
     Renderer r = {
-        .camera = camera,
+        .map = map, .camera = camera, .pixels = pixels,
         .origin_x = (int32_t)camera->x * camera->sine - (int32_t)camera->y * camera->cosine,
         .origin_z = (int32_t)camera->x * camera->cosine + (int32_t)camera->y * camera->sine,
     };
+    NxWireStats result = {0, 0};
     for (unsigned i = 0; i < nexus_wire_vertex_count; ++i) {
-        cache[i].view = view_point(&r, map->vertices[i]);
+        cache[i].view = use_tree ? (ViewPoint){0, INT32_MIN} : view_point(&r, map->vertices[i]);
         cache[i].scale = 0;
     }
-
-    for (unsigned i = 0; i < nexus_wire_count; ++i) {
-        const NxWireEdge *line = &nexus_wire_edges[i];
-        WirePoint *a = &cache[line->a], *b = &cache[line->b], clipped;
-        ViewPoint p = a->view, q = b->view;
-        if ((p.z < NEAR && q.z < NEAR) ||
-            (p.x <= -p.z && q.x <= -q.z) || (p.x >= p.z && q.x >= q.z))
-            continue;
-        int za = line->za, zb = line->zb;
-        if (p.z < NEAR) {
-            clipped = (WirePoint){.view = intersect_near(p, q)};
-            za += (int64_t)(zb - za) * (NEAR - p.z) / (q.z - p.z);
-            a = &clipped;
-        } else if (q.z < NEAR) {
-            clipped = (WirePoint){.view = intersect_near(q, p)};
-            zb += (int64_t)(za - zb) * (NEAR - q.z) / (p.z - q.z);
-            b = &clipped;
-        }
-        if (!a->scale)
-            project_wire_point(a);
-        if (!b->scale)
-            project_wire_point(b);
-        int y0 = NX_HEIGHT / 2 - (((int32_t)za - camera->z) * a->scale >> 16);
-        int y1 = NX_HEIGHT / 2 - (((int32_t)zb - camera->z) * b->scale >> 16);
-        wire_line(pixels, a->screen_x, y0, b->screen_x, y1);
+    if (!use_tree) {
+        result.checked = nexus_wire_count;
+        for (unsigned i = 0; i < nexus_wire_count; ++i)
+            result.drawn += draw_wire_edge(&r, cache, &nexus_wire_edges[i], 0);
+        return result;
     }
+
+    r.end_open = NX_WIDTH;
+    for (unsigned x = 0; x < NX_WIDTH; ++x)
+        r.bottom[x] = NX_HEIGHT;
+    update_open_bounds(&r);
+
+    for (unsigned i = 0; i < nexus_wire_node_count;) {
+        const NxWireNode *node = &nexus_wire_nodes[i];
+        if (!wire_node_visible(&r, node)) {
+            i = node->count ? i + 1 : node->first_or_skip;
+            continue;
+        }
+        for (unsigned j = 0; j < node->count; ++j) {
+            unsigned edge_index = nexus_wire_order[node->first_or_skip + j];
+            result.drawn += draw_wire_edge(&r, cache, &nexus_wire_edges[edge_index], 1);
+        }
+        result.checked += node->count;
+        ++i;
+    }
+    return result;
 }
 #endif
