@@ -29,8 +29,10 @@ int main(void)
                 return EXIT_FAILURE;
             }
         }
-        if (fwrite(linear, 1, sizeof linear, stdout) != sizeof linear)
-            return EXIT_FAILURE;
+        for (unsigned y = 0; y < NX_HEIGHT; ++y)
+            for (unsigned x = 0; x < NX_WIDTH; ++x)
+                if (putchar(linear[nx_linear_index(x, y)]) == EOF)
+                    return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
 }

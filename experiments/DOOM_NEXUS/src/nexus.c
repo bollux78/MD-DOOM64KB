@@ -15,7 +15,10 @@ typedef struct {
     uint8_t top[NX_WIDTH];
     uint8_t bottom[NX_WIDTH];
     int open;
-    int16_t plane_x[3], plane_y[3];
+    int first_open, end_open;
+    int32_t origin_x, origin_z;
+    int16_t left_x, left_y, right_x, right_y;
+    int32_t left_bias, right_bias;
 } Renderer;
 
 static void span(Renderer *r, int x, int first, int end, unsigned color)
@@ -23,19 +26,33 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
     if (first >= end)
         return;
     if (r->layout == NX_LINEAR) {
-        for (int y = first; y < end; ++y)
-            r->pixels[y * NX_WIDTH + x] = color;
+        uint8_t *dst = r->pixels + nx_linear_index(x, first);
+        uint16_t count = end - first;
+#ifdef __m68k__
+        --count;
+        __asm__ volatile ("1: move.b %2,(%0)+\n\tdbra %1,1b"
+                          : "+a"(dst), "+d"(count) : "d"(color) : "memory", "cc");
+#else
+        while (count--)
+            *dst++ = color;
+#endif
         return;
     }
 
 #ifdef NX_2X2
     unsigned offset = (x >> 2) * 32 + (x & 3);
     uint8_t ink = color * 17;
-    for (int y = first; y < end; ++y) {
-        uint8_t *dst = r->pixels + (y >> 2) * (NX_VIEW_WIDTH * 4)
-                       + (y & 3) * 8 + offset;
-        dst[0] = ink;
-        dst[4] = ink;
+    while (first < end) {
+        uint8_t *dst = r->pixels + (first >> 2) * (NX_VIEW_WIDTH * 4)
+                       + (first & 3) * 8 + offset;
+        int stop = ((first | 3) + 1);
+        if (stop > end)
+            stop = end;
+        for (int row = 0; row < stop - first; ++row) {
+            dst[row * 8] = ink;
+            dst[row * 8 + 4] = ink;
+        }
+        first = stop;
     }
 #else
     unsigned shift = (x & 1) ? 0 : 4;
@@ -55,42 +72,73 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
 #endif
 }
 
+#ifdef NX_2X2
+static void pack_tile(const uint8_t *src, uint8_t *tile)
+{
+    for (int row = 0; row < 4; ++row) {
+        for (int x = 0; x < 4; ++x) {
+            uint8_t ink = src[x * NX_HEIGHT] * 17;
+            tile[x] = ink;
+            tile[x + 4] = ink;
+        }
+        tile += 8;
+        ++src;
+    }
+}
+
+typedef uint32_t AliasWord __attribute__((__may_alias__));
+
+unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,
+                       uint16_t mixed_base, uint16_t solid_base)
+{
+    unsigned mixed = 0;
+    for (int ty = 0; ty < NX_HEIGHT; ty += 4) {
+        for (int tx = 0; tx < NX_WIDTH; tx += 4) {
+            const uint8_t *src = linear + nx_linear_index(tx, ty);
+            const AliasWord *columns = (const AliasWord *)src;
+            uint32_t color = src[0] * UINT32_C(0x01010101);
+            if (columns[0] == color && columns[NX_HEIGHT / 4] == color &&
+                columns[NX_HEIGHT / 2] == color && columns[NX_HEIGHT * 3 / 4] == color) {
+                *map++ = solid_base + src[0];
+            } else {
+                *map++ = mixed_base + mixed++;
+                pack_tile(src, tiles);
+                tiles += 32;
+            }
+        }
+    }
+    return mixed;
+}
+#endif
+
 void nx_pack(const uint8_t *linear, uint8_t *tiles)
 {
 #ifdef NX_2X2
     for (int ty = 0; ty < NX_HEIGHT; ty += 4) {
         for (int tx = 0; tx < NX_WIDTH; tx += 4) {
-            for (int row = 0; row < 4; ++row) {
-                const uint8_t *src = linear + (ty + row) * NX_WIDTH + tx;
-                for (int x = 0; x < 4; ++x) {
-                    uint8_t ink = src[x] * 17;
-                    tiles[x] = ink;
-                    tiles[x + 4] = ink;
-                }
-                tiles += 8;
-            }
+            pack_tile(linear + nx_linear_index(tx, ty), tiles);
+            tiles += 32;
         }
     }
 #else
     for (int ty = 0; ty < NX_HEIGHT; ty += 8) {
         for (int tx = 0; tx < NX_WIDTH; tx += 8) {
             for (int row = 0; row < 8; ++row) {
-                const uint8_t *src = linear + (ty + row) * NX_WIDTH + tx;
+                const uint8_t *src = linear + nx_linear_index(tx, ty + row);
                 for (int x = 0; x < 8; x += 2)
-                    *tiles++ = (src[x] << 4) | src[x + 1];
+                    *tiles++ = (src[x * NX_HEIGHT] << 4) | src[(x + 1) * NX_HEIGHT];
             }
         }
     }
 #endif
 }
 
-static ViewPoint view_point(const NxCamera *camera, NxVertex vertex)
+static ViewPoint view_point(const Renderer *r, NxVertex vertex)
 {
-    int32_t dx = (int32_t)vertex.x - camera->x;
-    int32_t dy = (int32_t)vertex.y - camera->y;
+    const NxCamera *c = r->camera;
     ViewPoint point = {
-        dx * camera->sine - dy * camera->cosine,
-        dx * camera->cosine + dy * camera->sine
+        (int32_t)vertex.x * c->sine - (int32_t)vertex.y * c->cosine - r->origin_x,
+        (int32_t)vertex.x * c->cosine + (int32_t)vertex.y * c->sine - r->origin_z
     };
     return point;
 }
@@ -122,34 +170,74 @@ static int edge(int32_t position)
     return (position + SCALE / 2 - 1) >> 8;
 }
 
-/* Height at pixel centers, stepped in screen space at Q16 precision. */
-typedef struct { int64_t y, step; } Edge;
+/* Perspective scale is linear in screen space and shared by all four edges. */
+typedef struct { int32_t first, step; } Zoom;
+typedef struct { uint32_t y, step; } Edge;
 
-static Edge project_edge(int height, ViewPoint a, ViewPoint b,
-                         int32_t ax, int32_t bx, int first)
+static int32_t scaled_divide(int32_t value, int32_t factor, int32_t divisor)
 {
-    int32_t ay = projected(height, a.z, FOCAL * SCALE * SCALE);
-    int32_t by = projected(height, b.z, FOCAL * SCALE * SCALE);
+    if (value >= INT16_MIN && value <= INT16_MAX && (uint32_t)factor <= 65536)
+        return value * factor / divisor;
+    return (int64_t)value * factor / divisor;
+}
+
+static Zoom project_zoom(ViewPoint a, ViewPoint b, int32_t ax, int32_t bx,
+                         int first, int end)
+{
+    uint32_t numerator = FOCAL * SCALE * 65536u;
+    int32_t za = numerator / (uint32_t)a.z;
+    int32_t zb = numerator / (uint32_t)b.z;
     int32_t delta = bx - ax;
     int32_t offset = first * SCALE + SCALE / 2 - ax;
-    if (ay == by)
-        return (Edge){(int64_t)NX_HEIGHT / 2 * 65536 - (int64_t)ay * SCALE, 0};
+    int32_t range = zb - za;
+    if (!range)
+        return (Zoom){za * SCALE, 0};
 
-    int64_t range = (int64_t)(ay - by);
-    int64_t y = (int64_t)NX_HEIGHT / 2 * 65536 - (int64_t)ay * SCALE
-              + range * offset * SCALE / delta;
-    int64_t step = range * 65536 / delta;
+    /* Rebase the weighted average on the nearer horizontal endpoint. */
+    if (offset > delta / 2) {
+        za = zb;
+        offset -= delta;
+    }
+    /* Keep eight extra fractional bits while advancing the scale. */
+    int32_t start = za * SCALE + (int64_t)range * offset * SCALE / delta;
+    int32_t step = first + 1 < end ? scaled_divide(range, 65536, delta) : 0;
+    return (Zoom){start, step};
+}
 
-    /* Extreme projected edges may be off-screen by thousands of pixels.
-       Keep interpolation wide until converting a sampled edge to a row. */
-    return (Edge){y, step};
+static Edge project_edge(int height, Zoom zoom)
+{
+    int32_t first = ((int64_t)height * zoom.first) >> 8;
+    int32_t step = ((int64_t)height * zoom.step + 128) >> 8;
+    return (Edge){NX_HEIGHT / 2 * 65536u - (uint32_t)first, 0u - (uint32_t)step};
+}
+
+static void update_open_bounds(Renderer *r)
+{
+    int left = r->first_open;
+    int right = r->end_open;
+    while (left < right && r->top[left] == r->bottom[left])
+        ++left;
+    while (right > left && r->top[right - 1] == r->bottom[right - 1])
+        --right;
+    r->first_open = left;
+    r->end_open = right;
+
+    const NxCamera *c = r->camera;
+    int lo = left - NX_WIDTH / 2;
+    int hi = right - NX_WIDTH / 2;
+    r->left_x = FOCAL * c->sine - lo * c->cosine;
+    r->left_y = -FOCAL * c->cosine - lo * c->sine;
+    r->right_x = hi * c->cosine - FOCAL * c->sine;
+    r->right_y = hi * c->sine + FOCAL * c->cosine;
+    r->left_bias = (int32_t)c->x * r->left_x + (int32_t)c->y * r->left_y;
+    r->right_bias = (int32_t)c->x * r->right_x + (int32_t)c->y * r->right_y;
 }
 
 static void draw_seg(Renderer *r, const NxSeg *seg)
 {
     const NxVertex *vertices = r->map->vertices;
-    ViewPoint a = view_point(r->camera, vertices[seg->a]);
-    ViewPoint b = view_point(r->camera, vertices[seg->b]);
+    ViewPoint a = view_point(r, vertices[seg->a]);
+    ViewPoint b = view_point(r, vertices[seg->b]);
 
     if ((a.z < NEAR && b.z < NEAR) ||
         (a.x <= -a.z && b.x <= -b.z) ||
@@ -165,8 +253,8 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     if (bx <= ax)
         return;
 
-    int first = limit(edge(ax), 0, NX_WIDTH);
-    int end = limit(edge(bx), 0, NX_WIDTH);
+    int first = limit(edge(ax), r->first_open, r->end_open);
+    int end = limit(edge(bx), r->first_open, r->end_open);
     int visible = first;
     while (visible < end && r->top[visible] == r->bottom[visible])
         ++visible;
@@ -183,29 +271,31 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     int solid = seg->back == 0xFFFF || low >= high;
     int wall_color = 5 + (vertices[seg->a].x == vertices[seg->b].x);
 
-    Edge ceiling = project_edge(front.ceiling - r->camera->z, a, b, ax, bx, first);
-    Edge floor = project_edge(front.floor - r->camera->z, a, b, ax, bx, first);
+    Zoom zoom = project_zoom(a, b, ax, bx, first, end);
+    Edge ceiling = project_edge(front.ceiling - r->camera->z, zoom);
+    Edge floor = project_edge(front.floor - r->camera->z, zoom);
     Edge upper = ceiling;
     Edge lower = floor;
     if (!solid && high != front.ceiling)
-        upper = project_edge(high - r->camera->z, a, b, ax, bx, first);
+        upper = project_edge(high - r->camera->z, zoom);
     if (!solid && low != front.floor)
-        lower = project_edge(low - r->camera->z, a, b, ax, bx, first);
+        lower = project_edge(low - r->camera->z, zoom);
 
+    int before = r->open;
     for (int x = first; x < end; ++x) {
         int top = r->top[x];
         int bottom = r->bottom[x];
         if (top < bottom) {
-            int wall_top = limit(edge(ceiling.y >> 8), top, bottom);
-            int wall_end = limit(edge(floor.y >> 8), wall_top, bottom);
+            int wall_top = limit(edge((int32_t)ceiling.y >> 8), top, bottom);
+            int wall_end = limit(edge((int32_t)floor.y >> 8), wall_top, bottom);
             span(r, x, top, wall_top, CEILING_COLOR);
             span(r, x, wall_end, bottom, FLOOR_COLOR);
             if (solid) {
                 span(r, x, wall_top, wall_end, wall_color);
                 r->top[x] = r->bottom[x];
             } else {
-                int opening_top = limit(edge(upper.y >> 8), wall_top, wall_end);
-                int opening_end = limit(edge(lower.y >> 8), opening_top, wall_end);
+                int opening_top = limit(edge((int32_t)upper.y >> 8), wall_top, wall_end);
+                int opening_end = limit(edge((int32_t)lower.y >> 8), opening_top, wall_end);
                 span(r, x, wall_top, opening_top, UPPER_COLOR);
                 span(r, x, opening_end, wall_end, LOWER_COLOR);
                 r->top[x] = opening_top;
@@ -218,13 +308,13 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
         upper.y += upper.step;
         lower.y += lower.step;
     }
+    if (r->open != before && (first == r->first_open || end == r->end_open))
+        update_open_bounds(r);
 }
 
 static int camera_side(const NxCamera *camera, const NxNode *node)
 {
-    int32_t dx = (int32_t)camera->x - node->x;
-    int32_t dy = (int32_t)camera->y - node->y;
-    return dy * node->dx > dx * node->dy;
+    return (int32_t)camera->y * node->dx - (int32_t)camera->x * node->dy > node->partition;
 }
 
 void nx_camera_floor(const NxMap *map, NxCamera *camera)
@@ -239,17 +329,20 @@ void nx_camera_floor(const NxMap *map, NxCamera *camera)
     camera->z = limit(eye, INT16_MIN, (int)sector.ceiling - 1);
 }
 
-static int intersects_view(const Renderer *r, NxBounds box)
+static inline int32_t box_max(const NxBounds *box, int16_t px, int16_t py)
 {
+    int16_t x = px >= 0 ? box->right : box->left;
+    int16_t y = py >= 0 ? box->top : box->bottom;
+    return (int32_t)x * px + (int32_t)y * py;
+}
+
+static int intersects_view(const Renderer *r, const NxBounds *box)
+{
+    const NxCamera *c = r->camera;
     /* A linear plane reaches its maximum at one corner of the box. */
-    for (int i = 0; i < 3; ++i) {
-        int16_t px = r->plane_x[i], py = r->plane_y[i];
-        int32_t x = (int32_t)(px >= 0 ? box.right : box.left) - r->camera->x;
-        int32_t y = (int32_t)(py >= 0 ? box.top : box.bottom) - r->camera->y;
-        if (x * px + y * py < (i == 0 ? NEAR : 0))
-            return 0;
-    }
-    return 1;
+    return box_max(box, c->cosine, c->sine) >= r->origin_z + NEAR
+           && box_max(box, r->left_x, r->left_y) >= r->left_bias
+           && box_max(box, r->right_x, r->right_y) >= r->right_bias;
 }
 
 static void traverse(Renderer *r, uint16_t child)
@@ -257,8 +350,9 @@ static void traverse(Renderer *r, uint16_t child)
     while (r->open && !(child & LEAF)) {
         const NxNode *node = &r->map->nodes[child];
         int side = camera_side(r->camera, node);
-        traverse(r, node->child[side]);
-        if (!r->open || !intersects_view(r, node->bounds[side ^ 1]))
+        if (intersects_view(r, &node->bounds[side]))
+            traverse(r, node->child[side]);
+        if (!r->open || !intersects_view(r, &node->bounds[side ^ 1]))
             return;
         child = node->child[side ^ 1];
     }
@@ -278,16 +372,15 @@ void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int la
     r.pixels = pixels;
     r.layout = layout;
     r.open = NX_WIDTH;
-    r.plane_x[0] = camera->cosine;
-    r.plane_y[0] = camera->sine;
-    r.plane_x[1] = camera->cosine + camera->sine;
-    r.plane_y[1] = camera->sine - camera->cosine;
-    r.plane_x[2] = camera->cosine - camera->sine;
-    r.plane_y[2] = camera->sine + camera->cosine;
+    r.origin_x = (int32_t)camera->x * camera->sine - (int32_t)camera->y * camera->cosine;
+    r.origin_z = (int32_t)camera->x * camera->cosine + (int32_t)camera->y * camera->sine;
+    r.first_open = 0;
+    r.end_open = NX_WIDTH;
     for (int x = 0; x < NX_WIDTH; ++x) {
         r.top[x] = 0;
         r.bottom[x] = NX_HEIGHT;
     }
+    update_open_bounds(&r);
     traverse(&r, map->root);
 
     /* Color 7 exposes uncovered geometry instead of hiding it in the backdrop. */

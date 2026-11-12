@@ -12,10 +12,18 @@ extern const char nexus_map_name[];
 extern const NxCamera nexus_cameras[];
 extern const unsigned int nexus_camera_count;
 
-static uint8_t linear[NX_WIDTH * NX_HEIGHT];
+_Alignas(4) static uint8_t linear[NX_WIDTH * NX_HEIGHT];
 static uint32_t packed[NX_TILE_BYTES / 4];
 static uint16_t tilemap[2][TILE_COUNT];
 static unsigned displayed = 1;
+#ifdef NX_2X2
+enum { SOLID_COLORS = 8, DMA_SAFE_BYTES = 7000 };
+static uint16_t mixed_map[TILE_COUNT];
+static unsigned solid_base(void)
+{
+    return TILE_USER_INDEX + 2 * TILE_COUNT;
+}
+#endif
 
 typedef struct {
     u32 draw, pack, wait, dma, frame;
@@ -28,31 +36,43 @@ static Timing show(const NxCamera *camera, int layout)
     uint8_t *tiles = (uint8_t *)packed;
     nx_render(&nexus_map, camera, layout == NX_LINEAR ? linear : tiles, layout);
     u32 drawn = getSubTick();
-    if (layout == NX_LINEAR)
+    unsigned bank = displayed ^ 1;
+    unsigned tile_base = TILE_USER_INDEX + bank * TILE_COUNT;
+    const uint16_t *map = tilemap[bank];
+    unsigned count = TILE_COUNT;
+    if (layout == NX_LINEAR) {
+#ifdef NX_2X2
+        count = nx_pack_mixed(linear, tiles, mixed_map,
+                              TILE_ATTR_FULL(PAL1, 0, 0, 0, tile_base),
+                              TILE_ATTR_FULL(PAL1, 0, 0, 0, solid_base()));
+        map = mixed_map;
+#else
         nx_pack(linear, tiles);
+#endif
+    }
     u32 ready = getSubTick();
 
-    unsigned bank = displayed ^ 1;
     SYS_doVBlankProcessEx(ON_VBLANK_START);
     u32 blank = getSubTick();
     u32 initial_wait = blank - ready;
     u32 transfer = 0;
-    unsigned tile_base = TILE_USER_INDEX + bank * TILE_COUNT;
     unsigned first = 0;
-#ifdef NX_2X2
-    first = TILE_COUNT / 2;
-    VDP_loadTileData(packed, tile_base, first, DMA);
-    DMA_waitCompletion();
-    u32 half_done = getSubTick();
-    transfer = half_done - blank;
-    SYS_doVBlankProcessEx(ON_VBLANK_START);
-    blank = getSubTick();
-    time.wait = blank - half_done;
-#else
     time.wait = 0;
+#ifdef NX_2X2
+    if (count * 32 + TILE_COUNT * 2 > DMA_SAFE_BYTES) {
+        first = count / 2;
+        VDP_loadTileData(packed, tile_base, first, DMA);
+        DMA_waitCompletion();
+        u32 half_done = getSubTick();
+        transfer = half_done - blank;
+        SYS_doVBlankProcessEx(ON_VBLANK_START);
+        blank = getSubTick();
+        time.wait = blank - half_done;
+    }
 #endif
-    VDP_loadTileData(packed + first * 8, tile_base + first, TILE_COUNT - first, DMA);
-    VDP_setTileMapDataRect(BG_A, tilemap[bank], VIEW_X, VIEW_Y,
+    if (count > first)
+        VDP_loadTileData(packed + first * 8, tile_base + first, count - first, DMA);
+    VDP_setTileMapDataRect(BG_A, map, VIEW_X, VIEW_Y,
                           NX_VIEW_WIDTH / 8, NX_VIEW_HEIGHT / 8, NX_VIEW_WIDTH / 8, DMA);
     DMA_waitCompletion();
     displayed = bank;
@@ -81,7 +101,7 @@ static void value(unsigned n, unsigned x, unsigned y)
 static void show_timing(Timing t, unsigned pose, int layout, int free_camera)
 {
     SYS_doVBlankProcess();
-    VDP_drawText(layout == NX_LINEAR ? "A LINEAR+PACK" : "B DIRECT TILES", 3, 3);
+    VDP_drawText(layout == NX_LINEAR ? "A SHARED TILES" : "B DIRECT TILES", 3, 3);
     if (free_camera)
         VDP_drawText("FREE CAMERA", 20, 3);
     else {
@@ -180,16 +200,26 @@ int main(bool hard_reset)
     PAL_setPalette(PAL1, colors, CPU);
     VDP_setTextPlane(BG_B);
 #ifdef NX_2X2
-    VDP_drawText("NEXUS 2X2", 3, 1);
+    VDP_drawText("NEXUS 2X2 OPT", 3, 1);
 #else
     VDP_drawText("NEXUS N02", 3, 1);
 #endif
-    VDP_drawText(nexus_map_name, 15, 1);
+    VDP_drawText(nexus_map_name, 18, 1);
     VDP_drawText("START camera   A/B layout   C run", 3, 26);
 
     for (unsigned bank = 0; bank < 2; ++bank)
         for (unsigned i = 0; i < TILE_COUNT; ++i)
             tilemap[bank][i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, TILE_USER_INDEX + bank * TILE_COUNT + i);
+
+#ifdef NX_2X2
+    /* Install the shared uniform tiles once, before either image bank is shown. */
+    for (unsigned color = 0; color < SOLID_COLORS; ++color)
+        for (unsigned i = 0; i < 8; ++i)
+            packed[color * 8 + i] = UINT32_C(0x11111111) * color;
+    SYS_doVBlankProcessEx(ON_VBLANK_START);
+    VDP_loadTileData(packed, solid_base(), SOLID_COLORS, DMA);
+    DMA_waitCompletion();
+#endif
 
     unsigned pose = 0;
     int layout = NX_LINEAR;

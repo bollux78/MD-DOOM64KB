@@ -1,4 +1,4 @@
-# NEXUS N02 · 2 × 2
+# NEXUS 2 × 2 · otimização
 
 Motor 2.5D experimental para Mega Drive. A N01 foi aprovada no console por Daniel.
 A N02 usa o mesmo renderizador para E1M1, E1M2 e E1M9, em três ROMs de
@@ -24,7 +24,7 @@ de importação em `out/<mapa>/`.
 | Esquerda/direita | Percorre as poses fixas. Na câmera livre, gira a câmera. |
 | Cima/baixo | Avança ou recua na câmera livre. |
 | Start | Alterna entre a pose fixa selecionada e a câmera livre. |
-| A | Buffer linear de um byte por pixel e empacotamento em tiles 4 bpp. |
+| A | Buffer por colunas e reutilização de tiles de cor sólida. |
 | B | Escrita direta no buffer de tiles 4 bpp. |
 | C | Roda o benchmark de 39 quadros por caminho e exibe mediana, P95 e máximo. |
 
@@ -33,29 +33,35 @@ A câmera livre acompanha a altura do setor e atravessa paredes. Volte
 
 ## Renderização e testes
 
-A travessia BSP perto–longe descarta ramos distantes quando a caixa do WAD
-fica inteiramente fora do frustum. A projeção usa divisão inteira de 32
-bits quando o numerador cabe sem perda de precisão e mantém 64 bits para
-os demais casos. O caminho direto escreve em trechos contíguos de cada tile.
+A travessia BSP perto–longe descarta caixas inteiramente fora do intervalo
+de colunas abertas. A projeção compartilha uma escala de perspectiva por
+parede entre os quatro limites verticais. Os spans verticais do modo A
+escrevem em endereços contíguos com uma rotina de byte para o 68000.
 
-Cada apresentação transfere 9.600 bytes de padrões e 600 bytes de mapa
-de tiles em dois VBlanks. A primeira metade é escrita no banco oculto e a
-exibição muda após a transferência da segunda metade. A tela individual mostra tempos aproximados de render,
-empacotamento, espera, DMA e quadro. No lote, o tempo de cada quadro inclui
-a espera até o VBlank e a apresentação. A cor magenta identifica pixels
-que ficaram sem cobertura.
+No modo A, cada cor sólida já tem um tile na VRAM. O empacotamento envia
+só os padrões dos tiles com mais de uma cor, além de 600 bytes da tabela
+de tiles. Quando os dados cabem em 7.000 bytes, a atualização usa um
+VBlank. Se excederem esse orçamento, o renderer divide a transferência
+em dois VBlanks. A troca do banco ocorre após a transferência completa.
+O modo B escreve e transfere todos os 9.600 bytes de padrões.
+
+A tela individual mostra os tempos aproximados de render, empacotamento,
+espera, DMA e quadro. A cor magenta indica pixels sem cobertura geométrica.
 
 O teste no PC compara os tiles produzidos por A e B e usa um traçador de
 raios independente para conferir a geometria das poses fixas. A comparação desta variante passou pelas 13 poses de cada mapa no Genesis Plus GX.
 
-## Comparação em E1M1
+## Comparação com a versão 2 × 2 aprovada no console
 
-Mesmo Genesis Plus GX, 39 quadros por caminho e as mesmas 13 poses.
-Tempos em milissegundos, incluindo a apresentação. A mediana e o P95 são
-medidos pela ROM. Daniel confirmou que as três ROMs 2 × 2 funcionaram no Mega Drive físico. Os tempos da tabela são do emulador.
+Genesis Plus GX, modo A, 13 poses e três amostras por pose. Tempo total
+por quadro, incluindo espera e transferência ao VDP.
 
-| Resolução interna | Viewport | A mediana / P95 | B mediana / P95 |
-| --- | --- | ---: | ---: |
-| 128 × 96 | 128 × 96 | 249 / 449 | 232 / 449 |
-| 96 × 64 | 192 × 128 | 216 / 415 | 249 / 449 |
-| 80 × 60 | 160 × 120 | 183 / 366 | 216 / 399 |
+| Mapa | Mediana anterior → otimizada | P95 anterior → otimizado |
+| --- | ---: | ---: |
+| E1M1 | 183 → 98 ms | 366 → 199 ms |
+| E1M2 | 166 → 81 ms | 615 → 282 ms |
+| E1M9 | 183 → 98 ms | 266 → 116 ms |
+
+Nas 39 poses, os dois caminhos apresentaram a mesma imagem. A comparação
+com o traçador de raios encontrou 15 pixels divergentes em bordas e
+zero pixels descobertos. A variante otimizada aguarda teste no Mega Drive.
