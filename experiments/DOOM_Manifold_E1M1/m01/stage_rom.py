@@ -1119,6 +1119,34 @@ static void sky_repair_once(void) {
     p.write_text(s)
     print("M13 one-time HUD/sky VRAM recovery, no interrupt masking")
 
+def m14_vdp_safe(out):
+    """M14: main-thread VDP writes race with the H-Int/V-Int handlers.
+
+    A VDP command is two control-port words; an interrupt that writes the
+    control port between them (H-Int register writes every frame, V-Int DMA
+    queue flush) makes the VDP take the wrong address, so tile data / name
+    table words land in the wrong VRAM place. The window is tiny, so the
+    screen breaks only after minutes (FPS text, Doom face, status bar and
+    sky update in the main loop).  SGDK documents this (sys.h): VDP access
+    outside interrupts must be bracketed by SYS_disableInts/SYS_enableInts.
+    Each statement is wrapped on its own, so interrupts stay masked for a
+    few hundred cycles at a time.
+    """
+    import re
+    pat=re.compile(r"^(\s*)((?:VDP_setTileMapXY|VDP_setTileMapDataRect|VDP_clearTileMapRect|VDP_loadTileData|SKY_CLEAR_BORDERS)\(.*\);)\s*$")
+    total=0
+    for name in ("game.c","doom_statusbar.c","manifold_sky.c"):
+        p=out/"src"/name
+        if not p.is_file(): continue
+        lines=p.read_text().split("\n");n=0
+        for i,l in enumerate(lines):
+            m=pat.match(l)
+            if m:
+                lines[i]=f"{m.group(1)}SYS_disableInts(); {m.group(2)} SYS_enableInts();";n+=1
+        p.write_text("\n".join(lines));total+=n
+        print(f"M14 VDP safe: {name} wrapped {n} statements")
+    if total<8: raise ValueError("M14 VDP safe: too few statements wrapped")
+
 def m13_werk_vdp_atomic(out):
     """M13.1 A/B: keep V-Int bitmap DMA and H-Int register writes from
     interrupting SGDK multiwrite VDP operations on HUD/sky.
@@ -1614,7 +1642,7 @@ def player_radius_collision(out):
     s=p.read_text()
     sig="collision_result check_for_collision_radius(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {\n"
     if s.count(sig)!=1: raise ValueError("radius collision signature changed")
-    wrapper="""
+    wrapper="#define MANIFOLD_SWEPT "+("0" if os.environ.get("MANIFOLD_SWEPT","1")=="0" else "1")+"\n"+"""
 extern const u16 e1_block_offsets[] __attribute__((weak));
 extern const s16 e1_block_segs[] __attribute__((weak));
 extern const portal_map e1m1_map __attribute__((weak));
@@ -1652,7 +1680,9 @@ static u8 manifold_radius_blocked(s16 cx, s16 cy, s16 nx, s16 ny, u16 sect) {
     const s16* s = &e1_block_segs[e1_block_offsets[sect] * 5];
     u16 n = e1_block_offsets[sect + 1] - e1_block_offsets[sect];
     for (; n; n--, s += 5) {
+#if MANIFOLD_SWEPT
         if ((cx != nx || cy != ny) && manifold_step_crosses(cx, cy, nx, ny, s)) { return 1; }
+#endif
         s16 lo = s[0] < s[2] ? s[0] : s[2], hi = s[0] < s[2] ? s[2] : s[0];
         if (nx < lo - MANIFOLD_R || nx > hi + MANIFOLD_R) { continue; }
         lo = s[1] < s[3] ? s[1] : s[3]; hi = s[1] < s[3] ? s[3] : s[1];
@@ -2942,6 +2972,8 @@ def stage(src, wad, out, control=False):
         m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
+    if os.environ.get("MANIFOLD_VDP_SAFE","0")=="1":
+        m14_vdp_safe(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":

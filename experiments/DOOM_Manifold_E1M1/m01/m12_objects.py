@@ -32,6 +32,11 @@ TYPES = (
  (2049,"SBOXA0","shellbox",44,21),
  # M14: BRNBIG lattice (two-sided mid-textured fences, sector 72) as 32-unit
  # billboard slices; box = slice x 1.39 wide, 128 x 1.75 high.
+ # M14: monsters, static (no AI yet) at their E1M1 start positions, front frame
+ # A1; width/height 0 = derive from the patch with the barrel's approved ratios.
+ (3004,"POSSA1","zombieman",0,0),
+ (9,"SPOSA1","sergeant",0,0),
+ (3001,"TROOA1","imp",0,0),
  (9001,"GRATE_L","grate_l",44,224),
  (9002,"GRATE_R","grate_r",44,224),
  (9003,"GRATE_C0","grate_c0",44,224),
@@ -88,6 +93,8 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
             print("M12 skipped missing patch:",lump)
             continue
         if not 0<pw<=512 or not 0<ph<=512: raise ValueError("Invalid patch dimensions")
+        if not width: width=round(pw*1.39)
+        if not height: height=round(ph*1.75)
         idx=len(templates)+1
         ident="m12_sprite_"+name
         cols=[]
@@ -122,7 +129,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         matches=[i for i,c in enumerate(cells) if point_inside([w["a"] for w in c["walls"]],(x*16,y*16))]
         if len(matches)!=1: skipped[kind]+=1;continue
         placements.append((matches[0],x,y,mapping[kind]))
-    if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1":
+    if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1" and __import__("os").environ.get("MANIFOLD_GRATE_SPRITES","1")=="1":
         for x,y,kind in grate_placements():
             if kind not in mapping: continue
             m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],(x*16,y*16))]
