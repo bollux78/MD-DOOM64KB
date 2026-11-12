@@ -1119,6 +1119,22 @@ static void sky_repair_once(void) {
     p.write_text(s)
     print("M13 one-time HUD/sky VRAM recovery, no interrupt masking")
 
+def m14_nohud(out):
+    """M14 diagnostic: no Doom HUD and no FPS/title text (no per-frame VDP
+    writes from the main loop except the sky and the queued sprite/palette DMA)."""
+    g=out/"src"/"game.c";t=g.read_text()
+    assert t.count("    showStats();\n")==1
+    g.write_text(t.replace("    showStats();\n","    /* M14 NOHUD: showStats(); */\n"))
+    h=out/"src"/"doom_statusbar.c";t=h.read_text()
+    old="void doom_hud_update(void) {\n    hud_repair_once();"
+    assert t.count(old)==1
+    t=t.replace(old,"void doom_hud_update(void) {\n    return;\n    hud_repair_once();")
+    old2="    dhud_draw_margins();\n    dhud_draw_bar();\n    dhud_last_hash"
+    assert t.count(old2)==1
+    t=t.replace(old2,"    dhud_last_hash")
+    h.write_text(t)
+    print("M14 NOHUD: HUD and FPS text disabled")
+
 def m14_vdp_safe(out):
     """M14: main-thread VDP writes race with the H-Int/V-Int handlers.
 
@@ -2972,6 +2988,8 @@ def stage(src, wad, out, control=False):
         m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
+    if os.environ.get("MANIFOLD_NOHUD","0")=="1":
+        m14_nohud(out)
     if os.environ.get("MANIFOLD_VDP_SAFE","0")=="1":
         m14_vdp_safe(out)
     if os.environ.get("MANIFOLD_H32","1")=="1":
