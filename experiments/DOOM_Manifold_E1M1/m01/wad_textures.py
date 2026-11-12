@@ -265,6 +265,21 @@ def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1"):
         for y in range(0, 64, 4):
             for x in range(0, 64, 4):
                 samples.extend([img[y][x]] * 3)
+    import os
+    wgt = int(os.environ.get("MANIFOLD_PAL_SPRITES", "0"))
+    if wgt:
+        # M14: let the object sprites vote for palette entries (one 15-colour
+        # palette is shared by walls, flats and sprites on this renderer).
+        import m12_objects as MO
+        for _k, lump, *_r in MO.TYPES:
+            try:
+                pw, ph, pim = patch_image(w.lump(lump))
+            except KeyError:
+                continue
+            for y in range(0, ph, 2):
+                for x in range(0, pw, 2):
+                    if pim[y][x] is not None:
+                        samples.extend([pal256[pim[y][x]]] * wgt)
     pal = build_palette(samples)
     return {"pal": pal, "tex": texrgb, "flats": flatrgb, "sky": sky}
 

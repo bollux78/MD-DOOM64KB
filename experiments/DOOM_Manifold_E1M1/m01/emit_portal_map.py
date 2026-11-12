@@ -214,6 +214,31 @@ def assign_wall_textures(lumps,cells):
     for li,ld in enumerate(LD):
         a=V[ld[0]];b=V[ld[1]];dx=b[0]-a[0];dy=b[1]-a[1];L=math.hypot(dx,dy)
         if L: lines.append((li,a,dx,dy,L))
+    if __import__("os").environ.get("MANIFOLD_SPLIT_LINES","1")=="1":
+        # merge_collinear joins solid pieces that belong to different Doom
+        # linedefs (e.g. the exit switch inside a longer wall) and one texture
+        # then covers all of them: split solid walls at Doom vertices again.
+        vpts=sorted(set((round(v[0]*SCALE),round(v[1]*SCALE)) for v in V))
+        nsplit=0
+        for c in cells:
+            nw=[]
+            for w in c["walls"]:
+                if w["neighbor"]>=0:
+                    nw.append(w);continue
+                a,b=w["a"],w["b"];dx=b[0]-a[0];dy=b[1]-a[1];L2=dx*dx+dy*dy
+                mids=[]
+                for p in vpts:
+                    if p==a or p==b: continue
+                    if dx*(p[1]-a[1])-dy*(p[0]-a[0])!=0: continue
+                    t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2
+                    if 0<t<1: mids.append((t,p))
+                mids.sort()
+                pts=[a]+[p for _,p in mids]+[b]
+                for k in range(len(pts)-1):
+                    nw.append(dict(w,a=pts[k],b=pts[k+1]))
+                nsplit+=len(pts)-2
+            c["walls"]=nw
+        print("M14 solid walls split at Doom vertices:",nsplit)
     names=set()
     for c in cells:
         for w in c["walls"]:
