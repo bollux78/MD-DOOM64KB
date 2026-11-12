@@ -26,7 +26,12 @@ static inline unsigned nx_linear_index(unsigned x, unsigned y)
     return x * NX_HEIGHT + y;
 }
 
-enum { NX_FLAT, NX_PERSPECTIVE, NX_STRIP, NX_MODE_COUNT };
+enum { NX_FLAT, NX_PERSPECTIVE, NX_STRIP,
+#ifdef NX_LINE_TEST
+       NX_OUTLINE,
+#endif
+       NX_MODE_COUNT };
+typedef struct { uint16_t a; int16_t za; uint16_t b; int16_t zb; } NxWireEdge;
 typedef struct { const uint8_t *pixels; uint16_t width, height; } NxTexture;
 typedef struct {
     int32_t u, length;
@@ -54,6 +59,7 @@ typedef struct {
 void nx_camera_floor(const NxMap *map, NxCamera *camera);
 void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout);
 void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int mode);
+void nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels);
 void nx_pack(const uint8_t *linear, uint8_t *tiles);
 #ifdef NX_2X2
 unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,

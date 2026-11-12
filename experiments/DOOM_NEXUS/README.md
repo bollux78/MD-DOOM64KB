@@ -72,3 +72,32 @@ nas 13 poses e nos três modos. UV e ASM foram idênticos à BASE. LUT e
 ALL mudaram nove pixels lógicos no total no modo perspectiva e sete no
 modo em blocos. As paredes lisas foram idênticas em todas as variantes.
 O teste em console da matriz está pendente.
+
+## Contornos e wireframe
+
+Duas ROMs de E1M1 usam 80 × 60 internos e viewport de 160 × 120.
+
+- `bash build.sh E1M1 2x uv lines` gera a comparação com contornos.
+  A alterna liso/contorno, B alterna as texturas e C executa o benchmark.
+  Fora da câmera livre, cima alterna as poses normais, a parede no mapa e
+  o mesmo segmento isolado. C nessas duas últimas poses mede as duas cenas
+  automaticamente em modo liso.
+- `bash build.sh E1M1 2x base wire` gera o wireframe puro, em branco sobre
+  preto. As linhas vêm de linedefs de paredes e desníveis. A importação
+  deduplica as arestas. O renderer recorta e rasteriza linhas, inclusive
+  arestas atrás das paredes. C mede o wireframe, esquerda/direita navegam
+  nas poses e Start alterna a câmera livre.
+
+No Genesis Plus GX, 39 amostras por modo nas 13 poses de E1M1:
+
+| Modo | Mediana / P95 do quadro |
+| --- | ---: |
+| Parede lisa | 99 / 216 ms |
+| Contorno visível com oclusão | 82 / 183 ms |
+| Wireframe com arestas ocultas visíveis | 116 / 300 ms |
+
+Na pose de frente para a parede lisa, a imagem da BSP inteira foi
+idêntica à de uma folha contendo só o segmento correspondente. A
+mediana do render foi 33 ms com a BSP do mapa e 31 ms com a folha
+isolada. O quadro completo mediu 50 ms de mediana e P95 nos dois casos
+(39 amostras por cenário). O teste no Mega Drive físico está pendente.

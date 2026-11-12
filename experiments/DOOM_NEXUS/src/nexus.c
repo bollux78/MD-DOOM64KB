@@ -22,6 +22,42 @@ typedef struct {
     int32_t left_bias, right_bias;
 } Renderer;
 
+#if defined(NX_LINE_TEST) || defined(NX_WIREFRAME_ROM)
+static void clear_lines(uint8_t *pixels)
+{
+    uint16_t count = NX_WIDTH * NX_HEIGHT / 4 - 1;
+#ifdef __m68k__
+    uint32_t zero = 0;
+    __asm__ volatile ("1: move.l %2,(%0)+\n\tdbra %1,1b"
+                      : "+a"(pixels), "+d"(count) : "d"(zero) : "memory", "cc");
+#else
+    for (unsigned i = 0; i < ((unsigned)count + 1) * 4; ++i)
+        pixels[i] = 0;
+#endif
+}
+#endif
+
+#ifdef NX_LINE_TEST
+static void outline_band(Renderer *r, int x, int y0, int y1, int top, int bottom,
+                         int side)
+{
+    if (y0 >= y1 || y1 <= top || y0 >= bottom)
+        return;
+    int first = y0 > top ? y0 : top;
+    int end = y1 < bottom ? y1 : bottom;
+    uint8_t *column = r->pixels + nx_linear_index(x, 0);
+    if (side)
+        for (int y = first; y < end; ++y)
+            column[y] = 12;
+    else {
+        if (y0 >= top)
+            column[y0] = 12;
+        if (y1 <= bottom)
+            column[y1 - 1] = 12;
+    }
+}
+#endif
+
 static void span(Renderer *r, int x, int first, int end, unsigned color)
 {
     if (first >= end)
@@ -465,7 +501,7 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
 #ifdef NX_WALLS
     const NxMaterial *material = 0;
     int32_t ua = 0, ub = 0;
-    if (r->material_mode) {
+    if (r->material_mode == NX_PERSPECTIVE || r->material_mode == NX_STRIP) {
         material = &nexus_materials[seg - r->map->segs];
         ua = material->u;
         ub = ua + material->length;
@@ -548,8 +584,27 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
         int top = r->top[x];
         int bottom = r->bottom[x];
         if (top < bottom) {
-            int wall_top = limit(edge((int32_t)ceiling.y >> 8), top, bottom);
-            int wall_end = limit(edge((int32_t)floor.y >> 8), wall_top, bottom);
+            int raw_top = edge((int32_t)ceiling.y >> 8);
+            int raw_bottom = edge((int32_t)floor.y >> 8);
+            int wall_top = limit(raw_top, top, bottom);
+            int wall_end = limit(raw_bottom, wall_top, bottom);
+#ifdef NX_LINE_TEST
+            if (r->material_mode == NX_OUTLINE) {
+                int side = x == edge(ax) || x == edge(bx) - 1;
+                if (solid) {
+                    outline_band(r, x, raw_top, raw_bottom, top, bottom, side);
+                    r->top[x] = r->bottom[x];
+                } else {
+                    int raw_upper = edge((int32_t)upper.y >> 8);
+                    int raw_lower = edge((int32_t)lower.y >> 8);
+                    outline_band(r, x, raw_top, raw_upper, top, bottom, side);
+                    outline_band(r, x, raw_lower, raw_bottom, top, bottom, side);
+                    r->top[x] = limit(raw_upper, wall_top, wall_end);
+                    r->bottom[x] = limit(raw_lower, r->top[x], wall_end);
+                }
+                goto advance_column;
+            }
+#endif
             span(r, x, top, wall_top, CEILING_COLOR);
             span(r, x, wall_end, bottom, FLOOR_COLOR);
 #ifdef NX_WALLS
@@ -624,6 +679,9 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
                 r->top[x] = opening_top;
                 r->bottom[x] = opening_end;
             }
+#ifdef NX_LINE_TEST
+advance_column:
+#endif
             r->open -= r->top[x] == r->bottom[x];
         }
         ceiling.y += ceiling.step;
@@ -709,8 +767,16 @@ static void render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, in
         r.top[x] = 0;
         r.bottom[x] = NX_HEIGHT;
     }
+#ifdef NX_LINE_TEST
+    if (mode == NX_OUTLINE)
+        clear_lines(pixels);
+#endif
     update_open_bounds(&r);
     traverse(&r, map->root);
+#ifdef NX_LINE_TEST
+    if (mode == NX_OUTLINE)
+        return;
+#endif
 
     /* Color 7 exposes uncovered geometry instead of hiding it in the backdrop. */
     for (int x = 0; x < NX_WIDTH; ++x)
@@ -727,3 +793,128 @@ void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, 
 {
     render(map, camera, pixels, NX_LINEAR, mode);
 }
+
+
+#ifdef NX_WIREFRAME_ROM
+extern const NxWireEdge nexus_wire_edges[];
+extern const unsigned int nexus_wire_count, nexus_wire_vertex_count;
+
+typedef struct {
+    ViewPoint view;
+    int32_t screen_x, scale;
+} WirePoint;
+
+static int screen_outcode(int x, int y)
+{
+    return (x < 0 ? 1 : x >= NX_WIDTH ? 2 : 0) |
+           (y < 0 ? 4 : y >= NX_HEIGHT ? 8 : 0);
+}
+
+static void wire_line(uint8_t *pixels, int x0, int y0, int x1, int y1)
+{
+    for (;;) {
+        int c0 = screen_outcode(x0, y0), c1 = screen_outcode(x1, y1);
+        if (!(c0 | c1))
+            break;
+        if (c0 & c1)
+            return;
+        if (!c0) {
+            int t = x0; x0 = x1; x1 = t;
+            t = y0; y0 = y1; y1 = t;
+            c0 = c1;
+        }
+        if (c0 & 12) {
+            int y = c0 & 4 ? 0 : NX_HEIGHT - 1;
+            x0 += (int64_t)(x1 - x0) * (y - y0) / (y1 - y0);
+            y0 = y;
+        } else {
+            int x = c0 & 1 ? 0 : NX_WIDTH - 1;
+            y0 += (int64_t)(y1 - y0) * (x - x0) / (x1 - x0);
+            x0 = x;
+        }
+    }
+
+    if (x0 == x1) {
+        if (y0 > y1) {
+            int swap = y0; y0 = y1; y1 = swap;
+        }
+        uint8_t *dst = pixels + nx_linear_index(x0, y0);
+        for (int y = y0; y <= y1; ++y)
+            *dst++ = 15;
+        return;
+    }
+    if (y0 == y1) {
+        if (x0 > x1) {
+            int swap = x0; x0 = x1; x1 = swap;
+        }
+        for (int x = x0; x <= x1; ++x)
+            pixels[nx_linear_index(x, y0)] = 15;
+        return;
+    }
+    int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    int dx = (x1 - x0) * sx, dy = -(y1 - y0) * sy;
+    int error = dx + dy;
+    for (;;) {
+        pixels[nx_linear_index(x0, y0)] = 15;
+        if (x0 == x1 && y0 == y1)
+            break;
+        int twice = error * 2;
+        if (twice >= dy) {
+            error += dy;
+            x0 += sx;
+        }
+        if (twice <= dx) {
+            error += dx;
+            y0 += sy;
+        }
+    }
+}
+
+static void project_wire_point(WirePoint *point)
+{
+    point->screen_x = edge(NX_WIDTH / 2 * SCALE +
+                           projected(point->view.x, point->view.z, FOCAL * SCALE));
+    point->scale = (FOCAL * SCALE * 65536u) / (uint32_t)point->view.z;
+}
+
+void nx_render_wire(const NxMap *map, const NxCamera *camera, uint8_t *pixels)
+{
+    clear_lines(pixels);
+    WirePoint cache[nexus_wire_vertex_count];
+    Renderer r = {
+        .camera = camera,
+        .origin_x = (int32_t)camera->x * camera->sine - (int32_t)camera->y * camera->cosine,
+        .origin_z = (int32_t)camera->x * camera->cosine + (int32_t)camera->y * camera->sine,
+    };
+    for (unsigned i = 0; i < nexus_wire_vertex_count; ++i) {
+        cache[i].view = view_point(&r, map->vertices[i]);
+        cache[i].scale = 0;
+    }
+
+    for (unsigned i = 0; i < nexus_wire_count; ++i) {
+        const NxWireEdge *line = &nexus_wire_edges[i];
+        WirePoint *a = &cache[line->a], *b = &cache[line->b], clipped;
+        ViewPoint p = a->view, q = b->view;
+        if ((p.z < NEAR && q.z < NEAR) ||
+            (p.x <= -p.z && q.x <= -q.z) || (p.x >= p.z && q.x >= q.z))
+            continue;
+        int za = line->za, zb = line->zb;
+        if (p.z < NEAR) {
+            clipped = (WirePoint){.view = intersect_near(p, q)};
+            za += (int64_t)(zb - za) * (NEAR - p.z) / (q.z - p.z);
+            a = &clipped;
+        } else if (q.z < NEAR) {
+            clipped = (WirePoint){.view = intersect_near(q, p)};
+            zb += (int64_t)(za - zb) * (NEAR - q.z) / (p.z - q.z);
+            b = &clipped;
+        }
+        if (!a->scale)
+            project_wire_point(a);
+        if (!b->scale)
+            project_wire_point(b);
+        int y0 = NX_HEIGHT / 2 - (((int32_t)za - camera->z) * a->scale >> 16);
+        int y1 = NX_HEIGHT / 2 - (((int32_t)zb - camera->z) * b->scale >> 16);
+        wire_line(pixels, a->screen_x, y0, b->screen_x, y1);
+    }
+}
+#endif

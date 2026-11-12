@@ -8,7 +8,13 @@ enum {
 };
 
 extern const NxMap nexus_map;
+#ifndef NX_WIREFRAME_ROM
 extern const uint16_t nexus_palette[16];
+#endif
+#ifdef NX_LINE_TEST
+extern const uint16_t nexus_wall_seg;
+extern const NxCamera nexus_wall_camera;
+#endif
 extern const char nexus_map_name[];
 extern const NxCamera nexus_cameras[];
 extern const unsigned int nexus_camera_count;
@@ -29,11 +35,26 @@ typedef struct {
     u32 draw, pack, wait, dma, frame;
 } Timing;
 
-static Timing show(const NxCamera *camera, int mode)
+static Timing show(const NxCamera *camera, int mode, int scene)
 {
     Timing time;
     u32 start = getSubTick();
+#ifdef NX_WIREFRAME_ROM
+    (void)mode;
+    (void)scene;
+    nx_render_wire(&nexus_map, camera, linear);
+#elif defined(NX_LINE_TEST)
+    NxMap single = nexus_map;
+    NxLeaf leaf = {nexus_wall_seg, 1};
+    if (scene == 2) {
+        single.root = 0x8000;
+        single.leaves = &leaf;
+    }
+    nx_render_walls(scene == 2 ? &single : &nexus_map, camera, linear, mode);
+#else
+    (void)scene;
     nx_render_walls(&nexus_map, camera, linear, mode);
+#endif
     u32 drawn = getSubTick();
     unsigned bank = displayed ^ 1;
     unsigned base = TILE_USER_INDEX + bank * TILE_COUNT;
@@ -101,15 +122,33 @@ static void value(unsigned n, unsigned x, unsigned y)
 #define VARIANT_NAME "BASE"
 #endif
 
-static const char *const mode_name[NX_MODE_COUNT] = {"FLAT", "PERSPECTIVE", "STRIPS"};
+#ifdef NX_WIREFRAME_ROM
+enum { BENCH_MODES = 1 };
+static const char *const mode_name[] = {"WIREFRAME"};
+#else
+enum { BENCH_MODES = NX_MODE_COUNT };
+static const char *const mode_name[] = {"FLAT", "PERSPECTIVE", "STRIPS",
+#ifdef NX_LINE_TEST
+                                        "OUTLINE",
+#endif
+};
+#endif
 
-static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
+static void show_timing(Timing t, unsigned pose, int mode, int free_camera, int scene)
 {
     SYS_doVBlankProcess();
     VDP_clearText(0, 0, 40);
     VDP_drawText("NEXUS", 1, 0);
     VDP_drawText(nexus_map_name, 8, 0);
+#ifdef NX_LINE_TEST
+    if (scene)
+        VDP_drawText(scene == 1 ? "MAP WALL" : "ONE SEG", 25, 0);
+#else
+    (void)scene;
+#ifndef NX_WIREFRAME_ROM
     VDP_drawText(VARIANT_NAME, 28, 0);
+#endif
+#endif
     VDP_drawText(mode_name[mode], 15, 0);
     if (free_camera)
         VDP_drawText("FREE", 33, 0);
@@ -122,7 +161,13 @@ static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
     value(millis(t.wait), 11, 26);
     value(millis(t.dma), 16, 26);
     value(millis(t.frame), 21, 26);
+#ifdef NX_WIREFRAME_ROM
+    VDP_drawText("LEFT/RIGHT POSES  C BENCH  START CAM", 1, 27);
+#elif defined(NX_LINE_TEST)
+    VDP_drawText("A FLAT/LINE  B TEX  UP WALL  C BENCH", 1, 27);
+#else
     VDP_drawText("A FLAT  B TEXTURES  C BENCH  START CAM", 1, 27);
+#endif
 }
 
 static void sort(u32 *values)
@@ -140,21 +185,23 @@ static void sort(u32 *values)
 
 static void benchmark(void)
 {
-    u32 frames[NX_MODE_COUNT][RUN_SAMPLES];
+    u32 frames[BENCH_MODES][RUN_SAMPLES];
     for (unsigned i = 0; i < RUN_SAMPLES; ++i) {
         unsigned pose = i % nexus_camera_count;
-        for (unsigned j = 0; j < NX_MODE_COUNT; ++j) {
-            unsigned mode = (i + j) % NX_MODE_COUNT;
-            frames[mode][i] = show(&nexus_cameras[pose], mode).frame;
+        for (unsigned j = 0; j < BENCH_MODES; ++j) {
+            unsigned mode = (i + j) % BENCH_MODES;
+            frames[mode][i] = show(&nexus_cameras[pose], mode, 0).frame;
         }
     }
     SYS_doVBlankProcess();
     VDP_clearText(0, 0, 40);
     VDP_drawText("BENCH (ms)      MED   P95   MAX", 1, 0);
+#if !defined(NX_LINE_TEST) && !defined(NX_WIREFRAME_ROM)
     VDP_drawText(VARIANT_NAME, 35, 0);
-    VDP_clearTextArea(0, 25, 40, 3);
-    for (unsigned mode = 0; mode < NX_MODE_COUNT; ++mode) {
-        unsigned row = 25 + mode;
+#endif
+    VDP_clearTextArea(0, 24, 40, 4);
+    for (unsigned mode = 0; mode < BENCH_MODES; ++mode) {
+        unsigned row = 24 + mode;
         sort(frames[mode]);
         VDP_drawText(mode_name[mode], 1, row);
         value(millis(frames[mode][19]), 17, row);
@@ -162,6 +209,35 @@ static void benchmark(void)
         value(millis(frames[mode][38]), 29, row);
     }
 }
+
+#ifdef NX_LINE_TEST
+static void benchmark_wall(void)
+{
+    u32 draw[2][RUN_SAMPLES], frames[2][RUN_SAMPLES];
+    for (unsigned i = 0; i < RUN_SAMPLES; ++i) {
+        for (unsigned j = 0; j < 2; ++j) {
+            unsigned scene = (i + j) & 1;
+            Timing result = show(&nexus_wall_camera, NX_FLAT, scene + 1);
+            draw[scene][i] = result.draw;
+            frames[scene][i] = result.frame;
+        }
+    }
+    SYS_doVBlankProcess();
+    VDP_clearText(0, 0, 40);
+    VDP_drawText("ONE WALL TEST (ms)", 1, 0);
+    VDP_clearTextArea(0, 24, 40, 4);
+    VDP_drawText("DRAW MED  FRAME MED  P95", 14, 24);
+    for (unsigned scene = 0; scene < 2; ++scene) {
+        unsigned row = 25 + scene;
+        sort(draw[scene]);
+        sort(frames[scene]);
+        VDP_drawText(scene ? "ONE SEG" : "MAP WALL", 1, row);
+        value(millis(draw[scene][19]), 15, row);
+        value(millis(frames[scene][19]), 25, row);
+        value(millis(frames[scene][37]), 35, row);
+    }
+}
+#endif
 
 enum { ANGLES = 32, MOVE_STEP = 12 };
 
@@ -205,7 +281,12 @@ int main(bool hard_reset)
 {
     (void)hard_reset;
     VDP_setScreenWidth320();
+#ifdef NX_WIREFRAME_ROM
+    static const u16 wire_palette[16] = {[15] = 0xEEE};
+    PAL_setPalette(PAL1, wire_palette, CPU);
+#else
     PAL_setPalette(PAL1, nexus_palette, CPU);
+#endif
     VDP_setTextPlane(BG_B);
     if (solid_base() + SOLID_COLORS - 1 > TILE_USER_MAX_INDEX) {
         VDP_drawText("INSUFFICIENT VRAM FOR VIEWPORT", 2, 1);
@@ -221,11 +302,16 @@ int main(bool hard_reset)
     DMA_waitCompletion();
 
     unsigned pose = 0;
+#if defined(NX_WIREFRAME_ROM) || defined(NX_LINE_TEST)
+    int mode = NX_FLAT;
+#else
     int mode = NX_PERSPECTIVE;
+#endif
+    int scene = 0;
     int free_camera = 0;
     unsigned angle = 0;
     NxCamera camera = nexus_cameras[pose];
-    show_timing(show(&camera, mode), pose, mode, free_camera);
+    show_timing(show(&camera, mode, scene), pose, mode, free_camera, scene);
     u16 previous = 0;
     for (;;) {
         SYS_doVBlankProcess();
@@ -233,16 +319,29 @@ int main(bool hard_reset)
         u16 pressed = held & ~previous;
         previous = held;
         if (pressed & BUTTON_C) {
-            benchmark();
+#ifdef NX_LINE_TEST
+            if (scene)
+                benchmark_wall();
+            else
+#endif
+                benchmark();
             continue;
         }
         int redraw = pressed & (BUTTON_START | BUTTON_A | BUTTON_B);
-        if (pressed & BUTTON_A)
+#ifndef NX_WIREFRAME_ROM
+        if (pressed & BUTTON_A) {
+#ifdef NX_LINE_TEST
+            mode = mode == NX_FLAT ? NX_OUTLINE : NX_FLAT;
+#else
             mode = NX_FLAT;
+#endif
+        }
         if (pressed & BUTTON_B)
             mode = mode == NX_PERSPECTIVE ? NX_STRIP : NX_PERSPECTIVE;
+#endif
         if (pressed & BUTTON_START) {
             free_camera ^= 1;
+            scene = 0;
             camera = nexus_cameras[pose];
             angle = nearest_angle(camera);
         }
@@ -258,14 +357,21 @@ int main(bool hard_reset)
                     nx_camera_floor(&nexus_map, &camera);
                 redraw = 1;
             }
+#ifdef NX_LINE_TEST
+        } else if (pressed & BUTTON_UP) {
+            scene = (scene + 1) % 3;
+            camera = scene ? nexus_wall_camera : nexus_cameras[pose];
+            redraw = 1;
+#endif
         } else if (pressed & (BUTTON_LEFT | BUTTON_RIGHT)) {
+            scene = 0;
             unsigned step = (pressed & BUTTON_LEFT) ? nexus_camera_count - 1 : 1;
             pose = (pose + step) % nexus_camera_count;
             camera = nexus_cameras[pose];
             redraw = 1;
         }
         if (redraw) {
-            show_timing(show(&camera, mode), pose, mode, free_camera);
+            show_timing(show(&camera, mode, scene), pose, mode, free_camera, scene);
         }
     }
 }
