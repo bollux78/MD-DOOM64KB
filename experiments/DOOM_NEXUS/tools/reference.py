@@ -66,8 +66,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wad", type=Path)
     parser.add_argument("frames", type=Path)
+    parser.add_argument("--map", default="E1M1")
     args = parser.parse_args()
-    data = load_map(directory(args.wad.read_bytes()), "E1M1")
+    data = load_map(directory(args.wad.read_bytes()), args.map)
     raw = args.frames.read_bytes()
     poses = cameras(data)
     frame_size = WIDTH * HEIGHT

@@ -15,10 +15,13 @@ typedef struct {
     uint8_t top[NX_WIDTH];
     uint8_t bottom[NX_WIDTH];
     int open;
+    int16_t plane_x[3], plane_y[3];
 } Renderer;
 
 static void span(Renderer *r, int x, int first, int end, unsigned color)
 {
+    if (first >= end)
+        return;
     if (r->layout == NX_LINEAR) {
         for (int y = first; y < end; ++y)
             r->pixels[y * NX_WIDTH + x] = color;
@@ -29,9 +32,15 @@ static void span(Renderer *r, int x, int first, int end, unsigned color)
     unsigned mask = 15u << shift;
     unsigned ink = color << shift;
     unsigned offset = (x >> 3) * 32 + ((x & 7) >> 1);
-    for (int y = first; y < end; ++y) {
-        uint8_t *byte = r->pixels + (y >> 3) * (NX_WIDTH * 4) + (y & 7) * 4 + offset;
-        *byte = (*byte & ~mask) | ink;
+    while (first < end) {
+        uint8_t *byte = r->pixels + (first >> 3) * (NX_WIDTH * 4)
+                        + (first & 7) * 4 + offset;
+        int stop = (first | 7) + 1;
+        if (stop > end)
+            stop = end;
+        for (int row = 0; row < stop - first; ++row)
+            byte[row * 4] = (byte[row * 4] & ~mask) | ink;
+        first = stop;
     }
 }
 
@@ -72,6 +81,14 @@ static int limit(int value, int low, int high)
     return value > high ? high : value;
 }
 
+/* Use the 32-bit division path when the scaled numerator fits exactly. */
+static inline int32_t projected(int32_t value, int32_t depth, int factor)
+{
+    if (value >= INT32_MIN / factor && value <= INT32_MAX / factor)
+        return value * factor / depth;
+    return (int64_t)value * factor / depth;
+}
+
 /* First pixel whose center falls on or past the projected edge. */
 static int edge(int32_t position)
 {
@@ -84,8 +101,8 @@ typedef struct { int64_t y, step; } Edge;
 static Edge project_edge(int height, ViewPoint a, ViewPoint b,
                          int32_t ax, int32_t bx, int first)
 {
-    int32_t ay = (int64_t)height * FOCAL * SCALE * SCALE / a.z;
-    int32_t by = (int64_t)height * FOCAL * SCALE * SCALE / b.z;
+    int32_t ay = projected(height, a.z, FOCAL * SCALE * SCALE);
+    int32_t by = projected(height, b.z, FOCAL * SCALE * SCALE);
     int32_t delta = bx - ax;
     int32_t offset = first * SCALE + SCALE / 2 - ax;
     if (ay == by)
@@ -116,8 +133,8 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     if (b.z < NEAR)
         b = intersect_near(b, a);
 
-    int32_t ax = NX_WIDTH / 2 * SCALE + (int64_t)a.x * FOCAL * SCALE / a.z;
-    int32_t bx = NX_WIDTH / 2 * SCALE + (int64_t)b.x * FOCAL * SCALE / b.z;
+    int32_t ax = NX_WIDTH / 2 * SCALE + projected(a.x, a.z, FOCAL * SCALE);
+    int32_t bx = NX_WIDTH / 2 * SCALE + projected(b.x, b.z, FOCAL * SCALE);
     if (bx <= ax)
         return;
 
@@ -176,14 +193,46 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     }
 }
 
+static int camera_side(const NxCamera *camera, const NxNode *node)
+{
+    int32_t dx = (int32_t)camera->x - node->x;
+    int32_t dy = (int32_t)camera->y - node->y;
+    return dy * node->dx > dx * node->dy;
+}
+
+void nx_camera_floor(const NxMap *map, NxCamera *camera)
+{
+    uint16_t child = map->root;
+    while (!(child & LEAF)) {
+        const NxNode *node = &map->nodes[child];
+        child = node->child[camera_side(camera, node)];
+    }
+    NxSector sector = map->sectors[map->segs[map->leaves[child & ~LEAF].first].front];
+    int eye = (int)sector.floor + 41;
+    camera->z = limit(eye, INT16_MIN, (int)sector.ceiling - 1);
+}
+
+static int intersects_view(const Renderer *r, NxBounds box)
+{
+    /* A linear plane reaches its maximum at one corner of the box. */
+    for (int i = 0; i < 3; ++i) {
+        int16_t px = r->plane_x[i], py = r->plane_y[i];
+        int32_t x = (int32_t)(px >= 0 ? box.right : box.left) - r->camera->x;
+        int32_t y = (int32_t)(py >= 0 ? box.top : box.bottom) - r->camera->y;
+        if (x * px + y * py < (i == 0 ? NEAR : 0))
+            return 0;
+    }
+    return 1;
+}
+
 static void traverse(Renderer *r, uint16_t child)
 {
     while (r->open && !(child & LEAF)) {
         const NxNode *node = &r->map->nodes[child];
-        int32_t dx = (int32_t)r->camera->x - node->x;
-        int32_t dy = (int32_t)r->camera->y - node->y;
-        int side = dy * node->dx > dx * node->dy;
+        int side = camera_side(r->camera, node);
         traverse(r, node->child[side]);
+        if (!r->open || !intersects_view(r, node->bounds[side ^ 1]))
+            return;
         child = node->child[side ^ 1];
     }
     if (!r->open)
@@ -202,6 +251,12 @@ void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int la
     r.pixels = pixels;
     r.layout = layout;
     r.open = NX_WIDTH;
+    r.plane_x[0] = camera->cosine;
+    r.plane_y[0] = camera->sine;
+    r.plane_x[1] = camera->cosine + camera->sine;
+    r.plane_y[1] = camera->sine - camera->cosine;
+    r.plane_x[2] = camera->cosine - camera->sine;
+    r.plane_y[2] = camera->sine + camera->cosine;
     for (int x = 0; x < NX_WIDTH; ++x) {
         r.top[x] = 0;
         r.bottom[x] = NX_HEIGHT;

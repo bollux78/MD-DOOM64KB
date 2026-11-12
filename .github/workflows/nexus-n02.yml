@@ -1,0 +1,76 @@
+name: NEXUS N02
+on:
+  push:
+    branches: [exp-nexus-engine-n02]
+    paths:
+      - experiments/DOOM_NEXUS/**
+      - .github/workflows/nexus-n02.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/exp-nexus-engine-n02'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: experiments/DOOM_NEXUS
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and verify the three map ROMs
+        env:
+          DOOM1_WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+        run: |
+          echo '1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771  /home/dan/Projetos/doom-md/assets/wads/doom1.wad' | sha256sum -c
+          for map in E1M1 E1M2 E1M9; do
+            bash build.sh "$map"
+            dir="out/$map"
+            cc -std=c11 -O2 -Wall -Wextra -Werror -Isrc tools/check_render.c src/nexus.c src/map_data.c -o "$dir/check_render"
+            "$dir/check_render" > "$dir/frames.idx"
+            python3 tools/reference.py "$DOOM1_WAD" "$dir/frames.idx" --map "$map" | tee "$dir/reference.json"
+            python3 - "$dir/reference.json" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1]) as source:
+              rows = json.load(source)
+          assert len(rows) == 13
+          assert all(not row["uncovered_pixels"] and not row["different_away_from_reference_edge"]
+                     for row in rows)
+          PY
+          done
+      - name: Archive builds on the runner
+        run: |
+          dest="$HOME/Projetos/nexus-engine/roms/N02/${GITHUB_SHA:0:12}"
+          for map in E1M1 E1M2 E1M9; do
+            rom="nexus-n02-${map,,}.bin"
+            install -d "$dest/$map"
+            install -m 644 "out/$map/$rom" "out/$map/map-audit.json" "out/$map/reference.json" "$dest/$map/"
+            cmp "out/$map/$rom" "$dest/$map/$rom"
+            sha256sum "$dest/$map/$rom"
+          done
+      - name: Smoke test in BlastEm
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import shutil
+          import subprocess
+          emulator = shutil.which("blastem")
+          if not emulator:
+              emulator = next((str(p) for p in (pathlib.Path.home() / "Projetos").glob("**/blastem")
+                               if p.is_file() and os.access(p, os.X_OK)), None)
+          if not emulator:
+              print("::warning::BlastEm unavailable on runner; boot unverified")
+          else:
+              env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+              for rom in sorted(pathlib.Path("out").glob("E1M?/nexus-n02-*.bin")):
+                  subprocess.run([emulator, "-b", "800", str(rom)],
+                                 env=env, check=True, timeout=60)
+                  print(f"BlastEm smoke completed: {rom.name} (800 emulated frames)")
+          PY

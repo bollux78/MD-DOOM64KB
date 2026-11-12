@@ -1,45 +1,49 @@
-# NEXUS N01
+# NEXUS N02
 
-Protótipo independente de renderização 2.5D para Mega Drive. A ROM importa a
-geometria de E1M1 de um WAD local e apresenta poses fixas a 128 × 96, em
-cores sólidas. A sequência começa no spawn e aproxima a câmera de uma
-passagem entre setores de alturas diferentes.
+Motor 2.5D experimental para Mega Drive. A N01 foi aprovada no console por Daniel.
+A N02 usa o mesmo renderizador para E1M1, E1M2 e E1M9, em três ROMs de
+inspeção. A imagem tem 128 × 96 pixels e usa cores sólidas para distinguir
+pisos, tetos e paredes.
 
 ## Compilar
 
 Requer Python 3, Java e SGDK nativo com toolchain m68k-elf. Execute neste diretório:
 
 ```sh
-GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh
+GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh E1M1
 ```
 
-O build produz `out/nexus-n01.bin` e `out/map-audit.json`. O importador
-confere E1M1, E1M2 e E1M9. A ROM recebe somente E1M1. No runner, a automação
-confere o SHA-256 do WAD usado pelo projeto e arquiva a ROM localmente em
-`~/Projetos/nexus-engine/roms/N01/<revisão>/`.
+O argumento aceita E1M1, E1M2 ou E1M9. O build produz a ROM e o relatório
+de importação em `out/<mapa>/`. O runner usa o WAD local do projeto e arquiva
+as ROMs em `~/Projetos/nexus-engine/roms/N02/<revisão>/`.
 
-## Controles e medições
+## Controles
 
 | Botão | Função |
 | --- | --- |
-| Esquerda/direita | Percorre as poses fixas. |
+| Esquerda/direita | Percorre as poses fixas. Na câmera livre, gira a câmera. |
+| Cima/baixo | Avança ou recua na câmera livre. |
+| Start | Alterna entre a pose fixa selecionada e a câmera livre. |
 | A | Buffer linear de um byte por pixel e empacotamento em tiles 4 bpp. |
 | B | Escrita direta no buffer de tiles 4 bpp. |
-| C | Mede 39 apresentações por caminho, alternando a ordem A/B. Exibe mediana, P95 e máximo. |
+| C | Roda o benchmark de 39 quadros por caminho e exibe mediana, P95 e máximo. |
 
-Os dois caminhos compartilham a travessia BSP perto–longe, a projeção
-em ponto fixo e uma janela de oclusão vertical por coluna. Cada apresentação
-transfere 6.144 bytes de padrões e 384 bytes de mapa de tiles. O mapa de
-tiles aponta para o novo banco depois da transferência dos padrões. A
-cor magenta indica pixels para os quais a geometria recortada não forneceu
-cobertura.
+A câmera livre acompanha a altura do setor e atravessa paredes. Volte
+à pose fixa com Start para retomar a inspeção dentro do mapa.
 
-A tela individual mostra os tempos aproximados de render, empacotamento,
-espera, DMA e quadro, a partir do contador do SGDK. No lote, o tempo de cada
-quadro inclui a espera até o VBlank e a apresentação. Os números no
-emulador e no console devem ser registrados separadamente.
+## Renderização e testes
 
-`tools/check_render.c` confere a paridade exata de tiles entre A e B. A
-referência em `tools/reference.py` resolve os cruzamentos dos raios por
-distância, sem percorrer a BSP, e informa diferenças junto a bordas e no
-interior das superfícies. O runner mantém o relatório ao lado da ROM.
+A travessia BSP perto–longe descarta ramos distantes quando a caixa do WAD
+fica inteiramente fora do frustum. A projeção usa divisão inteira de 32
+bits quando o numerador cabe sem perda de precisão e mantém 64 bits para
+os demais casos. O caminho direto escreve em trechos contíguos de cada tile.
+
+Cada apresentação transfere 6.144 bytes de padrões e 384 bytes de mapa
+de tiles. A tela individual mostra tempos aproximados de render,
+empacotamento, espera, DMA e quadro. No lote, o tempo de cada quadro inclui
+a espera até o VBlank e a apresentação. A cor magenta identifica pixels
+que ficaram sem cobertura.
+
+O teste no PC compara os tiles produzidos por A e B e usa um traçador de
+raios independente para conferir a geometria das poses fixas. A automação
+repete a validação para cada mapa e executa o teste de inicialização no BlastEm.
