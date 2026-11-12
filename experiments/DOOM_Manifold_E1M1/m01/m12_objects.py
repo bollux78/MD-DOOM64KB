@@ -138,7 +138,17 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],((x+(1 if x<3000 else -1))*16,y*16))]
             if len(m)!=1: print("M14 grate slice skipped",x,y,len(m));continue
             placements.append((m[0],x+(1 if x<3000 else -1),y,mapping[kind]))
-    if len(placements)>126: raise ValueError(f"Too many decorations: {len(placements)}")
+    if len(placements)>126:
+        # M14: walk-through maps. Drop monsters first, then thin the rest evenly
+        # (never a whole region) down to the runtime limit.
+        monster_idx={mapping[k] for k in (3004,9,3001) if k in mapping}
+        before=len(placements)
+        keep=[pl for pl in placements if pl[3] not in monster_idx]
+        if len(keep)>126:
+            step=len(keep)/126.0
+            keep=[keep[int(i*step)] for i in range(126)]
+        placements=keep
+        print(f"M14 decorations cut {before} -> {len(placements)}")
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements
 

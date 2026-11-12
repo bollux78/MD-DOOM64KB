@@ -490,7 +490,7 @@ def fail_loud_on_heap_exhaustion(out):
     p.write_text(s)
     print("Heap exhaustion now fails loudly via SYS_die")
 
-MAX_WALLS_PER_SECTOR=16  # E1M1 BSP cells have <=11 walls; 255 made visit_graph frames 2.3KB -> stack overflow into heap
+MAX_WALLS_PER_SECTOR=int(os.environ.get("MANIFOLD_MAX_CELL_WALLS","16"))  # E1M1 BSP cells have <=11 walls; 255 made visit_graph frames 2.3KB -> stack overflow into heap
 def widen_sector_vertex_buffers(out):
     """portal.c keeps per-sector transformed vertices on the stack in
     `Vect2D_s16 buf[62]`, and load_transform_and_duplicate_verts writes
@@ -2199,6 +2199,10 @@ def m13_fall_snap(out):
             if (drop < 0) cur_player_pos.z = rest_player_pos;
         }
     }"""
+    if os.environ.get("MANIFOLD_FALL_FAST","0")=="1":
+        # M14: quicker fall: starts at 12, +6 per frame, cap 96 (default 4/+2/32)
+        new=new.replace("FIX32(4) ? FIX32(4) : fall_vel + FIX32(2)","FIX32(12) ? FIX32(12) : fall_vel + FIX32(6)").replace("fall_vel > FIX32(32)) fall_vel = FIX32(32)","fall_vel > FIX32(96)) fall_vel = FIX32(96)")
+        assert "FIX32(96)" in new and "FIX32(12)" in new
     s=s.replace(old,new,1)
     p.write_text(s)
     print("M13.3 fall: step snap and accelerating fall enabled")

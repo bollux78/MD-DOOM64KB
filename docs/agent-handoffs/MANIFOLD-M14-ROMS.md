@@ -15,3 +15,6 @@ Base comum: `MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H3
 
 As ROMs NOHUD (e as seguintes) têm nome no cabeçalho e tela de abertura com START/15 s.
 | claudio-m14-e1m1-VBLANK-SAFE-h40.bin | ver MAME/ROM | base + grades + monstros + `MANIFOLD_VDP_SAFE=2` (escritas VDP do thread principal só durante o VBlank, onde o H-Int não dispara; sem máscara na área ativa). Soak MAME 36000 quadros limpo, FPS 3,4. BlastEm: a confirmar |
+
+## ROMs de passeio (walk): E1M1, E1M2, E1M4, E1M5, E1M9 (12/11)
+Uma ROM por fase (um menu único não cabe: texturas de cada fase ~1 MB, ROM máx. 4 MB). Base VBLANK-SAFE + `MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1` (snap de degraus e queda acelerada 12/+6/teto 96). Fases ≠ E1M1: portas abertas estaticamente (`MANIFOLD_DOORS=0`), decorações cortadas a ≤126 (monstros primeiro, depois desbaste uniforme), sem grades. E1M4 usa `MANIFOLD_SKY_MERGE=0`; E1M4/E1M5 `MANIFOLD_MAX_CELL_WALLS=24`. Receita: `tools/m14/buildwalk.sh E1M2 MANIFOLD_SPLIT_LINES=0 [...]`.
