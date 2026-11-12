@@ -1,0 +1,52 @@
+name: Manifold historical ROM variants recovery
+on:
+  push:
+    branches: [exp-manifold-m14-e1m1]
+    paths:
+      - '.github/workflows/manifold-archive-variants.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-rom-archive-local
+  cancel-in-progress: false
+jobs:
+  archive-variants:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate local runner inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /home/dan/Projetos/manifold-doom/roms
+          test -f /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+      - name: Find SGDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then echo "GDK=$d" >> "$GITHUB_ENV"; exit 0; fi
+          done
+          while IFS= read -r p; do
+            if test -f "$p"; then echo "GDK=${p%/makefile.gen}" >> "$GITHUB_ENV"; exit 0; fi
+          done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null)
+          echo "::error::Missing SGDK"; exit 1
+      - name: Rebuild historical M09 and M11-M13 variants
+        shell: bash
+        env:
+          MANIFOLD_ARCHIVE_EXPANDED: '1'
+        run: |
+          set -euo pipefail
+          python3 experiments/DOOM_Manifold_E1M1/tools/archive_rom_families.py
+      - name: List private BINs without uploading them
+        if: always()
+        shell: bash
+        run: |
+          find /home/dan/Projetos/manifold-doom/roms -maxdepth 2 -type f -name '*.bin' -printf '%P\n' | sort
+          echo "ROMs only on self-hosted runner; no upload artifacts."
