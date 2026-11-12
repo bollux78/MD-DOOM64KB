@@ -234,7 +234,12 @@ static int edge(int32_t position)
 }
 
 /* Perspective scale is linear in screen space and shared by all four edges. */
-typedef struct { int32_t first, step; } Zoom;
+typedef struct {
+    int32_t first, step;
+#ifdef NX_UV_INCREMENTAL
+    int32_t right;
+#endif
+} Zoom;
 typedef struct { uint32_t y, step; } Edge;
 
 static int32_t scaled_divide(int32_t value, int32_t factor, int32_t divisor)
@@ -254,7 +259,11 @@ static Zoom project_zoom(ViewPoint a, ViewPoint b, int32_t ax, int32_t bx,
     int32_t offset = first * SCALE + SCALE / 2 - ax;
     int32_t range = zb - za;
     if (!range)
-        return (Zoom){za * SCALE, 0};
+        return (Zoom){.first = za * SCALE, .step = 0
+#ifdef NX_UV_INCREMENTAL
+                      , .right = zb * SCALE
+#endif
+        };
 
     /* Rebase the weighted average on the nearer horizontal endpoint. */
     if (offset > delta / 2) {
@@ -264,7 +273,11 @@ static Zoom project_zoom(ViewPoint a, ViewPoint b, int32_t ax, int32_t bx,
     /* Keep eight extra fractional bits while advancing the scale. */
     int32_t start = za * SCALE + (int64_t)range * offset * SCALE / delta;
     int32_t step = first + 1 < end ? scaled_divide(range, 65536, delta) : 0;
-    return (Zoom){start, step};
+    return (Zoom){.first = start, .step = step
+#ifdef NX_UV_INCREMENTAL
+                  , .right = zb * SCALE
+#endif
+    };
 }
 
 static Edge project_edge(int height, Zoom zoom)
@@ -302,6 +315,73 @@ extern const NxMaterial nexus_materials[];
 
 typedef struct { int u, v_step; } TextureColumn;
 
+#ifdef NX_RECIP_LUT
+#include "wall_reciprocal.h"
+
+/* zoom is positive Q24. Normalize its mantissa into [2048,4096). */
+static int vertical_step(uint32_t zoom)
+{
+    if (!zoom)
+        return 0;
+    if (zoom < 2048)
+        return UINT32_MAX / zoom;
+    unsigned shift = 0;
+    uint32_t mantissa = zoom;
+    if (mantissa >= (4096u << 8)) {
+        mantissa >>= 8;
+        shift += 8;
+    }
+    if (mantissa >= (4096u << 4)) {
+        mantissa >>= 4;
+        shift += 4;
+    }
+    while (mantissa >= 4096) {
+        mantissa >>= 1;
+        ++shift;
+    }
+    int a = wall_reciprocal[mantissa - 2048];
+    int b = wall_reciprocal[mantissa - 2047];
+    unsigned fraction = shift >= 8 ? (zoom >> (shift - 8)) & 255u
+                                   : (zoom << (8 - shift)) & 255u;
+    unsigned estimate = (a * 256 + (b - a) * (int)fraction + 128) >> 8;
+    return shift <= 6 ? estimate << (6 - shift) : estimate >> (shift - 6);
+}
+#else
+static int vertical_step(uint32_t zoom)
+{
+    return zoom ? (int)(UINT32_MAX / zoom) : 0;
+}
+#endif
+
+#ifdef NX_UV_INCREMENTAL
+typedef struct { int32_t first, step; } Weight;
+
+static Weight wall_weight(int32_t ax, int32_t bx, int first, int end, Zoom zoom)
+{
+    int32_t width = bx - ax;
+    int32_t offset = limit(first * SCALE + SCALE / 2 - ax, 0, width);
+    int32_t start = (int64_t)offset * zoom.right / width;
+    int32_t step = first + 1 < end ? (int64_t)SCALE * zoom.right / width : 0;
+    return (Weight){start, step};
+}
+
+static TextureColumn sample_incremental(int32_t scale, int32_t weight,
+                                         int32_t ua, int32_t ub)
+{
+    if (scale <= 0)
+        return (TextureColumn){ua >> 8, 0};
+    int32_t z = scale;
+    int32_t weighted = limit(weight, 0, z);
+    /* Normalize both terms together before the Q12 division. */
+    while ((uint32_t)z > 0x000fffff) {
+        weighted >>= 4;
+        z >>= 4;
+    }
+    int32_t t = ((uint32_t)weighted << 12) / (uint32_t)z;
+    int u = (ua + ((int64_t)(ub - ua) * t >> 12)) >> 8;
+    return (TextureColumn){u, vertical_step(scale)};
+}
+#else
 static TextureColumn sample_wall(int x, int32_t ax, int32_t bx, ViewPoint a,
                                  ViewPoint b, int32_t ua, int32_t ub, int32_t zoom)
 {
@@ -319,9 +399,9 @@ static TextureColumn sample_wall(int x, int32_t ax, int32_t bx, ViewPoint a,
     }
     int32_t t = ((uint32_t)left << 12) / (uint32_t)total;
     int u = (ua + ((int64_t)(ub - ua) * t >> 12)) >> 8;
-    int step = zoom > 0 ? (int)(UINT32_MAX / (uint32_t)zoom) : 0;
-    return (TextureColumn){u, step};
+    return (TextureColumn){u, vertical_step(zoom > 0 ? zoom : 0)};
 }
+#endif
 
 static void material_span(Renderer *r, int x, int first, int end, unsigned color,
                           const NxTexture *texture, int anchor, TextureColumn column)
@@ -343,6 +423,26 @@ static void material_span(Renderer *r, int x, int first, int end, unsigned color
         v += height;
     unsigned step = column.v_step % height;
     uint8_t *dst = r->pixels + nx_linear_index(x, first);
+#if defined(NX_COLUMN_ASM) && defined(__m68k__)
+    if (height <= 32768) {
+        uint16_t rows = end - first - 1;
+        uint16_t fraction = v, advance = step, period = height, index;
+        __asm__ volatile (
+            "1: move.w %[fraction],%[index]\n\t"
+            "lsr.w #8,%[index]\n\t"
+            "move.b (%[source],%[index].w),(%[dest])+\n\t"
+            "add.w %[advance],%[fraction]\n\t"
+            "cmp.w %[period],%[fraction]\n\t"
+            "bcs.s 2f\n\t"
+            "sub.w %[period],%[fraction]\n"
+            "2: dbra %[rows],1b"
+            : [dest] "+&a"(dst), [fraction] "+&d"(fraction),
+              [rows] "+&d"(rows), [index] "=&d"(index)
+            : [source] "a"(src), [advance] "d"(advance), [period] "d"(period)
+            : "memory", "cc");
+        return;
+    }
+#endif
     for (int y = first; y < end; ++y) {
         *dst++ = src[v >> 8];
         v += step;
@@ -432,6 +532,16 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     }
     TextureColumn column = {0,0}, block_first = {0,0}, block_last = {0,0};
     int block_start = -1, block_end = -1;
+#ifdef NX_UV_INCREMENTAL
+    Weight weight = {0, 0};
+    int weight_ready = 0;
+    int32_t column_scale = zoom.first, column_weight = 0;
+#define SAMPLE_COLUMN(at) sample_incremental(zoom.first + zoom.step * ((at) - first), \
+                                             weight.first + weight.step * ((at) - first), ua, ub)
+#else
+#define SAMPLE_COLUMN(at) sample_wall((at), ax, bx, a, b, ua, ub, \
+                                      zoom.first + (int32_t)((int64_t)zoom.step * ((at) - first)))
+#endif
 #endif
     int before = r->open;
     for (int x = first; x < end; ++x) {
@@ -452,19 +562,25 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
             if (material && (solid ? middle->width && wall_top < wall_end :
                 (high_texture->width && wall_top < opening_top) ||
                 (low_texture->width && opening_end < wall_end))) {
+#ifdef NX_UV_INCREMENTAL
+                if (!weight_ready) {
+                    weight = wall_weight(ax, bx, first, end, zoom);
+                    column_weight = weight.first + weight.step * (x - first);
+                    weight_ready = 1;
+                }
+#endif
                 if (r->material_mode == NX_PERSPECTIVE) {
-                    int32_t scale = zoom.first + (int32_t)((int64_t)zoom.step * (x - first));
-                    column = sample_wall(x, ax, bx, a, b, ua, ub, scale);
+#ifdef NX_UV_INCREMENTAL
+                    column = sample_incremental(column_scale, column_weight, ua, ub);
+#else
+                    column = SAMPLE_COLUMN(x);
+#endif
                 } else {
                     int start = first + ((x - first) & ~3);
                     if (start != block_start) {
                         int stop = limit(start + 4, start, end - 1);
-                        int32_t scale = zoom.first + (int32_t)((int64_t)zoom.step * (start - first));
-                        block_first = start == block_end ? block_last :
-                            sample_wall(start, ax, bx, a, b, ua, ub, scale);
-                        scale = zoom.first + (int32_t)((int64_t)zoom.step * (stop - first));
-                        block_last = stop == start ? block_first :
-                            sample_wall(stop, ax, bx, a, b, ua, ub, scale);
+                        block_first = start == block_end ? block_last : SAMPLE_COLUMN(start);
+                        block_last = stop == start ? block_first : SAMPLE_COLUMN(stop);
                         block_start = start;
                         block_end = stop;
                     }
@@ -514,7 +630,12 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
         floor.y += floor.step;
         upper.y += upper.step;
         lower.y += lower.step;
+#if defined(NX_WALLS) && defined(NX_UV_INCREMENTAL)
+        column_scale += zoom.step;
+        column_weight += weight.step;
+#endif
     }
+#undef SAMPLE_COLUMN
     if (r->open != before && (first == r->first_open || end == r->end_open))
         update_open_bounds(r);
 }

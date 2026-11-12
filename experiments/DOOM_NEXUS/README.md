@@ -43,3 +43,32 @@ GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh E1M1 2x
 
 Os binários são gravados em `out/E1M1/`. O arquivo de textura gerado
 localmente é ignorado no Git.
+
+## Comparação isolada de otimizações
+
+A matriz A/B usa E1M1 a 80 × 60 internos e viewport 2x. Rode
+`bash build.sh E1M1 2x <variante>` com `base`, `uv`, `lut`, `asm` ou
+`all`. A sigla aparece no cabeçalho da tela e no nome da ROM.
+
+- UV avança a escala de perspectiva e o peso horizontal em ponto fixo por coluna.
+- LUT usa uma tabela de mantissa interpolada para o recíproco vertical.
+- ASM usa DBRA e um acumulador de 16 bits no loop de texels quando o período cabe.
+- ALL habilita as três mudanças.
+
+Genesis Plus GX, perspectiva por coluna, mesmas 13 poses e três repetições.
+A medição do render isolado exclui empacotamento, espera e DMA.
+
+| Variante | Mediana do render isolado | Quadro mediana / P95 |
+| --- | ---: | ---: |
+| BASE | 204,6 ms | 233 / 432 ms |
+| UV | 176,8 ms | 216 / 416 ms |
+| LUT | 205,5 ms | 233 / 432 ms |
+| ASM | 202,9 ms | 232 / 432 ms |
+| ALL | 175,6 ms | 200 / 416 ms |
+
+O modo em blocos ficou em 199 / 399 ms de quadro em todas as variantes.
+As cinco ROMs coincidiram com a saída correspondente do renderer no PC
+nas 13 poses e nos três modos. UV e ASM foram idênticos à BASE. LUT e
+ALL mudaram nove pixels lógicos no total no modo perspectiva e sete no
+modo em blocos. As paredes lisas foram idênticas em todas as variantes.
+O teste em console da matriz está pendente.

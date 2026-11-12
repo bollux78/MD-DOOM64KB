@@ -89,6 +89,18 @@ static void value(unsigned n, unsigned x, unsigned y)
     VDP_drawText(text, x, y);
 }
 
+#if defined(NX_UV_INCREMENTAL) && defined(NX_RECIP_LUT) && defined(NX_COLUMN_ASM)
+#define VARIANT_NAME "ALL"
+#elif defined(NX_UV_INCREMENTAL)
+#define VARIANT_NAME "UV"
+#elif defined(NX_RECIP_LUT)
+#define VARIANT_NAME "LUT"
+#elif defined(NX_COLUMN_ASM)
+#define VARIANT_NAME "ASM"
+#else
+#define VARIANT_NAME "BASE"
+#endif
+
 static const char *const mode_name[NX_MODE_COUNT] = {"FLAT", "PERSPECTIVE", "STRIPS"};
 
 static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
@@ -97,6 +109,7 @@ static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
     VDP_clearText(0, 0, 40);
     VDP_drawText("NEXUS", 1, 0);
     VDP_drawText(nexus_map_name, 8, 0);
+    VDP_drawText(VARIANT_NAME, 28, 0);
     VDP_drawText(mode_name[mode], 15, 0);
     if (free_camera)
         VDP_drawText("FREE", 33, 0);
@@ -138,6 +151,7 @@ static void benchmark(void)
     SYS_doVBlankProcess();
     VDP_clearText(0, 0, 40);
     VDP_drawText("BENCH (ms)      MED   P95   MAX", 1, 0);
+    VDP_drawText(VARIANT_NAME, 35, 0);
     VDP_clearTextArea(0, 25, 40, 3);
     for (unsigned mode = 0; mode < NX_MODE_COUNT; ++mode) {
         unsigned row = 25 + mode;
