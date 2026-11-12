@@ -3089,6 +3089,46 @@ void m14_hit_object(object_link o, u16 sector) {
     g.write_text(t)
     print("M14 monsters: AI installed")
 
+
+def m14_weapon_fix(out):
+    """M14: make the weapon sprites actually show.
+
+    Upstream waits for DMA_getQueueSize()==pre_queue_size before placing the
+    hardware sprites; in this build the queue never drains to that exact size
+    (cur_num_sprites stays 0, nothing is drawn), and the idle weapon is never
+    placed at start-up.  Wait one game frame instead (the queue is flushed by
+    the V-Int in between), place the idle sprites at start, and make the
+    animation timers frame-rate aware.
+    """
+    w=out/"src/weapon_sprites.c"; t=w.read_text()
+    assert t.count("if(DMA_getQueueSize() == pre_queue_size) {")==2
+    t=t.replace("if(DMA_getQueueSize() == pre_queue_size) {","if(m14_wpn_ready()) {")
+    anchor="void update_weapon_sprites(TransferMethod transfer_type);"
+    assert t.count(anchor)==1
+    t=t.replace(anchor,anchor+"""
+extern u32 last_frame_ticks;
+static u8 m14_wpn_wait;
+static int m14_wpn_ready(void) {
+    if (m14_wpn_wait) { m14_wpn_wait--; return 0; }
+    return 1;
+}""",1)
+    old="        transfer_pending = TILES_LOADING;"
+    assert t.count(old)==1
+    t=t.replace(old,old+"\n        m14_wpn_wait = 1;",1)
+    old="    if(cur_frame_timer-- <= 0 && transfer_pending == DONE) {"
+    assert t.count(old)==1
+    t=t.replace(old,"    if(transfer_pending == DONE && cur_frame_timer-- <= 0) {",1)
+    old="    cur_frame_timer = entry.time;"
+    assert t.count(old)==1
+    t=t.replace(old,"    cur_frame_timer = entry.time;\n    if (entry.time > 0) { if (last_frame_ticks >= 60) cur_frame_timer = 0; else if (last_frame_ticks >= 30) cur_frame_timer = 1; }",1)
+    w.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    old="    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n}"
+    assert t.count(old)==1
+    t=t.replace(old,"    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n    { extern void update_weapon_sprites(TransferMethod t); update_weapon_sprites(DMA); }\n}",1)
+    g.write_text(t)
+    print("M14 weapon fix: sprites placed at start, queue wait replaced")
+
 def m14_tex_u(out):
     """MANIFOLD_TEX_U=1: per-wall texture U base/span from the emitter
     (Doom mapping, continuous across BSP fragments) instead of an integer
@@ -3405,6 +3445,8 @@ def stage(src, wad, out, control=False):
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.ang = {(angle*1024)//360};")
     p.write_text(s)
+    if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
+        m14_weapon_fix(out)
     if os.environ.get("MANIFOLD_MONSTERS","0")=="1":
         m14_monsters(out,x,y,angle,spawn_cell)
     report={
