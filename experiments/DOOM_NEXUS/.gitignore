@@ -2,3 +2,5 @@
 /src/map_data.c
 __pycache__/
 /src/boot/
+
+/src/wall_data.c

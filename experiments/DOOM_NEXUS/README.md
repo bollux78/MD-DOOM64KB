@@ -1,67 +1,45 @@
-# NEXUS 2 × 2 · otimização
+# NEXUS · teste de texturas nas paredes
 
-Motor 2.5D experimental para Mega Drive. A N01 foi aprovada no console por Daniel.
-A N02 usa o mesmo renderizador para E1M1, E1M2 e E1M9, em três ROMs de
-inspeção. Esta variante desenha 80 × 60 pixels lógicos e os apresenta em 160 × 120,
-com escala inteira de 2 × 2 e proporção 4:3. Usa cores sólidas para distinguir
-pisos, tetos e paredes.
-
-## Compilar
-
-Requer Python 3, Java e SGDK nativo com toolchain m68k-elf. Execute neste diretório:
-
-```sh
-GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh E1M1
-```
-
-O argumento aceita E1M1, E1M2 ou E1M9. O build produz a ROM e o relatório
-de importação em `out/<mapa>/`.
+E1M1 é a cena de referência. O renderizador trabalha com 80 × 60 amostras
+nas duas ROMs. A versão 2x ocupa 160 × 120. A 3x ocupa 240 × 180 e usa
+quatro linhas de padding para a tabela de tiles do VDP.
 
 ## Controles
 
-| Botão | Função |
-| --- | --- |
-| Esquerda/direita | Percorre as poses fixas. Na câmera livre, gira a câmera. |
-| Cima/baixo | Avança ou recua na câmera livre. |
-| Start | Alterna entre a pose fixa selecionada e a câmera livre. |
-| A | Buffer por colunas e reutilização de tiles de cor sólida. |
-| B | Escrita direta no buffer de tiles 4 bpp. |
-| C | Roda o benchmark de 39 quadros por caminho e exibe mediana, P95 e máximo. |
+- A seleciona paredes lisas.
+- B alterna entre perspectiva por coluna e interpolação em blocos de quatro colunas.
+- C mede 39 quadros por modo. Exibe mediana, P95 e máximo em milissegundos.
+- Start alterna câmera livre e poses fixas. Esquerda/direita seleciona poses ou gira a câmera. Cima/baixo move a câmera livre.
 
-A câmera livre acompanha a altura do setor e atravessa paredes. Volte
-à pose fixa com Start para retomar a inspeção dentro do mapa.
+As texturas são compostas dos patches do WAD e quantizadas para a
+paleta do Mega Drive. A BSP projeta e recorta os segmentos de parede.
+O rasterizador escreve o texel diretamente no pixel da parede. O modo
+em blocos calcula a perspectiva nas extremidades e interpola dentro de
+cada bloco. Pisos e tetos usam cores sólidas. Portais mascarados, sprites
+e regras completas de iluminação ficam fora deste protótipo.
 
-## Renderização e testes
+## Comparação em E1M1
 
-A travessia BSP perto–longe descarta caixas inteiramente fora do intervalo
-de colunas abertas. A projeção compartilha uma escala de perspectiva por
-parede entre os quatro limites verticais. Os spans verticais do modo A
-escrevem em endereços contíguos com uma rotina de byte para o 68000.
+Genesis Plus GX, as mesmas 13 poses repetidas três vezes em cada modo.
+O tempo inclui render, empacotamento, espera pelo VBlank e DMA.
 
-No modo A, cada cor sólida já tem um tile na VRAM. O empacotamento envia
-só os padrões dos tiles com mais de uma cor, além de 600 bytes da tabela
-de tiles. Quando os dados cabem em 7.000 bytes, a atualização usa um
-VBlank. Se excederem esse orçamento, o renderer divide a transferência
-em dois VBlanks. A troca do banco ocorre após a transferência completa.
-O modo B escreve e transfere todos os 9.600 bytes de padrões.
+| Viewport | Liso mediana / P95 | Perspectiva mediana / P95 | Blocos mediana / P95 |
+| --- | ---: | ---: | ---: |
+| 160 × 120 | 99 / 215 ms | 233 / 432 ms | 219 / 399 ms |
+| 240 × 180 | 214 / 315 ms | 367 / 549 ms | 349 / 515 ms |
 
-A tela individual mostra os tempos aproximados de render, empacotamento,
-espera, DMA e quadro. A cor magenta indica pixels sem cobertura geométrica.
+Cada viewport e modo foi comparado à saída do renderer no PC nas 13
+poses. Os tempos acima são do emulador. A confirmação no Mega Drive
+físico está pendente.
 
-O teste no PC compara os tiles produzidos por A e B e usa um traçador de
-raios independente para conferir a geometria das poses fixas. A comparação desta variante passou pelas 13 poses de cada mapa no Genesis Plus GX.
+## Compilar
 
-## Comparação com a versão 2 × 2 aprovada no console
+Requer Python 3, Java, SGDK nativo e um WAD clássico local.
 
-Genesis Plus GX, modo A, 13 poses e três amostras por pose. Tempo total
-por quadro, incluindo espera e transferência ao VDP.
+```sh
+GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh E1M1 3x
+GDK=/caminho/para/sgdk DOOM1_WAD=/caminho/para/doom1.wad bash build.sh E1M1 2x
+```
 
-| Mapa | Mediana anterior → otimizada | P95 anterior → otimizado |
-| --- | ---: | ---: |
-| E1M1 | 183 → 98 ms | 366 → 199 ms |
-| E1M2 | 166 → 81 ms | 615 → 282 ms |
-| E1M9 | 183 → 98 ms | 266 → 116 ms |
-
-Nas 39 poses, os dois caminhos apresentaram a mesma imagem. A comparação
-com o traçador de raios encontrou 15 pixels divergentes em bordas e
-zero pixels descobertos. A variante otimizada aguarda teste no Mega Drive.
+Os binários são gravados em `out/E1M1/`. O arquivo de textura gerado
+localmente é ignorado no Git.

@@ -9,8 +9,13 @@ enum { NX_WIDTH = 80, NX_HEIGHT = 60, NX_SCALE = 2 };
 enum { NX_WIDTH = 128, NX_HEIGHT = 96, NX_SCALE = 1 };
 #endif
 enum {
+    #ifdef NX_WIDE
+    NX_VIEW_WIDTH = NX_WIDTH * 3,
+    NX_VIEW_HEIGHT = (NX_HEIGHT * 3 + 7) & ~7,
+#else
     NX_VIEW_WIDTH = NX_WIDTH * NX_SCALE,
     NX_VIEW_HEIGHT = NX_HEIGHT * NX_SCALE,
+#endif
     NX_TILE_BYTES = NX_VIEW_WIDTH * NX_VIEW_HEIGHT / 2
 };
 enum { NX_LINEAR, NX_TILES };
@@ -20,6 +25,14 @@ static inline unsigned nx_linear_index(unsigned x, unsigned y)
 {
     return x * NX_HEIGHT + y;
 }
+
+enum { NX_FLAT, NX_PERSPECTIVE, NX_STRIP, NX_MODE_COUNT };
+typedef struct { const uint8_t *pixels; uint16_t width, height; } NxTexture;
+typedef struct {
+    int32_t u, length;
+    int16_t offset;
+    uint16_t flags, middle, upper, lower;
+} NxMaterial;
 
 typedef struct { int16_t x, y; } NxVertex;
 typedef struct { int16_t floor, ceiling; } NxSector;
@@ -40,6 +53,7 @@ typedef struct {
 
 void nx_camera_floor(const NxMap *map, NxCamera *camera);
 void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout);
+void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int mode);
 void nx_pack(const uint8_t *linear, uint8_t *tiles);
 #ifdef NX_2X2
 unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,

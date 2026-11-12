@@ -171,6 +171,7 @@ def main():
     parser.add_argument("wad", type=Path)
     parser.add_argument("--maps", nargs="+", default=["E1M1", "E1M2", "E1M9"])
     parser.add_argument("--emit", type=Path, help="write C data for the first map")
+    parser.add_argument("--textures", type=Path, help="emit wall materials for the first map")
     args = parser.parse_args()
     try:
         wad = args.wad.read_bytes()
@@ -187,7 +188,10 @@ def main():
             }
         if args.emit:
             emit(args.emit, maps[args.maps[0]], args.maps[0])
-    except (OSError, ValueError, struct.error) as error:
+        if args.textures:
+            import textures
+            textures.emit(entries, args.maps[0], args.textures)
+    except (OSError, ValueError, KeyError, struct.error) as error:
         parser.exit(1, f"NEXUS import: {error}\n")
     print(json.dumps(report, indent=2))
 

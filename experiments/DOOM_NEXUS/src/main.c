@@ -4,20 +4,20 @@
 enum {
     TILE_COUNT = NX_VIEW_WIDTH * NX_VIEW_HEIGHT / 64,
     VIEW_X = (320 - NX_VIEW_WIDTH) / 16,
-    VIEW_Y = (208 - NX_VIEW_HEIGHT) / 16, RUN_SAMPLES = 39
+    VIEW_Y = (200 - NX_VIEW_HEIGHT) / 16, RUN_SAMPLES = 39
 };
 
 extern const NxMap nexus_map;
+extern const uint16_t nexus_palette[16];
 extern const char nexus_map_name[];
 extern const NxCamera nexus_cameras[];
 extern const unsigned int nexus_camera_count;
 
 _Alignas(4) static uint8_t linear[NX_WIDTH * NX_HEIGHT];
 static uint32_t packed[NX_TILE_BYTES / 4];
-static uint16_t tilemap[2][TILE_COUNT];
 static unsigned displayed = 1;
 #ifdef NX_2X2
-enum { SOLID_COLORS = 8, DMA_SAFE_BYTES = 7000 };
+enum { SOLID_COLORS = 16, DMA_SAFE_BYTES = 6800, DMA_CHUNK = 200 };
 static uint16_t mixed_map[TILE_COUNT];
 static unsigned solid_base(void)
 {
@@ -29,59 +29,50 @@ typedef struct {
     u32 draw, pack, wait, dma, frame;
 } Timing;
 
-static Timing show(const NxCamera *camera, int layout)
+static Timing show(const NxCamera *camera, int mode)
 {
     Timing time;
     u32 start = getSubTick();
-    uint8_t *tiles = (uint8_t *)packed;
-    nx_render(&nexus_map, camera, layout == NX_LINEAR ? linear : tiles, layout);
+    nx_render_walls(&nexus_map, camera, linear, mode);
     u32 drawn = getSubTick();
     unsigned bank = displayed ^ 1;
-    unsigned tile_base = TILE_USER_INDEX + bank * TILE_COUNT;
-    const uint16_t *map = tilemap[bank];
-    unsigned count = TILE_COUNT;
-    if (layout == NX_LINEAR) {
-#ifdef NX_2X2
-        count = nx_pack_mixed(linear, tiles, mixed_map,
-                              TILE_ATTR_FULL(PAL1, 0, 0, 0, tile_base),
-                              TILE_ATTR_FULL(PAL1, 0, 0, 0, solid_base()));
-        map = mixed_map;
-#else
-        nx_pack(linear, tiles);
-#endif
-    }
+    unsigned base = TILE_USER_INDEX + bank * TILE_COUNT;
+    unsigned count = nx_pack_mixed(linear, (uint8_t *)packed, mixed_map,
+                       TILE_ATTR_FULL(PAL1, 0, 0, 0, base),
+                       TILE_ATTR_FULL(PAL1, 0, 0, 0, solid_base()));
     u32 ready = getSubTick();
-
+    unsigned sent = 0;
+    const unsigned last_capacity = (DMA_SAFE_BYTES - TILE_COUNT * 2) / 32;
+    time.wait = 0;
+    time.dma = 0;
+    u32 previous = ready;
+    while (count - sent > last_capacity) {
+        unsigned chunk = count - sent - last_capacity;
+        if (chunk > DMA_CHUNK)
+            chunk = DMA_CHUNK;
+        SYS_doVBlankProcessEx(ON_VBLANK_START);
+        u32 blank = getSubTick();
+        VDP_loadTileData(packed + sent * 8, base + sent, chunk, DMA);
+        DMA_waitCompletion();
+        u32 done = getSubTick();
+        time.wait += blank - previous;
+        time.dma += done - blank;
+        previous = done;
+        sent += chunk;
+    }
     SYS_doVBlankProcessEx(ON_VBLANK_START);
     u32 blank = getSubTick();
-    u32 initial_wait = blank - ready;
-    u32 transfer = 0;
-    unsigned first = 0;
-    time.wait = 0;
-#ifdef NX_2X2
-    if (count * 32 + TILE_COUNT * 2 > DMA_SAFE_BYTES) {
-        first = count / 2;
-        VDP_loadTileData(packed, tile_base, first, DMA);
-        DMA_waitCompletion();
-        u32 half_done = getSubTick();
-        transfer = half_done - blank;
-        SYS_doVBlankProcessEx(ON_VBLANK_START);
-        blank = getSubTick();
-        time.wait = blank - half_done;
-    }
-#endif
-    if (count > first)
-        VDP_loadTileData(packed + first * 8, tile_base + first, count - first, DMA);
-    VDP_setTileMapDataRect(BG_A, map, VIEW_X, VIEW_Y,
+    if (count > sent)
+        VDP_loadTileData(packed + sent * 8, base + sent, count - sent, DMA);
+    VDP_setTileMapDataRect(BG_A, mixed_map, VIEW_X, VIEW_Y,
                           NX_VIEW_WIDTH / 8, NX_VIEW_HEIGHT / 8, NX_VIEW_WIDTH / 8, DMA);
     DMA_waitCompletion();
     displayed = bank;
     u32 done = getSubTick();
-
     time.draw = drawn - start;
-    time.pack = layout == NX_LINEAR ? ready - drawn : 0;
-    time.wait += initial_wait;
-    time.dma = transfer + done - blank;
+    time.pack = ready - drawn;
+    time.wait += blank - previous;
+    time.dma += done - blank;
     time.frame = done - start;
     return time;
 }
@@ -98,22 +89,27 @@ static void value(unsigned n, unsigned x, unsigned y)
     VDP_drawText(text, x, y);
 }
 
-static void show_timing(Timing t, unsigned pose, int layout, int free_camera)
+static const char *const mode_name[NX_MODE_COUNT] = {"FLAT", "PERSPECTIVE", "STRIPS"};
+
+static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
 {
     SYS_doVBlankProcess();
-    VDP_drawText(layout == NX_LINEAR ? "A SHARED TILES" : "B DIRECT TILES", 3, 3);
+    VDP_clearText(0, 0, 40);
+    VDP_drawText("NEXUS", 1, 0);
+    VDP_drawText(nexus_map_name, 8, 0);
+    VDP_drawText(mode_name[mode], 15, 0);
     if (free_camera)
-        VDP_drawText("FREE CAMERA", 20, 3);
-    else {
-        VDP_drawText("POSE", 20, 3);
-        value(pose, 25, 3);
-    }
-    VDP_drawText("DRAW PACK WAIT DMA  TOTAL (ms)", 3, 21);
-    value(millis(t.draw), 3, 22);
-    value(millis(t.pack), 8, 22);
-    value(millis(t.wait), 13, 22);
-    value(millis(t.dma), 18, 22);
-    value(millis(t.frame), 23, 22);
+        VDP_drawText("FREE", 33, 0);
+    else
+        value(pose, 34, 0);
+    VDP_clearTextArea(0, 25, 40, 3);
+    VDP_drawText("DRAW PACK WAIT DMA  TOTAL (ms)", 1, 25);
+    value(millis(t.draw), 1, 26);
+    value(millis(t.pack), 6, 26);
+    value(millis(t.wait), 11, 26);
+    value(millis(t.dma), 16, 26);
+    value(millis(t.frame), 21, 26);
+    VDP_drawText("A FLAT  B TEXTURES  C BENCH  START CAM", 1, 27);
 }
 
 static void sort(u32 *values)
@@ -131,24 +127,25 @@ static void sort(u32 *values)
 
 static void benchmark(void)
 {
-    u32 frames[2][RUN_SAMPLES];
+    u32 frames[NX_MODE_COUNT][RUN_SAMPLES];
     for (unsigned i = 0; i < RUN_SAMPLES; ++i) {
         unsigned pose = i % nexus_camera_count;
-        int first = i & 1;
-        frames[first][i] = show(&nexus_cameras[pose], first).frame;
-        frames[first ^ 1][i] = show(&nexus_cameras[pose], first ^ 1).frame;
+        for (unsigned j = 0; j < NX_MODE_COUNT; ++j) {
+            unsigned mode = (i + j) % NX_MODE_COUNT;
+            frames[mode][i] = show(&nexus_cameras[pose], mode).frame;
+        }
     }
-
     SYS_doVBlankProcess();
-    VDP_drawText("A/B 39 FRAMES EACH (ms)             ", 3, 3);
-    VDP_drawText("       MED  P95  MAX                ", 3, 21);
-    VDP_drawText("A                                   ", 3, 22);
-    VDP_drawText("B", 3, 23);
-    for (int layout = 0; layout < 2; ++layout) {
-        sort(frames[layout]);
-        value(millis(frames[layout][19]), 10, 22 + layout);
-        value(millis(frames[layout][37]), 15, 22 + layout);
-        value(millis(frames[layout][38]), 20, 22 + layout);
+    VDP_clearText(0, 0, 40);
+    VDP_drawText("BENCH (ms)      MED   P95   MAX", 1, 0);
+    VDP_clearTextArea(0, 25, 40, 3);
+    for (unsigned mode = 0; mode < NX_MODE_COUNT; ++mode) {
+        unsigned row = 25 + mode;
+        sort(frames[mode]);
+        VDP_drawText(mode_name[mode], 1, row);
+        value(millis(frames[mode][19]), 17, row);
+        value(millis(frames[mode][37]), 23, row);
+        value(millis(frames[mode][38]), 29, row);
     }
 }
 
@@ -193,25 +190,14 @@ static int16_t move_axis(int16_t coordinate, int delta)
 int main(bool hard_reset)
 {
     (void)hard_reset;
-    static const u16 colors[16] = {
-        0x000, 0x844, 0x246, 0x08e, 0x04c, 0x26a, 0x48c, 0xe0e
-    };
     VDP_setScreenWidth320();
-    PAL_setPalette(PAL1, colors, CPU);
+    PAL_setPalette(PAL1, nexus_palette, CPU);
     VDP_setTextPlane(BG_B);
-#ifdef NX_2X2
-    VDP_drawText("NEXUS 2X2 OPT", 3, 1);
-#else
-    VDP_drawText("NEXUS N02", 3, 1);
-#endif
-    VDP_drawText(nexus_map_name, 18, 1);
-    VDP_drawText("START camera   A/B layout   C run", 3, 26);
+    if (solid_base() + SOLID_COLORS - 1 > TILE_USER_MAX_INDEX) {
+        VDP_drawText("INSUFFICIENT VRAM FOR VIEWPORT", 2, 1);
+        for (;;) SYS_doVBlankProcess();
+    }
 
-    for (unsigned bank = 0; bank < 2; ++bank)
-        for (unsigned i = 0; i < TILE_COUNT; ++i)
-            tilemap[bank][i] = TILE_ATTR_FULL(PAL1, 0, 0, 0, TILE_USER_INDEX + bank * TILE_COUNT + i);
-
-#ifdef NX_2X2
     /* Install the shared uniform tiles once, before either image bank is shown. */
     for (unsigned color = 0; color < SOLID_COLORS; ++color)
         for (unsigned i = 0; i < 8; ++i)
@@ -219,14 +205,13 @@ int main(bool hard_reset)
     SYS_doVBlankProcessEx(ON_VBLANK_START);
     VDP_loadTileData(packed, solid_base(), SOLID_COLORS, DMA);
     DMA_waitCompletion();
-#endif
 
     unsigned pose = 0;
-    int layout = NX_LINEAR;
+    int mode = NX_PERSPECTIVE;
     int free_camera = 0;
     unsigned angle = 0;
     NxCamera camera = nexus_cameras[pose];
-    show_timing(show(&camera, layout), pose, layout, free_camera);
+    show_timing(show(&camera, mode), pose, mode, free_camera);
     u16 previous = 0;
     for (;;) {
         SYS_doVBlankProcess();
@@ -239,9 +224,9 @@ int main(bool hard_reset)
         }
         int redraw = pressed & (BUTTON_START | BUTTON_A | BUTTON_B);
         if (pressed & BUTTON_A)
-            layout = NX_LINEAR;
+            mode = NX_FLAT;
         if (pressed & BUTTON_B)
-            layout = NX_TILES;
+            mode = mode == NX_PERSPECTIVE ? NX_STRIP : NX_PERSPECTIVE;
         if (pressed & BUTTON_START) {
             free_camera ^= 1;
             camera = nexus_cameras[pose];
@@ -266,10 +251,7 @@ int main(bool hard_reset)
             redraw = 1;
         }
         if (redraw) {
-            VDP_drawText("                                    ", 3, 23);
-            VDP_drawText("                                    ", 3, 3);
-            VDP_drawText("                                    ", 3, 22);
-            show_timing(show(&camera, layout), pose, layout, free_camera);
+            show_timing(show(&camera, mode), pose, mode, free_camera);
         }
     }
 }

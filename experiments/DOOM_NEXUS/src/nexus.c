@@ -12,6 +12,7 @@ typedef struct {
     const NxCamera *camera;
     uint8_t *pixels;
     int layout;
+    int material_mode;
     uint8_t top[NX_WIDTH];
     uint8_t bottom[NX_WIDTH];
     int open;
@@ -91,6 +92,67 @@ typedef uint32_t AliasWord __attribute__((__may_alias__));
 unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,
                        uint16_t mixed_base, uint16_t solid_base)
 {
+#ifdef NX_WIDE
+#define INK_ROW(n) {0u, (n), 2u*(n), 3u*(n), 4u*(n), 5u*(n), 6u*(n), 7u*(n), \
+                    8u*(n), 9u*(n), 10u*(n), 11u*(n), 12u*(n), 13u*(n), 14u*(n), 15u*(n)}
+    static const uint32_t ink[3][3][16] = {
+        {INK_ROW(0x11100000u), INK_ROW(0x00011100u), INK_ROW(0x00000011u)},
+        {INK_ROW(0x11000000u), INK_ROW(0x00111000u), INK_ROW(0x00000111u)},
+        {INK_ROW(0x10000000u), INK_ROW(0x01110000u), INK_ROW(0x00001110u)},
+    };
+#undef INK_ROW
+    static const uint8_t sample[3][8] = {
+        {0,0,0,1,1,1,2,2}, {0,0,1,1,1,2,2,2}, {0,1,1,1,2,2,2,3}
+    };
+    unsigned mixed = 0;
+    unsigned y_phase = 0, sy = 0;
+    for (unsigned ty = 0; ty < NX_VIEW_HEIGHT; ty += 8) {
+        const uint8_t *ys = sample[y_phase];
+        unsigned logical_rows = 1 + ys[7];
+        unsigned x_phase = 0, sx = 0;
+        for (unsigned tx = 0; tx < NX_VIEW_WIDTH; tx += 8) {
+            const uint32_t (*phase)[16] = ink[x_phase];
+            const uint8_t *src = linear + nx_linear_index(sx, sy);
+            uint32_t rows[4];
+            for (unsigned y = 0; y < logical_rows; ++y) {
+                if (sy + y >= NX_HEIGHT)
+                    rows[y] = 0;
+                else {
+                    uint32_t pattern = phase[0][src[y]] | phase[1][src[NX_HEIGHT + y]]
+                                       | phase[2][src[2 * NX_HEIGHT + y]];
+                    if (x_phase == 2)
+                        pattern |= src[3 * NX_HEIGHT + y];
+                    rows[y] = pattern;
+                }
+            }
+            unsigned color = rows[0] & 15;
+            uint32_t uniform = color * UINT32_C(0x11111111);
+            if (rows[0] == uniform && rows[1] == uniform && rows[2] == uniform &&
+                (logical_rows == 3 || rows[3] == uniform)) {
+                *map++ = solid_base + color;
+            } else {
+                *map++ = mixed_base + mixed++;
+                for (unsigned y = 0; y < 8; ++y) {
+                    uint32_t row = rows[ys[y]];
+#ifdef __m68k__
+                    *(AliasWord *)tiles = row;
+#else
+                    tiles[0] = row >> 24;
+                    tiles[1] = row >> 16;
+                    tiles[2] = row >> 8;
+                    tiles[3] = row;
+#endif
+                    tiles += 4;
+                }
+            }
+            sx += x_phase ? 3 : 2;
+            x_phase = x_phase ? x_phase - 1 : 2;
+        }
+        sy += y_phase ? 3 : 2;
+        y_phase = y_phase ? y_phase - 1 : 2;
+    }
+    return mixed;
+#else
     unsigned mixed = 0;
     for (int ty = 0; ty < NX_HEIGHT; ty += 4) {
         for (int tx = 0; tx < NX_WIDTH; tx += 4) {
@@ -108,6 +170,7 @@ unsigned nx_pack_mixed(const uint8_t *linear, uint8_t *tiles, uint16_t *map,
         }
     }
     return mixed;
+#endif
 }
 #endif
 
@@ -233,6 +296,62 @@ static void update_open_bounds(Renderer *r)
     r->right_bias = (int32_t)c->x * r->right_x + (int32_t)c->y * r->right_y;
 }
 
+#ifdef NX_WALLS
+extern const NxTexture nexus_textures[];
+extern const NxMaterial nexus_materials[];
+
+typedef struct { int u, v_step; } TextureColumn;
+
+static TextureColumn sample_wall(int x, int32_t ax, int32_t bx, ViewPoint a,
+                                 ViewPoint b, int32_t ua, int32_t ub, int32_t zoom)
+{
+    int32_t offset = limit(x * SCALE + SCALE / 2 - ax, 0, bx - ax);
+    int64_t left = (int64_t)offset * a.z;
+    int64_t total = left + (int64_t)(bx - ax - offset) * b.z;
+    /* Preserve a 12-bit interpolation factor using 32-bit division. */
+    if (total > UINT32_MAX) {
+        left >>= 16;
+        total >>= 16;
+    }
+    while (total > 0x000fffff) {
+        left >>= 4;
+        total >>= 4;
+    }
+    int32_t t = ((uint32_t)left << 12) / (uint32_t)total;
+    int u = (ua + ((int64_t)(ub - ua) * t >> 12)) >> 8;
+    int step = zoom > 0 ? (int)(UINT32_MAX / (uint32_t)zoom) : 0;
+    return (TextureColumn){u, step};
+}
+
+static void material_span(Renderer *r, int x, int first, int end, unsigned color,
+                          const NxTexture *texture, int anchor, TextureColumn column)
+{
+    if (first >= end)
+        return;
+    if (!texture->width) {
+        span(r, x, first, end, color);
+        return;
+    }
+    int u = column.u % texture->width;
+    if (u < 0)
+        u += texture->width;
+    const uint8_t *src = texture->pixels + u * texture->height;
+    int height = texture->height * 256;
+    int v = ((anchor - r->camera->z) * 256
+             + (first * 2 + 1 - NX_HEIGHT) * column.v_step / 2) % height;
+    if (v < 0)
+        v += height;
+    unsigned step = column.v_step % height;
+    uint8_t *dst = r->pixels + nx_linear_index(x, first);
+    for (int y = first; y < end; ++y) {
+        *dst++ = src[v >> 8];
+        v += step;
+        if (v >= height)
+            v -= height;
+    }
+}
+#endif
+
 static void draw_seg(Renderer *r, const NxSeg *seg)
 {
     const NxVertex *vertices = r->map->vertices;
@@ -243,6 +362,19 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
         (a.x <= -a.z && b.x <= -b.z) ||
         (a.x >= a.z && b.x >= b.z))
         return;
+#ifdef NX_WALLS
+    const NxMaterial *material = 0;
+    int32_t ua = 0, ub = 0;
+    if (r->material_mode) {
+        material = &nexus_materials[seg - r->map->segs];
+        ua = material->u;
+        ub = ua + material->length;
+        if (a.z < NEAR)
+            ua += (int64_t)(ub - ua) * (NEAR - a.z) / (b.z - a.z);
+        else if (b.z < NEAR)
+            ub += (int64_t)(ua - ub) * (NEAR - b.z) / (a.z - b.z);
+    }
+#endif
     if (a.z < NEAR)
         a = intersect_near(a, b);
     if (b.z < NEAR)
@@ -281,6 +413,26 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
     if (!solid && low != front.floor)
         lower = project_edge(low - r->camera->z, zoom);
 
+#ifdef NX_WALLS
+    const NxTexture *middle = 0, *high_texture = 0, *low_texture = 0;
+    int middle_anchor = 0, high_anchor = 0, low_anchor = 0;
+    if (material) {
+        unsigned mid = material->middle;
+        if (!mid && solid)
+            mid = material->upper ? material->upper : material->lower;
+        middle = &nexus_textures[mid];
+        high_texture = &nexus_textures[material->upper];
+        low_texture = &nexus_textures[material->lower];
+        middle_anchor = material->offset + ((material->flags & 16)
+                       ? front.floor + middle->height : front.ceiling);
+        high_anchor = material->offset + ((material->flags & 8)
+                     ? front.ceiling : back.ceiling + high_texture->height);
+        low_anchor = material->offset + ((material->flags & 16)
+                    ? front.ceiling : back.floor);
+    }
+    TextureColumn column = {0,0}, block_first = {0,0}, block_last = {0,0};
+    int block_start = -1, block_end = -1;
+#endif
     int before = r->open;
     for (int x = first; x < end; ++x) {
         int top = r->top[x];
@@ -290,14 +442,69 @@ static void draw_seg(Renderer *r, const NxSeg *seg)
             int wall_end = limit(edge((int32_t)floor.y >> 8), wall_top, bottom);
             span(r, x, top, wall_top, CEILING_COLOR);
             span(r, x, wall_end, bottom, FLOOR_COLOR);
+#ifdef NX_WALLS
+            int opening_top = wall_top;
+            int opening_end = wall_end;
+            if (!solid) {
+                opening_top = limit(edge((int32_t)upper.y >> 8), wall_top, wall_end);
+                opening_end = limit(edge((int32_t)lower.y >> 8), opening_top, wall_end);
+            }
+            if (material && (solid ? middle->width && wall_top < wall_end :
+                (high_texture->width && wall_top < opening_top) ||
+                (low_texture->width && opening_end < wall_end))) {
+                if (r->material_mode == NX_PERSPECTIVE) {
+                    int32_t scale = zoom.first + (int32_t)((int64_t)zoom.step * (x - first));
+                    column = sample_wall(x, ax, bx, a, b, ua, ub, scale);
+                } else {
+                    int start = first + ((x - first) & ~3);
+                    if (start != block_start) {
+                        int stop = limit(start + 4, start, end - 1);
+                        int32_t scale = zoom.first + (int32_t)((int64_t)zoom.step * (start - first));
+                        block_first = start == block_end ? block_last :
+                            sample_wall(start, ax, bx, a, b, ua, ub, scale);
+                        scale = zoom.first + (int32_t)((int64_t)zoom.step * (stop - first));
+                        block_last = stop == start ? block_first :
+                            sample_wall(stop, ax, bx, a, b, ua, ub, scale);
+                        block_start = start;
+                        block_end = stop;
+                    }
+                    column = block_first;
+                    if (x == block_end)
+                        column = block_last;
+                    else if (x != block_start) {
+                        int n = x - block_start;
+                        int width = block_end - block_start;
+                        int du = (block_last.u - block_first.u) * n;
+                        int dv = (block_last.v_step - block_first.v_step) * n;
+                        column.u += width == 4 ? du / 4 : du / width;
+                        column.v_step += width == 4 ? dv / 4 : dv / width;
+                    }
+                }
+            }
+#endif
             if (solid) {
-                span(r, x, wall_top, wall_end, wall_color);
+#ifdef NX_WALLS
+                if (material)
+                    material_span(r, x, wall_top, wall_end, wall_color, middle, middle_anchor, column);
+                else
+#endif
+                    span(r, x, wall_top, wall_end, wall_color);
                 r->top[x] = r->bottom[x];
             } else {
+#ifndef NX_WALLS
                 int opening_top = limit(edge((int32_t)upper.y >> 8), wall_top, wall_end);
                 int opening_end = limit(edge((int32_t)lower.y >> 8), opening_top, wall_end);
-                span(r, x, wall_top, opening_top, UPPER_COLOR);
-                span(r, x, opening_end, wall_end, LOWER_COLOR);
+#endif
+#ifdef NX_WALLS
+                if (material) {
+                    material_span(r, x, wall_top, opening_top, UPPER_COLOR, high_texture, high_anchor, column);
+                    material_span(r, x, opening_end, wall_end, LOWER_COLOR, low_texture, low_anchor, column);
+                } else
+#endif
+                {
+                    span(r, x, wall_top, opening_top, UPPER_COLOR);
+                    span(r, x, opening_end, wall_end, LOWER_COLOR);
+                }
                 r->top[x] = opening_top;
                 r->bottom[x] = opening_end;
             }
@@ -364,13 +571,14 @@ static void traverse(Renderer *r, uint16_t child)
         draw_seg(r, &r->map->segs[leaf.first + i]);
 }
 
-void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout)
+static void render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout, int mode)
 {
     Renderer r;
     r.map = map;
     r.camera = camera;
     r.pixels = pixels;
     r.layout = layout;
+    r.material_mode = mode;
     r.open = NX_WIDTH;
     r.origin_x = (int32_t)camera->x * camera->sine - (int32_t)camera->y * camera->cosine;
     r.origin_z = (int32_t)camera->x * camera->cosine + (int32_t)camera->y * camera->sine;
@@ -386,4 +594,15 @@ void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int la
     /* Color 7 exposes uncovered geometry instead of hiding it in the backdrop. */
     for (int x = 0; x < NX_WIDTH; ++x)
         span(&r, x, r.top[x], r.bottom[x], 7);
+}
+
+
+void nx_render(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int layout)
+{
+    render(map, camera, pixels, layout, NX_FLAT);
+}
+
+void nx_render_walls(const NxMap *map, const NxCamera *camera, uint8_t *pixels, int mode)
+{
+    render(map, camera, pixels, NX_LINEAR, mode);
 }
