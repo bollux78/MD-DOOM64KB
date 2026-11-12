@@ -70,3 +70,9 @@ Pedido do usuário: converter todos os objetos. `m12_objects.py` agora cobre 21 
 - `m12_pickups.py`: novos pickups (cartuchos, caixas, armaduras 100/200, chaingun, lança-foguetes).
 - MAME: caixa de balas 50→100, armadura verde 0→100, azul 100→200, caixa de cartuchos 0→20; candelabro visível; botão A sem crash (700 VBlanks).
 - ROM: `claudio-m14-e1m1-allobj-eye48-u1-h40.bin` (TEX_U=1, HSTRETCH=1.0, eye48).
+
+## Decisões do usuário, 12/11 02h04
+- Câmera: `MANIFOLD_EYE=48` aprovada.
+- Texturas: **u1 aprovada** (`MANIFOLD_TEX_U=1`, `MANIFOLD_TEX_HSTRETCH=1.0`, 1 texel por unidade do Doom). A porta ficou parecida com a referência do Doom (BlastEm: 10 FPS no jogo, emulador a 59,8).
+- Base de build do M14: BSP=0, OBJECTS=1, PICKUPS=1, DOORS=1, EYE=48, TEX_U=1.
+- Pendentes: arma do Doom no lugar da do Manifold; tiles pretas do HUD (Werk); inimigos; checkpoint de FPS no console.
