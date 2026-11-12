@@ -52,3 +52,8 @@ Base: BSP=0 + `MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1`. ROM: `cl
 | Tour de 180 s emulados | **Estável**: 1336 quadros, 7,51 FPS médios (rota/duração diferentes das medições anteriores, não comparável 1:1). |
 
 Não testado: inimigos (não existem), colisão com objetos, fechamento automático das portas, pisca de parede ao se aproximar (confirmado só pelo usuário no console), crash do A no console real.
+
+## Console 12/11 01h46: `claudio-m14-e1m1-full-h40.bin`
+Usuário: "está funcionando; câmera ainda alta, mas tudo acontece corretamente; a arma ainda é a do Manifold, que é até maior". FPS visto no console: 4,1 (screenshot). Tiles pretas no HUD ainda presentes (canto esquerdo da barra, entre os números).
+- Câmera: `MANIFOLD_EYE=N` (padrão 64, unidades de altura dobradas) em `stage_rom.py`. Variantes 48 e 36 geradas para escolha no console.
+- Pendente: arma do Doom no lugar da do Manifold; tiles pretas do HUD (Werk).

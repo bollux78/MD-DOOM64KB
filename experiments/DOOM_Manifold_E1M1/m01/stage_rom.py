@@ -2913,19 +2913,20 @@ def stage(src, wad, out, control=False):
     assert s.count(old)==1
     s=s.replace(old,f"    cur_player_pos.x = FIX32({x});\n    cur_player_pos.y = FIX32({y});")
     # Lower the eye to 64 units in doubled E1M1, preserving foot collision offsets.
+    EYE=int(os.environ.get("MANIFOLD_EYE","64"))  # eye above feet, doubled-height units; default unchanged
     eye="(FIX32_FRAC_BITS-4));// + FIX32(50);"
     if s.count(eye)!=1:
         raise ValueError("level.c player z init changed")
-    s=s.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(64);")
+    s=s.replace(eye,f"(FIX32_FRAC_BITS-4)) + FIX32({EYE});")
     g=out/"src/game.c"
     gs=g.read_text()
     if gs.count(eye)!=1:
         raise ValueError("game.c rest z changed")
-    gs=gs.replace(eye,"(FIX32_FRAC_BITS-4)) + FIX32(64);")
+    gs=gs.replace(eye,f"(FIX32_FRAC_BITS-4)) + FIX32({EYE});")
     feet="        s16 cur_player_z = cur_player_pos.z >> (FIX32_FRAC_BITS-4);"
     if gs.count(feet)!=1:
         raise ValueError("game.c collision z changed")
-    gs=gs.replace(feet,"        s16 cur_player_z = (cur_player_pos.z - FIX32(64)) >> (FIX32_FRAC_BITS-4); /* feet, not eye */")
+    gs=gs.replace(feet,f"        s16 cur_player_z = (cur_player_pos.z - FIX32({EYE})) >> (FIX32_FRAC_BITS-4); /* feet, not eye */")
     g.write_text(gs)
     old="    cur_player_pos.ang = 0;"
     assert s.count(old)==1
