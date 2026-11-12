@@ -1,5 +1,4 @@
 /out/
 /src/map_data.c
-/src/rom_header.c
 __pycache__/
 /src/boot/
