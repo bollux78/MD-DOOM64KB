@@ -1222,7 +1222,7 @@ def m14_nohud(out):
     h.write_text(t)
     print("M14 NOHUD: HUD and FPS text disabled")
 
-def m14_vdp_safe(out):
+def m14_vdp_safe(out, mode=1):
     """M14: main-thread VDP writes race with the H-Int/V-Int handlers.
 
     A VDP command is two control-port words; an interrupt that writes the
@@ -1245,7 +1245,17 @@ def m14_vdp_safe(out):
         for i,l in enumerate(lines):
             m=pat.match(l)
             if m:
-                lines[i]=f"{m.group(1)}SYS_disableInts(); {m.group(2)} SYS_enableInts();";n+=1
+                if mode==2:
+                    lines[i]=f"{m.group(1)}M14_VB_BEGIN(); {m.group(2)} M14_VB_END();";n+=1
+                else:
+                    lines[i]=f"{m.group(1)}SYS_disableInts(); {m.group(2)} SYS_enableInts();";n+=1
+        if mode==2 and n:
+            hdr=("#include <genesis.h>\n"
+                 "/* M14 VBLANK-only VDP writes: H-Int never fires in vblank, so no H-Int can land between the two\n"
+                 "   control-port words and the H-Int phase timing is not delayed by masking in the active area. */\n"
+                 "static inline void m14_vb_begin(void){ for(;;){ SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) return; SYS_enableInts(); __asm__ volatile(\"nop\\n nop\\n nop\\n nop\"); } }\n"
+                 "#define M14_VB_BEGIN() m14_vb_begin()\n#define M14_VB_END() SYS_enableInts()\n")
+            lines.insert(0,hdr)
         p.write_text("\n".join(lines));total+=n
         print(f"M14 VDP safe: {name} wrapped {n} statements")
     if total<8: raise ValueError("M14 VDP safe: too few statements wrapped")
@@ -3078,8 +3088,8 @@ def stage(src, wad, out, control=False):
     m14_identity(out)
     if os.environ.get("MANIFOLD_NOHUD","0")=="1":
         m14_nohud(out)
-    if os.environ.get("MANIFOLD_VDP_SAFE","0")=="1":
-        m14_vdp_safe(out)
+    if os.environ.get("MANIFOLD_VDP_SAFE","0") in ("1","2"):
+        m14_vdp_safe(out, int(os.environ["MANIFOLD_VDP_SAFE"]))
     if os.environ.get("MANIFOLD_H32","1")=="1":
         h32_mode(out)
     if os.environ.get("MANIFOLD_MUSIC","0")=="1":

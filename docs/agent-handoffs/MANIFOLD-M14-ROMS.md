@@ -14,3 +14,4 @@ Base comum: `MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H3
 | claudio-m14-NOHUD-B-vdpsafe-ceu.bin | 281c517739d940c5 | `MANIFOLD_NOHUD=1 MANIFOLD_VDP_SAFE=1` |
 
 As ROMs NOHUD (e as seguintes) têm nome no cabeçalho e tela de abertura com START/15 s.
+| claudio-m14-e1m1-VBLANK-SAFE-h40.bin | ver MAME/ROM | base + grades + monstros + `MANIFOLD_VDP_SAFE=2` (escritas VDP do thread principal só durante o VBlank, onde o H-Int não dispara; sem máscara na área ativa). Soak MAME 36000 quadros limpo, FPS 3,4. BlastEm: a confirmar |
