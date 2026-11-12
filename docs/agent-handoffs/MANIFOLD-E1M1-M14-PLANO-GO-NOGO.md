@@ -76,3 +76,9 @@ Pedido do usuário: converter todos os objetos. `m12_objects.py` agora cobre 21 
 - Texturas: **u1 aprovada** (`MANIFOLD_TEX_U=1`, `MANIFOLD_TEX_HSTRETCH=1.0`, 1 texel por unidade do Doom). A porta ficou parecida com a referência do Doom (BlastEm: 10 FPS no jogo, emulador a 59,8).
 - Base de build do M14: BSP=0, OBJECTS=1, PICKUPS=1, DOORS=1, EYE=48, TEX_U=1.
 - Pendentes: arma do Doom no lugar da do Manifold; tiles pretas do HUD (Werk); inimigos; checkpoint de FPS no console.
+
+## Arma do Doom e possível causa do crash do botão A (12/11, 02h)
+- Usuário: texturas na resolução atual são aceitáveis ("já é reconhecível"); o letreiro EXIT ilegível é esperado (32 colunas × 64 linhas, 16 cores; subir para 64 colunas exige mexer na asm do desenhador). Não será alterado agora.
+- `MANIFOLD_WEAPON=pistol` (`m14_weapon` em `stage_rom.py`): substitui `SHOTGUN.png`/`SHOTGUN_RELOAD.png` pela pistola do Doom (PISGA0 parada; PISGB0 + flash PISFA0 ao atirar), paleta de 9 cores (índices 1..9; 10..15 ficam pretos, pois as margens da tela usam a PAL0 — com 15 cores elas ficaram marrons).
+- **Causa provável do crash do A no console:** `anim_table` pede `frame_idx=1` de `shotgun_reload`, mas o recurso compilado tem 1 quadro (`shotgun_reload_animation0_frames` tem uma entrada). `frames[1]` lê um ponteiro inválido (~0x0100xxxx): sem erro no MAME, mas deve gerar bus/address error em hardware real. Corrigido para `frame_idx=0` neste build. NÃO confirmado no console.
+- Não verificado: aparência da pistola. O MAME headless não desenha os sprites da arma (nem nos builds antigos) e o BlastEm não renderiza sob Xvfb aqui. ROM: `claudio-m14-e1m1-pistol-allobj-eye48-u1-h40.bin`.

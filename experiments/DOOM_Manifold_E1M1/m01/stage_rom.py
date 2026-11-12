@@ -2780,6 +2780,67 @@ def m14_tex_u(out):
     b.write_text(s)
     print("M14 wall_tex_u installed (draw.c, portal.c x2, bunch_render x2)")
 
+def m14_weapon(out, wad):
+    """MANIFOLD_WEAPON=pistol: replace the Manifold shotgun PNGs with the Doom
+    pistol (PISGA0 idle, PISGB0+PISFA0 firing) built from the user's WAD, one
+    shared 16-colour palette (index 0 transparent). Also fixes the
+    animation table: the compiled reload animation has ONE frame, but
+    anim_table asked for frame 1 (a garbage pointer read; harmless in MAME,
+    suspected crash on real hardware)."""
+    import wad_textures as WT
+    from PIL import Image
+    w=WT.Wad(wad); rgb=WT.playpal(w)
+    def load(name):
+        pw,ph,img=WT.patch_image(w.lump(name))
+        im=Image.new("RGBA",(pw,ph),(0,0,0,0))
+        for y in range(ph):
+            for x in range(pw):
+                p=img[y][x]
+                if p is not None: im.putpixel((x,y),tuple(rgb[p])+(255,))
+        return im
+    def fit(im,maxw,maxh):
+        k=min(1.0,maxw/im.width,maxh/im.height)
+        return im if k>=1 else im.resize((max(1,round(im.width*k)),max(1,round(im.height*k))),Image.NEAREST)
+    def canvas(parts,w_,h_):
+        c=Image.new("RGBA",(w_,h_),(0,0,0,0))
+        for im,(cx,by) in parts:      # centre x, bottom y
+            c.alpha_composite(im,(max(0,cx-im.width//2),by-im.height)) if by-im.height>=0 else c.alpha_composite(im.crop((0,im.height-by,im.width,im.height)),(max(0,cx-im.width//2),0))
+        return c
+    idle=canvas([(fit(load("PISGA0"),64,64),(32,64))],64,64)
+    fire=fit(load("PISGB0"),64,64)
+    flash=fit(load("PISFA0"),40,24)
+    fire_c=canvas([(fire,(32,64)),(flash,(32,24))],64,64)
+    # fire sprite lives on the 64x128 canvas of the original reload resource
+    reload_c=Image.new("RGBA",(64,128),(0,0,0,0)); reload_c.alpha_composite(fire_c,(0,0))
+    both=Image.new("RGBA",(64,128),(0,0,0,0)); both.alpha_composite(idle,(0,0)); both.alpha_composite(fire_c,(0,64))
+    opaque=Image.new("RGB",(64,128),(0,0,0)); opaque.paste(both,(0,0),both)
+    mask=[both.getpixel((x,y))[3]>0 for y in range(128) for x in range(64)]
+    # 9 colours (indices 1..9): the original weapon palette used 0..9; indices 10..15
+    # stay black because the margins/other tiles on PAL0 rely on them.
+    pal_img=opaque.quantize(colors=9,method=Image.MEDIANCUT)
+    pal=pal_img.getpalette()[:9*3]
+    def to_p(rgba):
+        o=Image.new("P",rgba.size)
+        flat=[0]*(768); flat[3:3+9*3]=pal; o.putpalette(flat)
+        px=[]
+        pimg=Image.new("RGB",rgba.size,(0,0,0)); pimg.paste(rgba,(0,0),rgba)
+        q=pimg.quantize(palette=pal_img,dither=Image.NONE)
+        data=[]
+        for y in range(rgba.height):
+            for x in range(rgba.width):
+                data.append(q.getpixel((x,y))+1 if rgba.getpixel((x,y))[3]>0 else 0)
+        o.putdata(data); o.info["transparency"]=0
+        return o
+    d=out/"res/images"
+    to_p(idle).save(d/"SHOTGUN.png")
+    to_p(reload_c).save(d/"SHOTGUN_RELOAD.png")
+    p=out/"src/weapon_sprites.c"
+    s=p.read_text()
+    old=".anim_idx = 0, .frame_idx = 1,"
+    if s.count(old)!=1: raise ValueError("anim_table frame_idx 1 site changed")
+    p.write_text(s.replace(old,".anim_idx = 0, .frame_idx = 0,"))
+    print("M14 weapon: Doom pistol PNGs written, anim_table frame_idx fixed")
+
 def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
@@ -2842,6 +2903,8 @@ def stage(src, wad, out, control=False):
         m12_safe_sprite_raster(out)
     if os.environ.get("MANIFOLD_TEX_U","0")=="1":
         m14_tex_u(out)
+    if os.environ.get("MANIFOLD_WEAPON","")=="pistol":
+        m14_weapon(out,wad)
     m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
     if m12_doors:
