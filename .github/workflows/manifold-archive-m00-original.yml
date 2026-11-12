@@ -1,0 +1,84 @@
+name: Manifold M00 original upstream ROM (private runner)
+on:
+  push:
+    branches: [exp-manifold-m14-e1m1]
+    paths:
+      - '.github/workflows/manifold-archive-m00-original.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-rom-archive-local
+  cancel-in-progress: false
+jobs:
+  archive-original:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Verify and archive unmodified original Manifold ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination=/home/dan/Projetos/manifold-doom/roms/M00
+          file="$destination/manifold-original-upstream-b6fe52a.bin"
+          test -d /home/dan/Projetos/manifold-doom/roms
+          mkdir -p "$destination"
+          stage="$(mktemp -d "$RUNNER_TEMP/manifold-m00-XXXXXX")"
+          trap 'rm -rf "$stage"' EXIT
+          git clone --quiet --no-checkout https://github.com/ehaliewicz/Manifold.git "$stage/upstream"
+          git -C "$stage/upstream" checkout --quiet --detach b6fe52a52344464de00bde4dc58a40f8b89cfc1a
+          git -C "$stage/upstream" show HEAD:built_rom.bin > "$stage/original.bin"
+          python3 - "$stage/original.bin" <<'PY'
+          from pathlib import Path
+          import sys
+          data=Path(sys.argv[1]).read_bytes()
+          assert len(data)==2752512, f"unexpected original ROM size {len(data)}"
+          assert data[0x100:0x104]==b"SEGA", "missing Genesis ROM header"
+          print(f"Verified original ROM (size={len(data)}, header=SEGA)")
+          PY
+          # Real boot smoke in BlastEm; no compile, patch, WAD or asset conversion.
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          test -x "$emu"
+          mkdir "$stage/fake"
+          printf '#!/bin/sh\nexit 99\n' > "$stage/fake/x-terminal-emulator"
+          chmod +x "$stage/fake/x-terminal-emulator"
+          PATH="$stage/fake:$PATH" SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+            timeout 120s "$emu" -b 90 "$stage/original.bin" </dev/null > "$stage/boot.log" 2>&1 || {
+              tail -50 "$stage/boot.log"; exit 1;
+            }
+          if grep -qiE 'unmapped|fatal|exception|error|lock up' "$stage/boot.log"; then
+            tail -50 "$stage/boot.log"
+            exit 1
+          fi
+          if test -e "$file"; then
+            cmp -s "$stage/original.bin" "$file" || {
+              echo "::error::Existing M00 ROM differs; refusing overwrite"; exit 1;
+            }
+          else
+            cp "$stage/original.bin" "$file"
+          fi
+          cat > "$destination/README.md" <<'EOF'
+          # M00 — Manifold original (sem DOOM)
+
+          Esta e a ROM original `built_rom.bin` do projeto Manifold de ehaliewicz, copiada **sem modificacoes** do commit `b6fe52a52344464de00bde4dc58a40f8b89cfc1a`.
+
+          **Arquivo:** `manifold-original-upstream-b6fe52a.bin`.
+
+          **Finalidade:** referencia do motor original de portais 2.5D para Mega Drive, anterior a nossa conversao do mapa E1M1 do DOOM. O motor oferece setores convexos, portais, paredes com angulos arbitrarios, texturas em perspectiva e iluminacao.
+
+          **Autenticidade:** binario ja versionado no upstream, 2.752.512 bytes; nao foi recompilado, modificado ou renomeado internamente.
+
+          **Teste:** boot headless de 90 quadros no BlastEm. A imagem e os controles devem ser avaliados no console real.
+
+          **Fonte:** https://github.com/ehaliewicz/Manifold/tree/b6fe52a52344464de00bde4dc58a40f8b89cfc1a
+
+          M01 permanece apenas documentada: nao substituir a versao historica por uma M02 renomeada.
+          EOF
+          echo "M00 original archived locally:"
+          ls -lh "$file" "$destination/README.md"
+          sha256sum "$file"
+      - name: Confirm only BIN and README in M00
+        shell: bash
+        run: |
+          find /home/dan/Projetos/manifold-doom/roms/M00 -maxdepth 1 -type f -printf '%f\n' | sort
+          echo "Nothing uploaded to GitHub."
