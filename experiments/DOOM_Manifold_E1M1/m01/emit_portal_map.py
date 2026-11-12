@@ -324,6 +324,34 @@ WALL_COLOR_CYCLE=(12,6,13,7,9,3)
 FLOOR_COLOR=13   # dark yellow/brown
 CEIL_COLOR=12    # steel
 
+def _wall_u_pair(lumps,w,tw,hstretch):
+    """Texture U at wall start/end (8.8, in texture widths), as Doom maps it:
+    distance along the linedef from the seg start, plus sidedef x offset.
+    A BSP fragment therefore continues the texture instead of restarting it."""
+    import math
+    li=w.get("line")
+    if li is None or not tw:
+        return 0,256
+    V=lumps["VERTEXES"];ld=lumps["LINEDEFS"][li]
+    v1=V[ld[0]];v2=V[ld[1]]
+    dx=v2[0]-v1[0];dy=v2[1]-v1[1];L=math.hypot(dx,dy)
+    if not L: return 0,256
+    ax,ay=w["a"][0]/SCALE,w["a"][1]/SCALE;bx,by=w["b"][0]/SCALE,w["b"][1]/SCALE
+    pa=((ax-v1[0])*dx+(ay-v1[1])*dy)/L
+    pb=((bx-v1[0])*dx+(by-v1[1])*dy)/L
+    front = w.get("side",-1)==ld[5]
+    if not front:   # back side: seg runs v2 -> v1
+        pa,pb=L-pa,L-pb
+    if pb<pa:       # winding opposite to seg direction: measure from the other end
+        pa,pb=L-pa,L-pb
+    seglen=math.hypot(bx-ax,by-ay)
+    xoff=w.get("xoff",0) or 0
+    ua=(pa+xoff)/(tw*hstretch)
+    ub=ua+seglen/(tw*hstretch)
+    k=math.floor(ua);ua-=k;ub-=k
+    q=lambda u:max(0,min(65535,round(u*256)))
+    return q(ua),q(ub)
+
 def emit(lumps,cells,tex=None,things=None,doors=False):
     tex=tex or {}
     vertices={}
@@ -332,7 +360,10 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     portals=[]
     quad=[]
     colors=[]
+    import os
     reps=[]
+    tex_u=[]
+    hstretch=float(os.environ.get("MANIFOLD_TEX_HSTRETCH","1.0"))
     collision_verts=[]
     import os
     sky_merge=os.environ.get("MANIFOLD_SKY_MERGE","0")=="1"
@@ -372,6 +403,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
                     colors.extend([idx[nm],hi,lo_,0])
                     tw=tex["width"][nm]
                     reps.append(max(1,min(255,round(math.hypot(dx,dy)/SCALE/tw))))
+                    tex_u.extend(_wall_u_pair(lumps,w,tw,hstretch))
                 else:
                     up_t=w.get("upper");lo_t=w.get("lower")
                     hi=(0x80|idx[up_t]) if up_t else avg.get(w.get("mid") or "",fl)
@@ -389,12 +421,15 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
                         t0=up_t or lo_t
                         colors.extend([idx[t0],hi,lo_,0])
                         reps.append(max(1,min(255,round(math.hypot(dx,dy)/SCALE/tex["width"][t0]))))
+                        tex_u.extend(_wall_u_pair(lumps,w,tex["width"][t0],hstretch))
                     else:
                         colors.extend([0,hi,lo_,hi])
                         reps.append(1)
+                        tex_u.extend((0,256))
             else:
                 colors.extend([0,wc,wc,wc])
                 reps.append(1)
+                tex_u.extend((0,256))
         # Manifold walls use a closing vertex per cell.
         walls.append(vertices[cell["walls"][0]["a"]])
         sectors.extend([offset,first_portal,len(cell["walls"]),cell["doom_sector"]])
@@ -493,6 +528,10 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     text+=as_c_array("u8","e1_quadrants",quad)
     text+=as_c_array("u8","e1_wall_colors",colors)
     text+=as_c_array("u8","e1_wall_repetitions",reps)
+    use_u=os.environ.get("MANIFOLD_TEX_U","0")=="1"
+    if use_u:
+        assert len(tex_u)==2*len(reps)
+        text+=as_c_array("u16","e1_wall_tex_u",tex_u)
     text+=as_c_array("s16","e1_group_params",sector_params)
     text+=as_c_array("u8","e1_group_types",sector_types)
     text+=as_c_array("s16","e1_group_triggers",[0]*(len(lumps["SECTORS"])*8))
@@ -536,7 +575,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
   .num_verts={len(vertices)},
   .sectors=e1_sectors,.sector_group_types=e1_group_types,
   .sector_group_params=e1_group_params,.sector_group_triggers=e1_group_triggers,
-  .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,\n  .collision_vertexes=e1_collision_vertices,
+  .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,{(chr(10)+"  .wall_tex_u=e1_wall_tex_u,") if use_u else ""}\n  .collision_vertexes=e1_collision_vertices,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
   .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
   .num_things={len(things) if things is not None else 0},.things={"e1_m12_things" if things is not None else "0"}{pal_field}

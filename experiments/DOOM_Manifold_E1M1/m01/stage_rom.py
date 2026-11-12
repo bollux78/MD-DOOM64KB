@@ -2733,6 +2733,53 @@ def m12_tune_doors(out):
     p.write_text(s.replace(old,new,1))
     print("M12 door timer 105 ticks, player-safe auto-close")
 
+def m14_tex_u(out):
+    """MANIFOLD_TEX_U=1: per-wall texture U base/span from the emitter
+    (Doom mapping, continuous across BSP fragments) instead of an integer
+    repetition count that restarts the texture on every fragment.
+    The clip code keeps producing left_u/right_u as 0..1 fractions of the
+    wall; draw.c now maps them to base + fraction*span when span != 0."""
+    h=out/"src/portal_map.h"
+    s=h.read_text()
+    old="    const u8* wall_tex_repetitions;\n"
+    if s.count(old)!=1: raise ValueError("portal_map.h wall_tex_repetitions changed")
+    h.write_text(s.replace(old,old+"    const u16* wall_tex_u;   /* M14: 8.8 U start,end per wall, in texture widths */\n",1))
+    t=out/"src/texture.h"
+    s=t.read_text()
+    old="    u8 needs_texture;\n} texmap_params;"
+    if s.count(old)!=1: raise ValueError("texmap_params layout changed")
+    t.write_text(s.replace(old,"    u8 needs_texture;\n    u16 u_base;    /* M14: 8.8 texture widths */\n    u16 u_span;    /* M14: 8.8; 0 = legacy repetitions */\n} texmap_params;",1))
+    d=out/"src/draw.c"
+    s=d.read_text()
+    old1="    u32 left_u_16 = (tmap_info->left_u * repetitions);\n    u32 right_u_16 = (tmap_info->right_u * repetitions);\n"
+    if s.count(old1)!=2: raise ValueError("draw.c u sites changed: %d"%s.count(old1))
+    new1="""    u32 left_u_16 = (tmap_info->left_u * repetitions);
+    u32 right_u_16 = (tmap_info->right_u * repetitions);
+    if (tmap_info->u_span) {
+        u32 base = ((u32)tmap_info->u_base) << 8;
+        left_u_16 = base + ((tmap_info->left_u * (u32)tmap_info->u_span) >> 8);
+        right_u_16 = base + ((tmap_info->right_u * (u32)tmap_info->u_span) >> 8);
+    }
+"""
+    s=s.replace(old1,new1)
+    d.write_text(s)
+    p=out/"src/portal.c"
+    s=p.read_text()
+    old="(map->wall_tex_repetitions ? map->wall_tex_repetitions[portal_idx] : 1),"
+    if s.count(old)!=2: raise ValueError("portal.c repetitions sites changed: %d"%s.count(old))
+    s=s.replace(old,old+" .u_base = (map->wall_tex_u ? map->wall_tex_u[(portal_idx)*2] : 0), .u_span = (map->wall_tex_u ? (u16)(map->wall_tex_u[(portal_idx)*2+1]-map->wall_tex_u[(portal_idx)*2]) : 0),")
+    p.write_text(s)
+    b=out/"src/bunch_render.c"
+    s=b.read_text()
+    old="            texmap_params tmap_info;\n"
+    c=s.count(old)
+    for idx in ("portal_idx","portal_index"):
+        o2=f"                tmap_info.repetitions = cur_portal_map->wall_tex_repetitions[{idx}];\n"
+        if s.count(o2)!=1: raise ValueError("bunch_render site changed: "+idx)
+        s=s.replace(o2,o2+f"                tmap_info.u_base = cur_portal_map->wall_tex_u ? cur_portal_map->wall_tex_u[({idx})*2] : 0;\n                tmap_info.u_span = cur_portal_map->wall_tex_u ? (u16)(cur_portal_map->wall_tex_u[({idx})*2+1]-cur_portal_map->wall_tex_u[({idx})*2]) : 0;\n",1)
+    b.write_text(s)
+    print("M14 wall_tex_u installed (draw.c, portal.c x2, bunch_render x2)")
+
 def stage(src, wad, out, control=False):
     out=out.resolve()
     if out.exists():
@@ -2793,6 +2840,8 @@ def stage(src, wad, out, control=False):
         (out/"src/m12_doom_objects.c").write_text(sprite_c)
         install_templates(out,templates)
         m12_safe_sprite_raster(out)
+    if os.environ.get("MANIFOLD_TEX_U","0")=="1":
+        m14_tex_u(out)
     m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
     if m12_doors:

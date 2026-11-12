@@ -57,3 +57,10 @@ Não testado: inimigos (não existem), colisão com objetos, fechamento automát
 Usuário: "está funcionando; câmera ainda alta, mas tudo acontece corretamente; a arma ainda é a do Manifold, que é até maior". FPS visto no console: 4,1 (screenshot). Tiles pretas no HUD ainda presentes (canto esquerdo da barra, entre os números).
 - Câmera: `MANIFOLD_EYE=N` (padrão 64, unidades de altura dobradas) em `stage_rom.py`. Variantes 48 e 36 geradas para escolha no console.
 - Pendente: arma do Doom no lugar da do Manifold; tiles pretas do HUD (Werk).
+
+## Texturas horizontalmente comprimidas (12/11, 01h54)
+Usuário: eye48 é boa (agora o padrão); texturas "um pouco horizontalmente comprimidas"; a textura da porta deveria ser única, mas repete nas laterais.
+- Causa geral medida: 192 de 444 linedefs ficam fragmentadas pela divisão em células (457 paredes). Cada pedaço recebia `reps=max(1,round(comprimento/largura))`, refazendo a textura do zero (comprime/repete). As faces das portas (128 de comprimento, linedefs 151/152) NÃO estão fragmentadas; a repetição lateral da porta tem outra causa ainda não confirmada.
+- Correção opt-in `MANIFOLD_TEX_U=1`: o emitter calcula U inicial e final por parede (distância na linedef + xoff, como o Doom); `draw.c` mapeia base + fração·extensão; patch em `draw.c`, `portal.c`, `bunch_render.c`, `texture.h`, `portal_map.h`.
+- `MANIFOLD_TEX_HSTRETCH` (padrão 1,0 = 1 texel por unidade do Doom). Com altura dobrada, 2,0 restaura a proporção do Doom. ROMs: `...eye48-u1-h40.bin` e `...eye48-u2-h40.bin`.
+- MAME: u1 idêntico ao anterior nas paredes inteiras (esperado); u2 mais largo. Sem crash (botão A, 700 VBlanks). Não verificado no console. Pedido ao usuário: foto do Doom original da mesma cena.
