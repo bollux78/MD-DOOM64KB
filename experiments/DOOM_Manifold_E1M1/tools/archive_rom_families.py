@@ -39,6 +39,10 @@ FAMILIES = [
     ("M14", "e324839", "Objetos, portas, pickups, pistola, grades e identidade", {"MANIFOLD_BSP": "0", "MANIFOLD_RADIUS": "1", "MANIFOLD_STABLE_VIEW": "1", "MANIFOLD_H32": "0", "MANIFOLD_HUD_TIMING": "1", "MANIFOLD_STATIC_REPAIR_ONCE": "1", "MANIFOLD_NEAR_SAFE": "1", "MANIFOLD_SKY_MERGE": "1", "MANIFOLD_OBJECTS": "1", "MANIFOLD_PICKUPS": "1", "MANIFOLD_DOORS": "1", "MANIFOLD_EYE": "48", "MANIFOLD_TEX_U": "1", "MANIFOLD_TEX_HSTRETCH": "1.0", "MANIFOLD_WEAPON": "pistol", "MANIFOLD_ROM_NAME": "MANIFOLD M14", "MANIFOLD_ROM_TEST": "E1M1 OBJECTS DOORS PICKUPS"}),
 ]
 
+EXPANDED_VARIANTS = [["M09","2ca6ad82","LOD distante rejeitado",{},"werk-m09-lod-rejeitado.bin"],["M11","7be9eef9","Camera fixa H32",{"MANIFOLD_CAMERAS":"fixed","MANIFOLD_H32":"1","MANIFOLD_HUD":"doom"},"werk-m11-camera-fixa-h32.bin"],["M11","7be9eef9","Cache de vertices fixo",{"MANIFOLD_CAMERAS":"fixed","MANIFOLD_VERT_CACHE":"1","MANIFOLD_H32":"1"},"werk-m11-cache-fixo-h32.bin"],["M11","7be9eef9","Cache de vertices jogavel",{"MANIFOLD_VERT_CACHE":"1","MANIFOLD_H32":"1"},"werk-m11-cache-play-h32.bin"],["M11","7be9eef9","Fog desligado",{"MANIFOLD_SKIP":"far_portal_fog","MANIFOLD_CAMERAS":"fixed","MANIFOLD_H32":"1"},"werk-m11-fogoff-h32.bin"],["M11","7be9eef9","Musica H32",{"MANIFOLD_H32":"1"},"werk-m11-music-h32.bin"],["M11","90d53168","Near clipping seguro",{"MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1"},"werk-m11-near-safe-h40.bin"],["M12","88c735c4","Controle H40 musical",{"MANIFOLD_H32":"0"},"werk-m12-control-h40.bin"],["M12","88c735c4","BSP estavel H40",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0"},"werk-m12-bsp-play-h40.bin"],["M12","74133dc0","BSP precisao H40",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_BSP_PRECISION":"1"},"werk-m12-bsp-precision-h40.bin"],["M13","2394a7bc","HUD timing",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_HUD_TIMING":"1"},"werk-m13-hud-timing-h40.bin"],["M13","9cb7c1a3","Near clipping geometrico",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1"},"werk-m13-near-safe-h40.bin"],["M13","ec7957a0","BSP precisao",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1","MANIFOLD_BSP_PRECISION":"1"},"werk-m13-bsp-precision-h40.bin"],["M13","abf0c1f2","Sky merge",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1","MANIFOLD_BSP_PRECISION":"1","MANIFOLD_SKY_MERGE":"1"},"werk-m13-sky-merge-h40.bin"],["M13","5bb039ed","Sky ceiling",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1","MANIFOLD_BSP_PRECISION":"1","MANIFOLD_SKY_MERGE":"1","MANIFOLD_SKY_CEIL_UNIFORM":"1"},"werk-m13-sky-ceiling-h40.bin"],["M13","e99f64c8","All leaves controle",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1","MANIFOLD_BSP_PRECISION":"1","MANIFOLD_SKY_MERGE":"1","MANIFOLD_BSP_ALL_LEAVES":"0"},"werk-m13-allleaves-control-h40.bin"],["M13","e99f64c8","All leaves experimental",{"MANIFOLD_BSP":"1","MANIFOLD_RADIUS":"1","MANIFOLD_STABLE_VIEW":"1","MANIFOLD_H32":"0","MANIFOLD_NEAR_SAFE":"1","MANIFOLD_BSP_PRECISION":"1","MANIFOLD_SKY_MERGE":"1","MANIFOLD_BSP_ALL_LEAVES":"1"},"werk-m13-allleaves-h40.bin"]]
+if os.environ.get('MANIFOLD_ARCHIVE_EXPANDED') == '1':
+    FAMILIES = EXPANDED_VARIANTS
+
 def run(cmd, *, cwd=None, env=None, log=None, timeout=1800):
     with (open(log, "a") if log else open(os.devnull, "w")) as fd:
         return subprocess.run(cmd, cwd=cwd, env=env, stdout=fd, stderr=subprocess.STDOUT, timeout=timeout, check=True)
@@ -46,6 +50,9 @@ def run(cmd, *, cwd=None, env=None, log=None, timeout=1800):
 def write_readme(folder, code, title, message, ref=""):
     # README is permitted by user. No other sidecar files in destination.
     p = folder / "README.md"
+    if os.environ.get("MANIFOLD_ARCHIVE_EXPANDED") == "1" and p.exists():
+        p.write_text(p.read_text(encoding="utf-8") + "\n## " + title + "\n\n" + message + "\n", encoding="utf-8")
+        return
     p.write_text(f"# {code} — {title}\n\n{message}\n" + (f"\nReferencia de codigo: \`{ref}\`\n" if ref else ""), encoding="utf-8")
 
 def main():
@@ -88,7 +95,7 @@ def main():
             write_readme(folder, code, title, msg)
             results.append((code, "NAO REPRODUZIDA"))
             continue
-        scratch = TEMP / code
+        scratch = TEMP / (code + '-' + (rest[0].removesuffix('.bin') if rest else 'base'))
         src = scratch / "repo"
         staged = scratch / "stage"
         log = TEMP / f"{code}.log"
@@ -115,6 +122,7 @@ def main():
             if code in {"M11", "M12", "M13", "M14"}:
                 prep = src / "scripts/lab/prepare_r25_music.py"
                 if prep.exists():
+                    env["DOOM_R25_MUSIC"] = "1"
                     run([sys.executable, str(prep)], cwd=src, env=env, log=log, timeout=120)
                 env["MANIFOLD_MUSIC"] = "1"
                 if not (src / "res/r25-e1m1.vgm").exists():
@@ -153,7 +161,7 @@ def main():
             mode = "h32" if flags.get("MANIFOLD_H32") == "1" else "h40"
             if code in {"M02","M03","M04","M05","M06","M07","M08","M10"}:
                 mode = "legacy"  # early stages did not universally use H40
-            name = f"werk-{code.lower()}-historico-{mode}.bin"
+            name = rest[0] if rest else f"werk-{code.lower()}-historico-{mode}.bin"
             target = folder / name
             if target.exists():
                 import hashlib
