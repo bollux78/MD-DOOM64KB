@@ -21,3 +21,9 @@ Série R20 do port: ~11 FPS calculados na DEMO3 (2134 frames). Relatos de consol
 2. Portas, pickups, crash do botão A.
 3. Checkpoint de FPS (go/no-go parcial).
 4. Inimigos, grades, ROM final de teste jogável (START entra no jogo).
+
+## Linha de base (Fase 0, MAME headless, 120 s emulados, rota "tour" fixa, controle sem objetos)
+Script: `experiments/DOOM_Manifold_E1M1/tools/m14/run_fps.sh` (lê `cur_frame`, incrementado por quadro renderizado).
+- E1M1 (tour_ctrl): 6,87 FPS
+- E1M9 (e1m9_tourctl): 6,73 FPS
+O MAME não reproduz o clock do console (o usuário vê ~3 a 5 FPS), então vale só como comparação relativa entre builds.
