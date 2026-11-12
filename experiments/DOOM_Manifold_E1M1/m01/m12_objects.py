@@ -30,7 +30,48 @@ TYPES = (
  (2046,"BROKA0","rocketbox",75,37),
  (2048,"AMMOA0","bulletbox",39,28),
  (2049,"SBOXA0","shellbox",44,21),
+ # M14: BRNBIG lattice (two-sided mid-textured fences, sector 72) as 32-unit
+ # billboard slices; box = slice x 1.39 wide, 128 x 1.75 high.
+ (9001,"GRATE_L","grate_l",44,224),
+ (9002,"GRATE_R","grate_r",44,224),
+ (9003,"GRATE_C0","grate_c0",44,224),
+ (9004,"GRATE_C1","grate_c1",44,224),
+ (9005,"GRATE_C2","grate_c2",44,224),
+ (9006,"GRATE_C3","grate_c3",44,224),
 )
+
+def _masked_texture(w,texdefs,name):
+    """Composite a texture keeping unpainted texels transparent (None)."""
+    wdt,hgt,patches=texdefs[name]
+    img=[[None]*wdt for _ in range(hgt)]
+    for ox,oy,pname in patches:
+        try: pw,ph,pim=WT.patch_image(w.lump(pname))
+        except KeyError: continue
+        for y in range(ph):
+            for x in range(pw):
+                v=pim[y][x]
+                if v is not None and 0<=x+ox<wdt and 0<=y+oy<hgt: img[y+oy][x+ox]=v
+    return wdt,hgt,img
+
+def grate_extra(w):
+    """name -> (pw,ph,img) 32-wide slices of BRNBIGL / BRNBIGR / BRNBIGC."""
+    td=WT.textures(w);out={}
+    for key,tex,x0 in (("GRATE_L","BRNBIGL",0),("GRATE_R","BRNBIGR",0),("GRATE_C0","BRNBIGC",0),
+                       ("GRATE_C1","BRNBIGC",32),("GRATE_C2","BRNBIGC",64),("GRATE_C3","BRNBIGC",96)):
+        wdt,hgt,img=_masked_texture(w,td,tex)
+        out[key]=(32,hgt,[row[x0:x0+32] for row in img])
+    return out
+
+def grate_placements():
+    """(x,y,kind) of the slices: west fence x=2888 and east fence x=3128 of
+    E1M1 (linedefs 298-303); y runs -4352..-4160, 32 units per slice."""
+    ys=[-4336,-4304,-4272,-4240,-4208,-4176]
+    west=[9001,9003,9004,9005,9006,9002]
+    east=[9002,9003,9004,9005,9006,9001]
+    return [(2888,y,k) for y,k in zip(ys,west)]+[(3128,y,k) for y,k in zip(ys,east)]
+def kinds_has_grates(w):
+    return True
+
 def generate(wad, lumps, cells, vdp_palette, point_inside):
     w=WT.Wad(wad)
     rgb=WT.playpal(w)
@@ -38,10 +79,11 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     lines=['#include <genesis.h>','#include "obj_sprite.h"']
     templates=[]; mapping={}
     seen={}
+    extra=grate_extra(w) if kinds_has_grates(w) else {}
     for kind,lump,name,width,height in TYPES:
         if lump in seen:            # several THING kinds, one sprite
             mapping[kind]=seen[lump]; continue
-        try: pw,ph,img=WT.patch_image(w.lump(lump))
+        try: pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
         except KeyError:
             print("M12 skipped missing patch:",lump)
             continue
@@ -80,6 +122,15 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         matches=[i for i,c in enumerate(cells) if point_inside([w["a"] for w in c["walls"]],(x*16,y*16))]
         if len(matches)!=1: skipped[kind]+=1;continue
         placements.append((matches[0],x,y,mapping[kind]))
+    if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1":
+        for x,y,kind in grate_placements():
+            if kind not in mapping: continue
+            m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],(x*16,y*16))]
+            if len(m)!=1:
+                # on a cell boundary: nudge one unit into the room
+                m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],((x+(1 if x<3000 else -1))*16,y*16))]
+            if len(m)!=1: print("M14 grate slice skipped",x,y,len(m));continue
+            placements.append((m[0],x+(1 if x<3000 else -1),y,mapping[kind]))
     if len(placements)>126: raise ValueError(f"Too many decorations: {len(placements)}")
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements

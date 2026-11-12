@@ -1635,10 +1635,24 @@ static u32 manifold_seg_d2(s16 px, s16 py, const s16* s) {
     u32 q = (u32)cr / (u16)s[4];
     return q * q;
 }
+static s32 manifold_cross(s16 ox, s16 oy, s16 ax, s16 ay, s16 bx, s16 by) {
+    return (s32)(ax - ox) * (by - oy) - (s32)(ay - oy) * (bx - ox);
+}
+/* swept test: the step (cx,cy)->(nx,ny) properly crosses the wall segment */
+static u8 manifold_step_crosses(s16 cx, s16 cy, s16 nx, s16 ny, const s16* s) {
+    s32 d1 = manifold_cross(s[0], s[1], s[2], s[3], cx, cy);
+    s32 d2 = manifold_cross(s[0], s[1], s[2], s[3], nx, ny);
+    if ((d1 > 0 && d2 > 0) || (d1 < 0 && d2 < 0) || (d1 == 0 && d2 == 0)) { return 0; }
+    s32 d3 = manifold_cross(cx, cy, nx, ny, s[0], s[1]);
+    s32 d4 = manifold_cross(cx, cy, nx, ny, s[2], s[3]);
+    if ((d3 > 0 && d4 > 0) || (d3 < 0 && d4 < 0)) { return 0; }
+    return 1;
+}
 static u8 manifold_radius_blocked(s16 cx, s16 cy, s16 nx, s16 ny, u16 sect) {
     const s16* s = &e1_block_segs[e1_block_offsets[sect] * 5];
     u16 n = e1_block_offsets[sect + 1] - e1_block_offsets[sect];
     for (; n; n--, s += 5) {
+        if ((cx != nx || cy != ny) && manifold_step_crosses(cx, cy, nx, ny, s)) { return 1; }
         s16 lo = s[0] < s[2] ? s[0] : s[2], hi = s[0] < s[2] ? s[2] : s[0];
         if (nx < lo - MANIFOLD_R || nx > hi + MANIFOLD_R) { continue; }
         lo = s[1] < s[3] ? s[1] : s[3]; hi = s[1] < s[3] ? s[3] : s[1];

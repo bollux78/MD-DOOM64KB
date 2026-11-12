@@ -325,6 +325,17 @@ def blocking_segments(lumps,cells):
                 n=cells[w["neighbor"]]
                 if abs(floor(c)-floor(n))>=LEDGE_DOOM:
                     ledges[tuple(sorted((a,b)))]=(a,b,max(floor(c),floor(n)))
+    if __import__("os").environ.get("MANIFOLD_GRATES","1")=="1":
+        # M14: two-sided BRNBIG lattice fences are blocking (linedef flag 1)
+        # but belong to no cell wall (same sector on both sides).
+        Vx=lumps["VERTEXES"];SDx=lumps["SIDEDEFS"]
+        for ld in lumps["LINEDEFS"]:
+            if not ld[2]&1 or ld[6]==65535: continue
+            mids=[_nm(SDx[sd][4]) for sd in (ld[5],ld[6])]
+            if any(m.startswith("BRNBIG") for m in mids):
+                a=(Vx[ld[0]][0],Vx[ld[0]][1]);b=(Vx[ld[1]][0],Vx[ld[1]][1])
+                solid.append((a,b,None))
+                print("M14 grate collision segment",a,b)
     segs=solid+list(ledges.values())
     lines=[LineString([a,b]) for a,b,_ in segs]
     offs=[0];flat=[]
