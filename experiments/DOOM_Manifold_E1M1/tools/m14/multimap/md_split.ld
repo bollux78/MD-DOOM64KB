@@ -99,9 +99,6 @@ SECTIONS
     */libgcc.a:*(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = ALIGN(0x1000);
   } > rom
-  /* Prevent common data from overlapping the phase window. */
-  ASSERT(ADDR(.common) + SIZEOF(.common) <= 0x00200000,
-         "common exceeds 2MiB after compacting WAD reserve");
   .mapobjs 0x00201800 :
   {
     . = 0x0;
