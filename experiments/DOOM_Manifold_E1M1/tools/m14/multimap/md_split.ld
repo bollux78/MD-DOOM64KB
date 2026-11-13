@@ -75,6 +75,10 @@ SECTIONS
     . = 0x5200;
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x8000;
+    /* Fixed-size descriptor arrays first: global m12_sprite_* addresses
+       remain identical across maps even when deduplicated RLE pools differ.
+       Their internal spans/texel pointers still refer to per-map resources. */
+    */src/m12_doom_objects.o(.rodata.m12_sprite_*)
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x2B000;
     */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -150,11 +154,6 @@ SECTIONS
     *(.dtors)
     LONG(0)
     __DTOR_END__ = .;
-    /* Per-map sprite pointers in fixed 0x900-byte window inside the
-       existing 0xE00 phase header; no impact on map texture placement. */
-    . = 0x400;
-    */src/object.o(.rodata.object_types)
-    . = 0xD00;
     *(.rodata .rodata.*)
     *(.gcc_except_table .gcc_except_table.*)
     . = ALIGN(0x4);
