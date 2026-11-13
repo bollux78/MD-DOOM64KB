@@ -109,6 +109,34 @@ def is_convex(poly):
     hull = poly.convex_hull
     return hull.area - poly.area <= max(1.0, 1e-4 * hull.area)
 
+def heretic_convex_parts(poly, depth=0):
+    """Exact-area diagnostic subdivision: triangulate concave clipped regions.
+
+    Never render a convex hull of a concave shape (would invent solid space).
+    Polygonal intersections are triangulated until each positive-area piece
+    is convex. Each step verifies area preservation and rejects holes.
+    """
+    from shapely.ops import triangulate
+    if poly.area <= MIN_AREA:
+        return []
+    if poly.interiors:
+        raise ValueError("Heretic polygon contains a hole; unsafe to simplify")
+    if is_convex(poly):
+        return [poly]
+    if depth >= 8:
+        raise ValueError("Heretic convex subdivision exceeded recursion cap")
+    chunks = []
+    for triangle in triangulate(poly):
+        clip = triangle.intersection(poly)
+        for piece in getattr(clip, "geoms", [clip]):
+            if isinstance(piece, Polygon) and piece.area > 1e-7:
+                chunks.extend(heretic_convex_parts(piece, depth+1))
+    covered = unary_union(chunks)
+    discrepancy = poly.symmetric_difference(covered).area
+    if discrepancy > max(1e-4, poly.area*1e-6):
+        raise ValueError(f"Heretic convex subdivision area mismatch: {discrepancy}")
+    return chunks
+
 
 def true_cells(lumps, nodes, merge=True):
     leaves = build(lumps, nodes)
@@ -133,13 +161,14 @@ def true_cells(lumps, nodes, merge=True):
                 dropped += 1
                 continue
             for comp in components:
-                ring = convex_ring(comp)
-                if ring is None:
-                    continue
-                poly = Polygon(ring)
-                if not is_convex(poly):
-                    raise ValueError(f"Heretic leaf {ss} piece is non-convex; no unsafe hull")
-                cells.append([sec, poly, ss])
+                for piece in heretic_convex_parts(comp):
+                    ring = convex_ring(piece)
+                    if ring is None:
+                        continue
+                    poly = Polygon(ring)
+                    if not is_convex(poly):
+                        raise ValueError(f"Heretic leaf {ss} still non-convex after split")
+                    cells.append([sec, poly, ss])
         else:
             ring = convex_ring(intersection)
             if ring is None:
