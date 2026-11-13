@@ -12,6 +12,11 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     steps:
+      - name: Show latest linker failure and game.o section sizes
+        shell: bash
+        run: |
+          tail -90 /tmp/m12/mm_E1M1.build.log 2>/dev/null || true
+          "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" -h /tmp/m12/mm_E1M1/out/release/src/game.o 2>/dev/null | grep -E "text|rodata" | head -40 || true
       - name: Diagnose existing disposable M14 phase builds
         shell: bash
         run: |
