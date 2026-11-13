@@ -3186,6 +3186,20 @@ def m14_view_trim(out, n):
     edit("my_bmp.c",[('		bmp_buffer_1 = man_malloc(BMP_PITCH * BMP_VERTICAL_HEIGHT * sizeof(u8), "vertical bmp_buffer_1");\n	}\n',
       '		bmp_buffer_1 = man_malloc(BMP_PITCH * BMP_VERTICAL_HEIGHT * sizeof(u8), "vertical bmp_buffer_1");\n	}\n	memset(bmp_buffer_0, 0, BMP_PITCH * BMP_VERTICAL_HEIGHT); memset(bmp_buffer_1, 0, BMP_PITCH * BMP_VERTICAL_HEIGHT);\n',1)])
     edit("draw.c",[("    if (xa<0) xa=0;\n    if (xb>RENDER_WIDTH) xb=RENDER_WIDTH;","    if (xa<M14_VL) xa=M14_VL;\n    if (xb>M14_VR) xb=M14_VR;",1)])
+def m14_static_params(out):
+    """M14: maps without doors/lifts never change their sector-group parameters, so keep
+    them in ROM instead of a RAM copy (E1M6: 250 groups x 8 x 2 B = 4000 B of heap, which
+    shrank the stack and cut portal recursion to nothing)."""
+    f=out/"src/level.c"; t=f.read_text()
+    a='    live_sector_group_parameters = man_malloc(num_bytes, "live sector group params table");\n    memcpy(live_sector_group_parameters, cur_portal_map->sector_group_params, num_bytes);'
+    assert t.count(a)==1
+    t=t.replace(a,"    (void)num_bytes;\n    live_sector_group_parameters = (s16*)cur_portal_map->sector_group_params;   /* ROM, read-only (static map) */")
+    b='    man_free(live_sector_group_parameters, "live sector group params table");\n'
+    assert t.count(b)==1
+    t=t.replace(b,"")
+    f.write_text(t)
+    print("M14 static sector params: no RAM copy")
+
 def m14_unpack_map(out):
     """M14 perf: portal_map is declared __packed__, so GCC reads each pointer
     field byte by byte (~30 instrs per u32). All its members are 2-byte aligned
@@ -3757,6 +3771,8 @@ def stage(src, wad, out, control=False):
         m14_max_depth(out,int(os.environ["MANIFOLD_MAX_DEPTH"]))
     if os.environ.get("MANIFOLD_UNPACK_MAP","0")=="1":
         m14_unpack_map(out)
+    if os.environ.get("MANIFOLD_STATIC_PARAMS","0")=="1":
+        m14_static_params(out)
     if int(os.environ.get("MANIFOLD_VIEW_TRIM","0"))>0:
         m14_view_trim(out,int(os.environ["MANIFOLD_VIEW_TRIM"]))
     if os.environ.get("MANIFOLD_NO_SOUND","0")=="1":
