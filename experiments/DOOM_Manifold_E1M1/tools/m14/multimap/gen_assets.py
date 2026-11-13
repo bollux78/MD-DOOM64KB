@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Menu assets: Doom TITLEPIC -> 16-colour 4bpp tiles, SGDK font tiles, vector stubs."""
-import struct, sys
+import struct, sys, os
+from pathlib import Path
 from PIL import Image
-sys.path.insert(0, "/home/claude/md-doom64kb/experiments/DOOM_Manifold_E1M1/m01")
-import wad_textures as WT
+ROOT = Path(os.environ.get("MANIFOLD_REPO", "/home/claude/md-doom64kb"))
+GDK = Path(os.environ.get("MANIFOLD_GDK", "/home/claude/sgdkr"))
 
 src = Image.open(ROOT / "assets/art/doom-title-md-32col.png")
 sp = src.getpalette()[:96]
