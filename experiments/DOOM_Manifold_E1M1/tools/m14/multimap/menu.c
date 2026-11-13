@@ -3,6 +3,9 @@
    slots 1..4 (512 KB each) by the SSF2 bank registers. */
 #include "menu.h"
 #include "maps.h"
+#ifndef NSLOT
+#define NSLOT 7
+#endif
 typedef unsigned char u8; typedef unsigned short u16; typedef unsigned long u32;
 #define VDP_DATA  (*(volatile u16 *)0xC00000)
 #define VDP_CTRL  (*(volatile u16 *)0xC00004)
@@ -51,7 +54,7 @@ static void bank_test(int k) {
     clear_plane();
     text(8, 4, "TESTE DE BANCOS (SSF2)", 3);
     text(8, 6, mp->name, 2);
-    for (s = 1; s <= 7; s++) {
+    for (s = 1; s <= NSLOT; s++) {
         bad = 0;
         for (j = 0; j < 8; j++)
             if (*(volatile u32 *)(0x80000UL * (u32)s + (u32)j * 0x10000UL + 0x1230UL) != bank_expect[k][s - 1][j]) bad++;
@@ -60,7 +63,9 @@ static void bank_test(int k) {
         text(16, 9 + s, bad == 0 ? "OK" : "ERRO", bad == 0 ? 2 : 3);
         if (bad) text(22, 9 + s, "AMOSTRAS RUINS", 3);
     }
+    #ifndef LAYOUT_PER_MAP
     text(8, 20, "SLOTS 1-5 COMUM, 6-7 FASE", 2);
+#endif
     text(8, 22, "RESET VOLTA AO MENU", 2);
     vreg(1, 0x44);
     for (;;) wait_vblank();
@@ -68,6 +73,11 @@ static void bank_test(int k) {
 /* slots 1..5 (0x080000-0x2FFFFF) = banks 1..5: the common code/data block shared by every map;
    slots 6..7 (0x300000-0x3FFFFF) = the selected map's own block */
 static void set_banks(int mapbank) {
+#ifdef LAYOUT_PER_MAP   /* 10 MB layout: each map = 4 banks mapped at slots 1..4 */
+    *(volatile u8 *)0xA130F3 = mapbank; *(volatile u8 *)0xA130F5 = mapbank + 1;
+    *(volatile u8 *)0xA130F7 = mapbank + 2; *(volatile u8 *)0xA130F9 = mapbank + 3;
+    return;
+#endif
     *(volatile u8 *)0xA130F3 = 1; *(volatile u8 *)0xA130F5 = 2; *(volatile u8 *)0xA130F7 = 3;
     *(volatile u8 *)0xA130F9 = 4; *(volatile u8 *)0xA130FB = 5;
     *(volatile u8 *)0xA130FD = mapbank; *(volatile u8 *)0xA130FF = mapbank + 1;
@@ -92,6 +102,15 @@ int main(void) {
     int i, sel = 0, prev;
     u16 pad, last = 0xFFFF;
 
+    /* after a RESET the game leaves VDP state/VRAM behind: put every register in a
+       known state, then wipe VRAM, CRAM and VSRAM (cold boot has them zeroed) */
+    vreg(1, 0x04);
+    vreg(6, 0); vreg(8, 0); vreg(9, 0); vreg(14, 0);
+    vreg(19, 0); vreg(20, 0); vreg(21, 0); vreg(22, 0); vreg(23, 0);   /* no DMA fill/copy pending */
+    vreg(15, 2);
+    vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
+    cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
+    VDP_CTRL32 = 0x40000010UL; for (i = 0; i < 40; i++) VDP_DATA = 0;   /* VSRAM */
     vreg(0, 0x04); vreg(1, 0x04); vreg(2, PLANE_A >> 10); vreg(3, 0); vreg(4, 0x07);
     vreg(5, 0); vreg(7, 0x00); vreg(10, 0); vreg(11, 0); vreg(12, 0x81);
     vreg(13, 0x2C); vreg(15, 2); vreg(16, 0x01); vreg(17, 0); vreg(18, 0);
