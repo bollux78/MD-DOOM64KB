@@ -126,11 +126,11 @@ SECTIONS
     */src/manifold_sky.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x5200;
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x8800;
+    . = 0xA000;
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x30000;
+    . = 0x31000;
     */src/e1m1_map.o(.rodata.e1m1_map)
-    . = 0x30100;
+    . = 0x31100;
     */src/e1m1_map.o(.rodata.e1_block_segs)
     */src/e1m1_map.o(.rodata.str1.1)
     . = ALIGN(4);

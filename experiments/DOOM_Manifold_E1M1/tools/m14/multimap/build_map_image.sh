@@ -17,7 +17,7 @@ case $m in
 esac
 doors="MANIFOLD_DOORS=2 MANIFOLD_DYN_PARAMS=1"
 [ "$m" = "E1M1" ] && doors="MANIFOLD_DOORS=1 MANIFOLD_DYN_PARAMS=1"
-F=$(cat /tmp/m14x/flags_walk.txt)
+F="$(cat /tmp/m14x/flags_walk.txt) ${EXTRA_ENV:-}"
 export MANIFOLD_MONSTERS=1 MANIFOLD_MONSTERS_INACTIVE=1 MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM=$R/res/r25-$(echo $m | tr A-Z a-z).vgm
 out=/tmp/m12/$name; rm -rf "$out"
 env $F $doors MANIFOLD_MAP=$m MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 MANIFOLD_GRATE_SPRITES=0 MANIFOLD_GRATES=0 MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1 \

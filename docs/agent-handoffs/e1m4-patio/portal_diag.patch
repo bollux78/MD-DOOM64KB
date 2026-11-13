@@ -1,0 +1,73 @@
+--- /tmp/m12/mm_E1M4/src/portal.c	2026-11-13 17:43:05.020947255 -0300
++++ /tmp/m12/dbg_E1M4/src/portal.c	2026-11-13 18:19:31.605554127 -0300
+@@ -88,6 +88,9 @@
+ extern u32 manifold_heap_high;
+ extern volatile u32 manifold_dbg[8];
+ volatile u32 manifold_dbg_maxdepth;
++volatile s16 manifold_dbgw[4][8];
++#define DW(code) do{ if(sector==161 && depth==0 && i<4) manifold_dbgw[i][5]=(code);}while(0)
++
+ void visit_graph(u16 src_sector, u16 sector, u16 x1, u16 x2, u32 cur_frame, uint8_t depth) {
+     {
+         u32 sp_now;
+@@ -200,6 +203,7 @@
+         Vect2D_s16 trans_v1 = *transformed_vert_buffer_ptr++;
+         Vect2D_s16 trans_v2 = *transformed_vert_buffer_ptr++;
+         u8 manifold_fogged = 0;
++        if(sector==161 && depth==0 && i<4){ manifold_dbgw[i][0]=trans_v1.x; manifold_dbgw[i][1]=trans_v1.y; manifold_dbgw[i][2]=trans_v2.x; manifold_dbgw[i][3]=trans_v2.y; manifold_dbgw[i][5]=0; manifold_dbgw[i][6]=is_portal; }
+         if (is_portal && ceil_color != 0 /* outdoors sky is transparent */
+              && get_sector_group_ceil_color(sector_group(portal_sector, map)) != 0
+              && trans_v1.y > (1600<<TRANS_Z_FRAC_BITS) && trans_v2.y > (1600<<TRANS_Z_FRAC_BITS)) {
+@@ -235,7 +239,8 @@
+             tmap_info.tex = tex;
+         }
+         clip_result clipped = clip_map_vertex_16((Vect2D_s16*)&trans_v1, (Vect2D_s16*)&trans_v2, &tmap_info);
+-        if (clipped == FRUSTUM_CULLED) { continue; }
++        DW(1); if (clipped == FRUSTUM_CULLED) { if(!is_portal) manifold_dbg[0]++; continue; }
++        if(sector==161 && depth==0 && i<4){ manifold_dbgw[i][4]=clipped; }
+         #ifdef DEBUG_PORTAL_CLIP
+         KLog_S3("post clip, wall idx: ", i, " x1: ", trans_v1.x, " x2: ", trans_v2.x);
+         #endif 
+@@ -250,6 +255,7 @@
+ 
+ 
+         if(clipped == NEAR_Z_CULLED || clipped == FRUSTUM_CULLED) {
++            if(!is_portal) manifold_dbg[4]++; DW(2);
+             if(clipped == FRUSTUM_CULLED) { continue; }
+         #ifdef DEBUG_PORTAL_CLIP
+             KLog_U2("in sector: ", sector, " wall idx offscreen: ", i);
+@@ -402,7 +408,7 @@
+             }
+             #endif
+             //inc_counter(POST_PROJ_BACKFACE_CULL_COUNTER);
+-            if(sector != src_sector || !is_portal) {
++            if(sector != src_sector || !is_portal) { if(!is_portal) manifold_dbg[1]++; DW(3);
+             #ifdef DEBUG_PORTAL_CLIP
+                 KLog("portal actually backface culled");
+             #endif
+@@ -437,7 +443,7 @@
+         }
+ 
+ 
+-        if (x1 > window_max) {
++        if (x1 > window_max) { if(!is_portal) manifold_dbg[2]++; DW(4);
+             if(is_portal && clipped & LEFT_Z_CLIPPED && x2 >= window_min) {
+                 visit_graph(src_sector, portal_sector, window_min, endx, cur_frame, depth+1);
+             } else {
+@@ -450,7 +456,7 @@
+                 #endif 
+             }
+             continue;
+-        } else if (x2 <= window_min) {
++        } else if (x2 <= window_min) { if(!is_portal) manifold_dbg[3]++; DW(5);
+             if(is_portal && clipped & RIGHT_Z_CLIPPED && x1 < window_max) {
+                 visit_graph(src_sector, portal_sector, beginx, window_max, cur_frame, depth+1);
+             } else {
+@@ -468,6 +474,7 @@
+         }
+ 
+         int recur = 0;
++        DW(6); if(sector==161 && depth==0 && i<4){ manifold_dbgw[i][6]=x1; manifold_dbgw[i][7]=x2; }
+ 
+         s16 x1_ytop, x1_ybot;
+         s16 x2_ytop, x2_ybot;
