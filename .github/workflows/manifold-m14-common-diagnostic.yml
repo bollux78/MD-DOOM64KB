@@ -1,0 +1,67 @@
+name: Manifold compact multimap shared-block diagnostic
+on:
+  push:
+    branches: [exp-manifold-m14-size-opt]
+    paths:
+      - '.github/workflows/manifold-m14-common-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Diagnose existing disposable M14 phase builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          t="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          for m in E1M1 E1M2 E1M4 E1M5 E1M9; do
+            test -s "/tmp/m12/mm_$m/out/release/rom.out"
+          done
+          python3 - <<'PY'
+          import subprocess, pathlib, collections, hashlib, bisect
+          base=pathlib.Path("/tmp/m12")
+          T=str(pathlib.Path.home()/"mars/m68k-elf/bin/m68k-elf-")
+          data={}
+          symbols={}
+          for m in ["E1M1","E1M2","E1M4","E1M5","E1M9"]:
+              f=base/f"mm_{m}/out/release/rom.out"
+              o=subprocess.check_output([T+"objcopy","-O","binary","-j",".common",str(f),"/dev/stdout"])
+              data[m]=o
+              n=subprocess.check_output([T+"nm","-n",str(f)],text=True,errors="replace")
+              sy=[]
+              for line in n.splitlines():
+                  p=line.split()
+                  if len(p)>=3:
+                      try: v=int(p[0],16)
+                      except ValueError:continue
+                      if 0x10000<=v<=0x200000:sy.append((v,p[2]))
+              symbols[m]=sy
+              print(m,"common length",len(o),"sha",hashlib.sha256(o).hexdigest()[:16])
+          ref=data["E1M1"]
+          for m,other in data.items():
+              if m=="E1M1":continue
+              diffs=[i for i in range(min(len(ref),len(other))) if ref[i]!=other[i]]
+              groups=[]
+              for i in diffs:
+                  if not groups or i>groups[-1][-1]+1:groups.append([i])
+                  else:groups[-1].append(i)
+              print("DIFF",m,"count",len(diffs),"groups",len(groups),"length_delta",len(other)-len(ref))
+              for g in sorted(groups,key=lambda x:-len(x))[:20]:
+                  start=g[0]; addr=start+0x10000
+                  sy=symbols["E1M1"]
+                  pos=bisect.bisect_right(sy,(addr,"zzzz"))-1
+                  sym=sy[pos] if pos>=0 else None
+                  print("DIFF-RANGE",hex(start),len(g),"at",hex(addr),"nearest_symbol",sym,"ref",ref[start:start+12].hex(),"other",other[start:start+12].hex())
+          # Object-level fingerprints help identify misclassified common objects
+          dirs=[base/f"mm_{m}/out/release" for m in data]
+          objsets={}
+          for m,dr in zip(data,dirs):
+              objsets[m]={str(p.relative_to(dr)):hashlib.sha256(p.read_bytes()).hexdigest() for p in dr.rglob("*.o")}
+          allnames=set().union(*(set(x) for x in objsets.values()))
+          diffnames=[n for n in sorted(allnames) if len(set(objsets[m].get(n) for m in data))>1]
+          print("CHANGING_OBJECTS",len(diffnames))
+          for n in diffnames[:100]:print("OBJECT",n,[(m,objsets[m].get(n,"missing")[:12]) for m in data])
+          PY
