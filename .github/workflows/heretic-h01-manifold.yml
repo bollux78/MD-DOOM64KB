@@ -4,6 +4,7 @@ on:
     branches: [exp-heretic-manifold-h01]
     paths:
       - '.github/workflows/heretic-h01-manifold.yml'
+      - 'experiments/DOOM_Manifold_E1M1/m01/true_cells.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -50,7 +51,7 @@ jobs:
           d=json.loads(p.read_text())
           print('HERETIC_MANIFOLD_GEOMETRY',json.dumps(dict(limits=d['limits'],warnings=len(d['warnings']),first_warnings=d['warnings'][:12],components=len(d['connected_components']))))
           PY
-          python3 - "$HERETIC_WAD" <<'PY'
+          HERETIC_SPLIT_PIECES=1 python3 - "$HERETIC_WAD" <<'PY'
           import sys
           sys.path.insert(0,'experiments/DOOM_Manifold_E1M1/m01')
           from convert_wad import read_map
@@ -64,7 +65,7 @@ jobs:
           set -euo pipefail
           python3 -c 'import shapely' || { echo "::error::shapely missing on runner"; exit 1; }
           python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$HERETIC_STAGE/upstream"
-          env MANIFOLD_MAP=E1M1 MANIFOLD_TEXTURES=0 MANIFOLD_OBJECTS=0 \
+          env HERETIC_SPLIT_PIECES=1 MANIFOLD_MAP=E1M1 MANIFOLD_TEXTURES=0 MANIFOLD_OBJECTS=0 \
             MANIFOLD_HUD=manifold MANIFOLD_MUSIC=0 MANIFOLD_DOORS=0 \
             MANIFOLD_GRATES=0 MANIFOLD_SKY_MERGE=0 MANIFOLD_WEAPON='' \
             MANIFOLD_H32=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 \
