@@ -1,0 +1,24 @@
+name: Manifold object_types section diagnostic
+on:
+  push:
+    branches: [exp-manifold-m14-resource-compression]
+    paths:
+      - '.github/workflows/manifold-m14-object-section.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Identify exact object_types section and nearby map layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          obj=/tmp/m12/mm_E1M1/out/release/src/object.o
+          test -s "$obj"
+          "${bin}objdump" -t "$obj" | grep -E 'object_types|\.rodata|\.data' | tail -35
+          "${bin}objdump" -h "$obj" | grep -E 'Idx|\.rodata|\.data'
+          "${bin}nm" -n /tmp/m12/mm_E1M1/out/release/rom.out | grep -E 'object_types|doomtex_' | head -12
