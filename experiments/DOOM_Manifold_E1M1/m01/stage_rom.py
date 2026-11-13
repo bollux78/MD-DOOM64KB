@@ -2899,6 +2899,37 @@ def m12_tune_doors(out):
     print("M12 door timer 105 ticks, player-safe auto-close")
 
 
+def m14_start_menu(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
+    """M14: START in game opens the multi-map level-select menu (warm restart through reset vector 0)
+    instead of pausing.  A magic + the map id are left in work RAM for the menu (it reads them before
+    touching anything), which opens on the level list with the current map selected.
+    Exact resume is not possible: the next map start-up clears all work RAM, and the menu needs VRAM/CRAM."""
+    import os as _o
+    mapid={"E1M1":0,"E1M2":1,"E1M4":2,"E1M5":3,"E1M9":4}[_o.environ.get("MANIFOLD_MAP","E1M1")]
+    sb=out/"src/doom_statusbar.c"; t=sb.read_text()
+    t+="""
+/* M14 START menu */
+u16 m14_map_id_var;
+void m14_save_and_menu(void) {
+    __asm volatile("move.w #0x2700,%%sr" ::: "memory");
+    *(volatile u32 *)0xFF0010 = 0x4D454E55UL;
+    *(volatile u32 *)0xFF0014 = 0x4C560000UL | m14_map_id_var;
+    __asm volatile("move.l 0x0,%%sp\\n move.l 0x4,%%a0\\n jmp (%%a0)" ::: "memory");
+    for (;;) ;
+}
+"""
+    sb.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    old="    if (start_pressed && !prev_start_pressed) {\n        if(paused) {"
+    assert t.count(old)==1,"handle_input start anchor changed"
+    t=t.replace(old,"    if (start_pressed && !prev_start_pressed) {\n        { extern void m14_save_and_menu(void); m14_save_and_menu(); }\n        if(paused) {",1)
+    g.write_text(t)
+    lv=out/"src/level.c"; t=lv.read_text()
+    old=f"    const int init_player_sector = {spawn_cell};"
+    assert t.count(old)==1,"level.c init sector anchor"
+    t=t.replace(old,f"    {{ extern u16 m14_map_id_var; m14_map_id_var = {mapid}; }}\n"+old,1)
+    lv.write_text(t)
+
 def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     """M14: basic enemy AI on top of Manifold's object state machine.
 
@@ -3691,6 +3722,8 @@ def stage(src, wad, out, control=False):
         assert _ls.count(_an)==1
         _ls=_ls.replace(_an,_an+f"\n    {{ extern s32 m14_spawn_x, m14_spawn_y; extern u16 m14_spawn_cell, m14_spawn_ang; m14_spawn_x = FIX32({x}); m14_spawn_y = FIX32({y}); m14_spawn_cell = {spawn_cell}; m14_spawn_ang = {(angle*1024)//360}; }}")
         _lp.write_text(_ls)
+    if os.environ.get("MANIFOLD_START_MENU","0")=="1":
+        m14_start_menu(out,x,y,angle,spawn_cell)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
     if os.environ.get("MANIFOLD_INPUT_FIX","0")=="1":

@@ -197,7 +197,7 @@ SECTIONS
     */src/portal.o(.bss .bss.* COMMON)
     */src/sector_group.o(.bss .bss.* COMMON)
     */src/textures.o(.bss .bss.* COMMON)
-    . = 0x1D00;
+    . = 0x1D20;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }

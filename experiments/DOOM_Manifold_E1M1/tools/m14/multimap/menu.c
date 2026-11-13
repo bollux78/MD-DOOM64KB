@@ -119,7 +119,7 @@ static void bank_test(int k) {
     #ifndef LAYOUT_PER_MAP
     text(8, 20, "SLOTS 1-5 COMUM, 6-7 FASE", 2);
 #endif
-    text(8, 22, "RESET VOLTA AO MENU", 2);
+    text(8, 22, "START NO JOGO VOLTA AQUI", 2);
     vreg(1, 0x44);
     for (;;) wait_vblank();
 }
@@ -155,6 +155,11 @@ static void launch(int k) {
 int main(void) {
     int i, sel = 0, prev;
     u16 pad, last = 0xFFFF;
+    /* START in game leaves a magic + map id in work RAM: open on the level list with that map selected */
+    volatile u32 *rb = (volatile u32 *)0xFF0010;
+    int skip_title = 0;
+    if (rb[0] == 0x4D454E55UL && (rb[1] >> 16) == 0x4C56 && (rb[1] & 0xFFFF) < MAP_COUNT) { skip_title = 1; sel = rb[1] & 0xFFFF; }
+    rb[0] = 0; rb[1] = 0;
 
     /* after a RESET the game leaves VDP state/VRAM behind: put every register in a
        known state, then wipe VRAM, CRAM and VSRAM (cold boot has them zeroed) */
@@ -169,6 +174,9 @@ int main(void) {
     vreg(5, 0); vreg(7, 0x00); vreg(10, 0); vreg(11, 0); vreg(12, 0x81);
     vreg(13, 0x2C); vreg(15, 2); vreg(16, 0x01); vreg(17, 0); vreg(18, 0);
     PAD_CTRL = 0x40;
+#ifdef AUTO_LAUNCH
+    music_stop(); launch(AUTO_LAUNCH - 1);
+#endif
 
     /* tiles: font at 0..95, title at 96.. */
     vram_w(0);
@@ -182,6 +190,7 @@ int main(void) {
     set_color(48 + 15, 0x0000);  /* backdrop (R7 = pal 3 idx 15) */
 
     /* title screen */
+    if (!skip_title) {
     clear_plane();
     { int r, c; for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, title_attr[r * 40 + c] | (96 + r * 40 + c)); }
     text(14, 25, "PRESS START", 2);
@@ -190,6 +199,7 @@ int main(void) {
     music_start();
     while (pad_read() & 0xFF) wait_vblank();
     for (;;) { wait_vblank(); if (pad_read() & 0xC0) break; }
+    } else { vreg(7, 0x3F); clear_plane(); vreg(1, 0x44); music_start(); }   /* wait_vblank needs the display on */
     while (pad_read() & 0xFF) wait_vblank();
 
     /* level menu */
@@ -204,8 +214,9 @@ int main(void) {
         }
         text(8, 23, "CIMA/BAIXO: ESCOLHER", 2);
         text(8, 25, "START: JOGAR", 2);
-        text(8, 27, "RESET VOLTA AO MENU", 2);
+        text(8, 27, "START NO JOGO VOLTA AQUI", 2);
         text(8, 21, "A: TESTE DE BANCOS", 2);
+        vreg(1, 0x44);
         wait_vblank();
         pad = pad_read();
         if (pad != last) {

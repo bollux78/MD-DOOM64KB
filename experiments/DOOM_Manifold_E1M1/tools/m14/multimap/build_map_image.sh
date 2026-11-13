@@ -17,7 +17,7 @@ F=$(cat /tmp/m14x/flags_walk.txt)
 export MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM=$R/res/r25-$(echo $m | tr A-Z a-z).vgm
 out=/tmp/m12/$name; rm -rf "$out"
 env $F $doors MANIFOLD_MAP=$m MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 MANIFOLD_GRATE_SPRITES=0 MANIFOLD_GRATES=0 MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1 \
-  MANIFOLD_WEAPON_FIX=1 MANIFOLD_INPUT_FIX=1 MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 MANIFOLD_SPLIT_LINES=0 MANIFOLD_OBJ_HEIGHT_PCT=${HPCT:-80} $extra \
+  MANIFOLD_WEAPON_FIX=1 MANIFOLD_INPUT_FIX=1 MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 MANIFOLD_SPLIT_LINES=0 MANIFOLD_OBJ_HEIGHT_PCT=${HPCT:-80} MANIFOLD_START_MENU=1 $extra \
   python3 $R/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source /home/claude/manifold-up --wad /home/claude/wad/d.wad --out "$out" > "$out.stage.log" 2>&1 || { tail -5 "$out.stage.log"; exit 1; }
 ln -sf math3d.h "$out/src/math3D.h"
 make -C "$out" -f $D/mk-split.gen -j4 release GDK=/home/claude/sgdkr OS=Linux PREFIX=$t CC=${t}gcc LD=${t}ld AR=${t}ar NM=${t}nm OBJCPY=${t}objcopy > "$out.build.log" 2>&1 || { grep -iE " error|undefined" "$out.build.log" | head; exit 1; }
