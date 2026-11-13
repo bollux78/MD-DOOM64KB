@@ -60,7 +60,7 @@ static void bank_test(int k) {
         text(16, 9 + s, bad == 0 ? "OK" : "ERRO", bad == 0 ? 2 : 3);
         if (bad) text(22, 9 + s, "AMOSTRAS RUINS", 3);
     }
-    text(8, 20, "SLOTS 1-5 COMUM, 6-7 FASE", 2);
+    text(8, 20, "SLOTS 1-3 COMUM, 4-5 FASE", 2);
     text(8, 22, "RESET VOLTA AO MENU", 2);
     vreg(1, 0x44);
     for (;;) wait_vblank();
@@ -68,10 +68,13 @@ static void bank_test(int k) {
 /* slots 1..5 (0x080000-0x2FFFFF) = banks 1..5: the common code/data block shared by every map;
    slots 6..7 (0x300000-0x3FFFFF) = the selected map's own block */
 static void set_banks(int mapbank) {
-    *(volatile u8 *)0xA130F3 = 1; *(volatile u8 *)0xA130F5 = 2; *(volatile u8 *)0xA130F7 = 3;
-    *(volatile u8 *)0xA130F9 = 4; *(volatile u8 *)0xA130FB = 5;
-    *(volatile u8 *)0xA130FD = mapbank; *(volatile u8 *)0xA130FF = mapbank + 1;
+    /* slots 1..3: common; slots 4..5: selected phase; 6..7: menu bank */
+    *(volatile u8 *)0xA130F3 = 1; *(volatile u8 *)0xA130F5 = 2;
+    *(volatile u8 *)0xA130F7 = 3;
+    *(volatile u8 *)0xA130F9 = mapbank; *(volatile u8 *)0xA130FB = mapbank + 1;
+    *(volatile u8 *)0xA130FD = 0; *(volatile u8 *)0xA130FF = 0;
 }
+
 static void launch(int k) {
     int i;
     const struct map_entry *m = &maps[k];
