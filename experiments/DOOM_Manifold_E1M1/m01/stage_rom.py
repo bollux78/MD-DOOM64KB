@@ -3200,6 +3200,56 @@ def m14_static_params(out):
     f.write_text(t)
     print("M14 static sector params: no RAM copy")
 
+def m14_dyn_params(out):
+    """M14: only sector groups that can move/flash (type != NO_TYPE: doors, lifts, lights,
+    stairs) get a RAM copy of their 8 parameters; every other group is read straight from
+    the ROM map.  Replaces the full per-map RAM copy (E1M6: 250 groups x 16 B = 4000 B of
+    heap that starved visit_graph's stack).  slot table = 1 B per group, RAM = 16 B per
+    dynamic group."""
+    import re
+    f=out/"src/sector_group.c"; t=f.read_text()
+    anchor="s16* live_sector_group_parameters;\n"
+    assert t.count(anchor)==1
+    t=t.replace(anchor,anchor+"""u8* m14_dyn_slot;
+s16* m14_dyn_ram;
+static __attribute__((noinline)) s16* m14_gp(u16 g) {
+    u8 s = m14_dyn_slot[g];
+    if (s == 0xFF) return (s16*)cur_portal_map->sector_group_params + ((u32)g << NUM_SECTOR_GROUP_PARAMS_SHIFT);
+    return m14_dyn_ram + ((u16)s << NUM_SECTOR_GROUP_PARAMS_SHIFT);
+}
+""",1)
+    # &live[(X<<SHIFT)]  /  &live[X<<SHIFT]
+    t,n1=re.subn(r"&live_sector_group_parameters\[\(?\s*([A-Za-z_][A-Za-z_0-9]*)\s*<<NUM_SECTOR_GROUP_PARAMS_SHIFT\s*\)?\]",r"m14_gp(\1)",t)
+    # live[(X<<SHIFT)+IDX] / live[(X<<SHIFT) + IDX]
+    t,n2=re.subn(r"live_sector_group_parameters\[\(\s*([A-Za-z_][A-Za-z_0-9]*)\s*<<NUM_SECTOR_GROUP_PARAMS_SHIFT\s*\)\s*\+\s*([A-Z_0-9]+)\]",r"m14_gp(\1)[\2]",t)
+    left=t.count("live_sector_group_parameters[")
+    assert left==0,("unconverted accessors",left)
+    print("M14 dyn params: accessors patched",n1,n2)
+    f.write_text(t)
+    f=out/"src/level.c"; t=f.read_text()
+    a='    live_sector_group_parameters = man_malloc(num_bytes, "live sector group params table");\n    memcpy(live_sector_group_parameters, cur_portal_map->sector_group_params, num_bytes);'
+    assert t.count(a)==1
+    t=t.replace(a,"""    (void)num_bytes;
+    extern u8* m14_dyn_slot; extern s16* m14_dyn_ram;
+    m14_dyn_slot = man_malloc(num_sector_groups + 1, "dyn group slot table");
+    u16 nd = 0;
+    for (u16 g = 0; g < num_sector_groups; g++) {
+        if (GET_SECTOR_GROUP_TYPE(map->sector_group_types[g]) != NO_TYPE) m14_dyn_slot[g] = (u8)nd++;
+        else m14_dyn_slot[g] = 0xFF;
+    }
+    m14_dyn_ram = man_malloc(nd * (NUM_SECTOR_GROUP_PARAMS * 2) + 2, "dyn group params");
+    for (u16 g = 0; g < num_sector_groups; g++) {
+        if (m14_dyn_slot[g] != 0xFF)
+            memcpy(&m14_dyn_ram[(u16)m14_dyn_slot[g] << NUM_SECTOR_GROUP_PARAMS_SHIFT],
+                   &map->sector_group_params[(u32)g << NUM_SECTOR_GROUP_PARAMS_SHIFT], NUM_SECTOR_GROUP_PARAMS * 2);
+    }""")
+    b='    man_free(live_sector_group_parameters, "live sector group params table");\n    live_sector_group_parameters = NULL;'
+    assert t.count(b)==1
+    t=t.replace(b,"""    { extern u8* m14_dyn_slot; extern s16* m14_dyn_ram;
+      man_free(m14_dyn_ram, "dyn group params"); man_free(m14_dyn_slot, "dyn group slot table"); m14_dyn_ram = NULL; m14_dyn_slot = NULL; }""")
+    f.write_text(t)
+    print("M14 dyn params: level.c init/clean")
+
 def m14_unpack_map(out):
     """M14 perf: portal_map is declared __packed__, so GCC reads each pointer
     field byte by byte (~30 instrs per u32). All its members are 2-byte aligned
@@ -3773,6 +3823,8 @@ def stage(src, wad, out, control=False):
         m14_unpack_map(out)
     if os.environ.get("MANIFOLD_STATIC_PARAMS","0")=="1":
         m14_static_params(out)
+    if os.environ.get("MANIFOLD_DYN_PARAMS","0")=="1":
+        m14_dyn_params(out)
     if int(os.environ.get("MANIFOLD_VIEW_TRIM","0"))>0:
         m14_view_trim(out,int(os.environ["MANIFOLD_VIEW_TRIM"]))
     if os.environ.get("MANIFOLD_NO_SOUND","0")=="1":
