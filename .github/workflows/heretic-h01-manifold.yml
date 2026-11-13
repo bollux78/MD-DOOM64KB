@@ -1,0 +1,122 @@
+name: HERETIC H01 — Manifold geometry and first ROM
+on:
+  push:
+    branches: [exp-heretic-manifold-h01]
+    paths:
+      - '.github/workflows/heretic-h01-manifold.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  h01:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Obtain exact shareware v1.0 IWAD privately (no WAD in Git)
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/heretic-h01-$GITHUB_RUN_ID"
+          mkdir -p "$stage"
+          wad="$stage/HERETIC1.WAD"
+          # Prefer a local private copy; otherwise retrieve the *exact same*
+          # public shareware v1.0 bytes the user supplied (SHA-256 pinned).
+          if test -s /home/dan/Projetos/heretic/assets/HERETIC1.WAD; then
+            cp /home/dan/Projetos/heretic/assets/HERETIC1.WAD "$wad"
+          elif test -s /home/dan/Projetos/manifold-doom/assets/HERETIC1.WAD; then
+            cp /home/dan/Projetos/manifold-doom/assets/HERETIC1.WAD "$wad"
+          else
+            url='https://archive.org/download/wadarchive/DATA/5e.zip/5e%2Ff073366e5ca523b26a529e843f05c4907c23a4%2F5ef073366e5ca523b26a529e843f05c4907c23a4.wad.gz'
+            curl -fLsS --retry 2 --connect-timeout 12 --max-time 120 "$url" -o "$stage/heretic.wad.gz"
+            gzip -dc "$stage/heretic.wad.gz" > "$wad"
+            rm -f "$stage/heretic.wad.gz"
+          fi
+          echo 'b33a9d23fccd273485c4769f499e47dd009ce265f9c90d856600a2000bde3fe0  '"$wad" | sha256sum -c -
+          test "$(stat -c%s "$wad")" = 5120300
+          echo "HERETIC_WAD=$wad" >> "$GITHUB_ENV"
+          echo "HERETIC_STAGE=$stage" >> "$GITHUB_ENV"
+          python3 experiments/HERETIC_Manifold_H01/tools/inspect_iwad.py "$wad"
+      - name: Inspect E1M1 with Manifold topology tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/DOOM_Manifold_E1M1/m01/convert_wad.py --wad "$HERETIC_WAD" --map E1M1 --out "$HERETIC_STAGE/heretic-geometry.json" > "$HERETIC_STAGE/geometry.log"
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['HERETIC_STAGE'])/'heretic-geometry.json'
+          d=json.loads(p.read_text())
+          print('HERETIC_MANIFOLD_GEOMETRY',json.dumps(dict(limits=d['limits'],warnings=len(d['warnings']),first_warnings=d['warnings'][:12],components=len(d['connected_components']))))
+          PY
+          python3 - "$HERETIC_WAD" <<'PY'
+          import sys
+          sys.path.insert(0,'experiments/DOOM_Manifold_E1M1/m01')
+          from convert_wad import read_map
+          from emit_portal_map import candidate,nodes_from_wad
+          cells,stats,missing=candidate(read_map(sys.argv[1]),nodes_from_wad(sys.argv[1]),allow_gaps=True)
+          print('HERETIC_H01_CANDIDATE',stats,'missing=',len(missing))
+          PY
+      - name: Bootstrap isolated Manifold source and stage geometry-only Heretic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import shapely' || { echo "::error::shapely missing on runner"; exit 1; }
+          python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$HERETIC_STAGE/upstream"
+          env MANIFOLD_MAP=E1M1 MANIFOLD_TEXTURES=0 MANIFOLD_OBJECTS=0 \
+            MANIFOLD_HUD=manifold MANIFOLD_MUSIC=0 MANIFOLD_DOORS=0 \
+            MANIFOLD_GRATES=0 MANIFOLD_SKY_MERGE=0 MANIFOLD_WEAPON='' \
+            MANIFOLD_H32=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 \
+            MANIFOLD_NEAR_SAFE=1 MANIFOLD_COMPACT_WAD_AREA=1 \
+            python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+              --source "$HERETIC_STAGE/upstream/manifold" \
+              --wad "$HERETIC_WAD" --out "$HERETIC_STAGE/candidate" \
+            > "$HERETIC_STAGE/stage.log" 2>&1 || { tail -100 "$HERETIC_STAGE/stage.log"; exit 1; }
+          tail -15 "$HERETIC_STAGE/stage.log"
+      - name: Compile first H01 diagnostic ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdk=/home/dan/Projetos/marsdev/sgdk/SGDK
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc"
+          test -f "$gdk/makefile.gen"
+          if test ! -x "$gdk/bin/xgmtool"; then
+            test -x "$HOME/mars/m68k-elf/bin/xgmtool"
+            test ! -e "$gdk/bin/xgmtool" && test ! -L "$gdk/bin/xgmtool"
+            ln -s "$HOME/mars/m68k-elf/bin/xgmtool" "$gdk/bin/xgmtool"
+          fi
+          ln -sf math3d.h "$HERETIC_STAGE/candidate/src/math3D.h"
+          python3 - "$gdk/makefile.gen" "$HERETIC_STAGE/makefile.gen" <<'PY'
+          from pathlib import Path
+          import sys
+          s=Path(sys.argv[1]).read_text().replace("-flto -flto=auto -ffat-lto-objects","-fno-lto")
+          Path(sys.argv[2]).write_text(s)
+          PY
+          export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
+          make -C "$HERETIC_STAGE/candidate" -f "$HERETIC_STAGE/makefile.gen" -j2 release \
+            OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" \
+            NM="${tc}nm" OBJCPY="${tc}objcopy" > "$HERETIC_STAGE/build.log" 2>&1 || {
+              tail -90 "$HERETIC_STAGE/build.log"; exit 1;
+            }
+          test -s "$HERETIC_STAGE/candidate/out/rom.bin"
+          rom="$HERETIC_STAGE/candidate/out/rom.bin"
+          python3 - "$rom" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);b=p.read_bytes()
+          assert b[0x100:0x104]==b'SEGA'
+          print("H01 ROM BUILT",len(b),"bytes")
+          PY
+          target=/home/dan/Projetos/manifold-doom/roms/H01
+          mkdir -p "$target"
+          cp "$rom" "$target/heretic-manifold-h01-geometry.bin"
+          sha256sum "$target/heretic-manifold-h01-geometry.bin"
+          echo "H01_RENDERER_ROM=$target/heretic-manifold-h01-geometry.bin"
+      - name: Summarize exact validation scope
+        if: always()
+        shell: bash
+        run: |
+          echo "H01 may be a geometry-only ROM: no guarantee of textures/objects/gameplay."
+          echo "No Heretic WAD or resources uploaded to GitHub."
