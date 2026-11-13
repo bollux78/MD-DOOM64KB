@@ -74,13 +74,14 @@ SECTIONS
     */src/manifold_sky.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x5200;
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x5800;
-    */src/game.o(.text.handle_input)
     . = 0x8000;
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x2B000;
     */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x42000;
+    /* 0x1000-byte fixed slot for map-dependent input code. */
+    */src/game.o(.text.handle_input)
+    . = 0x43000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
   .common 0x00010000 :
