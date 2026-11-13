@@ -1,0 +1,46 @@
+name: Manifold resource-dedup ROM README registration
+on:
+  push:
+    branches: [exp-manifold-m14-resource-compression]
+    paths:
+      - '.github/workflows/manifold-m14-resource-register.yml'
+permissions:
+  contents: read
+jobs:
+  register:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Record verified lossless resource-pooling ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          folder=Path("/home/dan/Projetos/manifold-doom/roms/M14")
+          p=folder/"claudio-manifold-doom-MENU-5-FASES-RESOURCES-DEDUP.bin"
+          assert p.is_file() and p.stat().st_size==6291456
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert digest=="95e6e468274b51a805689c04240590f34fc6bb9e3c21c4d8a1f7eca2b0393117",digest
+          readme=folder/"README.md"
+          text=readme.read_text(encoding="utf-8") if readme.exists() else "# M14\n"
+          marker="## Recursos RLE deduplicados (experimento)"
+          if marker not in text:
+              text += """
+          ## Recursos RLE deduplicados (experimento)
+
+          - Arquivo: `claudio-manifold-doom-MENU-5-FASES-RESOURCES-DEDUP.bin`.
+          - Cinco mapas: E1M1, E1M2, E1M4, E1M5, E1M9.
+          - Deduplicacao lossless de colunas RLE de sprites, sem buffer adicional, sem descompressao em runtime.
+          - Economiza 66–68 KB de arrays RLE por mapa (~334 KB nos cinco); tentativa de deduplicacao de texturas inteiras nao achou duplicatas.
+          - Tamanho final: 6.291.456 bytes (6 MiB), IGUAL a ROM compacta anterior devido ao alinhamento SSF2 de 512 KiB.
+          - Etapas verificadas: cinco builds, bloco comum byte-identico, ROM montada e menu com boot headless no BlastEm.
+          - Nao comprovado: testes de selecao de bancos, imagem dentro das fases e hardware real.
+          - Codigo experimental: `exp-manifold-m14-resource-compression`.
+          - A ROM de 6 MiB anterior continua preservada, sem sobrescrita.
+          """
+              readme.write_text(text,encoding="utf-8")
+          (folder/"README-COMPACT.md").unlink(missing_ok=True)
+          print("ROM and README verified; no binaries transferred.")
+          PY
