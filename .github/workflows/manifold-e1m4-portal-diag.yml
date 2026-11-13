@@ -1,0 +1,145 @@
+name: Manifold E1M4 — portal clipping diagnostic A/B
+on:
+  push:
+    branches: [exp-manifold-e1m4-portal-diagnostic]
+    paths:
+      - '.github/workflows/manifold-e1m4-portal-diag.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/e1m4_portal_diag.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-e1m4-portal-diagnostic
+  cancel-in-progress: false
+jobs:
+  builds:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify inputs and prepare pinned upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          wad=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          echo '1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771  '"$wad" | sha256sum -c -
+          test "$(stat -c%s "$wad")" = 4196020
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          stage="$RUNNER_TEMP/manifold-e1m4-diag-$GITHUB_RUN_ID"
+          mkdir -p "$stage"
+          python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$stage/upstream"
+          test -f "$stage/upstream/manifold/src/portal.c"
+          DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
+          test -s res/r25-e1m1.vgm
+          gdk=""
+          for dir in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK"; do
+            if test -f "$dir/makefile.gen"; then gdk="$dir"; break; fi
+          done
+          test -n "$gdk"
+          xgm="$gdk/bin/xgmtool"
+          native="$HOME/mars/m68k-elf/bin/xgmtool"
+          if test ! -x "$xgm"; then
+            test -x "$native"
+            test ! -e "$xgm" && test ! -L "$xgm"
+            ln -s "$native" "$xgm"
+          fi
+          python3 - "$gdk/makefile.gen" "$stage/makefile-no-cross-lto.gen" <<'PY'
+          from pathlib import Path
+          import sys
+          s=Path(sys.argv[1]).read_text()
+          pat="-flto -flto=auto -ffat-lto-objects"
+          assert s.count(pat)>=2
+          Path(sys.argv[2]).write_text(s.replace(pat,"-fno-lto"))
+          PY
+          echo "DIAG_STAGE=$stage" >> "$GITHUB_ENV"
+          echo "DIAG_GDK=$gdk" >> "$GITHUB_ENV"
+          echo "DIAG_WAD=$wad" >> "$GITHUB_ENV"
+      - name: Build isolated E1M4 control, trace, independent limits and combination
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/mars/m68k-elf/bin:$DIAG_GDK/bin:$PATH"
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          target="$HOME/Projetos/manifold-doom/roms/M14/diagnostico-E1M4"
+          mkdir -p "$target"
+          for mode in control trace revisit12 depth48 both; do
+            echo "::group::E1M4 $mode"
+            out="$DIAG_STAGE/$mode"
+            # Match M14 visual/renderer settings and E1M4-specific limits.
+            # Sound/music do not participate in visual diagnosis, but retaining
+            # same M14 asset configuration guards against incidental differences.
+            env MANIFOLD_MAP=E1M4 MANIFOLD_BUILD_TAG="E1M4-$mode" \
+              MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 \
+              MANIFOLD_H32=0 MANIFOLD_HUD_TIMING=1 MANIFOLD_HUD_VRAM_REPAIR=0 \
+              MANIFOLD_VDP_ATOMIC=0 MANIFOLD_STATIC_REPAIR_ONCE=1 \
+              MANIFOLD_NEAR_SAFE=1 MANIFOLD_SKY_MERGE=0 \
+              MANIFOLD_SKY_CEIL_UNIFORM=0 MANIFOLD_OBJECTS=1 \
+              MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=0 MANIFOLD_EYE=48 \
+              MANIFOLD_TEX_U=1 MANIFOLD_TEX_HSTRETCH=1.0 \
+              MANIFOLD_WEAPON=pistol MANIFOLD_MONSTERS=1 \
+              MANIFOLD_MONSTERS_INACTIVE=1 MANIFOLD_MUSIC=1 \
+              MANIFOLD_MUSIC_VGM="$GITHUB_WORKSPACE/res/r25-e1m1.vgm" \
+              MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 \
+              MANIFOLD_GRATE_SPRITES=0 MANIFOLD_GRATES=0 \
+              MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1 \
+              MANIFOLD_WEAPON_FIX=1 MANIFOLD_INPUT_FIX=1 \
+              MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 \
+              MANIFOLD_SPLIT_LINES=0 MANIFOLD_OBJ_HEIGHT_PCT=80 \
+              MANIFOLD_COMPACT_WAD_AREA=1 MANIFOLD_MAX_CELL_WALLS=24 \
+              python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+                --source "$DIAG_STAGE/upstream/manifold" \
+                --wad "$DIAG_WAD" --out "$out" > "$DIAG_STAGE/stage-$mode.log" 2>&1 || {
+                  tail -80 "$DIAG_STAGE/stage-$mode.log"; exit 1;
+                }
+            python3 experiments/DOOM_Manifold_E1M1/tools/e1m4_portal_diag.py --tree "$out" --mode "$mode"
+            test -f "$out/src/math3d.h"
+            ln -sf math3d.h "$out/src/math3D.h"
+            make -C "$out" -f "$DIAG_STAGE/makefile-no-cross-lto.gen" -j4 release \
+              GDK="$DIAG_GDK" OS=Linux PREFIX="$tc" \
+              CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" \
+              OBJCPY="${tc}objcopy" > "$DIAG_STAGE/build-$mode.log" 2>&1 || {
+                tail -95 "$DIAG_STAGE/build-$mode.log"; exit 1;
+              }
+            rom="$out/out/rom.bin"
+            test -s "$rom"
+            python3 - "$rom" "$mode" <<'PY'
+          from pathlib import Path
+          import sys
+          data=Path(sys.argv[1]).read_bytes()
+          assert data[0x100:0x104]==b'SEGA'
+          print("E1M4_DIAG_ROM_OK",sys.argv[2],len(data))
+          PY
+            dest="$target/claudio-manifold-E1M4-DIAG-$mode.bin"
+            if test -e "$dest"; then
+              cmp -s "$rom" "$dest" || { echo "::error::Existing ROM differs, refusing overwrite $dest"; exit 1; }
+            else
+              cp "$rom" "$dest"
+            fi
+            sha256sum "$dest"
+            echo "::endgroup::"
+          done
+          echo "E1M4_DIAGNOSTICS=$target"
+      - name: Optional headless emulator smoke for the control
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          rom="$HOME/Projetos/manifold-doom/roms/M14/diagnostico-E1M4/claudio-manifold-E1M4-DIAG-control.bin"
+          if test -x "$emu"; then
+            SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 90s "$emu" -b 90 "$rom" > "$DIAG_STAGE/blastem.log" 2>&1 || {
+              tail -50 "$DIAG_STAGE/blastem.log"; exit 1;
+            }
+            if grep -Eqi 'unmapped|fatal|exception|lock up' "$DIAG_STAGE/blastem.log"; then
+              tail -40 "$DIAG_STAGE/blastem.log"; exit 1
+            fi
+          else
+            echo "BlastEm not present; skip headless smoke"
+          fi
+      - name: Summary
+        if: always()
+        run: |
+          echo 'M14 original and Claudio branch are untouched.'
+          echo 'These are diagnostic ROMs; DO NOT interpret more revisits or deeper stack as an approved fix.'
+          echo 'No WAD or ROM assets uploaded to GitHub.'
