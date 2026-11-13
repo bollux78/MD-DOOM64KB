@@ -2,17 +2,17 @@
 """Build maps.h, compile the menu and compose the de-duplicated SSF2 ROM.
    File layout (= CPU address space of the cartridge):
      0x000000  menu (bank 0, fixed slot 0)            | linked by menu.ld
-     0x010000  .common block, identical in every map  | slots 0..5, banks 1..5 (identity)
-     0x300000+ one block per map (512 KB bank aligned), mapped into slots 6..7
+     0x010000  .common block, identical in every map  | slots 0..3, banks 1..3 (identity)
+     0x300000+ one block per map (512 KB bank aligned), mapped into slots 4..5
    Each map is linked with md_split.ld (see handoff MANIFOLD-M14-MULTIMAP-4MB.md)."""
 import subprocess, sys, os, struct
 D = os.path.dirname(os.path.abspath(__file__)); os.chdir(D)
-T = "/home/claude/mars/m68k-elf/bin/m68k-elf-"
+T = os.environ.get("MANIFOLD_TOOLCHAIN", "/home/claude/mars/m68k-elf/bin/m68k-elf-")
 MAPS = [("E1M1", "E1M1  HANGAR"), ("E1M2", "E1M2  NUCLEAR PLANT"), ("E1M4", "E1M4  COMMAND CONTROL"),
         ("E1M5", "E1M5  PHOBOS LAB"), ("E1M9", "E1M9  MILITARY BASE")]
 BANK = 0x80000
 COMMON_ORG = 0x10000
-MAP_ORG = 0x300000
+MAP_ORG = 0x200000
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m14x/manifold-doom-menu.bin"
 common = None; blocks = []
 for m, label in MAPS:
@@ -33,7 +33,7 @@ for b in blocks:
 body = bytearray(b"\xff" * MAP_ORG) ; body[COMMON_ORG:COMMON_ORG + len(common)] = common
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
-h = ['#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
+h = ['#define MAP_ENTRY 0x00200200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; };', 'static const struct map_entry maps[] = {']
 for (m, label), bk in zip(MAPS, banks): h.append('  {"%s", %d},' % (label, bk))
 h.append('};')
@@ -41,7 +41,7 @@ h.append('static const unsigned long bank_expect[%d][7][8] = {' % len(MAPS))
 for bk in banks:
     h.append('  {')
     for sl in range(1, 8):
-        bn = sl if sl <= 5 else bk + (sl - 6)
+        bn = sl if sl <= 3 else (bk + (sl - 4) if sl <= 5 else 0)
         vals = [struct.unpack(">I", rom[bn*BANK + k*0x10000 + 0x1230: bn*BANK + k*0x10000 + 0x1234].ljust(4, b"\xff"))[0] for k in range(8)]
         h.append('    {' + ','.join('0x%08XUL' % v for v in vals) + '},')
     h.append('  },')
