@@ -47,7 +47,7 @@ for bk in banks:
     h.append('  },')
 h.append('};')
 open("maps.h", "w").write("\n".join(h) + "\n")
-subprocess.check_call(["python3", "gen_assets.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.check_call(["python3", "gen_assets.py"])
 subprocess.check_call([T+"as", "-m68000", "crt0.s", "-o", "/tmp/m14x/crt0.o"])
 for s in ("menu.c", "assets.c"):
     subprocess.check_call([T+"gcc", "-m68000", "-Os", "-ffreestanding", "-fno-pic", "-nostdlib", "-c", s, "-o", "/tmp/m14x/" + s.replace(".c", ".o")])
