@@ -5,7 +5,7 @@ from PIL import Image
 sys.path.insert(0, "/home/claude/md-doom64kb/experiments/DOOM_Manifold_E1M1/m01")
 import wad_textures as WT
 
-src = Image.open("/home/claude/md-doom64kb/assets/art/doom-title-md-32col.png")
+src = Image.open(ROOT / "assets/art/doom-title-md-32col.png")
 sp = src.getpalette()[:96]
 rgb = [tuple(sp[i*3:i*3+3]) for i in range(32)]
 lv = lambda v: min(7, round(v / 36.4))
@@ -73,7 +73,7 @@ for n, (t, a) in enumerate(zip(tiles, assign)):
             pp[tx*8+x, ty*8+y] = rgb[pals[a][i]]
 pv.save("/tmp/m14x/title_q16.png")
 # SGDK font: 16x6 chars (ASCII 32..127), ink index 15 -> 1
-f = Image.open("/home/claude/sgdkr/res/image/font_default.png")
+f = Image.open(GDK / "res/image/font_default.png")
 fd = list(f.getdata())
 font = []
 for ci in range(96):
