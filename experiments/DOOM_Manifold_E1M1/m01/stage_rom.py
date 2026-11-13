@@ -3361,9 +3361,13 @@ static int m14_wpn_ready(void) {
 void m14_fire_anim(void) {
     if (M14_FLASH == 0) return;                                  /* diagnostic: no fire frame */
     if (transfer_pending != DONE || cur_anim_idx != 0) return;   /* one flash at a time */
-    set_weapon_anim(2, DMA_QUEUE);
-    transfer_pending = TILES_LOADING;
-    m14_wpn_wait = 1;
+    set_weapon_anim(2, DMA_QUEUE);                               /* tiles already resident: no upload */
+    transfer_pending = DONE;
+    update_weapon_sprites(DMA_QUEUE);
+}
+void m14_weapon_preload(void) {                                  /* fire frame -> tile buffer B, once */
+    AnimationFrame* f = shotgun_reload.animations[0]->frames[0];
+    VDP_loadTileSet(f->tileset, manifold_weapon_buf1, DMA);
 }
 """
     old="        transfer_pending = TILES_LOADING;"
@@ -3374,12 +3378,23 @@ void m14_fire_anim(void) {
     t=t.replace(old,"    if(transfer_pending == DONE && cur_frame_timer-- <= 0) {",1)
     old="    VDP_loadTileSet(frame->tileset, cur_upload_idx, transfer_type);"
     assert t.count(old)==1
-    t=t.replace(old,"""    m14_up_ptr = frame->tileset->tiles; m14_up_left = frame->tileset->numTile; m14_up_idx = cur_upload_idx;
+    t=t.replace(old,"""    m14_up_ptr = frame->tileset->tiles; m14_up_left = m14_res ? 0 : frame->tileset->numTile; m14_up_idx = cur_upload_idx;
     if (transfer_type == DMA_QUEUE) m14_up_chunk(DMA_QUEUE);
     else while (m14_up_left) m14_up_chunk(transfer_type);""",1)
     old="    cur_frame_timer = entry.time;"
     assert t.count(old)==1
     t=t.replace(old,"    cur_frame_timer = entry.time;\n    if (entry.time > 0) { if (last_frame_ticks >= 60) cur_frame_timer = 0; else if (last_frame_ticks >= 30) cur_frame_timer = 1; }",1)
+    # M14 weapon v2: idle (tile buffer A) and fire (buffer B) frames stay resident in
+    # VRAM; firing only swaps the sprite tile index, with no DMA at the moment of the
+    # shot (the old per-shot 64-tile upload arrived 2-3 game frames late and collided
+    # with the PCM shot sound).
+    old2="    cur_upload_idx = get_next_tile_loc_and_flip();"
+    assert t.count(old2)==1
+    t=t.replace(old2,"""    static u8 m14_inited; u8 m14_res = 0;
+    if (anim_idx == 2) { cur_upload_idx = manifold_weapon_buf1; m14_res = 1; }
+    else if (anim_idx == 0 && m14_inited) { cur_upload_idx = start_tile_loc; m14_res = 1; }
+    else cur_upload_idx = get_next_tile_loc_and_flip();
+    if (anim_idx == 0) m14_inited = 1;""",1)
     t="#define M14_FLASH "+("0" if os.environ.get("MANIFOLD_WEAPON_FLASH","1")=="0" else "1")+"\n"+t
     w.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
@@ -3388,7 +3403,11 @@ void m14_fire_anim(void) {
             t=t.replace(call,"{ extern void m14_fire_anim(void); m14_fire_anim(); }")
     old="    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n}"
     assert t.count(old)==1
-    t=t.replace(old,"    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n    { extern void update_weapon_sprites(TransferMethod t); update_weapon_sprites(DMA); }\n}",1)
+    t=t.replace(old,"    set_weapon_anim(SHOTGUN_IDLE_ANIM, DMA);\n    { extern void update_weapon_sprites(TransferMethod t); update_weapon_sprites(DMA); }\n    { extern void m14_weapon_preload(void); m14_weapon_preload(); }\n}",1)
+    o6="    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));"
+    assert t.count(o6)==1
+    if os.environ.get("MANIFOLD_PCM_DELAY","1")=="1":
+        t=t.replace(o6,"    XGM_setForceDelayDMA(TRUE);   /* M14: keep queued DMA from starving Z80 PCM (shot noise) */\n"+o6,1)
     g.write_text(t)
     print("M14 weapon fix: sprites placed at start, queue wait replaced")
 
