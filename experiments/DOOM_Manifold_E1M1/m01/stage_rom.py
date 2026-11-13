@@ -3236,6 +3236,50 @@ def m14_all_keys(out):
     f.write_text(t)
     print("M14 all keys in inventory")
 
+def m14_lat_clip(out):
+    """M14 experiment (MANIFOLD_LAT_CLIP=1): geometric, 32-bit lateral frustum clipping of walls before projection.
+    Clips each wall against the 45-degree side planes (z16+16x>=0, z16-16x>=0), keeps the texture u range consistent
+    and forces the edge columns (LEFT/RIGHT_FRUSTUM_CLIPPED) so the last column is not left undrawn.
+    Fixes E1M4 yard triangles (wall projected 13..431 instead of 13..63)."""
+    f=out/"src/portal.c"; t=f.read_text()
+    call="        clip_result clipped = clip_map_vertex_16((Vect2D_s16*)&trans_v1, (Vect2D_s16*)&trans_v2, &tmap_info);\n"
+    assert t.count(call)==1
+    patch='''        u8 lat_flags = 0;
+        {
+            s32 cx1 = trans_v1.x, cz1 = trans_v1.y, cx2 = trans_v2.x, cz2 = trans_v2.y;
+            s32 tA = 0, tB = 65536;
+            u8 lat_changed = 0;
+            for (int pl = 0; pl < 2; pl++) {
+                s32 sg = pl ? -16 : 16;
+                s32 d1 = cz1 + sg * cx1, d2 = cz2 + sg * cx2;
+                if (d1 < 0 && d2 >= 0) {
+                    s32 tt = (s32)((((s32)(-d1)) << 16) / (d2 - d1));
+                    cx1 += (s32)(((cx2 - cx1) * (tt >> 1)) >> 15);
+                    cz1 += (s32)(((cz2 - cz1) * (tt >> 1)) >> 15);
+                    tA += (s32)(((tB - tA) >> 1) * (tt >> 1) >> 14);
+                    lat_changed = 1; if (pl == 0) lat_flags |= LEFT_FRUSTUM_CLIPPED;
+                } else if (d2 < 0 && d1 >= 0) {
+                    s32 tt = (s32)((((s32)d1) << 16) / (d1 - d2));
+                    cx2 = cx1 + (s32)(((cx2 - cx1) * (tt >> 1)) >> 15);
+                    cz2 = cz1 + (s32)(((cz2 - cz1) * (tt >> 1)) >> 15);
+                    tB = tA + (s32)(((tB - tA) >> 1) * (tt >> 1) >> 14);
+                    lat_changed = 1; if (pl == 1) lat_flags |= RIGHT_FRUSTUM_CLIPPED;
+                }
+            }
+            if (lat_changed) {
+                trans_v1.x = (s16)cx1; trans_v1.y = (s16)cz1; trans_v2.x = (s16)cx2; trans_v2.y = (s16)cz2;
+                if (tmap_info.needs_texture) {
+                    u32 sp = tmap_info.u_span;
+                    tmap_info.u_base = (u16)(tmap_info.u_base + (u16)((sp * (u32)tA) >> 16));
+                    tmap_info.u_span = (u16)((sp * (u32)(tB - tA)) >> 16);
+                }
+            }
+        }
+'''
+    t=t.replace(call,patch+call+"        if (lat_flags && clipped != FRUSTUM_CULLED && clipped != NEAR_Z_CULLED) { clipped = (clip_result)(clipped | lat_flags); }\n")
+    f.write_text(t)
+    print("M14 lateral frustum clip (experiment)")
+
 def m14_dyn_params(out):
     """M14: only sector groups that can move/flash (type != NO_TYPE: doors, lifts, lights,
     stairs) get a RAM copy of their 8 parameters; every other group is read straight from
@@ -3718,6 +3762,8 @@ def stage(src, wad, out, control=False):
     m14_identity(out)
     if os.environ.get("MANIFOLD_ALL_KEYS","1")=="1":
         m14_all_keys(out)
+    if os.environ.get("MANIFOLD_LAT_CLIP","0")=="1":
+        m14_lat_clip(out)
     if os.environ.get("MANIFOLD_NOHUD","0")=="1":
         m14_nohud(out)
     if os.environ.get("MANIFOLD_VDP_SAFE","0") in ("1","2"):

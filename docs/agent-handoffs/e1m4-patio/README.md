@@ -18,3 +18,10 @@ Span projetado muito alem da borda direita (431 vs 339) perde precisao no raster
 Calcular a interseccao real parede x plano proximo antes de projetar (ou limitar o span a janela mantendo a inclinacao). Se o triangulo sumir, confirmado.
 
 portal_diag.patch grava, para a celula 161 em profundidade 0, vertices transformados, resultado do clip e ramo de saida (manifold_dbgw). yard3.lua le esses valores no MAME. Requer ampliar pinos do md_split.ld (bss 0x1D60, doom_objects 0x9400) so para a build diagnostica.
+
+## Resultado do teste isolado (clip lateral geometrico, MANIFOLD_LAT_CLIP=1, so na E1M4)
+- No MAME, mesmos 8 angulos do patio: nenhum triangulo; parede lateral passa de 13..431 para 13..63 colunas.
+- Sem forcar as colunas de borda (LEFT/RIGHT_FRUSTUM_CLIPPED) sobrava uma coluna indefinida na borda direita (x=63); corrigido.
+- Implementacao: `m14_lat_clip()` em m01/stage_rom.py (flag desligada por padrao). Recorta no espaco da camera contra z16+-16x>=0 em 32 bits, ajusta u_base/u_span da textura.
+- Pinos do md_split.ld deslocados (portal.o cresceu): doom_objects 0xA000, e1m1_map 0x31000/0x31100. Todos os mapas precisam ser recompilados (o bloco comum referencia esses enderecos).
+- Nao medido: FPS no hardware; segunda chamada de clip_map_vertex_16 (objetos/decoracao) nao recebeu o recorte; efeito nas outras fases.
