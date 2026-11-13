@@ -99,7 +99,10 @@ SECTIONS
     */libgcc.a:*(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = ALIGN(0x1000);
   } > rom
-  .mapobjs 0x00301800 :
+  /* Prevent common data from overlapping the phase window. */
+  ASSERT(ADDR(.common) + SIZEOF(.common) <= 0x00200000,
+         "common exceeds 2MiB after compacting WAD reserve");
+  .mapobjs 0x00201800 :
   {
     . = 0x0;
     */src/level.o(.text.check_trigger_switch)
@@ -132,7 +135,7 @@ SECTIONS
     . = 0x42000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
-  .maphead 0x00300000 :
+  .maphead 0x00200000 :
   {
     KEEP(*(.text.keepboot))
     *(.text.*) *(.text)
@@ -160,9 +163,9 @@ SECTIONS
     ASSERT(. <= 0xE00, "map head too big");
     . = 0xE00;
   } > rom
-  _etext = 0x00300E00;
-  _stext = 0x00300E00;
-  .data 0xE0FF0000 : AT ( 0x00300E00 ) SUBALIGN(2)
+  _etext = 0x00200E00;
+  _stext = 0x00200E00;
+  .data 0xE0FF0000 : AT ( 0x00200E00 ) SUBALIGN(2)
   {
     *(.got.plt) *(.got)
     *(.shdata)
