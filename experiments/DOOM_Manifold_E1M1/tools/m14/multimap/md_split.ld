@@ -82,6 +82,9 @@ SECTIONS
     /* 0x1000-byte fixed slot for map-dependent input code. */
     */src/game.o(.text.handle_input)
     . = 0x43000;
+    /* Per-level sprite pointers: content varies after RLE resource pooling. */
+    */src/object.o(.rodata.object_types)
+    . = 0x44000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
   .common 0x00010000 :
