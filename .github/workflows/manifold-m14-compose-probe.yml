@@ -1,0 +1,35 @@
+name: Manifold compact menu composition probe
+on:
+  push:
+    branches: [exp-manifold-m14-size-opt]
+    paths:
+      - '.github/workflows/manifold-m14-compose-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compose:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reuse exact previously compiled phase images (diagnostic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for m in E1M1 E1M2 E1M4 E1M5 E1M9; do
+            test -s "/tmp/m12/mm_$m/out/release/rom.out"
+          done
+          mkdir -p /tmp/m14x
+          echo "MANIFOLD_TOOLCHAIN=$HOME/mars/m68k-elf/bin/m68k-elf-" >> "$GITHUB_ENV"
+          echo "MANIFOLD_REPO=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "MANIFOLD_GDK=$HOME/Projetos/marsdev/sgdk/SGDK" >> "$GITHUB_ENV"
+      - name: Compose compact ROM, log errors, do not publish diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/mars/m68k-elf/bin:$PATH"
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/multimap/compose.py "$RUNNER_TEMP/compact-probe.bin"
+          stat -c '%s bytes' "$RUNNER_TEMP/compact-probe.bin"
