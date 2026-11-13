@@ -91,6 +91,13 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     lines=['#include <genesis.h>','#include "obj_sprite.h"']
     templates=[]; mapping={}
     seen={}
+    # Exact content-addressed pooling: preserve every RLE pixel, column and
+    # sprite; share read-only storage between identical column payloads.
+    # Independent of the rasterizer and requires no decompression or RAM.
+    dedup = os.environ.get("MANIFOLD_SPRITE_COL_DEDUP", "0") == "1"
+    span_pool = {}
+    pixel_pool = {}
+    saved_span_bytes = saved_pixel_bytes = 0
     extra=grate_extra(w) if kinds_has_grates(w) else {}
     for kind,lump,name,width,height in TYPES:
         if lump in seen:            # several THING kinds, one sprite
@@ -119,8 +126,22 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 spans.extend((skip,y-first))
             if spans:
                 a=f"m12_{idx}_{x}_sp";b=f"m12_{idx}_{x}_px"
-                lines.append(f"static const u16 {a}[] = {{{','.join(map(str,spans))}}};")
-                lines.append(f"static const u8 {b}[] = {{{','.join(map(str,texels))}}};")
+                spans_key = tuple(spans)
+                pixel_key = bytes(texels)
+                if dedup and spans_key in span_pool:
+                    saved_span_bytes += 2 * len(spans)
+                    a = span_pool[spans_key]
+                else:
+                    lines.append(f"static const u16 {a}[] = {{{','.join(map(str,spans))}}};")
+                    if dedup:
+                        span_pool[spans_key] = a
+                if dedup and pixel_key in pixel_pool:
+                    saved_pixel_bytes += len(texels)
+                    b = pixel_pool[pixel_key]
+                else:
+                    lines.append(f"static const u8 {b}[] = {{{','.join(map(str,texels))}}};")
+                    if dedup:
+                        pixel_pool[pixel_key] = b
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}")
             else: cols.append("{.num_spans=0,.spans=0,.texels=0}")
         lines.append(f"const rle_sprite {ident} = {{.num_columns=64,.columns={{")
@@ -161,6 +182,11 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         decs=[decs[int(i*st)] for i in range(cap)]
         print(f"M14 decorations cut {before} -> {len(decs)}")
     placements=decs+mons
+    if dedup:
+        print("M14 SPRITE RLE DEDUP", "unique_span_arrays", len(span_pool),
+              "unique_pixel_arrays", len(pixel_pool),
+              "source_bytes_saved_at_least", saved_span_bytes + saved_pixel_bytes,
+              "(not including alignment overhead)")
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements
 
