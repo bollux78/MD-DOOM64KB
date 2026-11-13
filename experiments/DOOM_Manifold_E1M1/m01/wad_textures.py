@@ -10,6 +10,7 @@ for the 3D view (index 0 = transparent, used for sky), and emits:
 """
 from __future__ import annotations
 import struct
+import os
 from pathlib import Path
 
 TEX_W, TEX_H = 32, 64
