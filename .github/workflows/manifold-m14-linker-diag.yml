@@ -1,0 +1,16 @@
+name: Manifold M14 linker maphead diagnosis
+on:
+  push:
+    branches: [exp-manifold-m14-resource-compression]
+    paths:
+      - '.github/workflows/manifold-m14-linker-diag.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Show linker stderr from last build
+        shell: bash
+        run: |
+          tail -75 /tmp/m12/mm_E1M1.build.log
