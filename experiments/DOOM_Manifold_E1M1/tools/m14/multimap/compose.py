@@ -47,11 +47,12 @@ for bk in banks:
     h.append('  },')
 h.append('};')
 open("maps.h", "w").write("\n".join(h) + "\n")
+subprocess.check_call(["python3", "gen_music.py"])
 subprocess.check_call(["python3", "gen_assets.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 subprocess.check_call([T+"as", "-m68000", "crt0.s", "-o", "/tmp/m14x/crt0.o"])
-for s in ("menu.c", "assets.c"):
+for s in ("menu.c", "assets.c", "music_data.c"):
     subprocess.check_call([T+"gcc", "-m68000", "-Os", "-ffreestanding", "-fno-pic", "-nostdlib", "-c", s, "-o", "/tmp/m14x/" + s.replace(".c", ".o")])
-subprocess.check_call([T+"ld", "-T", "menu.ld", "/tmp/m14x/crt0.o", "/tmp/m14x/menu.o", "/tmp/m14x/assets.o", "-o", "/tmp/m14x/menu.elf"])
+subprocess.check_call([T+"ld", "-T", "menu.ld", "/tmp/m14x/crt0.o", "/tmp/m14x/menu.o", "/tmp/m14x/assets.o", "/tmp/m14x/music_data.o", "-o", "/tmp/m14x/menu.elf"])
 subprocess.check_call([T+"objcopy", "-O", "binary", "/tmp/m14x/menu.elf", "/tmp/m14x/menu.bin"])
 menu = open("/tmp/m14x/menu.bin", "rb").read()
 assert len(menu) <= COMMON_ORG, len(menu)

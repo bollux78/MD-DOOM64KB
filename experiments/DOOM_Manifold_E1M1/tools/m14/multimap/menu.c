@@ -16,9 +16,62 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned long u32;
 static void vreg(u8 r, u8 v) { VDP_CTRL = 0x8000 | (r << 8) | v; }
 static void vram_w(u16 a) { VDP_CTRL32 = 0x40000000UL | ((u32)(a & 0x3FFF) << 16) | ((a & 0xC000) >> 14); }
 static void cram_w(u16 a) { VDP_CTRL32 = 0xC0000000UL | ((u32)a << 16); }
+/* ---- title music: r25-intro.vgm played straight from the 68000 (1 VGM frame per vblank) ---- */
+extern const unsigned char intro_vgm[];
+extern const unsigned short intro_vgm_loop;
+#define Z80_BUS (*(volatile u16 *)0xA11100)
+#define Z80_RST (*(volatile u16 *)0xA11200)
+#define YM_ST   (*(volatile u8 *)0xA04000)
+#define PSG_PORT (*(volatile u8 *)0xC00011)
+/* the menu has no .bss/.data (ROM only): the player pointer lives at the bottom of work RAM */
+#define mus_p (*(const unsigned char * volatile *)0xFF0000)
+static void ym_w(int part, u8 reg, u8 val) {
+    volatile u8 *p = (volatile u8 *)(0xA04000 + part * 2);
+    while (YM_ST & 0x80) ;
+    p[0] = reg;
+    while (YM_ST & 0x80) ;
+    p[1] = val;
+}
+static void music_silence(void) {
+    int c;
+    PSG_PORT = 0x9F; PSG_PORT = 0xBF; PSG_PORT = 0xDF; PSG_PORT = 0xFF;
+    for (c = 0; c < 8; c++) if (c != 3 && c != 7) ym_w(0, 0x28, c);   /* key off */
+    ym_w(0, 0x2B, 0);                                                /* DAC off */
+}
+static void music_start(void) {
+    volatile int i;
+    Z80_RST = 0x100; Z80_BUS = 0x100;      /* take the Z80 bus so the 68000 owns the YM2612 */
+    while (Z80_BUS & 0x100) ;
+    Z80_RST = 0x000; for (i = 0; i < 200; i++) ;   /* reset pulse (bus stays ours) */
+    Z80_RST = 0x100; for (i = 0; i < 200; i++) ;
+    music_silence();
+    mus_p = intro_vgm;
+}
+static void music_stop(void) {
+    if (!mus_p) return;
+    mus_p = 0;
+    music_silence();
+    Z80_RST = 0x000; Z80_BUS = 0x000;      /* power-on-like Z80 state for the game's own init */
+}
+static void music_tick(void) {
+    const unsigned char *p = mus_p;
+    int guard = 0;
+    if (!p) return;
+    for (;;) {
+        u8 b = *p++;
+        if (b == 0x62) break;
+        else if (b == 0x50) PSG_PORT = *p++;
+        else if (b == 0x52 || b == 0x53) { u8 r = p[0], v = p[1]; p += 2; ym_w(b - 0x52, r, v); }
+        else if (b == 0x66) { p = intro_vgm + intro_vgm_loop; if (++guard > 1) break; }
+        else break;   /* unknown command: stop this frame */
+    }
+    mus_p = p;
+}
+
 static void wait_vblank(void) {
     while (VDP_CTRL & 8) ;      /* leave current vblank */
     while (!(VDP_CTRL & 8)) ;   /* wait for next one */
+    music_tick();
 }
 static void delay(int n) { while (n--) wait_vblank(); }
 
@@ -86,6 +139,7 @@ static void launch(int k) {
     int i;
     const struct map_entry *m = &maps[k];
     /* black screen, clear VRAM so the map starts from a clean VDP */
+    music_stop();
     vreg(1, 0x04);
     vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
@@ -133,6 +187,7 @@ int main(void) {
     text(14, 25, "PRESS START", 2);
     vreg(7, 0x00);   /* title: backdrop = palette 0 colour 0 (same as picture colour 0) */
     vreg(1, 0x44);
+    music_start();
     while (pad_read() & 0xFF) wait_vblank();
     for (;;) { wait_vblank(); if (pad_read() & 0xC0) break; }
     while (pad_read() & 0xFF) wait_vblank();

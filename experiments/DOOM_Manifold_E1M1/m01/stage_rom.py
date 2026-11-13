@@ -1524,9 +1524,12 @@ def install_e1m1_music(out):
     src=src.replace(anchor,anchor+"""
     /* M11 music variant: E1M1 starts only after Z80 PCM setup and stage load.
        XGM driver plays in the background; no per-render or frame FM writes. */
-    if (music_on) XGM_startPlay(bgm_e1m1);
+    if (music_on) { extern const u8 *const m14_bgm; XGM_startPlay(m14_bgm); }
 """,1)
     p.write_text(src)
+    # per-map music: the pointer lives in its own object (pinned by the split linker script),
+    # so the common game code does not reference the map-specific bgm symbol
+    (out/"src/m14_bgm.c").write_text('#include <genesis.h>\n#include "../res/music_res.h"\nconst u8 *const m14_bgm = bgm_e1m1;\n')
     print("M11 music: E1M1 classic XGM started after game init, source",vgm.name)
 
 
