@@ -3,6 +3,7 @@ on:
   push:
     branches: [exp-manifold-m14-resource-compression]
     paths:
+      - '.github/workflows/manifold-m14-resource-dedup.yml'
   workflow_dispatch:
 permissions:
   contents: read
