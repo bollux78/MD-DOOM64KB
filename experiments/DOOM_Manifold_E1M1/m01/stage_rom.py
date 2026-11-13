@@ -3200,6 +3200,33 @@ def m14_static_params(out):
     f.write_text(t)
     print("M14 static sector params: no RAM copy")
 
+def m14_generic_doors(out):
+    """M14 (MANIFOLD_DOORS=2): generic doors/lifts/lowering pillars for E1M2..E1M9.
+    - B near a portal into a LOWERING_STAIRS sector (S1 'lower floor' pillar) starts it lowering;
+    - lowering sectors keep their floor colour (the stairs colour hack is removed);
+    - door timer 105 ticks + player-safe auto close (same as E1M1)."""
+    m12_tune_doors(out)
+    f=out/"src/level.c"; t=f.read_text()
+    a="if(next_sect_group_type_low_bits != DOOR && next_sect_group_type_low_bits != LIFT) {"
+    assert t.count(a)==1
+    t=t.replace(a,"if(next_sect_group_type_low_bits != DOOR && next_sect_group_type_low_bits != LIFT && next_sect_group_type_low_bits != LOWERING_STAIRS) {")
+    b="""        } else if (tgt_sect_group_type_low_bits == LIFT) {
+            set_sector_group_state(tgt_sect_group, GOING_DOWN);
+        }"""
+    assert t.count(b)==1
+    t=t.replace(b,"""        } else if (tgt_sect_group_type_low_bits == LIFT) {
+            set_sector_group_state(tgt_sect_group, GOING_DOWN);
+        } else if (tgt_sect_group_type_low_bits == LOWERING_STAIRS) {
+            if (get_sector_group_state(tgt_sect_group) == STAIRS_LOWERED) set_sector_group_state(tgt_sect_group, STAIRS_MOVING);
+        }""")
+    f.write_text(t)
+    f=out/"src/sector_group.c"; t=f.read_text()
+    i=t.index("void run_lowering_stairs(")
+    j=t.index("set_sector_group_floor_color_inner(params, 12);",i)
+    t=t[:j]+"/* floor colour hack removed */"+t[j+len("set_sector_group_floor_color_inner(params, 12);"):]
+    f.write_text(t)
+    print("M14 generic doors: lowering pillars + keycards")
+
 def m14_dyn_params(out):
     """M14: only sector groups that can move/flash (type != NO_TYPE: doors, lifts, lights,
     stairs) get a RAM copy of their 8 parameters; every other group is read straight from
@@ -3658,6 +3685,8 @@ def stage(src, wad, out, control=False):
     (out/"src/e1m1_map.c").write_text(emit(map_lumps,cells,tex,things=m12_things,doors=m12_doors))
     if m12_doors:
         m12_tune_doors(out)
+    if os.environ.get("MANIFOLD_DOORS","0")=="2":
+        m14_generic_doors(out)
     if os.environ.get("MANIFOLD_SKY_MERGE","0")=="1":
         m13_sky_merge_upper_wall(out)
     # Unified default (user, 10/11): H32 screen + Doom HUD-WAD status bar.

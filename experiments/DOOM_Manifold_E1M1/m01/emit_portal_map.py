@@ -503,6 +503,36 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     else:
         print("Temporarily opened closed/connected door-like sectors:",opened)
     door_door_ceilings=dict(ceilings) if doors else {}
+    # MANIFOLD_DOORS=2: generic doors/lifts/lowering switches for maps other than E1M1.
+    gen_dyn={}   # doom sector -> (type_byte, target_height_units)
+    if os.environ.get("MANIFOLD_DOORS","0")=="2":
+        S_=lumps["SECTORS"]
+        KEYS={26:0x20,27:0x40,28:0x60,32:0x20,33:0x60,34:0x40}  # blue/yellow(->green)/red
+        LIFT_SP={10,21,62,88,120,121,122,123}
+        for si,(floor,ceil,fl,ce,light,special,tag) in enumerate(S_):
+            if ceil>floor: continue
+            nbs=neighbors[si]
+            if not nbs: continue
+            min_c=min(S_[n][1] for n in nbs); min_f=min(S_[n][0] for n in nbs)
+            if min_c>floor+32:
+                gen_dyn[si]=(2,min_c)            # door: ceiling rises to lowest neighbour ceiling
+            elif min_f<floor-32:
+                gen_dyn[si]=(5,min_f)            # closed pillar: floor lowers (S1/W1 lower floor)
+        lift_tags={ln[4] for ln in lumps["LINEDEFS"] if ln[3] in LIFT_SP and ln[4]}
+        for si,(floor,ceil,fl,ce,light,special,tag) in enumerate(S_):
+            if tag in lift_tags and tag!=0 and si not in gen_dyn and ceil>floor:
+                low=min([floor]+[S_[n][0] for n in neighbors[si]])
+                if low<floor-16: gen_dyn[si]=(3,low)
+        sd_=lumps["SIDEDEFS"]
+        for ln in lumps["LINEDEFS"]:
+            kb=KEYS.get(ln[3])
+            if not kb: continue
+            for sdi in (ln[5],ln[6]):
+                if sdi==65535: continue
+                sec=sd_[sdi][5]
+                if gen_dyn.get(sec,(0,0))[0]==2:
+                    gen_dyn[sec]=(2|kb,gen_dyn[sec][1])
+        print("M14 generic dynamic sectors (type,target):",{k:v for k,v in sorted(gen_dyn.items())})
     # M13 diagnostic only. Doom F_SKY1 is a sky portal, not a physical
     # roof; test whether varying outdoor ceiling Z exposes a geometry bug.
     # Keep ALL other sector parameters and BSP/portal topology identical.
@@ -533,7 +563,8 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     sector_types=[]
     for sector_i,(floor,ceil,fl,ce,light,special,tag) in enumerate(lumps["SECTORS"]):
         is_door=doors and sector_i in door_door_ceilings
-        if not is_door:
+        is_gen=sector_i in gen_dyn
+        if not is_door and not is_gen:
             ceil=ceilings.get(sector_i,ceil)
         light_level=max(-2,min(2,round((light-160)/40)))  # colors.c tables cover -2..2
         # 12.4 heights, doubled: Manifold projects 64x144 with a wide FOV and
@@ -547,7 +578,14 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
             fc=tex["flat_color"].get(_nm(fl),FLOOR_COLOR); cc=tex["flat_color"].get(_nm(ce),CEIL_COLOR)
         packed=((light_level & 0xFF) << 8) | (cc << 4) | fc
         if packed >= 0x8000: packed -= 0x10000
-        if is_door:
+        if is_gen:
+            gt,gh=gen_dyn[sector_i]
+            target_h=gh*16*HEIGHT_SCALE
+            if not (-32768<=target_h<=32767):
+                raise ValueError(f"generic target out of range: {sector_i}")
+            sector_params.extend([packed,target_h,0,0,floor_h,ceil_h,0,0])
+            sector_types.append(gt)
+        elif is_door:
             target_h=door_door_ceilings[sector_i]*16*HEIGHT_SCALE
             if not (-32768<=target_h<=32767) or target_h<=floor_h:
                 raise ValueError(f"M12 door target out of range: {sector_i}")
