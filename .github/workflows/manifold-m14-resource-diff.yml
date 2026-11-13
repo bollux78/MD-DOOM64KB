@@ -1,0 +1,56 @@
+name: Manifold resource-dedup shared-block diagnostics
+on:
+  push:
+    branches: [exp-manifold-m14-resource-compression]
+    paths:
+      - '.github/workflows/manifold-m14-resource-diff.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect existing exact linked images (no builds or writes to user archive)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess, pathlib, hashlib, bisect, collections
+          t=str(pathlib.Path.home()/"mars/m68k-elf/bin/m68k-elf-")
+          root=pathlib.Path("/tmp/m12")
+          names=("E1M1","E1M2","E1M4","E1M5","E1M9")
+          dat={};sym={}
+          for m in names:
+              f=root/f"mm_{m}/out/release/rom.out"
+              assert f.is_file(),f
+              dat[m]=subprocess.check_output([t+"objcopy","-O","binary","-j",".common",str(f),"/dev/stdout"])
+              nm=subprocess.check_output([t+"nm","-n",str(f)],text=True,errors="replace")
+              pts=[]
+              for l in nm.splitlines():
+                  a=l.split()
+                  if len(a)<3:continue
+                  try:v=int(a[0],16)
+                  except ValueError:continue
+                  if 0x10000<=v<0x200000:pts.append((v,a[2]))
+              sym[m]=pts
+              print(m,"length",len(dat[m]),"sha256",hashlib.sha256(dat[m]).hexdigest()[:16])
+          ref=dat[names[0]]
+          for m in names[1:]:
+              other=dat[m];diff=[i for i in range(min(len(ref),len(other))) if ref[i]!=other[i]]
+              groups=[]
+              for p in diff:
+                  if not groups or p!=groups[-1][-1]+1:groups.append([p])
+                  else:groups[-1].append(p)
+              print("DIFF",m,"bytes",len(diff),"ranges",len(groups),"lengthdelta",len(other)-len(ref))
+              for g in sorted(groups,key=lambda q:-len(q))[:20]:
+                  p=g[0];addr=p+0x10000
+                  k=bisect.bisect_right(sym["E1M1"],(addr,"zzzz"))-1
+                  print("DIFF-RANGE",hex(addr),"size",len(g),"near",sym["E1M1"][k] if k>=0 else "none","A",ref[p:p+20].hex(),"B",other[p:p+20].hex())
+          for m in names:
+              for k in ("SPRITE RLE DEDUP","TEXTURE ARRAY DEDUP"):
+                  p=root/f"mm_{m}.stage.log"
+                  for l in p.read_text(errors="replace").splitlines():
+                      if k in l:print(m,l)
+          PY
