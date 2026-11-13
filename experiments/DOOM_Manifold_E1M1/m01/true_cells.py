@@ -122,11 +122,30 @@ def true_cells(lumps, nodes, merge=True):
         if reg is None:
             dropped += 1
             continue
-        ring = convex_ring(leaf.intersection(reg))
-        if ring is None:
-            dropped += 1
-            continue
-        cells.append([sec, Polygon(ring), ss])
+        intersection = leaf.intersection(reg)
+        if __import__("os").environ.get("HERETIC_SPLIT_PIECES", "0") == "1":
+            # Heretic diagnostic only: one BSP leaf may intersect disconnected
+            # sector regions. Preserve *each* convex component, never choose
+            # the largest and silently delete the others.
+            components = [g for g in getattr(intersection, "geoms", [intersection])
+                          if isinstance(g, Polygon) and g.area > MIN_AREA]
+            if not components:
+                dropped += 1
+                continue
+            for comp in components:
+                ring = convex_ring(comp)
+                if ring is None:
+                    continue
+                poly = Polygon(ring)
+                if not is_convex(poly):
+                    raise ValueError(f"Heretic leaf {ss} piece is non-convex; no unsafe hull")
+                cells.append([sec, poly, ss])
+        else:
+            ring = convex_ring(intersection)
+            if ring is None:
+                dropped += 1
+                continue
+            cells.append([sec, Polygon(ring), ss])
     if merge:
         merged = True
         while merged:
