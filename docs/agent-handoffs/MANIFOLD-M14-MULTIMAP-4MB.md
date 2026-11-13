@@ -43,3 +43,17 @@ Restrições: RAM de 64 KB está quase toda no heap (heap_high ≈ 0xFFE1B2; ~1,
 - No spawn da E1M2 o fundo do corredor (portais/sala aberta distante) aparece com ruído e faixa azul: é anterior a esta ROM (também nas ROMs de passeio antigas); relacionado aos "buracos residuais em células externas" do M13.2.
 - Opção nova `MANIFOLD_STACK_MARGIN` (padrão 3072) no guard de pilha do `visit_graph`; medido no E1M2: uso real de pilha além do guard ≈ 320 bytes, folga de ~1,5 KB com margem 1536 (sem mudança visual).
 - Abertos (do Werk): corrupção com botão C no BlastEm/console, ruído no primeiro tiro, animação de tiro invisível.
+
+## Atualização: versão com dados unificados (7 MB), 12/11 noite
+`claudio-manifold-doom-MENU-5-FASES-UNIFICADA-7MB.bin`: 7.340.032 bytes (antes 11.010.048). Testada no MAME (menu, teste de bancos, as cinco fases rodando via ROMs planas); troca real de banco ainda não testada no BlastEm/Everdrive nesta versão.
+
+Layout (endereço = offset no arquivo): `0x000000` menu (slot 0 fixo); `0x010000`–`0x2FB000` **bloco comum, um só exemplar** (3,06 MB, idêntico nas cinco fases; slots 0–5, bancos 1–5 identidade); `0x300000`+ **bloco de cada fase** (slots 6–7), alinhado a 512 KB: E1M1 banco 6 (1 banco), E1M2 7–8, E1M4 9–10, E1M5 11–12, E1M9 13. O menu seleciona slots 1–5 = bancos 1–5 e slots 6/7 = banco da fase / banco+1; vetores do menu redirecionam por `0x300000+4*i`; entrada da fase `0x300200`.
+
+Como o bloco comum ficou idêntico (verificado por `compose.py`, que aborta se diferir): `md_split.ld` + `mk-split.gen` (sem `--gc-sections`, para o conteúdo não depender do mapa).
+- `.common` (0x10000): os 45 objetos cujo md5 é igual nas cinco fases + `libmd.a` + `libgcc.a`.
+- `.mapobjs` (0x301800): os 8 objetos que mudam por fase (`colors level sector_group manifold_sky portal m12_doom_objects e1m1_map textures`) em **endereços fixos** (slots com folga). Os 7 símbolos desses objetos que o bloco comum referencia e cujo endereço variava (`check_trigger_switch clean_portal_map load_portal_map run_sector_group_processes activate_sector_group_enter_trigger portal_rend e1_block_offsets`) ficam fixados no início (seções `-ffunction-sections`).
+- `.maphead` (0x300000, 0xE00): vetores/cabeçalho/entrada da fase, ctors, etc. Imagem do `.data` em `0x300E00` (fixa); `_stext=_etext=0x300E00`, `_sdata=0x6A0` fixo (copia até 8 bytes a mais, inofensivo).
+- RAM: `.data` começa em 0xE0FF0000 e `.bss` em +0x6C0 (fixo), `_bend` = início do bss + 0x1D00 (fixo; custa ≤ ~0x1C bytes de heap). Dados de RAM dos 8 objetos vão por último. `SUBALIGN(2)` em `.data/.bss` (sem isso `sprite_draw_cache` caiu em endereço ímpar e `init_sprite_draw_cache` dava Address Error: defeito latente que o layout antigo escondia).
+- Limites que o link verifica/ou devem ser reavaliados se o conteúdo crescer: bloco comum < 0x2F0000; `.data` ≤ 0x6C0; `.bss` ≤ 0x1D00; textures ≤ ~0x72E00; e1m1_map ≤ 0x17000; m12_doom_objects ≤ 0x23000; bloco da fase ≤ 1 MB (2 bancos).
+
+Próximos ganhos (para os 4 MB): bloco comum 3,06 MB (era 2,59 MB de dados + código/libs sem gc-sections: voltar a podar seções não usadas sem quebrar a igualdade, p.ex. `--gc-sections` com `KEEP` do conjunto de todas as fases); `map_table` 1 MB e `tex_draw_tables` 0,54 MB (idênticos, candidatos a compressão); sprites só dos objetos usados por fase; e reduzir o bloco da fase (textures até 0,47 MB). Com 4 MB faltam ~3 MB: 3,06 (comum) + 5×~0,6 (fases) = ~6 MB de dados reais sem compressão.

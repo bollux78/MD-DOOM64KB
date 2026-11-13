@@ -43,26 +43,34 @@ static void clear_plane(void) {
 }
 static void set_color(int idx, u16 c) { cram_w(idx * 2); VDP_DATA = c; }
 
+static void set_banks(int mapbank);
 static void bank_test(int k) {
     int s, j, bad;
     const struct map_entry *mp = &maps[k];
-    *(volatile u8 *)0xA130F3 = mp->bank;     *(volatile u8 *)0xA130F5 = mp->bank + 1;
-    *(volatile u8 *)0xA130F7 = mp->bank + 2; *(volatile u8 *)0xA130F9 = mp->bank + 3;
+    set_banks(mp->bank);
     clear_plane();
     text(8, 4, "TESTE DE BANCOS (SSF2)", 3);
     text(8, 6, mp->name, 2);
-    for (s = 0; s < 4; s++) {
+    for (s = 1; s <= 7; s++) {
         bad = 0;
         for (j = 0; j < 8; j++)
-            if (*(volatile u32 *)(0x80000UL + (u32)s * 0x80000UL + (u32)j * 0x10000UL + 0x1230UL) != bank_expect[k][s][j]) bad++;
-        text(8, 10 + s * 2, "SLOT", 2);
-        text(13, 10 + s * 2, s == 0 ? "1" : s == 1 ? "2" : s == 2 ? "3" : "4", 2);
-        text(16, 10 + s * 2, bad == 0 ? "OK" : "ERRO", bad == 0 ? 2 : 3);
-        if (bad) { text(22, 10 + s * 2, "AMOSTRAS RUINS:", 3); text(38, 10 + s * 2, bad == 8 ? "8" : bad == 7 ? "7" : bad == 6 ? "6" : bad == 5 ? "5" : bad == 4 ? "4" : bad == 3 ? "3" : bad == 2 ? "2" : "1", 3); }
+            if (*(volatile u32 *)(0x80000UL * (u32)s + (u32)j * 0x10000UL + 0x1230UL) != bank_expect[k][s - 1][j]) bad++;
+        text(8, 9 + s, "SLOT", 2);
+        text(13, 9 + s, s == 1 ? "1" : s == 2 ? "2" : s == 3 ? "3" : s == 4 ? "4" : s == 5 ? "5" : s == 6 ? "6" : "7", 2);
+        text(16, 9 + s, bad == 0 ? "OK" : "ERRO", bad == 0 ? 2 : 3);
+        if (bad) text(22, 9 + s, "AMOSTRAS RUINS", 3);
     }
+    text(8, 20, "SLOTS 1-5 COMUM, 6-7 FASE", 2);
     text(8, 22, "RESET VOLTA AO MENU", 2);
     vreg(1, 0x44);
     for (;;) wait_vblank();
+}
+/* slots 1..5 (0x080000-0x2FFFFF) = banks 1..5: the common code/data block shared by every map;
+   slots 6..7 (0x300000-0x3FFFFF) = the selected map's own block */
+static void set_banks(int mapbank) {
+    *(volatile u8 *)0xA130F3 = 1; *(volatile u8 *)0xA130F5 = 2; *(volatile u8 *)0xA130F7 = 3;
+    *(volatile u8 *)0xA130F9 = 4; *(volatile u8 *)0xA130FB = 5;
+    *(volatile u8 *)0xA130FD = mapbank; *(volatile u8 *)0xA130FF = mapbank + 1;
 }
 static void launch(int k) {
     int i;
@@ -71,10 +79,7 @@ static void launch(int k) {
     vreg(1, 0x04);
     vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
-    *(volatile u8 *)0xA130F3 = m->bank;
-    *(volatile u8 *)0xA130F5 = m->bank + 1;
-    *(volatile u8 *)0xA130F7 = m->bank + 2;
-    *(volatile u8 *)0xA130F9 = m->bank + 3;
+    set_banks(m->bank);
     /* make the map's SGDK startup take the full cold-start path */
     *(volatile u8 *)0xA10009 = 0; *(volatile u8 *)0xA1000B = 0; *(volatile u8 *)0xA1000D = 0;
     __asm volatile("move.w #0x2700,%%sr\n"
