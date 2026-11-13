@@ -1,0 +1,144 @@
+name: Manifold M14 multimapa compacta (experimento 6 MiB)
+on:
+  push:
+    branches: [exp-manifold-m14-size-opt]
+    paths:
+      - '.github/workflows/manifold-m14-size-opt.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-m14-size-opt
+  cancel-in-progress: false
+jobs:
+  compact:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate local inputs and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -d /home/dan/Projetos/manifold-doom/roms/M14
+          gdk=""
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          if test -z "$gdk"; then
+            while IFS= read -r p; do
+              if test -f "$p"; then gdk="${p%/makefile.gen}"; break; fi
+            done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null)
+          fi
+          test -n "$gdk"
+          echo "MANIFOLD_GDK=$gdk" >> "$GITHUB_ENV"
+          echo "MANIFOLD_REPO=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "MANIFOLD_TOOLCHAIN=$HOME/mars/m68k-elf/bin/m68k-elf-" >> "$GITHUB_ENV"
+          echo "MANIFOLD_WAD=/home/dan/Projetos/doom-md/assets/wads/doom1.wad" >> "$GITHUB_ENV"
+          echo "MANIFOLD_UPSTREAM=$RUNNER_TEMP/manifold-compact-upstream" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import hashlib,pathlib
+          p=pathlib.Path("/home/dan/Projetos/doom-md/assets/wads/doom1.wad")
+          assert p.stat().st_size==4196020
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=="1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771"
+          print("Shareware WAD pinned OK")
+          PY
+      - name: Prepare isolated upstream, soundtrack and 5-map options
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/m14x /tmp/m12
+          test ! -e "$MANIFOLD_UPSTREAM" || rm -rf "$MANIFOLD_UPSTREAM"
+          git clone --quiet https://github.com/ehaliewicz/Manifold.git "$MANIFOLD_UPSTREAM"
+          git -C "$MANIFOLD_UPSTREAM" checkout --quiet --detach b6fe52a52344464de00bde4dc58a40f8b89cfc1a
+          DOOM_R25_MUSIC=1 python3 scripts/lab/prepare_r25_music.py
+          test -s res/r25-e1m1.vgm
+          cat > /tmp/m14x/flags_walk.txt <<'EOF'
+          MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_HUD_TIMING=1 MANIFOLD_HUD_VRAM_REPAIR=0 MANIFOLD_VDP_ATOMIC=0 MANIFOLD_STATIC_REPAIR_ONCE=1 MANIFOLD_NEAR_SAFE=1 MANIFOLD_SKY_MERGE=1 MANIFOLD_SKY_CEIL_UNIFORM=0 MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1 MANIFOLD_EYE=48 MANIFOLD_TEX_U=1 MANIFOLD_TEX_HSTRETCH=1.0 MANIFOLD_WEAPON=pistol MANIFOLD_MONSTERS=1 MANIFOLD_MONSTERS_INACTIVE=1
+          EOF
+          xgm="$MANIFOLD_GDK/bin/xgmtool"
+          native="$HOME/mars/m68k-elf/bin/xgmtool"
+          if test ! -x "$xgm"; then
+            test -x "$native"
+            test ! -e "$xgm" && test ! -L "$xgm"
+            ln -s "$native" "$xgm"
+          fi
+      - name: Compile five map images from shared source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/mars/m68k-elf/bin:$MANIFOLD_GDK/bin:$PATH"
+          for m in E1M1 E1M2 E1M4 E1M5 E1M9; do
+            echo "::group::Compiling compact $m"
+            bash experiments/DOOM_Manifold_E1M1/tools/m14/multimap/build_map_image.sh "$m"
+            echo "::endgroup::"
+          done
+      - name: Compose compact image and verify identical shared block
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/mars/m68k-elf/bin:$MANIFOLD_GDK/bin:$PATH"
+          image="$RUNNER_TEMP/manifold-m14-compact-6mb.bin"
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/multimap/compose.py "$image"
+          test -s "$image"
+          python3 - "$image" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]); s=p.stat().st_size
+          assert s%0x80000==0,s
+          assert s<=6*1024*1024, f"Compact target exceeds 6 MiB: {s}"
+          b=p.read_bytes()
+          assert b[0x100:0x108]==b"SEGA SSF",b[0x100:0x108]
+          print(f"Compact ROM size {s} bytes ({s/1048576:.2f} MiB)")
+          PY
+          echo "MANIFOLD_COMPACT_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Smoke test title/menu on BlastEm
+        shell: bash
+        run: |
+          set -euo pipefail
+          emu="$HOME/Projetos/blastem64-1.0.0/blastem"
+          if test -x "$emu"; then
+            stage="$RUNNER_TEMP/manifold-compact-test"
+            mkdir -p "$stage"
+            printf '#!/bin/sh\nexit 99\n' > "$stage/x-terminal-emulator"
+            chmod +x "$stage/x-terminal-emulator"
+            PATH="$stage:$PATH" SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+              timeout 120s "$emu" -b 90 "$MANIFOLD_COMPACT_IMAGE" > "$stage/boot.log" 2>&1 || { tail -30 "$stage/boot.log"; exit 1; }
+            if grep -qiE "unmapped|fatal|exception|lock up" "$stage/boot.log"; then
+              tail -30 "$stage/boot.log"
+              exit 1
+            fi
+          fi
+      - name: Save verified compact ROM privately alongside original
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=/home/dan/Projetos/manifold-doom/roms/M14/claudio-manifold-doom-MENU-5-FASES-COMPACT-6MB.bin
+          if test -e "$target"; then
+            cmp -s "$target" "$MANIFOLD_COMPACT_IMAGE" || { echo "::error::Existing target differs, refusing overwrite"; exit 1; }
+          else
+            cp "$MANIFOLD_COMPACT_IMAGE" "$target"
+          fi
+          echo "COMPACT ROM: $target"
+          sha256sum "$target"
+          cat > /home/dan/Projetos/manifold-doom/roms/M14/README-COMPACT.md <<'EOF'
+          # M14 multimapa compacta (experimento)
+          - Cinco fases: E1M1, E1M2, E1M4, E1M5, E1M9.
+          - Bloco comum unico; o antigo wad_area de 1 MiB vazio foi reduzido a um marcador de 4 bytes.
+          - Mapeamento SSF2: slots 1-3 comuns, slots 4-5 da fase selecionada.
+          - Geometria, texturas e renderer preservados nesta etapa.
+          - Smoke automatizado: menu de 90 quadros no BlastEm.
+          - Ainda requer teste de bancos via A no menu e teste real de todas as fases no EverDrive.
+          - Fonte: branch exp-manifold-m14-size-opt.
+          - Mantida a ROM original de 7 MB como controle; sem sobrescrita.
+          EOF
+      - name: Final summary
+        if: always()
+        shell: bash
+        run: |
+          echo "No ROM uploaded to GitHub; all build objects remain on runner temp paths."
