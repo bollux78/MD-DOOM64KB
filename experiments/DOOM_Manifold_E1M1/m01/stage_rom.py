@@ -3632,6 +3632,19 @@ def stage(src, wad, out, control=False):
     0xDEADBEEF, 1, (uint32_t)&e1m1_map, 0, 0, 0, 0
 };"""+s[b:]
     p.write_text(s)
+    # Multimap only: the original engine reserves 1 MiB of ROM for an
+    # embedded WAD ('WAD?' + zero padding). The DOOM E1M1-E1M9 port
+    # reads the private WAD at BUILD time instead and never consumes this
+    # reserve. Keep the symbol but reduce its storage to four bytes.
+    # Do not enable for upstream-control builds.
+    if os.environ.get("MANIFOLD_COMPACT_WAD_AREA", "0") == "1":
+        p = out / "src/map_table.c"
+        text = p.read_text()
+        key = "const uint8_t wad_area[512*1024*2] = {"
+        if text.count(key) != 1:
+            raise ValueError("Unexpected upstream wad_area declaration; abort compact build")
+        text = text.replace(key, "const uint8_t wad_area[4] = {", 1)
+        p.write_text(text)
     # Find the real player-1 THING; never place the camera at arbitrary BSP 0.
     spawns=[(x,y,angle) for x,y,angle,type_id,flags in map_lumps["THINGS"] if type_id==1]
     if len(spawns)!=1:
