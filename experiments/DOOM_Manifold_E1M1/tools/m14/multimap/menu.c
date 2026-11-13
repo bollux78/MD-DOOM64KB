@@ -1,0 +1,142 @@
+/* Bare-metal SSF2 level-select menu (no SGDK, no interrupts).
+   Each map is a complete SGDK image linked at 0x080000 and mapped into
+   slots 1..4 (512 KB each) by the SSF2 bank registers. */
+#include "menu.h"
+#include "maps.h"
+typedef unsigned char u8; typedef unsigned short u16; typedef unsigned long u32;
+#define VDP_DATA  (*(volatile u16 *)0xC00000)
+#define VDP_CTRL  (*(volatile u16 *)0xC00004)
+#define VDP_CTRL32 (*(volatile u32 *)0xC00004)
+#define PAD_DATA  (*(volatile u8 *)0xA10003)
+#define PAD_CTRL  (*(volatile u8 *)0xA10009)
+
+static void vreg(u8 r, u8 v) { VDP_CTRL = 0x8000 | (r << 8) | v; }
+static void vram_w(u16 a) { VDP_CTRL32 = 0x40000000UL | ((u32)(a & 0x3FFF) << 16) | ((a & 0xC000) >> 14); }
+static void cram_w(u16 a) { VDP_CTRL32 = 0xC0000000UL | ((u32)a << 16); }
+static void wait_vblank(void) {
+    while (VDP_CTRL & 8) ;      /* leave current vblank */
+    while (!(VDP_CTRL & 8)) ;   /* wait for next one */
+}
+static void delay(int n) { while (n--) wait_vblank(); }
+
+static u16 pad_read(void) {   /* bit set = pressed: 0 U,1 D,2 L,3 R,4 B,5 C,6 A,7 START */
+    u16 r;
+    PAD_DATA = 0x40; __asm volatile("nop\n nop\n nop\n nop");
+    r = (~PAD_DATA) & 0x3F;
+    PAD_DATA = 0x00; __asm volatile("nop\n nop\n nop\n nop");
+    r |= ((~PAD_DATA) & 0x30) << 2;   /* A=bit4->6, START=bit5->7 */
+    return r;
+}
+
+#define PLANE_A 0xC000
+static void put_cell(int col, int row, u16 attr) {
+    vram_w(PLANE_A + (row * 64 + col) * 2);
+    VDP_DATA = attr;
+}
+static void text(int col, int row, const char *s, int pal) {
+    vram_w(PLANE_A + (row * 64 + col) * 2);
+    while (*s) { VDP_DATA = (pal << 13) | (*s - 32); s++; }
+}
+static void clear_plane(void) {
+    int i; vram_w(PLANE_A);
+    for (i = 0; i < 64 * 32; i++) VDP_DATA = 0;
+}
+static void set_color(int idx, u16 c) { cram_w(idx * 2); VDP_DATA = c; }
+
+static void bank_test(int k) {
+    int s, j, bad;
+    const struct map_entry *mp = &maps[k];
+    *(volatile u8 *)0xA130F3 = mp->bank;     *(volatile u8 *)0xA130F5 = mp->bank + 1;
+    *(volatile u8 *)0xA130F7 = mp->bank + 2; *(volatile u8 *)0xA130F9 = mp->bank + 3;
+    clear_plane();
+    text(8, 4, "TESTE DE BANCOS (SSF2)", 3);
+    text(8, 6, mp->name, 2);
+    for (s = 0; s < 4; s++) {
+        bad = 0;
+        for (j = 0; j < 8; j++)
+            if (*(volatile u32 *)(0x80000UL + (u32)s * 0x80000UL + (u32)j * 0x10000UL + 0x1230UL) != bank_expect[k][s][j]) bad++;
+        text(8, 10 + s * 2, "SLOT", 2);
+        text(13, 10 + s * 2, s == 0 ? "1" : s == 1 ? "2" : s == 2 ? "3" : "4", 2);
+        text(16, 10 + s * 2, bad == 0 ? "OK" : "ERRO", bad == 0 ? 2 : 3);
+        if (bad) { text(22, 10 + s * 2, "AMOSTRAS RUINS:", 3); text(38, 10 + s * 2, bad == 8 ? "8" : bad == 7 ? "7" : bad == 6 ? "6" : bad == 5 ? "5" : bad == 4 ? "4" : bad == 3 ? "3" : bad == 2 ? "2" : "1", 3); }
+    }
+    text(8, 22, "RESET VOLTA AO MENU", 2);
+    vreg(1, 0x44);
+    for (;;) wait_vblank();
+}
+static void launch(int k) {
+    int i;
+    const struct map_entry *m = &maps[k];
+    /* black screen, clear VRAM so the map starts from a clean VDP */
+    vreg(1, 0x04);
+    vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
+    cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
+    *(volatile u8 *)0xA130F3 = m->bank;
+    *(volatile u8 *)0xA130F5 = m->bank + 1;
+    *(volatile u8 *)0xA130F7 = m->bank + 2;
+    *(volatile u8 *)0xA130F9 = m->bank + 3;
+    /* make the map's SGDK startup take the full cold-start path */
+    *(volatile u8 *)0xA10009 = 0; *(volatile u8 *)0xA1000B = 0; *(volatile u8 *)0xA1000D = 0;
+    __asm volatile("move.w #0x2700,%%sr\n"
+                   "move.l #0,%%sp\n"
+                   "jmp %c0\n" : : "i"(MAP_ENTRY));
+    for (;;) ;
+}
+
+int main(void) {
+    int i, sel = 0, prev;
+    u16 pad, last = 0xFFFF;
+
+    vreg(0, 0x04); vreg(1, 0x04); vreg(2, PLANE_A >> 10); vreg(3, 0); vreg(4, 0x07);
+    vreg(5, 0); vreg(7, 0x00); vreg(10, 0); vreg(11, 0); vreg(12, 0x81);
+    vreg(13, 0x2C); vreg(15, 2); vreg(16, 0x01); vreg(17, 0); vreg(18, 0);
+    PAD_CTRL = 0x40;
+
+    /* tiles: font at 0..95, title at 96.. */
+    vram_w(0);
+    for (i = 0; i < 96 * 8; i++) { VDP_DATA = font_tiles[i] >> 16; VDP_DATA = font_tiles[i]; }
+    for (i = 0; i < 1120 * 8; i++) { VDP_DATA = title_tiles[i] >> 16; VDP_DATA = title_tiles[i]; }
+    cram_w(0);
+    for (i = 0; i < 32; i++) VDP_DATA = title_pal[i];
+    for (i = 0; i < 32; i++) VDP_DATA = 0;
+    set_color(32 + 1, 0x0EEE);   /* palette 2: white text   */
+    set_color(48 + 1, 0x00EE);   /* palette 3: yellow (selected/heading) */
+    set_color(48 + 15, 0x0000);  /* backdrop (R7 = pal 3 idx 15) */
+
+    /* title screen */
+    clear_plane();
+    { int r, c; for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, title_attr[r * 40 + c] | (96 + r * 40 + c)); }
+    text(14, 25, "PRESS START", 2);
+    vreg(7, 0x00);   /* title: backdrop = palette 0 colour 0 (same as picture colour 0) */
+    vreg(1, 0x44);
+    while (pad_read() & 0xFF) wait_vblank();
+    for (;;) { wait_vblank(); if (pad_read() & 0xC0) break; }
+    while (pad_read() & 0xFF) wait_vblank();
+
+    /* level menu */
+    vreg(7, 0x3F);
+    clear_plane();
+    text(9, 4, "MANIFOLD DOOM - E1M1..E1M9", 3);
+    text(13, 6, "SELECIONE A FASE", 3);
+    for (;;) {
+        for (i = 0; i < MAP_COUNT; i++) {
+            text(10, 10 + i * 2, i == sel ? "> " : "  ", 3);
+            text(12, 10 + i * 2, maps[i].name, i == sel ? 3 : 2);
+        }
+        text(8, 23, "CIMA/BAIXO: ESCOLHER", 2);
+        text(8, 25, "START: JOGAR", 2);
+        text(8, 27, "RESET VOLTA AO MENU", 2);
+        text(8, 21, "A: TESTE DE BANCOS", 2);
+        wait_vblank();
+        pad = pad_read();
+        if (pad != last) {
+            prev = sel;
+            if (pad & 1) sel = sel ? sel - 1 : MAP_COUNT - 1;
+            if (pad & 2) sel = (sel + 1 < MAP_COUNT) ? sel + 1 : 0;
+            if (pad & 0x40) { vreg(1, 0x04); bank_test(sel); }
+            if (pad & 0xA0) { vreg(1, 0x04); launch(sel); }
+            (void)prev;
+        }
+        last = pad;
+    }
+}

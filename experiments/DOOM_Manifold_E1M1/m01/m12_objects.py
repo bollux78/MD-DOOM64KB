@@ -3,6 +3,7 @@ No WAD assets are committed. Decoration is visual only; no pickup/combat yet.
 """
 from collections import Counter
 from pathlib import Path
+import os
 import wad_textures as WT
 
 TYPES = (
@@ -176,11 +177,15 @@ def install_templates(out,templates):
         hdr.append(f"#define M14_ID_{name.upper()} {i+1}")
     hdr.append("#endif")
     (Path(out)/"src/m14_ids.h").write_text("\n".join(hdr)+"\n")
+    _hp=int(os.environ.get('MANIFOLD_OBJ_HEIGHT_PCT','100'))
     for ident,name,width,height in templates:
         if mon and name in ("zombieman","sergeant","imp"):
-            entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=1,.type=OBJECT}}')
+            _inact = os.environ.get("MANIFOLD_MONSTERS_INACTIVE","0")=="1"
+            _ist = 0 if _inact else 1
+            _typ = "DECORATION" if _inact else "OBJECT"
+            entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24*_hp//100},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state={_ist},.type={_typ}}}')
             continue
         # The visual test showed an oversized barrel; reduce both projected
         # dimensions by 25% while preserving the same sprite pixels/THINGS.
-        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
+        entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24*_hp//100},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
     p.write_text(s[:a]+externs+"const object_template object_types[48] = {\n"+",\n".join(entries)+"\n};"+s[b:])

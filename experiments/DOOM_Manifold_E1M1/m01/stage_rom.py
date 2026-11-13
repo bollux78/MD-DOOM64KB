@@ -562,11 +562,12 @@ def guard_portal_recursion_stack(out):
     {
         u32 sp_now;
         __asm volatile("move.l %%sp,%0" : "=d" (sp_now));
-        if (depth > 48 || (sp_now & 0xFFFFFF) < ((manifold_heap_high & 0xFFFFFF) + 3072)) { manifold_dbg[7]++; return; }
+        if (depth > 48 || (sp_now & 0xFFFFFF) < ((manifold_heap_high & 0xFFFFFF) + @STK@)) { manifold_dbg[7]++; return; }
         if (depth > manifold_dbg_maxdepth) { manifold_dbg_maxdepth = depth; }
     }""",1)
+    s=s.replace("@STK@",os.environ.get("MANIFOLD_STACK_MARGIN","3072"))
     p.write_text(s)
-    print("portal recursion bounded by stack/heap guard")
+    print("portal recursion bounded by stack/heap guard, margin",os.environ.get("MANIFOLD_STACK_MARGIN","3072"))
 
 def guard_zero_width_edges(out):
     """M12: 68000 DIVS-by-zero when a wall/floor/ceiling edge has x1 == x2.
@@ -3090,6 +3091,206 @@ void m14_hit_object(object_link o, u16 sector) {
     print("M14 monsters: AI installed")
 
 
+def m14_tex_span(out, span):
+    """M14: perspective-correct texture coords only every `span` columns
+    (default upstream: 4); linear in between. Fewer 32/16 divisions per wall."""
+    import math
+    lg=int(math.log2(span)); assert 1<<lg==span and span in (8,16)
+    d=out/"src/draw.c"; t=d.read_text()
+    a=t.index("void calculate_tex_coords_for_wall(")
+    b=t.index("void calculate_tex_coords_for_wall_two_column(")
+    f=t[a:b]
+    def rep(old,new):
+        nonlocal f
+        assert f.count(old)==1,old
+        f=f.replace(old,new)
+    rep("cnt += 3;","cnt += %d;"%(span-1))
+    rep("cnt>>=2;","cnt>>=%d;"%lg)
+    rep("s16 d_one_over_z_16_times_4 = d_one_over_z_16 << 2;","s16 d_one_over_z_16_times_4 = d_one_over_z_16 << %d;"%lg)
+    rep("s32 d_u_over_z_23_times_4 = d_u_over_z_23 << 2;","s32 d_u_over_z_23_times_4 = d_u_over_z_23 << %d;"%lg)
+    rep("u_11_per_col >>= 2;","u_11_per_col >>= %d;"%lg)
+    blk="move.w %1, %2\\t\\n\\\n            and.w %6, %2\\t\\n\\\n            move.w %3, (%0)+\\t\\n\\\n            move.w %2, (%0)+\\t\\n\\\n            add.w %4, %3\\t\\n\\\n            add.w %5, %1\\t\\n\\\n            \\t\\n\\\n            "
+    i=f.index('        __asm volatile(\n            "\\t\\n\\\n')
+    j=f.index('"\\\n        : "+a" (tex_col_ptr), "+r" (u_11_start)')
+    head='        __asm volatile(\n            "\\t\\n\\\n            '
+    f=f[:i]+head+blk*span+f[j:]
+    t=t[:a]+f+t[b:]
+    assert "u16 tex_col_buffer[RENDER_WIDTH*2+3];" in t
+    t=t.replace("u16 tex_col_buffer[RENDER_WIDTH*2+3];","u16 tex_col_buffer[RENDER_WIDTH*2+48];")
+    d.write_text(t)
+def m14_no_sound(out):
+    """M14 diagnostic: no music and no SFX (sfx_on/music_on start FALSE)."""
+    for f,a,b in (("sfx.c","int sfx_on = TRUE;","int sfx_on = FALSE;"),("music.c","int music_on = TRUE;","int music_on = FALSE;")):
+        p_=out/"src"/f; t=p_.read_text(); assert t.count(a)==1,f
+        p_.write_text(t.replace(a,b))
+def m14_view_trim(out, n):
+    """M14: render only columns [n, RENDER_WIDTH-n) (each column = 4 px; n=2 -> one
+    8x8 tile less on each side). Outer columns are never drawn (stay black)."""
+    gh=out/"src/game.h"; t=gh.read_text()
+    a="#define RENDER_WIDTH 64"; assert t.count(a)==1
+    gh.write_text(t.replace(a,a+"\n#define M14_VL %d\n#define M14_VR (RENDER_WIDTH-%d)"%(n,n)))
+    def edit(fn,pairs):
+        f=out/"src"/fn; t=f.read_text()
+        for old,new,cnt in pairs:
+            assert t.count(old)==cnt,(fn,old,t.count(old))
+            t=t.replace(old,new)
+        f.write_text(t)
+    edit("portal.c",[
+      ("    if (x2 > RENDER_WIDTH) x2 = RENDER_WIDTH;\n    if (x1 >= x2) return;",
+       "    if (x2 > M14_VR) x2 = M14_VR;\n    if (x1 < M14_VL) x1 = M14_VL;\n    if (x1 >= x2) return;",1),
+      ("clipped & LEFT_FRUSTUM_CLIPPED ? 0 : project","clipped & LEFT_FRUSTUM_CLIPPED ? M14_VL : project",1),
+      ("LEFT_FRUSTUM_CLIPPED) ? 0 : project_and_adjust_x","LEFT_FRUSTUM_CLIPPED) ? M14_VL : project_and_adjust_x",2),
+      ("RIGHT_FRUSTUM_CLIPPED) ? RENDER_WIDTH : project_and_adjust_x","RIGHT_FRUSTUM_CLIPPED) ? M14_VR : project_and_adjust_x",2),
+    ])
+    f=out/"src/bunch_render.c"; t=f.read_text()
+    assert t.count("s16 window_min = 0;\n    s16 window_max = RENDER_WIDTH;")>=1
+    t=t.replace("s16 window_min = 0;\n    s16 window_max = RENDER_WIDTH;","s16 window_min = M14_VL;\n    s16 window_max = M14_VR;")
+    t=t.replace("0, RENDER_WIDTH,","M14_VL, M14_VR,")
+    f.write_text(t)
+    edit("my_bmp.c",[('		bmp_buffer_1 = man_malloc(BMP_PITCH * BMP_VERTICAL_HEIGHT * sizeof(u8), "vertical bmp_buffer_1");\n	}\n',
+      '		bmp_buffer_1 = man_malloc(BMP_PITCH * BMP_VERTICAL_HEIGHT * sizeof(u8), "vertical bmp_buffer_1");\n	}\n	memset(bmp_buffer_0, 0, BMP_PITCH * BMP_VERTICAL_HEIGHT); memset(bmp_buffer_1, 0, BMP_PITCH * BMP_VERTICAL_HEIGHT);\n',1)])
+    edit("draw.c",[("    if (xa<0) xa=0;\n    if (xb>RENDER_WIDTH) xb=RENDER_WIDTH;","    if (xa<M14_VL) xa=M14_VL;\n    if (xb>M14_VR) xb=M14_VR;",1)])
+def m14_unpack_map(out):
+    """M14 perf: portal_map is declared __packed__, so GCC reads each pointer
+    field byte by byte (~30 instrs per u32). All its members are 2-byte aligned
+    anyway on m68k, so dropping the attribute keeps the layout and lets the
+    compiler use move.l."""
+    f=out/"src/portal_map.h"; t=f.read_text()
+    a="typedef struct __attribute__((__packed__)){\n    const u16 num_sector_groups;"
+    assert t.count(a)==1
+    f.write_text(t.replace(a,"typedef struct {\n    const u16 num_sector_groups;"))
+    # same reasoning: structs whose members are all 2-byte aligned on m68k
+    for fn,pat in (("obj_sprite.h",["typedef struct  __attribute__((__packed__))  {\n    const u16 num_spans;","typedef struct  __attribute__((__packed__)) {\n    // 2 bytes\n    const u16 num_columns;"]),
+                   ("texture.h",["typedef struct __attribute__((__packed__)) {\n    const uint16_t* const dark;"])):
+        f=out/"src"/fn; t=f.read_text()
+        for a in pat:
+            assert t.count(a)==1,(fn,a)
+            t=t.replace(a,a.replace(" __attribute__((__packed__)) "," ",1).replace("  __attribute__((__packed__))  "," ",1))
+        f.write_text(t)
+def m14_max_depth(out, n):
+    """M14 perf: stop the portal traversal after n portal hops."""
+    f=out/"src/portal.c"; t=f.read_text()
+    a="if (depth > 48 ||"
+    assert t.count(a)==1
+    f.write_text(t.replace(a,"if (depth > %d ||"%n))
+def m14_max_revisits(out, n):
+    """M14 perf: a sector may be entered at most n times per frame (upstream: 10)."""
+    f=out/"src/portal.c"; t=f.read_text()
+    a="if(sector_rendered_cache[sector] >= 10) {"
+    assert t.count(a)==1
+    f.write_text(t.replace(a,"if(sector_rendered_cache[sector] >= %d) {"%n))
+def m14_skip_closed(out):
+    """M14 perf, no visual loss: do not enter a sector when every screen column of
+    its portal window is already fully covered (nothing more can be drawn there)."""
+    d=out/"src/draw.c"; t=d.read_text()
+    a="u8 is_column_drawn(u8 min_drawable_y, u8 max_drawable_y) {"
+    assert t.count(a)==1
+    t=t.replace(a,"""int m14_window_open(u16 x1, u16 x2) {
+    const u8* p = &yclip[x1<<1];
+    while (x1 < x2) {
+        if (p[0] < p[1]) return 1;
+        p += 2; x1++;
+    }
+    return 0;
+}
+
+"""+a)
+    d.write_text(t)
+    f=out/"src/portal.c"; t=f.read_text()
+    a="    if (x1 >= x2) return;\n"
+    assert t.count(a)>=1
+    i=t.index("void visit_graph(")
+    j=t.index(a,i)
+    t=t[:j]+a+"    { extern int m14_window_open(u16,u16); if (depth != 0 && !m14_window_open(x1,x2)) return; }\n"+t[j+len(a):]
+    f.write_text(t)
+def m14_vg_micro(out):
+    """M14 perf: small per-wall savings in visit_graph (no behaviour change)."""
+    f=out/"src/portal.c"; t=f.read_text()
+    i=t.index("void visit_graph(")
+    j=t.index("\nvoid ",i+10) if "\nvoid " in t[i+10:] else len(t)
+    body=t[i:j]
+    def rep(old,new):
+        nonlocal body
+        assert body.count(old)==1,old
+        body=body.replace(old,new)
+    rep("manifold_dbg[1]++; manifold_dbg[clipped==UNCLIPPED?2:clipped==NEAR_Z_CULLED?3:clipped==FRUSTUM_CULLED?4:5]++;","if (clipped == FRUSTUM_CULLED) { continue; }")
+    rep("    manifold_dbg[0]++;\n","")
+    a=body.index("        texmap_params tmap_info = {")
+    b=body.index("        };",a)+len("        };")
+    body=body[:a]+"""        texmap_params tmap_info;
+        tmap_info.repetitions = 1; tmap_info.u_base = 0; tmap_info.u_span = 0;
+        tmap_info.needs_texture = !is_solid_color;
+        if (!is_solid_color) {
+            tmap_info.repetitions = (map->wall_tex_repetitions ? map->wall_tex_repetitions[portal_idx] : 1);
+            tmap_info.u_base = (map->wall_tex_u ? map->wall_tex_u[(portal_idx)*2] : 0);
+            tmap_info.u_span = (map->wall_tex_u ? (u16)(map->wall_tex_u[(portal_idx)*2+1]-map->wall_tex_u[(portal_idx)*2]) : 0);
+        }"""+body[b:]
+    t=t[:i]+body+t[j:]
+    f.write_text(t)
+def m14_input_fix(out):
+    """M14: BUTTON_C in draw.c flip() is a leftover debug path (clears/copies
+    framebuffers, waitMs(125)) that corrupts the BMP engine; disable it and
+    let C fire as well as A."""
+    d=out/"src/draw.c"; t=d.read_text()
+    old="  if(JOY_readJoypad(JOY_1) & BUTTON_C) {"
+    assert t.count(old)==1
+    t=t.replace(old,"  if(0) {")
+    d.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    assert t.count("joy_button_pressed(BUTTON_A)")==2
+    t=t.replace("joy_button_pressed(BUTTON_A)","joy_button_pressed(BUTTON_A|BUTTON_C)")
+    g.write_text(t)
+    # SGDK XGM: sample ids 1..63 belong to the music, SFX must use >= 64
+    h=out/"src/sfx.h"; t=h.read_text()
+    import re
+    t,nsub=re.subn(r"(#define SFX_\w+_ID )(\d+)",lambda m:m.group(1)+str(int(m.group(2))+63),t)
+    assert nsub==8,nsub
+    h.write_text(t)
+    # recoil (works without tile uploads) + real shot sound
+    t=g.read_text()
+    a="    s16 bobOffY = gun_bobs[idx].y<<1;"
+    assert t.count(a)==1
+    t=t.replace(a,a+"\n    { extern s16 m14_recoil_y; bobOffY += m14_recoil_y; }")
+    a="void set_gun_pos() {"
+    assert t.count(a)==1
+    t=t.replace(a,"s16 m14_recoil_y;\n"+a)
+    a="        shooting--;\n"
+    assert t.count(a)==1
+    t=t.replace(a,a+"        m14_recoil_y = (shooting > 0) ? ((shooting > 3 ? 3 : shooting) * 6) : 0; set_gun_pos();\n")
+    g.write_text(t)
+    wad_snd=None
+    try:
+        import wad_textures as WT, struct as _st
+        _w=WT.Wad(os.environ.get("MANIFOLD_WAD_SND","/home/claude/wad/d.wad"))
+        _l=_w.lump(os.environ.get("MANIFOLD_SHOT_LUMP","DSPISTOL"))
+        _rate=_st.unpack("<H",_l[2:4])[0]; _n=_st.unpack("<I",_l[4:8])[0]
+        _pcm=list(_l[8+16:8+_n-16]) if _n>40 else list(_l[8:8+_n])
+        _m=max(abs(x-128) for x in _pcm) or 1
+        _nn=int(len(_pcm)*14000/_rate); _o=bytearray()
+        for i in range(_nn):
+            v=(_pcm[min(len(_pcm)-1,int(i*_rate/14000))]-128)*min(120/_m,2.0)
+            _o.append(max(1,min(255,int(128+v))))
+        wad_snd=(bytes(_o))
+    except Exception as e:
+        print("M14 WAD sound failed:",e)
+    import wave,random,math
+    random.seed(6)
+    rate=14000; n=int(rate*0.32); lp=0.0; data=bytearray()
+    for i in range(n):
+        tt=i/rate
+        env=math.exp(-tt*14.0)
+        lp+= (random.uniform(-1,1)-lp)*(0.55 if tt<0.05 else 0.25)
+        thump=math.sin(2*math.pi*(90-120*tt)*tt)*math.exp(-tt*18)
+        v=(lp*0.9+thump*0.6)*env*1.6
+        data.append(max(1,min(255,int(128+max(-1,min(1,v))*120))))
+    wp=out/"res/sfx/shotgun.wav"
+    with wave.open(str(wp),"wb") as w:
+        w.setnchannels(1); w.setsampwidth(1); w.setframerate(rate); w.writeframes(wad_snd if wad_snd else bytes(data))
+    b=out/"src/doom_statusbar.c"; t=b.read_text()
+    old="(JOY_readJoypad(JOY_1) & BUTTON_A)"
+    assert t.count(old)==1
+    t=t.replace(old,"(JOY_readJoypad(JOY_1) & (BUTTON_A|BUTTON_C))")
+    b.write_text(t)
 def m14_weapon_fix(out):
     """M14: make the weapon sprites actually show.
 
@@ -3482,6 +3683,24 @@ def stage(src, wad, out, control=False):
         m14_monsters(out,x,y,angle,spawn_cell)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
+    if os.environ.get("MANIFOLD_INPUT_FIX","0")=="1":
+        m14_input_fix(out)
+    if os.environ.get("MANIFOLD_VG_MICRO","0")=="1":
+        m14_vg_micro(out)
+    if os.environ.get("MANIFOLD_SKIP_CLOSED","0")=="1":
+        m14_skip_closed(out)
+    if os.environ.get("MANIFOLD_MAX_REVISITS"):
+        m14_max_revisits(out,int(os.environ["MANIFOLD_MAX_REVISITS"]))
+    if os.environ.get("MANIFOLD_MAX_DEPTH"):
+        m14_max_depth(out,int(os.environ["MANIFOLD_MAX_DEPTH"]))
+    if os.environ.get("MANIFOLD_UNPACK_MAP","0")=="1":
+        m14_unpack_map(out)
+    if int(os.environ.get("MANIFOLD_VIEW_TRIM","0"))>0:
+        m14_view_trim(out,int(os.environ["MANIFOLD_VIEW_TRIM"]))
+    if os.environ.get("MANIFOLD_NO_SOUND","0")=="1":
+        m14_no_sound(out)
+    if os.environ.get("MANIFOLD_TEX_SPAN","4") in ("8","16"):
+        m14_tex_span(out,int(os.environ["MANIFOLD_TEX_SPAN"]))
     report={
         "source":UPSTREAM,"pin":PIN,"map":"E1M1",
         "format":"Manifold portal_map C proof of concept",
