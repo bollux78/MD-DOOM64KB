@@ -50,6 +50,11 @@ TYPES = (
  (9004,"GRATE_C1","grate_c1",44,224),
  (9005,"GRATE_C2","grate_c2",44,224),
  (9006,"GRATE_C3","grate_c3",44,224),
+ # M14 shareware: the remaining E1 monsters, static front frame A1.
+ # Spectre = demon sprite with a checkerboard of transparent texels (fuzz look).
+ (3002,"SARGA1","demon",0,0),
+ (58,"SPECTRE","spectre",0,0),
+ (3003,"BOSSA1","baron",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -95,7 +100,12 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     for kind,lump,name,width,height in TYPES:
         if lump in seen:            # several THING kinds, one sprite
             mapping[kind]=seen[lump]; continue
-        try: pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
+        try:
+            if lump=="SPECTRE":
+                pw,ph,img=WT.patch_image(w.lump("SARGA1"))
+                img=[[(None if (x+y)&1 else v) for x,v in enumerate(row)] for y,row in enumerate(img)]
+            else:
+                pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
         except KeyError:
             print("M12 skipped missing patch:",lump)
             continue
@@ -146,7 +156,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
             if len(m)!=1: print("M14 grate slice skipped",x,y,len(m));continue
             placements.append((m[0],x+(1 if x<3000 else -1),y,mapping[kind]))
     import os as _os
-    monster_idx={mapping[k] for k in (3004,9,3001) if k in mapping}
+    monster_idx={mapping[k] for k in (3004,9,3001,3002,58,3003) if k in mapping}
     if _os.environ.get("MANIFOLD_MONSTERS","0")=="1":
         mons=[pl for pl in placements if pl[3] in monster_idx]
         decs=[pl for pl in placements if pl[3] not in monster_idx]

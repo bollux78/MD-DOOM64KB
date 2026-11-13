@@ -128,7 +128,7 @@ SECTIONS
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x8000;
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x2B000;
+    . = 0x30000;
     */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x50000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
