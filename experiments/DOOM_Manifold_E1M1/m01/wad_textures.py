@@ -290,14 +290,27 @@ def emit_textures_c(res, names):
            '#include "real_timer.h"', '#include "texture.h"', "",
            "/* GENERATED from Doom shareware textures (E1M1) for this experiment */"]
     table = ["(lit_texture*)(0xBEEFF00F),"]
+    # Lossless deduplication of byte-identical converted palette/lighting
+    # textures. Identical images may legally point to the same const array.
+    dedup = os.environ.get("MANIFOLD_TEXTURE_ARRAY_DEDUP", "0") == "1"
+    array_pool = {}
+    saved_bytes = 0
     for i, nm in enumerate(names):
         wdt, hgt, img = res["tex"][nm]
         for variant, f in (("mid", 1.0), ("dark", 0.55)):
             words = texture_words(pal, img, wdt, hgt, f)
-            out.append(f"const u16 doomtex_{i}_{variant}[{TEX_W}*{TEX_H}] = {{")
-            for k in range(0, len(words), TEX_H):
-                out.append("  " + ", ".join(f"0x{v:04x}" for v in words[k:k + TEX_H]) + ",")
-            out.append("};")
+            ident = f"doomtex_{i}_{variant}"
+            key = tuple(words)
+            if dedup and key in array_pool:
+                out.append(f"#define {ident} {array_pool[key]}")
+                saved_bytes += 2 * len(words)
+            else:
+                out.append(f"const u16 {ident}[{TEX_W}*{TEX_H}] = {{")
+                for k in range(0, len(words), TEX_H):
+                    out.append("  " + ", ".join(f"0x{v:04x}" for v in words[k:k + TEX_H]) + ",")
+                out.append("};")
+                if dedup:
+                    array_pool[key] = ident
         for lv, (d, m, l) in (("dark", ("dark", "dark", "mid")), ("mid", ("dark", "dark", "mid")),
                               ("light", ("mid", "mid", "mid"))):
             out.append(f"const lit_texture doomlit_{i}_{lv} = {{ .dark = doomtex_{i}_{d}, "
@@ -309,6 +322,9 @@ def emit_textures_c(res, names):
     out.append("const lit_texture* const textures[1+ 64*8] = {")
     out += ["  " + t for t in table]
     out.append("};")
+    if dedup:
+        print("M14 TEXTURE ARRAY DEDUP", "unique_arrays", len(array_pool),
+              "source_bytes_saved_at_least", saved_bytes)
     return "\n".join(out) + "\n"
 
 
