@@ -4,6 +4,7 @@ on:
     branches: [exp-manifold-m14-resource-compression]
     paths:
       - '.github/workflows/manifold-m14-resource-dedup.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld'
   workflow_dispatch:
 permissions:
   contents: read
@@ -77,6 +78,7 @@ jobs:
           for m in E1M1 E1M2 E1M4 E1M5 E1M9; do
             echo "::group::Compiling compact $m"
             bash experiments/DOOM_Manifold_E1M1/tools/m14/multimap/build_map_image.sh "$m"
+            grep -E "M14 SPRITE RLE DEDUP|M14 TEXTURE ARRAY DEDUP" "/tmp/m12/mm_$m.stage.log" || true
             echo "::endgroup::"
           done
       - name: Compose compact image and verify identical shared block
