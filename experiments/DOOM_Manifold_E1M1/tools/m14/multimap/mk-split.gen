@@ -184,7 +184,7 @@ $(OUT_DIR)/symbol.txt: $(OUT_DIR)/rom.out
 
 $(OUT_DIR)/rom.out: $(OUT_DIR)/sega.o $(OUT_DIR)/cmd_ $(LIBMD)
 	@$(MKDIR) -p $(dir $@)
-	$(CC) -m68000 -B$(BIN) -n -T /home/claude/md-doom64kb/experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld -nostdlib $(OUT_DIR)/sega.o @$(OUT_DIR)/cmd_ $(LIBMD) $(LIBGCC) -o $(OUT_DIR)/rom.out -Wl,--no-gc-sections -fno-lto
+	$(CC) -m68000 -B$(BIN) -n -T $(MANIFOLD_MULTIMAP_DIR)/md_split.ld -nostdlib $(OUT_DIR)/sega.o @$(OUT_DIR)/cmd_ $(LIBMD) $(LIBGCC) -o $(OUT_DIR)/rom.out -Wl,--no-gc-sections -fno-lto
 	@$(RM) $(OUT_DIR)/cmd_
 
 $(OUT_DIR)/cmd_: $(OBJS)
