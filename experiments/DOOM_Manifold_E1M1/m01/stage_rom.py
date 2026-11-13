@@ -3227,6 +3227,15 @@ def m14_generic_doors(out):
     f.write_text(t)
     print("M14 generic doors: lowering pillars + keycards")
 
+def m14_all_keys(out):
+    """M14: the player always carries the blue, red and green(yellow) keys (tech demo: open every door)."""
+    f=out/"src/inventory.c"; t=f.read_text()
+    a="void inventory_reset() {\n    num_items = 0;\n"
+    assert t.count(a)==1
+    t=t.replace(a,"void inventory_reset() {\n    num_items = 0;\n    inventory[num_items++] = BLUE_KEY; inventory[num_items++] = RED_KEY; inventory[num_items++] = GREEN_KEY;\n")
+    f.write_text(t)
+    print("M14 all keys in inventory")
+
 def m14_dyn_params(out):
     """M14: only sector groups that can move/flash (type != NO_TYPE: doors, lifts, lights,
     stairs) get a RAM copy of their 8 parameters; every other group is read straight from
@@ -3707,6 +3716,8 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
     m14_identity(out)
+    if os.environ.get("MANIFOLD_ALL_KEYS","1")=="1":
+        m14_all_keys(out)
     if os.environ.get("MANIFOLD_NOHUD","0")=="1":
         m14_nohud(out)
     if os.environ.get("MANIFOLD_VDP_SAFE","0") in ("1","2"):
