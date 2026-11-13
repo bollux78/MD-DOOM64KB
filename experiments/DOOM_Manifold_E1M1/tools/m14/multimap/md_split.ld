@@ -114,7 +114,7 @@ SECTIONS
     */src/portal.o(.text.portal_rend)
     . = 0x1500;
     */src/e1m1_map.o(.rodata.e1_block_offsets)
-    . = 0x1900;
+    . = 0x1B00;
     */src/m14_bgm.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .lit)
     . = 0x2000;
     */src/colors.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -130,7 +130,7 @@ SECTIONS
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x2B000;
     */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x42000;
+    . = 0x50000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = ALIGN(2);
     */res/music_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)

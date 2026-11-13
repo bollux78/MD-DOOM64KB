@@ -17,8 +17,9 @@ from convert_wad import read_map, name
 
 SCALE=16
 MAX_CELLS=1024
-MAX_WALLS=2048
-MAX_VERTICES=1024
+import os as _os
+MAX_WALLS=int(_os.environ.get("MANIFOLD_MAX_WALLS","2048"))
+MAX_VERTICES=int(_os.environ.get("MANIFOLD_MAX_WALLS","1024"))
 MAX_PORTALS=512
 
 def nodes_from_wad(path, map_name="E1M1"):

@@ -8,8 +8,9 @@
 import subprocess, sys, os, struct
 D = os.path.dirname(os.path.abspath(__file__)); os.chdir(D)
 T = "/home/claude/mars/m68k-elf/bin/m68k-elf-"
-MAPS = [("E1M1", "E1M1  HANGAR"), ("E1M2", "E1M2  NUCLEAR PLANT"), ("E1M4", "E1M4  COMMAND CONTROL"),
-        ("E1M5", "E1M5  PHOBOS LAB"), ("E1M9", "E1M9  MILITARY BASE")]
+MAPS = [("E1M1", "E1M1  HANGAR"), ("E1M2", "E1M2  NUCLEAR PLANT"), ("E1M3", "E1M3  TOXIN REFINERY"),
+        ("E1M4", "E1M4  COMMAND CONTROL"), ("E1M5", "E1M5  PHOBOS LAB"), ("E1M6", "E1M6  CENTRAL PROC."),
+        ("E1M7", "E1M7  COMPUTER STATION"), ("E1M8", "E1M8  PHOBOS ANOMALY"), ("E1M9", "E1M9  MILITARY BASE")]
 BANK = 0x80000
 COMMON_ORG = 0x10000
 MAP_ORG = 0x300000

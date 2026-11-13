@@ -2905,7 +2905,7 @@ def m14_start_menu(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     touching anything), which opens on the level list with the current map selected.
     Exact resume is not possible: the next map start-up clears all work RAM, and the menu needs VRAM/CRAM."""
     import os as _o
-    mapid={"E1M1":0,"E1M2":1,"E1M4":2,"E1M5":3,"E1M9":4}[_o.environ.get("MANIFOLD_MAP","E1M1")]
+    mapid={"E1M1":0,"E1M2":1,"E1M3":2,"E1M4":3,"E1M5":4,"E1M6":5,"E1M7":6,"E1M8":7,"E1M9":8}[_o.environ.get("MANIFOLD_MAP","E1M1")]
     sb=out/"src/doom_statusbar.c"; t=sb.read_text()
     t+="""
 /* M14 START menu */
@@ -3653,7 +3653,7 @@ def stage(src, wad, out, control=False):
     old="#define MAX_WALLS        1024"
     if h.count(old)!=1:
         raise ValueError("upstream MAX_WALLS definition changed")
-    header.write_text(h.replace(old,"#define MAX_WALLS        2048"))
+    header.write_text(h.replace(old,"#define MAX_WALLS        %d"%int(os.environ.get("MANIFOLD_MAX_WALLS","2048"))))
     # Manifold's map chooser reads a fixed pointer table, not the Doom BSP.
     p=out/"src/maps.h"
     s=p.read_text()

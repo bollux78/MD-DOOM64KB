@@ -209,8 +209,8 @@ int main(void) {
     text(13, 6, "SELECIONE A FASE", 3);
     for (;;) {
         for (i = 0; i < MAP_COUNT; i++) {
-            text(10, 10 + i * 2, i == sel ? "> " : "  ", 3);
-            text(12, 10 + i * 2, maps[i].name, i == sel ? 3 : 2);
+            text(10, 9 + i * 1, i == sel ? "> " : "  ", 3);
+            text(12, 9 + i * 1, maps[i].name, i == sel ? 3 : 2);
         }
         text(8, 23, "CIMA/BAIXO: ESCOLHER", 2);
         text(8, 25, "START: JOGAR", 2);

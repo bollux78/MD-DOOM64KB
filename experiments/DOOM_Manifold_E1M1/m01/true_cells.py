@@ -16,6 +16,7 @@ M03 pipeline:
   5. weld to integer map units, split T-junctions, pair edges exactly.
 """
 from __future__ import annotations
+import os
 from collections import defaultdict
 import math
 
@@ -83,7 +84,15 @@ def convex_ring(geom):
     if not polys:
         return None
     if len(polys) > 1:
-        raise ValueError(f"leaf ∩ sector split into {len(polys)} pieces")
+        if os.environ.get("MANIFOLD_SPLIT_PIECES", "0") != "1":
+            raise ValueError(f"leaf ∩ sector split into {len(polys)} pieces")
+        rings = []
+        for pg in polys:
+            g = pg.buffer(0)
+            if g.interiors:
+                raise ValueError("cell with hole")
+            rings.append(simplify(list(g.exterior.coords)[:-1]))
+        return rings
     g = polys[0].buffer(0)
     if g.interiors:
         raise ValueError("cell with hole")
@@ -126,7 +135,8 @@ def true_cells(lumps, nodes, merge=True):
         if ring is None:
             dropped += 1
             continue
-        cells.append([sec, Polygon(ring), ss])
+        for rg in (ring if isinstance(ring[0], list) else [ring]):
+            cells.append([sec, Polygon(rg), ss])
     if merge:
         merged = True
         while merged:
