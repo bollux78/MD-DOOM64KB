@@ -1,0 +1,38 @@
+name: Manifold M14 compact README cleanup
+on:
+  push:
+    branches: [exp-manifold-m14-size-opt]
+    paths:
+      - '.github/workflows/manifold-m14-readme-cleanup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tidy:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Keep only one family README
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("/home/dan/Projetos/manifold-doom/roms/M14")
+          rom=p/"claudio-manifold-doom-MENU-5-FASES-COMPACT-6MB.bin"
+          assert rom.is_file() and rom.stat().st_size==6291456, "compact ROM not found or unexpected size"
+          base=p/"README.md"
+          old=base.read_text(encoding="utf-8") if base.exists() else "# M14 — Manifold DOOM\n"
+          marker="## Multimapa compacta — 6 MiB"
+          note="""\n## Multimapa compacta — 6 MiB
+
+          - ROM: `claudio-manifold-doom-MENU-5-FASES-COMPACT-6MB.bin`.
+          - Fases: E1M1, E1M2, E1M4, E1M5 e E1M9.
+          - Removida reserva ROM de 1 MiB sem uso, mantendo um so bloco compartilhado.
+          - Menu inicializa no BlastEm; banco SSF2 e jogo aguardam teste no X7.
+          - Branch: `exp-manifold-m14-size-opt`.
+          """
+          if marker not in old:base.write_text(old+note,encoding="utf-8")
+          (p/"README-COMPACT.md").unlink(missing_ok=True)
+          print("M14:",[x.name for x in p.iterdir() if x.is_file() and x.name.lower().endswith(".md")])
+          PY
