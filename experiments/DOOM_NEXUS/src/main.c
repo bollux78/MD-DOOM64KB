@@ -89,7 +89,13 @@ static void value(unsigned n, unsigned x, unsigned y)
     VDP_drawText(text, x, y);
 }
 
-#if defined(NX_UV_INCREMENTAL) && defined(NX_RECIP_LUT) && defined(NX_COLUMN_ASM)
+#if defined(NX_PRECALC) && defined(NX_FAST_DIV)
+#define VARIANT_NAME "BOTH"
+#elif defined(NX_PRECALC)
+#define VARIANT_NAME "PRE"
+#elif defined(NX_FAST_DIV)
+#define VARIANT_NAME "DIV"
+#elif defined(NX_UV_INCREMENTAL) && defined(NX_RECIP_LUT) && defined(NX_COLUMN_ASM)
 #define VARIANT_NAME "ALL"
 #elif defined(NX_UV_INCREMENTAL)
 #define VARIANT_NAME "UV"
@@ -110,7 +116,7 @@ static void show_timing(Timing t, unsigned pose, int mode, int free_camera)
     VDP_drawText("NEXUS", 1, 0);
     VDP_drawText(nexus_map_name, 8, 0);
 #ifdef NX_4X1
-    VDP_drawText("4X1", 28, 0);
+    VDP_drawText(VARIANT_NAME, 28, 0);
 #else
     VDP_drawText(VARIANT_NAME, 28, 0);
 #endif

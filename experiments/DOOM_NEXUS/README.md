@@ -93,3 +93,25 @@ As duas ROMs coincidiram com seus frames de referência do PC nas
 13 poses e nos três modos. O modo liso 4x1 também coincidiu com o
 traçado de raios independente nessas poses. A avaliação visual e
 de velocidade no Mega Drive físico está pendente.
+
+## Escalas pré-calculadas e assembly
+
+E1M1, 4×1, mesmo campo de visão, viewport 160 × 120. As variantes
+`uv`, `fastdiv`, `precalc` e `combined` são compiladas com
+`bash build.sh E1M1 4x1 <variante>`. A primeira é a referência.
+A segunda usa DIVU.W para calcular U. A terceira combina recíprocos
+e offsets de texels pré-calculados com cópias de oito linhas em
+assembly e DBRA na cauda. A quarta reúne as duas mudanças.
+
+| Variante | Perspectiva mediana / P95 | Faixas mediana / P95 |
+| --- | ---: | ---: |
+| UV | 149 / 299 ms | 133 / 299 ms |
+| DIV | 134 / 299 ms | 133 / 299 ms |
+| PRE | 117 / 266 ms | 116 / 266 ms |
+| BOTH | 117 / 266 ms | 116 / 266 ms |
+
+Genesis Plus GX, 13 poses repetidas três vezes. Os tempos incluem o
+quadro completo. Todas as variantes coincidiram com sua saída no PC.
+Em perspectiva, PRE alterou 269 de 62.400 amostras lógicas em relação
+à UV, por aproximações de escala e arredondamento. Paredes lisas
+foram idênticas. O teste no console está pendente.

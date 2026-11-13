@@ -366,7 +366,41 @@ extern const NxMaterial nexus_materials[];
 
 typedef struct { int u, v_step; } TextureColumn;
 
-#ifdef NX_RECIP_LUT
+#ifdef NX_FAST_DIV
+static inline uint32_t wall_divu(uint32_t n, uint16_t d)
+{
+#ifdef __m68k__
+    __asm__("divu.w %1,%0" : "+d"(n) : "dm"(d) : "cc");
+    return (uint16_t)n;
+#else
+    return n / d;
+#endif
+}
+#endif
+
+#ifdef NX_FAST_DIV
+/* Normalize once so the 68000 can do the U division in hardware. */
+static inline unsigned wall_ratio(uint32_t n, uint32_t d)
+{
+    while (d > UINT16_MAX) {
+        n >>= 4;
+        d >>= 4;
+    }
+    return wall_divu(n << 12, d);
+}
+#endif
+
+#ifdef NX_PRECALC
+#include "wall_steps.h"
+
+static int vertical_step(uint32_t zoom)
+{
+    unsigned index = (zoom + 16384u) >> 15;
+    if (index < 64 || index > 8192)
+        return zoom ? (int)(UINT32_MAX / zoom) : 0;
+    return depth_step[index];
+}
+#elif defined(NX_RECIP_LUT)
 #include "wall_reciprocal.h"
 
 /* zoom is positive Q24. Normalize its mantissa into [2048,4096). */
@@ -423,12 +457,16 @@ static TextureColumn sample_incremental(int32_t scale, int32_t weight,
         return (TextureColumn){ua >> 8, 0};
     int32_t z = scale;
     int32_t weighted = limit(weight, 0, z);
+#ifdef NX_FAST_DIV
+    int32_t t = wall_ratio(weighted, z);
+#else
     /* Normalize both terms together before the Q12 division. */
     while ((uint32_t)z > 0x000fffff) {
         weighted >>= 4;
         z >>= 4;
     }
     int32_t t = ((uint32_t)weighted << 12) / (uint32_t)z;
+#endif
     int u = (ua + ((int64_t)(ub - ua) * t >> 12)) >> 8;
     return (TextureColumn){u, vertical_step(scale)};
 }
@@ -454,6 +492,38 @@ static TextureColumn sample_wall(int x, int32_t ax, int32_t bx, ViewPoint a,
 }
 #endif
 
+#ifdef NX_PRECALC
+static inline unsigned wall_remainder(uint32_t n, unsigned d)
+{
+    if ((d & (d - 1)) == 0)
+        return n & (d - 1);
+#ifdef __m68k__
+    if (n < d * UINT32_C(65536)) {
+        __asm__("divu.w %1,%0" : "+d"(n) : "dm"((uint16_t)d) : "cc");
+        return n >> 16;
+    }
+#endif
+    return n % d;
+}
+
+static void copy_rows(uint8_t *dst, const uint8_t *src, const uint8_t *offsets)
+{
+#ifdef __m68k__
+    uint16_t index = 0;
+#define COPY_TEXEL "move.b (%[offsets])+,%[index]\n\t" \
+                   "move.b (%[source],%[index].w),(%[dest])+\n\t"
+    __asm__ volatile (COPY_TEXEL COPY_TEXEL COPY_TEXEL COPY_TEXEL
+                      COPY_TEXEL COPY_TEXEL COPY_TEXEL COPY_TEXEL
+                      : [dest] "+&a"(dst), [offsets] "+&a"(offsets), [index] "+&d"(index)
+                      : [source] "a"(src) : "memory");
+#undef COPY_TEXEL
+#else
+    for (unsigned i = 0; i < 8; ++i)
+        dst[i] = src[offsets[i]];
+#endif
+}
+#endif
+
 static void material_span(Renderer *r, int x, int first, int end, unsigned color,
                           const NxTexture *texture, int anchor, TextureColumn column)
 {
@@ -463,18 +533,53 @@ static void material_span(Renderer *r, int x, int first, int end, unsigned color
         span(r, x, first, end, color);
         return;
     }
+#ifdef NX_PRECALC
+    int u = wall_remainder(column.u < 0 ? -(int64_t)column.u : column.u, texture->width);
+    if (column.u < 0 && u)
+        u = texture->width - u;
+#else
     int u = column.u % texture->width;
+#endif
+#ifndef NX_PRECALC
     if (u < 0)
         u += texture->width;
+#endif
     const uint8_t *src = texture->pixels + u * texture->height;
     int height = texture->height * 256;
-    int v = ((anchor - r->camera->z) * 256
-             + (first * 2 + 1 - NX_HEIGHT) * column.v_step / 2) % height;
+    int initial = (anchor - r->camera->z) * 256
+                  + (first * 2 + 1 - NX_HEIGHT) * column.v_step / 2;
+#ifdef NX_PRECALC
+    int v = wall_remainder(initial < 0 ? -(int64_t)initial : initial, height);
+    if (initial < 0 && v)
+        v = height - v;
+#else
+    int v = initial % height;
+#endif
     if (v < 0)
         v += height;
+#ifdef NX_PRECALC
+    unsigned step = wall_remainder(column.v_step, height);
+#else
     unsigned step = column.v_step % height;
+#endif
     uint8_t *dst = r->pixels + nx_linear_index(x, first);
+#ifdef NX_PRECALC
+    unsigned bucket = (step + 16) >> 5;
+    if (bucket <= 64) {
+        unsigned tail = row_offsets[bucket][7][7];
+        while (end - first >= 8 && (v >> 8) + tail < texture->height) {
+            copy_rows(dst, src + (v >> 8), row_offsets[bucket][(v >> 5) & 7]);
+            dst += 8;
+            first += 8;
+            v += step * 8;
+            if (v >= height)
+                v = wall_remainder(v, height);
+        }
+    }
+#endif
 #if defined(NX_COLUMN_ASM) && defined(__m68k__)
+    if (first == end)
+        return;
     if (height <= 32768) {
         uint16_t rows = end - first - 1;
         uint16_t fraction = v, advance = step, period = height, index;

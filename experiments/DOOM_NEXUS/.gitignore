@@ -5,3 +5,4 @@ __pycache__/
 
 /src/wall_data.c
 /src/wall_reciprocal.h
+/src/wall_steps.h

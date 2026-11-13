@@ -14,6 +14,9 @@ case "$variant" in
     lut) variant_flags="-DNX_RECIP_LUT" ;;
     asm) variant_flags="-DNX_COLUMN_ASM" ;;
     all) variant_flags="-DNX_UV_INCREMENTAL -DNX_RECIP_LUT -DNX_COLUMN_ASM" ;;
+    fastdiv) variant_flags="-DNX_UV_INCREMENTAL -DNX_FAST_DIV" ;;
+    precalc) variant_flags="-DNX_UV_INCREMENTAL -DNX_PRECALC -DNX_COLUMN_ASM" ;;
+    combined) variant_flags="-DNX_UV_INCREMENTAL -DNX_FAST_DIV -DNX_PRECALC -DNX_COLUMN_ASM" ;;
     *) echo "Unsupported optimization variant: $variant" >&2; exit 2 ;;
 esac
 config="$scale-$variant"
@@ -33,6 +36,9 @@ python3 tools/import_wad.py "$DOOM1_WAD" --maps "$map" --emit src/map_data.c --t
 
 if [[ "$variant" == lut || "$variant" == all ]]; then
     python3 tools/reciprocal.py src/wall_reciprocal.h
+fi
+if [[ "$variant" == precalc || "$variant" == combined ]]; then
+    python3 tools/wall_steps.py src/wall_steps.h
 fi
 libgcc="$("${prefix}gcc" -m68000 -print-libgcc-file-name)"
 make release GDK="$GDK" PREFIX="$prefix" JAVA=java EXTRA_FLAGS="-std=gnu11 -ffreestanding -DNX_2X2 -DNX_WALLS $viewport_flag $variant_flags" LIBGCC="$libgcc -lgcc"
