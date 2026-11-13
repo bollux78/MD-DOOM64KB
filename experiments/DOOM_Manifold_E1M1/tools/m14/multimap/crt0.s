@@ -90,127 +90,127 @@ _start:
         jsr main
 2:      bra.s 2b
 
-stub2: move.l 3145736,-(%sp)
+stub2: move.l 2097160,-(%sp)
         rts
-stub3: move.l 3145740,-(%sp)
+stub3: move.l 2097164,-(%sp)
         rts
-stub4: move.l 3145744,-(%sp)
+stub4: move.l 2097168,-(%sp)
         rts
-stub5: move.l 3145748,-(%sp)
+stub5: move.l 2097172,-(%sp)
         rts
-stub6: move.l 3145752,-(%sp)
+stub6: move.l 2097176,-(%sp)
         rts
-stub7: move.l 3145756,-(%sp)
+stub7: move.l 2097180,-(%sp)
         rts
-stub8: move.l 3145760,-(%sp)
+stub8: move.l 2097184,-(%sp)
         rts
-stub9: move.l 3145764,-(%sp)
+stub9: move.l 2097188,-(%sp)
         rts
-stub10: move.l 3145768,-(%sp)
+stub10: move.l 2097192,-(%sp)
         rts
-stub11: move.l 3145772,-(%sp)
+stub11: move.l 2097196,-(%sp)
         rts
-stub12: move.l 3145776,-(%sp)
+stub12: move.l 2097200,-(%sp)
         rts
-stub13: move.l 3145780,-(%sp)
+stub13: move.l 2097204,-(%sp)
         rts
-stub14: move.l 3145784,-(%sp)
+stub14: move.l 2097208,-(%sp)
         rts
-stub15: move.l 3145788,-(%sp)
+stub15: move.l 2097212,-(%sp)
         rts
-stub16: move.l 3145792,-(%sp)
+stub16: move.l 2097216,-(%sp)
         rts
-stub17: move.l 3145796,-(%sp)
+stub17: move.l 2097220,-(%sp)
         rts
-stub18: move.l 3145800,-(%sp)
+stub18: move.l 2097224,-(%sp)
         rts
-stub19: move.l 3145804,-(%sp)
+stub19: move.l 2097228,-(%sp)
         rts
-stub20: move.l 3145808,-(%sp)
+stub20: move.l 2097232,-(%sp)
         rts
-stub21: move.l 3145812,-(%sp)
+stub21: move.l 2097236,-(%sp)
         rts
-stub22: move.l 3145816,-(%sp)
+stub22: move.l 2097240,-(%sp)
         rts
-stub23: move.l 3145820,-(%sp)
+stub23: move.l 2097244,-(%sp)
         rts
-stub24: move.l 3145824,-(%sp)
+stub24: move.l 2097248,-(%sp)
         rts
-stub25: move.l 3145828,-(%sp)
+stub25: move.l 2097252,-(%sp)
         rts
-stub26: move.l 3145832,-(%sp)
+stub26: move.l 2097256,-(%sp)
         rts
-stub27: move.l 3145836,-(%sp)
+stub27: move.l 2097260,-(%sp)
         rts
-stub28: move.l 3145840,-(%sp)
+stub28: move.l 2097264,-(%sp)
         rts
-stub29: move.l 3145844,-(%sp)
+stub29: move.l 2097268,-(%sp)
         rts
-stub30: move.l 3145848,-(%sp)
+stub30: move.l 2097272,-(%sp)
         rts
-stub31: move.l 3145852,-(%sp)
+stub31: move.l 2097276,-(%sp)
         rts
-stub32: move.l 3145856,-(%sp)
+stub32: move.l 2097280,-(%sp)
         rts
-stub33: move.l 3145860,-(%sp)
+stub33: move.l 2097284,-(%sp)
         rts
-stub34: move.l 3145864,-(%sp)
+stub34: move.l 2097288,-(%sp)
         rts
-stub35: move.l 3145868,-(%sp)
+stub35: move.l 2097292,-(%sp)
         rts
-stub36: move.l 3145872,-(%sp)
+stub36: move.l 2097296,-(%sp)
         rts
-stub37: move.l 3145876,-(%sp)
+stub37: move.l 2097300,-(%sp)
         rts
-stub38: move.l 3145880,-(%sp)
+stub38: move.l 2097304,-(%sp)
         rts
-stub39: move.l 3145884,-(%sp)
+stub39: move.l 2097308,-(%sp)
         rts
-stub40: move.l 3145888,-(%sp)
+stub40: move.l 2097312,-(%sp)
         rts
-stub41: move.l 3145892,-(%sp)
+stub41: move.l 2097316,-(%sp)
         rts
-stub42: move.l 3145896,-(%sp)
+stub42: move.l 2097320,-(%sp)
         rts
-stub43: move.l 3145900,-(%sp)
+stub43: move.l 2097324,-(%sp)
         rts
-stub44: move.l 3145904,-(%sp)
+stub44: move.l 2097328,-(%sp)
         rts
-stub45: move.l 3145908,-(%sp)
+stub45: move.l 2097332,-(%sp)
         rts
-stub46: move.l 3145912,-(%sp)
+stub46: move.l 2097336,-(%sp)
         rts
-stub47: move.l 3145916,-(%sp)
+stub47: move.l 2097340,-(%sp)
         rts
-stub48: move.l 3145920,-(%sp)
+stub48: move.l 2097344,-(%sp)
         rts
-stub49: move.l 3145924,-(%sp)
+stub49: move.l 2097348,-(%sp)
         rts
-stub50: move.l 3145928,-(%sp)
+stub50: move.l 2097352,-(%sp)
         rts
-stub51: move.l 3145932,-(%sp)
+stub51: move.l 2097356,-(%sp)
         rts
-stub52: move.l 3145936,-(%sp)
+stub52: move.l 2097360,-(%sp)
         rts
-stub53: move.l 3145940,-(%sp)
+stub53: move.l 2097364,-(%sp)
         rts
-stub54: move.l 3145944,-(%sp)
+stub54: move.l 2097368,-(%sp)
         rts
-stub55: move.l 3145948,-(%sp)
+stub55: move.l 2097372,-(%sp)
         rts
-stub56: move.l 3145952,-(%sp)
+stub56: move.l 2097376,-(%sp)
         rts
-stub57: move.l 3145956,-(%sp)
+stub57: move.l 2097380,-(%sp)
         rts
-stub58: move.l 3145960,-(%sp)
+stub58: move.l 2097384,-(%sp)
         rts
-stub59: move.l 3145964,-(%sp)
+stub59: move.l 2097388,-(%sp)
         rts
-stub60: move.l 3145968,-(%sp)
+stub60: move.l 2097392,-(%sp)
         rts
-stub61: move.l 3145972,-(%sp)
+stub61: move.l 2097396,-(%sp)
         rts
-stub62: move.l 3145976,-(%sp)
+stub62: move.l 2097400,-(%sp)
         rts
-stub63: move.l 3145980,-(%sp)
+stub63: move.l 2097404,-(%sp)
         rts
