@@ -4,6 +4,8 @@ on:
     branches: [exp-manifold-m14-size-opt]
     paths:
       - '.github/workflows/manifold-m14-size-opt.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/**'
+      - 'experiments/DOOM_Manifold_E1M1/m01/stage_rom.py'
   workflow_dispatch:
 permissions:
   contents: read
