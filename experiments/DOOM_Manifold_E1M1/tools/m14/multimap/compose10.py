@@ -18,4 +18,4 @@ subprocess.check_call([T+"as","-m68000","crt0.s","-o","crt0.o"])
 for f in("menu","assets"): subprocess.check_call([T+"gcc","-m68000","-Os","-ffreestanding","-fno-pic","-nostdlib","-c",f+".c","-o",f+".o"])
 subprocess.check_call([T+"ld","-T","menu.ld","crt0.o","menu.o","assets.o","-o","menu.elf"]); subprocess.check_call([T+"objcopy","-O","binary","menu.elf","menu.bin"])
 m=open("menu.bin","rb").read(); assert len(m)<=BANK
-open("/home/claude/outputs/claudio-manifold-doom-MENU-5-FASES-10MB-RESETOK.bin","wb").write(m+b"\xff"*(BANK-len(m))+b"".join(imgs)); print(len(m))
+open("/home/claude/outputs/claudio-manifold-doom-MENU-5-FASES-10MB-MONSTROS.bin","wb").write(m+b"\xff"*(BANK-len(m))+b"".join(imgs)); print(len(m))

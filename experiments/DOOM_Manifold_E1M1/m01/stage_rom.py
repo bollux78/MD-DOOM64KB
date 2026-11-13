@@ -2922,6 +2922,7 @@ def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     sb=out/"src/doom_statusbar.c"; t=sb.read_text()
     t+="""
 u8 m14_player_dead_flag;
+s32 m14_spawn_x, m14_spawn_y; u16 m14_spawn_cell, m14_spawn_ang;
 void m14_player_damage(u16 dmg) {
     if (dhud_state.armor > 0) {
         u16 a = dmg / 3;
@@ -3068,10 +3069,11 @@ void m14_hit_object(object_link o, u16 sector) {
         extern u8 m14_player_dead_flag;
         if (m14_player_dead_flag) {{
             m14_player_dead_flag = 0;
-            cur_player_pos.x = FIX32({spawn_x});
-            cur_player_pos.y = FIX32({spawn_y});
-            cur_player_pos.cur_sector = {spawn_cell};
-            cur_player_pos.ang = {(spawn_ang*1024)//360};
+            extern s32 m14_spawn_x, m14_spawn_y; extern u16 m14_spawn_cell, m14_spawn_ang;
+            cur_player_pos.x = m14_spawn_x;
+            cur_player_pos.y = m14_spawn_y;
+            cur_player_pos.cur_sector = m14_spawn_cell;
+            cur_player_pos.ang = m14_spawn_ang;
             cur_player_pos.z = FIX32(-10000);
         }}
     }}
@@ -3681,6 +3683,11 @@ def stage(src, wad, out, control=False):
     p.write_text(s)
     if os.environ.get("MANIFOLD_MONSTERS","0")=="1":
         m14_monsters(out,x,y,angle,spawn_cell)
+        _lp=out/"src/level.c"; _ls=_lp.read_text()
+        _an=f"    cur_player_pos.ang = {(angle*1024)//360};"
+        assert _ls.count(_an)==1
+        _ls=_ls.replace(_an,_an+f"\n    {{ extern s32 m14_spawn_x, m14_spawn_y; extern u16 m14_spawn_cell, m14_spawn_ang; m14_spawn_x = FIX32({x}); m14_spawn_y = FIX32({y}); m14_spawn_cell = {spawn_cell}; m14_spawn_ang = {(angle*1024)//360}; }}")
+        _lp.write_text(_ls)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
     if os.environ.get("MANIFOLD_INPUT_FIX","0")=="1":
