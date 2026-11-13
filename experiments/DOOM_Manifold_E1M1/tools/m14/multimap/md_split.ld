@@ -48,6 +48,41 @@ PROVIDE (__stack = 0xE1000000);
 
 SECTIONS
 {
+  .mapobjs 0x00201800 :
+  {
+    . = 0x0;
+    */src/level.o(.text.check_trigger_switch)
+    . = 0x400;
+    */src/level.o(.text.clean_portal_map)
+    . = 0x800;
+    */src/level.o(.text.load_portal_map)
+    . = 0xC00;
+    */src/sector_group.o(.text.run_sector_group_processes)
+    . = 0x1000;
+    */src/sector_group.o(.text.activate_sector_group_enter_trigger)
+    . = 0x1400;
+    */src/portal.o(.text.portal_rend)
+    . = 0x1500;
+    */src/e1m1_map.o(.rodata.e1_block_offsets)
+    . = 0x2000;
+    */src/colors.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x2800;
+    */src/level.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x3000;
+    */src/sector_group.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x3C00;
+    */src/manifold_sky.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x5200;
+    */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x5800;
+    */src/game.o(.text.handle_input)
+    . = 0x8000;
+    */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x2B000;
+    */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = 0x42000;
+    */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+  } > rom
   .common 0x00010000 :
   {
     */res/graphics_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -68,8 +103,7 @@ SECTIONS
     */src/editor_test_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */src/fire.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */src/fire_native.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    /* game.o code contains references to per-map input structures: keep it per-map. */
-    */src/game.o(.rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    */src/game.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */src/game_mode.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */src/init.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */src/inventory.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -99,41 +133,6 @@ SECTIONS
     */libmd.a:*(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     */libgcc.a:*(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = ALIGN(0x1000);
-  } > rom
-  .mapobjs 0x00201800 :
-  {
-    . = 0x0;
-    */src/level.o(.text.check_trigger_switch)
-    . = 0x400;
-    */src/level.o(.text.clean_portal_map)
-    . = 0x800;
-    */src/level.o(.text.load_portal_map)
-    . = 0xC00;
-    */src/sector_group.o(.text.run_sector_group_processes)
-    . = 0x1000;
-    */src/sector_group.o(.text.activate_sector_group_enter_trigger)
-    . = 0x1400;
-    */src/portal.o(.text.portal_rend)
-    . = 0x1500;
-    */src/e1m1_map.o(.rodata.e1_block_offsets)
-    . = 0x2000;
-    */src/colors.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x2800;
-    */src/level.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x3000;
-    */src/sector_group.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x3C00;
-    */src/manifold_sky.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x5200;
-    */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x5800;
-    */src/game.o(.text .text.*)
-    . = 0x8000;
-    */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x2B000;
-    */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x42000;
-    */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
   .maphead 0x00200000 :
   {
