@@ -306,7 +306,7 @@ PLAYER_RADIUS=16          # Doom's player radius; must stay > NEAR_Z*sqrt(2) = 1
 BLOCK_MARGIN=24           # extra reach so a one-frame move cannot outrun the per-cell list
 LEDGE_DOOM=30             # runtime blocks rises >= (60<<4) in 2x-scaled heights
 
-def blocking_segments(lumps,cells):
+def blocking_segments(lumps,cells,skip_sectors=()):
     """Per cell: solid walls and too-high ledges (of ANY cell) within reach.
     Upstream Manifold expects collision_vertexes pre-inset by the editor; ours
     were the raw walls, so the player could touch walls -> wall inside the
@@ -324,7 +324,7 @@ def blocking_segments(lumps,cells):
             if w["neighbor"]<0: solid.append((a,b,None))
             else:
                 n=cells[w["neighbor"]]
-                if abs(floor(c)-floor(n))>=LEDGE_DOOM:
+                if abs(floor(c)-floor(n))>=LEDGE_DOOM and c["doom_sector"] not in skip_sectors and n["doom_sector"] not in skip_sectors:
                     ledges[tuple(sorted((a,b)))]=(a,b,max(floor(c),floor(n)))
     if __import__("os").environ.get("MANIFOLD_GRATES","1")=="1":
         # M14: two-sided BRNBIG lattice fences are blocking (linedef flag 1)
@@ -635,7 +635,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         bt=bsp_tables(cells)
         text+=f"const u16 e1_bsp_num_nodes = {len(bt)//14};\n"
         text+="const s16 e1_bsp_nodes[] = {"+",".join(map(str,bt))+"};\n"
-    boffs,bflat,_=blocking_segments(lumps,cells)
+    boffs,bflat,_=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,5)})
     text+="const u16 e1_block_offsets[] = {"+",".join(map(str,boffs))+"};\n"
     text+="const s16 e1_block_segs[] = {"+",".join(map(str,bflat or [0]))+"};\n"
     if things is not None:
