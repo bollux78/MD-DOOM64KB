@@ -44,3 +44,24 @@ Objetivo: portar primeiro a **geometria e texturas de E1M1** de Heretic para o r
 - [ ] Testes gráficos/console.
 
 **Não afirmar ainda que H01 roda em Manifold.** A inspeção do formato é somente a primeira etapa.
+
+## Decisão de implementação (13/11/2026)
+
+**Manifold primeiro.** O conversor `m01/convert_wad.py` aceita diretamente WADs little-endian Doom/Heretic, e `emit_portal_map.py` reconstrói BSP para células. Já a R128 usa WAD ROM com setores/sidedefs/seg/texture IDs em formato proprietário big-endian, tornando a simples substituição do IWAD insegura.
+
+Preflight local do arquivo do usuário (Heretic shareware v1.0, SHA fixado acima):
+- E1M1: 370 SSECTORS, 1118 SEGS, 777 LINEDEFS, 688 VERTEXES, 154 SECTORS.
+- Nenhuma SEG de E1M1 referencia sidedef frontal inválido.
+- 251 de 370 subsectors não são anéis fechados independentes: isso requer reconstrução de regiões BSP; não é necessariamente erro.
+- TEXTURE1: 58 texturas; PLAYPAL e PNAMES presentes; 12 nomes de flats usados no E1M1.
+- Há 242 THINGS e 45 tipos: a versão H01 dispensa objetos e lógica.
+- Não aplicar semântica de specials, sprites, HUD ou armas de DOOM ao Heretic.
+
+O workflow `.github/workflows/heretic-h01-manifold.yml` realiza:
+1. Obtenção privada do IWAD original via arquivo local ou fonte pública com SHA-256 validado; nunca faz commit do WAD.
+2. Auditoria de topologia e geração de candidato portal_map.
+3. Preparação da árvore Manifold isolada, **sem texturas/objetos/portas/HUD de DOOM**, para verificar apenas geometria.
+4. Compilação de ROM H01 na máquina de runner, se as etapas anteriores forem aprovadas.
+5. ROM de diagnóstico, se gerada: `/home/dan/Projetos/manifold-doom/roms/H01/heretic-manifold-h01-geometry.bin`.
+
+**Critério de fallback:** a R128 será considerada se a reconstrução geométrica do Manifold apresentar problema estrutural sem correção simples. Esta rotina não declara que Heretic já executa ou está jogável.
