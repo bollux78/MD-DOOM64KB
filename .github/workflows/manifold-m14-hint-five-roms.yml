@@ -5,6 +5,7 @@ on:
     branches: [exp-manifold-m14-hint-five-roms]
     paths:
       - '.github/workflows/manifold-m14-hint-five-roms.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/hint_five_roms.py'
   workflow_dispatch:
 permissions:
   contents: read
