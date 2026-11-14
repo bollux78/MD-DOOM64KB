@@ -3227,6 +3227,24 @@ def m14_generic_doors(out):
     f.write_text(t)
     print("M14 generic doors: lowering pillars + keycards")
 
+def m14_hint_rearm(out):
+    """Piscar de barras pretas ao girar: o VInt zera a fase do H-Int mas nao rearma o
+    contador do H-Int. Se um H-Int atrasa/se perde, o registrador fica com o valor de outra
+    fase e o quadro inteiro desalinha (display ligado tarde / apagado cedo). Rearma o
+    contador da fase 0 em todo VInt."""
+    p=out/"src/my_bmp.c"
+    s=p.read_text()
+    old="void do_vint_flip() {\n    phase = 0;\n"
+    if s.count(old)!=1: raise ValueError("do_vint_flip changed")
+    s=s.replace(old,old+"    VDP_setHIntCounter(((screenHeight - BMP_VERTICAL_HEIGHT) >> 1) - 8);\n")
+    p.write_text(s)
+    print("H-Int counter rearmed in every VInt")
+
+def m14_install_display_hint_variants(out):
+    if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
+    if os.environ.get("MANIFOLD_KEEP_DISPLAY","0")=="1": keep_display_enabled_in_hblank(out)
+
+
 def m14_all_keys(out):
     """M14: the player always carries the blue, red and green(yellow) keys (tech demo: open every door)."""
     f=out/"src/inventory.c"; t=f.read_text()
@@ -3760,6 +3778,7 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
     m14_identity(out)
+    m14_install_display_hint_variants(out)
     if os.environ.get("MANIFOLD_ALL_KEYS","1")=="1":
         m14_all_keys(out)
     if os.environ.get("MANIFOLD_LAT_CLIP","0")=="1":
