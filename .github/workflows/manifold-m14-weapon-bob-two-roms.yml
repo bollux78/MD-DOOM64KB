@@ -1,0 +1,47 @@
+name: Manifold M14 E1M4 weapon bob two ROM diagnostics
+# Runs only on private self-hosted runner; WAD and ROMs never uploaded.
+on:
+  push:
+    branches: [exp-manifold-m14-weapon-bob-two-roms]
+    paths:
+      - '.github/workflows/manifold-m14-weapon-bob-two-roms.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/weapon_bob_two_roms.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manifold-m14-weapon-bob-two-roms
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout isolated experiment
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify private inputs and locate SGDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /home/dan/Projetos/manifold-doom/roms/M14
+          test -f /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then echo "GDK=$d" >> "$GITHUB_ENV"; exit 0; fi
+          done
+          while IFS= read -r f; do
+            if test -f "$f"; then echo "GDK=${f%/makefile.gen}" >> "$GITHUB_ENV"; exit 0; fi
+          done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null)
+          echo "::error::SGDK not found"; exit 1
+      - name: Build two weapon E1M4 diagnostic ROMs in private runner archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/weapon_bob_two_roms.py
+      - name: List generated ROMs (no uploads)
+        if: always()
+        shell: bash
+        run: |
+          find /home/dan/Projetos/manifold-doom/roms/M14/diagnostico-ARMA-20261114 -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/dev/null | sort || true
