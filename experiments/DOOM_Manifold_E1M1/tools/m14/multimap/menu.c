@@ -163,13 +163,21 @@ int main(void) {
 
     /* after a RESET the game leaves VDP state/VRAM behind: put every register in a
        known state, then wipe VRAM, CRAM and VSRAM (cold boot has them zeroed) */
+#ifndef WIPE_MODE
+#define WIPE_MODE 3   /* bit0 = reset VDP regs, bit1 = wipe VRAM/CRAM/VSRAM (0 = neither) */
+#endif
+#if WIPE_MODE & 1
     vreg(1, 0x04);
     vreg(6, 0); vreg(8, 0); vreg(9, 0); vreg(14, 0);
     vreg(19, 0); vreg(20, 0); vreg(21, 0); vreg(22, 0); vreg(23, 0);   /* no DMA fill/copy pending */
     vreg(15, 2);
+#endif
+#if WIPE_MODE & 2
+    vreg(15, 2);
     vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
     VDP_CTRL32 = 0x40000010UL; for (i = 0; i < 40; i++) VDP_DATA = 0;   /* VSRAM */
+#endif
     vreg(0, 0x04); vreg(1, 0x04); vreg(2, PLANE_A >> 10); vreg(3, 0); vreg(4, 0x07);
     vreg(5, 0); vreg(7, 0x00); vreg(10, 0); vreg(11, 0); vreg(12, 0x81);
     vreg(13, 0x2C); vreg(15, 2); vreg(16, 0x01); vreg(17, 0); vreg(18, 0);
@@ -206,6 +214,9 @@ int main(void) {
     vreg(7, 0x3F);
     clear_plane();
     text(9, 4, "MANIFOLD DOOM - E1M1..E1M9", 3);
+#ifdef BUILD_TAG
+    text(2, 1, BUILD_TAG, 2);
+#endif
     text(13, 6, "SELECIONE A FASE", 3);
     for (;;) {
         for (i = 0; i < MAP_COUNT; i++) {
