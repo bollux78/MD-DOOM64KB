@@ -164,7 +164,7 @@ int main(void) {
     /* after a RESET the game leaves VDP state/VRAM behind: put every register in a
        known state, then wipe VRAM, CRAM and VSRAM (cold boot has them zeroed) */
 #ifndef WIPE_MODE
-#define WIPE_MODE 3   /* bit0 = reset VDP regs, bit1 = wipe VRAM/CRAM/VSRAM (0 = neither) */
+#define WIPE_MODE 2   /* hardware: bit0 (regs) da tela preta; so bit1 funciona. bit0 = reset VDP regs, bit1 = wipe VRAM/CRAM/VSRAM (0 = neither) */
 #endif
 #if WIPE_MODE & 1
     vreg(1, 0x04);
