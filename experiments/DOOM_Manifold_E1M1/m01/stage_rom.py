@@ -3240,9 +3240,38 @@ def m14_hint_rearm(out):
     p.write_text(s)
     print("H-Int counter rearmed in every VInt")
 
+def m14_hint_probe(out):
+    """Diagnostico: guarda em RAM a linha (VCounter) em que cada fase do H-Int vertical roda."""
+    p=out/"src/my_bmp.c"
+    s=p.read_text()
+    a=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_vertical() {")
+    b=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_horizontal() {")
+    body=s[a:b]
+    body=body.replace("    const u16 scrh = screenHeight;\n","    const u16 scrh = screenHeight;\n    hint_probe[3]++; hint_probe[4+(phase&3)] = GET_VCOUNTER;\n",1)
+    s=s[:a]+"volatile u16 hint_probe[8];\n"+body+s[b:]
+    p.write_text(s)
+    print("H-Int probe installed")
+
+def m14_hint_margin(out, n):
+    """Margem de tolerancia no H-Int vertical: acende o display n linhas mais cedo no topo e
+    apaga n linhas mais tarde embaixo, para absorver H-Int atrasado (barras pretas piscando)."""
+    p=out/"src/my_bmp.c"
+    s=p.read_text()
+    a=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_vertical() {")
+    b=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_horizontal() {")
+    body=s[a:b]
+    o1="const u16 vborder = (scrh - 177) >> 1; // was 177?"
+    o2="VDP_setHIntCounter(((scrh - BMP_VERTICAL_HEIGHT) >> 1) - 8);"
+    if body.count(o1)!=1 or body.count(o2)!=1: raise ValueError("vertical H-Int body changed")
+    body=body.replace(o1,"const u16 vborder = ((scrh - 177) >> 1) - %d;"%n).replace(o2,"VDP_setHIntCounter(((scrh - BMP_VERTICAL_HEIGHT) >> 1) - %d);"%(8+n))
+    p.write_text(s[:a]+body+s[b:])
+    print("H-Int margin",n)
+
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
     if os.environ.get("MANIFOLD_KEEP_DISPLAY","0")=="1": keep_display_enabled_in_hblank(out)
+    if os.environ.get("MANIFOLD_HINT_PROBE","0")=="1": m14_hint_probe(out)
+    if int(os.environ.get("MANIFOLD_HINT_MARGIN","0")): m14_hint_margin(out,int(os.environ["MANIFOLD_HINT_MARGIN"]))
 
 
 def m14_all_keys(out):
