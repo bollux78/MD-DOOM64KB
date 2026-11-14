@@ -3248,7 +3248,14 @@ def m14_hint_probe(out):
     b=s.index("HINTERRUPT_CALLBACK bmp_do_hblank_process_horizontal() {")
     body=s[a:b]
     body=body.replace("    const u16 scrh = screenHeight;\n","    const u16 scrh = screenHeight;\n    hint_probe[3]++; hint_probe[4+(phase&3)] = GET_VCOUNTER;\n",1)
-    s=s[:a]+"volatile u16 hint_probe[8];\n"+body+s[b:]
+    s=s[:a]+"volatile u16 hint_probe[16];\n"+body+s[b:]
+    k="void do_vint_flip() {"
+    if s.count(k)==1:
+        s=s.replace(k,"static void do_vint_flip_inner() {")
+        s+="\nvoid do_vint_flip() { u16 t0=GET_VCOUNTER; do_vint_flip_inner(); hint_probe[0]=t0; hint_probe[1]=GET_VCOUNTER; }\n"
+    k="void request_flip() {\n"
+    if s.count(k)==1:
+        s=s.replace(k,k+"    hint_probe[8]=DMA_getQueueSize(); hint_probe[9]=(u16)DMA_getQueueTransferSize();\n")
     p.write_text(s)
     print("H-Int probe installed")
 
@@ -3267,10 +3274,27 @@ def m14_hint_margin(out, n):
     p.write_text(s[:a]+body+s[b:])
     print("H-Int margin",n)
 
+def m14_ablate(out):
+    """Diagnostico: tira do loop do jogo trabalhos que entram na fila de DMA do VInt."""
+    g=out/"src/game.c"; t=g.read_text()
+    if os.environ.get("MANIFOLD_NO_CONSOLE","0")=="1":
+        if t.count("    console_tick();")!=1: raise ValueError("console_tick call changed")
+        t=t.replace("    console_tick();","    /* console_tick(); ablated */")
+    ev=int(os.environ.get("MANIFOLD_CONSOLE_EVERY","0"))
+    if ev>1 and os.environ.get("MANIFOLD_NO_CONSOLE","0")!="1":
+        if t.count("    console_tick();")!=1: raise ValueError("console_tick call changed")
+        t=t.replace("    console_tick();","    { static u8 ctk; if(!(ctk++ & %d)) console_tick(); }"%(ev-1))
+    if os.environ.get("MANIFOLD_NO_GUNBOB","0")=="1":
+        k="void set_gun_pos() {\n"
+        if t.count(k)!=1: raise ValueError("set_gun_pos changed")
+        t=t.replace(k,k+"    return;\n")
+    g.write_text(t); print("ablation applied")
+
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
     if os.environ.get("MANIFOLD_KEEP_DISPLAY","0")=="1": keep_display_enabled_in_hblank(out)
     if os.environ.get("MANIFOLD_HINT_PROBE","0")=="1": m14_hint_probe(out)
+    m14_ablate(out)
     if int(os.environ.get("MANIFOLD_HINT_MARGIN","0")): m14_hint_margin(out,int(os.environ["MANIFOLD_HINT_MARGIN"]))
 
 
