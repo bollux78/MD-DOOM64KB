@@ -2,7 +2,7 @@ name: Manifold M14 E1M4 weapon bob two ROM diagnostics
 # Runs only on private self-hosted runner; WAD and ROMs never uploaded.
 on:
   push:
-    branches: [exp-manifold-m14-weapon-bob-two-roms]
+    branches: [exp-manifold-m14-weapon-bob-diag]
     paths:
       - '.github/workflows/manifold-m14-weapon-bob-two-roms.yml'
       - 'experiments/DOOM_Manifold_E1M1/tools/m14/weapon_bob_two_roms.py'
