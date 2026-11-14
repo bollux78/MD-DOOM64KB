@@ -79,6 +79,7 @@ def main():
     env0 = os.environ.copy()
     env0.update(BASE)
     env0["GDK"] = str(GDK)
+    env0["DOOM_R25_MUSIC"] = "1"
     env0["PATH"] = f"{TC.parent}:{GDK}/bin:" + env0.get("PATH","")
     run([sys.executable,"scripts/lab/prepare_r25_music.py"],log,cwd=ROOT,env=env0)
     vgm = ROOT/"res/r25-e1m1.vgm"
