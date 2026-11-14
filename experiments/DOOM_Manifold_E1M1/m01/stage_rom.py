@@ -3277,11 +3277,19 @@ def m14_hint_margin(out, n):
 def m14_ablate(out):
     """Diagnostico: tira do loop do jogo trabalhos que entram na fila de DMA do VInt."""
     g=out/"src/game.c"; t=g.read_text()
-    if os.environ.get("MANIFOLD_NO_CONSOLE","0")=="1":
+    if os.environ.get("MANIFOLD_NO_CONSOLE","0")=="1" and os.environ.get("MANIFOLD_NO_TEXT","0")!="1":
         if t.count("    console_tick();")!=1: raise ValueError("console_tick call changed")
         t=t.replace("    console_tick();","    /* console_tick(); ablated */")
+    if os.environ.get("MANIFOLD_NO_TEXT","0")=="1":
+        for k,r in (("    showStats();","    /* showStats ablated */"),
+                    ("    console_tick();","    /* console_tick ablated */"),
+                    ('    console_push_message_high_priority("game initialized!", 17, 2);',"    /* console msg ablated */")):
+            if t.count(k)!=1: raise ValueError("call changed: "+k)
+            t=t.replace(k,r)
+        print("all on-screen text removed")
     ev=int(os.environ.get("MANIFOLD_CONSOLE_EVERY","0"))
-    if ev>1 and os.environ.get("MANIFOLD_NO_CONSOLE","0")!="1":
+    if os.environ.get("MANIFOLD_NO_TEXT","0")=="1": ev=0
+    if ev>1 and os.environ.get("MANIFOLD_NO_CONSOLE","0")!="1" and os.environ.get("MANIFOLD_NO_TEXT","0")!="1":
         if t.count("    console_tick();")!=1: raise ValueError("console_tick call changed")
         t=t.replace("    console_tick();","    { static u8 ctk; if(!(ctk++ & %d)) console_tick(); }"%(ev-1))
     if os.environ.get("MANIFOLD_NO_GUNBOB","0")=="1":
