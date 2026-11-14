@@ -93,7 +93,7 @@ def main():
         staged = TEMP/name
         env = env0.copy()
         env.update(extra)
-        env["MANIFOLD_BUILD_TAG"] = "WERK M14 HINT " + name.upper()
+        env["MANIFOLD_BUILD_TAG"] = ("WERK M14 HINT " + name.upper())[:28]
         env["MANIFOLD_ROM_NAME"] = "WERK M14 HINT " + name.upper()
         print("BUILD", name, "flags", extra, flush=True)
         run([sys.executable,str(stage_script),"--source",str(upstream),
