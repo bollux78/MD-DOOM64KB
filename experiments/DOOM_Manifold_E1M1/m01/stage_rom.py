@@ -679,9 +679,10 @@ def limit_repeated_sector_overdraw(out):
     old="if(sector_rendered_cache[sector] >= 14)"
     if source.count(old)!=1:
         raise ValueError("upstream repeated-sector threshold changed")
-    source=source.replace(old,"if(sector_rendered_cache[sector] >= 10)")
+    visits=int(os.environ.get("MANIFOLD_VISITS","5"))
+    source=source.replace(old,"if(sector_rendered_cache[sector] >= %d)"%(2*visits))
     p.write_text(source)
-    print("Portals: per-frame repeated-sector bound reduced 7 -> 5")
+    print("Portals: per-frame repeated-sector bound %d (upstream 7)"%visits)
 
 
 
