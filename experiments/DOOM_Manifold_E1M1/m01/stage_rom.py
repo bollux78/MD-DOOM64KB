@@ -4020,6 +4020,32 @@ def m14_tex_u(out):
     b.write_text(s)
     print("M14 wall_tex_u installed (draw.c, portal.c x2, bunch_render x2)")
 
+def m14_weapon_sat(out):
+    """The sprite attribute table of the weapon was refreshed with DMA_QUEUE, and that queue never
+    drains in this engine, so the weapon froze (no bob, no recoil, no fire frame).  Write the SAT
+    with the CPU at vblank instead."""
+    w=out/"src/weapon_sprites.c"; t=w.read_text()
+    n=t.count("VDP_updateSprites(cur_num_sprites, transfer_type);")+t.count("VDP_updateSprites(cur_num_sprites, DMA_QUEUE);")
+    assert n==2,n
+    t=t.replace("VDP_updateSprites(cur_num_sprites, transfer_type);","m14_sat_update(cur_num_sprites);")
+    t=t.replace("VDP_updateSprites(cur_num_sprites, DMA_QUEUE);","m14_sat_update(cur_num_sprites);")
+    a="void update_weapon_sprites(TransferMethod transfer_type);"
+    assert t.count(a)==1
+    t=t.replace(a,a+"""
+void m14_sat_update(u16 n) {
+    for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\\n nop\\n nop\\n nop"); }
+    VDP_updateSprites(n, CPU);
+    SYS_enableInts();
+}""",1)
+    w.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    a="    VDP_updateSprites(shotgun_num_sprites, DMA_QUEUE);"
+    assert t.count(a)==1
+    t=t.replace(a,"    { extern void m14_sat_update(u16 n); m14_sat_update(shotgun_num_sprites); }",1)
+    g.write_text(t)
+    print("weapon: SAT updated by CPU at vblank")
+
+
 def m14_weapon(out, wad):
     """MANIFOLD_WEAPON=pistol: replace the Manifold shotgun PNGs with the Doom
     pistol (PISGA0 idle, PISGB0+PISFA0 firing) built from the user's WAD, one
@@ -4316,6 +4342,7 @@ def stage(src, wad, out, control=False):
         m14_level_exit(out)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
+        m14_weapon_sat(out)
     if os.environ.get("MANIFOLD_INPUT_FIX","0")=="1":
         m14_input_fix(out)
     if os.environ.get("MANIFOLD_VG_MICRO","0")=="1":
