@@ -10,7 +10,9 @@ from pathlib import Path
 GRANTS = {"stimpack":1, "medikit":2, "ammo":3, "shotgun":4,
           "health":5, "armor":6,
           "shells":7, "bulletbox":8, "shellbox":9, "rocketbox":10,
-          "greenarmor":11, "bluearmor":12, "chaingun":13, "rocketlauncher":14}
+          "greenarmor":11, "bluearmor":12, "chaingun":13, "rocketlauncher":14,
+          "radsuit":15, "soulsphere":16, "invis":17, "lightamp":18, "compmap":19, "rocket":20,
+          "chainsaw":21, "backpack":22, "bluekey":23, "yellowkey":24, "redkey":25}
 
 def install(out,templates):
     out=Path(out)
@@ -78,6 +80,7 @@ void m12_process_pickups(void) {
     if h.count(anchor)!=1:raise ValueError("M12 DOOM status bar anchor changed")
     grant="""/* M12: update the actual Doom HUD counters upon collecting THINGS.
  * No combat or firing mechanics are implied by these counters yet. */
+u32 m14_suit_left;
 u8 doom_hud_grant_pickup(u8 kind) {
     switch(kind) {
     case 1: /* stimpack */
@@ -146,6 +149,24 @@ u8 doom_hud_grant_pickup(u8 kind) {
         if ((dhud_state.arms & 8) && dhud_state.ammo[2]>=50) return 0;
         dhud_state.arms|=8;
         dhud_state.ammo[2]+=2; if (dhud_state.ammo[2]>50) dhud_state.ammo[2]=50;
+        return 1;
+    case 15: /* radiation suit: 60 s of hazard immunity (see M14 hazards) */
+        { extern u32 m14_suit_left; m14_suit_left = 18000; }
+        return 1;
+    case 16: /* soulsphere */
+        if (dhud_state.health>=200) return 0;
+        dhud_state.health+=100; if (dhud_state.health>200) dhud_state.health=200;
+        return 1;
+    case 17: case 18: case 19: case 23: case 24: case 25: case 21: /* no mechanic yet: just collect */
+        return 1;
+    case 20: /* rocket */
+        if (dhud_state.ammo[2]>=50) return 0;
+        dhud_state.ammo[2]+=1;
+        return 1;
+    case 22: /* backpack */
+        dhud_state.ammo[0]+=10; if (dhud_state.ammo[0]>200) dhud_state.ammo[0]=200; dhud_state.ammo_r=dhud_state.ammo[0];
+        dhud_state.ammo[1]+=4; if (dhud_state.ammo[1]>50) dhud_state.ammo[1]=50;
+        dhud_state.ammo[2]+=1; if (dhud_state.ammo[2]>50) dhud_state.ammo[2]=50;
         return 1;
     }
     return 0;

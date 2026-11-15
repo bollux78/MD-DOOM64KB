@@ -55,6 +55,18 @@ TYPES = (
  (3002,"SARGA1","demon",0,0),
  (58,"SPECTRE","spectre",0,0),
  (3003,"BOSSA1","baron",0,0),
+ # M14: remaining E1 pickups (patch size x the barrel ratios)
+ (2025,"SUITA0","radsuit",0,0),
+ (2013,"SOULA0","soulsphere",0,0),
+ (2024,"PINSA0","invis",0,0),
+ (2045,"PVISA0","lightamp",0,0),
+ (2026,"PMAPA0","compmap",0,0),
+ (2010,"ROCKA0","rocket",0,0),
+ (2005,"CSAWA0","chainsaw",0,0),
+ (8,"BPAKA0","backpack",0,0),
+ (5,"BKEYA0","bluekey",0,0),
+ (6,"YKEYA0","yellowkey",0,0),
+ (13,"RKEYA0","redkey",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -144,6 +156,13 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     for x,y,angle,kind,flags in lumps["THINGS"]:
         if kind not in mapping or flags&16 or not (flags&7): continue
         matches=[i for i,c in enumerate(cells) if point_inside([w["a"] for w in c["walls"]],(x*16,y*16))]
+        if len(matches)!=1:
+            # on a cell edge / vertex: nudge a few units until exactly one cell holds it
+            for r in (1,2,3,4,6):
+                for ddx,ddy in ((r,0),(-r,0),(0,r),(0,-r),(r,r),(-r,r),(r,-r),(-r,-r)):
+                    m2=[i for i,c in enumerate(cells) if point_inside([w["a"] for w in c["walls"]],((x+ddx)*16,(y+ddy)*16))]
+                    if len(m2)==1: matches=m2; x+=ddx; y+=ddy; break
+                if len(matches)==1: break
         if len(matches)!=1: skipped[kind]+=1;continue
         placements.append((matches[0],x,y,mapping[kind]))
     if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1" and __import__("os").environ.get("MANIFOLD_GRATE_SPRITES","1")=="1":
@@ -165,11 +184,27 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     else:
         mons=[]
         decs=[pl for pl in placements if pl[3] not in monster_idx] if len(placements)>126 else placements
-    cap=126-len(mons)          # every monster may leave a corpse decoration
-    if len(decs)>cap:
-        before=len(decs); st=len(decs)/cap
-        decs=[decs[int(i*st)] for i in range(cap)]
-        print(f"M14 decorations cut {before} -> {len(decs)}")
+    # Decorations share one pool (255 slots with the M14 patch).  Pickups first, then
+    # monsters, then pure scenery; keep a reserve for corpses of killed monsters.
+    ITEM_KINDS={2011,2012,2007,2001,2014,2015,2002,2003,2008,2018,2019,2046,2048,2049,2025,2013,2024,
+                2045,2026,2010,2005,8,5,6,13}
+    item_idx={mapping[k] for k in ITEM_KINDS if k in mapping}
+    total=int(_os.environ.get("MANIFOLD_DEC_CAP","254"))
+    cap=total-len(mons)-int(_os.environ.get("MANIFOLD_CORPSE_RESERVE","24"))
+    items=[pl for pl in decs if pl[3] in item_idx]
+    scen=[pl for pl in decs if pl[3] not in item_idx]
+    if len(items)>cap:
+        bon={mapping[k] for k in (2014,2015) if k in mapping}
+        keep=[pl for pl in items if pl[3] not in bon]; bons=[pl for pl in items if pl[3] in bon]
+        n=max(0,cap-len(keep))
+        if n and bons:
+            st=len(bons)/n; keep+= [bons[int(i*st)] for i in range(min(n,len(bons)))]
+        items=keep[:cap]
+        print(f"M14 pickups cut -> {len(items)}")
+    room=cap-len(items)
+    if len(scen)>room:
+        st=len(scen)/room if room else 1; scen=[scen[int(i*st)] for i in range(room)] if room else []
+    decs=items+scen
     placements=decs+mons
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements
@@ -198,4 +233,4 @@ def install_templates(out,templates):
         # The visual test showed an oversized barrel; reduce both projected
         # dimensions by 25% while preserving the same sprite pixels/THINGS.
         entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24*_hp//100},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
-    p.write_text(s[:a]+externs+"const object_template object_types[48] = {\n"+",\n".join(entries)+"\n};"+s[b:])
+    p.write_text(s[:a]+externs+"const object_template object_types[64] = {\n"+",\n".join(entries)+"\n};"+s[b:])

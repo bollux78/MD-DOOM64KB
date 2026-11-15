@@ -652,10 +652,13 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     _el=[[_V[ln[0]][0],_V[ln[0]][1],_V[ln[1]][0],_V[ln[1]][1]] for ln in _ex]+[[0,0,0,0]]*(4-len(_ex))
     _es=[1 if ln[3]==51 else 0 for ln in _ex]+[0]*(4-len(_ex))
     text+="const struct { u16 count; s16 line[4][4]; u8 secret[4]; } __attribute__((section(\".rodata.m14_exit\"))) m14_exit_tbl = {"+str(len(_ex))+",{"+",".join("{"+",".join(map(str,l))+"}" for l in _el)+"},{"+",".join(map(str,_es))+"}};\n"
+    _dm={5:10,7:5,16:20,4:20}
+    _dv=[_dm.get(sc[5],0) for sc in lumps["SECTORS"]]; _dv+=[0]*((-len(_dv))%4)
+    text+="const u8 m14_dmg_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_dv))+"};\n"
     text+="const u16 e1_block_offsets[] = {"+",".join(map(str,boffs))+"};\n"
     text+="const s16 e1_block_segs[] = {"+",".join(map(str,bflat or [0]))+"};\n"
     if things is not None:
-        text+="static map_object e1_m12_things[] = {\n"
+        text+="static const map_object e1_m12_things[] = {\n"
         for sector,x,y,typ in things:
             text+=f"  {{.sector_num={sector},.x={x},.y={y},.z=0,.type={typ}}},\n"
         text+="};\n"
@@ -669,7 +672,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
   .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,{(chr(10)+"  .wall_tex_u=e1_wall_tex_u,") if use_u else ""}\n  .collision_vertexes=e1_collision_vertices,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
   .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
-  .num_things={len(things) if things is not None else 0},.things={"e1_m12_things" if things is not None else "0"}{pal_field}
+  .num_things={len(things) if things is not None else 0},.things={"(map_object*)e1_m12_things" if things is not None else "0"}{pal_field}{",.m14_dmg=m14_dmg_tbl" if os.environ.get("MANIFOLD_HAZARDS","1")=="1" and os.environ.get("MANIFOLD_MONSTERS","0")=="1" else ""}
 }};
 """
     return text

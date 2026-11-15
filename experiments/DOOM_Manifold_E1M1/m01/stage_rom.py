@@ -3167,6 +3167,50 @@ void m14_hit_object(object_link o, u16 sector) {
     print("M14 monsters: AI installed")
 
 
+def m14_hazards(out):
+    """Damaging floors (nukage 5/10, hell slime 20) at Doom's rate: every 32 tics (~274 of the
+    300 Hz getTick units); the radiation suit (60 s) negates them.  Death uses m14_player_damage
+    (health reset + respawn).  Per-sector damage table comes from the map (portal_map.m14_dmg)."""
+    pm=out/"src/portal_map.h"; t=pm.read_text()
+    a="    map_object* things;\n} portal_map;"
+    assert t.count(a)==1
+    pm.write_text(t.replace(a,"    map_object* things;\n    const u8* m14_dmg;\n} portal_map;",1))
+    sb=out/"src/doom_statusbar.c"; t=sb.read_text()
+    t+="""
+#include "portal_map.h"
+#include "level.h"
+#include "game.h"
+extern u32 m14_suit_left;
+extern u32 last_frame_ticks;
+extern void m14_player_damage(u16 dmg);
+void m14_hazards(void) {
+    static u32 acc;
+    u32 dt = last_frame_ticks; if (dt > 300) dt = 300;
+    if (m14_suit_left > dt) m14_suit_left -= dt; else m14_suit_left = 0;
+    acc += dt;
+    if (acc < 274) return;
+    acc = 0;
+    if (!cur_portal_map->m14_dmg) return;
+    u8 d = cur_portal_map->m14_dmg[sector_group(cur_player_pos.cur_sector, cur_portal_map)];
+    if (!d) return;
+    if (m14_suit_left && !(d >= 20 && (random() & 255) < 5)) return;
+    m14_player_damage(d);
+}
+"""
+    sb.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    a="    m12_process_pickups();"
+    assert t.count(a)==1
+    t=t.replace(a,a+"\n    { extern void m14_hazards(void); m14_hazards(); }",1)
+    g.write_text(t)
+    # 255 decoration slots (links are u8; 0xFF = null)
+    oh=out/"src/object.h"; t=oh.read_text()
+    a="#define NULL_DEC_LINK 0b01111111"
+    assert t.count(a)==1
+    oh.write_text(t.replace(a,"#define NULL_DEC_LINK 0b11111111",1))
+    print("M14 hazards: damaging floors + radiation suit, 255 decorations")
+
+
 def m14_tex_span(out, span):
     """M14: perspective-correct texture coords only every `span` columns
     (default upstream: 4); linear in between. Fewer 32/16 divisions per wall."""
@@ -4051,6 +4095,7 @@ def stage(src, wad, out, control=False):
     p.write_text(s)
     if os.environ.get("MANIFOLD_MONSTERS","0")=="1":
         m14_monsters(out,x,y,angle,spawn_cell)
+        if os.environ.get('MANIFOLD_HAZARDS','1')=='1': m14_hazards(out)
         _lp=out/"src/level.c"; _ls=_lp.read_text()
         _an=f"    cur_player_pos.ang = {(angle*1024)//360};"
         assert _ls.count(_an)==1
