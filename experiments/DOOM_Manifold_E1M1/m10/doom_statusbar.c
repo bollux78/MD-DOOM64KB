@@ -39,6 +39,9 @@ static void dhud_draw_bar(void) {
     for (u8 r = 0; r < HUDW_ROWS; r++) {
         HUDW_ComposeRow(&dhud_state, r, dhud_row);
         for (u8 c = 0; c < HUDW_COLS; c++) dhud_row[c] = DHUD_PAL2(dhud_row[c]);
+#ifndef MANIFOLD_H32
+        dhud_row[0] = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][HUDW_COLS - 1]));   /* plain stone instead of the left edge tile */
+#endif
         VDP_setTileMapDataRect(BG_B, dhud_row, DHUD_X, DHUD_Y + r, HUDW_COLS, 1, HUDW_COLS, CPU);
     }
 }
@@ -46,8 +49,8 @@ static void dhud_draw_bar(void) {
 static void dhud_draw_margins(void) {
 #ifndef MANIFOLD_H32
     for (u8 r = 0; r < HUDW_ROWS; r++) {
-        u16 left = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][0]));
         u16 right = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][HUDW_COLS - 1]));
+        u16 left = right;   /* plain stone on the left too (the bar's own left edge has tick marks) */
         for (u8 c = 0; c < 4; c++) {
             VDP_setTileMapXY(BG_B, left, c, DHUD_Y + r);
             VDP_setTileMapXY(BG_B, right, 36 + c, DHUD_Y + r);

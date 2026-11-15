@@ -166,13 +166,22 @@ def true_cells(lumps, nodes, merge=True):
     return cells, stats
 
 
+def _snap(v):
+    """Round to integer map units with a tie-break that does not depend on float noise: the same
+    BSP vertex (e.g. y=-374.5 +- 1e-9) must weld to the same integer in every cell, otherwise the
+    shared edge of two cells fails to pair and becomes a solid wall (E1M4 acid pit)."""
+    if os.environ.get("MANIFOLD_SNAP","new") == "old":
+        return round(v)
+    return int(math.floor(round(v, 5) + 0.5))
+
+
 def weld_and_pair(cells, lumps, clockwise=True):
     """Integer vertices, T-junction split, exact reverse-edge pairing."""
     # global weld: round to integer map units
     polys = []
     for ent in cells:
         sec, poly, ss = ent[0], ent[1], (ent[2] if len(ent) > 2 else -1)
-        pts = [(round(x), round(y)) for x, y in poly.exterior.coords[:-1]]
+        pts = [(_snap(x), _snap(y)) for x, y in poly.exterior.coords[:-1]]
         out = []
         for p in pts:
             if not out or out[-1] != p:
@@ -186,6 +195,54 @@ def weld_and_pair(cells, lumps, clockwise=True):
         if (area2 < 0) != clockwise:
             out.reverse()
         polys.append((sec, out, ss))
+    # The node builder created split vertices with truncated coordinates while the exact cell
+    # polygons carry rounded ones: the same point can differ by one unit between neighbouring cells
+    # (E1M4 acid pit: (704,-374) vs (704,-375)) and the shared edge then fails to pair and turns
+    # into a solid wall.  Snap such points (within 1 unit) onto one representative: WAD vertices win.
+    if os.environ.get("MANIFOLD_WELD1", "1") == "1":
+        wadv = set((v[0], v[1]) for v in lumps["VERTEXES"])
+        pts_all = sorted(set(p for _, poly, _ss in polys for p in poly))
+        grid = {}
+        for p in pts_all:
+            grid.setdefault((p[0] // 4, p[1] // 4), []).append(p)
+        rep = {}
+        for p in pts_all:
+            near = []
+            for gx in (p[0] // 4 - 1, p[0] // 4, p[0] // 4 + 1):
+                for gy in (p[1] // 4 - 1, p[1] // 4, p[1] // 4 + 1):
+                    for q in grid.get((gx, gy), []):
+                        if q != p and abs(q[0] - p[0]) <= 1 and abs(q[1] - p[1]) <= 1:
+                            near.append(q)
+            if not near or p in wadv:
+                continue
+            cands = [q for q in near if q in wadv]
+            if cands:
+                rep[p] = min(cands, key=lambda q: (abs(q[0]-p[0]) + abs(q[1]-p[1]), q))
+            else:
+                best = min(near + [p])
+                if best != p:
+                    rep[p] = best
+        if rep:
+            def canon(p):
+                seen = 0
+                while p in rep and seen < 4:
+                    p = rep[p]; seen += 1
+                return p
+            npolys = []
+            for sec, poly, ss in polys:
+                out = []
+                for p in map(canon, poly):
+                    if not out or out[-1] != p:
+                        out.append(p)
+                if len(out) > 1 and out[0] == out[-1]:
+                    out.pop()
+                area2 = sum(out[k][0] * out[(k + 1) % len(out)][1] - out[(k + 1) % len(out)][0] * out[k][1]
+                            for k in range(len(out)))
+                if len(out) < 3 or area2 == 0:
+                    continue
+                npolys.append((sec, out, ss))
+            polys = npolys
+            print("weld1: snapped %d vertices" % len(rep))
     allpts = set(p for _, poly, _ss in polys for p in poly)
 
     def on_seg(a, b, p):
@@ -193,7 +250,7 @@ def weld_and_pair(cells, lumps, clockwise=True):
             return False
         dx, dy = b[0] - a[0], b[1] - a[1]
         L = math.hypot(dx, dy)
-        if abs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) > 0.75 * L:
+        if abs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) > float(os.environ.get("MANIFOLD_TJ_TOL","0.9")) * L:
             return False
         t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (L * L)
         return 1e-9 < t < 1 - 1e-9
