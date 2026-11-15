@@ -3197,6 +3197,29 @@ void m14_hazards(void) {
     m14_player_damage(d);
 }
 
+/* ---- M14 radiation-suit tint: PAL1 (3D view) goes green while the suit is active ---- */
+static u8 m14t_on;
+static inline void m14t_vb(void){ for(;;){ SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) return; SYS_enableInts(); __asm__ volatile("nop\\n nop\\n nop\\n nop"); } }
+void m14_tint_tick(void) {
+    u8 want = m14_suit_left && (m14_suit_left > 1200 || ((m14_suit_left / 150) & 1));
+    if (want == m14t_on) return;
+    const u16* src = cur_portal_map->palette;
+    if (!src) return;
+    m14t_on = want;
+    m14t_vb();
+    for (u16 i = 0; i < 16; i++) {
+        u16 c = src[i];
+        if (want) {
+            u16 r = (c >> 1) & 7, g = (c >> 5) & 7, b = (c >> 9) & 7;
+            r = (r * 3) >> 3; b = (b * 3) >> 3;
+            if (g) { g += (g >> 2) + 1; if (g > 7) g = 7; }
+            c = (b << 9) | (g << 5) | (r << 1);
+        }
+        PAL_setColor(16 + i, c);
+    }
+    SYS_enableInts();
+}
+
 /* ---- M14 world: tagged remote actions ---- */
 #include "sfx.h"
 static u8 m14w_fired[64];
@@ -3305,6 +3328,96 @@ void m14_world_use(void) {
     a="#define NULL_DEC_LINK 0b01111111"
     assert t.count(a)==1
     oh.write_text(t.replace(a,"#define NULL_DEC_LINK 0b11111111",1))
+    o=out/"src/object.c"; t=o.read_text()
+    t+="""
+/* ---- M14 barrels: shoot -> explosion animation + radius damage + chain reaction ---- */
+extern u32 last_frame_ticks;
+extern void play_sfx(u8 id, u8 priority);
+static u8 m14b_hp[128];
+typedef struct { u8 link; u8 frame; u16 sector; s16 left; } m14_expl_t;
+static m14_expl_t m14x[10];
+static u8 m14x_n;
+static void m14_dec_unlink(u8 link, u16 sector) {
+    u8 prev = NULL_DEC_LINK, cur = sector_decoration_lists[sector];
+    u16 guard = 0;
+    while (cur != NULL_DEC_LINK && guard++ < MAX_DECORATIONS) {
+        if (cur == link) {
+            u8 nx = DEC_LINK_DEREF(cur).next;
+            if (prev == NULL_DEC_LINK) sector_decoration_lists[sector] = nx; else DEC_LINK_DEREF(prev).next = nx;
+            DEC_LINK_DEREF(cur).next = decoration_free_list; decoration_free_list = cur;
+            return;
+        }
+        prev = cur; cur = DEC_LINK_DEREF(cur).next;
+    }
+}
+static void m14_explode(u8 link, u16 sector, s16 delay);
+static void m14_blast(u8 link, u16 sector) {
+    s32 bx = DEC_LINK_DEREF(link).x, by = DEC_LINK_DEREF(link).y;
+    s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
+    s32 dx = px - bx, dy = py - by; if (dx < 0) dx = -dx; if (dy < 0) dy = -dy;
+    s32 d = (dx > dy ? dx : dy) - 16; if (d < 0) d = 0;
+    if (d < 128) m14_player_damage((u16)(128 - d));
+    for (u16 sct = 0; sct < num_sector_lists; sct++) {
+        u8 l = sector_decoration_lists[sct]; u16 g = 0;
+        while (l != NULL_DEC_LINK && g++ < MAX_DECORATIONS) {
+            if (l != link && DEC_LINK_DEREF(l).object_type == M14_ID_BARREL) {
+                s32 ex = DEC_LINK_DEREF(l).x - bx, ey = DEC_LINK_DEREF(l).y - by;
+                if (ex < 0) ex = -ex; if (ey < 0) ey = -ey;
+                if ((ex > ey ? ex : ey) < 108) m14_explode(l, sct, 60);
+            }
+            l = DEC_LINK_DEREF(l).next;
+        }
+    }
+}
+static void m14_explode(u8 link, u16 sector, s16 delay) {
+    if (DEC_LINK_DEREF(link).object_type != M14_ID_BARREL) return;
+    for (u8 i = 0; i < m14x_n; i++) if (m14x[i].link == link) return;
+    if (m14x_n >= 10) { m14_dec_unlink(link, sector); return; }
+    m14_expl_t* e = &m14x[m14x_n++];
+    e->link = link; e->sector = sector; e->frame = delay ? 255 : 0; e->left = delay ? delay : 45;
+    if (!delay) { DEC_LINK_DEREF(link).object_type = M14_ID_BEXP0; play_sfx(SFX_SHOTGUN_ID, 15); m14_blast(link, sector); }
+}
+void m14_shoot_dec(u8 link, u16 sector) {
+    if (DEC_LINK_DEREF(link).object_type != M14_ID_BARREL) return;
+    u8 n = link >> 1, sh = (link & 1) << 2;
+    u8 cur = ((m14b_hp[n] >> sh) & 15) + (random() % 3) + 1;
+    if (cur >= 4) { m14b_hp[n] &= ~(15 << sh); m14_explode(link, sector, 0); }
+    else m14b_hp[n] = (m14b_hp[n] & ~(15 << sh)) | (cur << sh);
+}
+void m14_expl_tick(void) {
+    s16 dt = last_frame_ticks > 300 ? 300 : last_frame_ticks;
+    for (u8 i = 0; i < m14x_n; ) {
+        m14_expl_t* e = &m14x[i];
+        e->left -= dt;
+        u8 done = 0;
+        if (e->frame == 255) {
+            if (e->left <= 0) {
+                e->frame = 0; e->left = 45;
+                DEC_LINK_DEREF(e->link).object_type = M14_ID_BEXP0; play_sfx(SFX_SHOTGUN_ID, 15); m14_blast(e->link, e->sector);
+            }
+        } else {
+            while (e->left <= 0 && !done) {
+                e->frame++; e->left += 45;
+                if (e->frame >= 5) done = 1; else DEC_LINK_DEREF(e->link).object_type = M14_ID_BEXP0 + e->frame;
+            }
+        }
+        if (done) {
+            m14_dec_unlink(e->link, e->sector);
+            m14x[i] = m14x[--m14x_n];
+        } else i++;
+    }
+}
+"""
+    t=t.replace("#include <genesis.h>","#include <genesis.h>\n#include \"sfx.h\"\n#include \"game.h\"",1) if "sfx.h" not in t else t
+    o.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    a="        if(drawn_to_center_cols == OBJECT && sprite_on_center_col != NULL_OBJ_LINK) {"
+    assert t.count(a)==1
+    t=t.replace(a,"        if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); m14_shoot_dec(sprite_on_center_col, center_object_sector); }\n"+a,1)
+    a="m14_hazards(); m14_world_tick(); }"
+    assert t.count(a)==1
+    t=t.replace(a,"m14_hazards(); m14_world_tick(); { extern void m14_tint_tick(void); extern void m14_expl_tick(void); m14_tint_tick(); m14_expl_tick(); } }",1)
+    g.write_text(t)
     print("M14 hazards: damaging floors + radiation suit, 255 decorations")
 
 

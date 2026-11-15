@@ -56,6 +56,11 @@ TYPES = (
  (58,"SPECTRE","spectre",0,0),
  (3003,"BOSSA1","baron",0,0),
  # M14: remaining E1 pickups (patch size x the barrel ratios)
+ (9301,"BEXPA0","bexp0",0,0),
+ (9302,"BEXPB0","bexp1",0,0),
+ (9303,"BEXPC0","bexp2",0,0),
+ (9304,"BEXPD0","bexp3",0,0),
+ (9305,"BEXPE0","bexp4",0,0),
  (2025,"SUITA0","radsuit",0,0),
  (2013,"SOULA0","soulsphere",0,0),
  (2024,"PINSA0","invis",0,0),

@@ -128,16 +128,16 @@ SECTIONS
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0xA000;
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x3D000;
+    . = 0x43000;
     */src/e1m1_map.o(.rodata.e1m1_map)
-    . = 0x3D100;
+    . = 0x43100;
     */src/e1m1_map.o(.rodata.m14_exit_tbl)
-    . = 0x3D180;
+    . = 0x43180;
     */src/e1m1_map.o(.rodata.e1_block_segs)
     */src/e1m1_map.o(.rodata.str1.1)
     . = ALIGN(4);
     */src/e1m1_map.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x5C000;
+    . = 0x62000;
     */src/textures.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = ALIGN(2);
     */res/music_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -204,7 +204,7 @@ SECTIONS
     */src/portal.o(.bss .bss.* COMMON)
     */src/sector_group.o(.bss .bss.* COMMON)
     */src/textures.o(.bss .bss.* COMMON)
-    . = 0x1D80;
+    . = 0x1E40;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }
