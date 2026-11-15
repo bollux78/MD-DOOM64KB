@@ -3078,6 +3078,23 @@ int look_for_player(object_link cur_obj, uint16_t cur_sector) {
     return 1;
 }
 
+/* Doom hitscan: the monster aims at the player, then the angle gets a random spread of
+   (P_Random()-P_Random())<<20 (triangular, max ~22.4 deg = 391 mrad).  The shot hits when the
+   spread is within the player's angular half-width (radius 16 units -> 16000/d mrad). */
+/* Doom P_CheckMissileRange (doom64kb src/p_enemy.c): dist-64, -128 more without a melee attack,
+   capped at 200; attack unless P_Random() < dist. */
+static u16 m14_missile_ok(u32 d) {
+    s32 dd = (s32)d - 64 - 128; if (dd < 0) dd = 0; if (dd > 200) dd = 200;
+    return (s32)(random() & 255) >= dd;
+}
+static u16 m14_aim_hit(u32 d) {
+    if (d < 16) return 1;
+    s32 a = 16000 / (s32)d; const s32 m = 391;
+    if (a >= m) return 1;
+    s32 sp = (s32)(random() & 255) - (s32)(random() & 255);      /* -255..255, triangular */
+    sp = sp * m / 255; if (sp < 0) sp = -sp;
+    return sp < a;
+}
 int follow_player(object_link cur_obj, uint16_t cur_sector) {
     u8 t=OBJ_LINK_DEREF(cur_obj).object_type;
     u8 k=m14_kind(t);
@@ -3099,16 +3116,18 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
                 OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(90);
                 return 1;
             }
-        } else if (seen && d<900) {                          /* zombieman / sergeant: hitscan */
+        } else if (seen && !m14_missile_ok(d)) {             /* Doom P_CheckMissileRange said no: re-check at the next chase decision */
+            OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(11*((random()&15)+1));   /* movecount 0..15 x 4 tics */
+        } else if (seen) {                                   /* zombieman / sergeant: hitscan (A_PosAttack / A_SPosAttack) */
             u8 pellets=(k==2)?3:1;
             u16 total=0;
             for (u8 i=0;i<pellets;i++) {
-                u16 hit = (d<300) ? ((random()&3)!=0) : (random()&1);
+                u16 hit = m14_aim_hit(d);
                 if (hit) total+=3*((random()%5)+1);
             }
             if (total) m14_player_damage(total);
             OBJ_LINK_DEREF(cur_obj).object_type=m14_atk_id[k];
-            OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(k==2?130:100);
+            OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(k==2?86:74);   /* attack states: 30 / 26 tics */
             play_sfx(SFX_SHOTGUN_ID, 5);
             return 1;
         }
