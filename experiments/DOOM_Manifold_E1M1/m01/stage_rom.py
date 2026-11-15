@@ -4034,9 +4034,26 @@ def m14_weapon_sat(out):
     t=t.replace(a,a+"""
 void m14_sat_update(u16 n) {
     for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\\n nop\\n nop\\n nop"); }
-    VDP_updateSprites(n, CPU);
+    VDP_updateSprites(n + 1, CPU);   /* +1: the cleared terminator entry, so no stale sprites stay linked */
     SYS_enableInts();
 }""",1)
+    k="    FrameVDPSprite* f = frame1->frameVDPSprites;\n    for(int i = 0; i < cur_num_sprites; i++) {"
+    assert t.count(k)==1
+    t=t.replace(k,"    FrameVDPSprite* f = frame1->frameVDPSprites;\n    u16 m14_cnt = frame1->numSprite < cur_num_sprites ? frame1->numSprite : cur_num_sprites;\n    for(int i = 0; i < m14_cnt; i++) {",1)
+    for k,v in (("BASE_WEAPON_X+spr->offsetX, BASE_WEAPON_Y+spr->offsetY,","BASE_WEAPON_X+spr->offsetX, BASE_WEAPON_Y+spr->offsetY+m14_shown_dy,"),
+                ("BASE_WEAPON_Y+spr->offsetY+offY","BASE_WEAPON_Y+spr->offsetY+offY+m14_shown_dy")):
+        assert t.count(k)==1,k
+        t=t.replace(k,v,1)
+    # the bob must follow the frame that is actually on screen (cur_sprite_def changes before the SAT is rebuilt)
+    k="void update_weapon_sprites(TransferMethod transfer_type) {\n"
+    assert t.count(k)==1
+    t=t.replace(k,"static AnimationFrame* m14_shown_frame; static s16 m14_shown_dy;\n"+k,1)
+    k="    cur_num_sprites = frame->numSprite;\n"
+    assert t.count(k)==1
+    t=t.replace(k,k+"    m14_shown_frame = frame; m14_shown_dy = (cur_sprite_def == &shotgun_reload) ? -38 : 0;\n",1)
+    k="AnimationFrame *frame1 = cur_sprite_def->animations[0]->frames[0];"
+    assert t.count(k)==1
+    t=t.replace(k,"AnimationFrame *frame1 = m14_shown_frame;\n    if (!frame1) return;",1)
     w.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
     a="    VDP_updateSprites(shotgun_num_sprites, DMA_QUEUE);"
@@ -4073,14 +4090,20 @@ def m14_weapon(out, wad):
             c.alpha_composite(im,(max(0,cx-im.width//2),by-im.height)) if by-im.height>=0 else c.alpha_composite(im.crop((0,im.height-by,im.width,im.height)),(max(0,cx-im.width//2),0))
         return c
     idle=canvas([(fit(load("PISGA0"),64,64),(32,64))],64,64)
-    fire=fit(load("PISGB0"),64,64)
-    flash=fit(load("PISFA0"),40,24)
-    fire_c=canvas([(fire,(32,64)),(flash,(32,24))],64,64)
+    # fire frame: true Doom placement (patch left/top offsets), no rescaling.
+    # canvas x = X-122 (same as idle), canvas y = Y-66; drawn 38 px higher on screen (m14 weapon Y shift)
+    import struct as _st
+    def raw(name):
+        l=w.lump(name); lo,to=_st.unpack("<hh",l[4:8]); return load(name),-lo,-to
+    fire_c=Image.new("RGBA",(64,104),(0,0,0,0))
+    for nm in ("PISGB0","PISFA0"):
+        im,X,Y=raw(nm)
+        fire_c.alpha_composite(im.crop((max(0,122-X),0,im.width,im.height)),(max(0,X-122),Y-66))
     # fire sprite lives on the 64x128 canvas of the original reload resource
     reload_c=Image.new("RGBA",(64,128),(0,0,0,0)); reload_c.alpha_composite(fire_c,(0,0))
-    both=Image.new("RGBA",(64,128),(0,0,0,0)); both.alpha_composite(idle,(0,0)); both.alpha_composite(fire_c,(0,64))
-    opaque=Image.new("RGB",(64,128),(0,0,0)); opaque.paste(both,(0,0),both)
-    mask=[both.getpixel((x,y))[3]>0 for y in range(128) for x in range(64)]
+    both=Image.new("RGBA",(64,168),(0,0,0,0)); both.alpha_composite(idle,(0,0)); both.alpha_composite(fire_c,(0,64))
+    opaque=Image.new("RGB",(64,168),(0,0,0)); opaque.paste(both,(0,0),both)
+    mask=[both.getpixel((x,y))[3]>0 for y in range(168) for x in range(64)]
     # 9 colours (indices 1..9): the original weapon palette used 0..9; indices 10..15
     # stay black because the margins/other tiles on PAL0 rely on them.
     pal_img=opaque.quantize(colors=9,method=Image.MEDIANCUT)
@@ -4102,9 +4125,9 @@ def m14_weapon(out, wad):
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         to_p(fire_c).save(d/"SHOTGUN_RELOAD.png")          # 64x64 = 64 tiles (was 128)
         rr=out/"res/sprites_res.res"; rt=rr.read_text()
-        o2='"images/SHOTGUN_RELOAD.png" 8 16'
+        o2='"images/SHOTGUN_RELOAD.png" 8 16'; n2='"images/SHOTGUN_RELOAD.png" 8 13'
         assert rt.count(o2)==1
-        rr.write_text(rt.replace(o2,'"images/SHOTGUN_RELOAD.png" 8 8'))
+        rr.write_text(rt.replace(o2,n2))
     else:
         to_p(reload_c).save(d/"SHOTGUN_RELOAD.png")
     p=out/"src/weapon_sprites.c"
