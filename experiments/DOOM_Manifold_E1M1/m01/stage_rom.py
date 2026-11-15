@@ -3299,19 +3299,33 @@ def m14_ablate(out):
     g.write_text(t); print("ablation applied")
 
 def m14_sky_dma(out):
-    """Piscar de barras pretas ao girar: manifold_sky_update reescreve 32x9 entradas do mapa do
-    ceu com a CPU (dentro de interrupcoes desligadas) a cada mudanca de ang>>4. Usa fila de DMA."""
-    import re
+    """Piscar de barras pretas ao girar: manifold_sky_update reescrevia 32x9 entradas do mapa do
+    ceu com a CPU (interrupcoes desligadas) a cada mudanca de ang>>4. Agora: uma linha por
+    DMA_queueDma, com retentativa por linha se a fila recusar (limite de bytes/quadro)."""
     p=out/"src/manifold_sky.c"
     s=p.read_text()
     i=s.index("void manifold_sky_update(void) {")
-    head,body=s[:i],s[i:]
-    body,n=re.subn(r"(VDP_setTileMapDataRect\(BG_B, sky_row_buf, SKY_X0, 4, 32, 9, 32, )CPU\)",r"\1DMA_QUEUE)",body)
-    if n!=1: raise ValueError("manifold_sky_update changed")
-    body=re.sub(r"\s*(M14_VB_BEGIN\(\); )?SKY_CLEAR_BORDERS\(4, 9\);( M14_VB_END\(\);)?","",body)   # bordas ja limpas no init
-    body=body.replace("    sky_last = off;\n","    if (DMA_getQueueSize() > 60) return;\n    sky_last = off;\n",1)
-    p.write_text(head+body)
-    print("sky map update via DMA queue")
+    new="""static u16 sky_pend;
+void manifold_sky_update(void) {
+    sky_repair_once();
+    if (!sky_ready) return;
+    s16 off = (s16)((cur_player_pos.ang >> 4) & 15);
+    if (off != sky_last) {
+        sky_last = off;
+        for (u16 r = 0; r < 9; r++)
+            for (u16 c = 0; c < 32; c++)
+                sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[sky_map[r][(c + off) & 15]]);
+        sky_pend = 0x1FF;
+    }
+    for (u16 r = 0; r < 9 && sky_pend; r++) {
+        if (!(sky_pend & (1 << r))) continue;
+        if (!DMA_queueDma(DMA_VRAM, (void*)&sky_row_buf[r*32], bgb_addr + (4 + r) * 128 + SKY_X0 * 2, 32, 2)) break;
+        sky_pend &= ~(1 << r);
+    }
+}
+"""
+    p.write_text(s[:i]+new)
+    print("sky map update via DMA queue (per row, retry)")
 
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)

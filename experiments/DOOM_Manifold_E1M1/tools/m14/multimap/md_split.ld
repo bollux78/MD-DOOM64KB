@@ -124,7 +124,7 @@ SECTIONS
     */src/sector_group.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x3C00;
     */src/manifold_sky.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
-    . = 0x5200;
+    . = 0x5400;
     */src/portal.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0xA000;
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
