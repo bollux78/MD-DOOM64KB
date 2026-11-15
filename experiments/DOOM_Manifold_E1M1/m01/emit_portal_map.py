@@ -215,11 +215,20 @@ def assign_wall_textures(lumps,cells):
     for li,ld in enumerate(LD):
         a=V[ld[0]];b=V[ld[1]];dx=b[0]-a[0];dy=b[1]-a[1];L=math.hypot(dx,dy)
         if L: lines.append((li,a,dx,dy,L))
-    if __import__("os").environ.get("MANIFOLD_SPLIT_LINES","1")=="1":
+    _sm=__import__("os").environ.get("MANIFOLD_SPLIT_LINES","1")
+    if _sm in ("1","2"):
         # merge_collinear joins solid pieces that belong to different Doom
         # linedefs (e.g. the exit switch inside a longer wall) and one texture
         # then covers all of them: split solid walls at Doom vertices again.
-        vpts=sorted(set((round(v[0]*SCALE),round(v[1]*SCALE)) for v in V))
+        if _sm=="2":   # only at the ends of switch linedefs (SW1*/SW2* textures): keeps the wall count low
+            _vv=set()
+            for ld in LD:
+                for sd in (ld[5],ld[6]):
+                    if sd!=65535 and any(_nm(SD[sd][k]).startswith(("SW1","SW2")) for k in (2,3,4)):
+                        _vv.add(ld[0]); _vv.add(ld[1])
+            vpts=sorted(set((round(V[i][0]*SCALE),round(V[i][1]*SCALE)) for i in _vv))
+        else:
+            vpts=sorted(set((round(v[0]*SCALE),round(v[1]*SCALE)) for v in V))
         nsplit=0
         for c in cells:
             nw=[]
