@@ -251,7 +251,7 @@ def apply(out, wad):
 }""", "void init_shotgun() { extern void m14w_select(u8 id); extern u8 m14w_cur; m14w_select(m14w_cur); }")
     rep("        if(shooting == m14_anim_at) { { extern void m14_fire_anim(void); m14_fire_anim(); } }\n", "")
     rep("{ s32 sl = 135 / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 2) sl = 2; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = (sl > 4) ? 4 : 1; }",
-        "{ extern u16 m14w_cad(void); extern void m14_fire_anim(void); s32 sl = m14w_cad() / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 1) sl = 1; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = -1; m14_fire_anim(); }")
+        "{ extern u16 m14w_cad(void); extern void m14_fire_anim(void); s32 sl = m14w_cad() / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 1) sl = 1; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = -1; { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) m14_fire_anim(); } }")
     rep("        play_sfx(SFX_SHOTGUN_ID, 15);\n        run_in_phs", "        { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) play_sfx(m14w_sfx(), 15); }\n        run_in_phs")
     rep("if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); m14_shoot_dec(sprite_on_center_col, center_object_sector); }",
         "if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); extern u8 m14w_pellets(void); for (u8 m14_p = 0; m14_p < m14w_pellets(); m14_p++) m14_shoot_dec(sprite_on_center_col, center_object_sector); }")
@@ -264,6 +264,9 @@ def apply(out, wad):
         "".join("    { extern const u8 sfx_w_%s[]; extern const u16 sfx_w_%s_len; XGM_setPCM(%d, sfx_w_%s, sfx_w_%s_len); }\n" % (k, k, i, k, k) for k, i in SFX_IDS.items()))
     assert t.count("joy_button_pressed(BUTTON_A|BUTTON_C)") == 2
     t = t.replace("joy_button_pressed(BUTTON_A|BUTTON_C)", "joy_button_pressed(BUTTON_C)")
+    k = "        if(shooting == 0 && joy_button_pressed(BUTTON_C)) { shooting = 1;}\n"
+    assert t.count(k) == 1
+    t = t.replace(k, "")          # this re-armed shooting forever: held button never fired again (now: auto-fire)
     g.write_text(t)
     # sounds
     szs = {}; ctext = ""
