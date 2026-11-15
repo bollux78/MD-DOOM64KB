@@ -3299,33 +3299,31 @@ def m14_ablate(out):
     g.write_text(t); print("ablation applied")
 
 def m14_sky_dma(out):
-    """Piscar de barras pretas ao girar: manifold_sky_update reescrevia 32x9 entradas do mapa do
-    ceu com a CPU (interrupcoes desligadas) a cada mudanca de ang>>4. Agora: uma linha por
-    DMA_queueDma, com retentativa por linha se a fila recusar (limite de bytes/quadro)."""
+    """Piscar de barras ao girar: o ceu era reescrito inteiro (288 entradas, CPU, ints off) a cada
+    mudanca de ang>>4. A fila de DMA do SGDK fica sempre cheia neste motor (nunca esvazia), entao
+    DMA_QUEUE descarta tudo. Agora: MANIFOLD_SKY_ROWS linhas por quadro, via CPU no vblank."""
+    rows=int(os.environ.get("MANIFOLD_SKY_ROWS","3"))
     p=out/"src/manifold_sky.c"
     s=p.read_text()
     i=s.index("void manifold_sky_update(void) {")
-    new="""static u16 sky_pend;
+    new="""static u16 sky_pend; static s16 sky_off;
 void manifold_sky_update(void) {
     sky_repair_once();
     if (!sky_ready) return;
     s16 off = (s16)((cur_player_pos.ang >> 4) & 15);
-    if (off != sky_last) {
-        sky_last = off;
-        for (u16 r = 0; r < 9; r++)
-            for (u16 c = 0; c < 32; c++)
-                sky_row_buf[r*32 + c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[sky_map[r][(c + off) & 15]]);
-        sky_pend = 0x1FF;
-    }
-    for (u16 r = 0; r < 9 && sky_pend; r++) {
+    if (off != sky_last) { sky_last = off; sky_off = off; sky_pend = 0x1FF; }
+    u16 left = %d;
+    for (u16 r = 0; r < 9 && sky_pend && left; r++) {
         if (!(sky_pend & (1 << r))) continue;
-        if (!DMA_queueDma(DMA_VRAM, (void*)&sky_row_buf[r*32], bgb_addr + (4 + r) * 128 + SKY_X0 * 2, 32, 2)) break;
-        sky_pend &= ~(1 << r);
+        for (u16 c = 0; c < 32; c++)
+            sky_row_buf[c] = TILE_ATTR_FULL(PAL1, 0, 0, 0, sky_index[sky_map[r][(c + sky_off) & 15]]);
+        M14_VB_BEGIN(); VDP_setTileMapDataRect(BG_B, sky_row_buf, SKY_X0, 4 + r, 32, 1, 32, CPU); SKY_CLEAR_BORDERS(4 + r, 1); M14_VB_END();
+        sky_pend &= ~(1 << r); left--;
     }
 }
-"""
+""" % rows
     p.write_text(s[:i]+new)
-    print("sky map update via DMA queue (per row, retry)")
+    print("sky map update: %d rows/frame" % rows)
 
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
