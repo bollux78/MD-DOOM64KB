@@ -2967,7 +2967,7 @@ void m14_do_exit(int kind) {
     g=out/"src/game.c"; t=g.read_text()
     old="        pressing = 2;\n        if(!check_trigger_switch(&cur_player_pos)) {"
     assert t.count(old)==1,"B handler anchor changed"
-    t=t.replace(old,"        pressing = 2;\n        { extern int m14_exit_near(void); extern void m14_do_exit(int); int k = m14_exit_near(); if (k) m14_do_exit(k); }\n        if(!check_trigger_switch(&cur_player_pos)) {",1)
+    t=t.replace(old,"        pressing = 2;\n        { extern int m14_exit_near(void); extern void m14_do_exit(int); extern void m14_world_use(void); int k = m14_exit_near(); if (k) m14_do_exit(k); else m14_world_use(); }\n        if(!check_trigger_switch(&cur_player_pos)) {",1)
     g.write_text(t)
 
 def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
@@ -3174,7 +3174,7 @@ def m14_hazards(out):
     pm=out/"src/portal_map.h"; t=pm.read_text()
     a="    map_object* things;\n} portal_map;"
     assert t.count(a)==1
-    pm.write_text(t.replace(a,"    map_object* things;\n    const u8* m14_dmg;\n} portal_map;",1))
+    pm.write_text(t.replace(a,"    map_object* things;\n    const u8* m14_dmg;\n    const s16* m14_trig;\n    const s16* m14_stag;\n    const s16* m14_tele;\n} portal_map;",1))
     sb=out/"src/doom_statusbar.c"; t=sb.read_text()
     t+="""
 #include "portal_map.h"
@@ -3196,12 +3196,109 @@ void m14_hazards(void) {
     if (m14_suit_left && !(d >= 20 && (random() & 255) < 5)) return;
     m14_player_damage(d);
 }
+
+/* ---- M14 world: tagged remote actions ---- */
+#include "sfx.h"
+static u8 m14w_fired[64];
+static s32 m14w_px, m14w_py; static u8 m14w_have;
+static u8 m14w_cls(s16 sp) {
+    switch (sp) {
+    case 2: case 4: case 29: case 61: case 63: case 86: case 90: case 103: return 1;
+    case 5: case 18: case 20: case 22: case 91: case 92: return 2;
+    case 23: case 36: case 38: case 60: case 70: case 71: case 82: case 98: return 3;
+    case 10: case 21: case 62: case 88: case 120: case 121: case 122: case 123: return 4;
+    case 39: case 97: return 5;
+    }
+    return 0;
+}
+static u8 m14w_is_switch(s16 sp) {
+    switch (sp) { case 18: case 20: case 21: case 23: case 29: case 61: case 62: case 63: case 70: case 71: case 103: return 1; }
+    return 0;
+}
+static u8 m14w_once(s16 sp) {
+    switch (sp) { case 2: case 4: case 5: case 18: case 20: case 21: case 22: case 23: case 29: case 36: case 38: case 39: case 103: return 1; }
+    return 0;
+}
+static void m14w_fire(s16 sp, s16 tag) {
+    u8 cls = m14w_cls(sp);
+    if (!cls || !tag) return;
+    if (cls == 5) {
+        const s16* t = cur_portal_map->m14_tele;
+        if (!t) return;
+        for (s16 i = 0; i < t[0]; i++) {
+            const s16* e = &t[1 + i * 5];
+            if (e[0] != tag) continue;
+            cur_player_pos.x = (s32)e[1] << FIX32_FRAC_BITS;
+            cur_player_pos.y = (s32)e[2] << FIX32_FRAC_BITS;
+            cur_player_pos.cur_sector = e[4];
+            cur_player_pos.ang = e[3];
+            cur_player_pos.z = FIX32(-10000);
+            m14w_have = 0;
+            return;
+        }
+        return;
+    }
+    const s16* st = cur_portal_map->m14_stag;
+    if (!st) return;
+    for (u16 g = 0; g < cur_portal_map->num_sector_groups; g++) {
+        if (st[g] != tag) continue;
+        u8 ty = GET_SECTOR_GROUP_TYPE(cur_portal_map->sector_group_types[g]);
+        u16 s = get_sector_group_state(g);
+        if (ty == DOOR && cls == 1 && s == CLOSED) { set_sector_group_state(g, GOING_UP); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
+        else if (ty == STAIRS && cls == 2 && s == STAIRS_LOWERED) { set_sector_group_state(g, STAIRS_MOVING); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
+        else if (ty == LOWERING_STAIRS && cls == 3 && s == STAIRS_LOWERED) { set_sector_group_state(g, STAIRS_MOVING); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
+        else if (ty == LIFT && cls == 4 && s == CLOSED) { set_sector_group_state(g, GOING_DOWN); }
+    }
+}
+void m14_world_tick(void) {
+    const s16* tr = cur_portal_map->m14_trig;
+    s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
+    if (!m14w_have) { m14w_px = px; m14w_py = py; m14w_have = 1; return; }
+    if (tr) {
+        for (s16 i = 0; i < tr[0]; i++) {
+            const s16* l = &tr[1 + i * 7];
+            s16 sp = l[4];
+            if (m14w_is_switch(sp) || (m14w_once(sp) && m14w_fired[l[6]])) continue;
+            s32 ax = l[0], ay = l[1], dx = l[2] - ax, dy = l[3] - ay;
+            s32 s0 = dx * (m14w_py - ay) - dy * (m14w_px - ax);
+            s32 s1 = dx * (py - ay) - dy * (px - ax);
+            u8 hit = (s0 < 0 && s1 >= 0) || (sp != 39 && sp != 97 && s0 >= 0 && s1 < 0);
+            if (!hit) continue;
+            s32 u = dx * (px - ax) + dy * (py - ay);
+            if (u < 0 || u > dx * dx + dy * dy) continue;
+            m14w_fired[l[6]] = 1;
+            m14w_fire(sp, l[5]);
+            if (!m14w_have) return;
+        }
+    }
+    m14w_px = px; m14w_py = py;
+}
+static s32 m14w_isqrt(s32 v) { s32 r = 0; while ((r + 1) * (r + 1) <= v) r++; return r; }
+void m14_world_use(void) {
+    const s16* tr = cur_portal_map->m14_trig;
+    if (!tr) return;
+    s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
+    for (s16 i = 0; i < tr[0]; i++) {
+        const s16* l = &tr[1 + i * 7];
+        s16 sp = l[4];
+        if (!m14w_is_switch(sp) || (m14w_once(sp) && m14w_fired[l[6]])) continue;
+        s32 ax = l[0], ay = l[1], dx = l[2] - ax, dy = l[3] - ay;
+        s32 dd = dx * dx + dy * dy; if (!dd) continue;
+        s32 u = dx * (px - ax) + dy * (py - ay);
+        s32 cr = dx * (py - ay) - dy * (px - ax); if (cr < 0) cr = -cr;
+        s32 len = m14w_isqrt(dd);
+        if (u < -(len * 16) || u > dd + len * 16) continue;
+        if (cr > 72 * len) continue;
+        m14w_fired[l[6]] = 1;
+        m14w_fire(sp, l[5]);
+    }
+}
 """
     sb.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
     a="    m12_process_pickups();"
     assert t.count(a)==1
-    t=t.replace(a,a+"\n    { extern void m14_hazards(void); m14_hazards(); }",1)
+    t=t.replace(a,a+"\n    { extern void m14_hazards(void); extern void m14_world_tick(void); m14_hazards(); m14_world_tick(); }",1)
     g.write_text(t)
     # 255 decoration slots (links are u8; 0xFF = null)
     oh=out/"src/object.h"; t=oh.read_text()
@@ -3970,7 +4067,7 @@ def stage(src, wad, out, control=False):
     m14_identity(out)
     m14_install_display_hint_variants(out)
     if os.environ.get("MANIFOLD_ALL_KEYS","1")=="1":
-        m14_all_keys(out)
+        if os.environ.get('MANIFOLD_REAL_KEYS','1')!='1': m14_all_keys(out)
     if os.environ.get("MANIFOLD_LAT_CLIP","0")=="1":
         m14_lat_clip(out)
     if os.environ.get("MANIFOLD_NOHUD","0")=="1":

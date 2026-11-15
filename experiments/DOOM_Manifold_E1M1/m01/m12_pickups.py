@@ -157,7 +157,10 @@ u8 doom_hud_grant_pickup(u8 kind) {
         if (dhud_state.health>=200) return 0;
         dhud_state.health+=100; if (dhud_state.health>200) dhud_state.health=200;
         return 1;
-    case 17: case 18: case 19: case 23: case 24: case 25: case 21: /* no mechanic yet: just collect */
+    case 23: if (inventory_has_item(BLUE_KEY)) return 0; inventory_add_item(BLUE_KEY); return 1;
+    case 24: if (inventory_has_item(GREEN_KEY)) return 0; inventory_add_item(GREEN_KEY); return 1;
+    case 25: if (inventory_has_item(RED_KEY)) return 0; inventory_add_item(RED_KEY); return 1;
+    case 17: case 18: case 19: case 21: /* no mechanic yet: just collect */
         return 1;
     case 20: /* rocket */
         if (dhud_state.ammo[2]>=50) return 0;

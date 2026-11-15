@@ -130,9 +130,9 @@ SECTIONS
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x3D000;
     */src/e1m1_map.o(.rodata.e1m1_map)
-    . = 0x3D080;
-    */src/e1m1_map.o(.rodata.m14_exit_tbl)
     . = 0x3D100;
+    */src/e1m1_map.o(.rodata.m14_exit_tbl)
+    . = 0x3D180;
     */src/e1m1_map.o(.rodata.e1_block_segs)
     */src/e1m1_map.o(.rodata.str1.1)
     . = ALIGN(4);
@@ -204,7 +204,7 @@ SECTIONS
     */src/portal.o(.bss .bss.* COMMON)
     */src/sector_group.o(.bss .bss.* COMMON)
     */src/textures.o(.bss .bss.* COMMON)
-    . = 0x1D20;
+    . = 0x1D80;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }

@@ -542,6 +542,52 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
                 if gen_dyn.get(sec,(0,0))[0]==2:
                     gen_dyn[sec]=(2|kb,gen_dyn[sec][1])
         print("M14 generic dynamic sectors (type,target):",{k:v for k,v in sorted(gen_dyn.items())})
+    # M14 world: tagged remote actions (walk-over / switch lines) -> sector motion tables
+    _S=lumps["SECTORS"]
+    A_DOOR={2,4,29,61,63,86,90,103}; A_RAISE={5,18,20,22,91,92}; A_LOWER={23,36,38,60,70,71,82,98}
+    A_LIFT={10,21,62,88,120,121,122,123}; A_TELE={39,97}
+    A_ALL=A_DOOR|A_RAISE|A_LOWER|A_LIFT|A_TELE
+    m14_trig=[]; _V0=lumps["VERTEXES"]
+    for ln in lumps["LINEDEFS"]:
+        if ln[3] in A_ALL and ln[4]:
+            m14_trig.append([_V0[ln[0]][0],_V0[ln[0]][1],_V0[ln[1]][0],_V0[ln[1]][1],ln[3],ln[4],len(m14_trig)])
+    m14_trig=m14_trig[:64]
+    for t_ in m14_trig:
+        sp_,tg_=t_[4],t_[5]
+        for si,(floor,ceil,fl,ce,light,special,tag) in enumerate(_S):
+            if tag!=tg_ or si in gen_dyn or si in door_door_ceilings: continue
+            nbf=[_S[n][0] for n in neighbors[si]]; nbc=[_S[n][1] for n in neighbors[si]]
+            if sp_ in A_RAISE:
+                if sp_ in (5,91) and nbc: tgt=min(nbc)
+                else:
+                    hi=[f for f in nbf if f>floor]; tgt=min(hi) if hi else ceil
+                tgt=min(tgt,ceil)
+                if tgt>floor: gen_dyn[si]=(4,tgt)
+            elif sp_ in A_LOWER and nbf:
+                lo=[f for f in nbf if f<floor]
+                tgt=(max(lo) if sp_ in (36,70,98) and lo else min(nbf))
+                if tgt<floor: gen_dyn[si]=(5,tgt)
+            elif sp_ in A_LIFT and ceil>floor and nbf:
+                low=min([floor]+nbf)
+                if low<floor-16: gen_dyn[si]=(3,low)
+    m14_tele=[]
+    for t_ in m14_trig:
+        if t_[4] not in A_TELE or any(x[0]==t_[5] for x in m14_tele): continue
+        for tx,ty,tang,tk,tfl in lumps["THINGS"]:
+            if tk!=14: continue
+            for ci,c in enumerate(cells):
+                pts=[w["a"] for w in c["walls"]]
+                if _S[c["doom_sector"]][6]!=t_[5]: continue
+                inside=True; X,Y=tx*16,ty*16; sg=0
+                for k in range(len(pts)):
+                    ax,ay=pts[k]; bx,by=pts[(k+1)%len(pts)]
+                    cr=(bx-ax)*(Y-ay)-(by-ay)*(X-ax)
+                    if cr==0: continue
+                    if sg==0: sg=1 if cr>0 else -1
+                    elif (cr>0)!=(sg>0): inside=False;break
+                if inside:
+                    m14_tele.append([t_[5],tx,ty,(tang*1024)//360,ci]); break
+    print("M14 world: lines",len(m14_trig),"tele",len(m14_tele),"dyn",{k:v for k,v in sorted(gen_dyn.items()) if v[0] in (3,4,5)})
     # M13 diagnostic only. Doom F_SKY1 is a sky portal, not a physical
     # roof; test whether varying outdoor ceiling Z exposes a geometry bug.
     # Keep ALL other sector parameters and BSP/portal topology identical.
@@ -653,6 +699,12 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     _es=[1 if ln[3]==51 else 0 for ln in _ex]+[0]*(4-len(_ex))
     text+="const struct { u16 count; s16 line[4][4]; u8 secret[4]; } __attribute__((section(\".rodata.m14_exit\"))) m14_exit_tbl = {"+str(len(_ex))+",{"+",".join("{"+",".join(map(str,l))+"}" for l in _el)+"},{"+",".join(map(str,_es))+"}};\n"
     _dm={5:10,7:5,16:20,4:20}
+    _tr=[len(m14_trig)]+[v for t_ in m14_trig for v in t_]
+    text+="const s16 m14_trig_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_tr))+"};\n"
+    _sg=[sc[6] for sc in lumps["SECTORS"]]
+    text+="const s16 m14_stag_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_sg))+"};\n"
+    _te=[len(m14_tele)]+[v for t_ in m14_tele for v in t_]
+    text+="const s16 m14_tele_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_te))+"};\n"
     _dv=[_dm.get(sc[5],0) for sc in lumps["SECTORS"]]; _dv+=[0]*((-len(_dv))%4)
     text+="const u8 m14_dmg_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_dv))+"};\n"
     text+="const u16 e1_block_offsets[] = {"+",".join(map(str,boffs))+"};\n"
@@ -672,7 +724,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
   .walls=e1_walls,.portals=e1_portals,.wall_colors=e1_wall_colors,\n  .wall_tex_repetitions=e1_wall_repetitions,{(chr(10)+"  .wall_tex_u=e1_wall_tex_u,") if use_u else ""}\n  .collision_vertexes=e1_collision_vertices,
   .wall_norm_quadrants=e1_quadrants,.vertexes=e1_vertices,
   .has_pvs=0,.name="E1M1 geometry experimental",\n  .sector_pvs_offsets=e1_visibility_offsets,.sector_pvs_entries=e1_visibility_all,\n  .sector_phs_offsets=e1_visibility_offsets,.sector_phs_entries=e1_visibility_all,
-  .num_things={len(things) if things is not None else 0},.things={"(map_object*)e1_m12_things" if things is not None else "0"}{pal_field}{",.m14_dmg=m14_dmg_tbl" if os.environ.get("MANIFOLD_HAZARDS","1")=="1" and os.environ.get("MANIFOLD_MONSTERS","0")=="1" else ""}
+  .num_things={len(things) if things is not None else 0},.things={"(map_object*)e1_m12_things" if things is not None else "0"}{pal_field}{",.m14_dmg=m14_dmg_tbl,.m14_trig=m14_trig_tbl,.m14_stag=m14_stag_tbl,.m14_tele=m14_tele_tbl" if os.environ.get("MANIFOLD_HAZARDS","1")=="1" and os.environ.get("MANIFOLD_MONSTERS","0")=="1" else ""}
 }};
 """
     return text
