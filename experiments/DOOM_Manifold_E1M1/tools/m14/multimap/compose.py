@@ -36,11 +36,11 @@ INTER_ORG = 0x2F0000          # intermission screen blob (gen_inter.py), visible
 inter = open("inter.bin", "rb").read()
 assert COMMON_ORG + len(common) <= INTER_ORG and INTER_ORG + len(inter) <= MAP_ORG, (len(common), len(inter))
 body[INTER_ORG:INTER_ORG + len(inter)] = inter
-rom = bytes(body) + rom_tail          # menu is patched in below
-# intermission music: bank 24 (slot 7 = 0x380000 while the intermission plays)
-assert len(rom) == 24 * BANK, len(rom)
+INTER_MUS_ORG = 0x2F9600      # compressed intermission music (gen_inter_music.py)
 _im = open("inter_music.bin", "rb").read()
-rom += _im + b"\xff" * (BANK - len(_im))
+assert INTER_ORG + len(inter) <= INTER_MUS_ORG and INTER_MUS_ORG + len(_im) <= MAP_ORG, len(_im)
+body[INTER_MUS_ORG:INTER_MUS_ORG + len(_im)] = _im
+rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
 h = ['#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; };', 'static const struct map_entry maps[] = {']

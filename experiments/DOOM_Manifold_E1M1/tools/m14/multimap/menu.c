@@ -50,15 +50,35 @@ static void music_start(void) {
     Z80_RST = 0x000; for (i = 0; i < 200; i++) ;   /* reset pulse (bus stays ours) */
     Z80_RST = 0x100; for (i = 0; i < 200; i++) ;
     music_silence();
-    mus_base = intro_vgm; mus_loop = intro_vgm_loop;
+    mus_base = intro_vgm; mus_loop = intro_vgm_loop; *(volatile unsigned char *)0xFF003C = 0;
     mus_p = intro_vgm;
 }
-static void music_start_inter(void) {   /* intermission tune lives in bank 24, mapped at slot 7 */
+/* intermission tune: LZ stream at 0x2F9600 (gen_inter_music.py), decoded on the fly through a 16 KB ring in RAM */
+#define LZ_SRC0 ((const unsigned char *)0x2F9600UL)
+#define LZ_RING ((volatile unsigned char *)0xFF4000)
+#define LZ_W 16384
+struct lzst { const unsigned char *src; unsigned long wpos; unsigned short mrem, moff; unsigned char fl, nb; };
+#define LZ ((volatile struct lzst *)0xFF0040)
+#define mus_lz (*(volatile unsigned char *)0xFF003C)
+static void lz_reset(void) { LZ->src = LZ_SRC0; LZ->wpos = 0; LZ->mrem = 0; LZ->nb = 0; }
+static unsigned char lz_next(void) {
+    unsigned char b;
+    if (!LZ->mrem) {
+        if (!LZ->nb) { LZ->fl = *LZ->src++; LZ->nb = 8; }
+        if (LZ->fl & 1) b = *LZ->src++;
+        else {
+            const unsigned char *s = LZ->src;
+            LZ->moff = (((unsigned short)s[0] << 8) | s[1]) + 1; LZ->mrem = s[2] + 4; LZ->src = s + 3;
+        }
+        LZ->fl >>= 1; LZ->nb--;
+        if (LZ->mrem) { b = LZ_RING[(LZ->wpos - LZ->moff) & (LZ_W - 1)]; LZ->mrem--; }
+    } else { b = LZ_RING[(LZ->wpos - LZ->moff) & (LZ_W - 1)]; LZ->mrem--; }
+    LZ_RING[LZ->wpos & (LZ_W - 1)] = b; LZ->wpos++;
+    return b;
+}
+static void music_start_inter(void) {
     music_start();
-    *(volatile u8 *)0xA130FF = 24;
-    mus_loop = *(const u32 *)INTER_MUS_ADDR;
-    mus_base = (const unsigned char *)(INTER_MUS_ADDR + 4);
-    mus_p = mus_base;
+    lz_reset(); mus_lz = 1;
 }
 static void music_stop(void) {
     if (!mus_p) return;
@@ -70,6 +90,17 @@ static void music_tick(void) {
     const unsigned char *p = mus_p;
     int guard = 0;
     if (!p) return;
+    if (mus_lz) {
+        for (;;) {
+            u8 b = lz_next();
+            if (b == 0x62) break;
+            else if (b == 0x50) PSG_PORT = lz_next();
+            else if (b == 0x52 || b == 0x53) { u8 r = lz_next(), v = lz_next(); ym_w(b - 0x52, r, v); }
+            else if (b == 0x66) { lz_reset(); if (++guard > 1) break; }
+            else break;
+        }
+        return;
+    }
     for (;;) {
         u8 b = *p++;
         if (b == 0x62) break;
