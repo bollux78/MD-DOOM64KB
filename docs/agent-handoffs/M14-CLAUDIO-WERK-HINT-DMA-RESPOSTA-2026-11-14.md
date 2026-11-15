@@ -32,3 +32,9 @@ r025 sem bob; r026 sem monstros; r027 sem música (todas = r024 + ablação).
 ## 5. Não provado
 Causa raiz do atraso do H-Int. Candidatos: monstros/objetos (grandes atrasos no MAME), DMA do
 flip + fila SGDK, VBlank do driver de som. Nenhum patch aprovado para merge.
+
+## Atualização 2026-11-15 — causa das barras ao girar encontrada (r031)
+- Causa: `manifold_sky_update` reescrevia 32x9 entradas do céu com a CPU (ints desligadas) a cada mudança de `ang>>4`; atrasava H-Int/VInt. Andar não muda o ângulo, por isso não piscava.
+- A fila DMA do SGDK neste motor fica sempre cheia (queueIndex=0x80, nunca esvazia): `DMA_QUEUE` descarta tudo (r028/r029 = céu preto). Fatiar por linhas (r030) gera faixas descendo.
+- Correção validada em hardware (r031, `MANIFOLD_SKY_GATE=1`): o céu só atualiza se um setor com `ceil_color==0` foi renderizado no quadro anterior (`manifold_sky_seen`, portal.c). MAME girando: H-Int fase0=32, fase2=215.
+- Hipóteses anteriores (margens, console/texto, gun bob, música) não eram a causa; `MANIFOLD_NO_TEXT` pode ser reavaliado.
