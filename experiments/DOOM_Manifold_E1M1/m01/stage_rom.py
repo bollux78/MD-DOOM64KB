@@ -3325,12 +3325,29 @@ void manifold_sky_update(void) {
     p.write_text(s[:i]+new)
     print("sky map update: %d rows/frame" % rows)
 
+def m14_sky_gate(out):
+    """Ceu so e atualizado quando algum setor com teto de ceu (ceil_color==0) foi renderizado no
+    quadro anterior. Fora disso manifold_sky_update retorna sem tocar no VDP (sem barras ao girar)."""
+    p=out/"src/manifold_sky.c"; s=p.read_text()
+    o="void manifold_sky_update(void) {\n    sky_repair_once();\n    if (!sky_ready) return;\n"
+    if s.count(o)!=1: raise ValueError("manifold_sky_update changed")
+    s=s.replace(o,"u8 manifold_sky_seen;\n"+o+"    if (!manifold_sky_seen) return;\n    manifold_sky_seen = 0;\n",1)
+    p.write_text(s)
+    q=out/"src/portal.c"; t=q.read_text()
+    o="    u8 ceil_color = get_sector_group_ceil_color(sect_group);\n\n    u8 cur_sect_group_type"
+    if t.count(o)!=1: raise ValueError("portal ceil_color changed")
+    t=t.replace(o,"    u8 ceil_color = get_sector_group_ceil_color(sect_group);\n    if (ceil_color == 0) manifold_sky_seen = 1;\n\n    u8 cur_sect_group_type",1)
+    t="extern unsigned char manifold_sky_seen;\n"+t
+    q.write_text(t)
+    print("sky gate on visible sky ceilings")
+
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
     if os.environ.get("MANIFOLD_KEEP_DISPLAY","0")=="1": keep_display_enabled_in_hblank(out)
     if os.environ.get("MANIFOLD_HINT_PROBE","0")=="1": m14_hint_probe(out)
     m14_ablate(out)
     if os.environ.get("MANIFOLD_SKY_DMA","0")=="1": m14_sky_dma(out)
+    if os.environ.get("MANIFOLD_SKY_GATE","0")=="1": m14_sky_gate(out)
     if int(os.environ.get("MANIFOLD_HINT_MARGIN","0")): m14_hint_margin(out,int(os.environ["MANIFOLD_HINT_MARGIN"]))
 
 
