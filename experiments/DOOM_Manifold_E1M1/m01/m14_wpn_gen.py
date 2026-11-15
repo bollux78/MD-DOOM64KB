@@ -26,6 +26,7 @@ SOUNDS = {  # key -> (lump, max seconds @14 kHz)
 SFX_BASE = 72
 SFX_IDS = {"punch": 72, "shotgun": 73, "rocket": 74, "saw": 75}   # pistol keeps SFX_SHOTGUN_ID (69)
 
+SCALE = {"SAW": 0.66}      # too wide for 128 tiles: scale it down instead of cropping the sides
 BASE_BOTTOM = 168            # Doom status bar line: weapon art below it is hidden anyway
 PIS_X0, PIS_Y0 = 122, 104    # origin that the original pistol canvas had (dx,dy = X0-122, Y0-104)
 FIRE_MAXTILES = 104          # fire frames live in the reclaimed window area: 104 tiles are known to be safe there
@@ -55,8 +56,18 @@ def build(w, rgb, cut):
 
     bottom = BASE_BOTTOM - cut
 
-    def frame_canvas(names, maxtiles):
-        layers = [load(n) for n in names]
+    def scaled(name, sc):
+        im, X, Y = load(name)
+        if sc >= 1.0:
+            return im, X, Y
+        nw = max(1, round(im.width * sc)); nh = max(1, round(im.height * sc))
+        a = im.getchannel("A").resize((nw, nh), Image.BOX).point(lambda v: 255 if v >= 128 else 0)
+        rgb_ = im.convert("RGB").resize((nw, nh), Image.BOX)
+        r = rgb_.convert("RGBA"); r.putalpha(a)
+        return r, round(160 + (X - 160) * sc), round(bottom + (Y - bottom) * sc)
+
+    def frame_canvas(names, maxtiles, sc=1.0):
+        layers = [scaled(n, sc) for n in names]
         bx0 = min(X for _, X, _ in layers); bx1 = max(X + im.width for im, X, _ in layers)
         by0 = min(Y for _, _, Y in layers)
         tw = math.ceil((bx1 - bx0) / 8); th = math.ceil((bottom - by0) / 8)
@@ -82,7 +93,8 @@ def build(w, rgb, cut):
 
     out = []
     for (name, idle, fire, cad, hold, pel, snd) in WEAPONS:
-        frames = [frame_canvas(idle, 128), frame_canvas(fire, FIRE_MAXTILES)]
+        sc = SCALE.get(name, 1.0)
+        frames = [frame_canvas(idle, 128, sc), frame_canvas(fire, FIRE_MAXTILES, sc)]
         # palette: 9 colours over both frames
         total_h = sum(f[0].height for f in frames); total_w = max(f[0].width for f in frames)
         sheet = Image.new("RGB", (total_w, total_h), (0, 0, 0)); yy = 0
@@ -209,7 +221,7 @@ def make_pcm(lump_data, maxsec):
 def apply(out, wad):
     import wad_textures as WT
     w = WT.Wad(wad); rgb = WT.playpal(w)
-    cut = int(os.environ.get("MANIFOLD_WPN_CUT", "0"))
+    cut = int(os.environ.get("MANIFOLD_WPN_CUT", "8"))
     ws = build(w, rgb, cut)
     tot = sum(len(f["data"]) * 4 for wp in ws for f in wp["frames"])
     p = out / "src/weapon_sprites.c"; t = p.read_text()
