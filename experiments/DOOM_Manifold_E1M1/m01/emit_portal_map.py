@@ -636,6 +636,13 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         text+=f"const u16 e1_bsp_num_nodes = {len(bt)//14};\n"
         text+="const s16 e1_bsp_nodes[] = {"+",".join(map(str,bt))+"};\n"
     boffs,bflat,_=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,5)})
+    # M14: exit switches (Doom specials 11 = exit, 51 = secret exit).  Fixed linker slot
+    # (.rodata.m14_exit @ 0x31080) so the shared common code can reference it by address.
+    _ex=[ln for ln in lumps["LINEDEFS"] if ln[3] in (11,51)][:4]
+    _V=lumps["VERTEXES"]
+    _el=[[_V[ln[0]][0],_V[ln[0]][1],_V[ln[1]][0],_V[ln[1]][1]] for ln in _ex]+[[0,0,0,0]]*(4-len(_ex))
+    _es=[1 if ln[3]==51 else 0 for ln in _ex]+[0]*(4-len(_ex))
+    text+="const struct { u16 count; s16 line[4][4]; u8 secret[4]; } __attribute__((section(\".rodata.m14_exit\"))) m14_exit_tbl = {"+str(len(_ex))+",{"+",".join("{"+",".join(map(str,l))+"}" for l in _el)+"},{"+",".join(map(str,_es))+"}};\n"
     text+="const u16 e1_block_offsets[] = {"+",".join(map(str,boffs))+"};\n"
     text+="const s16 e1_block_segs[] = {"+",".join(map(str,bflat or [0]))+"};\n"
     if things is not None:

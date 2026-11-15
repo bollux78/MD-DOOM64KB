@@ -159,6 +159,15 @@ int main(void) {
     volatile u32 *rb = (volatile u32 *)0xFF0010;
     int skip_title = 0;
     if (rb[0] == 0x4D454E55UL && (rb[1] >> 16) == 0x4C56 && (rb[1] & 0xFFFF) < MAP_COUNT) { skip_title = 1; sel = rb[1] & 0xFFFF; }
+    int inter = 0, inter_next = -1;
+    if (rb[0] == 0x45584954UL && (rb[1] >> 16) == 0x4C56 && (rb[1] & 0xFF) < MAP_COUNT) {
+        /* level exit: intermission screen, then the next map. E1M3 secret -> E1M9, E1M9 -> E1M4, E1M8 -> list */
+        static const signed char next_map[9] = { 1, 2, 3, 4, 5, 6, 7, -1, 3 };
+        int done = rb[1] & 0xFF, secret = (rb[1] >> 8) & 1;
+        inter = 1; skip_title = 1;
+        inter_next = (done == 2 && secret) ? 8 : next_map[done];
+        sel = inter_next >= 0 ? inter_next : 0;
+    }
     rb[0] = 0; rb[1] = 0;
 
     /* after a RESET the game leaves VDP state/VRAM behind: put every register in a
@@ -189,14 +198,38 @@ int main(void) {
     /* tiles: font at 0..95, title at 96.. */
     vram_w(0);
     for (i = 0; i < 96 * 8; i++) { VDP_DATA = font_tiles[i] >> 16; VDP_DATA = font_tiles[i]; }
+    if (inter) {
+        const u16 *ib = (const u16 *)0x2F0000UL;   /* pal[64] | attr[1120] | tiles[1120*16 words] */
+        for (i = 0; i < 1120 * 16; i++) VDP_DATA = ib[64 + 1120 + i];
+        cram_w(0);
+        for (i = 0; i < 64; i++) VDP_DATA = ib[i];
+    } else {
     for (i = 0; i < 1120 * 8; i++) { VDP_DATA = title_tiles[i] >> 16; VDP_DATA = title_tiles[i]; }
     cram_w(0);
     for (i = 0; i < 32; i++) VDP_DATA = title_pal[i];
+    }
+    if (!inter) {
     for (i = 0; i < 32; i++) VDP_DATA = 0;
     set_color(32 + 1, 0x0EEE);   /* palette 2: white text   */
     set_color(48 + 1, 0x00EE);   /* palette 3: yellow (selected/heading) */
     set_color(48 + 15, 0x0000);  /* backdrop (R7 = pal 3 idx 15) */
+    }
 
+    if (inter) {
+        const u16 *ib = (const u16 *)0x2F0000UL;
+        int r, c;
+        clear_plane();
+        for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));
+        vreg(7, 0x00);
+        vreg(1, 0x44);
+        music_start();
+        while (pad_read() & 0xFF) wait_vblank();
+        delay(60);
+        for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
+        while (pad_read() & 0xFF) wait_vblank();
+        if (inter_next >= 0) { vreg(1, 0x04); launch(inter_next); }
+        /* episode end: fall through to the level list */
+    }
     /* title screen */
     if (!skip_title) {
     clear_plane();
@@ -211,6 +244,7 @@ int main(void) {
     while (pad_read() & 0xFF) wait_vblank();
 
     /* level menu */
+    set_color(32 + 1, 0x0EEE); set_color(48 + 1, 0x00EE); set_color(48 + 15, 0x0000);   /* text palettes (also after the intermission) */
     vreg(7, 0x3F);
     clear_plane();
     text(9, 4, "MANIFOLD DOOM - E1M1..E1M9", 3);

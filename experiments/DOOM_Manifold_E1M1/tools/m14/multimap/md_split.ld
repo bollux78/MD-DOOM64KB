@@ -130,6 +130,8 @@ SECTIONS
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x31000;
     */src/e1m1_map.o(.rodata.e1m1_map)
+    . = 0x31080;
+    */src/e1m1_map.o(.rodata.m14_exit_tbl)
     . = 0x31100;
     */src/e1m1_map.o(.rodata.e1_block_segs)
     */src/e1m1_map.o(.rodata.str1.1)

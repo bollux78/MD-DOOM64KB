@@ -2930,6 +2930,45 @@ void m14_save_and_menu(void) {
     t=t.replace(old,f"    {{ extern u16 m14_map_id_var; m14_map_id_var = {mapid}; }}\n"+old,1)
     lv.write_text(t)
 
+def m14_level_exit(out):
+    """M14: botao B perto de um interruptor de saida (Doom special 11/51) termina a fase: deixa
+    magic 'EXIT' + mapa/secreto na RAM e reinicia no menu, que mostra a tela entre fases e
+    carrega o proximo mapa."""
+    sb=out/"src/doom_statusbar.c"; t=sb.read_text()
+    t+="""
+/* M14 level exit */
+#include "game.h"
+extern const struct { u16 count; s16 line[4][4]; u8 secret[4]; } m14_exit_tbl;
+int m14_exit_near(void) {
+    s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
+    for (u16 i = 0; i < m14_exit_tbl.count; i++) {
+        s32 ax = m14_exit_tbl.line[i][0], ay = m14_exit_tbl.line[i][1];
+        s32 dx = m14_exit_tbl.line[i][2] - ax, dy = m14_exit_tbl.line[i][3] - ay;
+        s32 den = dx*dx + dy*dy, num = (px-ax)*dx + (py-ay)*dy;
+        s32 cx, cy;
+        if (num <= 0 || den == 0) { cx = ax; cy = ay; }
+        else if (num >= den) { cx = ax + dx; cy = ay + dy; }
+        else { cx = ax + (dx*num)/den; cy = ay + (dy*num)/den; }
+        s32 ex = px-cx, ey = py-cy;
+        if (ex*ex + ey*ey < 60*60) return 1 + m14_exit_tbl.secret[i];
+    }
+    return 0;
+}
+void m14_do_exit(int kind) {
+    __asm volatile("move.w #0x2700,%%sr" ::: "memory");
+    *(volatile u32 *)0xFF0010 = 0x45584954UL;
+    *(volatile u32 *)0xFF0014 = 0x4C560000UL | ((u32)(kind - 1) << 8) | m14_map_id_var;
+    __asm volatile("move.l 0x0,%%sp\\n move.l 0x4,%%a0\\n jmp (%%a0)" ::: "memory");
+    for (;;) ;
+}
+"""
+    sb.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    old="        pressing = 2;\n        if(!check_trigger_switch(&cur_player_pos)) {"
+    assert t.count(old)==1,"B handler anchor changed"
+    t=t.replace(old,"        pressing = 2;\n        { extern int m14_exit_near(void); extern void m14_do_exit(int); int k = m14_exit_near(); if (k) m14_do_exit(k); }\n        if(!check_trigger_switch(&cur_player_pos)) {",1)
+    g.write_text(t)
+
 def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     """M14: basic enemy AI on top of Manifold's object state machine.
 
@@ -4018,6 +4057,7 @@ def stage(src, wad, out, control=False):
         _lp.write_text(_ls)
     if os.environ.get("MANIFOLD_START_MENU","0")=="1":
         m14_start_menu(out,x,y,angle,spawn_cell)
+        m14_level_exit(out)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
     if os.environ.get("MANIFOLD_INPUT_FIX","0")=="1":

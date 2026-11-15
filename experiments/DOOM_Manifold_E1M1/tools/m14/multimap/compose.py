@@ -32,6 +32,10 @@ for b in blocks:
     n = (len(b) + BANK - 1) // BANK
     rom_tail += b + b"\xff" * (n * BANK - len(b))
 body = bytearray(b"\xff" * MAP_ORG) ; body[COMMON_ORG:COMMON_ORG + len(common)] = common
+INTER_ORG = 0x2F0000          # intermission screen blob (gen_inter.py), visible in slot 5 (bank 5)
+inter = open("inter.bin", "rb").read()
+assert COMMON_ORG + len(common) <= INTER_ORG and INTER_ORG + len(inter) <= MAP_ORG, (len(common), len(inter))
+body[INTER_ORG:INTER_ORG + len(inter)] = inter
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
 h = ['#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
