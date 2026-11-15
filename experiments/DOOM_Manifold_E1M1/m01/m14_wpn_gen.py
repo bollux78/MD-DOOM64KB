@@ -17,7 +17,7 @@ WEAPONS = [
     ("SHOTGUN", ["SHTGA0"], ["SHTGA0", "SHTFB0"],  63, 14, 3, "shotgun"),
     ("CHAINGUN",["CHGGA0"], ["CHGGB0", "CHGFB0"],   7,  6, 1, "pistol"),
     ("ROCKET",  ["MISGA0"], ["MISGB0", "MISFB0"],  34, 14, 1, "rocket"),
-    ("SAW",     ["SAWGC0"], ["SAWGD0"],             7,  7, 0, "saw"),
+    ("SAW",     ["SAWGC0"], ["SAWGD0"],             5,  7, 0, "saw"),
 ]
 SOUNDS = {  # key -> (lump, max seconds @14 kHz)
     "punch": ("DSPUNCH", 0.35), "shotgun": ("DSSHOTGN", 0.45),
@@ -178,8 +178,12 @@ void m14w_next(void) { m14w_select((u8)((m14w_cur + 1) % @NW@)); }
 void m14_fire_anim(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
     u16 h = d->hold / (last_frame_ticks ? last_frame_ticks : 1); if (h < 1) h = 1;
+    if (d->sfx == 75) {                     /* chainsaw: alternate the two frames on every shot while C is held */
+        m14w_isfire ^= 1; m14w_shown = m14w_isfire ? d->fire : d->idle; m14w_hold = 0; m14w_place(); return;
+    }
     m14w_hold = (u8)h; m14w_shown = d->fire; m14w_isfire = 1; m14w_place();
 }
+void m14w_idle(void) { if (m14w_isfire) { m14w_shown = m14w_defs[m14w_cur].idle; m14w_isfire = 0; m14w_hold = 0; m14w_place(); } }
 void m14w_step(void) {
     if (m14w_hold && --m14w_hold == 0) { m14w_shown = m14w_defs[m14w_cur].idle; m14w_isfire = 0; m14w_place(); }
 }
@@ -253,7 +257,7 @@ def apply(out, wad):
         "if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); extern u8 m14w_pellets(void); for (u8 m14_p = 0; m14_p < m14w_pellets(); m14_p++) m14_shoot_dec(sprite_on_center_col, center_object_sector); }")
     rep("    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {",
         "    { static u8 m14_sp = 1; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; if (m14_now && !m14_sp) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }\n"
-        "    { static s16 m14_saw_t = 0; static u8 m14_saw_on = 0; extern u8 m14w_sfx(void); if (m14w_sfx() == 75 && joy_button_pressed(BUTTON_C)) { m14_saw_t -= (s16)last_frame_ticks; if (!m14_saw_on || m14_saw_t <= 0) { XGM_startPlayPCM(75, 15, SOUND_PCM_CH4); m14_saw_t = 19; m14_saw_on = 1; } } else if (m14_saw_on) { XGM_stopPlayPCM(SOUND_PCM_CH4); m14_saw_on = 0; } }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
+        "    { static s16 m14_saw_t = 0; static u8 m14_saw_on = 0; extern u8 m14w_sfx(void); if (m14w_sfx() == 75 && joy_button_pressed(BUTTON_C)) { m14_saw_t -= (s16)last_frame_ticks; if (!m14_saw_on || m14_saw_t <= 0) { XGM_startPlayPCM(75, 15, SOUND_PCM_CH4); m14_saw_t = 19; m14_saw_on = 1; } } else if (m14_saw_on) { extern void m14w_idle(void); XGM_stopPlayPCM(SOUND_PCM_CH4); m14_saw_on = 0; m14w_idle(); } }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
     # sound registration
     rep("    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));",
         "    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));\n" +
