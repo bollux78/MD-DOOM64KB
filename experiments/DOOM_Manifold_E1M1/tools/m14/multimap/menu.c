@@ -38,6 +38,11 @@ static void music_silence(void) {
     for (c = 0; c < 8; c++) if (c != 3 && c != 7) ym_w(0, 0x28, c);   /* key off */
     ym_w(0, 0x2B, 0);                                                /* DAC off */
 }
+#ifndef INTER_MUS_ADDR
+#define INTER_MUS_ADDR 0x380000UL   /* bank 24 at slot 7 */
+#endif
+#define mus_base (*(const unsigned char * volatile *)0xFF0004)
+#define mus_loop (*(volatile unsigned long *)0xFF0008)
 static void music_start(void) {
     volatile int i;
     Z80_RST = 0x100; Z80_BUS = 0x100;      /* take the Z80 bus so the 68000 owns the YM2612 */
@@ -45,7 +50,15 @@ static void music_start(void) {
     Z80_RST = 0x000; for (i = 0; i < 200; i++) ;   /* reset pulse (bus stays ours) */
     Z80_RST = 0x100; for (i = 0; i < 200; i++) ;
     music_silence();
+    mus_base = intro_vgm; mus_loop = intro_vgm_loop;
     mus_p = intro_vgm;
+}
+static void music_start_inter(void) {   /* intermission tune lives in bank 24, mapped at slot 7 */
+    music_start();
+    *(volatile u8 *)0xA130FF = 24;
+    mus_loop = *(const u32 *)INTER_MUS_ADDR;
+    mus_base = (const unsigned char *)(INTER_MUS_ADDR + 4);
+    mus_p = mus_base;
 }
 static void music_stop(void) {
     if (!mus_p) return;
@@ -62,7 +75,7 @@ static void music_tick(void) {
         if (b == 0x62) break;
         else if (b == 0x50) PSG_PORT = *p++;
         else if (b == 0x52 || b == 0x53) { u8 r = p[0], v = p[1]; p += 2; ym_w(b - 0x52, r, v); }
-        else if (b == 0x66) { p = intro_vgm + intro_vgm_loop; if (++guard > 1) break; }
+        else if (b == 0x66) { p = mus_base + mus_loop; if (++guard > 1) break; }
         else break;   /* unknown command: stop this frame */
     }
     mus_p = p;
@@ -222,7 +235,7 @@ int main(void) {
         for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));
         vreg(7, 0x00);
         vreg(1, 0x44);
-        music_start();
+        music_start_inter();
         while (pad_read() & 0xFF) wait_vblank();
         delay(60);
         for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }

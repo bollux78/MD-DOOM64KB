@@ -37,6 +37,10 @@ inter = open("inter.bin", "rb").read()
 assert COMMON_ORG + len(common) <= INTER_ORG and INTER_ORG + len(inter) <= MAP_ORG, (len(common), len(inter))
 body[INTER_ORG:INTER_ORG + len(inter)] = inter
 rom = bytes(body) + rom_tail          # menu is patched in below
+# intermission music: bank 24 (slot 7 = 0x380000 while the intermission plays)
+assert len(rom) == 24 * BANK, len(rom)
+_im = open("inter_music.bin", "rb").read()
+rom += _im + b"\xff" * (BANK - len(_im))
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
 h = ['#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; };', 'static const struct map_entry maps[] = {']
