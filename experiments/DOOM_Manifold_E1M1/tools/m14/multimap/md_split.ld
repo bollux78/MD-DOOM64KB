@@ -142,6 +142,7 @@ SECTIONS
     . = ALIGN(2);
     */res/music_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
+  .wpndata 0x003F0000 : { *(.wpndata) } > rom
   .maphead 0x00300000 :
   {
     KEEP(*(.text.keepboot))

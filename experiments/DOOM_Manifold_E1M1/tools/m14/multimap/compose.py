@@ -19,7 +19,7 @@ common = None; blocks = []
 for m, label in MAPS:
     o = "/tmp/m12/mm_%s/out/release/rom.out" % m
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".common", o, "/tmp/m14x/_c.bin"])
-    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", o, "/tmp/m14x/_m.bin"])
+    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".wpndata", o, "/tmp/m14x/_m.bin"])
     c = open("/tmp/m14x/_c.bin", "rb").read(); b = open("/tmp/m14x/_m.bin", "rb").read()
     if common is None: common = c
     assert c == common, "common block differs in " + m

@@ -4048,6 +4048,9 @@ void m14_sat_update(u16 n) {
     k="void update_weapon_sprites(TransferMethod transfer_type) {\n"
     assert t.count(k)==1
     t=t.replace(k,"static AnimationFrame* m14_shown_frame; static s16 m14_shown_dy;\n"+k,1)
+    k="    VDP_setSpriteLink(sprite_idx_start+cur_num_sprites, 0);\n"
+    assert t.count(k)==1
+    t=t.replace(k,k+"    VDP_setSpritePosition(sprite_idx_start+cur_num_sprites, 0, 0);   /* terminator entry is itself drawn: hide the stale sprite in it */\n",1)
     k="    cur_num_sprites = frame->numSprite;\n"
     assert t.count(k)==1
     t=t.replace(k,k+"    m14_shown_frame = frame; m14_shown_dy = (cur_sprite_def == &shotgun_reload) ? -38 : 0;\n",1)
@@ -4397,6 +4400,8 @@ def stage(src, wad, out, control=False):
         "renderer_unchanged":True,"lighting_color_placeholder":True,
         "thing_spawns_pending":True,"doors_triggers_pending":True
     }
+    if os.environ.get("MANIFOLD_WEAPONS","1")=="1" and os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
+        import m14_wpn_gen; m14_wpn_gen.apply(out,wad)
     (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
