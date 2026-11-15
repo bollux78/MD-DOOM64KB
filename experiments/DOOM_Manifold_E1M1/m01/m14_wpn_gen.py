@@ -248,11 +248,12 @@ def apply(out, wad):
     rep("        if(shooting == m14_anim_at) { { extern void m14_fire_anim(void); m14_fire_anim(); } }\n", "")
     rep("{ s32 sl = 135 / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 2) sl = 2; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = (sl > 4) ? 4 : 1; }",
         "{ extern u16 m14w_cad(void); extern void m14_fire_anim(void); s32 sl = m14w_cad() / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 1) sl = 1; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = -1; m14_fire_anim(); }")
-    rep("        play_sfx(SFX_SHOTGUN_ID, 15);\n        run_in_phs", "        { extern u8 m14w_sfx(void); play_sfx(m14w_sfx(), 15); }\n        run_in_phs")
+    rep("        play_sfx(SFX_SHOTGUN_ID, 15);\n        run_in_phs", "        { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) play_sfx(m14w_sfx(), 15); }\n        run_in_phs")
     rep("if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); m14_shoot_dec(sprite_on_center_col, center_object_sector); }",
         "if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); extern u8 m14w_pellets(void); for (u8 m14_p = 0; m14_p < m14w_pellets(); m14_p++) m14_shoot_dec(sprite_on_center_col, center_object_sector); }")
     rep("    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {",
-        "    { static u8 m14_sp = 1; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; if (m14_now && !m14_sp) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
+        "    { static u8 m14_sp = 1; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; if (m14_now && !m14_sp) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }\n"
+        "    { static s16 m14_saw_t = 0; static u8 m14_saw_on = 0; extern u8 m14w_sfx(void); if (m14w_sfx() == 75 && joy_button_pressed(BUTTON_C)) { m14_saw_t -= (s16)last_frame_ticks; if (!m14_saw_on || m14_saw_t <= 0) { XGM_startPlayPCM(75, 15, SOUND_PCM_CH4); m14_saw_t = 19; m14_saw_on = 1; } } else if (m14_saw_on) { XGM_stopPlayPCM(SOUND_PCM_CH4); m14_saw_on = 0; } }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
     # sound registration
     rep("    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));",
         "    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));\n" +
