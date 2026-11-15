@@ -3298,11 +3298,27 @@ def m14_ablate(out):
         t=t.replace(k,k+"    return;\n")
     g.write_text(t); print("ablation applied")
 
+def m14_sky_dma(out):
+    """Piscar de barras pretas ao girar: manifold_sky_update reescreve 32x9 entradas do mapa do
+    ceu com a CPU (dentro de interrupcoes desligadas) a cada mudanca de ang>>4. Usa fila de DMA."""
+    import re
+    p=out/"src/manifold_sky.c"
+    s=p.read_text()
+    i=s.index("void manifold_sky_update(void) {")
+    head,body=s[:i],s[i:]
+    body,n=re.subn(r"(VDP_setTileMapDataRect\(BG_B, sky_row_buf, SKY_X0, 4, 32, 9, 32, )CPU\)",r"\1DMA_QUEUE)",body)
+    if n!=1: raise ValueError("manifold_sky_update changed")
+    body=re.sub(r"\s*(M14_VB_BEGIN\(\); )?SKY_CLEAR_BORDERS\(4, 9\);( M14_VB_END\(\);)?","",body)   # bordas ja limpas no init
+    body=body.replace("    sky_last = off;\n","    if (DMA_getQueueSize() > 60) return;\n    sky_last = off;\n",1)
+    p.write_text(head+body)
+    print("sky map update via DMA queue")
+
 def m14_install_display_hint_variants(out):
     if os.environ.get("MANIFOLD_HINT_REARM","0")=="1": m14_hint_rearm(out)
     if os.environ.get("MANIFOLD_KEEP_DISPLAY","0")=="1": keep_display_enabled_in_hblank(out)
     if os.environ.get("MANIFOLD_HINT_PROBE","0")=="1": m14_hint_probe(out)
     m14_ablate(out)
+    if os.environ.get("MANIFOLD_SKY_DMA","0")=="1": m14_sky_dma(out)
     if int(os.environ.get("MANIFOLD_HINT_MARGIN","0")): m14_hint_margin(out,int(os.environ["MANIFOLD_HINT_MARGIN"]))
 
 
