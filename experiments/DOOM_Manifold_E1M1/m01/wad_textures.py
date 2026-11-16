@@ -341,7 +341,7 @@ def _merge_sky(pal, tiles, tmap, rows, cols, max_tiles):
             "map": [[remap[rep[v]] for v in row] for row in tmap], "rows": rows, "cols": cols}
 
 
-def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False, pair=False):
+def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False, pair=False, neutral=False):
     """SKY1 -> deduplicated 4bpp tiles for a BG_B band (3D palette)."""
     pal = res["pal"]
     wdt, hgt, img = res["sky"]
@@ -361,7 +361,17 @@ def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False, pair=Fa
                     xa = x & ~1
                     cs = [img[min(hgt - 1, int(y * hgt / H))][min(wdt - 1, int(xx * wdt / W))] for xx in (xa, xa + 1)]
                     c = tuple((cs[0][k] + cs[1][k]) / 2 for k in range(3))
-                    p_, q_ = nearest_pair(pal, c)
+                    if neutral:        # keep the sky grey: dither only between the palette's neutral greys
+                        ns = [i for i in range(1, len(pal)) if pal[i][0] == pal[i][1] == pal[i][2]] or list(range(1, len(pal)))
+                        best_ = None
+                        for p1 in ns:
+                            for q1 in ns:
+                                m_ = tuple((pal[p1][k] + pal[q1][k]) / 2 for k in range(3))
+                                d_ = dist2(c, m_) + (0 if p1 == q1 else 4)
+                                if best_ is None or d_ < best_[0]: best_ = (d_, p1, q1)
+                        p_, q_ = best_[1], best_[2]
+                    else:
+                        p_, q_ = nearest_pair(pal, c)
                     px[y][x] = p_ if x % 2 == 0 else q_
                 else:
                     px[y][x] = nearest(pal, c)
