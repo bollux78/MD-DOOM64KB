@@ -1,0 +1,146 @@
+--- a/src/m_text.c
++++ b/src/m_text.c
+@@ -288,6 +288,10 @@
+   (R22_TEXTWIDTH - 9) / 2,8,          // initial cursor position
+   NULL,0,
+ };
++boolean M_IsMainMenuVisible(void)
++{
++    return _g_menuactive && currentMenu == &MainDef && !messageToPrint;
++}
+ #include "r81_cheats.inc"
+ 
+ 
+--- a/src/r35_native4.inc
++++ b/src/r35_native4.inc
+@@ -46,6 +46,93 @@
+ };
+ static int16_t r35_native_active=-1;
+ static bool r35_white_font;
++static bool r35_title_menu_shadow;
++static u16 r35_title_menu_sprite_count;
++
++enum { R35_BOX_LEFT=11, R35_BOX_TOP=7, R35_BOX_RIGHT=27, R35_BOX_BOTTOM=16 };
++
++static void R35_ClearTitleMenuSprites(void)
++{
++    volatile u32 *ctrl=(volatile u32 *)0xC00004;
++    volatile u32 *data=(volatile u32 *)0xC00000;
++    *ctrl=VDP_WRITE_VRAM_ADDR(VDP_SPRITE_TABLE);
++    *data=0;
++    *data=0;
++}
++
++static void R35_BeginTitleMenu(void)
++{
++    extern boolean M_IsMainMenuVisible(void);
++    const bool desired = r35_native_active == R35_TITLE &&
++        _g_gamestate == GS_DEMOSCREEN && M_IsMainMenuVisible();
++    r35_title_menu_sprite_count = 0;
++    if (desired == r35_title_menu_shadow)
++        return;
++
++    const u16 sr = R22_Lock();
++    u16 row[40];
++    for (u16 y = 0; y < 28; ++y)
++    {
++        for (u16 x = 0; x < 40; ++x)
++        {
++            const bool inside = x >= R35_BOX_LEFT && x < R35_BOX_RIGHT &&
++                y >= R35_BOX_TOP && y < R35_BOX_BOTTOM;
++            row[x] = (r30_title_map[40u*y+x] + 16u) | (desired && !inside ? 0x8000u : 0);
++        }
++        VDP_setTileMapDataRect(BG_A,row,0,y,40,1,40,CPU);
++    }
++    VDP_setAutoInc(2);
++    R35_ClearTitleMenuSprites();
++    VDP_setHilightShadow(desired);
++    R22_Unlock(sr);
++
++    R40B_ResetNativeText();
++    r22_overlay_dirty = 0;
++    r35_title_menu_shadow = desired;
++}
++
++static bool R35_DrawTitleMenuSprites(u16 x,u16 y,const char *text)
++{
++    if (!r35_title_menu_shadow)
++        return false;
++
++    const u16 sr = R22_Lock();
++    volatile u32 *ctrl=(volatile u32 *)0xC00004;
++    volatile u16 *data=(volatile u16 *)0xC00000;
++    VDP_setAutoInc(2);
++    *ctrl=VDP_WRITE_VRAM_ADDR(VDP_SPRITE_TABLE+8u*r35_title_menu_sprite_count);
++    for (; *text && x < R40B_TEXT_W && r35_title_menu_sprite_count < 80u; ++text, ++x)
++    {
++        const u8 c = (u8)*text;
++        if (c <= 32u || c > 127u)
++            continue;
++        *data = 128u + 8u*y;
++        *data = ++r35_title_menu_sprite_count;
++        *data = 0x8000u | (TILE_FONT_INDEX+c-32u);
++        *data = 128u + 8u*x;
++    }
++    R22_Unlock(sr);
++    return true;
++}
++
++static bool R35_EndTitleMenu(void)
++{
++    if (!r35_title_menu_shadow)
++        return false;
++
++    const u16 sr = R22_Lock();
++    if (r35_title_menu_sprite_count)
++    {
++        volatile u32 *ctrl=(volatile u32 *)0xC00004;
++        volatile u16 *data=(volatile u16 *)0xC00000;
++        *ctrl=VDP_WRITE_VRAM_ADDR(VDP_SPRITE_TABLE+8u*(r35_title_menu_sprite_count-1u)+2u);
++        *data=0;
++    }
++    else
++        R35_ClearTitleMenuSprites();
++    R22_Unlock(sr);
++    return true;
++}
+ #include "r35_title_menu_patterns.h"
+ 
+ static void R35_SetNativeTextColor(bool visible)
+--- a/src/r22_video.inc
++++ b/src/r22_video.inc
+@@ -415,6 +415,7 @@
+  * original map words displaced by glyphs, without allocating a second
+  * 320x224 framebuffer or using the full-screen Window plane. */
+ static uint16_t R35_NativeMapWord(uint16_t x,uint16_t y);
++static bool R35_DrawTitleMenuSprites(uint16_t x,uint16_t y,const char *text);
+ #endif
+ static void R40B_DrawNativeText(int16_t x,int16_t y,const char *s)
+ {
+@@ -441,7 +442,8 @@
+ #if defined(DOOM_R50_STATIC_MENU)
+     /* Priority text directly in BG_A, over intact full-screen native art
+      * in BG_B. WINDOW stays hidden, preserving all 28 picture rows. */
+-    R22_DrawText(VDP_BG_A,s,(uint16_t)x,(uint16_t)y);
++    if(!R35_DrawTitleMenuSprites((uint16_t)x,(uint16_t)y,s))
++        R22_DrawText(VDP_BG_A,s,(uint16_t)x,(uint16_t)y);
+ #else
+     R22_DrawText(VDP_WINDOW,s,(uint16_t)x,(uint16_t)y);
+ #endif
+@@ -1545,6 +1547,7 @@
+     R51_WeaponBeginFrame();
+ #endif
+ #if defined(DOOM_R35_ART_RAW)
++    R35_BeginTitleMenu();
+     if(r35_native_active>=0)
+         memset(r40b_native_seen,0,R40B_OCC_BYTES);
+ #endif
+@@ -1553,6 +1556,8 @@
+ #if defined(DOOM_R35_ART_RAW)
+     if(r35_native_active>=0){
+         R35_SetNativeTextColor(r22_text_this_frame != 0);
++        if(R35_EndTitleMenu())
++            return;
+ #if defined(DOOM_R50_STATIC_MENU)
+         /* The native picture remains visible on both background planes.
+          * Remove glyphs that are no longer requested, including the case
