@@ -3326,7 +3326,13 @@ void m14_hit_object(object_link o, u16 sector) {
     dc=out/"src/draw.c"; d=dc.read_text()
     o1="        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2)) hit_center=1;"
     assert d.count(o1)==1
-    d=d.replace(o1,"        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2) && col_top<72+28 && col_bot>72-28) hit_center=1;")
+    d=d.replace(o1,"        if (col_top<72+28 && col_bot>72-28) { if (x>=RENDER_WIDTH/2-2 && x<=RENDER_WIDTH/2+2) hit_center=2; else if (x>=RENDER_WIDTH/2-13 && x<=RENDER_WIDTH/2+13 && !hit_center) hit_center=1; }")   # r072: +-20% aim tolerance
+    o3="    if (hit_center) {\n        drawn_to_center_cols=type;\n        sprite_on_center_col=obj_link;\n        center_object_sector=sector;\n    }"
+    assert d.count(o3)==1
+    d=d.replace(o3,"    if (hit_center && (hit_center==2 || (!m14_hx && (type==OBJECT || drawn_to_center_cols!=OBJECT)))) {\n        if (hit_center==2) m14_hx=1;\n        drawn_to_center_cols=type;\n        sprite_on_center_col=obj_link;\n        center_object_sector=sector;\n    }")
+    o4="void reset_sprite_hit_info() {\n"
+    assert d.count(o4)==1
+    d=d.replace(o4,"static u8 m14_hx;\nvoid reset_sprite_hit_info() {\n    m14_hx = 0;\n")
     dc.write_text(d)
     t=o.read_text()
     o2="    s32 cur_obj_z = (cur_sector_height<<(FIX32_FRAC_BITS-4));"
