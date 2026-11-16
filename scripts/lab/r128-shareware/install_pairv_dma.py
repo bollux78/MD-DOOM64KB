@@ -42,7 +42,7 @@ source = replace_once(source, "void I_FinishUpdate(void){",
 source = replace_once(source, "    r115_show=r115_draw;\n    __asm__ volatile",
                       "    R128_PrepareBgDma();\n    r115_show=r115_draw;\n    __asm__ volatile")
 
-start = "    for(uint16_t y=first_row;y<end_row;y++,srca+=76,srcb+=76,dsta+=128,dstb+=128){\n"
+start = "    for(uint16_t y=first_row;y<end_row;y++,source_word+=76,dsta+=128,dstb+=128){\n"
 end = "\n#else\n    #if defined(DOOM_R22_SOLID_TILES)"
 if source.count(start) != 1:
     raise SystemExit("Pair-V VBlank row loop changed")
