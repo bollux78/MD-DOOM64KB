@@ -13,15 +13,19 @@ MAPS = [("E1M1", "E1M1  HANGAR"), ("E1M2", "E1M2  NUCLEAR PLANT"), ("E1M3", "E1M
         ("E1M7", "E1M7  COMPUTER STATION"), ("E1M8", "E1M8  PHOBOS ANOMALY"), ("E1M9", "E1M9  MILITARY BASE")]
 BANK = 0x80000
 COMMON_ORG = 0x10000
-MAP_ORG = 0x300000
+MAP_ORG = 0x300000          # CPU address of the map block (slots 6..7)
+FILE_BODY = 0x280000        # file bytes before the first map bank: banks 0..3 menu+common, bank 4 weapons+intermission
+WPN_ORG = 0x200000
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m14x/manifold-doom-menu.bin"
-common = None; blocks = []; extras = []
+common = None; blocks = []; wpn = None
 for m, label in MAPS:
     o = "/tmp/m12/mm_%s/out/release/rom.out" % m
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".common", o, "/tmp/m14x/_c.bin"])
-    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".wpndata", o, "/tmp/m14x/_m.bin"])
-    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".mapextra", o, "/tmp/m14x/_x.bin"])
-    extras.append(open("/tmp/m14x/_x.bin", "rb").read())
+    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".mapextra", o, "/tmp/m14x/_m.bin"])
+    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".wpndata", o, "/tmp/m14x/_w.bin"])
+    w_ = open("/tmp/m14x/_w.bin", "rb").read()
+    if wpn is None: wpn = w_
+    assert w_ == wpn, "weapon data differs in " + m
     c = open("/tmp/m14x/_c.bin", "rb").read(); b = open("/tmp/m14x/_m.bin", "rb").read()
     if common is None: common = c
     assert c == common, "common block differs in " + m
@@ -32,32 +36,26 @@ rom_tail = b""; banks = []
 subprocess.check_call(["python3", "gen_credits.py"], stdout=subprocess.DEVNULL)
 credits = open("credits.bin", "rb").read()
 for b in blocks:
-    banks.append((MAP_ORG + len(rom_tail)) // BANK)
+    banks.append((FILE_BODY + len(rom_tail)) // BANK)
     n = (len(b) + BANK - 1) // BANK
     rom_tail += b + b"\xff" * (n * BANK - len(b))
-# per-map extra data (monster animation frames) linked at slot 5 (0x280000 / 0x2C0000): two maps share one bank
-EXTRA_BANKS = []
-for j in range(0, len(extras), 2):
-    pair = extras[j:j + 2]
-    for e in pair: assert len(e) <= BANK // 2, ("extra window overflow", len(e))
-    blob = b"".join(e.ljust(BANK // 2, b"\xff") for e in pair).ljust(BANK, b"\xff")
-    EXTRA_BANKS += [(MAP_ORG + len(rom_tail)) // BANK] * len(pair)
-    rom_tail += blob
-CREDITS_BANK = (MAP_ORG + len(rom_tail)) // BANK
+EXTRA_BANKS = [5] * len(blocks)     # slot 5 is unused by the game now (kept identity)
+CREDITS_BANK = (FILE_BODY + len(rom_tail)) // BANK
 assert len(credits) <= BANK
 rom_tail += credits + b"\xff" * (BANK - len(credits))      # one bank after the maps: menu image blobs (title, credits x2, end)
-body = bytearray(b"\xff" * MAP_ORG) ; body[COMMON_ORG:COMMON_ORG + len(common)] = common
-INTER_ORG = 0x2F0000          # intermission screen blob (gen_inter.py), visible in slot 5 (bank 5)
+body = bytearray(b"\xff" * FILE_BODY) ; body[COMMON_ORG:COMMON_ORG + len(common)] = common
+INTER_ORG = 0x20E000          # intermission screen blob (gen_inter.py), visible in slot 5 (bank 5)
 inter = open("inter.bin", "rb").read()
-assert COMMON_ORG + len(common) <= INTER_ORG and INTER_ORG + len(inter) <= MAP_ORG, (len(common), len(inter))
+assert COMMON_ORG + len(common) <= WPN_ORG and WPN_ORG + len(wpn) <= INTER_ORG and INTER_ORG + len(inter) <= FILE_BODY, (len(common), len(inter), len(wpn))
+body[WPN_ORG:WPN_ORG + len(wpn)] = wpn
 body[INTER_ORG:INTER_ORG + len(inter)] = inter
-INTER_MUS_ORG = 0x2F9600      # compressed intermission music (gen_inter_music.py)
+INTER_MUS_ORG = 0x218000      # compressed intermission music (gen_inter_music.py)
 _im = open("inter_music.bin", "rb").read()
-assert INTER_ORG + len(inter) <= INTER_MUS_ORG and INTER_MUS_ORG + len(_im) <= MAP_ORG, len(_im)
+assert INTER_ORG + len(inter) <= INTER_MUS_ORG and INTER_MUS_ORG + len(_im) <= FILE_BODY, len(_im)
 body[INTER_MUS_ORG:INTER_MUS_ORG + len(_im)] = _im
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
-h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
+h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define INTER_ORG 0x%XUL' % INTER_ORG, '#define INTER_MUS_ORG 0x%XUL' % INTER_MUS_ORG, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; unsigned char xbank; };', 'static const struct map_entry maps[] = {']
 for (m, label), bk, xb in zip(MAPS, banks, EXTRA_BANKS): h.append('  {"%s", %d, %d},' % (label, bk, xb))
 h.append('};')
@@ -82,4 +80,4 @@ menu = open("/tmp/m14x/menu.bin", "rb").read()
 assert len(menu) <= COMMON_ORG, len(menu)
 rom = menu + rom[len(menu):]
 open(out, "wb").write(rom)
-print("extra sizes", [len(e) for e in extras]); print("menu bytes", len(menu), "common", len(common), "banks", banks, "rom bytes", len(rom), "->", out)
+print("menu bytes", len(menu), "common", len(common), "banks", banks, "rom bytes", len(rom), "->", out)

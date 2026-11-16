@@ -143,8 +143,8 @@ SECTIONS
     . = ALIGN(2);
     */res/music_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
-  .wpndata 0x003F2600 : { *(.wpndata) } > rom
-  .mapextra MAPEXTRA_ORG : { *(.mapextra) } > rom      /* per-map extra window, slot 5 (0x280000) - r065 */
+  .mapextra : { *(.mapextra) } > rom      /* monster animation frames: right after the map objects (r067) */
+  .wpndata 0x00200000 : { *(.wpndata) } > rom      /* weapon tiles + sounds: ONE copy in bank 4, shared by every map (r067) */
   .maphead 0x00300000 :
   {
     KEEP(*(.text.keepboot))

@@ -54,7 +54,7 @@ static void music_start(void) {
     mus_p = intro_vgm;
 }
 /* intermission tune: LZ stream at 0x2F9600 (gen_inter_music.py), decoded on the fly through a 16 KB ring in RAM */
-#define LZ_SRC0 ((const unsigned char *)0x2F9600UL)
+#define LZ_SRC0 ((const unsigned char *)INTER_MUS_ORG)
 #define LZ_RING ((volatile unsigned char *)0xFF4000)
 #define LZ_W 16384
 struct lzst { const unsigned char *src; unsigned long wpos; unsigned short mrem, moff; unsigned char fl, nb; };
@@ -255,14 +255,14 @@ int main(void) {
     vram_w(0);
     for (i = 0; i < 96 * 8; i++) { VDP_DATA = font_tiles[i] >> 16; VDP_DATA = font_tiles[i]; }
     if (inter) {
-        const u16 *ib = (const u16 *)0x2F0000UL;   /* pal[64] | attr[1120] | tiles[1120*16 words] */
+        const u16 *ib = (const u16 *)INTER_ORG;   /* pal[64] | attr[1120] | tiles[1120*16 words] */
         for (i = 0; i < 1120 * 16; i++) VDP_DATA = ib[64 + 1120 + i];
         cram_w(0);
         for (i = 0; i < 64; i++) VDP_DATA = ib[i];
     }
 
     if (inter) {
-        const u16 *ib = (const u16 *)0x2F0000UL;
+        const u16 *ib = (const u16 *)INTER_ORG;
         int r, c;
         clear_plane();
         for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));

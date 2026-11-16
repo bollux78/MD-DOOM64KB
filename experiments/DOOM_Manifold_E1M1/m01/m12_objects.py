@@ -146,7 +146,23 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     seen={}
     extra=grate_extra(w) if kinds_has_grates(w) else {}
     _present={k for _x,_y,_a,k,f in lumps["THINGS"] if f&2 and not f&16}
+    _diet={}; colinfo={}
+    if os.environ.get("MANIFOLD_MAP","E1M1") in ("E1M2","E1M3","E1M4"):      # r067: these map blocks are the fullest -> fewer animation frames
+        for _f in ("zombieman","sergeant","imp"):
+            _diet.update({f"{_f}_wd":_f,f"{_f}_di":f"{_f}_dh",f"{_f}_dk":f"{_f}_d0"})
+            if os.environ.get("MANIFOLD_MAP")=="E1M3": _diet.update({f"{_f}_aim":_f,f"{_f}_wb":f"{_f}_w1"})
     for kind,lump,name,width,height in TYPES:
+        if name in _diet:           # own header (same layout/size in every map) pointing at a neighbouring frame's column data
+            _ai=[i for i,t in enumerate(templates) if t[1]==_diet[name]]
+            if _ai:
+                import struct as _st2
+                _ai=_ai[0]+1; _pw,_ph=_st2.unpack('<hh',w.lump(lump)[:4])
+                _wd=width or round(_pw*1.39); _ht=height or round(_ph*1.75)
+                idx=len(templates)+1; ident="m12_sprite_"+name
+                lines.append(f"const rle_sprite __attribute__((section(\".rodata.m12hdr\"))) {ident} = {{.num_columns=64,.columns={{")
+                lines.append(",\n".join(f"{{.num_spans={n},.spans=m12_{_ai}_{x}_sp,.texels=m12_{_ai}_{x}_px}}" if n else "{.num_spans=0,.spans=0,.texels=0}" for x,n in enumerate(colinfo[_ai])))
+                lines.append("}};")
+                templates.append((ident,name,_wd,_ht)); mapping[kind]=idx; seen[lump]=idx; continue
         if lump in seen:            # several THING kinds, one sprite
             mapping[kind]=seen[lump]; continue
         _grp={"zombieman":3004,"sergeant":9,"imp":3001,"demon":3002,"spectre":58,"baron":3003}.get(name.split("_")[0])
@@ -167,7 +183,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         if not height: height=round(ph*1.75)
         idx=len(templates)+1
         ident="m12_sprite_"+name
-        cols=[]
+        cols=[]; _ci=[]; colinfo[idx]=_ci
         for x in range(64):
             seq=[img[min(ph-1,y*ph//64)][min(pw-1,x*pw//64)] for y in range(64)]
             # Manifold draw_col writes a byte encoding TWO horizontal 4bpp pixels.
@@ -195,8 +211,8 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 _sec=' __attribute__((section(".mapextra")))' if name.split("_")[0] in ("zombieman","sergeant","imp","demon","spectre","baron") else ""
                 lines.append(f"static const u16{_sec} {a}[] = {{{','.join(map(str,spans))}}};")
                 lines.append(f"static const u8{_sec} {b}[] = {{{','.join(map(str,texels))}}};")
-                cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}")
-            else: cols.append("{.num_spans=0,.spans=0,.texels=0}")
+                cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}"); _ci.append(len(spans)//2)
+            else: cols.append("{.num_spans=0,.spans=0,.texels=0}"); _ci.append(0)
         lines.append(f"const rle_sprite __attribute__((section(\".rodata.m12hdr\"))) {ident} = {{.num_columns=64,.columns={{")
         lines.append(",\n".join(cols))
         lines.append("}};")
