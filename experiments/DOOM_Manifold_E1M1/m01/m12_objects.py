@@ -80,6 +80,28 @@ TYPES = (
  (9405,"SPOSJ0","sergeant_d0",0,0),
  (9406,"TROOC1","imp_w1",0,0),
  (9408,"TROOK0","imp_d0",0,0),
+ # M14 r066: the rest of the monster animation sets (walk B,D; aim; pain; death frames)
+ (9420,"POSSB1","zombieman_wb",0,0),
+ (9421,"POSSD1","zombieman_wd",0,0),
+ (9422,"POSSE1","zombieman_aim",0,0),
+ (9423,"POSSG1","zombieman_pain",0,0),
+ (9424,"POSSH0","zombieman_dh",0,0),
+ (9425,"POSSI0","zombieman_di",0,0),
+ (9426,"POSSK0","zombieman_dk",0,0),
+ (9427,"SPOSB1","sergeant_wb",0,0),
+ (9428,"SPOSD1","sergeant_wd",0,0),
+ (9429,"SPOSE1","sergeant_aim",0,0),
+ (9430,"SPOSG1","sergeant_pain",0,0),
+ (9431,"SPOSH0","sergeant_dh",0,0),
+ (9432,"SPOSI0","sergeant_di",0,0),
+ (9433,"SPOSK0","sergeant_dk",0,0),
+ (9434,"TROOB1","imp_wb",0,0),
+ (9435,"TROOD1","imp_wd",0,0),
+ (9436,"TROOE1","imp_aim",0,0),
+ (9437,"TROOH1","imp_pain",0,0),
+ (9438,"TROOI0","imp_dh",0,0),
+ (9439,"TROOJ0","imp_di",0,0),
+ (9440,"TROOL0","imp_dk",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -264,4 +286,4 @@ def install_templates(out,templates):
         # The visual test showed an oversized barrel; reduce both projected
         # dimensions by 25% while preserving the same sprite pixels/THINGS.
         entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24*_hp//100},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
-    p.write_text(s[:a]+externs+"const object_template object_types[64] = {\n"+",\n".join(entries)+"\n};"+s[b:])
+    p.write_text(s[:a]+externs+"const object_template object_types[128] = {\n"+",\n".join(entries)+"\n};"+s[b:])
