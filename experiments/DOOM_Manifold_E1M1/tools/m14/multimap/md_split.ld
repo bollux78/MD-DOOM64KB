@@ -144,6 +144,7 @@ SECTIONS
     */res/music_res.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
   } > rom
   .wpndata 0x003F2600 : { *(.wpndata) } > rom
+  .mapextra MAPEXTRA_ORG : { *(.mapextra) } > rom      /* per-map extra window, slot 5 (0x280000) - r065 */
   .maphead 0x00300000 :
   {
     KEEP(*(.text.keepboot))

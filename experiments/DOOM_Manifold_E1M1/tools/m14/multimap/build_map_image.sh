@@ -26,5 +26,6 @@ env $F $doors MANIFOLD_MAP=$m MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 MANIFOLD_GRAT
   MANIFOLD_WEAPON_FIX=1 MANIFOLD_INPUT_FIX=1 MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 MANIFOLD_SPLIT_LINES=${SPLIT:-2} MANIFOLD_OBJ_HEIGHT_PCT=${HPCT:-80} MANIFOLD_START_MENU=1 $extra \
   python3 $R/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source /home/claude/manifold-up --wad /home/claude/wad/d.wad --out "$out" > "$out.stage.log" 2>&1 || { tail -5 "$out.stage.log"; exit 1; }
 ln -sf math3d.h "$out/src/math3D.h"
-make -C "$out" -f $D/mk-split.gen -j4 release GDK=/home/claude/sgdkr OS=Linux PREFIX=$t CC=${t}gcc LD=${t}ld AR=${t}ar NM=${t}nm OBJCPY=${t}objcopy > "$out.build.log" 2>&1 || { grep -iE " error|undefined" "$out.build.log" | head; exit 1; }
+case $m in E1M1) xo=0x280000;; E1M2) xo=0x2C0000;; E1M3) xo=0x280000;; E1M4) xo=0x2C0000;; E1M5) xo=0x280000;; E1M6) xo=0x2C0000;; E1M7) xo=0x280000;; E1M8) xo=0x2C0000;; E1M9) xo=0x280000;; esac
+make -C "$out" -f $D/mk-split.gen MAPEXTRA_ORG=$xo -j4 release GDK=/home/claude/sgdkr OS=Linux PREFIX=$t CC=${t}gcc LD=${t}ld AR=${t}ar NM=${t}nm OBJCPY=${t}objcopy > "$out.build.log" 2>&1 || { grep -iE " error|undefined" "$out.build.log" | head; exit 1; }
 echo "OK $m $(stat -c %s $out/out/release/rom.bin) bytes entry=$(${t}nm $out/out/release/rom.out | awk '$3=="_Entry_Point"{print $1}')"

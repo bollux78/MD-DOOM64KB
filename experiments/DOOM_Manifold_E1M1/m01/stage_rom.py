@@ -4431,6 +4431,8 @@ def stage(src, wad, out, control=False):
     s=s[:a]+"""const uint32_t map_table[MAX_MAPS+2] = {
     0xDEADBEEF, 1, (uint32_t)&e1m1_map, 0, 0, 0, 0
 };"""+s[b:]
+    # r065: the 1 MB wad_area placeholder was never read; reclaiming it frees 1 MB in the shared .common block
+    s=s.replace("const uint8_t wad_area[512*1024*2]","const uint8_t wad_area[16]")
     p.write_text(s)
     # Find the real player-1 THING; never place the camera at arbitrary BSP 0.
     spawns=[(x,y,angle) for x,y,angle,type_id,flags in map_lumps["THINGS"] if type_id==1]

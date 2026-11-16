@@ -15,11 +15,13 @@ BANK = 0x80000
 COMMON_ORG = 0x10000
 MAP_ORG = 0x300000
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m14x/manifold-doom-menu.bin"
-common = None; blocks = []
+common = None; blocks = []; extras = []
 for m, label in MAPS:
     o = "/tmp/m12/mm_%s/out/release/rom.out" % m
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".common", o, "/tmp/m14x/_c.bin"])
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".wpndata", o, "/tmp/m14x/_m.bin"])
+    subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".mapextra", o, "/tmp/m14x/_x.bin"])
+    extras.append(open("/tmp/m14x/_x.bin", "rb").read())
     c = open("/tmp/m14x/_c.bin", "rb").read(); b = open("/tmp/m14x/_m.bin", "rb").read()
     if common is None: common = c
     assert c == common, "common block differs in " + m
@@ -33,6 +35,14 @@ for b in blocks:
     banks.append((MAP_ORG + len(rom_tail)) // BANK)
     n = (len(b) + BANK - 1) // BANK
     rom_tail += b + b"\xff" * (n * BANK - len(b))
+# per-map extra data (monster animation frames) linked at slot 5 (0x280000 / 0x2C0000): two maps share one bank
+EXTRA_BANKS = []
+for j in range(0, len(extras), 2):
+    pair = extras[j:j + 2]
+    for e in pair: assert len(e) <= BANK // 2, ("extra window overflow", len(e))
+    blob = b"".join(e.ljust(BANK // 2, b"\xff") for e in pair).ljust(BANK, b"\xff")
+    EXTRA_BANKS += [(MAP_ORG + len(rom_tail)) // BANK] * len(pair)
+    rom_tail += blob
 CREDITS_BANK = (MAP_ORG + len(rom_tail)) // BANK
 assert len(credits) <= BANK
 rom_tail += credits + b"\xff" * (BANK - len(credits))      # one bank after the maps: menu image blobs (title, credits x2, end)
@@ -48,8 +58,8 @@ body[INTER_MUS_ORG:INTER_MUS_ORG + len(_im)] = _im
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
 h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
-     'struct map_entry { const char *name; unsigned char bank; };', 'static const struct map_entry maps[] = {']
-for (m, label), bk in zip(MAPS, banks): h.append('  {"%s", %d},' % (label, bk))
+     'struct map_entry { const char *name; unsigned char bank; unsigned char xbank; };', 'static const struct map_entry maps[] = {']
+for (m, label), bk, xb in zip(MAPS, banks, EXTRA_BANKS): h.append('  {"%s", %d, %d},' % (label, bk, xb))
 h.append('};')
 h.append('static const unsigned long bank_expect[%d][7][8] = {' % len(MAPS))
 for bk in banks:
@@ -72,4 +82,4 @@ menu = open("/tmp/m14x/menu.bin", "rb").read()
 assert len(menu) <= COMMON_ORG, len(menu)
 rom = menu + rom[len(menu):]
 open(out, "wb").write(rom)
-print("menu bytes", len(menu), "common", len(common), "banks", banks, "rom bytes", len(rom), "->", out)
+print("extra sizes", [len(e) for e in extras]); print("menu bytes", len(menu), "common", len(common), "banks", banks, "rom bytes", len(rom), "->", out)

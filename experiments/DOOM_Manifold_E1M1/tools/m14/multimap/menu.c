@@ -155,11 +155,11 @@ static void show_image(int n) {
     vreg(7, 0x00); vreg(1, 0x44);
 }
 
-static void set_banks(int mapbank);
+static void set_banks(int mapbank, int xbank);
 static void bank_test(int k) {
     int s, j, bad;
     const struct map_entry *mp = &maps[k];
-    set_banks(mp->bank);
+    set_banks(mp->bank, mp->xbank);
     clear_plane();
     text(8, 4, "TESTE DE BANCOS (SSF2)", 3);
     text(8, 6, mp->name, 2);
@@ -181,14 +181,14 @@ static void bank_test(int k) {
 }
 /* slots 1..5 (0x080000-0x2FFFFF) = banks 1..5: the common code/data block shared by every map;
    slots 6..7 (0x300000-0x3FFFFF) = the selected map's own block */
-static void set_banks(int mapbank) {
+static void set_banks(int mapbank, int xbank) {
 #ifdef LAYOUT_PER_MAP   /* 10 MB layout: each map = 4 banks mapped at slots 1..4 */
     *(volatile u8 *)0xA130F3 = mapbank; *(volatile u8 *)0xA130F5 = mapbank + 1;
     *(volatile u8 *)0xA130F7 = mapbank + 2; *(volatile u8 *)0xA130F9 = mapbank + 3;
     return;
 #endif
     *(volatile u8 *)0xA130F3 = 1; *(volatile u8 *)0xA130F5 = 2; *(volatile u8 *)0xA130F7 = 3;
-    *(volatile u8 *)0xA130F9 = 4; *(volatile u8 *)0xA130FB = 5;
+    *(volatile u8 *)0xA130F9 = 4; *(volatile u8 *)0xA130FB = xbank;
     *(volatile u8 *)0xA130FD = mapbank; *(volatile u8 *)0xA130FF = mapbank + 1;
 }
 static void launch(int k) {
@@ -199,7 +199,7 @@ static void launch(int k) {
     vreg(1, 0x04);
     vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
-    set_banks(m->bank);
+    set_banks(m->bank, m->xbank);
     /* make the map's SGDK startup take the full cold-start path */
     *(volatile u8 *)0xA10009 = 0; *(volatile u8 *)0xA1000B = 0; *(volatile u8 *)0xA1000D = 0;
     __asm volatile("move.w #0x2700,%%sr\n"

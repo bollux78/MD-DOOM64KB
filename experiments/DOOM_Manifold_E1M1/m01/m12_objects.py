@@ -170,8 +170,9 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 spans.extend((skip,y-first))
             if spans:
                 a=f"m12_{idx}_{x}_sp";b=f"m12_{idx}_{x}_px"
-                lines.append(f"static const u16 {a}[] = {{{','.join(map(str,spans))}}};")
-                lines.append(f"static const u8 {b}[] = {{{','.join(map(str,texels))}}};")
+                _sec=' __attribute__((section(".mapextra")))' if name.split("_")[0] in ("zombieman","sergeant","imp","demon","spectre","baron") else ""
+                lines.append(f"static const u16{_sec} {a}[] = {{{','.join(map(str,spans))}}};")
+                lines.append(f"static const u8{_sec} {b}[] = {{{','.join(map(str,texels))}}};")
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}")
             else: cols.append("{.num_spans=0,.spans=0,.texels=0}")
         lines.append(f"const rle_sprite __attribute__((section(\".rodata.m12hdr\"))) {ident} = {{.num_columns=64,.columns={{")
