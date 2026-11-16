@@ -48,6 +48,9 @@ bash "$lab/apply-base.sh"
 for overlay in "$lab"/[0-9][0-9]-*.patch; do
     patch -p1 --batch --fuzz=0 < "$overlay"
 done
+if [[ "${R128_BG_PROBE:-0}" == 1 ]]; then
+    python3 "$lab/install_pairv_probe.py"
+fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
