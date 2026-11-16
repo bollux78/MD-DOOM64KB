@@ -48,6 +48,13 @@ bash "$lab/apply-base.sh"
 for overlay in "$lab"/[0-9][0-9]-*.patch; do
     patch -p1 --batch --fuzz=0 < "$overlay"
 done
+if [[ "${R128_BG_DMA:-0}" == 1 && "${R128_BG_PROBE:-0}" == 1 ]]; then
+    echo "Select either the BG diagnostic or the DMA experiment" >&2
+    exit 2
+fi
+if [[ "${R128_BG_DMA:-0}" == 1 ]]; then
+    python3 "$lab/install_pairv_dma.py"
+fi
 if [[ "${R128_BG_PROBE:-0}" == 1 ]]; then
     # Allow the probe's row signatures and counters in this diagnostic ROM.
     export HUD_BSS_SLACK=240
