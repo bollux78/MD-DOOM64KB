@@ -10,21 +10,22 @@ static void R128_BGProbe(void)
     static uint16_t same_rows, total_rows;
     static uint32_t previous_rect;
 
-    if (_g_gamestate != GS_LEVEL || r22_overlay_dirty)
+    if (_g_gamestate != GS_LEVEL || r22_overlay_dirty || R76_InGameMenu())
     {
         r128_bg_presented = false;
+        r128_bg_sampled = false;
         same_rows = total_rows = 0;
         window_start = _g_vblankCount;
         return;
     }
 
-    const uint16_t first = r57_queued_crop ? R57_TILE_YMIN : 1;
-    const uint16_t end = r57_queued_crop ? R57_TILE_YEND : 22;
-    const uint16_t left = r57_queued_crop ? R57_TILE_XMIN : 0;
-    const uint16_t width = r57_queued_crop ? R57_DMA_WORDS : 38;
+    const uint16_t first = r57_queued_crop ? r92_rect.y0 : 1;
+    const uint16_t end = r57_queued_crop ? r92_rect.y1 : 22;
+    const uint16_t left = r57_queued_crop ? r92_rect.x0 : 0;
+    const uint16_t width = r57_queued_crop ? r92_rect.x1 - left : 38;
     const uint32_t rect = ((uint32_t)first << 16) | (end << 11) | (left << 6) | width;
     const bool comparable = r128_bg_presented && rect == previous_rect;
-    const uint16_t *map = (const uint16_t *)(const void *)r22_fb.pixels;
+    const uint16_t *map = (const uint16_t *)(const void *)r115_show;
 
     for (uint16_t y = first; y < end; ++y)
     {
@@ -43,6 +44,7 @@ static void R128_BGProbe(void)
         total_rows += end - first;
     previous_rect = rect;
     r128_bg_presented = false;
+    r128_bg_sampled = true;
 
     const uint32_t now = _g_vblankCount;
     if (now - window_start >= 60u)
