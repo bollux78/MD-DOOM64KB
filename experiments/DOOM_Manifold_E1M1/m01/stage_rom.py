@@ -3094,7 +3094,7 @@ extern u32 last_frame_ticks; extern void play_sfx(u8 id, u8 priority);
 static const u8 m14_walk1[4]={0,M14_ID_ZOMBIEMAN_W1,M14_ID_SERGEANT_W1,M14_ID_IMP_W1};
 static const u8 m14_pain_id[4]={0,M14_ID_ZOMBIEMAN,M14_ID_SERGEANT,M14_ID_IMP};   /* pain: stands still (no pain sprite: map ROM budget) */
 static const u8 m14_death0[4]={0,M14_ID_ZOMBIEMAN_D0,M14_ID_SERGEANT_D0,M14_ID_IMP_D0};
-static u8 m14_wf[128]; static s16 m14_wt[128]; static s16 m14_pt[128];
+static u8 m14_wf[64]; static u8 m14_wt[64]; static u8 m14_pt[64];   /* per-monster anim state, timers in 1/75 s */
 typedef struct { u8 link; u8 frame; u8 k; u16 sector; s16 left; } m14_death_t;
 static m14_death_t m14dx[12]; static u8 m14dx_n;
 void m14_death_tick(void) {
@@ -3189,9 +3189,9 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     u8 t=OBJ_LINK_DEREF(cur_obj).object_type;
     u8 k=m14_kind(t);
     if (!k) return follow_player_orig(cur_obj, cur_sector);
-    { u8 L=cur_obj&127;                                        /* walk animation + pain */
-      m14_wt[L]-=2*(s16)last_frame_ticks; if (m14_wt[L]<=0) { m14_wt[L]=68; m14_wf[L]^=1; }
-      if (m14_pt[L]>0) { m14_pt[L]-=2*(s16)last_frame_ticks; OBJ_LINK_DEREF(cur_obj).object_type=m14_pain_id[k]; return 1; }
+    { u8 L=cur_obj&63;                                        /* walk animation + pain */
+      { s16 q=(s16)m14_wt[L]-(2*(s16)last_frame_ticks+3)/4; if (q<=0) { q=17; m14_wf[L]^=1; } m14_wt[L]=(u8)q; }
+      if (m14_pt[L]) { s16 q=(s16)m14_pt[L]-(2*(s16)last_frame_ticks+3)/4; m14_pt[L]=(u8)(q>0?q:0); OBJ_LINK_DEREF(cur_obj).object_type=m14_pain_id[k]; return 1; }
       OBJ_LINK_DEREF(cur_obj).object_type = m14_wf[L] ? (u8)(m14_walk1[k]+m14_wf[L]-1) : m14_base_id[k]; }
     int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
     int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
@@ -3244,7 +3244,7 @@ void m14_hit_object(object_link o, u16 sector) {
     } else {
         OBJ_LINK_DEREF(o).health-=dmg;
         OBJ_LINK_DEREF(o).current_state=2;
-        if ((random()&255) < (k==3?200:200)) { m14_pt[o&127]=26; play_sfx(76, 5); }   /* Doom painchance 200/256; pain state ~3 tics */
+        if ((random()&255) < (k==3?200:200)) { m14_pt[o&63]=7; play_sfx(76, 5); }   /* Doom painchance 200/256; pain state ~3 tics */
     }
 }
 """

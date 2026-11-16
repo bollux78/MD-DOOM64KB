@@ -116,7 +116,7 @@ SECTIONS
     */src/e1m1_map.o(.rodata.e1_block_offsets)
     . = 0x1B00;
     */src/m14_bgm.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .lit)
-    . = 0x2000;
+    . = 0x1F44;
     */src/colors.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
     . = 0x2800;
     */src/level.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
@@ -206,7 +206,7 @@ SECTIONS
     */src/portal.o(.bss .bss.* COMMON)
     */src/sector_group.o(.bss .bss.* COMMON)
     */src/textures.o(.bss .bss.* COMMON)
-    . = 0x2580;
+    . = 0x1F44;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }
