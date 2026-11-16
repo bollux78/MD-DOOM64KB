@@ -129,6 +129,8 @@ SECTIONS
     . = 0xA000;
     */src/m12_doom_objects.o(.rodata.m12hdr)
     */src/m12_doom_objects.o(.text .text.* .rodata .rodata.* .rodata_bin .rodata_binf .gcc_except_table .gcc_except_table.* .lit)
+    . = ALIGN(2);
+    */src/m12_doom_objects.o(.mapgap)      /* r068: monster frames that fit in the unused part of this region */
     . = 0x46200;
     */src/e1m1_map.o(.rodata.e1m1_map)
     . = 0x46300;

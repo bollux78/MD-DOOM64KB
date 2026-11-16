@@ -54,7 +54,7 @@ TYPES = (
  # M14 shareware: the remaining E1 monsters, static front frame A1.
  # Spectre = demon sprite with a checkerboard of transparent texels (fuzz look).
  (3002,"SARGA1","demon",0,0),
- (58,"SPECTRE","spectre",0,0),
+ (58,"SARGA1","spectre",0,0),
  (3003,"BOSSA1","baron",0,0),
  # M14: remaining E1 pickups (patch size x the barrel ratios)
  (9301,"BEXPA0","bexp0",0,0),
@@ -86,22 +86,63 @@ TYPES = (
  (9422,"POSSE1","zombieman_aim",0,0),
  (9423,"POSSG1","zombieman_pain",0,0),
  (9424,"POSSH0","zombieman_dh",0,0),
- (9425,"POSSI0","zombieman_di",0,0),
- (9426,"POSSK0","zombieman_dk",0,0),
  (9427,"SPOSB1","sergeant_wb",0,0),
  (9428,"SPOSD1","sergeant_wd",0,0),
  (9429,"SPOSE1","sergeant_aim",0,0),
  (9430,"SPOSG1","sergeant_pain",0,0),
  (9431,"SPOSH0","sergeant_dh",0,0),
- (9432,"SPOSI0","sergeant_di",0,0),
- (9433,"SPOSK0","sergeant_dk",0,0),
  (9434,"TROOB1","imp_wb",0,0),
  (9435,"TROOD1","imp_wd",0,0),
  (9436,"TROOE1","imp_aim",0,0),
  (9437,"TROOH1","imp_pain",0,0),
  (9438,"TROOI0","imp_dh",0,0),
- (9439,"TROOJ0","imp_di",0,0),
- (9440,"TROOL0","imp_dk",0,0),
+
+ # r068: back (A5,C5) and side (A3, A7 = A3 mirrored) frames for every monster; demon/spectre/baron get their animation sets
+ (9457,"POSSA5","zombieman_bk0",0,0),
+ (9458,"POSSC5","zombieman_bk1",0,0),
+ (9459,"POSSA3A7","zombieman_sl",0,0),
+ (9460,"POSSA3A7~","zombieman_sr",0,0),
+ (9468,"SPOSA5","sergeant_bk0",0,0),
+ (9469,"SPOSC5","sergeant_bk1",0,0),
+ (9470,"SPOSA3A7","sergeant_sl",0,0),
+ (9471,"SPOSA3A7~","sergeant_sr",0,0),
+ (9479,"TROOA5","imp_bk0",0,0),
+ (9480,"TROOC5","imp_bk1",0,0),
+ (9481,"TROOA3A7","imp_sl",0,0),
+ (9482,"TROOA3A7~","imp_sr",0,0),
+ (9483,"SARGC1","demon_w1",0,0),
+ (9484,"SARGE1","demon_aim",0,0),
+ (9485,"SARGF1","demon_atk",0,0),
+ (9486,"SARGH1","demon_pain",0,0),
+ (9487,"SARGI0","demon_dh",0,0),
+ (9488,"SARGK0","demon_d0",0,0),
+ (9489,"SARGN0","demon_dead",0,0),
+ (9490,"SARGA5","demon_bk0",0,0),
+ (9491,"SARGC5","demon_bk1",0,0),
+ (9492,"SARGA3A7","demon_sl",0,0),
+ (9493,"SARGA3A7~","demon_sr",0,0),
+ (9494,"SARGC1","spectre_w1",0,0),
+ (9495,"SARGE1","spectre_aim",0,0),
+ (9496,"SARGF1","spectre_atk",0,0),
+ (9497,"SARGH1","spectre_pain",0,0),
+ (9498,"SARGI0","spectre_dh",0,0),
+ (9499,"SARGK0","spectre_d0",0,0),
+ (9500,"SARGN0","spectre_dead",0,0),
+ (9501,"SARGA5","spectre_bk0",0,0),
+ (9502,"SARGC5","spectre_bk1",0,0),
+ (9503,"SARGA3A7","spectre_sl",0,0),
+ (9504,"SARGA3A7~","spectre_sr",0,0),
+ (9505,"BOSSC1","baron_w1",0,0),
+ (9506,"BOSSE1","baron_aim",0,0),
+ (9507,"BOSSF1","baron_atk",0,0),
+ (9508,"BOSSH1","baron_pain",0,0),
+ (9509,"BOSSI0","baron_dh",0,0),
+ (9510,"BOSSK0","baron_d0",0,0),
+ (9511,"BOSSO0","baron_dead",0,0),
+ (9512,"BOSSA5","baron_bk0",0,0),
+ (9513,"BOSSC5","baron_bk1",0,0),
+ (9514,"BOSSA3A7","baron_sl",0,0),
+ (9515,"BOSSA3A7~","baron_sr",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -147,11 +188,30 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     extra=grate_extra(w) if kinds_has_grates(w) else {}
     _present={k for _x,_y,_a,k,f in lumps["THINGS"] if f&2 and not f&16}
     _diet={}; colinfo={}
+    _lk={}
+    for _k,_l2,_n,_w,_h in TYPES: _lk.setdefault(_l2,set()).add(_k)
+    _map=os.environ.get("MANIFOLD_MAP","E1M1")
+    def _unused(kind,lump,name):        # r068: sprites of things this map never places keep header + size but carry no columns
+        if name.startswith("grate_"): return not (_map=="E1M1" and os.environ.get("MANIFOLD_GRATE_SPRITES","1")=="1")
+        if name.startswith("bexp"): return 2035 not in _present
+        if kind<9000: return not any(k in _present for k in _lk[lump])
+        return False
     if os.environ.get("MANIFOLD_MAP","E1M1") in ("E1M2","E1M3","E1M4"):      # r067: these map blocks are the fullest -> fewer animation frames
-        for _f in ("zombieman","sergeant","imp"):
-            _diet.update({f"{_f}_wd":_f,f"{_f}_di":f"{_f}_dh",f"{_f}_dk":f"{_f}_d0"})
+        for _f in ("zombieman","sergeant","imp","demon","spectre","baron"):
+            _diet.update({f"{_f}_wd":_f,f"{_f}_bk1":f"{_f}_bk0"})
             if os.environ.get("MANIFOLD_MAP")=="E1M3": _diet.update({f"{_f}_aim":_f,f"{_f}_wb":f"{_f}_w1"})
     for kind,lump,name,width,height in TYPES:
+        _flip = name.endswith("_sr") and lump.endswith("~")
+        if _flip:                   # r068: right-side view = left-side view mirrored -> same column data, reversed order, own header
+            _ai=[i for i,t in enumerate(templates) if t[1]==name[:-3]+"_sl"][0]+1
+            import struct as _st3
+            _pw,_ph=_st3.unpack('<hh',w.lump(lump[:-1])[:4])
+            _wd=width or round(_pw*1.39); _ht=height or round(_ph*1.75)
+            idx=len(templates)+1; ident="m12_sprite_"+name
+            lines.append(f"const rle_sprite __attribute__((section(\".rodata.m12hdr\"))) {ident} = {{.num_columns=64,.columns={{")
+            lines.append(",\n".join(f"{{.num_spans={colinfo[_ai][63-x]},.spans=m12_{_ai}_{63-x}_sp,.texels=m12_{_ai}_{63-x}_px}}" if colinfo[_ai][63-x] else "{.num_spans=0,.spans=0,.texels=0}" for x in range(64)))
+            lines.append("}};")
+            templates.append((ident,name,_wd,_ht)); mapping[kind]=idx; colinfo[idx]=[colinfo[_ai][63-x] for x in range(64)]; seen[lump]=idx; continue
         if name in _diet:           # own header (same layout/size in every map) pointing at a neighbouring frame's column data
             _ai=[i for i,t in enumerate(templates) if t[1]==_diet[name]]
             if _ai:
@@ -163,15 +223,19 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 lines.append(",\n".join(f"{{.num_spans={n},.spans=m12_{_ai}_{x}_sp,.texels=m12_{_ai}_{x}_px}}" if n else "{.num_spans=0,.spans=0,.texels=0}" for x,n in enumerate(colinfo[_ai])))
                 lines.append("}};")
                 templates.append((ident,name,_wd,_ht)); mapping[kind]=idx; seen[lump]=idx; continue
-        if lump in seen:            # several THING kinds, one sprite
-            mapping[kind]=seen[lump]; continue
+        _spec=name.startswith("spectre"); _sk=lump+("#S" if _spec else "")
+        if _sk in seen:            # several THING kinds, one sprite
+            mapping[kind]=seen[_sk]; continue
         _grp={"zombieman":3004,"sergeant":9,"imp":3001,"demon":3002,"spectre":58,"baron":3003}.get(name.split("_")[0])
-        if _grp is not None and _grp not in _present:      # r057: monster not in this map -> empty sprite (saves map ROM)
-            _l=w.lump("SARGA1" if lump=="SPECTRE" else lump); import struct as _st; pw,ph=_st.unpack('<hh',_l[:4]); img=[[None]*pw for _ in range(ph)]   # keep the true size: object_types lives in common code
+        if (_grp is not None and _grp not in _present) or _unused(kind,lump,name):      # r057: monster not in this map -> empty sprite (saves map ROM)
+            if lump in extra: pw,ph=extra[lump][0],extra[lump][1]
+            else:
+                _l=w.lump(lump); import struct as _st; pw,ph=_st.unpack('<hh',_l[:4])
+            img=[[None]*pw for _ in range(ph)]   # keep the true size: object_types lives in common code
         else:
           try:
-              if lump=="SPECTRE":
-                  pw,ph,img=WT.patch_image(w.lump("SARGA1"))
+              if _spec:
+                  pw,ph,img=WT.patch_image(w.lump(lump))
                   img=[[(None if (x+y)&1 else v) for x,v in enumerate(row)] for y,row in enumerate(img)]
               else:
                   pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
@@ -208,7 +272,8 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 spans.extend((skip,y-first))
             if spans:
                 a=f"m12_{idx}_{x}_sp";b=f"m12_{idx}_{x}_px"
-                _sec=' __attribute__((section(".mapextra")))' if name.split("_")[0] in ("zombieman","sergeant","imp","demon","spectre","baron") else ""
+                _fm=name.split("_")[0]
+                _sec=(' __attribute__((section(".mapgap")))' if _fm in os.environ.get("MANIFOLD_GAPFAMS","").split(",") else ' __attribute__((section(".mapextra")))') if _fm in ("zombieman","sergeant","imp","demon","spectre","baron") else ""   # r068: .mapgap = free bytes inside the fixed layout of the map block
                 lines.append(f"static const u16{_sec} {a}[] = {{{','.join(map(str,spans))}}};")
                 lines.append(f"static const u8{_sec} {b}[] = {{{','.join(map(str,texels))}}};")
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}"); _ci.append(len(spans)//2)
@@ -218,7 +283,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         lines.append("}};")
         templates.append((ident,name,width,height))
         mapping[kind]=idx
-        seen[lump]=idx
+        seen[_sk]=idx
     if not templates: raise ValueError("M12 needs at least one sprite from local WAD")
     placements=[];skipped=Counter()
     for x,y,angle,kind,flags in lumps["THINGS"]:
@@ -293,7 +358,7 @@ def install_templates(out,templates):
     (Path(out)/"src/m14_ids.h").write_text("\n".join(hdr)+"\n")
     _hp=int(os.environ.get('MANIFOLD_OBJ_HEIGHT_PCT','100'))
     for ident,name,width,height in templates:
-        if mon and name in ("zombieman","sergeant","imp"):
+        if mon and name in ("zombieman","sergeant","imp","demon","spectre","baron"):
             _inact = os.environ.get("MANIFOLD_MONSTERS_INACTIVE","0")=="1"
             _ist = 0 if _inact else 1
             _typ = "DECORATION" if _inact else "OBJECT"

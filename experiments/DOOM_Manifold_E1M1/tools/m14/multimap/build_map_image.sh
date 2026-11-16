@@ -15,6 +15,14 @@ case $m in
   E1M7) extra="MANIFOLD_SPLIT_PIECES=1 MANIFOLD_MAX_WALLS=4096 MANIFOLD_MAX_CELL_WALLS=24";;
   E1M8) extra="MANIFOLD_MAX_WALLS=4096 MANIFOLD_MAX_CELL_WALLS=24";;
 esac
+# r068: which monster families live in the unused gap of the fixed map-block layout (rest goes behind .mapobjs)
+case $m in
+  E1M1|E1M2) extra="$extra MANIFOLD_GAPFAMS=zombieman,sergeant,imp,demon,spectre,baron";;
+  E1M3) extra="$extra MANIFOLD_GAPFAMS=zombieman,sergeant";;
+  E1M4) extra="$extra MANIFOLD_GAPFAMS=sergeant,imp";;
+  E1M6|E1M7) extra="$extra MANIFOLD_GAPFAMS=sergeant";;
+  E1M8) extra="$extra MANIFOLD_GAPFAMS=sergeant,imp,demon";;
+esac
 doors="MANIFOLD_DOORS=2 MANIFOLD_DYN_PARAMS=1"
 [ "$m" = "E1M1" ] && doors="MANIFOLD_DOORS=1 MANIFOLD_DYN_PARAMS=1"
 F="$(cat /tmp/m14x/flags_walk.txt) MANIFOLD_LAT_CLIP=${LAT_CLIP:-1} ${EXTRA_ENV:-}"

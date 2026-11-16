@@ -2977,6 +2977,33 @@ void m14_do_exit(int kind) {
     t=t.replace(old,"        pressing = 2;\n        { extern int m14_exit_near(void); extern void m14_do_exit(int); extern void m14_world_use(void); int k = m14_exit_near(); if (k) m14_do_exit(k); else m14_world_use(); }\n        if(!check_trigger_switch(&cur_player_pos)) {",1)
     g.write_text(t)
 
+
+_M14_FAMS=["zombieman","sergeant","imp","demon","spectre","baron"]
+def _m14_ai_tables():
+    """r068: per-family id tables for the six monsters (kind 1..6); returns (fam_map, tables_before_death_tick)."""
+    def I(f,suf=""): return "M14_ID_"+f.upper()+(("_"+suf.upper()) if suf else "")
+    ent=[]
+    for k,f in enumerate(_M14_FAMS,1):
+        sufs=["","W1","WB","WD","AIM","ATK","PAIN","BK0","BK1","SL","SR"] if k<=3 else ["","W1","AIM","ATK","PAIN","BK0","BK1","SL","SR"]
+        ent+=[f"[{I(f,x)}]={k}" for x in sufs]
+    fam="static const u8 m14_fam[128]={"+",".join(ent)+",};"
+    def row(fn): return "{0,0,0,0}," if fn is None else "{"+",".join(fn)+"},"
+    walk=["{0,0,0,0}"]
+    for k,f in enumerate(_M14_FAMS,1):
+        walk.append("{%s,%s,%s,%s}"%((I(f),I(f,"WB"),I(f,"W1"),I(f,"WD")) if k<=3 else (I(f),I(f,"W1"),I(f),I(f,"W1"))))
+    t="static const u8 m14_walkid[7][4]={"+",".join(walk)+"};\n"
+    t+="static const u8 m14_rotid[7][4]={{0,0,0,0},"+",".join("{%s,%s,%s,%s}"%(I(f,"BK0"),I(f,"BK1"),I(f,"SL"),I(f,"SR")) for f in _M14_FAMS)+"};\n"
+    t+="static const u8 m14_aim_id[7]={0,"+",".join(I(f,"AIM") for f in _M14_FAMS)+"};\n"
+    t+="static const u8 m14_painf_id[7]={0,"+",".join(I(f,"PAIN") for f in _M14_FAMS)+"};\n"
+    t+="static const u8 m14_dseq[7][2]={{0,0},"+",".join("{%s,%s}"%(I(f,"DH"),I(f,"D0")) for f in _M14_FAMS)+"};\n"
+    t2="static const u8 m14_base_id[7]={0,"+",".join(I(f) for f in _M14_FAMS)+"};\n"
+    t2+="static const u8 m14_atk_id[7]={0,"+",".join(I(f,"ATK") for f in _M14_FAMS)+"};\n"
+    t2+="static const u8 m14_dead_id[7]={0,"+",".join(I(f,"DEAD") for f in _M14_FAMS)+"};\n"
+    t2+="static const u8 m14_hp[7]={0,20,30,60,150,150,255};      /* demon/spectre 150; baron 1000 does not fit a byte -> 255 */\n"
+    t2+="static const u8 m14_ratio[7]={0,35,35,55,50,50,40};      /* % of the player's step */\n"
+    t2+="static const u8 m14_painch[7]={0,200,170,200,180,180,50};  /* Doom painchance /256 */\n"
+    return fam,t,t2
+
 def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     """M14: basic enemy AI on top of Manifold's object state machine.
 
@@ -3090,19 +3117,17 @@ void m14_player_damage(u16 dmg) {
 extern u8 m14_player_dead_flag;
 extern void m14_player_damage(u16 dmg);
 static u8 m14_force_wake;
-static const u8 m14_fam[128]={[M14_ID_ZOMBIEMAN]=1,[M14_ID_ZOMBIEMAN_W1]=1,[M14_ID_ZOMBIEMAN_WB]=1,[M14_ID_ZOMBIEMAN_WD]=1,[M14_ID_ZOMBIEMAN_AIM]=1,[M14_ID_ZOMBIEMAN_ATK]=1,[M14_ID_ZOMBIEMAN_PAIN]=1,[M14_ID_SERGEANT]=2,[M14_ID_SERGEANT_W1]=2,[M14_ID_SERGEANT_WB]=2,[M14_ID_SERGEANT_WD]=2,[M14_ID_SERGEANT_AIM]=2,[M14_ID_SERGEANT_ATK]=2,[M14_ID_SERGEANT_PAIN]=2,[M14_ID_IMP]=3,[M14_ID_IMP_W1]=3,[M14_ID_IMP_WB]=3,[M14_ID_IMP_WD]=3,[M14_ID_IMP_AIM]=3,[M14_ID_IMP_ATK]=3,[M14_ID_IMP_PAIN]=3,};
+@@FAM@@
 static u8 m14_kind(u8 t) { return t<128 ? m14_fam[t] : 0; }
 extern u32 last_frame_ticks; extern void play_sfx(u8 id, u8 priority);
 /* r057 animation: walk A,B,C,D (Doom run frames, 4 tics = 34/300 s each), pain, death sequence */
-static const u8 m14_walkid[4][4]={{0,0,0,0},{M14_ID_ZOMBIEMAN,M14_ID_ZOMBIEMAN_WB,M14_ID_ZOMBIEMAN_W1,M14_ID_ZOMBIEMAN_WD},{M14_ID_SERGEANT,M14_ID_SERGEANT_WB,M14_ID_SERGEANT_W1,M14_ID_SERGEANT_WD},{M14_ID_IMP,M14_ID_IMP_WB,M14_ID_IMP_W1,M14_ID_IMP_WD}};
-static const u8 m14_aim_id[4]={0,M14_ID_ZOMBIEMAN_AIM,M14_ID_SERGEANT_AIM,M14_ID_IMP_AIM};
-static const u8 m14_painf_id[4]={0,M14_ID_ZOMBIEMAN_PAIN,M14_ID_SERGEANT_PAIN,M14_ID_IMP_PAIN};
-static const u8 m14_dseq[4][4]={{0,0,0,0},{M14_ID_ZOMBIEMAN_DH,M14_ID_ZOMBIEMAN_DI,M14_ID_ZOMBIEMAN_D0,M14_ID_ZOMBIEMAN_DK},{M14_ID_SERGEANT_DH,M14_ID_SERGEANT_DI,M14_ID_SERGEANT_D0,M14_ID_SERGEANT_DK},{M14_ID_IMP_DH,M14_ID_IMP_DI,M14_ID_IMP_D0,M14_ID_IMP_DK}};
+@@TABLES@@
 /* attack: aim (E) -> fire frame (+damage) -> recover; units of 2/300 s (1 Doom tic ~ 4.3) */
-static const u8 m14_at_T[4]={0,111,129,100};
-static const u8 m14_at_aim[4]={0,43,43,34};
-static const u8 m14_at_rec[4]={0,34,43,0};
+static const u8 m14_at_T[7]={0,111,129,100,103,103,103};
+static const u8 m14_at_aim[7]={0,43,43,34,34,34,34};
+static const u8 m14_at_rec[7]={0,34,43,0,0,0,0};
 static u8 m14_wf[64]; static u8 m14_wt[64]; static u8 m14_pt[64];   /* per-monster anim state; attack = wf bit7 + countdown in wt (no extra RAM) */
+@@TABLES2@@
 typedef struct { u8 link; u8 frame; u8 k; u16 sector; s16 left; } m14_death_t;
 static m14_death_t m14dx[12]; static u8 m14dx_n;
 void m14_death_tick(void) {
@@ -3112,17 +3137,12 @@ void m14_death_tick(void) {
         e->left -= dt;
         while (e->left <= 0 && !done) {
             e->left += 43; e->frame++;                                   /* Doom death frames: 5 tics each */
-            if (e->frame >= 4) { { static const u8 dd[4]={0,M14_ID_ZOMBIEMAN_DEAD,M14_ID_SERGEANT_DEAD,M14_ID_IMP_DEAD}; DEC_LINK_DEREF(e->link).object_type = dd[e->k]; } done = 1; }
+            if (e->frame >= 2) { DEC_LINK_DEREF(e->link).object_type = m14_dead_id[e->k]; done = 1; }
             else DEC_LINK_DEREF(e->link).object_type = m14_dseq[e->k][e->frame];
         }
         if (done) m14dx[i] = m14dx[--m14dx_n]; else i++;
     }
 }
-static const u8 m14_base_id[4]={0,M14_ID_ZOMBIEMAN,M14_ID_SERGEANT,M14_ID_IMP};
-static const u8 m14_atk_id[4]={0,M14_ID_ZOMBIEMAN_ATK,M14_ID_SERGEANT_ATK,M14_ID_IMP_ATK};
-static const u8 m14_dead_id[4]={0,M14_ID_ZOMBIEMAN_DEAD,M14_ID_SERGEANT_DEAD,M14_ID_IMP_DEAD};
-static const u8 m14_hp[4]={0,20,30,60};
-static const u8 m14_ratio[4]={0,35,35,55};      /* % of the player's step */
 static fix32 m14_speed_for(u8 type) {
     u8 k=m14_kind(type);
     if (!k) return FIX32(4.125);
@@ -3132,6 +3152,8 @@ static fix32 m14_speed_for(u8 type) {
     return FIX32(st*2);      /* chase runs every other frame (r056): double step */
 }
 """
+    _fam,_tab,_tab2=_m14_ai_tables()
+    helpers=helpers.replace('@@FAM@@',_fam).replace('@@TABLES@@',_tab).replace('@@TABLES2@@',_tab2)
     anchor="fix32 dist_sqr(player_pos posa, player_pos origin) {"
     assert t.count(anchor)==1
     t=t.replace(anchor,helpers+anchor,1)
@@ -3158,6 +3180,31 @@ static u8 m14_in_front(u8 a, s32 dx, s32 dy) {
     s8 cx = c[i], cy = c[(i + 12) & 15];          /* sin = cos shifted by 90 deg */
     return (s32)cx * dx + (s32)cy * dy > 0;
 }
+/* r068: which of the monster's views the player sees: 0 front, 1 back, 2 left side (A3), 3 right side (A7 mirrored) */
+static u8 m14_view(u8 a, s32 dx, s32 dy, u32 d) {
+    static const s8 c[16]={127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49,0,49,90,117};
+    u8 i = (u8)(((a + 4) >> 3) & 15);
+    s32 cx = c[i], cy = c[(i + 12) & 15];
+    s32 dot = cx * dx + cy * dy, lim = (s32)d * 63;      /* cos 60 deg */
+    if (dot > lim) return 0;
+    if (dot < -lim) return 1;
+    return (cx * dy - cy * dx) > 0 ? 2 : 3;
+}
+/* direction of (dx,dy) as 0..127 = 0..360 deg (0 = +x, CCW); linear atan approximation per octant */
+static u8 m14_bearing(s32 dx, s32 dy) {
+    s32 ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy; u8 a;
+    if (!ax && !ay) return 0;
+    if (ay <= ax) a = (u8)((ay * 16) / ax); else a = (u8)(32 - (ax * 16) / ay);
+    if (dx >= 0) return dy >= 0 ? a : (u8)((128 - a) & 127);
+    return dy >= 0 ? (u8)(64 - a) : (u8)(64 + a);
+}
+static void m14_turn(object_link o, s32 dx, s32 dy, u8 maxstep) {      /* Doom monsters turn toward their goal in 45 deg steps */
+    u8 b = m14_bearing(dx, dy), a = OBJ_LINK_DEREF(o).ang & 127, diff = (u8)((b - a) & 127);
+    if (!diff) return;
+    if (diff < 64) a = (u8)((a + (diff < maxstep ? diff : maxstep)) & 127);
+    else { u8 n = (u8)(128 - diff); a = (u8)((a - (n < maxstep ? n : maxstep)) & 127); }
+    OBJ_LINK_DEREF(o).ang = a;
+}
 int look_for_player(object_link cur_obj, uint16_t cur_sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(cur_obj).object_type);
     if (!k) return look_for_player_orig(cur_obj, cur_sector);
@@ -3173,6 +3220,8 @@ int look_for_player(object_link cur_obj, uint16_t cur_sector) {
         play_sfx(SFX_ENEMY_A_WAKE_ID, 8);
     }
     OBJ_LINK_DEREF(cur_obj).seen=0;
+    { u8 v = m14_view(m14a & 127, dx, dy, m14d);                  /* idle: show the side/back the player is looking at */
+      OBJ_LINK_DEREF(cur_obj).object_type = v ? m14_rotid[k][v == 1 ? 0 : v] : m14_base_id[k]; }
     return 1;
 }
 
@@ -3208,6 +3257,8 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
           u8 T=m14_at_T[k], fire_at=T-m14_at_aim[k];
           if ((u8)m14_wt[L]>fire_at && q<=fire_at) {          /* the shot leaves at the start of the fire frame */
               if (k==3) m14_player_damage(3*((random()&7)+1));
+              else if (k==4 || k==5) m14_player_damage(4*((random()%10)+1));              /* bite */
+              else if (k==6) { if (d<72) m14_player_damage(10*((random()&7)+1)); else if ((random()&255)<150) m14_player_damage(8*((random()&7)+1)); }   /* claw / fireball (instant, 60%) */
               else {
                   u8 pellets=(k==2)?3:1; u16 total=0;
                   for (u8 i=0;i<pellets;i++) { if (m14_aim_hit(d)) total+=3*((random()%5)+1); }
@@ -3219,25 +3270,28 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
           OBJ_LINK_DEREF(cur_obj).object_type = (q>fire_at || q<=m14_at_rec[k]) ? m14_aim_id[k] : m14_atk_id[k];
           return 1;
       }
-      { s16 q=(s16)m14_wt[L]-dq; if (q<=0) { q=17; m14_wf[L]=(m14_wf[L]+1)&3; } m14_wt[L]=(u8)q; }
-      OBJ_LINK_DEREF(cur_obj).object_type = m14_walkid[k][m14_wf[L]]; }
+      { s16 q=(s16)m14_wt[L]-dq; if (q<=0) { q=17; m14_wf[L]=(m14_wf[L]+1)&3; m14_turn(cur_obj, dx, dy, 16); } m14_wt[L]=(u8)q; }
+      { u8 v = m14_view(OBJ_LINK_DEREF(cur_obj).ang & 127, dx, dy, d);
+        OBJ_LINK_DEREF(cur_obj).object_type = v ? m14_rotid[k][v == 1 ? ((m14_wf[L] >> 1) & 1) : v] : m14_walkid[k][m14_wf[L]]; } }
     u8 seen=OBJ_LINK_DEREF(cur_obj).seen; extern u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by);
     OBJ_LINK_DEREF(cur_obj).seen=0;
     u16 cool=OBJ_LINK_DEREF(cur_obj).cool;
     cool = (cool>2*last_frame_ticks) ? (cool-2*last_frame_ticks) : 0;   /* every other frame */
     OBJ_LINK_DEREF(cur_obj).cool=cool;
     if (cool==0) {
-        if (k==3) {
-            if (d<56) {                                      /* imp: claws */
+        if ((k==3 || k==4 || k==5) || (k==6 && d<56)) {
+            if (d<56) {                                      /* imp / demon / spectre / baron: melee */
+                m14_turn(cur_obj, dx, dy, 128);
                 m14_wf[cur_obj&63]|=0x80; m14_wt[cur_obj&63]=m14_at_T[k];
                 OBJ_LINK_DEREF(cur_obj).object_type=m14_aim_id[k];
-                OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(90);
+                OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(k==3?90:70);
                 return 1;
             }
         } else if (!m14_missile_ok(d)) {             /* Doom P_CheckMissileRange said no: re-check at the next chase decision */
             OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(11*((random()&15)+1));   /* movecount 0..15 x 4 tics */
         } else if (seen || (d < 2048 && m14_los(F32_toInt(OBJ_LINK_DEREF(cur_obj).x), F32_toInt(OBJ_LINK_DEREF(cur_obj).y), cur_sector, F32_toInt(cur_player_pos.x), F32_toInt(cur_player_pos.y)))
                    || (OBJ_LINK_DEREF(cur_obj).cool = m14_ticks(11*((random()&15)+1)), 0)) {   /* sight test only at decision time (cheap path first) */
+            m14_turn(cur_obj, dx, dy, 128);
             m14_wf[cur_obj&63]|=0x80; m14_wt[cur_obj&63]=m14_at_T[k];
             OBJ_LINK_DEREF(cur_obj).object_type=m14_aim_id[k];
             OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(k==2?86:74);   /* attack states: 30 / 26 tics */
@@ -3262,7 +3316,7 @@ void m14_hit_object(object_link o, u16 sector) {
     } else {
         OBJ_LINK_DEREF(o).health-=dmg;
         OBJ_LINK_DEREF(o).current_state=2;
-        if ((random()&255) < (k==3?200:200)) { m14_pt[o&63]=7; m14_wf[o&63]&=3; play_sfx(76, 5); }   /* Doom painchance 200/256; pain state ~3 tics */
+        if ((random()&255) < m14_painch[k]) { m14_pt[o&63]=7; m14_wf[o&63]&=3; play_sfx(76, 5); }   /* Doom painchance 200/256; pain state ~3 tics */
     }
 }
 """
