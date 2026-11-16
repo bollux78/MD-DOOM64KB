@@ -1,0 +1,54 @@
+--- a/src/m_text.c
++++ b/src/m_text.c
+@@ -259,6 +259,9 @@
+ static void M_OpenCredits(int16_t choice)
+ {
+     UNUSED(choice);
++    if (_g_gamestate != GS_DEMOSCREEN)
++        return;
++
+     M_ClearMenus();
+     D_StartCredits();
+ }
+@@ -288,6 +291,14 @@
+   (R22_TEXTWIDTH - 9) / 2,8,          // initial cursor position
+   NULL,0,
+ };
++static int16_t M_MenuItemCount(void)
++{
++    if (currentMenu == &MainDef && _g_gamestate != GS_DEMOSCREEN)
++        return credits;  /* Credits is the last row in MainDef. */
++
++    return currentMenu->numitems;
++}
++
+ boolean M_IsMainMenuVisible(void)
+ {
+     return _g_menuactive && currentMenu == &MainDef && !messageToPrint;
+@@ -1031,7 +1042,7 @@
+     {
+         do
+         {
+-            if (itemOn+1 > currentMenu->numitems-1)
++            if (itemOn+1 >= M_MenuItemCount())
+                 itemOn = 0;
+             else
+                 itemOn++;
+@@ -1046,7 +1057,7 @@
+         do
+         {
+             if (!itemOn)
+-                itemOn = currentMenu->numitems-1;
++                itemOn = M_MenuItemCount()-1;
+             else
+                 itemOn--;
+             S_StartSound(NULL,sfx_pstop);
+@@ -1218,7 +1229,7 @@
+ 
+ 		x = currentMenu->x;
+ 		y = currentMenu->y;
+-		max = currentMenu->numitems;
++		max = M_MenuItemCount();
+ 
+ 		for (i=0;i<max;i++)
+ 		{

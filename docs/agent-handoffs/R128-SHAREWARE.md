@@ -18,7 +18,8 @@ identifica os exports de arte e os binários nativos usados no build.
 
 A abertura usa a tela BOLLUX. Start, A, B e C abrem o menu principal.
 A fonte branca fica sobre uma caixa de Shadow do VDP, e o seletor
-continua em **Select Level**. Em **Credits** cada toque avança uma vez na
+continua em **Select Level**. **Credits** aparece apenas no menu da
+abertura. Cada toque avança uma vez na
 ordem DoomCREDIT10 → Disclaimer and Credits → EndMD2 → abertura. O
 final do E1M8 também mostra EndMD2 após o texto.
 
@@ -78,10 +79,14 @@ publicar uma ROM modificada com os dados embutidos.
   confirmados o número de linedefs, a progressão dos tics e a resposta
   da câmera. Start, A, B e C abriram o mesmo menu. As telas de abertura,
   Shadow e créditos foram comparadas com a implementação anterior.
+- Durante a partida, a última opção do menu é Cheats. A navegação em
+  ambas as direções contorna a lista sem passar por Credits e é possível
+  fechar o menu e continuar no mesmo mapa. Na abertura, a sequência
+  de créditos foi conferida até o retorno à tela de título.
 - A ação de encerramento do E1M8 foi acionada via RAM para verificar
   intermissão, texto e EndMD2. Esse ensaio cobre a transição visual.
 - A ROM de referência tem 3.801.088 bytes, BSS de 58.030 bytes e SHA-256
-  `a66d4820a72c63865a46033687d867cdba6164c5062d0fa9f0f36a0533adfc3b`.
+  `d32bb7a97bb0fbd52c72fbd3b9ee73a453091910abc60ff94b77a6bfb89610fb`.
   A auditoria confirmou zero bytes de áudio acessados pelo Z80 acima
   do endereço `0x200000`.
 - O teste físico no Mega Drive continua pendente.
