@@ -2989,7 +2989,7 @@ u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by) {
     s16 cur = as;
     s32 dx = bx - ax, dy = by - ay;
     u16 len = (u16)fastLength(dx, dy);
-    u16 n = len / 24 + 1;
+    u16 n = len / 48 + 1;
     s16 px = ax, py = ay;
     for (u16 i = 1; i <= n; i++) {
         s16 nx = ax + (s16)(dx * i / n), ny = ay + (s16)(dy * i / n);
@@ -3133,7 +3133,7 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
     int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
     u32 d=fastLength(dx,dy);
-    u8 seen=OBJ_LINK_DEREF(cur_obj).seen; { extern u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by); if (!seen && d < 2048) seen = m14_los(F32_toInt(OBJ_LINK_DEREF(cur_obj).x), F32_toInt(OBJ_LINK_DEREF(cur_obj).y), cur_sector, F32_toInt(cur_player_pos.x), F32_toInt(cur_player_pos.y)); }
+    u8 seen=OBJ_LINK_DEREF(cur_obj).seen; extern u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by);
     OBJ_LINK_DEREF(cur_obj).seen=0;
     u16 cool=OBJ_LINK_DEREF(cur_obj).cool;
     cool = (cool>last_frame_ticks) ? (cool-last_frame_ticks) : 0;
@@ -3146,9 +3146,10 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
                 OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(90);
                 return 1;
             }
-        } else if (seen && !m14_missile_ok(d)) {             /* Doom P_CheckMissileRange said no: re-check at the next chase decision */
+        } else if (!m14_missile_ok(d)) {             /* Doom P_CheckMissileRange said no: re-check at the next chase decision */
             OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(11*((random()&15)+1));   /* movecount 0..15 x 4 tics */
-        } else if (seen) {                                   /* zombieman / sergeant: hitscan (A_PosAttack / A_SPosAttack) */
+        } else if (seen || (d < 2048 && m14_los(F32_toInt(OBJ_LINK_DEREF(cur_obj).x), F32_toInt(OBJ_LINK_DEREF(cur_obj).y), cur_sector, F32_toInt(cur_player_pos.x), F32_toInt(cur_player_pos.y)))
+                   || (OBJ_LINK_DEREF(cur_obj).cool = m14_ticks(11*((random()&15)+1)), 0)) {   /* sight test only at decision time (cheap path first) */
             u8 pellets=(k==2)?3:1;
             u16 total=0;
             for (u8 i=0;i<pellets;i++) {
