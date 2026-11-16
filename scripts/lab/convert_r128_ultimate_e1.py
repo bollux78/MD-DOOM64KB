@@ -18,6 +18,10 @@ def convert_episode(ultimate, shareware, compact):
     if not any(name == "E4M9" for name, _ in source):
         raise ValueError("Expected an Ultimate Doom IWAD")
 
+    return convert_episode_maps(source, reference, base)
+
+
+def convert_episode_maps(source, reference, base):
     defs = definitions()
     converted = list(base)
     reports = []

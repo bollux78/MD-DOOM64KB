@@ -1,0 +1,137 @@
+--- a/scripts/lab/build_r35_linear.fish
++++ b/scripts/lab/build_r35_linear.fish
+@@ -171,11 +171,11 @@
+ 
+ set -l control '-DDOOM_R20_SIGHT_ITERATIVE' '-DDOOM_R20_PIXEL_ADDX' '-DDOOM_R20_TAN_MULS' '-DDOOM_R20_CELLMAP_MEMO' '-DDOOM_R20_HUD_LAZY' '-DDOOM_R20_FPS_LAZY' '-DDOOM_R20_SCALE_MATH' '-DDOOM_R20_BSP_ITERATIVE' '-DDOOM_R20_DMA_BATCH' '-DDOOM_R20_COLOR_ROM' '-DDOOM_R20_REG_COLUMNS' '-DDOOM_R20_CACHE_DIRECT' '-DDOOM_R20_FLAT_INLINE' '-DDOOM_R20_TAN32' '-DDOOM_R20_VBLANK_VIDEO' '-DDOOM_R21_V2_HEAPBUF' '-DDOOM_R21_NO_VDP_INIT'
+ set -l pixel '-DDOOM_R20_SIGHT_ITERATIVE' '-DDOOM_R20_TAN_MULS' '-DDOOM_R20_SCALE_MATH' '-DDOOM_R20_BSP_ITERATIVE' '-DDOOM_R20_DMA_BATCH' '-DDOOM_R20_CACHE_DIRECT' '-DDOOM_R20_TAN32' '-DDOOM_R20_VBLANK_VIDEO' '-DDOOM_R21_NO_VDP_INIT'
+-cp scripts/doom64.wad /tmp/r23-original.wad; or exit 1
+-function r23_restore_wad --on-event fish_exit
+-    cp /tmp/r23-original.wad scripts/doom64.wad
++cp scripts/doom64.wad "$root/dist/r35/r23-original.wad"; or exit 1
++function r23_restore_wad --on-event fish_exit --inherit-variable root
++    cp "$root/dist/r35/r23-original.wad" scripts/doom64.wad
+ end
+-python3 scripts/lab/convert_r24_episode.py --payload assets/r24-episode.json --base /tmp/r23-original.wad --out /tmp/r23-converted.wad --report "$dest/map-report.json" --header src/r24_static_types.h; or exit 1
++python3 scripts/lab/convert_r24_episode.py --payload assets/r24-episode.json --base "$root/dist/r35/r23-original.wad" --out "$root/dist/r35/r23-converted.wad" --report "$dest/map-report.json" --header src/r24_static_types.h; or exit 1
+ # Each variant regenerates ONLY the static art (no changes to gameplay/rendering).
+ # R30 native control uses precisely the old no-dither pixels and palette banks.
+ set -l built
+@@ -242,20 +242,18 @@
+     set -gx DOOM_R31_SFX_REPORT "$dest/sfx-$v.json"
+     # The native art generator reads SOURCE bitmaps; this copy ensures it
+     # cannot accidentally read the converted/stripped WAD of the last build.
+-    cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
++    cp "$root/dist/r35/r23-original.wad" scripts/doom64.wad; or exit 1
+     python3 scripts/lab/gen_r30_native.py --dither "$dither" --storage raw > "$dest/art-$v.json"; or exit 1
+     if set -q DOOM_R78_ART
+         python3 scripts/lab/gen_r78_art.py; or exit 1
+     end
+     # Doom game uses the episode-converted WAD. Original 240x160 bitmaps
+     # are omitted by repack_wad in R30_NATIVE variants.
+-    cp /tmp/r23-converted.wad scripts/doom64.wad; or exit 1
++    cp "$R128_EPISODE_WAD" scripts/doom64.wad; or exit 1
++    python3 scripts/lab/r128-shareware/install_art.py; or exit 1
+     python3 scripts/lab/r89_align_maps.py scripts/doom64.wad; or exit 1
+     python3 scripts/lab/r128_stairs.py scripts/doom64.wad; or exit 1
+-    if not set -q R116_DEMO_DIR
+-        echo 'R116 demotest needs R116_DEMO_DIR'; exit 2
+-    end
+-    python3 scripts/lab/r116_add_demos.py --wad scripts/doom64.wad --dir "$R116_DEMO_DIR" --manifest assets/r116-demos.json --header src/r116_demos.h; or exit 1
++
+     # Fish variables are not automatically exported; the music generator needs
+     # both flags to select the XGM2 multi-track resource descriptor.
+     set -gx DOOM_R25_MUSIC $DOOM_R25_MUSIC
+@@ -1085,17 +1083,21 @@
+         exit 1
+     end
+     python3 scripts/lab/finish_r35_rom.py out/rom.bin "$dest/$id.bin"; or exit 1
+-    cp out/release/rom.out "$dest/$id.elf"; or exit 1
++    set -l elf out/release/rom.out
++    if not test -f "$elf"
++        set elf out/rom.out
++    end
++    cp "$elf" "$dest/$id.elf"; or exit 1
+     cp out/.render_options "$dest/flags-$id.txt"; or exit 1
+     # The ELF's raw loadable image is the real occupied ROM content, unlike
+     # sizebnd's 128 KiB-rounded .bin. Compare actual linked footprint against our 4 MiB cap.
+     set -l rawout "$dest/_payload-$v.tmp"
+-    "$HOME/mars/m68k-elf/bin/m68k-elf-objcopy" -O binary out/release/rom.out "$rawout"; or exit 1
++    "$DOOM_MD_GDK/bin/m68k-elf-objcopy" -O binary "$elf" "$rawout"; or exit 1
+     stat -c %s "$rawout" > "$dest/payload-$v.txt"; or exit 1
+     rm -f "$rawout"
+     set built $built $id
+ end
+-cp /tmp/r23-original.wad scripts/doom64.wad; or exit 1
++cp "$root/dist/r35/r23-original.wad" scripts/doom64.wad; or exit 1
+ if test (count $argv) -eq 0
+     # Whole-batch local run: check all 4 ROMs after the loop.
+     python3 scripts/lab/audit_r35.py "$dest" $variants; or exit 1
+--- a/scripts/lab/build_r71a12mul_hud.py
++++ b/scripts/lab/build_r71a12mul_hud.py
+@@ -16,7 +16,7 @@
+     ('r128-'+label+'-'+suffix,mode,{'DOOM_HUD_WAD':'1','DOOM_R73_STYLE':'micro25',
+         'DOOM_R72_FLAT_2D':'0','DOOM_R74_PROFILE':'l','DOOM_R74_FLATS':'f3',
+         'DOOM_R75_HYBRID':'near','DOOM_R76_PROFILES':'1','DOOM_R79_SHADOW':str(strength)},[])
+-    for label,strength in (('all', 1),)
++    for label,strength in (('all-sw', 1),)
+     for suffix,mode in (('pl','play'),)
+ )
+ 
+@@ -36,8 +36,8 @@
+     os.chdir(root)
+     dest = (root / 'dist/hud').resolve()
+     dest.mkdir(parents=True, exist_ok=True)
+-    size_exe = Path.home() / 'mars/m68k-elf/bin/m68k-elf-size'
+-    nm_exe = Path.home() / 'mars/m68k-elf/bin/m68k-elf-nm'
++    size_exe = Path(os.environ['DOOM_MD_GDK']) / 'bin/m68k-elf-size'
++    nm_exe = Path(os.environ['DOOM_MD_GDK']) / 'bin/m68k-elf-nm'
+     assert size_exe.is_file() and nm_exe.is_file(), 'MarsDev missing'
+     vgm = os.environ.get('DOOM_R20_BGM_VGM', str(root / 'res/e1m1.vgm'))
+     assert Path(vgm).is_file()
+@@ -139,7 +139,7 @@
+         assert '-DDOOM_R78_ART' in contents.split(),name
+         for flag in ('-DDOOM_R21_SEGLOOP_LOCALS', '-DDOOM_R70A_INVARIANTS', '-DDOOM_R71_MUL_ASM', '-DDOOM_HUD_WAD'):
+             assert flag in contents.split(), (name, flag)
+-    print('PASS R76 two HUD ROMs, four complete selectable palettes and persistent menu overlay',flush=True)
++    print('PASS R128 All Shareware PLAY', flush=True)
+ 
+ 
+ if __name__ == '__main__':
+--- a/src/m_text.c
++++ b/src/m_text.c
+@@ -237,9 +237,6 @@
+   selectlevel,
+ #endif
+   options,
+-#if defined(DOOM_R50_PLAY_BENCH)
+-  benchmark,
+-#endif
+ #if !defined DISABLE_SAVE_GAME
+   loadgame,
+   savegame,
+@@ -266,9 +263,6 @@
+   {1,"Select Level", M_SelectLevel},
+ #endif
+   {1,"Options",   M_Options},
+-#if defined(DOOM_R50_PLAY_BENCH)
+-  {1,"Benchmark", M_RunBenchmark},
+-#endif
+ #if !defined DISABLE_SAVE_GAME
+   {1,"Load game", M_LoadGame},
+   {1,"Save game", M_SaveGame},
+--- /dev/null
++++ b/src/r116_demos.h
+@@ -0,0 +1,13 @@
++/* R128 Ultimate E1 playtest: no third-party benchmark recordings. */
++#ifndef R116_DEMOS_H
++#define R116_DEMOS_H
++#include <stdint.h>
++typedef struct { const char *lump; const char *label; uint16_t want; uint8_t map; uint8_t nocap; } r116_demo_t;
++typedef struct { int32_t exit_time; uint32_t exit_gametic; int16_t kills,tkills,items,titems,secrets,tsecrets;
++                 uint16_t zmin_total,zmin_largest,deaths; uint8_t map,secretexit,sel,done; uint8_t pad[2]; } r116_res_t;
++extern r116_res_t r116_res;
++#define R116_DEMO_COUNT 0
++static const r116_demo_t __attribute__((unused)) r116_demos[11] = {
++    {0,0,0,0,0},
++};
++#endif

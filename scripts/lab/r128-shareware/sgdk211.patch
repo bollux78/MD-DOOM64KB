@@ -1,0 +1,52 @@
+--- a/makefile.gen
++++ b/makefile.gen
+@@ -16,7 +16,7 @@
+ SRC_C+= $(wildcard $(SRC)/*.c)
+ SRC_C+= $(wildcard $(SRC)/*/*.c)
+ SRC_C+= $(wildcard $(SRC)/*/*/*.c)
+-SRC_C:= $(filter-out $(SRC)/boot/rom_head.c,$(SRC_C))
++SRC_C:= $(filter-out $(SRC)/boot/rom_head.c $(SRC)/rom_header.c,$(SRC_C))
+ ifeq ($(SRC_C),)
+ SRC_C=$(SRC)/main.c
+ endif
+@@ -189,7 +189,7 @@
+ $(OUT)/rom_head.bin: $(OUT)/rom_head.o
+ 	$(OBJCPY) -O binary $< $@
+ 
+-$(OUT)/rom_head.o: $(SRC)/boot/rom_head.c
++$(OUT)/rom_head.o: $(SRC)/rom_header.c
+ 	$(MKDIR) -p $(dir $@)
+ 	$(CC) $(DEFAULT_FLAGS) -c $< -o $@
+ 
+--- a/inc/dma.h
++++ b/inc/dma.h
+@@ -41,7 +41,7 @@
+ #define DMA_BUFFER_SIZE_NTSC            8192
+ #define DMA_BUFFER_SIZE_PAL_LOW         8192
+ #define DMA_BUFFER_SIZE_PAL_MAX         (14 * 1024)
+-#define DMA_BUFFER_SIZE_MIN             (2 * 1024)
++#define DMA_BUFFER_SIZE_MIN             (1 * 1024)
+ 
+ 
+ /**
+--- a/src/dma.c
++++ b/src/dma.c
+@@ -46,7 +46,7 @@
+ 
+ void DMA_init()
+ {
+-    DMA_initEx(0, -1, 0);
++    DMA_initEx(DMA_QUEUE_SIZE_MIN, -1, DMA_BUFFER_SIZE_MIN);
+ }
+ 
+ void NO_INLINE DMA_initEx(u16 size, u16 capacity, u16 bufferSize)
+--- a/res/libres.res
++++ b/res/libres.res
+@@ -1,6 +1,6 @@
+ NEAR
+ 
+ BITMAP sgdk_logo "image/sgdk_logo.png" -1
+-TILESET font_default "image/font_default.png" BEST NONE
++TILESET font_default "image/font_default.png" NONE NONE
+ PALETTE font_pal_default "image/font_default.png"
+ BIN stop_xgm "sound/stop_xgm.bin" 2 2 0 NONE FALSE
