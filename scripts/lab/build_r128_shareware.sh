@@ -60,6 +60,9 @@ if [[ "${R128_BG_PROBE:-0}" == 1 ]]; then
     export HUD_BSS_SLACK=240
     python3 "$lab/install_pairv_probe.py"
 fi
+if [[ "${R128_E1M1_MENU_BENCH:-0}" == 1 ]]; then
+    python3 "$lab/install_e1m1_menu_bench.py"
+fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
