@@ -1,0 +1,37 @@
+name: R128 Shareware Pair-V BG probe
+on:
+  push:
+    branches: [exp-chatgpt-r128-pairv-bg-probe]
+permissions:
+  contents: read
+concurrency:
+  group: r128-pairv-bg-probe
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build ROM and verify audio layout
+        shell: bash
+        env:
+          R128_BG_PROBE: '1'
+        run: |
+          set -euo pipefail
+          wad=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          output="/home/dan/Projetos/Personal/r128-pairv-bg/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for gdk in "$HOME/mars/m68k-elf" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk"; do
+            if [[ -x "$gdk/bin/m68k-elf-gcc" && -f "$gdk/lib/libmd.a" && -f "$gdk/makefile.gen" ]]; then
+              break
+            fi
+          done
+          test -x "$gdk/bin/m68k-elf-gcc"
+          test -f "$gdk/lib/libmd.a"
+          test -f "$gdk/makefile.gen"
+          printf 'SGDK: %s\n' "$gdk"
+          bash scripts/lab/build_r128_shareware.sh "$wad" "$gdk" "$output"
+          for rom in "$output"/*.bin; do sha256sum "$rom"; done
+          printf 'Private output: %s\n' "$output" >> "$GITHUB_STEP_SUMMARY"

@@ -49,6 +49,8 @@ for overlay in "$lab"/[0-9][0-9]-*.patch; do
     patch -p1 --batch --fuzz=0 < "$overlay"
 done
 if [[ "${R128_BG_PROBE:-0}" == 1 ]]; then
+    # Allow the probe's row signatures and counters in this diagnostic ROM.
+    export HUD_BSS_SLACK=240
     python3 "$lab/install_pairv_probe.py"
 fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
