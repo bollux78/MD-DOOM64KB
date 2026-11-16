@@ -1427,12 +1427,12 @@ def install_sky(out, res):
     reclaimed from the unused WINDOW nametable and the never-displayed
     rows 28-63 of the 64x64 BG_B nametable (~272 tiles)."""
     import wad_textures as WT
-    sky_png=Path(__file__).with_name("sky_e1doom_256.png")      # user-made 256x224 sky (r062); window of 72 rows at SKY_YOFF
+    sky_png=Path(__file__).with_name("sky_e1doom_256x72.png")      # user-made 256x72 sky (r063)
     if sky_png.exists() and os.environ.get("MANIFOLD_SKY_PNG","1")=="1":
         from PIL import Image
-        _im=Image.open(sky_png).convert("RGB"); _yo=int(os.environ.get("MANIFOLD_SKY_YOFF","40"))
+        _im=Image.open(sky_png).convert("RGB"); _yo=0
         res=dict(res,sky=(256,72,[[_im.getpixel((x,_yo+y)) for x in range(256)] for y in range(72)]))
-        sk=WT.sky_tiles(res, band_rows=9, band_cols=32, max_tiles=131, merge=True, pair=True)
+        sk=WT.sky_tiles(res, band_rows=9, band_cols=32, max_tiles=131, merge=True)
     else:
         sk=WT.sky_tiles(res, band_rows=9, band_cols=32, max_tiles=131, merge=True)
     n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
