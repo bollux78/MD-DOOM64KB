@@ -341,7 +341,7 @@ def _merge_sky(pal, tiles, tmap, rows, cols, max_tiles):
             "map": [[remap[rep[v]] for v in row] for row in tmap], "rows": rows, "cols": cols}
 
 
-def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False):
+def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False, pair=False):
     """SKY1 -> deduplicated 4bpp tiles for a BG_B band (3D palette)."""
     pal = res["pal"]
     wdt, hgt, img = res["sky"]
@@ -356,7 +356,15 @@ def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False):
                 for yy in range(sy0, sy1):
                     for xx in range(sx0, sx1):
                         c = img[yy][xx]; acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n += 1
-                px[y][x] = nearest(pal, (acc[0] / n, acc[1] / n, acc[2] / n))
+                c = (acc[0] / n, acc[1] / n, acc[2] / n)
+                if pair:     # undo the source dither (2-px average) and re-dither with the game palette like the walls
+                    xa = x & ~1
+                    cs = [img[min(hgt - 1, int(y * hgt / H))][min(wdt - 1, int(xx * wdt / W))] for xx in (xa, xa + 1)]
+                    c = tuple((cs[0][k] + cs[1][k]) / 2 for k in range(3))
+                    p_, q_ = nearest_pair(pal, c)
+                    px[y][x] = p_ if x % 2 == 0 else q_
+                else:
+                    px[y][x] = nearest(pal, c)
         top = nearest(pal, average([img[0]]))
         bot = nearest(pal, average([img[hgt - 1]]))
         tiles, index, tmap = [], {}, []
