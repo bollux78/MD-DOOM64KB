@@ -711,8 +711,9 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     text+="const s16 e1_block_segs[] = {"+",".join(map(str,bflat or [0]))+"};\n"
     if things is not None:
         text+="static const map_object e1_m12_things[] = {\n"
+        import m12_objects as _mo
         for sector,x,y,typ in things:
-            text+=f"  {{.sector_num={sector},.x={x},.y={y},.z=0,.type={typ}}},\n"
+            text+=f"  {{.sector_num={sector},.x={x},.y={y},.z={_mo.ZCODE.get((sector,x,y),0)},.type={typ}}},\n"
         text+="};\n"
     pal_field=",.palette=(u16*)e1_palette" if tex else ""
     text+=f"""const portal_map e1m1_map = {{

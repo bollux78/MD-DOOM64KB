@@ -96,6 +96,7 @@ def grate_extra(w):
         out[key]=(32,hgt,[row[x0:x0+32] for row in img])
     return out
 
+ZCODE={}
 def grate_placements():
     """(x,y,kind) of the slices: west fence x=2888 and east fence x=3128 of
     E1M1 (linedefs 298-303); y runs -4352..-4160, 32 units per slice."""
@@ -159,7 +160,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     if not templates: raise ValueError("M12 needs at least one sprite from local WAD")
     placements=[];skipped=Counter()
     for x,y,angle,kind,flags in lumps["THINGS"]:
-        if kind not in mapping or flags&16 or not (flags&7): continue
+        if kind not in mapping or flags&16 or not (flags&2): continue      # skill 3 (Hurt Me Plenty) only
         matches=[i for i,c in enumerate(cells) if point_inside([w["a"] for w in c["walls"]],(x*16,y*16))]
         if len(matches)!=1:
             # on a cell edge / vertex: nudge a few units until exactly one cell holds it
@@ -170,6 +171,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 if len(matches)==1: break
         if len(matches)!=1: skipped[kind]+=1;continue
         placements.append((matches[0],x,y,mapping[kind]))
+        ZCODE[(matches[0],x,y)]=((angle*128//360)&127)|(128 if flags&8 else 0)   # facing (7 bits) + deaf/ambush
     if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1" and __import__("os").environ.get("MANIFOLD_GRATE_SPRITES","1")=="1":
         for x,y,kind in grate_placements():
             if kind not in mapping: continue

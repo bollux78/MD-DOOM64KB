@@ -2980,6 +2980,33 @@ def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     death respawns at the level start with 100% health.
     """
     import re
+    # ---- level.c: monster facing / ambush from the thing (z field carries it); object.ang keeps it
+    lv=out/"src/level.c"; t=lv.read_text()
+    k="""                    thg->type
+                );"""
+    assert t.count(k)==1
+    t=t.replace(k,"""                    thg->type
+                );
+                { extern void m14_set_last_ang(u8 a); m14_set_last_ang((u8)thg->z); }""",1)
+    lv.write_text(t)
+    ob=out/"src/object.c"; t=ob.read_text()
+    k="object_link alloc_object_in_sector(u8 activate_tick, int sector_num, fix32 x, fix32 y, s16 z, uint8_t object_type) {"
+    assert t.count(k)==1
+    t=t.replace(k,"static object_link m14_last_alloc = NULL_OBJ_LINK;\n"+k,1)
+    k="    object_link res = new_object_link();\n"
+    assert t.count(k)==1
+    t=t.replace(k,k+"    m14_last_alloc = res;\n",1)
+    ob.write_text(t)
+    # ---- object.c: AI rate: sleeping monsters look every 4th frame, chasers think every other frame
+    ob=out/"src/object.c"; t=ob.read_text()
+    k="""                } else {
+                    OBJ_LINK_DEREF(cur_object).activate_tick = 0;
+                }"""
+    assert t.count(k)==1
+    t=t.replace(k,"""                } else {
+                    OBJ_LINK_DEREF(cur_object).activate_tick = (object_state_machines[state_idx].action == &look_for_player) ? 3 : 1;
+                }""",1)
+    ob.write_text(t)
     # ---- collision.c: line of sight (Doom P_CheckSight equivalent): walk the cells along the
     # monster->player line, fail on a solid wall crossing or a closed sector (door shut)
     c=out/"src/collision.c"; t=c.read_text()
@@ -3073,7 +3100,7 @@ static fix32 m14_speed_for(u8 type) {
     u32 st=(move_speed*m14_ratio[k])/100;
     if (st<1) st=1;
     if (st>12) st=12;
-    return FIX32(st);
+    return FIX32(st*2);      /* chase runs every other frame (r056): double step */
 }
 """
     anchor="fix32 dist_sqr(player_pos posa, player_pos origin) {"
@@ -3094,12 +3121,24 @@ static u16 m14_ticks(u16 hundredths) {      /* hundredths of a second -> 300 Hz 
     return (u16)((u32)hundredths*3);
 }
 extern u16 random(void);
+void m14_set_last_ang(u8 a) { if (m14_last_alloc != NULL_OBJ_LINK) OBJ_LINK_DEREF(m14_last_alloc).ang = a; m14_last_alloc = NULL_OBJ_LINK; }
+/* facing a (0..127 = 0..360 deg, Doom: 0 = east, CCW, y up) vs direction to player */
+static u8 m14_in_front(u8 a, s32 dx, s32 dy) {
+    static const s8 c[16]={127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49,0,49,90,117};
+    u8 i = (u8)(((a + 4) >> 3) & 15);
+    s8 cx = c[i], cy = c[(i + 12) & 15];          /* sin = cos shifted by 90 deg */
+    return (s32)cx * dx + (s32)cy * dy > 0;
+}
 int look_for_player(object_link cur_obj, uint16_t cur_sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(cur_obj).object_type);
     if (!k) return look_for_player_orig(cur_obj, cur_sector);
     int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
     int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
-    if ((m14_force_wake && fastLength(dx,dy)<1600) || (OBJ_LINK_DEREF(cur_obj).seen && fastLength(dx,dy)<1024)) {
+    u8 m14a=OBJ_LINK_DEREF(cur_obj).ang; u32 m14d=fastLength(dx,dy);
+    /* Doom P_LookForPlayers: sight only in the monster's front 180 deg (unless within melee range 64);
+       ambush (deaf) monsters ignore gunfire noise */
+    u8 m14_front = m14_in_front(m14a&127, dx, dy) || m14d < 64;
+    if ((m14_force_wake && !(m14a&128) && m14d<1600) || (OBJ_LINK_DEREF(cur_obj).seen && m14_front && m14d<2048)) {
         OBJ_LINK_DEREF(cur_obj).current_state=2;
         OBJ_LINK_DEREF(cur_obj).cool=m14_ticks(60);
         play_sfx(SFX_ENEMY_A_WAKE_ID, 8);
@@ -3136,7 +3175,7 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     u8 seen=OBJ_LINK_DEREF(cur_obj).seen; extern u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by);
     OBJ_LINK_DEREF(cur_obj).seen=0;
     u16 cool=OBJ_LINK_DEREF(cur_obj).cool;
-    cool = (cool>last_frame_ticks) ? (cool-last_frame_ticks) : 0;
+    cool = (cool>2*last_frame_ticks) ? (cool-2*last_frame_ticks) : 0;   /* every other frame */
     OBJ_LINK_DEREF(cur_obj).cool=cool;
     if (cool==0) {
         if (k==3) {
