@@ -1427,7 +1427,7 @@ def install_sky(out, res):
     reclaimed from the unused WINDOW nametable and the never-displayed
     rows 28-63 of the 64x64 BG_B nametable (~272 tiles)."""
     import wad_textures as WT
-    sk=WT.sky_tiles(res, band_rows=10, band_cols=16, max_tiles=134)
+    sk=WT.sky_tiles(res, band_rows=9, band_cols=32, max_tiles=131, merge=True)
     n=len(sk["tiles"]);rows=sk["rows"];cols=sk["cols"]
     tiles=",\n".join("  "+",".join(f"0x{v:08x}" for v in t) for t in sk["tiles"])
     tmap=",".join(str(v) for row in sk["map"] for v in row)
@@ -1477,7 +1477,7 @@ u16 manifold_sky_init(u16 free_tile_loc) {{
 }}
 void manifold_sky_update(void) {{
     if (!sky_ready) return;
-    s16 off = (s16)((cur_player_pos.ang >> 4) & {cols - 1});
+    s16 off = (s16)((cur_player_pos.ang >> 3) & {cols - 1});   /* 1024 ang = 360 deg: 256 ang = 90 deg = 32 tiles = one 256px sky, same speed as the walls */
     if (off == sky_last) return;
     sky_last = off;
     for (u16 r = 0; r < {rows}; r++)

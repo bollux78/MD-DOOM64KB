@@ -312,7 +312,36 @@ def emit_textures_c(res, names):
     return "\n".join(out) + "\n"
 
 
-def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96):
+def _merge_sky(pal, tiles, tmap, rows, cols, max_tiles):
+    """Lossy tile merge: greedily fold the least-different (frequency weighted) tile pairs
+    until max_tiles remain. Tiles 0/1 (solid top/bottom fills) are always kept."""
+    def px(t): return [(w >> (28 - 4 * k)) & 15 for w in t for k in range(8)]
+    P = [px(t) for t in tiles]
+    cnt = [0] * len(tiles)
+    for r in tmap:
+        for v in r: cnt[v] += 1
+    cnt[0] += 10**6; cnt[1] += 10**6
+    dm = lambda a, b: sum(dist2(pal[x], pal[y]) for x, y in zip(P[a], P[b]))
+    alive = list(range(len(tiles))); rep = list(range(len(tiles)))
+    cache = {}
+    while len(alive) > max_tiles:
+        best = None
+        for i, a in enumerate(alive):
+            for b in alive[i + 1:]:
+                k = (a, b)
+                if k not in cache: cache[k] = dm(a, b)
+                s_, t_ = (a, b) if cnt[a] >= cnt[b] else (b, a)
+                c = cnt[t_] * cache[k]
+                if best is None or c < best[0]: best = (c, s_, t_)
+        _, s_, t_ = best
+        cnt[s_] += cnt[t_]; cnt[t_] = 0; alive.remove(t_)
+        rep = [s_ if r == t_ else r for r in rep]
+    remap = {a: i for i, a in enumerate(alive)}
+    return {"tiles": [tiles[a] for a in alive],
+            "map": [[remap[rep[v]] for v in row] for row in tmap], "rows": rows, "cols": cols}
+
+
+def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96, merge=False):
     """SKY1 -> deduplicated 4bpp tiles for a BG_B band (3D palette)."""
     pal = res["pal"]
     wdt, hgt, img = res["sky"]
@@ -345,4 +374,6 @@ def sky_tiles(res, band_rows=6, band_cols=16, max_tiles=96):
             tmap.append(row)
         if len(tiles) <= max_tiles or band_rows <= 2:
             return {"tiles": tiles, "map": tmap, "rows": band_rows, "cols": band_cols}
+        if merge:
+            return _merge_sky(pal, tiles, tmap, band_rows, band_cols, max_tiles)
         band_rows -= 1
