@@ -1,0 +1,58 @@
+name: R128 Shareware Pair-V BG probe (hosted compile)
+on:
+  push:
+    branches: [exp-chatgpt-r128-pairv-bg-probe]
+    paths: ['.github/workflows/r128-pairv-bg-probe-hosted.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fish default-jre-headless python3-numpy python3-pil
+      - name: Prepare the native SGDK 2.11 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/mars" "$RUNNER_TEMP/sgdk-release"
+          curl -fLsS --retry 3 https://github.com/andwn/marsdev/releases/download/v1.0.0-rc1/marsdev-v1.0.0-rc1-linux-x86_64.tar.xz -o "$RUNNER_TEMP/mars.tar.xz"
+          tar -xJf "$RUNNER_TEMP/mars.tar.xz" -C "$RUNNER_TEMP/mars"
+          compiler="$(find "$RUNNER_TEMP/mars" -name m68k-elf-gcc -print -quit)"
+          test -x "$compiler"
+          sdk="$(dirname "$(dirname "$compiler")")"
+          curl -fLsS --retry 3 https://github.com/Stephane-D/SGDK/archive/ef9292c03fe33a2f8af3a2589ab856a53dcef35c.tar.gz -o "$RUNNER_TEMP/sgdk.tar.gz"
+          tar -xzf "$RUNNER_TEMP/sgdk.tar.gz" -C "$RUNNER_TEMP/sgdk-release" --strip-components=1
+          sgdk_source="$RUNNER_TEMP/sgdk-release"
+          rm -rf "$sdk/inc" "$sdk/res" "$sdk/src"
+          cp -a "$sgdk_source"/{inc,res,src,md.ld,makelib.gen,makefile.gen} "$sdk/"
+          cp -a "$sgdk_source"/bin/*.jar "$sdk/bin/"
+          sed -i 's/\r$//' "$sdk"/{makefile.gen,inc/dma.h,src/dma.c,res/libres.res}
+          patch -d "$sdk" -p1 --fuzz=0 < scripts/lab/r128-shareware/sgdk211.patch
+          export PATH="$sdk/bin:$PATH"
+          rm -f "$sdk/lib/libmd.a"
+          make -C "$sdk" -f makelib.gen GDK="$sdk" PREFIX=m68k-elf- EXTRA_FLAGS=-std=gnu11 -j2
+          echo "R128_NATIVE_SGDK=$sdk" >> "$GITHUB_ENV"
+      - name: Compile from the pinned shareware IWAD and verify the ROM
+        shell: bash
+        env:
+          R128_BG_PROBE: '1'
+          R128_SGDK211_COMPAT: '1'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/shareware"
+          curl -fLsS --retry 3 https://deb.debian.org/debian/pool/non-free/d/doom-wad-shareware/doom-wad-shareware_1.9.fixed.orig.tar.gz -o "$RUNNER_TEMP/shareware.tar.gz"
+          tar -xzf "$RUNNER_TEMP/shareware.tar.gz" -C "$RUNNER_TEMP/shareware"
+          wad="$(find "$RUNNER_TEMP/shareware" -type f -iname doom1.wad -print -quit)"
+          test -f "$wad"
+          bash scripts/lab/build_r128_shareware.sh "$wad" "$R128_NATIVE_SGDK" "$RUNNER_TEMP/r128-bg-probe"
+          for rom in "$RUNNER_TEMP/r128-bg-probe"/*.bin; do
+            stat --printf='%n %s bytes\n' "$rom"
+            sha256sum "$rom"
+          done

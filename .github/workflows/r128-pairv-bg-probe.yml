@@ -2,6 +2,9 @@ name: R128 Shareware Pair-V BG probe
 on:
   push:
     branches: [exp-chatgpt-r128-pairv-bg-probe]
+    paths:
+      - 'scripts/lab/r128-shareware/**'
+      - 'scripts/lab/build_r128_shareware.sh'
 permissions:
   contents: read
 concurrency:
