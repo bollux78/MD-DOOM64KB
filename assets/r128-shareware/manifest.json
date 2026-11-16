@@ -1,0 +1,38 @@
+{
+  "title": {
+    "input_export": "titlescreenBOLLUX_sgdk.zip",
+    "input_sha256": "47415abd31253c546e97b8a498de53b6b0b50c0c9ad61704ffb960469bbffa26",
+    "sha256": {
+      "pack": "c1f562f2d1a792e190b4a74bac053c11cdcb519f4b08646d7b59cb3b85f05cc3",
+      "map": "241e2c2ebc41b56049487be060d929a86b2219c9b29b38ce9990a1d6e8d48efd",
+      "pal": "a2305acd17266acd39c354027f066b3aaaa5ee851bc0acf64a709d24b5b6c430"
+    }
+  },
+  "final": {
+    "input_export": "endMD2_sgdk.zip",
+    "input_sha256": "a7f6c7727add9722f67efa8eb914c4d63f7cc4d7ce65ba83e358f36615e63d71",
+    "sha256": {
+      "pack": "ccc4949e7a0ae7cc5fcb392a9f3e2a0d45b580a8e482adcfebef9c322dbc8f3c",
+      "map": "a7841a4a5a78f42b812be430a7fa06d1f69fb45ca5931d578c92ef5b96fc3f70",
+      "pal": "dc63b0f77dd5b26f3aef739b4d59dcf0665074531133a5445ef61ae15210ef5c"
+    }
+  },
+  "credit": {
+    "input_export": "DoomCREDIT10_sgdk.zip",
+    "input_sha256": "1229e0a017467dfba27eb86c09c8c87af55346d2567f4fc3b959c9db0f8d3403",
+    "sha256": {
+      "pack": "b889ef631d76bcd0af5f32fb868abdd1964e2463614ac418339b5872de86a500",
+      "map": "e4d0bd80380d8f0fbeab71ff23c56317b908ff76be8540d01ea67b021bebe934",
+      "pal": "4aab3f1a92c81d51ec73d0ddb3ade344161a7256e3b6b9abc9a201b896384ce3"
+    }
+  },
+  "disclaimer": {
+    "input_export": "disclaimer_and_credits_sgdk(1).zip",
+    "input_sha256": "c7a644252f159390d101a9ddad624e558551b31f43ca5a208b3159ff856f6836",
+    "sha256": {
+      "pack": "ee49c6073fb63c21d35415defbe5123db7c66c210e9393d21cac69a13506692f",
+      "map": "6c7ff26333893027c52aa0fb198b433c7ceb8ee51fc805fa2e6905d90ffa4bdf",
+      "pal": "aa5888f93d0fd3f5838704b110229bb88c4230c975613ec6554163d46cb354d5"
+    }
+  }
+}

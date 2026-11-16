@@ -1,0 +1,434 @@
+--- a/src/m_text.c
++++ b/src/m_text.c
+@@ -201,7 +201,6 @@
+ static void M_SaveSelect(int16_t choice);
+ static void M_ReadSaveStrings(void);
+ 
+-static void M_DrawMainMenu(void);
+ static void M_DrawNewGame(void);
+ static void M_DrawOptions(void);
+ static void M_DrawSound(void);
+@@ -245,6 +244,7 @@
+   quitdoom,
+ #endif
+   r81_cheats,
++  credits,
+   main_end
+ };
+ 
+@@ -256,6 +256,12 @@
+ //
+ 
+ static void R81_OpenCheats(int16_t choice);
++static void M_OpenCredits(int16_t choice)
++{
++    UNUSED(choice);
++    M_ClearMenus();
++    D_StartCredits();
++}
+ static const menuitem_t MainMenu[]=
+ {
+   {1,"New Game",  M_NewGame},
+@@ -271,27 +277,18 @@
+   {1,"Quit Game", M_QuitDOOM},
+ #endif
+   {1,"Cheats", R81_OpenCheats},
++  {1,"Credits", M_OpenCredits},
+ };
+ 
+ static const menu_t MainDef =
+ {
+   main_end,       // number of menu items
+   MainMenu,       // table that defines menu items
+-  M_DrawMainMenu, // drawing routine
++  NULL,           // draw the menu items without a heading
+   (R22_TEXTWIDTH - 9) / 2,8,          // initial cursor position
+   NULL,0,
+ };
+ #include "r81_cheats.inc"
+-
+-
+-//
+-// M_DrawMainMenu
+-//
+-
+-static void M_DrawMainMenu(void)
+-{
+-	V_DrawString((R22_TEXTWIDTH - 4) / 2, 1, 14, "DOOM");
+-}
+ 
+ 
+ // numerical values for the New Game menu items
+@@ -1016,12 +1013,7 @@
+     {
+         if (ch == key_menu_escape)
+         {
+-#if defined(DOOM_R26_FLOW) && defined(DOOM_R24_EPISODE)
+-            if (_g_gamestate == GS_DEMOSCREEN)
+-                M_R24OpenLevels();
+-            else
+-#endif
+-                M_StartControlPanel ();
++            M_StartControlPanel ();
+             S_StartSound(NULL,sfx_swtchn);
+             return true;
+         }
+--- a/src/r35_native4.inc
++++ b/src/r35_native4.inc
+@@ -10,7 +10,9 @@
+ #else
+ #define R35_FONT_TILE_LIMIT 1696
+ #endif
+-#if (16 + R30_TITLE_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_INTER_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_FINAL_TILES >= R35_FONT_TILE_LIMIT)
++#if (16 + R30_TITLE_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_INTER_TILES >= R35_FONT_TILE_LIMIT) || (16 + R30_FINAL_TILES >= R35_FONT_TILE_LIMIT) || \
++    (16 + R30_CREDIT_TILES >= R35_FONT_TILE_LIMIT) || \
++    (16 + R30_DISCLAIMER_TILES >= R35_FONT_TILE_LIMIT)
+ #error R35 static picture would overwrite the SGDK font tiles
+ #endif
+ extern const u8 r30_title_pack[],r30_inter_pack[],r30_final_pack[];
+@@ -31,12 +33,42 @@
+     u16 tile_count;
+     const u16 *back_map; /* Optional opaque base; map is sparse foreground. */
+ } R35Native4;
+-static const R35Native4 r35_native4[3]={
++enum { R35_TITLE, R35_INTERMISSION, R35_FINALE, R35_ID_CREDITS, R35_DISCLAIMER };
++extern const u8 r30_credit_pack[], r30_disclaimer_pack[];
++extern const u16 r30_credit_map[], r30_credit_pal[];
++extern const u16 r30_disclaimer_map[], r30_disclaimer_pal[];
++static const R35Native4 r35_native4[]={
+     {r30_title_pack,r30_title_map,r30_title_pal,R30_TITLE_TILES,R78_TITLE_MAPB},
+     {r30_inter_pack,r30_inter_map,r30_inter_pal,R30_INTER_TILES,R78_INTER_MAPB},
+-    {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES,0}
++    {r30_final_pack,r30_final_map,r30_final_pal,R30_FINAL_TILES,0},
++    {r30_credit_pack,r30_credit_map,r30_credit_pal,R30_CREDIT_TILES,0},
++    {r30_disclaimer_pack,r30_disclaimer_map,r30_disclaimer_pal,R30_DISCLAIMER_TILES,0}
+ };
+ static int16_t r35_native_active=-1;
++static bool r35_white_font;
++#include "r35_title_menu_patterns.h"
++
++static void R35_SetNativeTextColor(bool visible)
++{
++    if (visible == r35_white_font)
++        return;
++    /* Native glyphs use PAL0 color 15. Restore the supplied art color
++       once the overlay is gone. */
++    const u16 color = visible ? 0x0EEE : r35_native4[r35_native_active].palette[15];
++    const u16 sr = R22_Lock();
++    if (r35_native_active == R35_TITLE)
++    {
++        for (u16 i = 0; i < sizeof(r35_title_menu_tiles) / sizeof(r35_title_menu_tiles[0]); ++i)
++        {
++            const u16 tile = r35_title_menu_tiles[i];
++            const u8 *pattern = visible ? r35_title_menu_patterns[i] : r30_title_pack + 32UL * tile;
++            VDP_loadTileData((const u32 *)(const void *)pattern, 16 + tile, 1, CPU);
++        }
++    }
++    PAL_setColor(15, color);
++    R22_Unlock(sr);
++    r35_white_font = visible;
++}
+ #if defined(DOOM_R50_STATIC_MENU)
+ /* Called by R40B's displaced-glyph restoration. Native tilemap is immutable
+  * ROM data; no framebuffer duplication or new WRAM shadow required. */
+@@ -138,9 +170,68 @@
+     r35_native_active=-1;
+     VDP_setEnable(TRUE);
+ }
++static void R35_ShowNative4(u16 i)
++{
++    if(r35_native_active==(int16_t)i)return;
++#if defined(DOOM_R51_HW_WEAPON)
++    R51_WeaponInvalidate();
++#endif
++    const R35Native4 *picture=&r35_native4[i];
++    R20_StopVideo();
++#if defined(DOOM_R79_SHADOW)
++    VDP_setHilightShadow(FALSE);
++#endif
++    VDP_setEnable(FALSE);
++    VDP_clearPlane(BG_A,TRUE);
++#if defined(DOOM_R47_PLANE_PAIR)
++    VDP_clearPlane(BG_B,TRUE);
++    VDP_setVerticalScroll(BG_B,0);
++#if defined(DOOM_R48_PAIR_V)
++    VDP_setHorizontalScroll(BG_B,0);
++#endif
++#endif
++    VDP_clearPlane(WINDOW,TRUE);
++#if defined(DOOM_R50_STATIC_MENU)
++    /* With text written directly into BG_A and restored from ROM, a
++     * full-screen WINDOW would hide the 320x224 static background. */
++    VDP_setWindowHPos(FALSE,0);
++#else
++    VDP_setWindowHPos(TRUE,0);
++#endif
++    VDP_setWindowVPos(FALSE,0);
++    /* Tile data are 32B raw 4bpp, already converted with Bayer8.
++       Every tile lives directly in ROM. Never call a codec here. */
++    for(u16 t=0;t<picture->tile_count;t++)
++        VDP_loadTileData((const u32*)(const void*)(picture->pixels+32UL*t),
++                         16+t,1,CPU);
++    u16 row[40];
++    for(u16 y=0;y<28;y++)
++    {
++        for(u16 x=0;x<40;x++)row[x]=picture->map[y*40+x]+16;
++        VDP_setTileMapDataRect(BG_A,row,0,y,40,1,40,CPU);
++#if defined(DOOM_R47_PLANE_PAIR)
++        if(picture->back_map)
++            for(u16 x=0;x<40;x++)row[x]=picture->back_map[y*40+x]+16;
++        /* Mirror the native picture on B so transparent WINDOW glyphs
++         * reveal the complete static image, not odd scanline pairs.
++         * R78 user art instead puts its opaque base in B and exact sparse
++         * corrections in A. Native glyph retirement restores map A. */
++        VDP_setTileMapDataRect(BG_B,row,0,y,40,1,40,CPU);
++#endif
++    }
++    PAL_setColors(0,picture->palette,64,CPU);
++    r35_white_font=false;
++    r22_newpal=100;
++    r22_queued_pal=100;
++    r22_overlay_dirty=0;
++    R40B_ResetNativeText(); /* WINDOW is newly blank, so invalidate glyph shadow. */
++    r35_native_active=(int16_t)i;
++    VDP_setEnable(TRUE);
++}
++
+ static bool R35_DrawNative4(int16_t lump)
+ {
+-    static const char *const names[3]={"TITLEPIC","WIMAP0","HELP2"};
++    static const char *const names[]={"TITLEPIC","WIMAP0","HELP2"};
+     static int16_t ids[3];
+     static bool known=FALSE;
+     if(!known)
+@@ -151,64 +242,18 @@
+     for(u16 i=0;i<3;i++)
+     {
+         if(lump!=ids[i])continue;
+-        if(r35_native_active==(int16_t)i)return TRUE;
+-#if defined(DOOM_R51_HW_WEAPON)
+-        R51_WeaponInvalidate();
+-#endif
+-        const R35Native4 *picture=&r35_native4[i];
+-        R20_StopVideo();
+-#if defined(DOOM_R79_SHADOW)
+-        VDP_setHilightShadow(FALSE);
+-#endif
+-        VDP_setEnable(FALSE);
+-        VDP_clearPlane(BG_A,TRUE);
+-#if defined(DOOM_R47_PLANE_PAIR)
+-        VDP_clearPlane(BG_B,TRUE);
+-        VDP_setVerticalScroll(BG_B,0);
+-#if defined(DOOM_R48_PAIR_V)
+-        VDP_setHorizontalScroll(BG_B,0);
+-#endif
+-#endif
+-        VDP_clearPlane(WINDOW,TRUE);
+-#if defined(DOOM_R50_STATIC_MENU)
+-        /* With text written directly into BG_A and restored from ROM, a
+-         * full-screen WINDOW would hide the 320x224 static background. */
+-        VDP_setWindowHPos(FALSE,0);
+-#else
+-        VDP_setWindowHPos(TRUE,0);
+-#endif
+-        VDP_setWindowVPos(FALSE,0);
+-        /* Tile data are 32B raw 4bpp, already converted with Bayer8.
+-           Every tile lives directly in ROM. Never call a codec here. */
+-        for(u16 t=0;t<picture->tile_count;t++)
+-            VDP_loadTileData((const u32*)(const void*)(picture->pixels+32UL*t),
+-                             16+t,1,CPU);
+-        u16 row[40];
+-        for(u16 y=0;y<28;y++)
+-        {
+-            for(u16 x=0;x<40;x++)row[x]=picture->map[y*40+x]+16;
+-            VDP_setTileMapDataRect(BG_A,row,0,y,40,1,40,CPU);
+-#if defined(DOOM_R47_PLANE_PAIR)
+-            if(picture->back_map)
+-                for(u16 x=0;x<40;x++)row[x]=picture->back_map[y*40+x]+16;
+-            /* Mirror the native picture on B so transparent WINDOW glyphs
+-             * reveal the complete static image, not odd scanline pairs.
+-             * R78 user art instead puts its opaque base in B and exact sparse
+-             * corrections in A. Native glyph retirement restores map A. */
+-            VDP_setTileMapDataRect(BG_B,row,0,y,40,1,40,CPU);
+-#endif
+-        }
+-        PAL_setColors(0,picture->palette,64,CPU);
+-        r22_newpal=100;
+-        r22_queued_pal=100;
+-        r22_overlay_dirty=0;
+-        R40B_ResetNativeText(); /* WINDOW is newly blank, so invalidate glyph shadow. */
+-        r35_native_active=(int16_t)i;
+-        VDP_setEnable(TRUE);
++        R35_ShowNative4(i);
+         return TRUE;
+     }
+     return FALSE;
+ }
++
++void V_DrawCreditsPage(credits_page_t page)
++{
++    static const u8 pictures[] = {R35_TITLE, R35_ID_CREDITS, R35_DISCLAIMER, R35_FINALE};
++    R35_ShowNative4(pictures[page]);
++}
++
+ #endif
+ 
+ #undef R35_FONT_TILE_LIMIT
+--- a/src/d_main.c
++++ b/src/d_main.c
+@@ -164,6 +164,7 @@
+ 
+ 
+ static int16_t titlepicnum;
++static credits_page_t credits_page;
+ 
+ 
+ /*
+@@ -185,6 +186,9 @@
+     /* cph - suppress all input events at game start
+    * FIXME: This is a lousy kludge */
+     if (_g_gametic < 3)
++        return;
++
++    if (credits_page != CREDITS_NONE)
+         return;
+ 
+     if (!M_Responder(ev))
+@@ -475,8 +479,10 @@
+ //
+ void D_PageTicker(void)
+ {
++    if (credits_page != CREDITS_NONE)
++        return;
+ #if defined(DOOM_R26_FLOW) && defined(DOOM_R24_EPISODE)
+-    /* Keep the title visible until Start opens the level selector. */
++    /* Keep the title and the manually advanced credits visible. */
+     return;
+ #endif
+     if (--pagetic < 0)
+@@ -489,7 +495,10 @@
+ 
+ static void D_PageDrawer(void)
+ {
+-	V_DrawRawFullScreen(titlepicnum);
++    if (credits_page != CREDITS_NONE)
++        V_DrawCreditsPage(credits_page);
++    else
++        V_DrawRawFullScreen(titlepicnum);
+ }
+ 
+ //
+@@ -548,8 +557,30 @@
+ //
+ // D_StartTitle
+ //
++void D_StartCredits(void)
++{
++    credits_page = CREDITS_ID;
++    advancedemo = _g_usergame = false;
++    _g_gameaction = ga_nothing;
++    _g_gamestate = GS_DEMOSCREEN;
++}
++
++boolean D_CreditsInput(boolean newpress)
++{
++    if (credits_page == CREDITS_NONE)
++        return false;
++
++    if (newpress && credits_page == CREDITS_SHAREWARE)
++        D_StartTitle();
++    else if (newpress)
++        credits_page++;
++
++    return true;
++}
++
+ void D_StartTitle (void)
+ {
++    credits_page = CREDITS_NONE;
+     _g_gameaction = ga_nothing;
+     demosequence = -1;
+     D_AdvanceDemo();
+--- a/src/d_main.h
++++ b/src/d_main.h
+@@ -60,6 +60,8 @@
+ 
+ void D_PageTicker(void);
+ void D_StartTitle(void);
++void D_StartCredits(void);
++boolean D_CreditsInput(boolean newpress);
+ #if defined(DOOM_R50_PLAY_BENCH)
+ void D_R50_BenchmarkStart(void);
+ void D_R88_SelectBenchmarkMap(int16_t choice);
+--- a/src/i_genesis.c
++++ b/src/i_genesis.c
+@@ -135,6 +135,11 @@
+ 	uint16_t diff = cur ^ prev;
+ 	prev = cur;
+ 
++    /* Use raw pad edges here so every button works, including Y and Mode.
++       A chord advances once and a held button cannot skip pages. */
++    if (D_CreditsInput((cur & diff & BUTTON_ALL) != 0))
++        return;
++
+ 	for (uint16_t i = 0; i < NJOYMAP; i++)
+ 	{
+ 		if (diff & joymap[i].mask)
+--- a/src/r22_video.inc
++++ b/src/r22_video.inc
+@@ -1552,6 +1552,7 @@
+ static void R22_EndOverlay(void){
+ #if defined(DOOM_R35_ART_RAW)
+     if(r35_native_active>=0){
++        R35_SetNativeTextColor(r22_text_this_frame != 0);
+ #if defined(DOOM_R50_STATIC_MENU)
+         /* The native picture remains visible on both background planes.
+          * Remove glyphs that are no longer requested, including the case
+--- a/src/v_video.h
++++ b/src/v_video.h
+@@ -52,6 +52,13 @@
+ 
+ void V_DrawRaw(int16_t num, uint16_t offset);
+ void V_DrawRawFullScreen(int16_t num);
++typedef enum {
++    CREDITS_NONE,
++    CREDITS_ID,
++    CREDITS_DISCLAIMER,
++    CREDITS_SHAREWARE
++} credits_page_t;
++void V_DrawCreditsPage(credits_page_t page);
+ 
+ // V_DrawNumPatchScaled - Draws the patch from lump num
+ void V_DrawPatchScaled(int16_t x, int16_t y, const patch_t __far* patch);
+--- /dev/null
++++ b/src/r35_title_menu_patterns.h
+@@ -0,0 +1,29 @@
++/* Title tiles that use PAL0 index 15, reserved for white glyphs while the menu is visible. */
++static const u16 r35_title_menu_tiles[] = {4, 5, 9, 10, 11, 12, 16, 17, 19, 24, 25, 26, 29, 31, 33, 34, 44, 50, 51, 57, 58, 59, 65, 69, 200};
++static const u8 r35_title_menu_patterns[][32] __attribute__((aligned(4))) = {
++    {0xbe, 0x55, 0x18, 0x1e, 0xab, 0xb5, 0x8a, 0xa7, 0xaa, 0xa8, 0x87, 0xe7, 0x11, 0x11, 0xe7, 0xee, 0x11, 0xa1, 0xe7, 0xee, 0x11, 0xa1, 0x5e, 0xe3, 0x11, 0x11, 0x1e, 0xe3, 0xaa, 0x81, 0x11, 0x33},
++    {0x1e, 0xe1, 0x11, 0xa1, 0xee, 0xb1, 0x11, 0xa1, 0xee, 0x11, 0x11, 0xa1, 0xe7, 0x77, 0x77, 0x77, 0x33, 0x33, 0x33, 0x33, 0x23, 0x33, 0x33, 0x33, 0x2c, 0x3e, 0xee, 0xee, 0x23, 0x24, 0xaa, 0x4a},
++    {0x18, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x77, 0x77, 0x33, 0x11, 0x33, 0x33, 0xda, 0x31, 0x33, 0x3c, 0x9a, 0x33, 0xee, 0x29, 0x4a, 0x28, 0x44, 0x94, 0x4a, 0xb1},
++    {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x21, 0xa1, 0x11, 0x11, 0x3a, 0xa1, 0x11, 0x11, 0x33, 0x31, 0x11, 0x11},
++    {0x11, 0x18, 0x18, 0x11, 0x11, 0x11, 0x11, 0x88, 0x11, 0x11, 0x11, 0x88, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1a, 0x11, 0x11, 0x11, 0xa3},
++    {0x11, 0x11, 0x11, 0x88, 0x18, 0x18, 0x11, 0x18, 0x18, 0x18, 0x11, 0x18, 0x11, 0x11, 0x17, 0x77, 0x11, 0x13, 0x3a, 0x33, 0x13, 0x23, 0x1a, 0x23, 0xa3, 0xe3, 0xba, 0x9c, 0x33, 0xba, 0xaa, 0x92},
++    {0x88, 0x88, 0x88, 0x86, 0x86, 0x88, 0x86, 0x18, 0x86, 0x88, 0x86, 0x18, 0x77, 0x77, 0x77, 0x77, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0xee, 0xee, 0xee, 0x54, 0x22, 0x22, 0x22, 0x29},
++    {0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x18, 0x18, 0x18, 0x71, 0x88, 0x18, 0x88, 0x53, 0x38, 0x88, 0x88, 0xae, 0x33, 0x38, 0x18, 0xaa, 0x28, 0x3e, 0xa8, 0x4a, 0xb1, 0x33, 0x31},
++    {0x88, 0x88, 0x88, 0x88, 0x18, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x11, 0x88, 0x88, 0x18, 0x13, 0x88, 0x88, 0x13, 0x3a, 0x88, 0x83, 0x23, 0x1a, 0x8e, 0xa3, 0xe3, 0xba, 0x13, 0x33, 0xba, 0xaa},
++    {0x88, 0x86, 0x88, 0x88, 0x86, 0x86, 0x88, 0x88, 0x86, 0x86, 0x88, 0x88, 0x37, 0x31, 0x18, 0x88, 0x33, 0xa3, 0x31, 0x88, 0x33, 0xae, 0x33, 0x31, 0xc4, 0xaa, 0x28, 0x3e, 0x29, 0x4a, 0xb1, 0x33},
++    {0x88, 0x11, 0x11, 0x11, 0x11, 0x11, 0x18, 0x11, 0x11, 0x11, 0x18, 0x11, 0x88, 0x11, 0xe7, 0x77, 0x81, 0x17, 0x77, 0x38, 0x18, 0xe7, 0x77, 0x3e, 0xa8, 0x77, 0x77, 0x33, 0x37, 0x77, 0x33, 0x33},
++    {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x77, 0x77, 0x77, 0x77, 0xe3, 0x33, 0x33, 0x33, 0xbe, 0x23, 0x33, 0x33, 0x2a, 0x4c, 0x33, 0x3e, 0xca, 0x44, 0x23, 0x22},
++    {0x11, 0xa1, 0xa1, 0x11, 0x11, 0x11, 0x11, 0xa1, 0x11, 0x11, 0x11, 0xa1, 0x77, 0x33, 0x31, 0x1a, 0x33, 0xd3, 0x21, 0xa1, 0x3c, 0xd3, 0x41, 0xaa, 0xcd, 0x53, 0x41, 0xaa, 0x25, 0x24, 0x41, 0xaa},
++    {0xaa, 0x4a, 0x4a, 0x4a, 0xaa, 0x4a, 0x4a, 0x4a, 0xaa, 0x4a, 0x4a, 0x4a, 0x37, 0x37, 0x37, 0x37, 0xa3, 0x33, 0x33, 0x33, 0x44, 0x33, 0x33, 0x33, 0xaa, 0x2e, 0xee, 0xee, 0xaa, 0x42, 0x22, 0x22},
++    {0xaa, 0x4a, 0x4a, 0x4a, 0xaa, 0xa4, 0xaa, 0x4a, 0xaa, 0xa4, 0xaa, 0x4a, 0x37, 0x37, 0x37, 0x37, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0xee, 0xee, 0xee, 0xe3, 0x22, 0x22, 0x22, 0xa4},
++    {0xaa, 0x4a, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x37, 0x37, 0x37, 0x33, 0x33, 0x33, 0x23, 0x5a, 0x33, 0x23, 0x2a, 0xaa, 0xc3, 0x23, 0xaa, 0xaa, 0x23, 0x23, 0xaa, 0xaa},
++    {0x23, 0x94, 0xad, 0x2d, 0x34, 0x4a, 0x1d, 0x2c, 0xa4, 0x4a, 0x1d, 0x2c, 0x1a, 0x4a, 0x1d, 0x2c, 0xba, 0xaa, 0x1d, 0x2c, 0xaa, 0xaa, 0x1d, 0x2c, 0xaa, 0xaa, 0x1d, 0x22, 0x1a, 0xaa, 0x1d, 0x22},
++    {0xb1, 0x33, 0x31, 0x11, 0xaa, 0xb1, 0x33, 0x11, 0x4a, 0xaa, 0xaa, 0xb1, 0xd9, 0xba, 0x4a, 0xba, 0x22, 0xb4, 0x4a, 0xb3, 0x22, 0x1a, 0xaa, 0xbd, 0x22, 0x1a, 0xaa, 0xb2, 0x22, 0x1a, 0xaa, 0xad},
++    {0xa1, 0x11, 0x13, 0x33, 0x11, 0xaa, 0xa3, 0xba, 0x11, 0xaa, 0x4a, 0xaa, 0xa1, 0x1a, 0x44, 0x4a, 0x2a, 0x4a, 0x44, 0x9a, 0x23, 0xda, 0x4a, 0x4a, 0xdb, 0x2a, 0xaa, 0xae, 0xdb, 0x21, 0xaa, 0xae},
++    {0x9a, 0xaa, 0xb1, 0x33, 0x22, 0x9a, 0xaa, 0xb1, 0x22, 0x2c, 0x4a, 0xaa, 0x22, 0x2c, 0x24, 0xb4, 0x22, 0x2c, 0x29, 0xb4, 0x22, 0x2c, 0x22, 0xb4, 0x22, 0x2c, 0x22, 0x1a, 0x22, 0x2c, 0x22, 0x1a},
++    {0x38, 0x88, 0x88, 0x13, 0xaa, 0xa8, 0x8a, 0xa1, 0x4a, 0xa9, 0x8a, 0x4a, 0x4a, 0xa2, 0x9a, 0x44, 0x4a, 0xa2, 0x2a, 0x44, 0x4a, 0xa2, 0xda, 0x4a, 0xaa, 0xa2, 0x9a, 0xaa, 0xaa, 0xa2, 0x9a, 0xaa},
++    {0x33, 0xba, 0xaa, 0xa4, 0xba, 0xaa, 0xa4, 0x22, 0xaa, 0xa4, 0x2c, 0x22, 0x4a, 0x4d, 0x2c, 0x22, 0x9a, 0x92, 0x2c, 0x2c, 0x4a, 0x2c, 0x2c, 0x2c, 0xae, 0x22, 0x2c, 0x22, 0xae, 0x22, 0x2c, 0x22},
++    {0x33, 0x33, 0x33, 0xcc, 0xb1, 0xaa, 0xac, 0xcd, 0xaa, 0x4a, 0xac, 0x2d, 0xb4, 0x4a, 0xac, 0xdb, 0xb4, 0x4a, 0xad, 0xdb, 0xb4, 0x4a, 0xad, 0xdb, 0xb4, 0x4a, 0xa9, 0x2b, 0x1a, 0xaa, 0xa9, 0x2b},
++    {0x22, 0x44, 0x4a, 0xaa, 0x22, 0x4a, 0xaa, 0xaa, 0x2d, 0x2a, 0xa1, 0xaa, 0x22, 0x2a, 0xaa, 0xaa, 0x22, 0x2a, 0xbe, 0xa3, 0x22, 0x24, 0x1e, 0xac, 0x22, 0x22, 0x1e, 0xbc, 0x22, 0x22, 0xbe, 0x5c},
++    {0x4c, 0xcc, 0xce, 0xec, 0xa3, 0xdc, 0x5e, 0x75, 0x4a, 0x4c, 0x5e, 0x7e, 0xaa, 0x4a, 0x57, 0x7e, 0xaa, 0xaa, 0xe7, 0x7e, 0x55, 0xda, 0x5e, 0xe7, 0x5e, 0xda, 0x5e, 0xe7, 0xae, 0xaa, 0x4e, 0xee},
++};
