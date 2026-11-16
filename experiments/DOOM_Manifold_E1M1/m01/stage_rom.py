@@ -2980,6 +2980,36 @@ def m14_monsters(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     death respawns at the level start with 100% health.
     """
     import re
+    # ---- collision.c: line of sight (Doom P_CheckSight equivalent): walk the cells along the
+    # monster->player line, fail on a solid wall crossing or a closed sector (door shut)
+    c=out/"src/collision.c"; t=c.read_text()
+    t+="""
+u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by) {
+    portal_map* mp = (portal_map*)cur_portal_map;
+    s16 cur = as;
+    s32 dx = bx - ax, dy = by - ay;
+    u16 len = (u16)fastLength(dx, dy);
+    u16 n = len / 24 + 1;
+    s16 px = ax, py = ay;
+    for (u16 i = 1; i <= n; i++) {
+        s16 nx = ax + (s16)(dx * i / n), ny = ay + (s16)(dy * i / n);
+        const s16* sg = &e1_block_segs[e1_block_offsets[cur] * 5];
+        u16 k = e1_block_offsets[cur + 1] - e1_block_offsets[cur];
+        for (; k; k--, sg += 5) if (manifold_step_crosses(px, py, nx, ny, sg)) return 0;
+        if (!within_sector(FIX32(nx), FIX32(ny), cur)) {
+            s16 nc = manifold_locate2(FIX32(nx), FIX32(ny), cur);
+            if (nc < 0) return 0;
+            u16 g = sector_group(nc, mp);
+            if (get_sector_group_ceil_height(g) <= get_sector_group_floor_height(g)) return 0;
+            cur = nc;
+        }
+        px = nx; py = ny;
+    }
+    return 1;
+}
+"""
+    if '#include "sector_group.h"' not in t: t='#include "sector_group.h"\n'+t
+    c.write_text(t)
     # ---- object.h: per-object runtime fields
     h=out/"src/object.h"; t=h.read_text()
     old="    uint8_t activate_tick;\n};"
@@ -3103,7 +3133,7 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
     int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
     u32 d=fastLength(dx,dy);
-    u8 seen=OBJ_LINK_DEREF(cur_obj).seen;
+    u8 seen=OBJ_LINK_DEREF(cur_obj).seen; { extern u8 m14_los(s16 ax, s16 ay, u16 as, s16 bx, s16 by); if (!seen && d < 2048) seen = m14_los(F32_toInt(OBJ_LINK_DEREF(cur_obj).x), F32_toInt(OBJ_LINK_DEREF(cur_obj).y), cur_sector, F32_toInt(cur_player_pos.x), F32_toInt(cur_player_pos.y)); }
     OBJ_LINK_DEREF(cur_obj).seen=0;
     u16 cool=OBJ_LINK_DEREF(cur_obj).cool;
     cool = (cool>last_frame_ticks) ? (cool-last_frame_ticks) : 0;
