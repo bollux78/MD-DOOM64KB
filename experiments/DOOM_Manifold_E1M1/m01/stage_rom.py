@@ -3321,6 +3321,17 @@ void m14_hit_object(object_link o, u16 sector) {
 }
 """
     o.write_text(t)
+    # r071: (1) shots must pass through sprites that do not cover the crosshair row (corpses lying in front of a
+    #       monster used to swallow the hit); (2) monsters used the wrong z unit for the step-height test (nukage pits blocked them)
+    dc=out/"src/draw.c"; d=dc.read_text()
+    o1="        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2)) hit_center=1;"
+    assert d.count(o1)==1
+    d=d.replace(o1,"        if (x>=(RENDER_WIDTH/2-2) && x<=(RENDER_WIDTH/2+2) && col_top<72+28 && col_bot>72-28) hit_center=1;")
+    dc.write_text(d)
+    t=o.read_text()
+    o2="    s32 cur_obj_z = (cur_sector_height<<(FIX32_FRAC_BITS-4));"
+    assert t.count(o2)==1
+    o.write_text(t.replace(o2,"    s32 cur_obj_z = cur_sector_height;      /* same unit as the player's feet (floor<<4) */"))
     # ---- game.c: damage instead of instant kill, respawn on death
     g=out/"src/game.c"; t=g.read_text()
     old="free_object(sprite_on_center_col, center_object_sector);"
