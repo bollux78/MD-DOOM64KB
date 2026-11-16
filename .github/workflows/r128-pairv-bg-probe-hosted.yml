@@ -56,3 +56,10 @@ jobs:
             stat --printf='%n %s bytes\n' "$rom"
             sha256sum "$rom"
           done
+      - name: Upload console-test ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: doom-md-r128-shareware-bg-probe
+          path: ${{ runner.temp }}/r128-bg-probe/doom-md-r60-r128-all-sw-pl.bin
+          if-no-files-found: error
+          retention-days: 7
