@@ -22,11 +22,14 @@ WEAPONS = [
     ("SAW",     ["SAWGC0"], ["SAWGD0"],             34, 34, 0, "saw"),
 ]
 SOUNDS = {  # key -> (lump, max seconds @14 kHz)
-    "punch": ("DSPUNCH", 0.35), "shotgun": ("DSSHOTGN", 0.45),
-    "rocket": ("DSRLAUNC", 0.5), "saw": ("DSSAWFUL", 0.35),
+    "punch": ("DSPUNCH", 0.35), "shotgun": ("DSSHOTGN", 0.4),
+    "rocket": ("DSRLAUNC", 0.4), "saw": ("DSSAWFUL", 0.35),
+    "mpain": ("DSPOPAIN", 0.25), "mdeath": ("DSPODTH1", 0.4),
 }
+# placeholder WAV resources (were copies of select.wav = noise) replaced with the real Doom sounds
+WAV_FIX = {"enemya_wake.wav": ("DSPOSIT1", 0.6), "jump1.wav": ("DSNOWAY", 0.4), "jump2.wav": ("DSOOF", 0.4), "liftgoup.wav": ("DSPSTART", 0.5)}
 SFX_BASE = 72
-SFX_IDS = {"punch": 72, "shotgun": 73, "rocket": 74, "saw": 75}   # pistol keeps SFX_SHOTGUN_ID (69)
+SFX_IDS = {"punch": 72, "shotgun": 73, "rocket": 74, "saw": 75, "mpain": 76, "mdeath": 77}   # pistol keeps SFX_SHOTGUN_ID (69)
 
 SCALE = {"SAW": 0.66}      # too wide for 128 tiles: scale it down instead of cropping the sides
 BASE_BOTTOM = 168            # Doom status bar line: weapon art below it is hidden anyway
@@ -148,7 +151,7 @@ static void m14w_place(void) {
     VDP_clearSprites();
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
-        VDP_setSprite(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + m14w_bx, BASE_WEAPON_Y + f->dy + s->oy + m14w_by,
+        VDP_setSprite(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + m14w_bx, BASE_WEAPON_Y + 8 + f->dy + s->oy + m14w_by,
                       s->size, TILE_ATTR_FULL(PAL0, 0, 0, 0, tile));
         tile += s->nt;
     }
@@ -162,7 +165,7 @@ void set_weapon_sprite_position_offset(s16 offX, s16 offY) {
     const m14w_frame *f = m14w_shown; m14w_bx = offX; m14w_by = offY; if (!f) return;
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
-        VDP_setSpritePosition(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + offX, BASE_WEAPON_Y + f->dy + s->oy + offY);
+        VDP_setSpritePosition(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + offX, BASE_WEAPON_Y + 8 + f->dy + s->oy + offY);
     }
     m14_sat_update(f->ns);
 }
@@ -227,7 +230,7 @@ def make_pcm(lump_data, maxsec):
 def apply(out, wad):
     import wad_textures as WT
     w = WT.Wad(wad); rgb = WT.playpal(w)
-    cut = int(os.environ.get("MANIFOLD_WPN_CUT", "8"))
+    cut = int(os.environ.get("MANIFOLD_WPN_CUT", "16"))
     ws = build(w, rgb, cut)
     tot = sum(len(f["data"]) * 4 for wp in ws for f in wp["frames"])
     p = out / "src/weapon_sprites.c"; t = p.read_text()
@@ -276,4 +279,9 @@ def apply(out, wad):
         b = make_pcm(w.lump(lump), sec); szs[k] = len(b)
         ctext += "const u8 sfx_w_%s[%d] __attribute__((aligned(256), section(\".wpndata\"))) = {%s};\nconst u16 sfx_w_%s_len = %d;\n" % (k, len(b), ",".join(str(x) for x in b), k, len(b))
     p.write_text(p.read_text() + ctext)
+    for fn, (lump, sec) in WAV_FIX.items():
+        b = make_pcm(w.lump(lump), sec)
+        with wave.open(str(out / "res/sfx" / fn), "wb") as wf:
+            wf.setnchannels(1); wf.setsampwidth(1); wf.setframerate(14000)
+            wf.writeframes(bytes(((x + 128) & 0xFF) for x in b))       # WAV 8-bit is unsigned
     print("M14 weapons: %d weapons, %d bytes of tiles, sounds %s, cut=%d" % (len(ws), tot, szs, cut))

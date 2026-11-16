@@ -72,6 +72,13 @@ TYPES = (
  (5,"BKEYA0","bluekey",0,0),
  (6,"YKEYA0","yellowkey",0,0),
  (13,"RKEYA0","redkey",0,0),
+ # M14 r057: monster animation frames (2nd walk frame, pain, one death frame), front rotation
+ (9400,"POSSC1","zombieman_w1",0,0),
+ (9402,"POSSJ0","zombieman_d0",0,0),
+ (9403,"SPOSC1","sergeant_w1",0,0),
+ (9405,"SPOSJ0","sergeant_d0",0,0),
+ (9406,"TROOC1","imp_w1",0,0),
+ (9408,"TROOK0","imp_d0",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -115,16 +122,21 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     templates=[]; mapping={}
     seen={}
     extra=grate_extra(w) if kinds_has_grates(w) else {}
+    _present={k for _x,_y,_a,k,f in lumps["THINGS"] if f&2 and not f&16}
     for kind,lump,name,width,height in TYPES:
         if lump in seen:            # several THING kinds, one sprite
             mapping[kind]=seen[lump]; continue
-        try:
-            if lump=="SPECTRE":
-                pw,ph,img=WT.patch_image(w.lump("SARGA1"))
-                img=[[(None if (x+y)&1 else v) for x,v in enumerate(row)] for y,row in enumerate(img)]
-            else:
-                pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
-        except KeyError:
+        _grp={"zombieman":3004,"sergeant":9,"imp":3001,"demon":3002,"spectre":58,"baron":3003}.get(name.split("_")[0])
+        if _grp is not None and _grp not in _present:      # r057: monster not in this map -> empty sprite (saves map ROM)
+            _l=w.lump("SARGA1" if lump=="SPECTRE" else lump); import struct as _st; pw,ph=_st.unpack('<hh',_l[:4]); img=[[None]*pw for _ in range(ph)]   # keep the true size: object_types lives in common code
+        else:
+          try:
+              if lump=="SPECTRE":
+                  pw,ph,img=WT.patch_image(w.lump("SARGA1"))
+                  img=[[(None if (x+y)&1 else v) for x,v in enumerate(row)] for y,row in enumerate(img)]
+              else:
+                  pw,ph,img=extra[lump] if lump in extra else WT.patch_image(w.lump(lump))
+          except KeyError:
             print("M12 skipped missing patch:",lump)
             continue
         if not 0<pw<=512 or not 0<ph<=512: raise ValueError("Invalid patch dimensions")
@@ -151,7 +163,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 lines.append(f"static const u8 {b}[] = {{{','.join(map(str,texels))}}};")
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}")
             else: cols.append("{.num_spans=0,.spans=0,.texels=0}")
-        lines.append(f"const rle_sprite {ident} = {{.num_columns=64,.columns={{")
+        lines.append(f"const rle_sprite __attribute__((section(\".rodata.m12hdr\"))) {ident} = {{.num_columns=64,.columns={{")
         lines.append(",\n".join(cols))
         lines.append("}};")
         templates.append((ident,name,width,height))

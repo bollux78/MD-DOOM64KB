@@ -3084,10 +3084,31 @@ extern u8 m14_player_dead_flag;
 extern void m14_player_damage(u16 dmg);
 static u8 m14_force_wake;
 static u8 m14_kind(u8 t) {
-    if (t==M14_ID_ZOMBIEMAN || t==M14_ID_ZOMBIEMAN_ATK) return 1;
-    if (t==M14_ID_SERGEANT || t==M14_ID_SERGEANT_ATK) return 2;
-    if (t==M14_ID_IMP || t==M14_ID_IMP_ATK) return 3;
+    if (t==M14_ID_ZOMBIEMAN || t==M14_ID_ZOMBIEMAN_ATK || t==M14_ID_ZOMBIEMAN_W1) return 1;
+    if (t==M14_ID_SERGEANT || t==M14_ID_SERGEANT_ATK || t==M14_ID_SERGEANT_W1) return 2;
+    if (t==M14_ID_IMP || t==M14_ID_IMP_ATK || t==M14_ID_IMP_W1) return 3;
     return 0;
+}
+extern u32 last_frame_ticks; extern void play_sfx(u8 id, u8 priority);
+/* r057 animation: walk A,B,C,D (Doom run frames, 4 tics = 34/300 s each), pain, death sequence */
+static const u8 m14_walk1[4]={0,M14_ID_ZOMBIEMAN_W1,M14_ID_SERGEANT_W1,M14_ID_IMP_W1};
+static const u8 m14_pain_id[4]={0,M14_ID_ZOMBIEMAN,M14_ID_SERGEANT,M14_ID_IMP};   /* pain: stands still (no pain sprite: map ROM budget) */
+static const u8 m14_death0[4]={0,M14_ID_ZOMBIEMAN_D0,M14_ID_SERGEANT_D0,M14_ID_IMP_D0};
+static u8 m14_wf[128]; static s16 m14_wt[128]; static s16 m14_pt[128];
+typedef struct { u8 link; u8 frame; u8 k; u16 sector; s16 left; } m14_death_t;
+static m14_death_t m14dx[12]; static u8 m14dx_n;
+void m14_death_tick(void) {
+    s16 dt = last_frame_ticks > 300 ? 300 : last_frame_ticks;
+    for (u8 i = 0; i < m14dx_n; ) {
+        m14_death_t* e = &m14dx[i]; u8 done = 0;
+        e->left -= dt;
+        while (e->left <= 0 && !done) {
+            e->left += 86; e->frame++;                                   /* Doom death frames: 5 tics */
+            if (e->frame >= 1) { { static const u8 dd[4]={0,M14_ID_ZOMBIEMAN_DEAD,M14_ID_SERGEANT_DEAD,M14_ID_IMP_DEAD}; DEC_LINK_DEREF(e->link).object_type = dd[e->k]; } done = 1; }
+            else DEC_LINK_DEREF(e->link).object_type = m14_death0[e->k] + e->frame;
+        }
+        if (done) m14dx[i] = m14dx[--m14dx_n]; else i++;
+    }
 }
 static const u8 m14_base_id[4]={0,M14_ID_ZOMBIEMAN,M14_ID_SERGEANT,M14_ID_IMP};
 static const u8 m14_atk_id[4]={0,M14_ID_ZOMBIEMAN_ATK,M14_ID_SERGEANT_ATK,M14_ID_IMP_ATK};
@@ -3168,7 +3189,10 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     u8 t=OBJ_LINK_DEREF(cur_obj).object_type;
     u8 k=m14_kind(t);
     if (!k) return follow_player_orig(cur_obj, cur_sector);
-    OBJ_LINK_DEREF(cur_obj).object_type=m14_base_id[k];      /* end attack flash */
+    { u8 L=cur_obj&127;                                        /* walk animation + pain */
+      m14_wt[L]-=2*(s16)last_frame_ticks; if (m14_wt[L]<=0) { m14_wt[L]=68; m14_wf[L]^=1; }
+      if (m14_pt[L]>0) { m14_pt[L]-=2*(s16)last_frame_ticks; OBJ_LINK_DEREF(cur_obj).object_type=m14_pain_id[k]; return 1; }
+      OBJ_LINK_DEREF(cur_obj).object_type = m14_wf[L] ? (u8)(m14_walk1[k]+m14_wf[L]-1) : m14_base_id[k]; }
     int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(cur_obj).x);
     int dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(cur_obj).y);
     u32 d=fastLength(dx,dy);
@@ -3206,17 +3230,21 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
     return 1;
 }
 
+static u8 m14_dx_free(void) { return m14dx_n < 12; }
 void m14_hit_object(object_link o, u16 sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(o).object_type);
     if (!k) { free_object(o, sector); return; }
     u8 dmg=5*((random()%3)+1);
     if (dmg>=OBJ_LINK_DEREF(o).health) {
-        alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
-                                   OBJ_LINK_DEREF(o).z, m14_dead_id[k]);
+        decoration_link dl = alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
+                                   OBJ_LINK_DEREF(o).z, m14_dx_free() ? m14_death0[k] : m14_dead_id[k]);
+        if (dl != NULL_DEC_LINK && m14dx_n < 12) { m14_death_t* e=&m14dx[m14dx_n++]; e->link=dl; e->frame=0; e->k=k; e->sector=sector; e->left=43; }
+        play_sfx(77, 6);
         free_object(o, sector);
     } else {
         OBJ_LINK_DEREF(o).health-=dmg;
         OBJ_LINK_DEREF(o).current_state=2;
+        if ((random()&255) < (k==3?200:200)) { m14_pt[o&127]=26; play_sfx(76, 5); }   /* Doom painchance 200/256; pain state ~3 tics */
     }
 }
 """
@@ -3505,7 +3533,7 @@ void m14_expl_tick(void) {
     t=t.replace(a,"        if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); m14_shoot_dec(sprite_on_center_col, center_object_sector); }\n"+a,1)
     a="m14_hazards(); m14_world_tick(); }"
     assert t.count(a)==1
-    t=t.replace(a,"m14_hazards(); m14_world_tick(); { extern void m14_tint_tick(void); extern void m14_expl_tick(void); m14_tint_tick(); m14_expl_tick(); } }",1)
+    t=t.replace(a,"m14_hazards(); m14_world_tick(); { extern void m14_tint_tick(void); extern void m14_expl_tick(void); m14_tint_tick(); m14_expl_tick(); { extern void m14_death_tick(void); m14_death_tick(); } } }",1)
     g.write_text(t)
     print("M14 hazards: damaging floors + radiation suit, 255 decorations")
 
