@@ -358,7 +358,7 @@ def install_templates(out,templates):
     (Path(out)/"src/m14_ids.h").write_text("\n".join(hdr)+"\n")
     _hp=int(os.environ.get('MANIFOLD_OBJ_HEIGHT_PCT','100'))
     for ident,name,width,height in templates:
-        if mon and name in ("zombieman","sergeant","imp","demon","spectre","baron"):
+        if mon and name.split("_")[0] in ("zombieman","sergeant","imp","demon","spectre","baron") and name.split("_")[-1] not in ("dh","d0","dead"):   # r070: EVERY live frame is an OBJECT (shots only hit OBJECT sprites)
             _inact = os.environ.get("MANIFOLD_MONSTERS_INACTIVE","0")=="1"
             _ist = 0 if _inact else 1
             _typ = "DECORATION" if _inact else "OBJECT"

@@ -3306,7 +3306,7 @@ static u8 m14_dx_free(void) { return m14dx_n < 12; }
 void m14_hit_object(object_link o, u16 sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(o).object_type);
     if (!k) { free_object(o, sector); return; }
-    extern u8 m14w_pellets(void); u16 dmg=0; for (u8 pi=0, pn=m14w_pellets(); pi<(pn?pn:1); pi++) dmg+=5*((random()%3)+1);   /* every pellet of the current weapon hits (r069) */
+    extern u8 m14w_pellets(void); u16 dmg=0; for (u8 pi=0, pn=m14w_pellets(); pi<(pn==3?6:(pn?pn:1)); pi++) dmg+=5*((random()%3)+1);   /* every pellet of the current weapon hits (r069) */
     if (dmg>=OBJ_LINK_DEREF(o).health) {
         decoration_link dl = alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
                                    OBJ_LINK_DEREF(o).z, m14_dx_free() ? m14_dseq[k][0] : m14_dead_id[k]);
