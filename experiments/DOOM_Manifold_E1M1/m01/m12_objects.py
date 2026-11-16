@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 import os
 import wad_textures as WT
+_MIXC={}
 
 TYPES = (
  (2035,"BAR1A0","barrel",32,56),
@@ -148,7 +149,17 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         for x in range(64):
             seq=[img[min(ph-1,y*ph//64)][min(pw-1,x*pw//64)] for y in range(64)]
             # Manifold draw_col writes a byte encoding TWO horizontal 4bpp pixels.
-            seq=[None if p is None else (lambda c: (c << 4) | c)(WT.nearest(palette,rgb[p])) for p in seq]
+            # r060: like the wall textures, mix two palette colours per byte (alternating screen columns)
+            def _px(p, _m=os.environ.get("MANIFOLD_SPRITE_MIX","1")=="1"):
+                if p is None: return None
+                k=(rgb[p],_m)
+                if k not in _MIXC:
+                    if _m:
+                        a_,b_=WT.nearest_pair(palette,rgb[p]); _MIXC[k]=(a_<<4)|b_
+                    else:
+                        c=WT.nearest(palette,rgb[p]); _MIXC[k]=(c<<4)|c
+                return _MIXC[k]
+            seq=[_px(p) for p in seq]
             spans=[];texels=[];y=0
             while y<64:
                 skip=0
