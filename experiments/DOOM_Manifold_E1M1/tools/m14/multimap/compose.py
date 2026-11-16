@@ -27,10 +27,15 @@ for m, label in MAPS:
     blocks.append(b)
 assert COMMON_ORG + len(common) <= MAP_ORG, len(common)
 rom_tail = b""; banks = []
+subprocess.check_call(["python3", "gen_credits.py"], stdout=subprocess.DEVNULL)
+credits = open("credits.bin", "rb").read()
 for b in blocks:
     banks.append((MAP_ORG + len(rom_tail)) // BANK)
     n = (len(b) + BANK - 1) // BANK
     rom_tail += b + b"\xff" * (n * BANK - len(b))
+CREDITS_BANK = (MAP_ORG + len(rom_tail)) // BANK
+assert len(credits) <= BANK
+rom_tail += credits + b"\xff" * (BANK - len(credits))      # one bank after the maps: menu image blobs (title, credits x2, end)
 body = bytearray(b"\xff" * MAP_ORG) ; body[COMMON_ORG:COMMON_ORG + len(common)] = common
 INTER_ORG = 0x2F0000          # intermission screen blob (gen_inter.py), visible in slot 5 (bank 5)
 inter = open("inter.bin", "rb").read()
@@ -42,7 +47,7 @@ assert INTER_ORG + len(inter) <= INTER_MUS_ORG and INTER_MUS_ORG + len(_im) <= M
 body[INTER_MUS_ORG:INTER_MUS_ORG + len(_im)] = _im
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
-h = ['#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
+h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; };', 'static const struct map_entry maps[] = {']
 for (m, label), bk in zip(MAPS, banks): h.append('  {"%s", %d},' % (label, bk))
 h.append('};')

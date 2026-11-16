@@ -142,6 +142,18 @@ static void clear_plane(void) {
     for (i = 0; i < 64 * 32; i++) VDP_DATA = 0;
 }
 static void set_color(int idx, u16 c) { cram_w(idx * 2); VDP_DATA = c; }
+/* full-screen picture n from the credits bank (slot 6): 0 title, 1 credits, 2 disclaimer, 3 end. blob = pal[64] attr[1120] tiles[1120*16] */
+static void show_image(int n) {
+    const u16 *ib; int i, r, c;
+    *(volatile u8 *)0xA130FD = CREDITS_BANK;
+    ib = (const u16 *)(0x300000UL + (u32)n * 38208UL);
+    vreg(1, 0x04);
+    vram_w(96 * 32); for (i = 0; i < 1120 * 16; i++) VDP_DATA = ib[64 + 1120 + i];
+    cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = ib[i];
+    clear_plane();
+    for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));
+    vreg(7, 0x00); vreg(1, 0x44);
+}
 
 static void set_banks(int mapbank);
 static void bank_test(int k) {
@@ -247,16 +259,6 @@ int main(void) {
         for (i = 0; i < 1120 * 16; i++) VDP_DATA = ib[64 + 1120 + i];
         cram_w(0);
         for (i = 0; i < 64; i++) VDP_DATA = ib[i];
-    } else {
-    for (i = 0; i < 1120 * 8; i++) { VDP_DATA = title_tiles[i] >> 16; VDP_DATA = title_tiles[i]; }
-    cram_w(0);
-    for (i = 0; i < 32; i++) VDP_DATA = title_pal[i];
-    }
-    if (!inter) {
-    for (i = 0; i < 32; i++) VDP_DATA = 0;
-    set_color(32 + 1, 0x0EEE);   /* palette 2: white text   */
-    set_color(48 + 1, 0x00EE);   /* palette 3: yellow (selected/heading) */
-    set_color(48 + 15, 0x0000);  /* backdrop (R7 = pal 3 idx 15) */
     }
 
     if (inter) {
@@ -272,15 +274,15 @@ int main(void) {
         for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
         while (pad_read() & 0xFF) wait_vblank();
         if (inter_next >= 0) { vreg(1, 0x04); launch(inter_next); }
-        /* episode end: fall through to the level list */
+        /* episode end: the end picture, then the level list */
+        show_image(3);
+        while (pad_read() & 0xFF) wait_vblank();
+        for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
+        while (pad_read() & 0xFF) wait_vblank();
     }
     /* title screen */
     if (!skip_title) {
-    clear_plane();
-    { int r, c; for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, title_attr[r * 40 + c] | (96 + r * 40 + c)); }
-    text(14, 25, "PRESS START", 2);
-    vreg(7, 0x00);   /* title: backdrop = palette 0 colour 0 (same as picture colour 0) */
-    vreg(1, 0x44);
+    show_image(0);
     music_start();
     while (pad_read() & 0xFF) wait_vblank();
     for (;;) { wait_vblank(); if (pad_read() & 0xC0) break; }
@@ -289,17 +291,20 @@ int main(void) {
 
     /* level menu */
     set_color(32 + 1, 0x0EEE); set_color(48 + 1, 0x00EE); set_color(48 + 15, 0x0000);   /* text palettes (also after the intermission) */
-    vreg(7, 0x3F);
-    clear_plane();
-    text(9, 4, "MANIFOLD DOOM - E1M1..E1M9", 3);
-#ifdef BUILD_TAG
-    text(2, 1, BUILD_TAG, 2);
-#endif
-    text(13, 6, "SELECIONE A FASE", 3);
     for (;;) {
-        for (i = 0; i < MAP_COUNT; i++) {
+      menu_draw:
+        set_color(0, 0x0000); set_color(32 + 1, 0x0EEE); set_color(48 + 1, 0x00EE); set_color(48 + 15, 0x0000);
+        vreg(7, 0x3F);
+        clear_plane();
+        text(9, 4, "MANIFOLD DOOM - E1M1..E1M9", 3);
+#ifdef BUILD_TAG
+        text(2, 1, BUILD_TAG, 2);
+#endif
+        text(13, 6, "SELECIONE A FASE", 3);
+        for (;;) {
+        for (i = 0; i <= MAP_COUNT; i++) {
             text(10, 9 + i * 1, i == sel ? "> " : "  ", 3);
-            text(12, 9 + i * 1, maps[i].name, i == sel ? 3 : 2);
+            text(12, 9 + i * 1, i < MAP_COUNT ? maps[i].name : "CREDITS", i == sel ? 3 : 2);
         }
         text(8, 23, "CIMA/BAIXO: ESCOLHER", 2);
         text(8, 25, "START: JOGAR", 2);
@@ -310,12 +315,25 @@ int main(void) {
         pad = pad_read();
         if (pad != last) {
             prev = sel;
-            if (pad & 1) sel = sel ? sel - 1 : MAP_COUNT - 1;
-            if (pad & 2) sel = (sel + 1 < MAP_COUNT) ? sel + 1 : 0;
-            if (pad & 0x40) { vreg(1, 0x04); bank_test(sel); }
-            if (pad & 0xA0) { vreg(1, 0x04); launch(sel); }
+            if (pad & 1) sel = sel ? sel - 1 : MAP_COUNT;
+            if (pad & 2) sel = (sel < MAP_COUNT) ? sel + 1 : 0;
+            if (pad & 0x40 && sel < MAP_COUNT) { vreg(1, 0x04); bank_test(sel); }
+            if (pad & 0xA0) {
+                if (sel < MAP_COUNT) { vreg(1, 0x04); launch(sel); }
+                else {   /* CREDITS: DoomCREDIT10 -> Disclaimer and Credits -> EndMD2 -> level menu; any button advances */
+                    static const unsigned char order[3] = { 1, 2, 3 };
+                    for (i = 0; i < 3; i++) {
+                        while (pad_read() & 0xFF) wait_vblank();
+                        show_image(order[i]);
+                        for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
+                    }
+                    while (pad_read() & 0xFF) wait_vblank();
+                    last = 0xFFFF; goto menu_draw;
+                }
+            }
             (void)prev;
         }
         last = pad;
+        }
     }
 }

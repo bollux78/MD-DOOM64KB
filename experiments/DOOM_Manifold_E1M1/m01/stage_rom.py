@@ -4004,7 +4004,7 @@ def m14_input_fix(out):
     b=out/"src/doom_statusbar.c"; t=b.read_text()
     old="(JOY_readJoypad(JOY_1) & BUTTON_A)"
     assert t.count(old)==1
-    t=t.replace(old,"(JOY_readJoypad(JOY_1) & (BUTTON_A|BUTTON_C))")
+    t=t.replace(old,"(JOY_readJoypad(JOY_1) & BUTTON_B)")
     b.write_text(t)
 def m14_weapon_fix(out):
     """M14: make the weapon sprites actually show.

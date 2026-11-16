@@ -272,6 +272,11 @@ def apply(out, wad):
     k = "        if(shooting == 0 && joy_button_pressed(BUTTON_C)) { shooting = 1;}\n"
     assert t.count(k) == 1
     t = t.replace(k, "")          # this re-armed shooting forever: held button never fired again (now: auto-fire)
+    # r059: A = switch weapon, B = fire, C = use / open doors
+    t = t.replace("BUTTON_B", "@@B@@").replace("BUTTON_C", "BUTTON_B").replace("@@B@@", "BUTTON_C")
+    k = "s16 bobOffY = gun_bobs[idx].y<<1;"
+    assert t.count(k) == 1
+    t = t.replace(k, k + " if (bobOffY < 0) bobOffY = 0;")      # bob only downward (under the HUD)
     g.write_text(t)
     # sounds
     szs = {}; ctext = ""
