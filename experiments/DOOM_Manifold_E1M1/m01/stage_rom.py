@@ -4437,6 +4437,24 @@ static inline u16 m14_divu16(u32 n, u16 dv) { __asm volatile("divu.w %1,%0" : "+
             if (pix) {""","rle sprite draw")
     print("r077 perf pass applied")
 
+def m14_ai_throttle(out):
+    """r079: chase/attack AI runs every 3rd frame (instead of every 2nd) while the frame time is long
+    (> 36 ticks = under ~8 FPS, i.e. heavy combat). Every per-action quantity that assumed 'every other frame'
+    (step length, attack/pain timers, cooldown) is scaled by the period m14_ai_p, so game speed is unchanged;
+    the step is capped at 32 units to keep the swept collision test safe."""
+    o=out/"src/object.c"; t=o.read_text()
+    def rep(old,new,n=1):
+        nonlocal t
+        if t.count(old)!=n: raise ValueError("m14_ai_throttle anchor (%d): %s"%(t.count(old),old[:50]))
+        t=t.replace(old,new)
+    rep("static fix32 m14_speed_for(u8 type) {","u8 m14_ai_p = 2;\nstatic fix32 m14_speed_for(u8 type) {")
+    rep("    return FIX32(st*2);","    { u32 st2 = st * m14_ai_p; if (st2 > 32) st2 = 32; return FIX32(st2); }")
+    rep("(2*(s16)last_frame_ticks+3)/4","((s16)m14_ai_p*(s16)last_frame_ticks+3)/4")
+    rep("cool = (cool>2*last_frame_ticks) ? (cool-2*last_frame_ticks) : 0;","{ u32 el = (u32)m14_ai_p*last_frame_ticks; cool = (cool>el) ? (cool-el) : 0; }")
+    rep("(object_state_machines[state_idx].action == &look_for_player) ? 3 : 1;","(object_state_machines[state_idx].action == &look_for_player) ? 3 : (object_state_machines[state_idx].action == &follow_player ? m14_ai_p - 1 : 1);")
+    rep("void process_all_objects(uint32_t cur_frame) {","void process_all_objects(uint32_t cur_frame) {\n    m14_ai_p = (last_frame_ticks > 36) ? 3 : 2;")
+    o.write_text(t); print("r079 AI throttle")
+
 def m14_fps_only(out):
     """r078: FPS counter only (no ROM-name tag, no console). Text plane write is skipped unless the
     shown value changed, and the value is sampled every 8 frames, so the per-frame cost is a counter test."""
@@ -4891,6 +4909,8 @@ def stage(src, wad, out, control=False):
         import m14_wpn_gen; m14_wpn_gen.apply(out,wad)
     if os.environ.get("MANIFOLD_PERF","1")=="1":
         m14_perf(out)
+    if os.environ.get("MANIFOLD_AI_THROTTLE","0")=="1":
+        m14_ai_throttle(out)
     if os.environ.get("MANIFOLD_FPS_ONLY","0")=="1":
         m14_fps_only(out)
     (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
