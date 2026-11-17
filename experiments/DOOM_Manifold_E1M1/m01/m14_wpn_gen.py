@@ -21,6 +21,16 @@ WEAPONS = [
     ("ROCKET",  ["MISGA0"], ["MISGB0", "MISFB0"],  171, 60, 1, "rocket"),
     ("SAW",     ["SAWGC0"], ["SAWGD0"],             34, 34, 0, "saw"),
 ]
+if os.environ.get("MANIFOLD_WPN_GAME") == "heretic":
+    # Heretic shareware: slots keep the Doom behaviour classes (0 melee, 1 single, 2 spread, 3 rapid, 4 projectile, 5 melee)
+    WEAPONS = [
+        ("FIST",    ["STFFA0"], ["STFFC0"],            189, 86, 0, "punch"),    # Staff
+        ("PISTOL",  ["GWNDA0"], ["GWNDC0"],            120, 60, 1, "pistol"),   # Elven Wand
+        ("SHOTGUN", ["CRBWA0"], ["CRBWD0"],            317, 60, 3, "shotgun"),  # Ethereal Crossbow
+        ("CHAINGUN",["BLSRA0"], ["BLSRC0"],             34, 17, 1, "pistol"),   # Dragon Claw
+        ("ROCKET",  ["GWNDA0"], ["GWNDC0"],            171, 60, 1, "rocket"),   # placeholder (small art) until the Hellstaff (registered only)
+        ("SAW",     ["GAUNA0"], ["GAUNB0"],             34, 34, 0, "saw"),      # Gauntlets of the Necromancer
+    ]
 SOUNDS = {  # key -> (lump, max seconds @14 kHz)
     "punch": ("DSPUNCH", 0.35), "shotgun": ("DSSHOTGN", 0.4),
     "rocket": ("DSRLAUNC", 0.4), "saw": ("DSSAWFUL", 0.35),
@@ -28,10 +38,14 @@ SOUNDS = {  # key -> (lump, max seconds @14 kHz)
 }
 # placeholder WAV resources (were copies of select.wav = noise) replaced with the real Doom sounds
 WAV_FIX = {"enemya_wake.wav": ("DSPOSIT1", 0.6), "jump1.wav": ("DSNOWAY", 0.4), "jump2.wav": ("DSOOF", 0.4), "liftgoup.wav": ("DSPSTART", 0.5)}
+if os.environ.get("MANIFOLD_WPN_GAME") == "heretic":
+    SOUNDS = {"punch": ("STFHIT", 0.35), "shotgun": ("BOWSHT", 0.4), "rocket": ("BOWSHT", 0.25), "saw": ("GNTFUL", 0.35),
+              "mpain": ("CHICPAI", 0.25), "mdeath": ("IMPDTH", 0.4)}
+    WAV_FIX = {"enemya_wake.wav": ("IMPSIT", 0.6), "jump1.wav": ("PLROOF", 0.4), "jump2.wav": ("PLROOF", 0.4), "liftgoup.wav": ("DORMOV", 0.5)}
 SFX_BASE = 72
 SFX_IDS = {"punch": 72, "shotgun": 73, "rocket": 74, "saw": 75, "mpain": 76, "mdeath": 77}   # pistol keeps SFX_SHOTGUN_ID (69)
 
-SCALE = {"SAW": 0.66}      # too wide for 128 tiles: scale it down instead of cropping the sides
+SCALE = {"SAW": 0.5 if os.environ.get("MANIFOLD_WPN_GAME") == "heretic" else 0.66}      # too wide for 128 tiles: scale it down instead of cropping the sides
 BASE_BOTTOM = 168            # Doom status bar line: weapon art below it is hidden anyway
 PIS_X0, PIS_Y0 = 122, 104    # origin that the original pistol canvas had (dx,dy = X0-122, Y0-104)
 A_TILES, B_TILES = 128, 104
@@ -144,9 +158,10 @@ def build(w, rgb, cut, sheet=None):
         if sheet_pal:
             pal = list(sheet_pal) + [(0, 0, 0)] * (15 - len(sheet_pal)); pal_img = None
         else:
-            pal_img = sheet.quantize(colors=9, method=Image.MEDIANCUT)
-            pal = (pal_img.getpalette() + [0] * 27)[:27]
-            pal = [tuple(pal[i * 3:i * 3 + 3]) for i in range(9)]
+            NC = 15 if os.environ.get("MANIFOLD_WPN_GAME") else 9
+            pal_img = sheet.quantize(colors=NC, method=Image.MEDIANCUT)
+            pal = (pal_img.getpalette() + [0] * (NC * 3))[:NC * 3]
+            pal = [tuple(pal[i * 3:i * 3 + 3]) for i in range(NC)]
         def conv(cv, cx0, cy0):
             tw, th = cv.width // 8, cv.height // 8
             flat = Image.new("RGB", cv.size, (0, 0, 0)); flat.paste(cv, (0, 0), cv)
@@ -374,7 +389,7 @@ def apply(out, wad):
     k = "s16 bobOffY = gun_bobs[idx].y<<1;"
     assert t.count(k) == 1
     t = t.replace(k, k + " if (bobOffY < 0) bobOffY = 0;")      # bob only downward (under the HUD)
-    if os.environ.get("MANIFOLD_WPN_SHEET"):       # the 15-colour weapon palette now occupies PAL0 entry 10, which was the backdrop: backdrop -> entry 0 (black)
+    if os.environ.get("MANIFOLD_WPN_SHEET") or os.environ.get("MANIFOLD_WPN_GAME"):       # the 15-colour weapon palette now occupies PAL0 entry 10, which was the backdrop: backdrop -> entry 0 (black)
         for x, y in (("VDP_setBackgroundColor(10);", "VDP_setBackgroundColor(0);"), ("PAL_setPalette(PAL0, shotgun.palette->data, DMA);", "PAL_setPalette(PAL0, shotgun.palette->data, DMA); PAL_setColor(0, 0);")):
             assert t.count(x) == 1, x
             t = t.replace(x, y)
