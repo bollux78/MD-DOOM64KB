@@ -147,6 +147,7 @@ SECTIONS
   } > rom
   .mapextra : { *(.mapextra) } > rom      /* monster animation frames: right after the map objects (r067) */
   .wpndata 0x00200000 : { *(.wpndata) } > rom      /* weapon tiles + sounds: ONE copy in bank 4, shared by every map (r067) */
+  .wpndata2 0x0021C000 : { *(.wpndata2) } > rom      /* extra weapon animation frames (free area after the intermission music) */
   .maphead 0x00300000 :
   {
     KEEP(*(.text.keepboot))

@@ -4531,7 +4531,7 @@ def m14_projectiles(out):
     Projectiles are decorations moved by a small table; walls stop them (collision), they explode with a 3-frame
     animation. Rocket: direct hit + 128-unit splash on monsters/barrels/player."""
     o=out/"src/object.c"; t=o.read_text()
-    for x,y in (("m14dx[12]","m14dx[8]"),("m14dx_n < 12","m14dx_n < 8"),("m14x[10]","m14x[5]"),("m14x_n >= 10","m14x_n >= 5")):   # RAM: free bytes for the projectile table
+    for x,y in (("m14dx[12]","m14dx[7]"),("m14dx_n < 12","m14dx_n < 7"),("m14x[10]","m14x[5]"),("m14x_n >= 10","m14x_n >= 5")):   # RAM: free bytes for the projectile table
         if x not in t: raise ValueError("proj ram anchor "+x)
         t=t.replace(x,y)
     a="void m14_hit_object(object_link o, u16 sector) {"

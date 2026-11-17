@@ -17,12 +17,18 @@ MAP_ORG = 0x300000          # CPU address of the map block (slots 6..7)
 FILE_BODY = 0x280000        # file bytes before the first map bank: banks 0..3 menu+common, bank 4 weapons+intermission
 WPN_ORG = 0x200000
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m14x/manifold-doom-menu.bin"
-common = None; blocks = []; wpn = None
+common = None; blocks = []; wpn = None; wpn2 = None
 for m, label in MAPS:
     o = "/tmp/m12/mm_%s/out/release/rom.out" % m
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".common", o, "/tmp/m14x/_c.bin"])
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".mapextra", o, "/tmp/m14x/_m.bin"])
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".wpndata", o, "/tmp/m14x/_w.bin"])
+    import os as _os
+    if _os.path.exists("/tmp/m14x/_w2.bin"): _os.remove("/tmp/m14x/_w2.bin")
+    subprocess.call([T+"objcopy", "-O", "binary", "-j", ".wpndata2", o, "/tmp/m14x/_w2.bin"], stderr=subprocess.DEVNULL)
+    w2_ = open("/tmp/m14x/_w2.bin", "rb").read() if _os.path.exists("/tmp/m14x/_w2.bin") else b""
+    if wpn2 is None: wpn2 = w2_
+    assert w2_ == wpn2, "weapon data 2 differs in " + m
     w_ = open("/tmp/m14x/_w.bin", "rb").read()
     if wpn is None: wpn = w_
     assert w_ == wpn, "weapon data differs in " + m
@@ -48,6 +54,9 @@ INTER_ORG = 0x20E000          # intermission screen blob (gen_inter.py), visible
 inter = open("inter.bin", "rb").read()
 assert COMMON_ORG + len(common) <= WPN_ORG and WPN_ORG + len(wpn) <= INTER_ORG and INTER_ORG + len(inter) <= FILE_BODY, (len(common), len(inter), len(wpn))
 body[WPN_ORG:WPN_ORG + len(wpn)] = wpn
+WPN2_ORG = 0x21C000
+assert WPN2_ORG + len(wpn2) <= FILE_BODY, len(wpn2)
+body[WPN2_ORG:WPN2_ORG + len(wpn2)] = wpn2
 body[INTER_ORG:INTER_ORG + len(inter)] = inter
 INTER_MUS_ORG = 0x218000      # compressed intermission music (gen_inter_music.py)
 _im = open("inter_music.bin", "rb").read()
