@@ -204,5 +204,11 @@ void m14_save_and_menu(void) {
         anchor + """
     { extern void m14_checkpoint_boot(void); m14_checkpoint_boot(); }""",
         "apply loaded checkpoint after player & HUD initialization")
+    # The upstream run_game emitted "game initialized!" every frame,
+    # overwriting the pause help and save/load feedback immediately.
+    text = _one(text,
+        '    console_push_message_high_priority("game initialized!", 17, 2);',
+        '    /* Native checkpoint menu owns console messages while paused. */',
+        "remove per-frame console overwrite")
     game.write_text(text)
     print("M14 native save: SGDK pause/resume + A save / B load / C level menu; X7 SRAM checkpoint")
