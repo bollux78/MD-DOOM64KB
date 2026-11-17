@@ -4284,6 +4284,98 @@ static inline __attribute__((always_inline)) Vect2D_s16 m14_tv(s16 x, s16 y) {
         t=t.replace(old,old.replace("transform_map_vert_16","m14_tv"))
     f.write_text(t); print("r076 sprite transform inlined")
 
+def m14_perf(out):
+    """r077 performance pass (same game logic, fewer cycles):
+    1. collision.c manifold_radius_blocked: reject a wall segment by bounding box BEFORE the 4-cross-product swept test
+       (it ran for every block segment of the sector on every step: 8 software 32x32 multiplies each).
+    2. doom_statusbar.c m14_world_tick: skip when the player did not move and reject trigger lines by bbox (+ step slack)
+       before the 4 software multiplies per line (it looped over every trigger line every frame).
+    3. object.c monsters: one dot product shared by in_front/view, 16-bit muls (muls.w) and divu.w for the bearing."""
+    def sub(f, old, new, what):
+        t=f.read_text()
+        if t.count(old)!=1: raise ValueError("m14_perf anchor changed (%d): %s"%(t.count(old),what))
+        f.write_text(t.replace(old,new,1))
+    c=out/"src/collision.c"
+    sub(c,"""    for (; n; n--, s += 5) {
+#if MANIFOLD_SWEPT
+        if ((cx != nx || cy != ny) && manifold_step_crosses(cx, cy, nx, ny, s)) { return 1; }
+#endif
+        s16 lo = s[0] < s[2] ? s[0] : s[2], hi = s[0] < s[2] ? s[2] : s[0];
+        if (nx < lo - MANIFOLD_R || nx > hi + MANIFOLD_R) { continue; }
+        lo = s[1] < s[3] ? s[1] : s[3]; hi = s[1] < s[3] ? s[3] : s[1];
+        if (ny < lo - MANIFOLD_R || ny > hi + MANIFOLD_R) { continue; }
+""","""    u8 moving = (cx != nx || cy != ny);
+    s16 sminx = cx < nx ? cx : nx, smaxx = cx < nx ? nx : cx;
+    s16 sminy = cy < ny ? cy : ny, smaxy = cy < ny ? ny : cy;
+    for (; n; n--, s += 5) {
+        s16 xlo = s[0] < s[2] ? s[0] : s[2], xhi = s[0] < s[2] ? s[2] : s[0];
+        s16 ylo = s[1] < s[3] ? s[1] : s[3], yhi = s[1] < s[3] ? s[3] : s[1];
+#if MANIFOLD_SWEPT
+        /* r077: a step can only cross a segment whose bounding box it overlaps */
+        if (moving && !(smaxx < xlo || sminx > xhi || smaxy < ylo || sminy > yhi) && manifold_step_crosses(cx, cy, nx, ny, s)) { return 1; }
+#endif
+        if (nx < xlo - MANIFOLD_R || nx > xhi + MANIFOLD_R) { continue; }
+        if (ny < ylo - MANIFOLD_R || ny > yhi + MANIFOLD_R) { continue; }
+""","collision swept reorder")
+    d=out/"src/doom_statusbar.c"
+    sub(d,"""    if (!m14w_have) { m14w_px = px; m14w_py = py; m14w_have = 1; return; }
+    if (tr) {
+        for (s16 i = 0; i < tr[0]; i++) {
+            const s16* l = &tr[1 + i * 7];
+            s16 sp = l[4];
+            if (m14w_is_switch(sp) || (m14w_once(sp) && m14w_fired[l[6]])) continue;
+            s32 ax = l[0], ay = l[1], dx = l[2] - ax, dy = l[3] - ay;
+""","""    if (!m14w_have) { m14w_px = px; m14w_py = py; m14w_have = 1; return; }
+    s32 mvx = px - m14w_px, mvy = py - m14w_py; if (mvx < 0) mvx = -mvx; if (mvy < 0) mvy = -mvy;
+    if (!mvx && !mvy) return;                 /* r077: did not move -> no line can be crossed */
+    s32 mvm = mvx + mvy;
+    if (tr) {
+        for (s16 i = 0; i < tr[0]; i++) {
+            const s16* l = &tr[1 + i * 7];
+            s16 sp = l[4];
+            if (m14w_is_switch(sp) || (m14w_once(sp) && m14w_fired[l[6]])) continue;
+            {   /* r077: a hit needs the new position within |step| of the line segment (bbox reject before the multiplies) */
+                s32 x0 = l[0], x1 = l[2], y0 = l[1], y1 = l[3];
+                s32 lox = (x0 < x1 ? x0 : x1) - mvm, hix = (x0 < x1 ? x1 : x0) + mvm;
+                s32 loy = (y0 < y1 ? y0 : y1) - mvm, hiy = (y0 < y1 ? y1 : y0) + mvm;
+                if (px < lox || px > hix || py < loy || py > hiy) continue;
+            }
+            s32 ax = l[0], ay = l[1], dx = l[2] - ax, dy = l[3] - ay;
+""","world_tick bbox")
+    o=out/"src/object.c"
+    sub(o,"""    s32 cx = c[i], cy = c[(i + 12) & 15];
+    s32 dot = cx * dx + cy * dy, lim = (s32)d * 63;      /* cos 60 deg */
+    if (dot > lim) return 0;
+    if (dot < -lim) return 1;
+    return (cx * dy - cy * dx) > 0 ? 2 : 3;
+}""","""    s16 cx = c[i], cy = c[(i + 12) & 15];
+    s16 sx = dx > 32767 ? 32767 : (dx < -32768 ? -32768 : dx), sy = dy > 32767 ? 32767 : (dy < -32768 ? -32768 : dy);
+    s32 dot = (s32)cx * sx + (s32)cy * sy, lim = ((s32)d << 6) - (s32)d;      /* cos 60 deg; muls.w */
+    if (dot > lim) return 0;
+    if (dot < -lim) return 1;
+    return ((s32)cx * sy - (s32)cy * sx) > 0 ? 2 : 3;
+}
+/* r077: same as m14_view, also reports "player in the front 180 deg" from the same dot product */
+static u8 m14_view2(u8 a, s32 dx, s32 dy, u32 d, u8* front) {
+    static const s8 c[16]={127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49,0,49,90,117};
+    u8 i = (u8)(((a + 4) >> 3) & 15);
+    s16 cx = c[i], cy = c[(i + 12) & 15];
+    s16 sx = dx > 32767 ? 32767 : (dx < -32768 ? -32768 : dx), sy = dy > 32767 ? 32767 : (dy < -32768 ? -32768 : dy);
+    s32 dot = (s32)cx * sx + (s32)cy * sy, lim = ((s32)d << 6) - (s32)d;
+    *front = dot > 0;
+    if (dot > lim) return 0;
+    if (dot < -lim) return 1;
+    return ((s32)cx * sy - (s32)cy * sx) > 0 ? 2 : 3;
+}
+static inline u16 m14_divu16(u32 n, u16 dv) { __asm volatile("divu.w %1,%0" : "+d"(n) : "d"(dv)); return (u16)n; }""","monster view")
+    sub(o,"""    if (ay <= ax) a = (u8)((ay * 16) / ax); else a = (u8)(32 - (ax * 16) / ay);""",
+         """    if (ax > 32767) ax = 32767; if (ay > 32767) ay = 32767;
+    if (ay <= ax) a = (u8)m14_divu16((u32)ay << 4, (u16)ax); else a = (u8)(32 - m14_divu16((u32)ax << 4, (u16)ay));   /* r077: divu.w, quotient <= 16 */""","bearing")
+    sub(o,"u8 m14_front = m14_in_front(m14a&127, dx, dy) || m14d < 64;",
+         "u8 m14_vf; u8 m14_v2 = m14_view2(m14a & 127, dx, dy, m14d, &m14_vf); u8 m14_front = m14_vf || m14d < 64;","look front")
+    sub(o,"{ u8 v = m14_view(m14a & 127, dx, dy, m14d);","{ u8 v = m14_v2;","look view")
+    print("r077 perf pass applied")
+
 def m14_door_header(out):
     """r073: a door's textured upper step is anchored at the door's open height. When the room ceiling is
     higher than that (E1M7 spawn: ceiling 128, door 72) nothing was drawn above it. Repeat the door texture
@@ -4701,6 +4793,8 @@ def stage(src, wad, out, control=False):
     }
     if os.environ.get("MANIFOLD_WEAPONS","1")=="1" and os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         import m14_wpn_gen; m14_wpn_gen.apply(out,wad)
+    if os.environ.get("MANIFOLD_PERF","1")=="1":
+        m14_perf(out)
     (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
