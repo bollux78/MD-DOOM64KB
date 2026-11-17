@@ -3798,9 +3798,9 @@ def m14_ablate(out):
         if t.count("    console_tick();")!=1: raise ValueError("console_tick call changed")
         t=t.replace("    console_tick();","    /* console_tick(); ablated */")
     if os.environ.get("MANIFOLD_NO_TEXT","0")=="1":
-        for k,r in (("    showStats();","    /* showStats ablated */"),
+        for k,r in ((("    showStats();","    /* showStats ablated */"),) if os.environ.get("MANIFOLD_FPS_ONLY","0")!="1" else ())+(
                     ("    console_tick();","    /* console_tick ablated */"),
-                    ('    console_push_message_high_priority("game initialized!", 17, 2);',"    /* console msg ablated */")):
+                    ('    console_push_message_high_priority("game initialized!", 17, 2);',"    /* console msg ablated */"),):
             if t.count(k)!=1: raise ValueError("call changed: "+k)
             t=t.replace(k,r)
         print("all on-screen text removed")
@@ -4374,7 +4374,96 @@ static inline u16 m14_divu16(u32 n, u16 dv) { __asm volatile("divu.w %1,%0" : "+
     sub(o,"u8 m14_front = m14_in_front(m14a&127, dx, dy) || m14d < 64;",
          "u8 m14_vf; u8 m14_v2 = m14_view2(m14a & 127, dx, dy, m14d, &m14_vf); u8 m14_front = m14_vf || m14d < 64;","look front")
     sub(o,"{ u8 v = m14_view(m14a & 127, dx, dy, m14d);","{ u8 v = m14_v2;","look view")
+    if os.environ.get("MANIFOLD_PERF_SPRITE","1")!="1":
+        print("r077 perf pass applied (sprite path off)"); return
+    # 4. draw.c draw_rle_sprite: tall sprites draw per SOURCE row run (stores only), not per screen pixel with 2 table lookups
+    dr=out/"src/draw.c"
+    sub(dr,"""    u8 pixels[64];
+    s16 cached_src=-1;
+    u8 hit_center=0;""","""    u8 pixels[64];
+    s16 cached_src=-1;
+    u8 hit_center=0;
+    /* r078: first screen row of each source row (source_rows is monotonic); used by the fast path for tall sprites */
+    s16 fy[65]; u8 fast = (yb-ya) >= 56; u16 pmin=64, pmax=0;
+    if (fast) {
+        s16 yy=ya;
+        for (u16 sy2=0; sy2<64; sy2++) { while (yy<yb && source_rows[yy]<sy2) yy++; fy[sy2]=yy; }
+        fy[64]=yb;
+    }""","rle sprite decls")
+    sub(dr,"""            u16 pos=0,texpos=0;
+            if (col->num_spans && (!col->spans || !col->texels)) continue;
+            for (u16 j=0;j<col->num_spans && j<64;j++) {
+                u16 skip=col->spans[j*2],len=col->spans[j*2+1];
+                if (skip>64 || len>64 || pos+skip+len>64) break;
+                pos+=skip;
+                for (u16 k=0;k<len;k++) pixels[pos+k]=col->texels[texpos+k];
+                pos+=len;
+                texpos+=len;
+            }""","""            u16 pos=0,texpos=0;
+            pmin=64; pmax=0;
+            if (col->num_spans && (!col->spans || !col->texels)) continue;
+            for (u16 j=0;j<col->num_spans && j<64;j++) {
+                u16 skip=col->spans[j*2],len=col->spans[j*2+1];
+                if (skip>64 || len>64 || pos+skip+len>64) break;
+                pos+=skip;
+                if (len && pos<pmin) pmin=pos;
+                for (u16 k=0;k<len;k++) pixels[pos+k]=col->texels[texpos+k];
+                pos+=len;
+                if (len) pmax=pos-1;
+                texpos+=len;
+            }""","rle sprite decode")
+    sub(dr,"""        u8* dest=bmp_buffer_write+buf_column_offset_table[x];
+        for (s16 y=col_top;y<col_bot;y++) {
+            u8 pix=pixels[source_rows[y]];
+            if (pix) {""","""        u8* dest=bmp_buffer_write+buf_column_offset_table[x];
+        if (fast) {
+            u16* dcol=(u16*)dest;
+            for (u16 sy=pmin; sy<=pmax; sy++) {
+                u8 pix=pixels[sy];
+                if (!pix) continue;
+                s16 y0=fy[sy], y1=fy[sy+1];
+                if (y0>=col_bot) break;
+                if (y1<=col_top) continue;
+                if (y0<col_top) y0=col_top;
+                if (y1>col_bot) y1=col_bot;
+                if (y0>=y1) continue;
+                u16 v=(u16)(((u16)pix<<8)|pix);
+                u16* d=dcol+y0; u16* e=dcol+y1;
+                while (d<e) *d++=v;
+            }
+        } else
+        for (s16 y=col_top;y<col_bot;y++) {
+            u8 pix=pixels[source_rows[y]];
+            if (pix) {""","rle sprite draw")
     print("r077 perf pass applied")
+
+def m14_fps_only(out):
+    """r078: FPS counter only (no ROM-name tag, no console). Text plane write is skipped unless the
+    shown value changed, and the value is sampled every 8 frames, so the per-frame cost is a counter test."""
+    g=out/"src/game.c"; s=g.read_text()
+    start=s.find("void showStats() {")
+    if start<0: raise ValueError("showStats not found")
+    end=s.find("\n}\n",start)
+    if end<0: raise ValueError("showStats end not found")
+    end+=3
+    new="""
+static void manifold_fps_text(const char *t, u16 x, u16 y) {
+    while (*t) { VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, y); t++; }
+}
+void showStats() {
+    static u8 sk; static char last[16];
+    if (++sk & 7) return;
+    char num[16];
+    fix32ToStr(SYS_getFPSAsFloat(), num, 1);
+    if (!strcmp(num, last)) return;
+    strcpy(last, num);
+    VDP_clearTileMapRect(BG_B, 0, 26, 12, 1);
+    manifold_fps_text("FPS ", 1, 26);
+    manifold_fps_text(num, 5, 26);
+}
+"""
+    g.write_text(s[:start]+new+s[end:])
+    print("r078 FPS-only counter")
 
 def m14_door_header(out):
     """r073: a door's textured upper step is anchored at the door's open height. When the room ceiling is
@@ -4795,6 +4884,8 @@ def stage(src, wad, out, control=False):
         import m14_wpn_gen; m14_wpn_gen.apply(out,wad)
     if os.environ.get("MANIFOLD_PERF","1")=="1":
         m14_perf(out)
+    if os.environ.get("MANIFOLD_FPS_ONLY","0")=="1":
+        m14_fps_only(out)
     (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
