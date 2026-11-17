@@ -699,7 +699,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     _el=[[_V[ln[0]][0],_V[ln[0]][1],_V[ln[1]][0],_V[ln[1]][1]] for ln in _ex]+[[0,0,0,0]]*(4-len(_ex))
     _es=[1 if ln[3]==51 else 0 for ln in _ex]+[0]*(4-len(_ex))
     text+="const struct { u16 count; s16 line[4][4]; u8 secret[4]; } __attribute__((section(\".rodata.m14_exit\"))) m14_exit_tbl = {"+str(len(_ex))+",{"+",".join("{"+",".join(map(str,l))+"}" for l in _el)+"},{"+",".join(map(str,_es))+"}};\n"
-    _dm={5:10,7:5,16:20,4:20}
+    _dm={5:10,7:5,16:20,4:20,11:255}   # 11 = E1M8 finale sector (r073)
     _tr=[len(m14_trig)]+[v for t_ in m14_trig for v in t_]
     text+="const s16 m14_trig_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_tr))+"};\n"
     _sg=[sc[6] for sc in lumps["SECTORS"]]
