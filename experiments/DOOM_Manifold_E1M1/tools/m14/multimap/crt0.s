@@ -163,11 +163,17 @@ stub30: movem.l %d0-%d1,-(%sp)
         andi.b #0x40,%d1
         move.b %d1,0xA10003
         cmpi.l #0x4D56494E,0xFF0034      /* menu phase: no map loaded yet */
+        bne.s 1f
+        /* x7-menu-ack: acknowledge VDP status only while in the
+           bare-metal menu, matching the X7-tested Studio IRQ handler.
+           Do NOT read VDP status before chaining to SGDK _VINT:
+           that would modify the map's interrupt side effects. */
+        move.w 0xC00004,%d0
         movem.l (%sp)+,%d0-%d1
-        beq.s 1f
+        rte
+1:      movem.l (%sp)+,%d0-%d1
         move.l 3145848,-(%sp)
         rts
-1:      rte
 stub31: move.l 3145852,-(%sp)
         rts
 stub32: move.l 3145856,-(%sp)
