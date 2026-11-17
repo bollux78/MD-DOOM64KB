@@ -50,7 +50,8 @@ BASE_BOTTOM = 168            # Doom status bar line: weapon art below it is hidd
 PIS_X0, PIS_Y0 = 122, 104    # origin that the original pistol canvas had (dx,dy = X0-122, Y0-104)
 A_TILES, B_TILES = 128, 104
 POST = {"FIST": ([["PUNGC0"], ["PUNGD0"], ["PUNGC0"], ["PUNGB0"]], 38),
-        "SHOTGUN": ([["SHTGB0"], ["SHTGC0"], ["SHTGD0"], ["SHTGC0"], ["SHTGB0"]], 43)}
+        "SHOTGUN": ([["SHTGB0"], ["SHTGC0"], ["SHTGD0"], ["SHTGC0"], ["SHTGB0"]], 43),
+        "PISTOL": ([["PISGC0"], ["PISGD0"], ["PISGC0"]], 30)}
 FIRE_MAXTILES = 104          # fire frames live in the reclaimed window area: 104 tiles are known to be safe there
 
 

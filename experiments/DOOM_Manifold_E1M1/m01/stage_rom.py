@@ -3310,10 +3310,15 @@ void m14_baron_check(void) {
             if (m14_kind(OBJ_LINK_DEREF(l).object_type) == 6) return;
     { extern void m14_fire_tag(s16 sp, s16 tag); m14_fire_tag(23, 666); }
 }
+u8 m14_melee_ok(object_link o, u16 sector) {   /* melee weapons (0 pellets) only reach Doom's MELEERANGE 64 + target radius */
+    extern u8 m14w_pellets(void); if (m14w_pellets()) return 1;
+    int dx=F32_toInt(cur_player_pos.x-OBJ_LINK_DEREF(o).x), dy=F32_toInt(cur_player_pos.y-OBJ_LINK_DEREF(o).y);
+    return fastLength(dx,dy) < 84;
+}
 void m14_hit_object(object_link o, u16 sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(o).object_type);
     if (!k) { free_object(o, sector); return; }
-    extern u8 m14w_pellets(void); u16 dmg=0; for (u8 pi=0, pn=m14w_pellets(); pi<(pn==3?6:(pn?pn:1)); pi++) dmg+=5*((random()%3)+1);   /* every pellet of the current weapon hits (r069) */
+    extern u8 m14w_pellets(void); u16 dmg=0; for (u8 pi=0, pn=m14w_pellets(); pi<(pn==3?6:(pn?pn:1)); pi++) dmg+=pn?5*((random()%3)+1):2*((random()%10)+1);   /* every pellet of the current weapon hits (r069); melee = Doom fist/saw 2*(1d10) */
     if (k==6) dmg=(dmg+3)>>2;   /* r073: Baron has 1000 hp in Doom but only 255 fit in the byte -> weapons do 1/4 damage to it */
     if (dmg>=OBJ_LINK_DEREF(o).health) {
         decoration_link dl = alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
@@ -3351,7 +3356,7 @@ void m14_hit_object(object_link o, u16 sector) {
     g=out/"src/game.c"; t=g.read_text()
     old="free_object(sprite_on_center_col, center_object_sector);"
     assert t.count(old)==1
-    t=t.replace(old,"m14_hit_object(sprite_on_center_col, center_object_sector);",1)
+    t=t.replace(old,"{ extern u8 m14_melee_ok(u8 o, u16 s); if (m14_melee_ok(sprite_on_center_col, center_object_sector)) m14_hit_object(sprite_on_center_col, center_object_sector); }",1)
     anchor="    static int jumping = 0;"
     assert t.count(anchor)==1
     t=t.replace(anchor,f"""    {{
