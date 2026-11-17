@@ -29,6 +29,14 @@ MENU_C = r'''
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned long u32;
+/* Freestanding boot menu: GCC may lower checkpoint struct copies to memcpy. */
+void *memcpy(void *dst, const void *src, unsigned long n) {
+    volatile unsigned char *d = (volatile unsigned char *)dst;
+    const volatile unsigned char *s = (const volatile unsigned char *)src;
+    unsigned long i;
+    for (i = 0; i < n; ++i) d[i] = s[i];
+    return dst;
+}
 #define VDP_DATA (*(volatile u16 *)0xC00000)
 #define VDP_CTRL (*(volatile u16 *)0xC00004)
 #define VDP_CTRL32 (*(volatile u32 *)0xC00004)
