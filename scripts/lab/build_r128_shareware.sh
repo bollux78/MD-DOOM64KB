@@ -63,6 +63,13 @@ fi
 if [[ "${R128_E1M1_MENU_BENCH:-0}" == 1 ]]; then
     python3 "$lab/install_e1m1_menu_bench.py"
 fi
+if [[ -n "${R128_RAW_BG:-}" ]]; then
+    if [[ "${R128_E1M1_MENU_BENCH:-0}" != 1 || "${R128_BG_DMA:-0}" == 1 || "${R128_BG_PROBE:-0}" == 1 ]]; then
+        echo "Raw BG requires the E1M1 menu benchmark and its own DMA path" >&2
+        exit 2
+    fi
+    python3 "$lab/install_raw_bg.py" "$R128_RAW_BG"
+fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
