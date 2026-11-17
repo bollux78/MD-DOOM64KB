@@ -48,6 +48,21 @@ bash "$lab/apply-base.sh"
 for overlay in "$lab"/[0-9][0-9]-*.patch; do
     patch -p1 --batch --fuzz=0 < "$overlay"
 done
+if [[ "${R128_VERTICAL_DITHER:-0}" == 1 ]]; then
+    # Each row uses the same stripe phase. Pair-V tile indices stay identical.
+    python3 - <<'PYTHON'
+from pathlib import Path
+path = Path("src/r22_video.inc")
+source = path.read_text()
+checker = "(((x+row)&1u)==0u)"
+assert source.count(checker) == 1
+path.write_text(source.replace(checker, "((x&1u)==0u)").replace(
+    "#if defined(DOOM_R73_R53_FIXED)\n    uint32_t result=0;",
+    "#if defined(DOOM_R73_R53_FIXED)\n    (void)row;\n    uint32_t result=0;",
+))
+PYTHON
+    export R128_VERTICAL_DITHER
+fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
