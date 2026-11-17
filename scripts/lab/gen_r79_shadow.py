@@ -34,24 +34,30 @@ def generate(strength):
  table_path=ROOT/'src/r59_color_tables.h'
  text=table_path.read_text()
  stripe_pairs={}
- vertical_stripes=os.environ.get('R128_VERTICAL_DITHER')=='1'
+ resample_tones=os.environ.get('R128_TONE_RESAMPLE')=='1'
+ vertical_stripes=os.environ.get('R128_VERTICAL_DITHER')=='1' and not resample_tones
+ if resample_tones:
+  resample=runpy.run_path(str(ROOT/'scripts/lab/r128-shareware/resample_tones.py'))['resample']
+  text=resample(text)
+  table_path.write_text(text)
  gain={1:1.35,2:1.75}[strength]
  palettes=[];maps=[];costs=[];reports=[];pairsrows=[]
  for name,prefix in [('Hybrid Blue+','r77_h'),('A2 Full','r76_a'),('L3 Detail','r76_l'),('HN Smooth','r76_l')]:
   pal=np.array([parse(text,prefix+'_pal'+str(b)).reshape(14,16) for b in (0,1)])
-  partners=np.array([parse(text,prefix+'_pairs_'+side).reshape(16,2)[:,1] for side in ('even','odd')])
+  pattern=np.array([parse(text,prefix+'_pairs_'+side).reshape(16,2) for side in ('even','odd')])
+  first,partners=pattern[:,:,0],pattern[:,:,1]
   components=np.stack([(pal>>1)&7,(pal>>5)&7,(pal>>9)&7],-1)
   boosted=np.minimum(7,np.floor(components*gain+.5)).astype(int)
   words=(boosted[...,0]<<1)|(boosted[...,1]<<5)|(boosted[...,2]<<9)
   palettes.append(words)
-  target=np.array([avg(rgb(pal[b]),rgb(pal[b])[:,partners[b]]) for b in (0,1)])
+  target=np.array([avg(rgb(pal[b])[:,first[b]],rgb(pal[b])[:,partners[b]]) for b in (0,1)])
   if vertical_stripes:
    partners=np.array([stripe_partners(pal[b],target[b]) for b in (0,1)])
    for side,indices in zip(('even','odd'),partners):
     stripe_pairs[prefix+'_pairs_'+side]=np.stack([np.arange(16),indices],axis=1)
-  candN=np.array([avg(rgb(words[b]),rgb(words[b])[:,partners[b]]) for b in (0,1)])
+  candN=np.array([avg(rgb(words[b])[:,first[b]],rgb(words[b])[:,partners[b]]) for b in (0,1)])
   # Applying shadow before spatial averaging is essential.
-  candS=np.array([avg(rgb(words[b])*.5,rgb(words[b])[:,partners[b]]*.5) for b in (0,1)])
+  candS=np.array([avg(rgb(words[b])[:,first[b]]*.5,rgb(words[b])[:,partners[b]]*.5) for b in (0,1)])
   cand=np.stack([candN,candS],1) # bank,state,palette,code,rgb
   error=((lab(target)[:,None,:,:,None,:]-lab(cand)[:,:,:,None,:,:])**2).sum(-1)
   error[:,:,:,:,0]=1e9 # opaque samples must not become transparent
