@@ -70,6 +70,14 @@ if [[ -n "${R128_RAW_BG:-}" ]]; then
     fi
     python3 "$lab/install_raw_bg.py" "$R128_RAW_BG"
 fi
+if [[ "${R128_PIXEL4_PLAY:-0}" == 1 ]]; then
+    if [[ -n "${R128_RAW_BG:-}" || "${R128_BG_DMA:-0}" == 1 || "${R128_BG_PROBE:-0}" == 1 ]]; then
+        echo "Pixel4 play uses its own tile uploader" >&2
+        exit 2
+    fi
+    cp "$lab/pixel4-play.inc" src/r128_pixel4_play.inc
+    python3 "$lab/install_pixel4_cache.py"
+fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi

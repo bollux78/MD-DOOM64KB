@@ -1,0 +1,58 @@
+name: R128 Shareware Pixel4 playable build
+on:
+  push:
+    branches: [exp-chatgpt-r128-pixel4-play]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify runner dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in fish java make patch cc curl xz unzip; do command -v "$tool" >/dev/null; done
+          python3 -c 'import numpy, PIL'
+      - name: Prepare the native SGDK 2.11 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/mars" "$RUNNER_TEMP/sgdk-release"
+          curl -fLsS --retry 3 https://github.com/andwn/marsdev/releases/download/v1.0.0-rc1/marsdev-v1.0.0-rc1-linux-x86_64.tar.xz -o "$RUNNER_TEMP/mars.tar.xz"
+          tar -xJf "$RUNNER_TEMP/mars.tar.xz" -C "$RUNNER_TEMP/mars"
+          compiler="$(find "$RUNNER_TEMP/mars" -name m68k-elf-gcc -print -quit)"
+          test -x "$compiler"
+          sdk="$(dirname "$(dirname "$compiler")")"
+          curl -fLsS --retry 3 https://github.com/Stephane-D/SGDK/archive/ef9292c03fe33a2f8af3a2589ab856a53dcef35c.tar.gz -o "$RUNNER_TEMP/sgdk.tar.gz"
+          tar -xzf "$RUNNER_TEMP/sgdk.tar.gz" -C "$RUNNER_TEMP/sgdk-release" --strip-components=1
+          sgdk_source="$RUNNER_TEMP/sgdk-release"
+          rm -rf "$sdk/inc" "$sdk/res" "$sdk/src"
+          cp -a "$sgdk_source"/{inc,res,src,md.ld,makelib.gen,makefile.gen} "$sdk/"
+          cp -a "$sgdk_source"/bin/*.jar "$sdk/bin/"
+          sed -i 's/\r$//' "$sdk"/{makefile.gen,inc/dma.h,src/dma.c,res/libres.res}
+          patch -d "$sdk" -p1 --fuzz=0 < scripts/lab/r128-shareware/sgdk211.patch
+          export PATH="$sdk/bin:$PATH"
+          rm -f "$sdk/lib/libmd.a"
+          make -C "$sdk" -f makelib.gen GDK="$sdk" PREFIX=m68k-elf- EXTRA_FLAGS=-std=gnu11 -j2
+          echo "R128_NATIVE_SGDK=$sdk" >> "$GITHUB_ENV"
+      - name: Build playable Pixel4 and keep the ROM on the runner
+        shell: bash
+        env:
+          R128_SGDK211_COMPAT: '1'
+          R128_PIXEL4_PLAY: '1'
+        run: |
+          set -euo pipefail
+          wad="$HOME/Projetos/doom-md/assets/wads/doom1.wad"
+          work="$RUNNER_TEMP/r128-pixel4-play-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          private="$HOME/Projetos/Personal/r128-pixel4-play/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          bash scripts/lab/build_r128_shareware.sh "$wad" "$R128_NATIVE_SGDK" "$work"
+          install -d -m 0700 "$private"
+          install -m 0600 "$work/doom-md-r60-r128-all-sw-pl.bin" "$private/doom-md-r128-pixel4-cache.bin"
+          cmp -s "$work/doom-md-r60-r128-all-sw-pl.bin" "$private/doom-md-r128-pixel4-cache.bin"
+          cd "$private"
+          sha256sum doom-md-r128-pixel4-cache.bin
