@@ -17,9 +17,11 @@ MAP_ORG = 0x300000          # CPU address of the map block (slots 6..7)
 FILE_BODY = 0x280000        # file bytes before the first map bank: banks 0..3 menu+common, bank 4 weapons+intermission
 WPN_ORG = 0x200000
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m14x/manifold-doom-menu.bin"
+if os.environ.get("COMPOSE_MAPS"): MAPS = [x for x in MAPS if x[0] in os.environ["COMPOSE_MAPS"].split(",")]
+PFX = os.environ.get("COMPOSE_PREFIX", "mm")
 common = None; blocks = []; wpn = None; wpn2 = None
 for m, label in MAPS:
-    o = "/tmp/m12/mm_%s/out/release/rom.out" % m
+    o = "/tmp/m12/%s_%s/out/release/rom.out" % (PFX, m)
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".common", o, "/tmp/m14x/_c.bin"])
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".maphead", "-j", ".data", "-j", ".mapobjs", "-j", ".mapextra", o, "/tmp/m14x/_m.bin"])
     subprocess.check_call([T+"objcopy", "-O", "binary", "-j", ".wpndata", o, "/tmp/m14x/_w.bin"])

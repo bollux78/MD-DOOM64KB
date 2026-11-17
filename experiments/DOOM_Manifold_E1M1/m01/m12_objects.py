@@ -165,6 +165,7 @@ def _masked_texture(w,texdefs,name):
 def grate_extra(w):
     """name -> (pw,ph,img) 32-wide slices of BRNBIGL / BRNBIGR / BRNBIGC."""
     td=WT.textures(w);out={}
+    if "BRNBIGL" not in td: return {}
     for key,tex,x0 in (("GRATE_L","BRNBIGL",0),("GRATE_R","BRNBIGR",0),("GRATE_C0","BRNBIGC",0),
                        ("GRATE_C1","BRNBIGC",32),("GRATE_C2","BRNBIGC",64),("GRATE_C3","BRNBIGC",96)):
         wdt,hgt,img=_masked_texture(w,td,tex)
@@ -182,8 +183,29 @@ def grate_placements():
 def kinds_has_grates(w):
     return True
 
+class _SafeWad:
+    """MANIFOLD_SAFE_WAD=1 (other IWADs, e.g. Heretic): sprites missing from the WAD become empty 1x1 placeholders, so the
+    Doom type table and its M14_ID_* names still exist and the build goes on."""
+    @staticmethod
+    def _mk():
+        import struct
+        n=16; col=bytes([0,n,0])+bytes([200])*n+bytes([0,255])
+        return struct.pack("<hhhh",n,n,-140,-110)+b"".join(struct.pack("<I",8+4*n+len(col)*c) for c in range(n))+col*n
+    _DUMMY=None
+    def __init__(self,w):
+        self._w=w
+        if _SafeWad._DUMMY is None: _SafeWad._DUMMY=_SafeWad._mk()
+    def lump(self,n):
+        try: return self._w.lump(n)
+        except KeyError:
+            if n.startswith(("TEXTURE","PNAMES","PLAYPAL","COLORMAP")): raise
+            if n.startswith("DS"): return b"\x03\x00\x11\x2b\x20\x00\x00\x00"+b"\x80"*32
+            return self._DUMMY
+    def __getattr__(self,a): return getattr(self._w,a)
+
 def generate(wad, lumps, cells, vdp_palette, point_inside):
     w=WT.Wad(wad)
+    if os.environ.get("MANIFOLD_SAFE_WAD")=="1": w=_SafeWad(w)
     rgb=WT.playpal(w)
     palette=[(((v>>1)&7)*255//7,((v>>5)&7)*255//7,((v>>9)&7)*255//7) for v in vdp_palette]
     lines=['#include <genesis.h>','#include "obj_sprite.h"']

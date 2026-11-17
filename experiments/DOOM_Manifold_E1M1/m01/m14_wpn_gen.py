@@ -145,7 +145,7 @@ def build(w, rgb, cut, sheet=None):
             pal = list(sheet_pal) + [(0, 0, 0)] * (15 - len(sheet_pal)); pal_img = None
         else:
             pal_img = sheet.quantize(colors=9, method=Image.MEDIANCUT)
-            pal = pal_img.getpalette()[:27]
+            pal = (pal_img.getpalette() + [0] * 27)[:27]
             pal = [tuple(pal[i * 3:i * 3 + 3]) for i in range(9)]
         def conv(cv, cx0, cy0):
             tw, th = cv.width // 8, cv.height // 8
@@ -203,7 +203,7 @@ typedef struct { const m14w_frame *idle, *fire; u16 pal[15]; u16 cad, hold; u8 p
 @DATA@
 u8 m14w_cur = 1;
 static const m14w_frame *m14w_shown; static u8 m14w_isfire; static u16 m14w_hold;
-static s16 m14w_bx, m14w_by; static u8 m14w_pi = 0xFF; static s16 m14w_pt;
+static s16 m14w_bx, m14w_by; static u8 m14w_pi = 0xFF, m14w_pt;
 u16 m14w_cad(void) { return m14w_defs[m14w_cur].cad; }
 u8 m14w_pellets(void) { return m14w_defs[m14w_cur].pel; }
 u8 m14w_sfx(void) { return m14w_defs[m14w_cur].sfx; }
@@ -264,8 +264,9 @@ void m14w_idle(void) { if (m14w_isfire) { m14w_shown = m14w_defs[m14w_cur].idle;
 void m14w_step(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
     if (m14w_pi != 0xFF) {
-        m14w_pt -= (s16)(last_frame_ticks > 90 ? 90 : last_frame_ticks);
-        if (m14w_pt <= 0) {
+        s16 q = (s16)m14w_pt - (s16)(last_frame_ticks > 90 ? 90 : last_frame_ticks);
+        if (q > 0) m14w_pt = (u8)q;
+        else {
             m14w_pi++;
             if (m14w_pi >= d->npost) m14w_post_end();
             else { m14w_loadf(d->post[m14w_pi]); m14w_shown = d->post[m14w_pi]; m14w_isfire = 0; m14w_pt = d->ptime; m14w_place(); }
@@ -321,7 +322,10 @@ def make_pcm(lump_data, maxsec):
 
 def apply(out, wad):
     import wad_textures as WT
-    w = WT.Wad(wad); rgb = WT.playpal(w)
+    w = WT.Wad(wad)
+    if os.environ.get("MANIFOLD_SAFE_WAD") == "1":
+        import m12_objects as _M; w = _M._SafeWad(w)
+    rgb = WT.playpal(w)
     cut = int(os.environ.get("MANIFOLD_WPN_CUT", "16"))
     _sp = os.environ.get("MANIFOLD_WPN_SHEET")
     ws = build(w, rgb, cut, load_sheet(_sp, w) if _sp else None)

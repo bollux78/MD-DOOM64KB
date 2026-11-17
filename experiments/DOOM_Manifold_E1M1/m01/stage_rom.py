@@ -1400,7 +1400,7 @@ def install_doom_hud(out, wad):
     root=Path(__file__).resolve().parents[3]
     m10=Path(__file__).resolve().parents[1]/"m10"
     hdr=out/"src/hud_wad_assets.h"
-    subprocess.run([_sys.executable,str(m10/"gen_hud_manifold.py"),"--wad",str(wad),"--out",str(hdr)],check=True)
+    subprocess.run([_sys.executable,str(m10/"gen_hud_manifold.py"),"--wad",os.environ.get("MANIFOLD_HUD_WAD") or str(wad),"--out",str(hdr)],check=True)
     _sys.path.insert(0,str(m10))
     import gen_hud_manifold
     gen_hud_manifold.single_palette(str(hdr))
@@ -4837,7 +4837,10 @@ def m14_weapon(out, wad):
     suspected crash on real hardware)."""
     import wad_textures as WT
     from PIL import Image
-    w=WT.Wad(wad); rgb=WT.playpal(w)
+    w=WT.Wad(wad)
+    if os.environ.get("MANIFOLD_SAFE_WAD")=="1":
+        import m12_objects as _M; w=_M._SafeWad(w)
+    rgb=WT.playpal(w)
     def load(name):
         pw,ph,img=WT.patch_image(w.lump(name))
         im=Image.new("RGBA",(pw,ph),(0,0,0,0))
