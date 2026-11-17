@@ -1,11 +1,19 @@
 # Manifold / Mega EverDrive X7 — bissecção de SSF e 12 MiB
 
-Data: 2026-11-17. Estado: teste preparado, ainda NÃO confirmado no X7. Não incrementar rXXX.
+Data: 2026-11-17. Estado: TESTADO NO X7 REAL; A e B permitem menu, C até I não permitem menu. Não incrementar rXXX.
 Branch experimental: exp-manifold-m14-x7-ssf-probe.
 
 ## Base experimental
 
 A ROM estática de 128 KiB do Tile Palette Studio abriu Baixo+Start, Save State e Load State no X7 físico. O Manifold de 12 MiB, embora execute seu menu, não abriu o menu X7 nas tentativas r087, r088 e r088b. Tirar o header SSF do Manifold danifica a exibição dos gráficos dos bancos mapeados. Atribuir a falha apenas ao controle, ao SSF ou ao tamanho seria prematuro.
+
+## Resultado definitivo da matriz (Mega EverDrive X7 real)
+
+O proprietário testou as nove variantes: **somente A (128 KiB MD) e B (4 MiB MD) abriram o menu**. Variantes C/D/E/G/H/I com header `SEGA SSF` falharam, inclusive C, que mede somente 4 MiB e difere de B pelo header SSF. Variante **F (12 MiB, header MD, sem SSF)** também falhou. Portanto, foram isoladas DUAS limitações distintas: a ativação do modo SSF é suficiente para bloquear o in-game menu, e tamanho de 12 MiB por si só também impede o menu nesta configuração de X7. A matriz NÃO estabelece o limite exato de tamanho entre 4 e 12 MiB; não foi testado 5/6/8 MiB com header MD.
+
+A leitura de VBlank e as duas fases TH podem continuar funcionando corretamente; o menu está indisponível por configuração/modo do flashcart. O manual do Mega EverDrive v2 explicitamente exclui o Super Street Fighter II e hacks grandes do menu in-game: https://manualzz.com/doc/6927682/krikzz-v2-mega-everdrive-user-manual
+
+**Não promover para Manifold este patch de VDP/ISR como solução do X7: o modo SSF bloqueia o recurso antes de depender desse detalhe.** A alteração permanece SOMENTE nesta branch experimental; não foi confirmada na ROM Manifold em hardware.
 
 ## Mudança no código Manifold
 
@@ -31,8 +39,12 @@ Todas as ROMs derivam do binário exato de diagnóstico comprovado no X7; contê
 
 Copiar os .bin para o SD e iniciar no Mega Drive sem 32X. Confirmar se a imagem de tiles coloridos aparece, se o LED do X7 acende em Baixo+Start, se o menu abre e se Save/Load funcionam. Fazer 1→5 primeiro. Com os resultados é possível distinguir efeito do header SSF de efeito do tamanho e das escritas dos bancos.
 
-Se a variante x7-c falhar e x7-b funcionar, suspeitar do modo SSF. Se x7-c funcionar e x7-d/e falharem, suspeitar do comprimento. Se x7-e funcionar e x7-g/h falharem, suspeitar das escritas mapper/SRAM. Se todas funcionarem, suspeitar das peculiaridades do boot e das IRQs do Manifold. As ROMs não acessam conteúdo acima do banco zero, então a matriz não testa validade do mapeamento dos gráficos.
+Resultado obtido: B funcionou, C falhou: **SSF isolado bloqueia o menu**. F com 12 MiB e header MD também falhou: **ROM de 12 MiB sem SSF não garante o menu**. G/H/I não funcionam como esperado sob SSF. As ROMs não acessam conteúdo acima do banco zero, então a matriz não testa validade do mapeamento dos gráficos.
 
 O X7 anuncia tamanho máximo de ROM de 15 MiB, mas isso não prova suporte ao menu in-game em SSF. O manual antigo da linha Mega EverDrive excluía SSF do menu, mas não é prova conclusiva para a geração X7.
 
-IMPORTANTE: Não publicar uma ROM completa do Manifold gerada a partir de WAD privado. Não remover SSF do jogo completo. Não substituir o handler SGDK. Não marcar a solução aprovada antes de teste no cartucho.
+## Decisão arquitetural
+
+A ROM única de 12 MiB com SSF pode permanecer funcional como jogo, mas não deve anunciar suporte ao menu Save/Load do X7. Para **ter menu X7**, a alternativa de engenharia mais promissora é produzir ROMs menores, sem SSF (por exemplo, uma ROM individual por fase até 4 MiB), mantendo VBlank e polling de controle funcionais. A possibilidade de uma única ROM maior sem SSF ainda requer reprojetar a arquitetura, pois o Mega Drive endereça só 4 MiB diretamente. A alternativa de salvar progresso dentro do próprio jogo (SRAM própria) é diferente de Save State: registrar posição, vida, armas, inventário/estado determinístico, sem prometer snapshot universal. Não mexer no firmware do X7 para contornar sem evidência.
+
+IMPORTANTE: Não publicar uma ROM completa do Manifold gerada a partir de WAD privado. Não remover SSF do jogo completo sem reprojetar o uso dos bancos (r088b corrompeu os gráficos). Não substituir handler SGDK. Não marcar a solução como aprovada enquanto o Manifold completo com X7 não foi testado.
