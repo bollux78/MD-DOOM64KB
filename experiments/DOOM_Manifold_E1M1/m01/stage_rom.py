@@ -1408,11 +1408,6 @@ def install_doom_hud(out, wad):
     (out/"src/hud_wad_logic.h").write_text((root/"src/hud_wad_logic.h").read_text().replace("#include <stdint.h>",""))
     hdr.write_text(hdr.read_text().replace("#include <stdint.h>",""))
     shutil.copy(m10/"doom_statusbar.c",out/"src/doom_statusbar.c")
-    if os.environ.get("MANIFOLD_HUD_HIDE")=="1":   # diagnostic: no status bar, to see how far the weapons reach into its rows
-        q=out/"src/doom_statusbar.c"; ds=q.read_text()
-        for f in ("static void dhud_draw_bar(void) {","static void dhud_draw_margins(void) {"):
-            assert ds.count(f)==1; ds=ds.replace(f,f+" return;")
-        q.write_text(ds)
     inv=out/"src/inventory.c"
     s=inv.read_text()
     old_init_start="    u32 new_free_tile_loc = load_inventory_items_to_vram(free_tile_loc);\n"
