@@ -4447,14 +4447,21 @@ def m14_fps_only(out):
     if end<0: raise ValueError("showStats end not found")
     end+=3
     new="""
+extern u32 last_frame_ticks;
 static void manifold_fps_text(const char *t, u16 x, u16 y) {
     while (*t) { VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, y); t++; }
 }
 void showStats() {
-    static u8 sk; static char last[16];
-    if (++sk & 7) return;
-    char num[16];
-    fix32ToStr(SYS_getFPSAsFloat(), num, 1);
+    static u8 sk; static u16 acc; static char last[8];
+    acc += (u16)(last_frame_ticks > 600 ? 600 : last_frame_ticks);
+    if (++sk & 15) return;
+    /* real FPS = 16 frames / elapsed getTick() (300 ticks/s), one decimal */
+    u32 f10 = acc ? (u32)48000UL / acc : 0; acc = 0;
+    char num[8];
+    num[0] = (char)('0' + (f10 / 100) % 10); u8 i = (f10 >= 100) ? 1 : 0;
+    if (!i) { num[0] = (char)('0' + (f10 / 10) % 10); i = 1; }
+    else { num[1] = (char)('0' + (f10 / 10) % 10); i = 2; }
+    num[i++] = '.'; num[i++] = (char)('0' + f10 % 10); num[i] = 0;
     if (!strcmp(num, last)) return;
     strcpy(last, num);
     VDP_clearTileMapRect(BG_B, 0, 26, 12, 1);
