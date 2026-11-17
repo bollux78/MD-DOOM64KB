@@ -48,7 +48,7 @@ bash "$lab/apply-base.sh"
 for overlay in "$lab"/[0-9][0-9]-*.patch; do
     patch -p1 --batch --fuzz=0 < "$overlay"
 done
-if [[ "${R128_VERTICAL_DITHER:-0}" == 1 ]]; then
+if [[ "${R128_VERTICAL_DITHER:-0}" == 1 || "${R128_TONE_RESAMPLE:-0}" == 1 ]]; then
     # Each row uses the same stripe phase. Pair-V tile indices stay identical.
     python3 - <<'PYTHON'
 from pathlib import Path
