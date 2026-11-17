@@ -48,9 +48,6 @@ SFX_IDS = {"punch": 72, "shotgun": 73, "rocket": 74, "saw": 75, "mpain": 76, "md
 SCALE = {"SAW": 0.5 if os.environ.get("MANIFOLD_WPN_GAME") == "heretic" else 0.66}      # too wide for 128 tiles: scale it down instead of cropping the sides
 BASE_BOTTOM = 168            # Doom status bar line: weapon art below it is hidden anyway
 PIS_X0, PIS_Y0 = 122, 104    # origin that the original pistol canvas had (dx,dy = X0-122, Y0-104)
-# weapons drawn lower: the art is moved down by N px and everything below the HUD line (screen y 176) is dropped, so those tiles never exist.
-# MANIFOLD_WPN_SINK="FIST=8,PISTOL=8,SHOTGUN=8,ROCKET=8"
-SINK = {k: int(v) for k, v in (x.split("=") for x in os.environ.get("MANIFOLD_WPN_SINK", "").split(",") if x)}
 A_TILES, B_TILES = 128, 104
 POST = {"FIST": ([["PUNGC0"], ["PUNGD0"], ["PUNGC0"], ["PUNGB0"]], 38),
         "SHOTGUN": ([["SHTGB0"], ["SHTGC0"], ["SHTGD0"], ["SHTGC0"], ["SHTGB0"]], 43),
@@ -124,7 +121,7 @@ def build(w, rgb, cut, sheet=None):
         return r, round(160 + (X - 160) * sc), round(bottom + (Y - bottom) * sc)
 
     def frame_canvas(names, maxtiles, sc=1.0):
-        layers = [(im_, X_, Y_ + sink_cur[0]) for im_, X_, Y_ in (scaled(n, sc) for n in names)]
+        layers = [scaled(n, sc) for n in names]
         bx0 = min(X for _, X, _ in layers); bx1 = max(X + im.width for im, X, _ in layers)
         by0 = min(Y for _, _, Y in layers)
         tw = math.ceil((bx1 - bx0) / 8); th = math.ceil((bottom - by0) / 8)
@@ -149,10 +146,8 @@ def build(w, rgb, cut, sheet=None):
         cv.alpha_composite(im.crop((x0 - ox, y0 - oy, x1 - ox, y1 - oy)), (x0, y0))
 
     out = []
-    sink_cur = [0]
     for (name, idle, fire, cad, hold, pel, snd) in WEAPONS:
         sc = SCALE.get(name, 1.0)
-        sink_cur[0] = SINK.get(name, 0)
         if sheet_pal and name == "FIST": fire, hold = ["PUNGB0"], 34
         if sheet_pal and name == "SHOTGUN": hold = 26
         frames = [frame_canvas(idle, 128, sc), frame_canvas(fire, FIRE_MAXTILES, sc)]
