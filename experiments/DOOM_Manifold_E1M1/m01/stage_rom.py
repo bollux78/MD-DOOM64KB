@@ -4845,8 +4845,6 @@ def stage(src, wad, out, control=False):
         m13_werk_vdp_atomic(out)
     if os.environ.get("MANIFOLD_STATIC_REPAIR_ONCE","0")=="1":
         m13_werk_static_repair_once(out)
-    if os.environ.get("MANIFOLD_BUILD_TAG"):
-        hud_fps_and_build_tag(out)
     m14_identity(out)
     m14_install_display_hint_variants(out)
     if os.environ.get("MANIFOLD_ALL_KEYS","1")=="1":
