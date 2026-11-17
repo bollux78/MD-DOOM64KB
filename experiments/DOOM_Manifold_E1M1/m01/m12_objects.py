@@ -143,6 +143,10 @@ TYPES = (
  (9513,"BOSSC5","baron_bk1",0,0),
  (9514,"BOSSA3A7","baron_sl",0,0),
  (9515,"BOSSA3A7~","baron_sr",0,0),
+ # projectiles (appended at the end: IDs follow order)
+ (9520,"BAL1A0","fball0",0,0),
+ (9522,"BAL1C0","fbx0",0,0),
+ (9525,"MISLA1","rocketp",0,0),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -273,7 +277,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
             if spans:
                 a=f"m12_{idx}_{x}_sp";b=f"m12_{idx}_{x}_px"
                 _fm=name.split("_")[0]
-                _sec=(' __attribute__((section(".mapgap")))' if _fm in os.environ.get("MANIFOLD_GAPFAMS","").split(",") else ' __attribute__((section(".mapextra")))') if _fm in ("zombieman","sergeant","imp","demon","spectre","baron") else ""   # r068: .mapgap = free bytes inside the fixed layout of the map block
+                _sec=(' __attribute__((section(".mapgap")))' if _fm in os.environ.get("MANIFOLD_GAPFAMS","").split(",") else ' __attribute__((section(".mapextra")))') if _fm in ("zombieman","sergeant","imp","demon","spectre","baron") else (' __attribute__((section(".mapextra")))' if name.startswith(("fball","fbx","rocketp","rbx")) else "")   # r068: .mapgap = free bytes inside the fixed layout of the map block
                 lines.append(f"static const u16{_sec} {a}[] = {{{','.join(map(str,spans))}}};")
                 lines.append(f"static const u8{_sec} {b}[] = {{{','.join(map(str,texels))}}};")
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}"); _ci.append(len(spans)//2)

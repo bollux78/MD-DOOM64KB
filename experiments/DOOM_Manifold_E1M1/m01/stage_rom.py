@@ -4526,6 +4526,158 @@ def m14_godmode(out):
 """
     g.write_text(t.replace(old,new)); print("r082 godmode A+C")
 
+def m14_projectiles(out):
+    """EXP projectiles: imp fireball (BAL1) that flies toward the player, and the player's rocket (MISL) for weapon 4.
+    Projectiles are decorations moved by a small table; walls stop them (collision), they explode with a 3-frame
+    animation. Rocket: direct hit + 128-unit splash on monsters/barrels/player."""
+    o=out/"src/object.c"; t=o.read_text()
+    for x,y in (("m14dx[12]","m14dx[8]"),("m14dx_n < 12","m14dx_n < 8"),("m14x[10]","m14x[5]"),("m14x_n >= 10","m14x_n >= 5")):   # RAM: free bytes for the projectile table
+        if x not in t: raise ValueError("proj ram anchor "+x)
+        t=t.replace(x,y)
+    a="void m14_hit_object(object_link o, u16 sector) {"
+    if t.count(a)!=1: raise ValueError("proj anchor hit_object")
+    t=t.replace(a,"u16 m14_dmg_ov;\n"+a,1)
+    a="    if (k==6) dmg=(dmg+3)>>2;"
+    if t.count(a)!=1: raise ValueError("proj anchor baron dmg")
+    t=t.replace(a,"    if (m14_dmg_ov) dmg=m14_dmg_ov;\n"+a,1)
+    # imp: melee only when close; farther -> ranged attack branch
+    a="if ((k==3 || k==4 || k==5) || (k==6 && d<56)) {"
+    if t.count(a)!=1: raise ValueError("proj anchor imp branch")
+    t=t.replace(a,"if ((k==3 && d<56) || k==4 || k==5 || (k==6 && d<56)) {",1)
+    a="if (k==3) m14_player_damage(3*((random()&7)+1));"
+    if t.count(a)!=1: raise ValueError("proj anchor imp fire")
+    t=t.replace(a,"if (k==3) { if (d<56) m14_player_damage(3*((random()&7)+1)); else { extern void m14_pj_imp(s32 ix, s32 iy, s32 dx, s32 dy, u32 d, u16 sec); m14_pj_imp(OBJ_LINK_DEREF(cur_obj).x, OBJ_LINK_DEREF(cur_obj).y, dx, dy, d, cur_sector); } }",1)
+    t+=r"""
+/* ---- EXP projectiles ---- */
+u16 m14_dmg_ov;
+typedef struct { s32 x, y; s16 vx, vy; u16 sector; s16 left; u8 link, kind, st, fr; } m14_pj_t;
+static m14_pj_t m14pj[3];
+static u8 m14pj_n;
+static void m14_pj_mondmg(object_link o, u16 sct, u16 dmg) { m14_dmg_ov = dmg; m14_hit_object(o, sct); m14_dmg_ov = 0; }
+static u8 m14_pj_link(u16 sector, s32 x, s32 y, u8 id) {
+    return alloc_decoration_in_sector(sector, (s16)(x >> FIX32_FRAC_BITS), (s16)(y >> FIX32_FRAC_BITS),
+                get_sector_group_floor_height(sector_group(sector, cur_portal_map)) + 16, id);
+}
+static void m14_pj_spawn(u8 kind, s32 x, s32 y, s32 vx, s32 vy, u16 sector) {
+    if (m14pj_n >= 3) return;
+    u8 l = m14_pj_link(sector, x, y, kind ? M14_ID_ROCKETP : M14_ID_FBALL0);
+    if (l == NULL_DEC_LINK) return;
+    m14_pj_t* p = &m14pj[m14pj_n++];
+    p->x = x; p->y = y; p->vx = (s16)vx; p->vy = (s16)vy; p->sector = sector; p->left = 0; p->link = l; p->kind = kind; p->st = 0; p->fr = 0;
+}
+void m14_pj_imp(s32 ix, s32 iy, s32 dx, s32 dy, u32 d, u16 sec) {
+    if (!d) return;
+    s32 vx = ((dx * (s32)FIX32(1)) / (s32)d) * 7 / 6, vy = ((dy * (s32)FIX32(1)) / (s32)d) * 7 / 6;
+    m14_pj_spawn(0, ix, iy, vx, vy, sec);
+    play_sfx(74, 4);
+}
+u8 m14_rl_active(void) { extern u8 m14w_cur; return m14w_cur == 4; }
+void m14_pj_rocket(void) {
+    s32 c = cosFix32(cur_player_pos.ang), s = sinFix32(cur_player_pos.ang);
+    m14_pj_spawn(1, cur_player_pos.x + c * 16, cur_player_pos.y + s * 16, c * 7 / 3, s * 7 / 3, cur_player_pos.cur_sector);
+}
+static void m14_pj_blast(s32 bx, s32 by) {
+    s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
+    s32 dx = px - bx, dy = py - by; if (dx < 0) dx = -dx; if (dy < 0) dy = -dy;
+    s32 d = (dx > dy ? dx : dy) - 16; if (d < 0) d = 0;
+    if (d < 128) m14_player_damage((u16)(128 - d));
+    for (u16 sct = 0; sct < num_sector_lists; sct++) {
+        object_link l = sector_object_lists[sct];
+        while (l != NULL_OBJ_LINK) {
+            object_link nx = OBJ_LINK_DEREF(l).next;
+            if (m14_kind(OBJ_LINK_DEREF(l).object_type)) {
+                s32 ex = F32_toInt(OBJ_LINK_DEREF(l).x) - bx, ey = F32_toInt(OBJ_LINK_DEREF(l).y) - by;
+                if (ex < 0) ex = -ex; if (ey < 0) ey = -ey;
+                s32 dd = (ex > ey ? ex : ey) - 20; if (dd < 0) dd = 0;
+                if (dd < 128) m14_pj_mondmg(l, sct, (u16)(128 - dd));
+            }
+            l = nx;
+        }
+        u8 dl = sector_decoration_lists[sct]; u16 g = 0;
+        while (dl != NULL_DEC_LINK && g++ < MAX_DECORATIONS) {
+            u8 dn = DEC_LINK_DEREF(dl).next;
+            if (DEC_LINK_DEREF(dl).object_type == M14_ID_BARREL) {
+                s32 ex = DEC_LINK_DEREF(dl).x - bx, ey = DEC_LINK_DEREF(dl).y - by;
+                if (ex < 0) ex = -ex; if (ey < 0) ey = -ey;
+                if ((ex > ey ? ex : ey) < 128) m14_explode(dl, sct, 20);
+            }
+            dl = dn;
+        }
+    }
+}
+static void m14_pj_boom(m14_pj_t* p) {
+    p->st = 1; p->left = 50; p->vx = p->vy = 0;
+    DEC_LINK_DEREF(p->link).object_type = M14_ID_FBX0;
+    play_sfx(SFX_SHOTGUN_ID, 15);
+    if (p->kind) m14_pj_blast(p->x >> FIX32_FRAC_BITS, p->y >> FIX32_FRAC_BITS);
+}
+void m14_proj_tick(void) {
+    s16 dt = last_frame_ticks > 90 ? 90 : (s16)last_frame_ticks;
+    for (u8 i = 0; i < m14pj_n; ) {
+        m14_pj_t* p = &m14pj[i];
+        u8 done = 0;
+        if (p->st) {
+            p->left -= dt;
+            while (p->left <= 0 && !done) {
+                p->st++; p->left += 45;
+                if (p->st > 2) done = 1;
+            }
+        } else {
+            u8 ns = dt > 45 ? 2 : 1; s16 sd = dt / ns;
+            for (u8 sub = 0; sub < ns && !p->st; sub++) {
+                s32 nx = p->x + (s32)p->vx * sd, ny = p->y + (s32)p->vy * sd;
+                s32 cz = get_sector_group_floor_height(sector_group(p->sector, cur_portal_map));
+                collision_result r = check_for_collision_radius(p->x, p->y, cz, nx, ny, FIX32(8), p->sector);
+                u8 blocked = (r.pos.x != nx || r.pos.y != ny);
+                p->x = r.pos.x; p->y = r.pos.y;
+                if (r.new_sector != p->sector) {
+                    u8 nl = m14_pj_link(r.new_sector, p->x, p->y, DEC_LINK_DEREF(p->link).object_type);
+                    m14_dec_unlink(p->link, p->sector);
+                    if (nl == NULL_DEC_LINK) { done = 1; break; }
+                    p->link = nl; p->sector = r.new_sector;
+                } else {
+                    DEC_LINK_DEREF(p->link).x = (s16)(p->x >> FIX32_FRAC_BITS); DEC_LINK_DEREF(p->link).y = (s16)(p->y >> FIX32_FRAC_BITS);
+                }
+                if (blocked) { m14_pj_boom(p); break; }
+                s32 ux = p->x >> FIX32_FRAC_BITS, uy = p->y >> FIX32_FRAC_BITS;
+                if (!p->kind) {
+                    s32 dx = (cur_player_pos.x >> FIX32_FRAC_BITS) - ux, dy = (cur_player_pos.y >> FIX32_FRAC_BITS) - uy;
+                    if (dx < 0) dx = -dx; if (dy < 0) dy = -dy;
+                    if (dx < 24 && dy < 24) { m14_player_damage(3 * ((random() & 7) + 1)); m14_pj_boom(p); }
+                } else {
+                    u8 hit = 0;
+                    for (u16 sct = 0; sct < num_sector_lists && !hit; sct++) {
+                        for (object_link l = sector_object_lists[sct]; l != NULL_OBJ_LINK; l = OBJ_LINK_DEREF(l).next) {
+                            if (!m14_kind(OBJ_LINK_DEREF(l).object_type)) continue;
+                            s32 ex = F32_toInt(OBJ_LINK_DEREF(l).x) - ux, ey = F32_toInt(OBJ_LINK_DEREF(l).y) - uy;
+                            if (ex < 0) ex = -ex; if (ey < 0) ey = -ey;
+                            if (ex < 28 && ey < 28) { m14_pj_mondmg(l, sct, 20 * ((random() & 7) + 1)); hit = 1; break; }
+                        }
+                    }
+                    if (hit) m14_pj_boom(p);
+                }
+            }
+        }
+        if (done) { if (p->link != NULL_DEC_LINK) m14_dec_unlink(p->link, p->sector); m14pj[i] = m14pj[--m14pj_n]; } else i++;
+    }
+}
+"""
+    o.write_text(t)
+    g=out/"src/game.c"; t=g.read_text()
+    a="m14_tint_tick(); m14_expl_tick();"
+    if t.count(a)!=1: raise ValueError("proj anchor tick")
+    t=t.replace(a,a+" { extern void m14_proj_tick(void); m14_proj_tick(); }",1)
+    a="        run_in_phs(cur_player_pos.cur_sector, wake_enemies_in_sector, cur_portal_map);"
+    if t.count(a)!=1: raise ValueError("proj anchor fire")
+    t=t.replace(a,a+"\n        { extern u8 m14_rl_active(void); extern void m14_pj_rocket(void); if (m14_rl_active()) m14_pj_rocket(); }",1)
+    a="if (drawn_to_center_cols == DECORATION)"
+    if t.count(a)!=1: raise ValueError("proj anchor dec hit")
+    t=t.replace(a,"extern u8 m14_rl_active(void); if (!m14_rl_active() && drawn_to_center_cols == DECORATION)",1)
+    a="if(drawn_to_center_cols == OBJECT && sprite_on_center_col != NULL_OBJ_LINK) {"
+    if t.count(a)!=1: raise ValueError("proj anchor obj hit")
+    t=t.replace(a,"if(!m14_rl_active() && drawn_to_center_cols == OBJECT && sprite_on_center_col != NULL_OBJ_LINK) {",1)
+    g.write_text(t); print("EXP projectiles")
+
 def m14_sprite_zoom(out):
     """r084: maximum sprite ZOOM. Sprites are drawn exactly as before (same sort order, same projection, same
     position) except that once a sprite would be taller than MANIFOLD_SPRITE_MAXH percent of the 3D view
@@ -5026,6 +5178,7 @@ def stage(src, wad, out, control=False):
         m14_sprite_runs(out)
     if os.environ.get("MANIFOLD_SPRITE_MAXH","0")!="0":
         m14_sprite_zoom(out)
+    if os.environ.get("MANIFOLD_PROJECTILES","0")=="1": m14_projectiles(out)
     if os.environ.get("MANIFOLD_GODMODE","0")=="1":
         m14_godmode(out)
     if os.environ.get("MANIFOLD_SPRITE_CAP","0")!="0":
