@@ -2,7 +2,9 @@ name: M14 native checkpoint private compile E1M1
 on:
   push:
     branches: [exp-manifold-m14-native-save]
-    paths: ['.github/workflows/manifold-m14-native-save-private-build.yml']
+    paths:
+      - '.github/workflows/manifold-m14-native-save-private-build.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld'
   workflow_dispatch:
 permissions:
   contents: read
