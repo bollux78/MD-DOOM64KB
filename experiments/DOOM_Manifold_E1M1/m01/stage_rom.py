@@ -4982,7 +4982,8 @@ def stage(src, wad, out, control=False):
         _ls=_ls.replace(_an,_an+f"\n    {{ extern s32 m14_spawn_x, m14_spawn_y; extern u16 m14_spawn_cell, m14_spawn_ang; m14_spawn_x = FIX32({x}); m14_spawn_y = FIX32({y}); m14_spawn_cell = {spawn_cell}; m14_spawn_ang = {(angle*1024)//360}; }}")
         _lp.write_text(_ls)
     if os.environ.get("MANIFOLD_START_MENU","0")=="1":
-        m14_start_menu(out,x,y,angle,spawn_cell)
+        from m14_native_save import install as m14_install_native_save
+        m14_install_native_save(out,x,y,angle,spawn_cell)
         m14_level_exit(out)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
