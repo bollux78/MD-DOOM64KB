@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/manifold-m14-native-save-private-build.yml'
       - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/package_native_e1m1_test.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -76,6 +77,41 @@ jobs:
             }
           test -s "$src/out/release/rom.out"
           echo 'PASS: native save SGDK image compiled. No copyrighted ROM uploaded.'
+      - name: Package PRIVATE 12MiB E1M1-only test ROM in local roms directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$M14_TEST_STAGE/map/out/release/rom.out"
+          test -s "$src"
+          out="/home/dan/Projetos/manifold-doom/roms/MANIFOLD-M14-NATIVE-SAVE-E1M1-ONLY-X7-TEST-12MB.bin"
+          mkdir -p "$(dirname "$out")"
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/multimap/package_native_e1m1_test.py \
+            --map-elf "$src" \
+            --out "$out" \
+            --font "$GDK/res/image/font_default.png" \
+            --tool-prefix "$HOME/mars/m68k-elf/bin/m68k-elf-" \
+            --work "$M14_TEST_STAGE/pack"
+          test "$(stat -c %s "$out")" -eq 12582912
+          sha256sum "$out"
+          readme="$(dirname "$out")/MANIFOLD-M14-NATIVE-SAVE-E1M1-ONLY-X7-TEST-12MB-LEIA-ME.txt"
+          cat > "$readme" <<'TXT'
+          MANIFOLD M14 TESTE DE SAVE — APENAS E1M1
+          ROM experimental de 12 MiB (padding FF, jogo E1M1 somente).
+          Menu ao inicializar:
+            START = iniciar E1M1
+            B = carregar checkpoint salvo (depois de religar)
+          Dentro da fase:
+            START = pausa/retoma
+            A enquanto pausado = gravar save na SRAM
+            B enquanto pausado = carregar checkpoint da E1M1
+            C enquanto pausado = retornar ao menu do jogo
+          Usar via cartão SD do Mega EverDrive X7; USB não suporta SRAM
+          neste modo. Não substituir ROM rXXX estável.
+          Não é save state: o cenário reinicia após reset, mas posição,
+          fase e status do jogador são restaurados.
+          TXT
+          echo "::notice::TEST ROM CREATED LOCALLY: $out"
+          echo "::notice::NO WAD OR ROM WAS UPLOADED TO GITHUB."
       - name: Report errors only; never upload private assets
         if: failure()
         shell: bash
