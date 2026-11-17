@@ -26,7 +26,7 @@ static u16 manifold_hud_base;
 #define DHUD_X 4
 #endif
 #define DHUD_Y 22
-#define DHUD_PAL2(w) ((u16)(((w) & ~0x6000) | 0x4000 | 0x8000))   /* + priority bit: HUD tiles stay in front of the (low-priority) weapon sprites */   /* logic emits PAL3/PAL2 words -> force line 2 */
+#define DHUD_PAL2(w) ((u16)(((w) & ~0x6000) | 0x4000))   /* logic emits PAL3/PAL2 words -> force line 2 */
 
 static HudState dhud_state;
 static HudFace dhud_face;
