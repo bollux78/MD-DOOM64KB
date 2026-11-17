@@ -4437,6 +4437,76 @@ static inline u16 m14_divu16(u32 n, u16 dv) { __asm volatile("divu.w %1,%0" : "+
             if (pix) {""","rle sprite draw")
     print("r077 perf pass applied")
 
+def m14_sprite_runs(out):
+    """r080/r081: near (tall) sprites. Each SOURCE column is rendered ONCE into a 144-word column image
+    (cb) plus a short list of opaque screen segments (adjacent opaque source rows join, whatever their colour);
+    it is rebuilt only when the source column changes. A screen column then just copies the few clipped
+    segments from cb to the framebuffer with 32-bit moves. Same pixels as r078; per-column work drops from
+    one fill per source row to one copy per opaque segment."""
+    dr=out/"src/draw.c"; t=dr.read_text()
+    def rep(old,new):
+        nonlocal t
+        if t.count(old)!=1: raise ValueError("m14_sprite_runs anchor (%d): %s"%(t.count(old),old[:60]))
+        t=t.replace(old,new)
+    rep("s16 fy[65]; u8 fast = (yb-ya) >= 56; u16 pmin=64, pmax=0;",
+        "s16 fy[65]; u8 fast = (yb-ya) >= 56; u16 pmin=64, pmax=0; u8 rya[64], ryb[64]; u8 nr=0; u32 cb32[72]; u16* cb=(u16*)cb32;")
+    rep("                texpos+=len;\n            }\n",
+"""                texpos+=len;
+            }
+            nr=0;
+            if (fast) {
+                for (u16 sy=pmin; sy<=pmax; sy++) {
+                    u8 pix=pixels[sy]; s16 a=fy[sy], b=fy[sy+1];
+                    if (!pix || a>=b) continue;
+                    u16 v=(u16)(((u16)pix<<8)|pix);
+                    for (s16 yy=a; yy<b; yy++) cb[yy]=v;
+                    if (nr && ryb[nr-1]==(u8)a) ryb[nr-1]=(u8)b;
+                    else { rya[nr]=(u8)a; ryb[nr]=(u8)b; nr++; }
+                }
+            }
+""")
+    i=t.find("            u16* dcol=(u16*)dest;\n            for (u16 sy=pmin; sy<=pmax; sy++) {")
+    j=t.find("                while (d<e) *d++=v;\n            }\n",i)
+    if i<0 or j<0: raise ValueError("m14_sprite_runs draw anchor")
+    j+=len("                while (d<e) *d++=v;\n            }\n")
+    t=t[:i]+"""            u16* dcol=(u16*)dest;
+            for (u8 ri=0; ri<nr; ri++) {
+                s16 y0=rya[ri], y1=ryb[ri];
+                if (y0>=col_bot) break;
+                if (y1<=col_top) continue;
+                if (y0<col_top) y0=col_top;
+                if (y1>col_bot) y1=col_bot;
+                u16* d=dcol+y0; const u16* sp=cb+y0; s16 n=y1-y0;
+                if ((((u32)d)^((u32)sp))&2) { while (n-- > 0) *d++=*sp++; }
+                else {
+                    if (((u32)d)&2) { *d++=*sp++; n--; }
+                    u32* dl=(u32*)d; const u32* sl=(const u32*)sp; s16 k=n>>1;
+                    while (k>=4) { dl[0]=sl[0]; dl[1]=sl[1]; dl[2]=sl[2]; dl[3]=sl[3]; dl+=4; sl+=4; k-=4; }
+                    while (k>0) { *dl++=*sl++; k--; }
+                    if (n&1) *(u16*)dl=*(const u16*)sl;
+                }
+            }
+"""+t[j:]
+    dr.write_text(t); print("r081 sprite columns")
+
+def m14_sprite_cap(out):
+    """r081: limit the on-screen size of very near sprites to MANIFOLD_SPRITE_CAP percent of the view height
+    (75 -> 108 of 144 rows). Larger sprites are scaled down about their centre (aspect kept), so the
+    near-camera fill area, the dominant sprite cost, shrinks to ~56%."""
+    cap=int(os.environ.get("MANIFOLD_SPRITE_CAP","75"))
+    dr=out/"src/draw.c"; t=dr.read_text()
+    old="    if (!obj || obj->num_columns != 64 || x2<=x1 || ybot<=ytop) return;\n"
+    if t.count(old)!=1: raise ValueError("m14_sprite_cap anchor (%d)"%t.count(old))
+    new=old+"""    { s16 hh = ybot - ytop;                                   /* r081: near-sprite size cap */
+      if (hh > %d) {
+          s16 cy = (s16)(((s32)ybot + ytop) >> 1), cx = (s16)(((s32)x1 + x2) >> 1);
+          s16 hw = (s16)(((s32)(x2 - x1) * %d / hh) >> 1);
+          ytop = cy - %d; ybot = cy + %d; x1 = cx - hw; x2 = cx + hw;
+          if (x2 <= x1) return;
+      } }
+""" % (144*cap//100, 144*cap//100, 144*cap//200, 144*cap//100-144*cap//200)
+    dr.write_text(t.replace(old,new)); print("r081 sprite cap",cap)
+
 def m14_ai_throttle(out):
     """r079: chase/attack AI runs every 3rd frame (instead of every 2nd) while the frame time is long
     (> 36 ticks = under ~8 FPS, i.e. heavy combat). Every per-action quantity that assumed 'every other frame'
@@ -4909,6 +4979,10 @@ def stage(src, wad, out, control=False):
         import m14_wpn_gen; m14_wpn_gen.apply(out,wad)
     if os.environ.get("MANIFOLD_PERF","1")=="1":
         m14_perf(out)
+    if os.environ.get("MANIFOLD_SPRITE_RUNS","0")=="1":
+        m14_sprite_runs(out)
+    if os.environ.get("MANIFOLD_SPRITE_CAP","0")!="0":
+        m14_sprite_cap(out)
     if os.environ.get("MANIFOLD_AI_THROTTLE","0")=="1":
         m14_ai_throttle(out)
     if os.environ.get("MANIFOLD_FPS_ONLY","0")=="1":
