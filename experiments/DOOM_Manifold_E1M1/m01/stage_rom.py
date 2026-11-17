@@ -4526,6 +4526,30 @@ def m14_godmode(out):
 """
     g.write_text(t.replace(old,new)); print("r082 godmode A+C")
 
+def m14_sprite_zoom(out):
+    """r084: maximum sprite ZOOM. Sprites are drawn exactly as before (same sort order, same projection, same
+    position) except that once a sprite would be taller than MANIFOLD_SPRITE_MAXH percent of the 3D view
+    (144 rows) its scale stops growing: the projection is redone with the reciprocal depth that gives exactly
+    that height (screen x, top and bottom all scale about the eye/horizon line, as if the monster stopped
+    approaching). Sorting still uses the true depth."""
+    pc=int(os.environ.get("MANIFOLD_SPRITE_MAXH","75"))
+    cap=144*pc//100
+    pt=out/"src/portal.c"; t=pt.read_text()
+    old="""            s16 top_y = obj_sort_buf[obj_buf_idx].ytop;
+            s16 bot_y = obj_sort_buf[obj_buf_idx].ybot;
+"""
+    if t.count(old)!=1: raise ValueError("m14_sprite_zoom anchor (%d)"%t.count(old))
+    new=old+"""            { s16 hp = (s16)((bot_y - top_y) >> 4);                 /* r084: zoom cap, depth sort untouched */
+              if (hp > %d) {
+                  extern s16 playerZCam12Frac4;
+                  s16 hz = project_and_adjust_y_fix(playerZCam12Frac4, z_recip);
+                  top_y = hz + (s16)(((s32)(top_y - hz) * %d) / hp);
+                  bot_y = hz + (s16)(((s32)(bot_y - hz) * %d) / hp);
+                  z_recip = (u16)(((u32)z_recip * %d) / (u16)hp);
+              } }
+""" % (cap,cap,cap,cap)
+    pt.write_text(t.replace(old,new)); print("r084 sprite zoom cap",cap)
+
 def m14_ai_throttle(out):
     """r079: chase/attack AI runs every 3rd frame (instead of every 2nd) while the frame time is long
     (> 36 ticks = under ~8 FPS, i.e. heavy combat). Every per-action quantity that assumed 'every other frame'
@@ -5000,6 +5024,8 @@ def stage(src, wad, out, control=False):
         m14_perf(out)
     if os.environ.get("MANIFOLD_SPRITE_RUNS","0")=="1":
         m14_sprite_runs(out)
+    if os.environ.get("MANIFOLD_SPRITE_MAXH","0")!="0":
+        m14_sprite_zoom(out)
     if os.environ.get("MANIFOLD_GODMODE","0")=="1":
         m14_godmode(out)
     if os.environ.get("MANIFOLD_SPRITE_CAP","0")!="0":
