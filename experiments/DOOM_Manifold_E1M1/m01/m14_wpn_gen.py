@@ -254,12 +254,22 @@ void set_weapon_sprite_position_offset(s16 offX, s16 offY) {
     m14_sat_update(f->ns);
 }
 /* tiles of the first nsA sprites go to buffer A, the rest to buffer B; the V-int handler also talks to the VDP, so no interrupt may split the writes */
+/* a frame change used to copy up to 232 tiles (7.4 KB) with interrupts off in one go: far longer than vblank, so the 3D view's per-frame
+   transfer was starved (black band over the upper half). Now at most 40 tiles per vblank, interrupts on in between. */
+static void m14w_tiles(const u32 *src, u16 idx, u16 n) {
+    while (n) {
+        u16 c = n > 40 ? 40 : n;
+        for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\n nop\n nop\n nop"); }
+        VDP_loadTileData(src, idx, c, CPU);
+        SYS_enableInts();
+        src += c * 8; idx += c; n -= c;
+        if (n) while (*(volatile u16*)0xC00004 & 8) { }      /* wait for the end of this vblank */
+    }
+}
 static void m14w_loadf(const m14w_frame *f) {
     u16 ta = 0; for (u8 i = 0; i < f->nsA; i++) ta += f->spr[i].nt;
-    for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\n nop\n nop\n nop"); }
-    if (ta) VDP_loadTileData(f->tiles, start_tile_loc, ta, CPU);
-    if (f->ntiles > ta) VDP_loadTileData(f->tiles + ta * 8, manifold_weapon_buf1, f->ntiles - ta, CPU);
-    SYS_enableInts();
+    if (ta) m14w_tiles(f->tiles, start_tile_loc, ta);
+    if (f->ntiles > ta) m14w_tiles(f->tiles + ta * 8, manifold_weapon_buf1, f->ntiles - ta);
 }
 static void m14w_post_end(void) {
     const m14w_def *d = &m14w_defs[m14w_cur]; m14w_pi = 0xFF;
