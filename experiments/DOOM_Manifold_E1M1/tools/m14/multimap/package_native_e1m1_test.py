@@ -77,13 +77,13 @@ static void launch(void){
     *((volatile u8*)0xA10009)=0;
     *((volatile u8*)0xA1000B)=0;
     *((volatile u8*)0xA1000D)=0;
-    __asm volatile("move.w #0x2700,%%sr\n move.l #0,%%sp\n jmp 0x300200\n" ::: "memory");
+    __asm volatile("move.w #0x2700,%sr\n move.l #0,%sp\n jmp 0x300200\n" ::: "memory");
     for(;;){}
 }
 int main(void) {
     u16 last=0xffff;
     int i;
-    __asm volatile("move.w #0x2700,%%sr");
+    __asm volatile("move.w #0x2700,%sr");
     vreg(1,0x04); vreg(15,2);
     vram_w(0); for(i=0;i<32768;i++) VDP_DATA=0;
     cram_w(0); for(i=0;i<64;i++) VDP_DATA=0;
