@@ -125,11 +125,7 @@ void I_StartTic(void)
 	static uint16_t pf = 0;
 	if (++pf == 30) G_DeferedInitNew(sk_medium);
 #endif
-	// SGDK のジョイパッド状態更新。SYS_doVBlankProcess() の中でしか呼ばれないため、
-	// VDP_waitVSync() しか使わない本ループでは毎 tic ここで明示的に更新する。
-	// これを呼ばないと JOY_readJoypad() が常に無入力を返し、実機の操作が一切効かない。
-	JOY_update();
-
+	// The V-Int callback samples the controller. Keep event dispatch at game tic rate.
 	static uint16_t prev = 0;
 	uint16_t cur = JOY_readJoypad(JOY_1);
 	uint16_t diff = cur ^ prev;
@@ -402,6 +398,9 @@ static void I_VBlankCallback(void)
 	ticcount++;
 	_g_vblankCount++;
     R20_VBlankVideo();
+    // The X7 in-game hook observes the controller's TH-low and TH-high reads.
+    // Preserve the SDK's controller detection and service the video DMA first.
+    JOY_update();
 #if defined(DOOM_R20_STACKGUARD)
     R20_PROBE();
 #endif
