@@ -66,7 +66,10 @@ jobs:
             OS=Linux GDK="$GDK" PREFIX="$tc" CC="$tc"gcc LD="$tc"ld \
             AR="$tc"ar NM="$tc"nm OBJCPY="$tc"objcopy \
             MAPEXTRA_ORG=0x280000 > "$M14_TEST_STAGE/build.log" 2>&1 || {
-              grep -iEm25 'error|undefined|failed' "$M14_TEST_STAGE/build.log" || tail -80 "$M14_TEST_STAGE/build.log"
+              echo '---- Last linker/build output ----'
+              tail -110 "$M14_TEST_STAGE/build.log"
+              echo '---- Errors / missing symbols ----'
+              grep -iEm35 'error|undefined|failed|relocation|overflow|multiple definition' "$M14_TEST_STAGE/build.log" || true
               exit 1
             }
           test -s "$src/out/release/rom.out"
