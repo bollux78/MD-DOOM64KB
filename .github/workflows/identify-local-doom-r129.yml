@@ -1,0 +1,75 @@
+name: Identify the local Doom MD R129 build
+on:
+  push:
+    branches: [exp-chatgpt-r129-identification]
+    paths: ['.github/workflows/identify-local-doom-r129.yml']
+permissions:
+  contents: read
+jobs:
+  identify:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Read R129 ROM headers and local Doom MD Git metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import zipfile
+
+          home = Path.home()
+          projects = home / "Projetos"
+          private = projects / "Personal"
+          roots = [projects / "doom-md", projects / "MD-DOOM64KB"]
+          if private.is_dir():
+              roots += [p for p in private.iterdir() if re.match(r"(r12[89]|doom[-_ ]?md)", p.name, re.I)]
+          pattern = re.compile(r"(?<![a-z0-9])r[ _-]?129(?![0-9])", re.I)
+
+          def rom_info(label, data):
+              if len(data) < 512:
+                  return
+              title = ''.join(chr(b) if 32 <= b < 127 else ' ' for b in data[0x120:0x18e])
+              print(f"ROM {label}: {len(data)} bytes sha256={hashlib.sha256(data).hexdigest()}")
+              print("  header:", ' '.join(title.split()))
+
+          for root in roots:
+              if not root.is_dir():
+                  continue
+              if (root / ".git").exists():
+                  for params in (["log", "--all", "-i", "--grep=R129", "--oneline", "-20"],
+                                 ["status", "--short"]):
+                      p = subprocess.run(["git", "-C", str(root), *params], capture_output=True, text=True)
+                      for line in p.stdout.splitlines():
+                          if pattern.search(line):
+                              print("GIT", root.name, line)
+              for directory, subdirs, names in os.walk(root.resolve()):
+                  subdirs[:] = [d for d in subdirs if d not in (".git", "vendor", "node_modules") and not d.startswith(".")]
+                  for name in names:
+                      p = Path(directory) / name
+                      rel = p.relative_to(root.resolve())
+                      if not pattern.search(str(rel)) or p.is_symlink():
+                          continue
+                      label = str(root.relative_to(home) / rel)
+                      if p.suffix.lower() in (".bin", ".md", ".gen") and p.stat().st_size <= 16 * 1024 * 1024:
+                          if p.suffix.lower() == ".md":
+                              print("PROJECT FILE", label)
+                          else:
+                              rom_info(label, p.read_bytes())
+                      elif p.suffix.lower() == ".zip":
+                          with zipfile.ZipFile(p) as archive:
+                              for entry in archive.infolist():
+                                  if Path(entry.filename).suffix.lower() in (".bin", ".gen") and entry.file_size <= 16 * 1024 * 1024:
+                                      rom_info(label + " / " + entry.filename, archive.read(entry))
+                      elif p.name == "SOURCE-COMMIT":
+                          sha = p.read_text().strip()
+                          if re.fullmatch("[0-9a-f]{40}", sha):
+                              print("SOURCE", label, sha)
+                      elif p.name.lower() in ("manifest.json", "build.log") or p.suffix.lower() in (".elf", ".bps"):
+                          print("PROJECT FILE", label)
+          print("R129 metadata scan complete.")
+          PY
