@@ -5,7 +5,8 @@ on:
     paths:
       - '.github/workflows/manifold-m14-native-save-private-build.yml'
       - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld'
-      - '.github/workflows/manifold-m14-h40-reference-private-build.yml'
+      - '.github/workflows/manifold-m14-native-save-h40-reference-build.yml'
+      - 'experiments/DOOM_Manifold_E1M1/m01/stage_rom.py'
       - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/package_native_e1m1_test.py'
   workflow_dispatch:
 permissions:
