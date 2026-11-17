@@ -4491,7 +4491,7 @@ def m14_sprite_runs(out):
 
 def m14_sprite_cap(out):
     """r081: limit the on-screen size of very near sprites to MANIFOLD_SPRITE_CAP percent of the view height
-    (75 -> 108 of 144 rows). Larger sprites are scaled down about their centre (aspect kept), so the
+    (90 -> 129 of 144 rows). Larger sprites are scaled down (aspect kept), keeping their feet in place while visible, else about their centre, so the
     near-camera fill area, the dominant sprite cost, shrinks to ~56%."""
     cap=int(os.environ.get("MANIFOLD_SPRITE_CAP","75"))
     dr=out/"src/draw.c"; t=dr.read_text()
@@ -4501,10 +4501,11 @@ def m14_sprite_cap(out):
       if (hh > %d) {
           s16 cy = (s16)(((s32)ybot + ytop) >> 1), cx = (s16)(((s32)x1 + x2) >> 1);
           s16 hw = (s16)(((s32)(x2 - x1) * %d / hh) >> 1);
-          ytop = cy - %d; ybot = cy + %d; x1 = cx - hw; x2 = cx + hw;
+          if (ybot <= SCREEN_HEIGHT) ytop = ybot - %d; else { ytop = cy - %d; ybot = cy + %d; }   /* feet stay put while visible */
+          x1 = cx - hw; x2 = cx + hw;
           if (x2 <= x1) return;
       } }
-""" % (144*cap//100, 144*cap//100, 144*cap//200, 144*cap//100-144*cap//200)
+""" % (144*cap//100, 144*cap//100, 144*cap//100, 144*cap//200, 144*cap//100-144*cap//200)
     dr.write_text(t.replace(old,new)); print("r081 sprite cap",cap)
 
 def m14_godmode(out):
