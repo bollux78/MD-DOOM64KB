@@ -1,6 +1,6 @@
 # Manifold M14 — pausa com Continuar / Salvar / Carregar / Fases (experimento)
 
-**Estado:** implementação em `exp-manifold-m14-native-save`. Build do menu e driver SRAM validados para 68000; patch de staging verificado contra Manifold upstream fixado. **Ainda não confirmado com ROM Manifold integral no X7 real**. Não incrementar `rXXX` até aprovação.
+**Estado:** implementação em `exp-manifold-m14-native-save`. Menu/driver SRAM validados em 68000; staging e linkedição da fase E1M1 completa com SGDK no runner self-hosted **PASS** (run 44165583852, branch nativa). **A ROM final de 12 MiB ainda não foi montada e o save não foi validado no X7 real**. Não incrementar `rXXX` até aprovação.
 
 ## O que mudou
 
@@ -38,7 +38,7 @@ Fase E1M1–E1M9; X/Y/Z, ângulo e setor do jogador; vida, armadura, munição, 
 
 ## Validação
 
-O workflow público passou: verificou bytes do cabeçalho `RA E0 20` em `$1B0`, compilou o driver SRAM em M68000, compilou o menu bare-metal e aplicou o patch ao código real do Manifold upstream pinado.
+O workflow público passou: verificou bytes do cabeçalho `RA E0 20` em `$1B0`, compilou o driver SRAM em M68000, compilou o menu bare-metal e aplicou o patch ao código real do Manifold upstream pinado. A compilação privada do mapa E1M1 real também passou após ampliar o limite fixo da BSS de `0x1F44` para `0x1F84` no linker `md_split.ld` (reserva de +64 bytes). Workflow: https://github.com/bollux78/MD-DOOM64KB/actions/runs/44165583852. O binário E1M1 fica exclusivamente no `RUNNER_TEMP`, sem upload de ROM ou WAD.
 
 Testes ainda necessários: compilação integral SGDK do mapa; ROM completa 12MiB montada; iniciar no X7 via SD; START pausa; START retoma sem apagar HUD nem perder FPS; A salva; B recarrega; desligar/religar console; B no seletor relança a fase e restaura checkpoint; confirmar arquivo SRAM persistente no SD após trocar o jogo no menu principal.
 
