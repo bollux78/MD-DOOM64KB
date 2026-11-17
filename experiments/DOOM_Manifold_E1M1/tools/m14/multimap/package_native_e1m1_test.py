@@ -77,7 +77,7 @@ static void launch(void){
     *((volatile u8*)0xA10009)=0;
     *((volatile u8*)0xA1000B)=0;
     *((volatile u8*)0xA1000D)=0;
-    __asm volatile("move.w #0x2700,%sr\n move.l #0,%sp\n jmp 0x300200\n" ::: "memory");
+    __asm volatile("move.w #0x2700,%%sr\n move.l #0,%%sp\n jmp 0x300200\n" ::: "memory");
     for(;;){}
 }
 int main(void) {
