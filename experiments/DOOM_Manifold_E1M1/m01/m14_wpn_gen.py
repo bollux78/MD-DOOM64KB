@@ -223,15 +223,20 @@ static s16 m14w_bx, m14w_by; static u8 m14w_pi = 0xFF, m14w_pt;
 u16 m14w_cad(void) { return m14w_defs[m14w_cur].cad; }
 u8 m14w_pellets(void) { return m14w_defs[m14w_cur].pel; }
 u8 m14w_sfx(void) { return m14w_defs[m14w_cur].sfx; }
+/* Where the shown frame sits in VRAM: 0 = all tiles in buffer A, 1 = all in buffer B, 2 = split (first nsA sprites in A, rest in B).
+   Frames are never loaded over tiles that are on screen (that tears: square corrupt tiles on real hardware): the next frame is loaded
+   into the buffer that is not displayed, then the sprite list is switched. Frames that need both buffers hide the weapon while loading. */
+static u8 m14w_mode, m14w_ib;      /* m14w_ib: buffer of the idle frame (0 = A, 1 = B); the fire frame lives in the other one */
 static void m14w_place(void) {
     const m14w_frame *f = m14w_shown; if (!f) return;
-    u16 ta = (u16)start_tile_loc, tb = manifold_weapon_buf1;
+    u16 ta = (u16)start_tile_loc, tb = manifold_weapon_buf1, m = m14w_mode;
     VDP_clearSprites();
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
+        u8 inA = (m == 0) || (m == 2 && i < f->nsA);
         VDP_setSprite(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + m14w_bx, BASE_WEAPON_Y + 8 + f->dy + s->oy + m14w_by,
-                      s->size, TILE_ATTR_FULL(PAL0, 0, 0, 0, (i < f->nsA) ? ta : tb));
-        if (i < f->nsA) ta += s->nt; else tb += s->nt;
+                      s->size, TILE_ATTR_FULL(PAL0, 0, 0, 0, inA ? ta : tb));
+        if (inA) ta += s->nt; else tb += s->nt;
     }
     VDP_linkSprites(sprite_idx_start, f->ns);
     VDP_setSpriteLink(sprite_idx_start + f->ns, 0);
@@ -247,24 +252,49 @@ void set_weapon_sprite_position_offset(s16 offX, s16 offY) {
     }
     m14_sat_update(f->ns);
 }
-/* tiles of the first nsA sprites go to buffer A, the rest to buffer B; the V-int handler also talks to the VDP, so no interrupt may split the writes */
-static void m14w_loadf(const m14w_frame *f) {
-    u16 ta = 0; for (u8 i = 0; i < f->nsA; i++) ta += f->spr[i].nt;
-    for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\n nop\n nop\n nop"); }
-    if (ta) VDP_loadTileData(f->tiles, start_tile_loc, ta, CPU);
-    if (f->ntiles > ta) VDP_loadTileData(f->tiles + ta * 8, manifold_weapon_buf1, f->ntiles - ta, CPU);
-    SYS_enableInts();
+/* tile copy in chunks of <= 64 tiles, one per vblank (a 7 KB copy with interrupts off starves the 3D view's own transfer: black band) */
+static void m14w_tiles(const u32 *src, u16 idx, u16 n) {
+    while (n) {
+        u16 c = n > 64 ? 64 : n;
+        for (;;) { SYS_disableInts(); if (*(volatile u16*)0xC00004 & 8) break; SYS_enableInts(); __asm__ volatile("nop\n nop\n nop\n nop"); }
+        VDP_loadTileData(src, idx, c, CPU);
+        SYS_enableInts();
+        src += c * 8; idx += c; n -= c;
+        if (n) while (*(volatile u16*)0xC00004 & 8) { }
+    }
+}
+static void m14w_load(const m14w_frame *f, u8 mode) {
+    if (mode == 0) m14w_tiles(f->tiles, start_tile_loc, f->ntiles);
+    else if (mode == 1) m14w_tiles(f->tiles, manifold_weapon_buf1, f->ntiles);
+    else {
+        u16 ta = 0; for (u8 i = 0; i < f->nsA; i++) ta += f->spr[i].nt;
+        if (ta) m14w_tiles(f->tiles, start_tile_loc, ta);
+        if (f->ntiles > ta) m14w_tiles(f->tiles + ta * 8, manifold_weapon_buf1, f->ntiles - ta);
+    }
+}
+static void m14w_hide(void) { VDP_clearSprites(); m14_sat_update(0); }
+static void m14w_show(const m14w_frame *f, u8 mode) { m14w_shown = f; m14w_mode = mode; m14w_place(); }
+static u8 m14w_fits(const m14w_frame *f, u8 buf) { return f->ntiles <= (buf ? 104 : 128); }
+static void m14w_home(const m14w_def *d) {      /* idle in A, fire in B, shown with the weapon hidden meanwhile */
+    m14w_hide(); m14w_ib = 0; m14w_load(d->idle, 0); m14w_load(d->fire, 1); m14w_show(d->idle, 0);
 }
 static void m14w_post_end(void) {
-    const m14w_def *d = &m14w_defs[m14w_cur]; m14w_pi = 0xFF;
-    m14w_loadf(d->idle); m14w_loadf(d->fire);
-    m14w_shown = d->idle; m14w_isfire = 0; m14w_hold = 0; m14w_place();
+    const m14w_def *d = &m14w_defs[m14w_cur]; u8 m = m14w_mode; m14w_pi = 0xFF; m14w_isfire = 0; m14w_hold = 0;
+    if (m == 2 || !m14w_fits(d->idle, 1 - m)) { m14w_home(d); return; }
+    u8 nb = 1 - m;                                  /* the buffer that is not on screen */
+    m14w_load(d->idle, nb); m14w_show(d->idle, nb); m14w_ib = nb;
+    m14w_load(d->fire, m);                          /* the fire frame goes to the buffer that just became free */
+}
+static void m14w_post_show(const m14w_frame *f) {
+    u8 m = m14w_mode;
+    if (m != 2 && m14w_fits(f, 1 - m)) { m14w_load(f, 1 - m); m14w_show(f, 1 - m); return; }
+    u8 m2 = f->ntiles <= 104 ? 1 : (f->ntiles <= 128 ? 0 : 2);
+    m14w_hide(); m14w_load(f, m2); m14w_show(f, m2);
 }
 void m14w_select(u8 id) {
     const m14w_def *d = &m14w_defs[id]; m14w_cur = id; m14w_pi = 0xFF;
     PAL_setColors(1, d->pal, 15, CPU);
-    m14w_loadf(d->idle); m14w_loadf(d->fire);
-    m14w_shown = d->idle; m14w_isfire = 0; m14w_hold = 0; m14w_place();
+    m14w_home(d); m14w_isfire = 0; m14w_hold = 0;
 }
 void m14w_next(void) { m14w_select((u8)((m14w_cur + 1) % @NW@)); }
 void m14_fire_anim(void) {
@@ -272,11 +302,13 @@ void m14_fire_anim(void) {
     if (m14w_pi != 0xFF) m14w_post_end();
     u16 h = d->hold / (last_frame_ticks ? last_frame_ticks : 1); if (h < 1) h = 1;
     if (d->sfx == 75) {                     /* chainsaw: alternate the two frames on every shot while C is held */
-        m14w_isfire ^= 1; m14w_shown = m14w_isfire ? d->fire : d->idle; m14w_hold = 0; m14w_place(); return;
+        m14w_isfire ^= 1; m14w_hold = 0;
+        if (m14w_isfire) m14w_show(d->fire, 1 - m14w_ib); else m14w_show(d->idle, m14w_ib);
+        return;
     }
-    m14w_hold = h; m14w_shown = d->fire; m14w_isfire = 1; m14w_place();
+    m14w_hold = h; m14w_isfire = 1; m14w_show(d->fire, 1 - m14w_ib);
 }
-void m14w_idle(void) { if (m14w_isfire) { m14w_shown = m14w_defs[m14w_cur].idle; m14w_isfire = 0; m14w_hold = 0; m14w_place(); } }
+void m14w_idle(void) { if (m14w_isfire) { m14w_show(m14w_defs[m14w_cur].idle, m14w_ib); m14w_isfire = 0; m14w_hold = 0; } }
 void m14w_step(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
     if (m14w_pi != 0xFF) {
@@ -285,13 +317,13 @@ void m14w_step(void) {
         else {
             m14w_pi++;
             if (m14w_pi >= d->npost) m14w_post_end();
-            else { m14w_loadf(d->post[m14w_pi]); m14w_shown = d->post[m14w_pi]; m14w_isfire = 0; m14w_pt = d->ptime; m14w_place(); }
+            else { m14w_post_show(d->post[m14w_pi]); m14w_isfire = 0; m14w_pt = d->ptime; }
         }
         return;
     }
     if (m14w_hold && --m14w_hold == 0) {
-        if (d->npost) { m14w_pi = 0; m14w_loadf(d->post[0]); m14w_shown = d->post[0]; m14w_isfire = 0; m14w_pt = d->ptime; m14w_place(); }
-        else { m14w_shown = d->idle; m14w_isfire = 0; m14w_place(); }
+        if (d->npost) { m14w_pi = 0; m14w_post_show(d->post[0]); m14w_isfire = 0; m14w_pt = d->ptime; }
+        else { m14w_show(d->idle, m14w_ib); m14w_isfire = 0; }
     }
 }
 '''
