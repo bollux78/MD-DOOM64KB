@@ -4507,6 +4507,24 @@ def m14_sprite_cap(out):
 """ % (144*cap//100, 144*cap//100, 144*cap//200, 144*cap//100-144*cap//200)
     dr.write_text(t.replace(old,new)); print("r081 sprite cap",cap)
 
+def m14_godmode(out):
+    """r082: invincible-player toggle for combat performance tests. A+C together toggles it; while on, health is
+    pinned at 100% (the HUD shows it). The A weapon-switch is ignored while C is held."""
+    d=out/"src/doom_statusbar.c"; t=d.read_text()
+    old="void m14_player_damage(u16 dmg) {\n"
+    if t.count(old)!=1: raise ValueError("godmode anchor damage")
+    d.write_text(t.replace(old,"u8 m14_god;\nvoid m14_player_damage(u16 dmg) {\n    if (m14_god) { dhud_state.health = 100; return; }\n"))
+    g=out/"src/game.c"; t=g.read_text()
+    old="    { static u8 m14_sp = 1; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; if (m14_now && !m14_sp) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }\n"
+    if t.count(old)!=1: raise ValueError("godmode anchor game")
+    new="""    { static u8 m14_sp = 1, m14_gp = 0; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; u8 m14_cc = joy_button_pressed(BUTTON_C) ? 1 : 0;
+      u8 m14_combo = m14_now && m14_cc;
+      if (m14_combo && !m14_gp) { extern u8 m14_god; extern void m14_player_damage(u16 dmg); m14_god ^= 1; if (m14_god) m14_player_damage(0); }
+      m14_gp = m14_combo;
+      if (m14_now && !m14_sp && !m14_cc) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }
+"""
+    g.write_text(t.replace(old,new)); print("r082 godmode A+C")
+
 def m14_ai_throttle(out):
     """r079: chase/attack AI runs every 3rd frame (instead of every 2nd) while the frame time is long
     (> 36 ticks = under ~8 FPS, i.e. heavy combat). Every per-action quantity that assumed 'every other frame'
@@ -4981,6 +4999,8 @@ def stage(src, wad, out, control=False):
         m14_perf(out)
     if os.environ.get("MANIFOLD_SPRITE_RUNS","0")=="1":
         m14_sprite_runs(out)
+    if os.environ.get("MANIFOLD_GODMODE","0")=="1":
+        m14_godmode(out)
     if os.environ.get("MANIFOLD_SPRITE_CAP","0")!="0":
         m14_sprite_cap(out)
     if os.environ.get("MANIFOLD_AI_THROTTLE","0")=="1":
