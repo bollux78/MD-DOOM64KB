@@ -125,6 +125,7 @@ static u16 pad_read(void) {   /* bit set = pressed: 0 U,1 D,2 L,3 R,4 B,5 C,6 A,
     r = (~PAD_DATA) & 0x3F;
     PAD_DATA = 0x00; __asm volatile("nop\n nop\n nop\n nop");
     r |= ((~PAD_DATA) & 0x30) << 2;   /* A=bit4->6, START=bit5->7 */
+    PAD_DATA = 0x40;                  /* X7: leave TH idle HIGH (as the validated reference ISR does) */
     return r;
 }
 
