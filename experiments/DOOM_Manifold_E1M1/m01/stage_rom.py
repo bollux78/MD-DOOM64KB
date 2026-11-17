@@ -4087,7 +4087,7 @@ def m14_input_fix(out):
     t=t.replace(a,"s16 m14_recoil_y;\n"+a)
     a="        shooting--;\n"
     assert t.count(a)==1
-    t=t.replace(a,a+"        extern u8 m14w_has_post(void); m14_recoil_y = (shooting > 0 && !m14w_has_post()) ? ((shooting > 3 ? 3 : shooting) * 6) : 0; set_gun_pos();   /* weapons with their own recoil frames do not get the extra push down */\n")
+    t=t.replace(a,a+"        m14_recoil_y = (shooting > 0) ? ((shooting > 3 ? 3 : shooting) * 6) : 0; set_gun_pos();\n")
     g.write_text(t)
     wad_snd=None
     try:

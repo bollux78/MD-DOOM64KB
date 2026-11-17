@@ -228,7 +228,6 @@ static s16 m14w_bx, m14w_by; static u8 m14w_pi = 0xFF, m14w_pt;
 u16 m14w_cad(void) { return m14w_defs[m14w_cur].cad; }
 u8 m14w_pellets(void) { return m14w_defs[m14w_cur].pel; }
 u8 m14w_sfx(void) { return m14w_defs[m14w_cur].sfx; }
-u8 m14w_has_post(void) { return m14w_defs[m14w_cur].npost != 0; }
 static void m14w_place(void) {
     const m14w_frame *f = m14w_shown; if (!f) return;
     u16 ta = (u16)start_tile_loc, tb = manifold_weapon_buf1;
