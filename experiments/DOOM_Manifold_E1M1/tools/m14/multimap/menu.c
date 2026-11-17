@@ -152,7 +152,7 @@ static void show_image(int n) {
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = ib[i];
     clear_plane();
     for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));
-    vreg(7, 0x00); vreg(1, 0x44);
+    vreg(7, 0x00); vreg(1, 0x64);
 }
 
 static void set_banks(int mapbank, int xbank);
@@ -176,7 +176,7 @@ static void bank_test(int k) {
     text(8, 20, "SLOTS 1-5 COMUM, 6-7 FASE", 2);
 #endif
     text(8, 22, "START NO JOGO VOLTA AQUI", 2);
-    vreg(1, 0x44);
+    vreg(1, 0x64);
     for (;;) wait_vblank();
 }
 /* slots 1..5 (0x080000-0x2FFFFF) = banks 1..5: the common code/data block shared by every map;
@@ -196,6 +196,8 @@ static void launch(int k) {
     const struct map_entry *m = &maps[k];
     /* black screen, clear VRAM so the map starts from a clean VDP */
     music_stop();
+    __asm volatile("move.w #0x2700,%%sr" : : : "memory");
+    *(volatile u32 *)0xFF0034 = 0;     /* map phase: stub30 jumps to the map's _VINT */
     vreg(1, 0x04);
     vram_w(0); for (i = 0; i < 32768; i++) VDP_DATA = 0;
     cram_w(0); for (i = 0; i < 64; i++) VDP_DATA = 0;
@@ -247,6 +249,9 @@ int main(void) {
     vreg(5, 0); vreg(7, 0x00); vreg(10, 0); vreg(11, 0); vreg(12, 0x81);
     vreg(13, 0x2C); vreg(15, 2); vreg(16, 0x01); vreg(17, 0); vreg(18, 0);
     PAD_CTRL = 0x40;
+    /* X7 in-game menu: V-Int on + IRQ mask open in the menu (stub30 in crt0.s polls the pad both TH phases) */
+    *(volatile u32 *)0xFF0034 = 0x4D56494EUL;
+    __asm volatile("move.w #0x2000,%%sr" : : : "memory");
 #ifdef AUTO_LAUNCH
     music_stop(); launch(AUTO_LAUNCH - 1);
 #endif
@@ -267,7 +272,7 @@ int main(void) {
         clear_plane();
         for (r = 0; r < 28; r++) for (c = 0; c < 40; c++) put_cell(c, r, ib[64 + r * 40 + c] | (96 + r * 40 + c));
         vreg(7, 0x00);
-        vreg(1, 0x44);
+        vreg(1, 0x64);
         music_start_inter();
         while (pad_read() & 0xFF) wait_vblank();
         delay(60);
@@ -286,7 +291,7 @@ int main(void) {
     music_start();
     while (pad_read() & 0xFF) wait_vblank();
     for (;;) { wait_vblank(); if (pad_read() & 0xC0) break; }
-    } else { vreg(7, 0x3F); clear_plane(); vreg(1, 0x44); music_start(); }   /* wait_vblank needs the display on */
+    } else { vreg(7, 0x3F); clear_plane(); vreg(1, 0x64); music_start(); }   /* wait_vblank needs the display on */
     while (pad_read() & 0xFF) wait_vblank();
 
     /* level menu */
@@ -310,7 +315,7 @@ int main(void) {
         text(8, 25, "START: JOGAR", 2);
         text(8, 27, "START NO JOGO VOLTA AQUI", 2);
         text(8, 21, "A: TESTE DE BANCOS", 2);
-        vreg(1, 0x44);
+        vreg(1, 0x64);
         wait_vblank();
         pad = pad_read();
         if (pad != last) {

@@ -146,8 +146,28 @@ stub28: move.l 3145840,-(%sp)
         rts
 stub29: move.l 3145844,-(%sp)
         rts
-stub30: move.l 3145848,-(%sp)
+/* Level-6 (V-Int) vector. Mega EverDrive X7 opens its in-game menu (Down+Start) only if the pad is polled
+   in BOTH TH phases at every vblank, with the V-Int running. SGDK polls once per rendered frame (2-8 FPS in
+   combat), so do the two-phase poll here, at every vblank, then hand over to the map's own _VINT.
+   TH latch is restored afterwards so an interrupted JOY_update/pad_read is not disturbed. */
+stub30: movem.l %d0-%d1,-(%sp)
+        move.b 0xA10003,%d1
+        move.b #0x00,0xA10003
+        nop
+        nop
+        move.b 0xA10003,%d0
+        move.b #0x40,0xA10003
+        nop
+        nop
+        move.b 0xA10003,%d0
+        andi.b #0x40,%d1
+        move.b %d1,0xA10003
+        cmpi.l #0x4D56494E,0xFF0034      /* menu phase: no map loaded yet */
+        movem.l (%sp)+,%d0-%d1
+        beq.s 1f
+        move.l 3145848,-(%sp)
         rts
+1:      rte
 stub31: move.l 3145852,-(%sp)
         rts
 stub32: move.l 3145856,-(%sp)
