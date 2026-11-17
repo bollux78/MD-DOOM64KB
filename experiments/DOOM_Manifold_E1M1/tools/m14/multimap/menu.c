@@ -3,6 +3,7 @@
    slots 1..4 (512 KB each) by the SSF2 bank registers. */
 #include "menu.h"
 #include "maps.h"
+#include "m14_sram.h"
 #ifndef NSLOT
 #define NSLOT 7
 #endif
@@ -309,6 +310,7 @@ int main(void) {
         text(8, 23, "CIMA/BAIXO: ESCOLHER", 2);
         text(8, 25, "START: JOGAR", 2);
         text(8, 27, "START NO JOGO VOLTA AQUI", 2);
+        text(8, 19, "B: CARREGAR CHECKPOINT", 2);
         text(8, 21, "A: TESTE DE BANCOS", 2);
         vreg(1, 0x44);
         wait_vblank();
@@ -318,6 +320,15 @@ int main(void) {
             if (pad & 1) sel = sel ? sel - 1 : MAP_COUNT;
             if (pad & 2) sel = (sel < MAP_COUNT) ? sel + 1 : 0;
             if (pad & 0x40 && sel < MAP_COUNT) { vreg(1, 0x04); bank_test(sel); }
+            if (pad & 0x10) { /* B: load saved level after full power-off. */
+                m14_checkpoint saved;
+                if (m14_sram_load(&saved) && saved.w[3] < MAP_COUNT &&
+                    m14_sram_request(saved.w[3])) {
+                    vreg(1, 0x04);
+                    launch(saved.w[3]); /* Restore checkpoint after SGDK startup */
+                }
+                text(8, 19, "SEM SAVE VALIDO", 3);
+            }
             if (pad & 0xA0) {
                 if (sel < MAP_COUNT) { vreg(1, 0x04); launch(sel); }
                 else {   /* CREDITS: DoomCREDIT10 -> Disclaimer and Credits -> EndMD2 -> level menu; any button advances */

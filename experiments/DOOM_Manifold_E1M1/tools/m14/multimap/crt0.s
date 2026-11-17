@@ -65,18 +65,35 @@ _vectors:
         dc.l stub62
         dc.l stub63
 
+        /* Explicit ROM header offsets: original concatenated strings were
+           misaligned, preventing cartridge SRAM autodetection. */
         .org 0x100
         .ascii "SEGA SSF        "
-        .ascii "(C)MANIFOLD 2026 "
+        .org 0x110
+        .ascii "(C)MANIFOLD 2026"
+        .org 0x120
         .ascii "MANIFOLD DOOM E1 LEVEL SELECT            "
+        .org 0x150
         .ascii "MANIFOLD DOOM E1 LEVEL SELECT            "
+        .org 0x180
         .ascii "GM 00000000-00"
+        .org 0x18e
         dc.w 0
+        .org 0x190
         .ascii "J               "
+        .org 0x1a0
         dc.l 0, 0x00FFFFFF, 0xE0FF0000, 0xE0FFFFFF
+        .org 0x1b0
+        /* 16-bit persistent SRAM in X7 SSF bank31, virtual slot5,
+           usable at $2C0000-$2C00FF while slot5 is remapped. */
+        .ascii "RA"
+        .byte 0xE0, 0x20
+        dc.l 0x002C0000, 0x002C00FF
+        .org 0x1bc
         .ascii "            "
-        .ascii "            "
+        .org 0x1c8
         .ascii "                                        "
+        .org 0x1f0
         .ascii "JUE             "
 
         .org 0x200

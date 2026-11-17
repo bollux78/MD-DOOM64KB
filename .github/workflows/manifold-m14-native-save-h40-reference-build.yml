@@ -1,0 +1,128 @@
+name: M14 H40 reference visual + native SRAM test
+on:
+  push:
+    branches: [exp-manifold-m14-native-save]
+    paths:
+      - '.github/workflows/manifold-m14-native-save-private-build.yml'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/md_split.ld'
+      - '.github/workflows/manifold-m14-native-save-h40-reference-build.yml'
+      - 'experiments/DOOM_Manifold_E1M1/m01/stage_rom.py'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/package_native_e1m1_test.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-compile:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Find local SGDK, toolchain and shareware WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then echo "GDK=$d" >> "$GITHUB_ENV"; exit 0; fi
+          done
+          while IFS= read -r p; do
+            if test -f "$p"; then echo "GDK=$(dirname "$p")" >> "$GITHUB_ENV"; exit 0; fi
+          done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null)
+          echo '::error::Missing SGDK'; exit 1
+      - name: Stage E1M1 with native SRAM save (private)
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/m14-h40-reference-$GITHUB_RUN_ID"
+          mkdir -p "$scratch"
+          echo "M14_TEST_STAGE=$scratch" >> "$GITHUB_ENV"
+          git clone --quiet https://github.com/ehaliewicz/Manifold.git "$scratch/upstream"
+          git -C "$scratch/upstream" checkout --quiet b6fe52a52344464de00bde4dc58a40f8b89cfc1a
+          python3 -c 'import shapely,PIL' || python3 -m pip install --user -q shapely pillow
+          MANIFOLD_MAP=E1M1 MANIFOLD_START_MENU=1 MANIFOLD_HUD=doom MANIFOLD_H32=0 MANIFOLD_BUILD_TAG="BOLLUX78 H40 SAVE" \
+          MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_OBJECTS=1 \
+          MANIFOLD_VDP_SAFE=2 MANIFOLD_HUD_TIMING=1 MANIFOLD_STATIC_REPAIR_ONCE=1 \
+          MANIFOLD_NEAR_SAFE=1 MANIFOLD_SKY_CEIL_UNIFORM=0 MANIFOLD_TEX_HSTRETCH=1.0 \
+          MANIFOLD_MONSTERS=1 MANIFOLD_MONSTERS_INACTIVE=1 MANIFOLD_HAZARDS=1 MANIFOLD_PICKUPS=1 MANIFOLD_MUSIC=0 MANIFOLD_WEAPONS=1 MANIFOLD_PERF=1 \
+          MANIFOLD_DOORS=1 MANIFOLD_DYN_PARAMS=1 MANIFOLD_WEAPON_FIX=1 \
+          MANIFOLD_INPUT_FIX=1 MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 MANIFOLD_TEX_U=1 \
+          MANIFOLD_SKY_MERGE=1 MANIFOLD_EYE=48 MANIFOLD_OBJ_HEIGHT_PCT=80 \
+          MANIFOLD_WAD_SND=/home/dan/Projetos/doom-md/assets/wads/doom1.wad \
+            python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py \
+              --source "$scratch/upstream" --wad /home/dan/Projetos/doom-md/assets/wads/doom1.wad \
+              --out "$scratch/map" > "$scratch/stage.log" 2>&1 || {
+                tail -55 "$scratch/stage.log"; exit 1; }
+          grep -q 'M14 native save' "$scratch/stage.log"
+          grep -q 'VDP_setScreenWidth320()' "$scratch/map/src/game.c"
+          grep -q 'BOLLUX78 H40 SAVE' "$scratch/map/src/game.c"
+          grep -q 'M13 Werk' "$scratch/stage.log" || true
+          if grep -q 'MANIFOLD_H32 1' "$scratch/map/src/config.h"; then echo '::error::H32 erroneously enabled'; exit 1; fi
+          grep -q 'm14_checkpoint_load_current' "$scratch/map/src/game.c"
+          grep -q 'm14_sram_save' "$scratch/map/src/doom_statusbar.c"
+          if test ! -e "$scratch/map/src/math3D.h"; then ln -s math3d.h "$scratch/map/src/math3D.h"; fi
+          echo 'PASS: private Manifold M14 E1M1 staging'
+      - name: Cross compile the actual staged E1M1
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$M14_TEST_STAGE/map"
+          cp experiments/DOOM_Manifold_E1M1/tools/m14/multimap/mk-split.gen "$M14_TEST_STAGE/mk-split.gen"
+          sed -i "s@/home/claude/md-doom64kb@$GITHUB_WORKSPACE@g" "$M14_TEST_STAGE/mk-split.gen"
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          make -C "$src" -f "$M14_TEST_STAGE/mk-split.gen" -j2 release \
+            OS=Linux GDK="$GDK" PREFIX="$tc" CC="$tc"gcc LD="$tc"ld \
+            AR="$tc"ar NM="$tc"nm OBJCPY="$tc"objcopy \
+            MAPEXTRA_ORG=0x280000 > "$M14_TEST_STAGE/build.log" 2>&1 || {
+              echo '---- Last linker/build output ----'
+              tail -110 "$M14_TEST_STAGE/build.log"
+              echo '---- Errors / missing symbols ----'
+              grep -iEm35 'error|undefined|failed|relocation|overflow|multiple definition' "$M14_TEST_STAGE/build.log" || true
+              exit 1
+            }
+          test -s "$src/out/release/rom.out"
+          echo 'PASS: native save SGDK image compiled. No copyrighted ROM uploaded.'
+      - name: Package PRIVATE 12MiB E1M1-only test ROM in local roms directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$M14_TEST_STAGE/map/out/release/rom.out"
+          test -s "$src"
+          out="/home/dan/Projetos/manifold-doom/roms/MANIFOLD-M14-H40-REFERENCE-SAVE-E1M1-X7-TEST-12MB.bin"
+          mkdir -p "$(dirname "$out")"
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/multimap/package_native_e1m1_test.py \
+            --map-elf "$src" \
+            --out "$out" \
+            --font "$GDK/res/image/font_default.png" \
+            --tool-prefix "$HOME/mars/m68k-elf/bin/m68k-elf-" \
+            --work "$M14_TEST_STAGE/pack"
+          test "$(stat -c %s "$out")" -eq 12582912
+          sha256sum "$out"
+          readme="$(dirname "$out")/MANIFOLD-M14-H40-REFERENCE-SAVE-E1M1-X7-TEST-12MB-LEIA-ME.txt"
+          cat > "$readme" <<'TXT'
+          MANIFOLD M14 TESTE H40 + SAVE — APENAS E1M1
+          ROM experimental H40 (320 pixels), 12 MiB (padding FF, E1M1 somente).
+          Menu ao inicializar:
+            START = iniciar E1M1
+            B = carregar checkpoint salvo (depois de religar)
+          Dentro da fase:
+            START = pausa/retoma
+            A enquanto pausado = gravar save na SRAM
+            B enquanto pausado = carregar checkpoint da E1M1
+            C enquanto pausado = retornar ao menu do jogo
+          Usar via cartão SD do Mega EverDrive X7; USB não suporta SRAM
+          neste modo. Não substituir ROM rXXX estável.
+          Não é save state: o cenário reinicia após reset, mas posição,
+          fase e status do jogador são restaurados.
+          TXT
+          echo "::notice::TEST ROM CREATED LOCALLY: $out"
+          echo "::notice::NO WAD OR ROM WAS UPLOADED TO GITHUB."
+      - name: Report errors only; never upload private assets
+        if: failure()
+        shell: bash
+        run: |
+          if test -f "$M14_TEST_STAGE/stage.log"; then tail -50 "$M14_TEST_STAGE/stage.log"; fi
+          if test -f "$M14_TEST_STAGE/build.log"; then grep -iE -m20 'error|undefined' "$M14_TEST_STAGE/build.log" || true; fi

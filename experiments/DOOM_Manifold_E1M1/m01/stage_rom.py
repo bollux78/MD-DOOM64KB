@@ -972,7 +972,7 @@ def hud_fps_and_build_tag(out):
     if end<0: raise ValueError("showStats end not found")
     end+=3
     new=f'''#define MANIFOLD_BUILD_TAG "{tag}"
-static void manifold_hud_text(const char *t, u16 x, u16 y) {{
+static void manifold_hud_tag_text(const char *t, u16 x, u16 y) {{
     while (*t) {{
         VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, y);
         t++;
@@ -985,10 +985,10 @@ void showStats() {{
     char num[16];
     fix32ToStr(SYS_getFPSAsFloat(), num, 1);
     VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
-    manifold_hud_text("FPS ", 1, 26);
-    manifold_hud_text(num, 5, 26);
+    manifold_hud_tag_text("FPS ", 1, 26);
+    manifold_hud_tag_text(num, 5, 26);
     u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
-    manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
+    manifold_hud_tag_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
 }}
 '''
     s=s[:start]+new+s[end:]
@@ -1026,23 +1026,23 @@ def m13_werk_hud_timing(out):
     p.write_text(s.replace(old,new,1))
     p=out/"src/game.c";s=p.read_text()
     old="""    VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
-    manifold_hud_text("FPS ", 1, 26);
-    manifold_hud_text(num, 5, 26);
+    manifold_hud_tag_text("FPS ", 1, 26);
+    manifold_hud_tag_text(num, 5, 26);
     u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
-    manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);"""
+    manifold_hud_tag_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);"""
     new="""    static u8 m13_tag_written = 0;
     static char m13_last_fps[16] = "";
     if (!m13_tag_written) {
         VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
-        manifold_hud_text("FPS ", 1, 26);
+        manifold_hud_tag_text("FPS ", 1, 26);
         u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
-        manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
+        manifold_hud_tag_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
         m13_tag_written = 1;
     }
     if (strcmp(m13_last_fps, num) != 0) {
         /* Only changed digits; clear a fixed 8-character FPS region. */
-        manifold_hud_text("        ", 5, 26);
-        manifold_hud_text(num, 5, 26);
+        manifold_hud_tag_text("        ", 5, 26);
+        manifold_hud_tag_text(num, 5, 26);
         strcpy(m13_last_fps, num);
     }"""
     if s.count(old)!=1:
@@ -5147,7 +5147,8 @@ def stage(src, wad, out, control=False):
         _ls=_ls.replace(_an,_an+f"\n    {{ extern s32 m14_spawn_x, m14_spawn_y; extern u16 m14_spawn_cell, m14_spawn_ang; m14_spawn_x = FIX32({x}); m14_spawn_y = FIX32({y}); m14_spawn_cell = {spawn_cell}; m14_spawn_ang = {(angle*1024)//360}; }}")
         _lp.write_text(_ls)
     if os.environ.get("MANIFOLD_START_MENU","0")=="1":
-        m14_start_menu(out,x,y,angle,spawn_cell)
+        from m14_native_save import install as m14_install_native_save
+        m14_install_native_save(out,x,y,angle,spawn_cell)
         m14_level_exit(out)
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
