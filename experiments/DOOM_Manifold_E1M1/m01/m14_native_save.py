@@ -174,7 +174,7 @@ void m14_save_and_menu(void) {
     # overlay, which is already known to work in the game HUD.
     anchor = """    } else if (input_res == UNPAUSE_SCREEN) {"""
     text = _one(text, anchor,
-        """        console_push_message_high_priority("START: VOLTAR  A:SALVAR  B:CARREGAR  C:FASES", 45, 60000);
+        """        console_push_message_high_priority("START GO A SAVE B LOAD C FASES", 30, 60000);
         console_tick();
 """ + anchor, "pause message")
     anchor = """    if(paused) {
