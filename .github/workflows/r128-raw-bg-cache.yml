@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   build:
+    if: ${{ !contains(github.event.head_commit.message, '[relocate-roms]') }}
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
@@ -54,11 +55,13 @@ jobs:
             tar -xzf "$RUNNER_TEMP/shareware.tar.gz" -C "$RUNNER_TEMP/shareware"
             wad="$(find "$RUNNER_TEMP/shareware" -type f -iname doom1.wad -print -quit)"
           fi
+          private="$HOME/Projetos/Personal/r128-raw-bg-cache/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          install -d -m 0700 "$private"
           mkdir "$RUNNER_TEMP/r128-bench-builds" "$RUNNER_TEMP/e1m1-results"
           for mode in raw cache; do
             out="$RUNNER_TEMP/r128-bench-builds/$mode"
             R128_RAW_BG="$mode" bash scripts/lab/build_r128_shareware.sh "$wad" "$R128_NATIVE_SGDK" "$out"
-            cp "$out/doom-md-r60-r128-all-sw-pl.bin" "$RUNNER_TEMP/e1m1-results/doom-md-r128-bg-$mode.bin"
+            install -m 0600 "$out/doom-md-r60-r128-all-sw-pl.bin" "$private/doom-md-r128-bg-$mode.bin"
           done
       - name: Run the E1M1 menu benchmark and capture the result screens
         shell: bash
@@ -72,7 +75,7 @@ jobs:
             --nm "$R128_NATIVE_SGDK/bin/m68k-elf-nm" \
             --out "$RUNNER_TEMP/e1m1-results" --raw-bg
           cat "$RUNNER_TEMP/e1m1-results/results.json"
-      - name: Upload ROMs, E1M1 measurements and screenshots
+      - name: Upload E1M1 measurements and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -80,3 +83,47 @@ jobs:
           path: ${{ runner.temp }}/e1m1-results/
           if-no-files-found: warn
           retention-days: 30
+  relocate:
+    if: ${{ contains(github.event.head_commit.message, '[relocate-roms]') }}
+    permissions:
+      actions: write
+      contents: read
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 43998127353
+          name: r128-raw-bg-cache-e1m1
+          path: ${{ runner.temp }}/r128-original-results
+      - name: Preserve and verify the ROMs on the private runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          private="$HOME/Projetos/Personal/r128-raw-bg-cache/run-43998127353-1"
+          install -d -m 0700 "$private"
+          source="$RUNNER_TEMP/r128-original-results"
+          for rom in doom-md-r128-bg-raw.bin doom-md-r128-bg-cache.bin; do
+            install -m 0600 "$source/$rom" "$private/$rom"
+            cmp -s "$source/$rom" "$private/$rom"
+          done
+      - name: Upload only screenshots and benchmark measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: r128-raw-bg-cache-e1m1-results
+          path: |
+            ${{ runner.temp }}/r128-original-results/*.png
+            ${{ runner.temp }}/r128-original-results/results.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Delete the artifact that included ROMs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fsS -o /dev/null --request DELETE \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/14291161836"
