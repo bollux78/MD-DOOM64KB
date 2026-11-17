@@ -33,8 +33,14 @@ jobs:
           set -euo pipefail
           M=experiments/DOOM_Manifold_E1M1/tools/m14/multimap
           m68k-linux-gnu-as -m68000 -o /tmp/m14-crt0.o "$M/crt0.s"
-          m68k-linux-gnu-objdump -s -j .text.vec /tmp/m14-crt0.o > /tmp/m14-boot.txt
-          grep -q '5241 e020' /tmp/m14-boot.txt || grep -qi '5241e020' /tmp/m14-boot.txt
+          m68k-linux-gnu-objcopy -O binary -j .text.vec /tmp/m14-crt0.o /tmp/m14-boot.bin
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('/tmp/m14-boot.bin').read_bytes()
+          assert b[0x1b0:0x1b4] == bytes.fromhex('5241e020'), b[0x1b0:0x1bc].hex()
+          assert b[0x1b4:0x1bc] == bytes.fromhex('002c0000002c00ff')
+          print('PASS: SRAM header',b[0x1b0:0x1bc].hex())
+          PY
           cat > /tmp/test-m14-sram.c <<'C'
           #include "m14_sram.h"
           int probe(m14_checkpoint *rec) {
