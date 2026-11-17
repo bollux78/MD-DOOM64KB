@@ -73,6 +73,12 @@ def quantize(words, colors, weights, armor_colors=None):
     return words, pairs, codes, flat_codes
 
 
+def keep_black(previous, resampled):
+    # Code zero exposes the black backdrop in the existing Pair-V renderer.
+    # Keep the baseline black mask, including the colormap's dark grades.
+    return np.where(previous == 0, 0, resampled)
+
+
 def resample(text):
     wad = (ROOT / 'scripts/doom64.wad').read_bytes()
     lumps = MATH['wad_lumps'](wad)
@@ -96,10 +102,10 @@ def resample(text):
             if armor_colors is not None:
                 text = replace_array(text, f'{prefix}_pal{bank}', lambda _: words)
             text = replace_array(text, f'{prefix}_pairs_{side}', lambda _: pairs)
-            text = replace_array(text, f'{prefix}_wall_{side}', lambda _: codes)
-            text = replace_array(text, f'{prefix}_comp_{side}', lambda old: codes[cm].reshape(old.shape))
+            text = replace_array(text, f'{prefix}_wall_{side}', lambda old: keep_black(old, codes))
+            text = replace_array(text, f'{prefix}_comp_{side}', lambda old: keep_black(old, codes[cm].reshape(old.shape)))
             # Broad uniform floors and ceilings make continuous stripes conspicuous.
             flats = [prefix] if prefix != 'r76_l' else ['r76_l', 'r76_b', 'r76_n']
             for flat in flats:
-                text = replace_array(text, f'{flat}_flat_{side}', lambda _: flat_codes)
+                text = replace_array(text, f'{flat}_flat_{side}', lambda old: keep_black(old, flat_codes))
     return text
