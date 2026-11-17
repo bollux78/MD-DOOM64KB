@@ -185,6 +185,20 @@ void m14_save_and_menu(void) {
         console_tick();  /* pause overlay and save/load confirmations */
         return SAME_MODE;
     }""", "pause overlay tick")
+    # Upstream's PAUSE_SCREEN paints a 40x30 checkerboard over BG_B, then
+    # UNPAUSE_SCREEN clears the entire plane. That destroys the native Doom
+    # HUD, sky and font resources. Preserve VDP tilemaps; draw only a small
+    # existing console overlay on top of the live frame instead.
+    a = text.index("    } else if (input_res == PAUSE_SCREEN) {")
+    b = text.index("    if(paused) {\n        console_tick();", a)
+    text = text[:a] + """    } else if (input_res == PAUSE_SCREEN) {
+        console_push_message_high_priority("START GO A SAVE B LOAD C FASES", 30, 60000);
+        console_tick();
+    } else if (input_res == UNPAUSE_SCREEN) {
+        console_push_message_high_priority("JOGO RETOMADO", 13, 90);
+    }
+
+""" + text[b:]
     anchor = """    free_tile_loc = inventory_init(free_tile_loc);"""
     text = _one(text, anchor,
         anchor + """
