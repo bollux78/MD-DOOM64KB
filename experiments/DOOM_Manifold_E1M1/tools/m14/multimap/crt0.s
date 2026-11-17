@@ -74,7 +74,11 @@ _vectors:
         dc.w 0
         .ascii "J               "
         dc.l 0, 0x00FFFFFF, 0xE0FF0000, 0xE0FFFFFF
-        .ascii "            "
+        /* Native battery-backed 16-bit SRAM in X7 SSF bank31 (slot5),
+           usable at $2C0000-$2C00FF after temporarily remapping slot5. */
+        .ascii "RA"
+        .byte 0xE0,0x20
+        dc.l 0x002C0000,0x002C00FF
         .ascii "            "
         .ascii "                                        "
         .ascii "JUE             "
