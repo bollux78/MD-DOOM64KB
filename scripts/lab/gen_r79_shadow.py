@@ -3,7 +3,7 @@
 Targets are R77 effective pair colors, not recovered original WAD pixels.
 """
 from pathlib import Path
-import argparse,csv,json,re,runpy
+import argparse,csv,json,os,re,runpy
 import numpy as np
 ROOT=Path(__file__).resolve().parents[2]
 math=runpy.run_path(str(ROOT/'scripts/lab/gen_r52_claudio.py'))
@@ -17,8 +17,25 @@ def emit(name,a):
  a=np.asarray(a);dims=''.join('['+str(n)+']' for n in a.shape)
  def nest(v):return '{'+','.join(nest(x) if np.ndim(x) else str(int(x)) for x in v)+'}'
  return 'static const uint16_t '+name+dims+'='+nest(a)+';\n'
+def stripe_partners(palette, target):
+    # Use a single partner per code across light levels and palette effects.
+    # Score the mean color and penalize visible contrast between its stripes.
+    colors = rgb(palette)
+    color_lab = lab(colors)
+    mix = lab(avg(colors[:, :, None, :], colors[:, None, :, :]))
+    mean_error = ((lab(target)[:, :, None, :] - mix)**2).sum(-1)
+    contrast = ((color_lab[:, :, None, :] - color_lab[:, None, :, :])**2).sum(-1)
+    score = (mean_error + contrast / 8).mean(axis=0)
+    partners = np.argmin(score[:, 1:], axis=1) + 1
+    partners[0] = 0
+    return partners
+
 def generate(strength):
- text=(ROOT/'src/r59_color_tables.h').read_text();gain={1:1.35,2:1.75}[strength]
+ table_path=ROOT/'src/r59_color_tables.h'
+ text=table_path.read_text()
+ stripe_pairs={}
+ vertical_stripes=os.environ.get('R128_VERTICAL_DITHER')=='1'
+ gain={1:1.35,2:1.75}[strength]
  palettes=[];maps=[];costs=[];reports=[];pairsrows=[]
  for name,prefix in [('Hybrid Blue+','r77_h'),('A2 Full','r76_a'),('L3 Detail','r76_l'),('HN Smooth','r76_l')]:
   pal=np.array([parse(text,prefix+'_pal'+str(b)).reshape(14,16) for b in (0,1)])
@@ -28,6 +45,10 @@ def generate(strength):
   words=(boosted[...,0]<<1)|(boosted[...,1]<<5)|(boosted[...,2]<<9)
   palettes.append(words)
   target=np.array([avg(rgb(pal[b]),rgb(pal[b])[:,partners[b]]) for b in (0,1)])
+  if vertical_stripes:
+   partners=np.array([stripe_partners(pal[b],target[b]) for b in (0,1)])
+   for side,indices in zip(('even','odd'),partners):
+    stripe_pairs[prefix+'_pairs_'+side]=np.stack([np.arange(16),indices],axis=1)
   candN=np.array([avg(rgb(words[b]),rgb(words[b])[:,partners[b]]) for b in (0,1)])
   # Applying shadow before spatial averaging is essential.
   candS=np.array([avg(rgb(words[b])*.5,rgb(words[b])[:,partners[b]]*.5) for b in (0,1)])
@@ -74,9 +95,16 @@ def generate(strength):
     synthetic_blocks_shadow=int((s<n).sum()),synthetic_blocks_total=65536,
     mean_best_block_cost=float(np.minimum(n,s).mean()/4),
     palette0_mapping={state: selected[:,i,:].tolist() for i,state in enumerate(('normal','shadow'))}))
+ if vertical_stripes:
+  for name,pairs in stripe_pairs.items():
+   pattern=r'(uint8_t '+name+r'\[16\]\[2\]\s*=\s*)\{.*?\};'
+   rows=',\n '.join(f'{{{a},{b}}}' for a,b in pairs)
+   text,count=re.subn(pattern,lambda m:m[1]+'{\n '+rows+'\n};',text,flags=re.S)
+   assert count==1,name
+  table_path.write_text(text)
  header='/* R79 ROM only; mode,state,bank,packed R77 codes. */\n'+emit('r79_pal',palettes)+emit('r79_map',maps)+emit('r79_cost',costs)
  (ROOT/'src/r79_shadow_tables.h').write_text(header)
- report=dict(strength=strength,cram_stretch=gain,highlight=False,block_pixels=[8,8],
+ report=dict(strength=strength,vertical_stripes=vertical_stripes,cram_stretch=gain,highlight=False,block_pixels=[8,8],
   intensity='DAC N(c)=2c, S(c)=c; RGB proxy uses shadow=normal/2 BEFORE M50 averaging',
   target='R77 already quantized colors; does not recover discarded texture information',
   geometry='B priority always 0. A priority controls both visible 4px halves of its 8px tile, including A transparent half. H32/H40 scroll difference remains 4px.',
