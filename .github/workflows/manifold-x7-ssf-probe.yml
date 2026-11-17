@@ -1,0 +1,60 @@
+name: X7 SSF 4/8/12 MiB bisection (synthetic ROMs only)
+on:
+  push:
+    branches: [exp-manifold-m14-x7-ssf-probe]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/x7_ssf_probe.py'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/crt0.s'
+      - '.github/workflows/manifold-x7-ssf-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current Manifold experiment
+        uses: actions/checkout@v4
+      - name: Fetch pinned X7-verified synthetic ROM, no Doom copyrighted data
+        uses: actions/checkout@v4
+        with:
+          repository: bollux78/tile-palette-studio
+          ref: 3bce208532912929cf36336c5c6f7457b52587f5
+          path: .x7-verified
+          persist-credentials: false
+      - name: Generate nine controlled ROMs, test vectors/SSF checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist/x7-ssf-probes
+          python3 experiments/DOOM_Manifold_E1M1/tools/m14/x7_ssf_probe.py \
+            --baseline .x7-verified/diagnostics/x7/x7_static_test.bin \
+            --out dist/x7-ssf-probes
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          out = pathlib.Path('dist/x7-ssf-probes')
+          rows = json.loads((out/'manifest.json').read_text())
+          assert len(rows) == 9
+          for r in rows:
+              blob = (out/r['file']).read_bytes()
+              assert hashlib.sha256(blob).hexdigest() == r['sha256']
+              assert blob[0x78:0x7c] != b'\0'*4
+              assert b'\x81\x64' in blob[0x200:0x2000]
+              assert len(blob) == r['bytes']
+          print('PASS: 9 ROMs, VBlank vectors, identity/SSF, file sizes')
+          PY
+      - name: Assemble experimental Manifold IRQ (syntax only)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y binutils-m68k-linux-gnu
+          m68k-linux-gnu-as -m68000 -o "$RUNNER_TEMP/x7-crt0.o" \
+            experiments/DOOM_Manifold_E1M1/tools/m14/multimap/crt0.s
+          m68k-linux-gnu-objdump -dr "$RUNNER_TEMP/x7-crt0.o" | grep -A32 'stub30' | head -45
+          echo 'PASS: M68000 IRQ assembles; full Doom requires separate private build.'
+      - name: Publish synthetic X7 diagnostic ROMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: x7-ssf-bisect-9-test-roms
+          path: dist/x7-ssf-probes
+          if-no-files-found: error
+          retention-days: 30
