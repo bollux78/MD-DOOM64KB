@@ -524,7 +524,8 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
             if not nbs: continue
             min_c=min(S_[n][1] for n in nbs); min_f=min(S_[n][0] for n in nbs)
             if min_c>floor+32:
-                gen_dyn[si]=(2,min_c)            # door: ceiling rises to lowest neighbour ceiling
+                max_c=max(S_[n][1] for n in nbs)
+                gen_dyn[si]=(2,min(max_c,min_c+64))   # r073: door opens up to the taller neighbour's ceiling (max +64 over the lowest), so no header gap above it
             elif min_f<floor-32:
                 gen_dyn[si]=(5,min_f)            # closed pillar: floor lowers (S1/W1 lower floor)
         lift_tags={ln[4] for ln in lumps["LINEDEFS"] if ln[3] in LIFT_SP and ln[4]}

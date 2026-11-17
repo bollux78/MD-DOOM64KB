@@ -3303,6 +3303,13 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
 }
 
 static u8 m14_dx_free(void) { return m14dx_n < 12; }
+/* r073: Doom's tag-666 rule (E1M8): when no Baron of Hell is left alive, lower the tagged walls */
+void m14_baron_check(void) {
+    for (int s = 0; s < num_sector_lists; s++)
+        for (object_link l = sector_object_lists[s]; l != NULL_OBJ_LINK; l = OBJ_LINK_DEREF(l).next)
+            if (m14_kind(OBJ_LINK_DEREF(l).object_type) == 6) return;
+    { extern void m14_fire_tag(s16 sp, s16 tag); m14_fire_tag(23, 666); }
+}
 void m14_hit_object(object_link o, u16 sector) {
     u8 k=m14_kind(OBJ_LINK_DEREF(o).object_type);
     if (!k) { free_object(o, sector); return; }
@@ -3313,6 +3320,7 @@ void m14_hit_object(object_link o, u16 sector) {
         if (dl != NULL_DEC_LINK && m14dx_n < 12) { m14_death_t* e=&m14dx[m14dx_n++]; e->link=dl; e->frame=0; e->k=k; e->sector=sector; e->left=43; }
         m14_wf[o&63]&=3; m14_pt[o&63]=0; play_sfx(77, 6);
         free_object(o, sector);
+        if (k==6) m14_baron_check();
     } else {
         OBJ_LINK_DEREF(o).health-=dmg;
         OBJ_LINK_DEREF(o).current_state=2;
@@ -3391,7 +3399,7 @@ extern u32 last_frame_ticks;
 extern void m14_player_damage(u16 dmg);
 void m14_hazards(void) {
     static u32 acc;
-    u32 dt = last_frame_ticks; if (dt > 300) dt = 300;
+@@DBGB@@    u32 dt = last_frame_ticks; if (dt > 300) dt = 300;
     if (m14_suit_left > dt) m14_suit_left -= dt; else m14_suit_left = 0;
     acc += dt;
     if (acc < 274) return;
@@ -3479,6 +3487,7 @@ static void m14w_fire(s16 sp, s16 tag) {
         else if (ty == LIFT && cls == 4 && s == CLOSED) { set_sector_group_state(g, GOING_DOWN); }
     }
 }
+void m14_fire_tag(s16 sp, s16 tag) { m14w_fire(sp, tag); }
 void m14_world_tick(void) {
     const s16* tr = cur_portal_map->m14_trig;
     s32 px = cur_player_pos.x >> FIX32_FRAC_BITS, py = cur_player_pos.y >> FIX32_FRAC_BITS;
@@ -3523,6 +3532,7 @@ void m14_world_use(void) {
     }
 }
 """
+    t=t.replace("@@DBGB@@", "    { extern void m14_baron_check(void); m14_baron_check(); }\n" if os.environ.get("MANIFOLD_DBG_BARON")=="1" else "")
     sb.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
     a="    m12_process_pickups();"
@@ -4226,6 +4236,33 @@ def m14_tex_u(out):
     b.write_text(s)
     print("M14 wall_tex_u installed (draw.c, portal.c x2, bunch_render x2)")
 
+def m14_door_header(out):
+    """r073: a door's textured upper step is anchored at the door's open height. When the room ceiling is
+    higher than that (E1M7 spawn: ceiling 128, door 72) nothing was drawn above it. Repeat the door texture
+    upward (as vanilla tiles it) until the step top is reached."""
+    d=out/"src/draw.c"; t=d.read_text()
+    old="""                if(bot_draw_y == ntop_y_int) {
+                    draw_texture_vertical_line(pegged_top_y_int, top_draw_y, ntop_y_int, col_ptr, tex_column);
+                } else {
+                    draw_bottom_clipped_texture_vertical_line(pegged_top_y_int, top_draw_y, ntop_y_int, bot_draw_y, col_ptr, tex_column);
+                }
+"""
+    if t.count(old)!=1: raise ValueError("draw.c upper-step anchor changed")
+    new=old+"""                if (pegged_top_y_int > (s16)top_draw_y) {   /* M14 r073: door header above the texture */
+                    s16 hth = ntop_y_int - pegged_top_y_int, htb = pegged_top_y_int;
+                    if (hth > 0) {
+                        for (u8 hk = 0; hk < 4 && htb > (s16)top_draw_y; hk++) {
+                            s16 htt = htb - hth;
+                            u16 hyb = (u16)(htb < (s16)bot_draw_y ? htb : (s16)bot_draw_y);
+                            if (htb > 0) draw_bottom_clipped_texture_vertical_line(htt, top_draw_y, htb, hyb, col_ptr, tex_column);
+                            htb = htt;
+                        }
+                    }
+                }
+"""
+    d.write_text(t.replace(old,new))
+    print("M14 door header tiling installed (draw.c)")
+
 def m14_weapon_sat(out):
     """The sprite attribute table of the weapon was refreshed with DMA_QUEUE, and that queue never
     drains in this engine, so the weapon froze (no bob, no recoil, no fire frame).  Write the SAT
@@ -4408,6 +4445,8 @@ def stage(src, wad, out, control=False):
         m12_safe_sprite_raster(out)
     if os.environ.get("MANIFOLD_TEX_U","0")=="1":
         m14_tex_u(out)
+    if os.environ.get("MANIFOLD_DOOR_HEADER","1")=="1":
+        m14_door_header(out)
     if os.environ.get("MANIFOLD_WEAPON","")=="pistol":
         m14_weapon(out,wad)
     m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
