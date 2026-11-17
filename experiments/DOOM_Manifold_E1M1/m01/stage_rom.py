@@ -3489,6 +3489,7 @@ static void m14w_fire(s16 sp, s16 tag) {
         u16 s = get_sector_group_state(g);
         if (ty == DOOR && cls == 1 && s == CLOSED) { set_sector_group_state(g, GOING_UP); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
         else if (ty == STAIRS && cls == 2 && s == STAIRS_LOWERED) { set_sector_group_state(g, STAIRS_MOVING); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
+        else if (ty == STAIRS && cls == 3 && (s == STAIRS_RAISED || s == STAIRS_MOVING)) { set_sector_group_state(g, 3); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
         else if (ty == LOWERING_STAIRS && cls == 3 && s == STAIRS_LOWERED) { set_sector_group_state(g, STAIRS_MOVING); propagate_sfx_from_sect_group(SFX_OPEN_DOOR_ID, 8, g, cur_player_pos.cur_sector); }
         else if (ty == LIFT && cls == 4 && s == CLOSED) { set_sector_group_state(g, GOING_DOWN); }
     }
@@ -4242,6 +4243,25 @@ def m14_tex_u(out):
     b.write_text(s)
     print("M14 wall_tex_u installed (draw.c, portal.c x2, bunch_render x2)")
 
+def m14_stairs_down(out):
+    """r075: raised platforms (type STAIRS, e.g. E1M8 tag-2 platform) can go back down: state 3 lowers 32/tick
+    to the base floor kept in scratch param 6 (set by emit_portal_map)."""
+    f=out/"src/sector_group.c"; t=f.read_text()
+    old="params[SECTOR_GROUP_PARAM_STATE_IDX] = STAIRS_RAISED;\n                }\n            } while(0);\n            break;\n"
+    if t.count(old)!=1: raise ValueError("run_stairs changed: %d"%t.count(old))
+    t=t.replace(old,old+"""        case 3: do {
+                s16 base = params[SECTOR_GROUP_PARAM_SCRATCH_ONE_IDX];
+                cur_height -= 32;
+                params[SECTOR_GROUP_PARAM_FLOOR_HEIGHT_IDX] = cur_height;
+                if(cur_height <= base) {
+                    params[SECTOR_GROUP_PARAM_FLOOR_HEIGHT_IDX] = base;
+                    params[SECTOR_GROUP_PARAM_STATE_IDX] = STAIRS_LOWERED;
+                }
+            } while(0);
+            break;
+""",1)
+    f.write_text(t); print("r075 stairs can lower")
+
 def m14_door_header(out):
     """r073: a door's textured upper step is anchored at the door's open height. When the room ceiling is
     higher than that (E1M7 spawn: ceiling 128, door 72) nothing was drawn above it. Repeat the door texture
@@ -4453,6 +4473,8 @@ def stage(src, wad, out, control=False):
         m14_tex_u(out)
     if os.environ.get("MANIFOLD_DOOR_HEADER","1")=="1":
         m14_door_header(out)
+    if os.environ.get("MANIFOLD_STAIRS_DOWN","1")=="1":
+        m14_stairs_down(out)
     if os.environ.get("MANIFOLD_WEAPON","")=="pistol":
         m14_weapon(out,wad)
     m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"

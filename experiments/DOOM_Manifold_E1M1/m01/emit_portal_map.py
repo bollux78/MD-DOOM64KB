@@ -233,7 +233,9 @@ def assign_wall_textures(lumps,cells):
         for c in cells:
             nw=[]
             for w in c["walls"]:
-                if w["neighbor"]>=0:
+                # r075: in mode 2 portal walls are split too (switch drawn on a step,
+                # e.g. E1M8 spawn room: one 192-unit step repeated the button 3x).
+                if w["neighbor"]>=0 and _sm!="2":
                     nw.append(w);continue
                 a,b=w["a"],w["b"];dx=b[0]-a[0];dy=b[1]-a[1];L2=dx*dx+dy*dy
                 mids=[]
@@ -639,7 +641,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
             target_h=gh*16*HEIGHT_SCALE
             if not (-32768<=target_h<=32767):
                 raise ValueError(f"generic target out of range: {sector_i}")
-            sector_params.extend([packed,target_h,0,0,floor_h,ceil_h,0,0])
+            sector_params.extend([packed,target_h,0,0,floor_h,ceil_h,floor_h if gt==4 else 0,0])
             sector_types.append(gt)
         elif is_door:
             target_h=door_door_ceilings[sector_i]*16*HEIGHT_SCALE
@@ -691,7 +693,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         bt=bsp_tables(cells)
         text+=f"const u16 e1_bsp_num_nodes = {len(bt)//14};\n"
         text+="const s16 e1_bsp_nodes[] = {"+",".join(map(str,bt))+"};\n"
-    boffs,bflat,_=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,5)})
+    boffs,bflat,_=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,4,5)})
     # M14: exit switches (Doom specials 11 = exit, 51 = secret exit).  Fixed linker slot
     # (.rodata.m14_exit @ 0x31080) so the shared common code can reference it by address.
     _ex=[ln for ln in lumps["LINEDEFS"] if ln[3] in (11,51)][:4]
