@@ -972,7 +972,7 @@ def hud_fps_and_build_tag(out):
     if end<0: raise ValueError("showStats end not found")
     end+=3
     new=f'''#define MANIFOLD_BUILD_TAG "{tag}"
-static void manifold_hud_text(const char *t, u16 x, u16 y) {{
+static void manifold_hud_tag_text(const char *t, u16 x, u16 y) {{
     while (*t) {{
         VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, y);
         t++;
@@ -985,10 +985,10 @@ void showStats() {{
     char num[16];
     fix32ToStr(SYS_getFPSAsFloat(), num, 1);
     VDP_clearTileMapRect(BG_B, 0, 26, 40, 1);
-    manifold_hud_text("FPS ", 1, 26);
-    manifold_hud_text(num, 5, 26);
+    manifold_hud_tag_text("FPS ", 1, 26);
+    manifold_hud_tag_text(num, 5, 26);
     u16 tag_len = strlen(MANIFOLD_BUILD_TAG);
-    manifold_hud_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
+    manifold_hud_tag_text(MANIFOLD_BUILD_TAG, 39 - tag_len, 26);
 }}
 '''
     s=s[:start]+new+s[end:]
