@@ -4262,6 +4262,28 @@ def m14_stairs_down(out):
 """,1)
     f.write_text(t); print("r075 stairs can lower")
 
+def m14_sprite_xform(out):
+    """r076: sprites/decorations transform their position with an always_inline copy of transform_map_vert_16
+    (no call/struct-return per object; the player sin/cos/pos globals are loaded once per sector loop)."""
+    f=out/"src/portal.c"; t=f.read_text()
+    anchor='#include "vertex.h"\n'
+    if t.count(anchor)!=1: raise ValueError("portal.c include anchor changed")
+    helper="""
+static inline __attribute__((always_inline)) Vect2D_s16 m14_tv(s16 x, s16 y) {
+    s16 tlx = x - playerXInt, tly = y - playerYInt;
+    s32 rx = (tlx * angleSin16) - (tly * angleCos16);
+    s32 ry = (tlx * angleCos16) + (tly * angleSin16);
+    Vect2D_s16 v; v.x = rx >> FIX16_FRAC_BITS; v.y = ry >> (FIX16_FRAC_BITS - TRANS_Z_FRAC_BITS);
+    return v;
+}
+"""
+    t=t.replace(anchor,anchor+helper,1)
+    for old in ("\n            Vect2D_s16 trans_pos = transform_map_vert_16(F32_toInt(obj_x), F32_toInt(obj_y));","\n            Vect2D_s16 trans_pos = transform_map_vert_16(obj_x, obj_y);"):
+        n=t.count(old)
+        if n!=1: raise ValueError("sprite transform site changed (%d): %s"%(n,old))
+        t=t.replace(old,old.replace("transform_map_vert_16","m14_tv"))
+    f.write_text(t); print("r076 sprite transform inlined")
+
 def m14_door_header(out):
     """r073: a door's textured upper step is anchored at the door's open height. When the room ceiling is
     higher than that (E1M7 spawn: ceiling 128, door 72) nothing was drawn above it. Repeat the door texture
@@ -4475,6 +4497,8 @@ def stage(src, wad, out, control=False):
         m14_door_header(out)
     if os.environ.get("MANIFOLD_STAIRS_DOWN","1")=="1":
         m14_stairs_down(out)
+    if os.environ.get("MANIFOLD_SPRITE_XFORM","1")=="1":
+        m14_sprite_xform(out)
     if os.environ.get("MANIFOLD_WEAPON","")=="pistol":
         m14_weapon(out,wad)
     m12_doors=os.environ.get("MANIFOLD_DOORS","0")=="1"
