@@ -1,0 +1,97 @@
+name: M14 native save/pause 68000 source validation
+on:
+  push:
+    branches: [exp-manifold-m14-native-save]
+    paths:
+      - 'experiments/DOOM_Manifold_E1M1/m01/m14_native_save.py'
+      - 'experiments/DOOM_Manifold_E1M1/m01/stage_rom.py'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/m14_sram.h'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/menu.c'
+      - 'experiments/DOOM_Manifold_E1M1/tools/m14/multimap/crt0.s'
+      - '.github/workflows/manifold-m14-native-save-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ehaliewicz/Manifold
+          ref: b6fe52a52344464de00bde4dc58a40f8b89cfc1a
+          path: upstream
+          persist-credentials: false
+      - name: Set up 68000 assembler and compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y binutils-m68k-linux-gnu gcc-m68k-linux-gnu
+      - name: Validate headers, helper, and disassembly
+        run: |
+          set -euo pipefail
+          M=experiments/DOOM_Manifold_E1M1/tools/m14/multimap
+          m68k-linux-gnu-as -m68000 -o /tmp/m14-crt0.o "$M/crt0.s"
+          m68k-linux-gnu-objdump -s -j .text.vec /tmp/m14-crt0.o > /tmp/m14-boot.txt
+          grep -q '5241 e020' /tmp/m14-boot.txt || grep -qi '5241e020' /tmp/m14-boot.txt
+          cat > /tmp/test-m14-sram.c <<'C'
+          #include "m14_sram.h"
+          int probe(m14_checkpoint *rec) {
+              int ok = m14_sram_save(rec);
+              return ok && m14_sram_load(rec);
+          }
+          C
+          m68k-linux-gnu-gcc -m68000 -Os -ffreestanding -nostdlib -Wall -Wextra \
+            -I"$M" -c /tmp/test-m14-sram.c -o /tmp/test-m14-sram.o
+          python3 -m py_compile experiments/DOOM_Manifold_E1M1/m01/m14_native_save.py \
+            experiments/DOOM_Manifold_E1M1/m01/stage_rom.py
+          # Stage patched source from pinned Manifold upstream, no private WAD.
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path('experiments/DOOM_Manifold_E1M1/m01')
+          sys.path.insert(0,str(root.resolve()))
+          from m14_native_save import install
+          from tempfile import TemporaryDirectory
+          import shutil,os
+          with TemporaryDirectory() as tmp:
+              d=Path(tmp); src=d/'src';src.mkdir()
+              for name in ('game.c','level.c','inventory.c'):
+                  shutil.copy2(Path('upstream/src')/name,src/name)
+              (src/'doom_statusbar.c').write_text(
+                  '#include <genesis.h>\nstatic HudState dhud_state;\n')
+              os.environ['MANIFOLD_MAP']='E1M1'
+              install(d,0,0,0,0)
+              game=(src/'game.c').read_text()
+              menu=(src/'doom_statusbar.c').read_text()
+              assert 'm14_checkpoint_save()' in game
+              assert 'm14_checkpoint_load_current()' in game
+              assert 'm14_checkpoint_boot()' in game
+              assert 'console_tick();  /* pause overlay' in game
+              assert 'm14_save_and_menu();' in game
+              assert 'm14_sram_save(&r)' in menu
+              assert 'm14_sram_take_request(m14_map_id_var)' in menu
+              assert 'm14_inventory_export' in (src/'inventory.c').read_text()
+          print('PASS: native pause + SRAM save staged in pinned Manifold source')
+          PY
+      - name: Compile full bare-metal menu against synthetic map table
+        run: |
+          set -euo pipefail
+          M=experiments/DOOM_Manifold_E1M1/tools/m14/multimap
+          mkdir -p /tmp/m14-menu
+          cat > /tmp/m14-menu/maps.h <<'C'
+          #define MAP_COUNT 9
+          #define MAP_ENTRY 0x00300200
+          #define CREDITS_BANK 30
+          #define INTER_ORG 0x20E000UL
+          #define INTER_MUS_ORG 0x218000UL
+          struct map_entry { const char *name; unsigned char bank,xbank; };
+          static const struct map_entry maps[] = {
+          {"E1M1",6,5},{"E1M2",8,5},{"E1M3",10,5},{"E1M4",12,5},
+          {"E1M5",14,5},{"E1M6",16,5},{"E1M7",18,5},{"E1M8",20,5},{"E1M9",22,5}};
+          static const unsigned long bank_expect[9][7][8] = {{{0}}};
+          C
+          m68k-linux-gnu-gcc -m68000 -Os -ffreestanding -nostdlib \
+            -Wall -Wextra -I/tmp/m14-menu -I"$M" -c "$M/menu.c" -o /tmp/m14-menu.o
+          echo 'PASS: bare metal menu + SRAM load compiles for Motorola 68000'
