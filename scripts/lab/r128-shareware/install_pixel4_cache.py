@@ -18,12 +18,16 @@ palette = Path("src/r22_palette.h")
 quantize = list(map(int, re.search(r"r22_color\[256\]=\{(.*?)\}", palette.read_text()).group(1).split(",")))
 wad = dict(read_wad(Path("scripts/doom64.wad").read_bytes(), True))
 colormap = wad["COLORMAP"]
-if len(quantize) != 256 or len(colormap) % 256:
-    raise SystemExit("Invalid Pixel4 palette or colormap")
+if len(quantize) != 256 or len(colormap) != 8704:
+    raise SystemExit("Invalid Pixel4 palette or R113 colormap size")
+composed = [quantize[c] for c in colormap]
+# R113's assembly reads the shifted twin exactly 8,704 bytes after the
+# normal table. Both parity lookups point to the same Pixel4 pair of tables.
+packed = composed + [c << 4 for c in composed]
 with Path("src/r128_pixel4_comp.h").open("w") as out:
-    out.write(f"\nstatic const uint8_t r128_pixel4_comp[{len(colormap)}] = {{\n")
-    for i in range(0, len(colormap), 32):
-        out.write(",".join(str(quantize[c]) for c in colormap[i:i + 32]) + ",\n")
+    out.write(f"\nstatic const uint8_t r128_pixel4_comp[{len(packed)}] = {{\n")
+    for i in range(0, len(packed), 32):
+        out.write(",".join(str(c) for c in packed[i:i + 32]) + ",\n")
     out.write("};\n")
 
 edit('#include "r22_maps.h"', '#include "r22_maps.h"\n#include "r128_pixel4_comp.h"')
