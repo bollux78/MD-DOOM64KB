@@ -1,0 +1,6 @@
+out/
+src/map_data.c
+src/map.json
+tools/__pycache__/
+src/boot/
+src/rom_header.c
