@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 
 mode = os.environ.get('R128_BATCH', 'control')
-options = {'block', 'shot', 'openings', 'effects'}
+options = {'block', 'nodes', 'shot', 'openings', 'effects'}
 enabled = options if mode == 'all' else {mode}
 assert enabled <= options or mode == 'control'
 
@@ -46,6 +46,30 @@ void R129_BlockWrite(uint32_t address,uint32_t value){
 }''')
     edit('src/r22_blocklinks.c', '    r22_block_cells=(uint16_t)cells;',
          '    for(uint16_t i=0;i<8;i++)r129_heads[i].tag=0;\n    r22_block_cells=(uint16_t)cells;')
+
+if 'nodes' in enabled:
+    edit('src/r23_mapmem.h', 'void *R23_NodeAlloc(void);',
+         'void R129_NodeLinks(const void *node,uint32_t *links);\nvoid *R23_NodeAlloc(void);')
+    edit('src/r23_mapmem.c', 'uint32_t R23_MapRead(', '''void R129_NodeLinks(const void *node,uint32_t *links){
+    R25_SRAM_BEGIN();
+    links[0]=node_read(node,offsetof(msecnode_t,m_tprev));
+    links[1]=node_read(node,offsetof(msecnode_t,m_tnext));
+    links[2]=node_read(node,offsetof(msecnode_t,m_sprev));
+    links[3]=node_read(node,offsetof(msecnode_t,m_snext));
+    links[4]=node_read(node,offsetof(msecnode_t,m_sector));
+    R25_SRAM_END();
+}
+uint32_t R23_MapRead(''')
+    edit('src/p_map.c', '    tp = R23_GET(node,m_tprev);',
+         '''    uint32_t links[5];
+    R129_NodeLinks(node,links);
+    tp = (msecnode_t*)(uintptr_t)links[0];''')
+    for field,index in [('m_tnext',1),('m_sprev',2),('m_snext',3)]:
+        variable={'m_tnext':'tn','m_sprev':'sp','m_snext':'sn'}[field]
+        edit('src/p_map.c',f'    {variable} = R23_GET(node,{field});',
+             f'    {variable} = (msecnode_t*)(uintptr_t)links[{index}];')
+    edit('src/p_map.c','      R23_GET(node,m_sector)->touching_thinglist = sn;',
+         '      ((sector_t*)(uintptr_t)links[4])->touching_thinglist = sn;')
 
 if 'shot' in enabled:
     edit('src/p_map.c', 'static fixed_t  aimslope;', '''static fixed_t  aimslope;
