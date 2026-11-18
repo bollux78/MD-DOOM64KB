@@ -47,7 +47,7 @@ static void dhud_draw_bar(void) {
 }
 
 static void dhud_draw_margins(void) {
-#ifndef MANIFOLD_H32
+#if !defined(MANIFOLD_H32) && defined(DHUD_STONE_MARGINS)   /* v10k: bar ends with the viewport, no stone tiles beside it */
     for (u8 r = 0; r < HUDW_ROWS; r++) {
         u16 right = DHUD_PAL2(HUDW_WORD(hudw_bgmap[r][HUDW_COLS - 1]));
         u16 left = right;   /* plain stone on the left too (the bar's own left edge has tick marks) */
