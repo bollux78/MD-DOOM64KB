@@ -69,13 +69,20 @@ def load_sheet(path, w):
     from PIL import Image
     im = Image.open(path).convert("RGBA"); W, H = im.size; a = im.getchannel("A")
     cols = [x for x in range(W) if a.crop((x, 0, x + 1, H)).getbbox()]
-    seg = []; s0 = p0 = cols[0]
-    for x in cols[1:]:
-        if x - p0 > 3: seg.append((s0, p0)); s0 = x
-        p0 = x
-    seg.append((s0, p0))
     npx = lambda s: int((__import__("numpy").array(a.crop((s[0], 0, s[1] + 1, H))) > 0).sum())
-    seg = [s for s in seg if npx(s) >= 60]            # stray specks are not frames
+    def split(gapmin):                                # frames are separated by >= gapmin empty columns
+        sg = []; s0 = p0 = cols[0]
+        for x in cols[1:]:
+            if x - p0 - 1 >= gapmin: sg.append((s0, p0)); s0 = x
+            p0 = x
+        sg.append((s0, p0))
+        return [s for s in sg if npx(s) >= 60]        # stray specks are not frames
+    NEED = len(SHEET_ORDER) + 4
+    seg = split(3)
+    if len(seg) != NEED:                              # tightly packed sheet: try narrower gaps; extra trailing pieces (explosion debris) are ignored
+        for gm in (2, 1):
+            s2 = split(gm)
+            if len(s2) >= NEED: seg = s2[:NEED] if len(s2) > NEED else s2; break
     order = list(SHEET_ORDER)
     alias = {}
     if len(seg) == len(order) + 3:                    # the two shotgun flashes (SHTFA0/SHTFB0) touch: split that block at its widest inner gap
