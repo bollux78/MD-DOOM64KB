@@ -714,6 +714,24 @@ def guard_zero_reciprocal_in_texture_columns(out):
     print("Guarded zero reciprocal for far outdoor texture columns")
 
 
+def m14_visit_counter(out):
+    """Debug (MANIFOLD_VISIT_DBG=1): per-frame cell visits / wall count read by MAME Lua (m14_visits_last, m14_walls_last)."""
+    if os.environ.get("MANIFOLD_VISIT_DBG","0")!="1": return
+    p=out/"src/portal.c"; t=p.read_text()
+    a="    sector_rendered_cache[sector]++; // = cur_frame;\n"
+    assert t.count(a)==1
+    t=t.replace(a,a+"    m14_visits_cur++;\n",1)
+    a="    s16 num_walls = sector_num_walls(sector, map);\n    u16 sect_group = sector_group(sector, map);\n"
+    assert t.count(a)>=1
+    t=t.replace(a,a+"    m14_walls_cur += num_walls;\n",1)
+    a="void portal_rend(u16 src_sector, u32 cur_frame) {\n    manifold_dbg[6]++;\n"
+    assert t.count(a)==1
+    t=t.replace(a,a+"    m14_visits_last = m14_visits_cur; m14_walls_last = m14_walls_cur; m14_visits_cur = 0; m14_walls_cur = 0;\n",1)
+    t=t.replace("void visit_graph(u16 src_sector,","volatile u16 m14_visits_cur, m14_visits_last, m14_walls_cur, m14_walls_last;\nvoid visit_graph(u16 src_sector,",1)
+    p.write_text(t)
+    print("visit counter installed")
+
+
 def limit_repeated_sector_overdraw(out):
     """Bound repeated BSP cell rendering in dense stair corridors.
 
@@ -5010,7 +5028,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,shrink_visit_graph_vertex_buffer,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,shrink_visit_graph_vertex_buffer,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,m14_visit_counter,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
