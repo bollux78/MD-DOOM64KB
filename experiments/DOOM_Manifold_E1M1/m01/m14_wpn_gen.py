@@ -74,7 +74,10 @@ def load_sheet(path, w):
     frames = {}
     for name, (x0, x1) in zip(SHEET_ORDER, seg):
         pw, ph, _ = WT.patch_image(w.lump(name))
-        if x1 - x0 + 1 != pw: raise ValueError("sheet frame %s width %d != lump %d" % (name, x1 - x0 + 1, pw))
+        ss = float(os.environ.get("MANIFOLD_WPN_SHEET_SCALE", "1"))     # the sheet was drawn at this fraction of the Doom size (e.g. 0.75)
+        if ss != 1.0: pw, ph = round(pw * ss), round(ph * ss)
+        if abs(x1 - x0 + 1 - pw) > (1 if ss != 1.0 else 0): raise ValueError("sheet frame %s width %d != expected %d" % (name, x1 - x0 + 1, pw))
+        pw = x1 - x0 + 1
         top = a.crop((x0, 0, x1 + 1, H)).getbbox()[1]
         if top + ph > H: top = H - ph
         frames[name] = im.crop((x0, top, x0 + pw, top + ph))
@@ -97,7 +100,10 @@ def build(w, rgb, cut, sheet=None):
         l = w.lump(name)
         lo, to = struct.unpack("<hh", l[4:8])
         if sheet_frames and name in sheet_frames:
-            return sheet_frames[name].copy(), -lo, -to
+            ss = float(os.environ.get("MANIFOLD_WPN_SHEET_SCALE", "1"))
+            X, Y = -lo, -to
+            if ss != 1.0: X, Y = round(160 + (X - 160) * ss), round(BASE_BOTTOM - cut + (Y - (BASE_BOTTOM - cut)) * ss)   # same anchor as SCALE
+            return sheet_frames[name].copy(), X, Y
         import wad_textures as WT
         pw, ph, img = WT.patch_image(l)
         im = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
@@ -147,7 +153,7 @@ def build(w, rgb, cut, sheet=None):
 
     out = []
     for (name, idle, fire, cad, hold, pel, snd) in WEAPONS:
-        sc = SCALE.get(name, 1.0)
+        sc = 1.0 if (sheet_frames and os.environ.get("MANIFOLD_WPN_SHEET_SCALE")) else SCALE.get(name, 1.0)
         if sheet_pal and name == "FIST": fire, hold = ["PUNGB0"], 34
         if sheet_pal and name == "SHOTGUN": hold = 26
         frames = [frame_canvas(idle, 128, sc), frame_canvas(fire, FIRE_MAXTILES, sc)]
