@@ -569,6 +569,38 @@ def guard_portal_recursion_stack(out):
     p.write_text(s)
     print("portal recursion bounded by stack/heap guard, margin",os.environ.get("MANIFOLD_STACK_MARGIN","3072"))
 
+def m14_pool_sizes(out):
+    """RAM: size the object / decoration pools per map instead of the fixed 63 / 255 (objects 22 B, decorations 10 B each).
+    objects      = movers in the map (non-IDLE templates) + OBJ_SLACK
+    decorations  = static decorations + one corpse/effect per mover (a dead monster becomes a decoration) + DEC_SLACK (explosions, projectiles)"""
+    import re
+    oc=(out/"src/object.c").read_text()
+    blk=oc[oc.index("object_types[128] = {"):]; blk=blk[:blk.index("\n};")]
+    rows=[l for l in blk.split("\n")[1:] if l.startswith("{")]
+    idle=[("init_state=IDLE_STATE" in r) for r in rows]
+    mf=[p for p in (out/"src").glob("*map*.c") if "map_object e1_m" in p.read_text()][0].read_text()
+    th=mf[mf.index("map_object e1_m"):]; th=th[:th.index("};")]
+    types=[int(t) for t in re.findall(r"\.type=(\d+)",th)]
+    n_obj=sum(1 for t in types if t!=0 and t<len(idle) and not idle[t]); n_dec=sum(1 for t in types if t!=0 and t<len(idle) and idle[t])
+    osl=int(os.environ.get("MANIFOLD_OBJ_SLACK","10")); dsl=int(os.environ.get("MANIFOLD_DEC_SLACK","32"))
+    mo=min(63,n_obj+osl); md=min(255,n_dec+n_obj+dsl)
+    # the code (common block) must stay identical across maps: the limits live in the map data (ROM), not in compiled constants
+    pm=out/"src/portal_map.h"; t=pm.read_text()
+    a="    const u8* m14_dmg;"
+    assert t.count(a)==1
+    pm.write_text(t.replace(a,"    u8 m14_maxobj;\n    u8 m14_maxdec;\n"+a,1))
+    mp=[p for p in (out/"src").glob("*map*.c") if "map_object e1_m" in p.read_text()][0]; t=mp.read_text()
+    a=".m14_dmg=m14_dmg_tbl"
+    assert t.count(a)==1
+    mp.write_text(t.replace(a,".m14_maxobj=%d,.m14_maxdec=%d,"%(mo,md)+a,1))
+    oh=out/"src/object.h"; t=oh.read_text()
+    a="#define MAX_OBJECTS (NULL_OBJ_LINK)"; b="#define MAX_DECORATIONS (NULL_DEC_LINK)"
+    assert t.count(a)==1 and t.count(b)==1
+    t=t.replace(a,"#define MAX_OBJECTS (cur_portal_map->m14_maxobj)").replace(b,"#define MAX_DECORATIONS (cur_portal_map->m14_maxdec)")
+    oh.write_text(t)
+    print("pool sizes: objects %d (movers %d) decorations %d (static %d) -> saves %d B"%(mo,n_obj,md,n_dec,(63-mo)*22+(255-md)*10))
+
+
 def guard_zero_width_edges(out):
     """M12: 68000 DIVS-by-zero when a wall/floor/ceiling edge has x1 == x2.
 
@@ -5187,6 +5219,7 @@ def stage(src, wad, out, control=False):
     if os.environ.get("MANIFOLD_SPRITE_MAXH","0")!="0":
         m14_sprite_zoom(out)
     if os.environ.get("MANIFOLD_PROJECTILES","0")=="1": m14_projectiles(out)
+    if os.environ.get("MANIFOLD_POOL_SIZE","0")=="1": m14_pool_sizes(out)
     if os.environ.get("MANIFOLD_GODMODE","0")=="1":
         m14_godmode(out)
     if os.environ.get("MANIFOLD_SPRITE_CAP","0")!="0":
