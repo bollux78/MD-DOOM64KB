@@ -52,7 +52,7 @@ A_TILES, B_TILES = 128, 104
 POST = {"FIST": ([["PUNGC0"], ["PUNGD0"], ["PUNGC0"], ["PUNGB0"]], 38),
         "SHOTGUN": ([["SHTGB0"], ["SHTGC0"], ["SHTGD0"], ["SHTGC0"], ["SHTGB0"]], 43),
         "PISTOL": ([["PISGC0"], ["PISGD0"], ["PISGC0"]], 30)}
-FIRE_MAXTILES = 104          # fire frames live in the reclaimed window area: 104 tiles are known to be safe there
+FIRE_MAXTILES = 128          # fire frames live in the reclaimed window area: 104 tiles are known to be safe there
 
 
 SHEET_ORDER = ("PUNGA0 PUNGB0 PUNGC0 PUNGD0 PISGA0 PISGB0 PISGC0 PISGD0 PISGE0 PISFA0 SHTGA0 SHTGB0 SHTGC0 SHTGD0 SHTFA0 SHTFB0 "
@@ -164,8 +164,8 @@ def build(w, rgb, cut, sheet=None):
     def frame_canvas(names, maxtiles, sc=1.0):
         layers = [scaled(n, sc) for n in names]
         if sheet_frames and os.environ.get("MANIFOLD_WPN_SHEET_ANCHOR") == "1" and len(layers) > 1:
-            g0, f1 = layers[0], layers[1]      # muzzle flash: centred on the gun and sitting on top of it (4 px overlap)
-            layers[1] = (f1[0], g0[1] + g0[0].width // 2 - f1[0].width // 2, g0[2] - f1[0].height + 4)
+            g0, f1 = layers[0], layers[1]      # muzzle flash: centred on the gun, 55% of its height overlapping the gun
+            layers[1] = (f1[0], g0[1] + g0[0].width // 2 - f1[0].width // 2, g0[2] - f1[0].height + round(f1[0].height * 0.55))
         bx0 = min(X for _, X, _ in layers); bx1 = max(X + im.width for im, X, _ in layers)
         by0 = min(Y for _, _, Y in layers)
         tw = math.ceil((bx1 - bx0) / 8); th = math.ceil((bottom - by0) / 8)
@@ -319,8 +319,9 @@ static void m14w_load(const m14w_frame *f, u8 mode) {
 static void m14w_hide(void) { VDP_clearSprites(); m14_sat_update(0); }
 static void m14w_show(const m14w_frame *f, u8 mode) { m14w_shown = f; m14w_mode = mode; m14w_place(); }
 static u8 m14w_fits(const m14w_frame *f, u8 buf) { return f->ntiles <= (buf ? 104 : 128); }
-static void m14w_home(const m14w_def *d) {      /* idle in A, fire in B, shown with the weapon hidden meanwhile */
-    m14w_hide(); m14w_ib = 0; m14w_load(d->idle, 0); m14w_load(d->fire, 1); m14w_show(d->idle, 0);
+static void m14w_home(const m14w_def *d) {      /* idle in A, fire in B (a fire frame bigger than 104 tiles: swapped), shown with the weapon hidden meanwhile */
+    u8 sw = (d->fire->ntiles > 104 && d->idle->ntiles <= 104) ? 1 : 0;
+    m14w_hide(); m14w_ib = sw; m14w_load(d->idle, sw); m14w_load(d->fire, 1 - sw); m14w_show(d->idle, sw);
 }
 static void m14w_post_end(void) {
     const m14w_def *d = &m14w_defs[m14w_cur]; u8 m = m14w_mode; m14w_pi = 0xFF; m14w_isfire = 0; m14w_hold = 0;
@@ -345,16 +346,17 @@ void m14_fire_anim(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
     if (m14w_pi != 0xFF) m14w_post_end();
     u16 h = d->hold / (last_frame_ticks ? last_frame_ticks : 1); if (h < 1) h = 1;
-    if (d->sfx == 75) {                     /* chainsaw: alternate the two frames on every shot while C is held */
-        m14w_isfire ^= 1; m14w_hold = 0;
-        if (m14w_isfire) m14w_show(d->fire, 1 - m14w_ib); else m14w_show(d->idle, m14w_ib);
-        return;
-    }
+    if (d->sfx == 75) return;               /* chainsaw: its two frames alternate by themselves (m14w_step) */
     m14w_hold = h; m14w_isfire = 1; m14w_show(d->fire, 1 - m14w_ib);
 }
 void m14w_idle(void) { if (m14w_isfire) { m14w_show(m14w_defs[m14w_cur].idle, m14w_ib); m14w_isfire = 0; m14w_hold = 0; } }
 void m14w_step(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
+    if (d->sfx == 75) {                     /* Doom's chainsaw ready state: the two frames alternate every 4 tics, both stay resident */
+        static s16 st; st -= (s16)last_frame_ticks;
+        if (st <= 0) { st = 34; m14w_isfire ^= 1; m14w_show(m14w_isfire ? d->fire : d->idle, m14w_isfire ? 1 - m14w_ib : m14w_ib); }
+        return;
+    }
     if (m14w_pi != 0xFF) {
         s16 q = (s16)m14w_pt - (s16)(last_frame_ticks > 90 ? 90 : last_frame_ticks);
         if (q > 0) m14w_pt = (u8)q;
