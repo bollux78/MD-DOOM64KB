@@ -714,6 +714,31 @@ def guard_zero_reciprocal_in_texture_columns(out):
     print("Guarded zero reciprocal for far outdoor texture columns")
 
 
+def m14_early_backface(out):
+    """MANIFOLD_EARLY_CULL=1: reject back-facing walls before the expensive per-wall prologue.
+
+    visit_graph used to do the texture lookup, the lateral-frustum loop (32-bit divides) and clip_map_vertex_16
+    (another divide for textured walls) for every wall and only then discard back-facing ones (projected x1 >= x2).
+    This is the *same* test evaluated early, only for walls that need no clipping at all (both ends inside both
+    frustum planes and in front of the near plane), where the later code would project exactly these x values.
+    Same exception as the late test: a portal of the source sector is never culled here."""
+    if os.environ.get("MANIFOLD_EARLY_CULL","0")!="1": return
+    p=out/"src/portal.c"; t=p.read_text()
+    a="        u8 tex_idx = map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_TEXTURE_IDX];\n"
+    assert t.count(a)==2 and t.index(a)<t.index("void pvs_scan"), t.count(a)   # first occurrence is visit_graph
+    t=t.replace(a,"""        if (sector != src_sector || !is_portal) {
+            s32 ecx1 = trans_v1.x, ecz1 = trans_v1.y, ecx2 = trans_v2.x, ecz2 = trans_v2.y;
+            if (ecz1 >= NEAR_Z_FIX && ecz2 >= NEAR_Z_FIX &&
+                ecz1 + 16 * ecx1 >= 0 && ecz1 - 16 * ecx1 >= 0 && ecz2 + 16 * ecx2 >= 0 && ecz2 - 16 * ecx2 >= 0) {
+                u16 erc1 = z_recip_table_16[ecz1 >> TRANS_Z_FRAC_BITS];
+                u16 erc2 = z_recip_table_16[ecz2 >> TRANS_Z_FRAC_BITS];
+                if (project_and_adjust_x(trans_v1.x, erc1) >= project_and_adjust_x(trans_v2.x, erc2)) continue;
+            }
+        }
+"""+a,1)
+    p.write_text(t); print("early backface cull installed")
+
+
 def m14_revisit_skip(out):
     """MANIFOLD_REVISIT_SKIP=1: skip re-entering a cell when the new x-window lies inside the window that
     cell already drew this frame.  The renderer clips per column and only narrows, so the same cell drawn again
@@ -5056,7 +5081,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,shrink_visit_graph_vertex_buffer,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,m14_revisit_skip,m14_visit_counter,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,shrink_visit_graph_vertex_buffer,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,m14_revisit_skip,m14_visit_counter,far_portal_fog,m14_early_backface,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
