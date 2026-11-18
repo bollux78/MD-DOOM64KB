@@ -9,7 +9,7 @@ from convert_r24_episode import read_wad,write_wad
 import shutil
 template=Path('maplab-template')
 template.mkdir(exist_ok=True)
-for original in ('src/r_defs.h','src/doomdata.h','src/r_draw.c','src/m_text.c','src/g_game.c','src/p_sight.c','src/p_setup.c','src/r23_mapmem.c','scripts/doom64.wad'):
+for original in ('src/i_genesis.c','src/r_defs.h','src/doomdata.h','src/r_draw.c','src/m_text.c','src/g_game.c','src/p_sight.c','src/p_setup.c','src/r23_mapmem.c','scripts/doom64.wad'):
     target=template/Path(original).name
     if target.exists():shutil.copy2(target,original)
     else:shutil.copy2(original,target)
