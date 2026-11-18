@@ -172,7 +172,10 @@ def build(w, rgb, cut, sheet=None):
         layers = [scaled(n, sc) for n in names]
         if sheet_frames and os.environ.get("MANIFOLD_WPN_SHEET_ANCHOR") == "1" and len(layers) > 1:
             g0, f1 = layers[0], layers[1]      # muzzle flash: centred on the gun, 55% of its height overlapping the gun
-            layers[1] = (f1[0], g0[1] + g0[0].width // 2 - f1[0].width // 2, g0[2] - f1[0].height + round(f1[0].height * 0.55))
+            al = g0[0].getchannel("A"); top = al.getbbox()[1]       # muzzle x = centroid of the gun's top 5 opaque rows (the pistol barrel is off-centre)
+            xs = [x for y in range(top, min(top + 5, al.height)) for x in range(al.width) if al.getpixel((x, y))]
+            mx = round(sum(xs) / len(xs)) if xs else g0[0].width // 2
+            layers[1] = (f1[0], g0[1] + mx - f1[0].width // 2, g0[2] - f1[0].height + round(f1[0].height * 0.55))
         bx0 = min(X for _, X, _ in layers); bx1 = max(X + im.width for im, X, _ in layers)
         by0 = min(Y for _, _, Y in layers)
         tw = math.ceil((bx1 - bx0) / 8); th = math.ceil((bottom - by0) / 8)
@@ -296,7 +299,7 @@ static void m14w_place(void) {
     m14_sat_update(f->ns);
 }
 void set_weapon_sprite_position_offset(s16 offX, s16 offY) {
-    const m14w_frame *f = m14w_shown; m14w_bx = offX; m14w_by = offY; if (!f) return;
+    const m14w_frame *f = m14w_shown; m14w_bx = offX; m14w_by = offY + ((m14w_hold && m14w_defs[m14w_cur].sfx == 75) ? 4 : 0); if (!f) return;
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
         VDP_setSpritePosition(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + offX, BASE_WEAPON_Y + 8 + f->dy + s->oy + offY);
@@ -356,6 +359,7 @@ void m14_fire_anim(void) {
     if (d->sfx == 75) return;               /* chainsaw: its two frames alternate by themselves (m14w_step) */
     m14w_hold = h; m14w_isfire = 1; m14w_show(d->fire, 1 - m14w_ib);
 }
+void m14w_setdip(u8 v) { m14w_hold = v; }   /* chainsaw: hold is unused, it doubles as the 'dip 4 px while running' flag */
 void m14w_idle(void) { if (m14w_isfire) { m14w_show(m14w_defs[m14w_cur].idle, m14w_ib); m14w_isfire = 0; m14w_hold = 0; } }
 void m14w_step(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
@@ -460,7 +464,7 @@ def apply(out, wad):
         "if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); extern u8 m14w_pellets(void); for (u8 m14_p = 0; m14_p < m14w_pellets(); m14_p++) m14_shoot_dec(sprite_on_center_col, center_object_sector); }")
     rep("    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {",
         "    { static u8 m14_sp = 1; u8 m14_now = joy_button_pressed(BUTTON_A) ? 1 : 0; if (m14_now && !m14_sp) { extern void m14w_next(void); m14w_next(); } m14_sp = m14_now; }\n"
-        "    { static s16 m14_saw_t = 0; static u8 m14_saw_on = 0; extern u8 m14w_sfx(void); if (m14w_sfx() == 75 && joy_button_pressed(BUTTON_C)) { m14_saw_t -= (s16)last_frame_ticks; { static s16 m14_saw_f = 0; extern void m14_fire_anim(void); m14_saw_f -= (s16)last_frame_ticks; if (m14_saw_f <= 0) { m14_fire_anim(); m14_saw_f = 34; } } if (!m14_saw_on || m14_saw_t <= 0) { XGM_startPlayPCM(75, 15, SOUND_PCM_CH4); m14_saw_t = 96; m14_saw_on = 1; } } else if (m14_saw_on) { extern void m14w_idle(void); XGM_stopPlayPCM(SOUND_PCM_CH4); m14_saw_on = 0; m14w_idle(); } }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
+        "    { static s16 m14_saw_t = 0; static u8 m14_saw_on = 0; extern u8 m14w_sfx(void); if (m14w_sfx() == 75 && joy_button_pressed(BUTTON_C)) { m14_saw_t -= (s16)last_frame_ticks; { static s16 m14_saw_f = 0; extern void m14_fire_anim(void); m14_saw_f -= (s16)last_frame_ticks; if (m14_saw_f <= 0) { m14_fire_anim(); m14_saw_f = 34; } } if (!m14_saw_on || m14_saw_t <= 0) { XGM_startPlayPCM(75, 15, SOUND_PCM_CH4); m14_saw_t = 96; m14_saw_on = 1; } { extern void m14w_setdip(u8 v); m14w_setdip(1); } } else if (m14_saw_on) { extern void m14w_idle(void); XGM_stopPlayPCM(SOUND_PCM_CH4); m14_saw_on = 0; { extern void m14w_setdip(u8 v); m14w_setdip(0); } m14w_idle(); } }\n    if(joy_button_pressed(BUTTON_A|BUTTON_C) && !shooting) {")
     # sound registration
     rep("    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));",
         "    XGM_setPCM(SFX_SHOTGUN_ID, sfx_shotgun, sizeof(sfx_shotgun));\n" +
