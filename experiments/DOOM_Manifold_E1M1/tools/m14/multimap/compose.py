@@ -64,9 +64,13 @@ INTER_MUS_ORG = 0x218000      # compressed intermission music (gen_inter_music.p
 _im = open("inter_music.bin", "rb").read()
 assert INTER_ORG + len(inter) <= INTER_MUS_ORG and INTER_MUS_ORG + len(_im) <= FILE_BODY, len(_im)
 body[INTER_MUS_ORG:INTER_MUS_ORG + len(_im)] = _im
+END_MUS_ORG = (WPN2_ORG + len(wpn2) + 0xFF) & ~0xFF      # compressed ending tune (gen_inter_music.py r25-end.vgm end_music.bin)
+_em = open("end_music.bin", "rb").read()
+assert END_MUS_ORG + len(_em) <= FILE_BODY, len(_em)
+body[END_MUS_ORG:END_MUS_ORG + len(_em)] = _em
 rom = bytes(body) + rom_tail          # menu is patched in below
 # bank self-test table: 8 sample longs per 512 KB slot (1..7) per map
-h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define INTER_ORG 0x%XUL' % INTER_ORG, '#define INTER_MUS_ORG 0x%XUL' % INTER_MUS_ORG, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
+h = ['#define CREDITS_BANK %d' % CREDITS_BANK, '#define INTER_ORG 0x%XUL' % INTER_ORG, '#define INTER_MUS_ORG 0x%XUL' % INTER_MUS_ORG, '#define END_MUS_ORG 0x%XUL' % END_MUS_ORG, '#define MAP_ENTRY 0x00300200', '#define MAP_COUNT %d' % len(MAPS),
      'struct map_entry { const char *name; unsigned char bank; unsigned char xbank; };', 'static const struct map_entry maps[] = {']
 for (m, label), bk, xb in zip(MAPS, banks, EXTRA_BANKS): h.append('  {"%s", %d, %d},' % (label, bk, xb))
 h.append('};')

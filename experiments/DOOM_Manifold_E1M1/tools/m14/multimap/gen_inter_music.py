@@ -8,11 +8,14 @@
 import struct
 from collections import defaultdict
 W, MINM, MAXM, CHAIN = 16384, 4, 259, 256
-d = open("/home/claude/md-doom64kb/res/r25-inter.vgm", "rb").read()
+import sys
+SRC = sys.argv[1] if len(sys.argv) > 1 else "/home/claude/md-doom64kb/res/r25-inter.vgm"
+DST = sys.argv[2] if len(sys.argv) > 2 else "inter_music.bin"
+d = open(SRC, "rb").read()
 assert d[:4] == b"Vgm "
 p = 0x34 + struct.unpack("<I", d[0x34:0x38])[0]
 loop_abs = 0x1c + struct.unpack("<I", d[0x1c:0x20])[0]
-assert loop_abs == p, "loop point must be the start of the stream"
+assert loop_abs == p or len(sys.argv) > 1, "loop point must be the start of the stream"   # end tune: loops from its start (decoder has no loop offset)
 out = bytearray(); ym = {}
 while d[p] != 0x66:
     b = d[p]
@@ -61,5 +64,5 @@ while len(dec) < n:
             o = ((enc[s] << 8) | enc[s+1]) + 1; l = enc[s+2] + MINM; s += 3
             for _ in range(l): dec.append(dec[-o])
 assert bytes(dec[:n]) == data
-open("inter_music.bin", "wb").write(enc)
-print("inter_music.bin", len(enc), "bytes (stream", n, ")")
+open(DST, "wb").write(enc)
+print(DST, len(enc), "bytes (stream", n, ")")

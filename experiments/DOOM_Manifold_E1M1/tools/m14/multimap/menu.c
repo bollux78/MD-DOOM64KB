@@ -66,10 +66,10 @@ static void music_start(void) {
 #define LZ_SRC0 ((const unsigned char *)INTER_MUS_ORG)
 #define LZ_RING ((volatile unsigned char *)0xFF4000)
 #define LZ_W 16384
-struct lzst { const unsigned char *src; unsigned long wpos; unsigned short mrem, moff; unsigned char fl, nb; };
+struct lzst { const unsigned char *src; unsigned long wpos; unsigned short mrem, moff; unsigned char fl, nb; const unsigned char *base; };
 #define LZ ((volatile struct lzst *)0xFF0040)
 #define mus_lz (*(volatile unsigned char *)0xFF003C)
-static void lz_reset(void) { LZ->src = LZ_SRC0; LZ->wpos = 0; LZ->mrem = 0; LZ->nb = 0; }
+static void lz_reset(void) { LZ->src = LZ->base; LZ->wpos = 0; LZ->mrem = 0; LZ->nb = 0; }
 static unsigned char lz_next(void) {
     unsigned char b;
     if (!LZ->mrem) {
@@ -87,7 +87,11 @@ static unsigned char lz_next(void) {
 }
 static void music_start_inter(void) {
     music_start();
-    lz_reset(); mus_lz = 1;
+    LZ->base = LZ_SRC0; lz_reset(); mus_lz = 1;
+}
+static void music_start_end(void) {
+    music_start();
+    LZ->base = (const unsigned char *)END_MUS_ORG; lz_reset(); mus_lz = 1;
 }
 static void music_stop(void) {
     if (!mus_p) return;
@@ -484,6 +488,9 @@ int main(void) {
     /* START in game leaves a magic + map id in work RAM: open on the level list with that map selected */
     volatile u32 *rb = (volatile u32 *)0xFF0010;
     int skip_title = 0;
+#ifdef TEST_END
+    rb[0] = 0x45584954UL; rb[1] = 0x4C560007UL;
+#endif
     if (rb[0] == 0x4D454E55UL && (rb[1] >> 16) == 0x4C56 && (rb[1] & 0xFFFF) < MAP_COUNT) { skip_title = 1; sel = rb[1] & 0xFFFF; }
     int inter = 0, inter_next = -1;
     if (rb[0] == 0x45584954UL && (rb[1] >> 16) == 0x4C56 && (rb[1] & 0xFF) < MAP_COUNT) {
@@ -544,7 +551,32 @@ int main(void) {
         for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
         while (pad_read() & 0xFF) wait_vblank();
         if (inter_next >= 0) { vreg(1, 0x04); launch(inter_next); }
-        /* episode end: the end picture, then the level list */
+        /* episode end: closing text with the ending tune, then the end picture, then the level list */
+        vreg(1, 0x04); clear_plane(); setup_text_pal();
+        {
+            static const char *const ln[] = {
+                "DEPOIS DE ACABAR COM OS CHEFOES E",
+                "LIMPAR A BASE LUNAR, VOCE DEVIA",
+                "GANHAR, NAO E? NAO E?",
+                "CADE A SUA RECOMPENSA E O BILHETE",
+                "DE VOLTA PARA CASA?",
+                "",
+                "QUE DIABOS E ISSO? NAO DEVIA",
+                "TERMINAR ASSIM!",
+                "CHEIRA A CARNE PODRE, MAS PARECE",
+                "A BASE PERDIDA DE DEIMOS...",
+                "PARECE QUE VOCE ESTA PRESO NAS",
+                "MARGENS DO INFERNO. A UNICA SAIDA",
+                "E ATRAVES DELE." };
+            int k;
+            for (k = 0; k < 13; k++) text(3, 5 + k, ln[k], 2);
+        }
+        vreg(7, 0x00); vreg(1, 0x44);
+        music_start_end();
+        while (pad_read() & 0xFF) wait_vblank();
+        delay(60);
+        for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
+        while (pad_read() & 0xFF) wait_vblank();
         show_image(3);
         while (pad_read() & 0xFF) wait_vblank();
         for (;;) { wait_vblank(); if (pad_read() & 0xF0) break; }
