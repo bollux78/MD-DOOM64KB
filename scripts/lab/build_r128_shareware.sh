@@ -67,6 +67,7 @@ if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
 python3 "$lab/install_batches.py"
+python3 "$lab/install_e1m1_menu_bench.py"
 fish -n scripts/lab/build_r35_linear.fish
 python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee "$output/build.log"
 cp -a dist/hud/. "$output/"
