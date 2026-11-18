@@ -6,7 +6,7 @@ from pathlib import Path
 parser=argparse.ArgumentParser()
 parser.add_argument('prepared',type=Path)
 parser.add_argument('sgdk',type=Path)
-parser.add_argument('format',choices=('control','side8','seg32','chunkrom','chunk128'))
+parser.add_argument('format',choices=('control','side8','seg32','chunkrom','chunk128','chunkpvs','chunkslim','chunkall'))
 parser.add_argument('output',type=Path)
 args=parser.parse_args()
 work,gdk,out=args.prepared.resolve(),args.sgdk.resolve(),args.output.resolve()
