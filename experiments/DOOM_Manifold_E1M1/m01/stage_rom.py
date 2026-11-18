@@ -5095,6 +5095,20 @@ def stage(src, wad, out, control=False):
         return report
     map_name=os.environ.get("MANIFOLD_MAP","E1M1")
     map_lumps=read_map(wad,map_name)
+    # MANIFOLD_FLOOR_SET="E1M2:101=24;E1M2:102=40": explicit floor-height overrides (flatten tiny steps that cost a cell + portal each)
+    for _fs in filter(None,os.environ.get("MANIFOLD_FLOOR_SET","").split(";")):
+        _mp,_rest=_fs.split(":")
+        if ">" in _rest and _mp==map_name:   # "E1M2:101>100": sector alias (same floor/ceiling/textures as the target; lets the cell merger join them)
+            _from,_to=map(int,_rest.split(">")); _n=0
+            for _i,_sd in enumerate(map_lumps["SIDEDEFS"]):
+                if _sd[5]==_from:
+                    _l=list(_sd); _l[5]=_to; map_lumps["SIDEDEFS"][_i]=tuple(_l); _n+=1
+            print("M14 sector alias",_from,"->",_to,"sidedefs",_n); continue
+        if ">" in _rest: continue
+        _si,_h=_rest.split("=")
+        if _mp==map_name:
+            _r=list(map_lumps["SECTORS"][int(_si)]); print("M14 floor override sector",_si,_r[0],"->",_h); _r[0]=int(_h)
+            map_lumps["SECTORS"][int(_si)]=type(map_lumps["SECTORS"][int(_si)])(_r) if not isinstance(map_lumps["SECTORS"][int(_si)],list) else _r
     cells, stats, missing=candidate(map_lumps,nodes_from_wad(wad,map_name),allow_gaps=True)
     # Prototype only: missing BSP cut edges are opaque and nontraversable.
     # Never synthesize an unsafe portal or mark this build geometry-validated.
