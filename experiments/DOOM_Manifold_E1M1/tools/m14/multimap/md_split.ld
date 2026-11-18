@@ -213,7 +213,7 @@ SECTIONS
     /* Native checkpoint/menu adds a few bytes of persistent RAM state.
        Reserve 64 extra bytes while preserving the exact shared BSS layout
        across all map images. */
-    . = 0x1F84;
+    . = 0x1FC4;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }

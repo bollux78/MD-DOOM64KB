@@ -30,8 +30,9 @@ static m14_sram_guard m14_sram_enter(int writing) {
     __asm volatile("move.w #0x2700,%%sr" : : : "memory");
     ctx.had_z80_bus = (M14_Z80BUS & 0x0100) == 0;
     if (!ctx.had_z80_bus) {
+        int to = 300;    /* Z80 held in RESET never acknowledges the request: it is not using the bus, so go on */
         M14_Z80BUS = 0x0100;
-        while (M14_Z80BUS & 0x0100) { }
+        while ((M14_Z80BUS & 0x0100) && --to) { }
     }
     M14_CTRL0 = writing ? 0xa000 : 0x8000; /* unlock / write enable */
     M14_CTRL5 = 31;  /* slot $280000-$2fffff maps bank 31 */

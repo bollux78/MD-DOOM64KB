@@ -19,6 +19,7 @@ def install(out, spawn_x, spawn_y, spawn_ang, spawn_cell):
     root = Path(__file__).resolve().parents[1]
     src = out / "src"
     shutil.copyfile(root / "tools/m14/multimap/m14_sram.h", src / "m14_sram.h")
+    shutil.copyfile(root / "tools/m14/multimap/m14_tele.h", src / "m14_tele.h")
     mapid = MAPIDS[os.environ.get("MANIFOLD_MAP", "E1M1")]
 
     # Staged level.c knows the current map identity, used to validate saves.
@@ -69,6 +70,61 @@ void m14_ptext(const char *t) {
     u16 x = 10;
     VDP_clearTileMapRect(BG_B, 10, 26, 22, 1);
     while (*t && x < 32) { VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL3, 1, 0, 0, TILE_FONT_INDEX + (*t) - 32), x++, 26); t++; }
+}
+
+
+/* ---- test ROM "tele": persistent telemetry (frame-time buckets, stack/heap headroom, guard trips) ---- */
+#include "m14_tele.h"
+extern volatile u32 manifold_dbg[8];
+extern volatile u32 manifold_dbg_maxdepth;
+extern u32 manifold_heap_high;
+extern u32 last_frame_ticks;
+u16 m14t_stk;                                  /* max stack depth (bytes below 0x10000), fed by visit_graph */
+static u32 m14t_tf, m14t_tt, m14t_acc;
+static u16 m14t_b[5], m14t_dtmax, m14t_skip, m14t_sess;
+static void m14t_max(m14_tele_rec *r, int i, u16 v) { if (v > r->w[i]) r->w[i] = v; }
+static void m14t_add32(m14_tele_rec *r, int i, u32 d) {
+    u32 v = ((u32)r->w[i] << 16) | r->w[i + 1];
+    v += d; if (v < d) v = 0xFFFFFFFFUL;
+    r->w[i] = (u16)(v >> 16); r->w[i + 1] = (u16)v;
+}
+void m14_tele_flush(void) {
+    m14_tele_rec r;
+    m14_sram_guard g;
+    int i, base = M14T_BASE + (int)m14_map_id_var * M14T_STRIDE;
+    if (!m14t_tf) return;
+    g = m14_sram_enter(1);
+    m14t_read(base, &r);
+    if (!m14t_valid(&r)) {
+        memset(&r, 0, sizeof(r));
+        r.w[T_MAGIC] = M14T_MAGIC; r.w[T_VER] = M14T_VER;
+    }
+    if (!m14t_sess) { m14t_sess = 1; if (r.w[T_SESS] < 0xFFFF) r.w[T_SESS]++; }
+    m14t_add32(&r, T_FH, m14t_tf);
+    m14t_add32(&r, T_TH, m14t_tt);
+    for (i = 0; i < 5; i++) {
+        u32 v = (u32)r.w[T_B0 + i] + m14t_b[i];
+        r.w[T_B0 + i] = v > 0xFFFF ? 0xFFFF : (m14_sw)v;
+    }
+    m14t_max(&r, T_DTMAX, m14t_dtmax);
+    m14t_max(&r, T_STK, m14t_stk);
+    r.w[T_HEAP] = (m14_sw)manifold_heap_high;
+    m14t_max(&r, T_DEPTH, (u16)manifold_dbg_maxdepth);
+    m14t_max(&r, T_TRIPS, manifold_dbg[7] > 0xFFFF ? 0xFFFF : (u16)manifold_dbg[7]);
+    m14t_write(base, &r);
+    m14_sram_leave(g);
+    m14t_tf = 0; m14t_tt = 0; m14t_dtmax = 0;
+    for (i = 0; i < 5; i++) m14t_b[i] = 0;
+}
+void m14_tele_frame(void) {
+    u32 dt = last_frame_ticks;
+    if (m14t_skip < 40) { m14t_skip++; return; }     /* ignore level-load hitches */
+    if (!dt) return;
+    if (dt > 600) dt = 600;
+    m14t_tf++; m14t_tt += dt; m14t_acc += dt;
+    if (dt > m14t_dtmax) m14t_dtmax = (u16)dt;
+    m14t_b[dt <= 10 ? 0 : dt <= 15 ? 1 : dt <= 20 ? 2 : dt <= 30 ? 3 : 4]++;
+    if (m14t_acc >= 9000) { m14t_acc = 0; m14_tele_flush(); }   /* every ~30 s of play */
 }
 
 static void m14_put_long(m14_checkpoint *r, int at, m14_dw v) {
@@ -136,6 +192,7 @@ void m14_checkpoint_boot(void) {
 }
 /* Transition to the original fixed ROM map selector only on C, not START. */
 void m14_save_and_menu(void) {
+    m14_tele_flush();
     __asm volatile("move.w #0x2700,%%sr" ::: "memory");
     *(volatile u32 *)0xFF0010 = 0x4D454E55UL;
     *(volatile u32 *)0xFF0014 = 0x4C560000UL | m14_map_id_var;
@@ -199,6 +256,7 @@ void m14_save_and_menu(void) {
     a = text.index("    } else if (input_res == PAUSE_SCREEN) {")
     b = text.index("    if(paused) {\n        console_tick();", a)
     text = text[:a] + """    } else if (input_res == PAUSE_SCREEN) {
+        { extern void m14_tele_flush(void); m14_tele_flush(); }
         m14_ptext("A SALVA B LE C MENU");
     } else if (input_res == UNPAUSE_SCREEN) {
         m14_ptext("");
@@ -215,5 +273,12 @@ void m14_save_and_menu(void) {
     old_init = '    console_push_message_high_priority("game initialized!", 17, 2);'
     if text.count(old_init) == 1:      # not present in every base
         text = text.replace(old_init, '    /* Native checkpoint menu owns console messages while paused. */', 1)
+    anchor = "    last_frame_ticks = end_ticks - start_ticks;"
+    text = _one(text, anchor, anchor + "\n    { extern void m14_tele_frame(void); m14_tele_frame(); }", "telemetry frame hook")
     game.write_text(text)
+    portal = src / "portal.c"
+    ptxt = portal.read_text()
+    pa = "        if (depth > 48 ||"
+    ptxt = _one(ptxt, pa, "        { extern u16 m14t_stk; u16 u = (u16)(0u - (u16)sp_now); if (u > m14t_stk) m14t_stk = u; }\n" + pa, "telemetry stack hook")
+    portal.write_text(ptxt)
     print("M14 native save: SGDK pause/resume + A save / B load / C level menu; X7 SRAM checkpoint")

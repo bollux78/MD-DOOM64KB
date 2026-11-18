@@ -2995,6 +2995,7 @@ int m14_exit_near(void) {
     return 0;
 }
 void m14_do_exit(int kind) {
+    { extern void m14_tele_flush(void) __attribute__((weak)); if (m14_tele_flush) m14_tele_flush(); }
     __asm volatile("move.w #0x2700,%%sr" ::: "memory");
     *(volatile u32 *)0xFF0010 = 0x45584954UL;
     *(volatile u32 *)0xFF0014 = 0x4C560000UL | ((u32)(kind - 1) << 8) | m14_map_id_var;
