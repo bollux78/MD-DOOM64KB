@@ -1,0 +1,38 @@
+{
+  "textured": {
+    "edges": 171.59375,
+    "portals": 26.234375,
+    "draw_ms": 198.23404947916669,
+    "pack_ms": 22.721354166666668,
+    "total_ms": 262.0249430338542,
+    "fps": 3.816430559707432,
+    "raw": {
+      "nd_bench_done": 1,
+      "nd_bench_draw": 974360,
+      "nd_bench_edges": 10982,
+      "nd_bench_errors": 0,
+      "nd_bench_frames": 64,
+      "nd_bench_pack": 111680,
+      "nd_bench_portals": 1679,
+      "nd_bench_total": 1287905
+    }
+  },
+  "flat": {
+    "edges": 171.59375,
+    "portals": 26.234375,
+    "draw_ms": 133.2427978515625,
+    "pack_ms": 17.0684814453125,
+    "total_ms": 180.77596028645834,
+    "fps": 5.531708964042541,
+    "raw": {
+      "nd_bench_done": 1,
+      "nd_bench_draw": 654915,
+      "nd_bench_edges": 10982,
+      "nd_bench_errors": 0,
+      "nd_bench_frames": 64,
+      "nd_bench_pack": 83895,
+      "nd_bench_portals": 1679,
+      "nd_bench_total": 888550
+    }
+  }
+}
