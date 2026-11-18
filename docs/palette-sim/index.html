@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MD-DOOM64KB – Simulador de paleta</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;font:14px system-ui,sans-serif;background:#16171a;color:#ddd}
+header{padding:10px 16px;background:#202227;display:flex;gap:16px;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:5}
+h1{font-size:16px;margin:0}
+main{display:flex;gap:16px;padding:12px 16px;flex-wrap:wrap;align-items:flex-start}
+#left{width:330px;flex:none;position:sticky;top:56px}
+#right{flex:1;min-width:360px}
+.sw{display:grid;grid-template-columns:26px 44px 1fr;gap:6px;align-items:center;margin:3px 0}
+.sw input[type=color]{width:44px;height:26px;padding:0;border:1px solid #555;background:none}
+.sw code{font-size:12px;color:#9ab}
+.sw.ch code{color:#fc6}
+.sw button{font-size:11px}
+h2{font-size:14px;margin:18px 0 6px;border-bottom:1px solid #333;padding-bottom:3px}
+.grid{display:flex;flex-wrap:wrap;gap:12px}
+.it{background:#1e2024;padding:6px;border-radius:4px}
+.it .row{display:flex;gap:6px;align-items:flex-start}
+.it small{display:block;color:#889;font-size:11px;margin-top:3px}
+canvas{image-rendering:pixelated;background:#282828;display:block}
+textarea{width:100%;height:90px;background:#101114;color:#cfc;border:1px solid #444;font:12px monospace}
+button,select,input[type=number]{background:#2c2f36;color:#ddd;border:1px solid #555;border-radius:3px;padding:3px 8px}
+.note{color:#889;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Simulador de paleta – MD-DOOM64KB</h1>
+  <label>DOOM1.WAD / DOOM.WAD: <input type="file" id="wad" accept=".wad"></label>
+  <label>Fase: <select id="map"></select></label>
+  <label>Zoom: <input type="number" id="zoom" min="1" max="6" value="2" style="width:50px"></label>
+  <label>Brilho escuro: <input type="number" id="dk" min="0.2" max="1" step="0.05" value="0.55" style="width:60px"></label>
+  <span class="note" id="status">Carregue o WAD (ele não sai do seu navegador).</span>
+</header>
+<main>
+<div id="left">
+  <div id="sws"></div>
+  <p><button id="resetmap">Restaurar paleta da fase</button></p>
+  <h2>Resultado (todas as fases alteradas)</h2>
+  <textarea id="out" readonly></textarea>
+  <p class="note">Cole o texto acima no chat. O índice 0 é sempre preto. Cores são ajustadas para 3 bits por canal (como o VDP); o hex mostrado é a palavra do VDP.</p>
+</div>
+<div id="right">
+  <h2>Paredes (original | ideal | claro | escuro)</h2><div class="grid" id="walls"></div>
+  <h2>Pisos/tetos (original | sólido claro | sólido escuro | listras 1x1 claro | listras 1x1 escuro)</h2><div class="grid" id="flats"></div>
+  <h2>Monstros e objetos (original | processado)</h2><div class="grid" id="sprites"></div>
+  <p class="note">Paredes: cada célula de 4 pixels vira p,q,p,q (listras verticais). Sprites: pixel duplicado, par invertido nas colunas ímpares. Mesmo algoritmo do conversor (nearest_pair, viés de +40 para cor sólida).</p>
+</div>
+</main>
+<script>
+"use strict";
+const VDP = {
+E1M1:[0x0,0x200,0x400,0x600,0x22,0x222,0x8,0x224,0x244,0x444,0x446,0x466,0x666,0x888,0x88a,0xcce],
+E1M2:[0x0,0x200,0x400,0x600,0xa00,0x22,0x222,0x224,0x244,0x444,0x246,0x446,0x466,0x666,0x888,0xccc],
+E1M3:[0x0,0x200,0x2,0x600,0x22,0x222,0x8,0x224,0x244,0x444,0x446,0x466,0x666,0x888,0x88a,0xccc],
+E1M4:[0x0,0x2,0x600,0x22,0x222,0x8,0x224,0x244,0x444,0x246,0x446,0x466,0x666,0x888,0x8aa,0xccc],
+E1M5:[0x0,0x200,0x400,0x4,0x22,0x222,0x224,0xa,0x244,0x444,0x246,0x446,0x466,0x666,0x88a,0xcce],
+E1M6:[0x0,0x400,0x600,0xa00,0x22,0x222,0x8,0x224,0x244,0x444,0x246,0x446,0x466,0x666,0x88a,0xccc],
+E1M7:[0x0,0x200,0x400,0x2,0x22,0x222,0x8,0x224,0x244,0x444,0x446,0x466,0x666,0x888,0x88a,0xccc],
+E1M8:[0x0,0x400,0x2,0x4,0x22,0x222,0x224,0xa,0x244,0x444,0x246,0x446,0x466,0x666,0x888,0xace],
+E1M9:[0x0,0x2,0x4,0x22,0x222,0x224,0xa,0xc,0x244,0x444,0x246,0x446,0x466,0x666,0x888,0xccc]};
+const snap = v => Math.round(v*7/255);
+const lvl = n => Math.floor(n*255/7);
+const fromVdp = w => [lvl((w>>1)&7), lvl((w>>5)&7), lvl((w>>9)&7)];
+const toVdp = c => (snap(c[2])<<9)|(snap(c[1])<<5)|(snap(c[0])<<1);
+const snapC = c => [lvl(snap(c[0])), lvl(snap(c[1])), lvl(snap(c[2]))];
+const hex2 = c => c.map(v=>v.toString(16).padStart(2,"0")).join("");
+const parseHex = h => [1,3,5].map(i=>parseInt(h.substr(i,2),16));
+
+const ORIG = {}, state = {};
+for (const m in VDP) ORIG[m] = VDP[m].map(fromVdp);
+function loadState(){
+  for (const m in ORIG) state[m] = ORIG[m].map(c=>c.slice());
+  state.E1M1[11] = snapC([0xB6,0x48,0x00]);       // laranja escuro aprovado
+  try { const s = JSON.parse(localStorage.getItem("mdpal")||"null");
+        if (s) for (const m in s) if (state[m]) state[m] = s[m].map(c=>c.slice()); } catch(e){}
+}
+function saveState(){ try{ localStorage.setItem("mdpal", JSON.stringify(state)); }catch(e){} }
+
+/* ---------- WAD ---------- */
+let W = null;
+function parseWad(buf){
+  const dv = new DataView(buf), n = dv.getInt32(4,true), ofs = dv.getInt32(8,true);
+  const lumps = [], idx = {};
+  for (let i=0;i<n;i++){
+    const o = ofs+i*16;
+    let nm=""; for (let k=0;k<8;k++){ const ch=dv.getUint8(o+8+k); if(!ch)break; nm+=String.fromCharCode(ch); }
+    nm = nm.toUpperCase();
+    lumps.push({name:nm, pos:dv.getInt32(o,true), size:dv.getInt32(o+4,true)});
+    if (!(nm in idx)) idx[nm]=i;
+  }
+  const lump = nm => { const i=idx[nm]; if(i===undefined) return null; const l=lumps[i]; return new Uint8Array(buf,l.pos,l.size); };
+  const pp = lump("PLAYPAL");
+  const pal256 = []; for (let i=0;i<256;i++) pal256.push([pp[i*3],pp[i*3+1],pp[i*3+2]]);
+  // flats
+  const flats = {}; let fs=-1;
+  for (let i=0;i<n;i++){ const nm=lumps[i].name;
+    if (nm==="F_START"||nm==="FF_START") fs=i; else if (nm==="F_END"||nm==="FF_END") fs=-1;
+    else if (fs>=0 && lumps[i].size===4096) flats[nm]=i; }
+  // textures
+  const pn = lump("PNAMES"), pdv = new DataView(pn.buffer,pn.byteOffset,pn.byteLength);
+  const np = pdv.getUint32(0,true), pnames=[];
+  for (let i=0;i<np;i++){ let s=""; for(let k=0;k<8;k++){const ch=pn[4+8*i+k]; if(!ch)break; s+=String.fromCharCode(ch);} pnames.push(s.toUpperCase()); }
+  const texdefs = {};
+  for (const tn of ["TEXTURE1","TEXTURE2"]){
+    const t = lump(tn); if(!t) continue;
+    const d = new DataView(t.buffer,t.byteOffset,t.byteLength), cnt=d.getUint32(0,true);
+    for (let i=0;i<cnt;i++){
+      const o = d.getUint32(4+4*i,true);
+      let nm=""; for(let k=0;k<8;k++){const ch=t[o+k]; if(!ch)break; nm+=String.fromCharCode(ch);}
+      const w=d.getUint16(o+12,true), h=d.getUint16(o+14,true), npatch=d.getUint16(o+20,true), pa=[];
+      for (let k=0;k<npatch;k++){ const q=o+22+10*k; pa.push([d.getInt16(q,true),d.getInt16(q+2,true),pnames[d.getUint16(q+4,true)]]); }
+      texdefs[nm.toUpperCase()] = [w,h,pa];
+    }
+  }
+  return {lump, pal256, flats, lumps, texdefs, patchCache:{}, buf, idx};
+}
+function patchImage(data){
+  const dv = new DataView(data.buffer,data.byteOffset,data.byteLength);
+  const w=dv.getUint16(0,true), h=dv.getUint16(2,true);
+  const img = new Int16Array(w*h).fill(-1);
+  for (let x=0;x<w;x++){
+    let off = dv.getUint32(8+4*x,true);
+    while (data[off]!==0xFF){
+      const top=data[off], len=data[off+1];
+      for (let k=0;k<len;k++){ const y=top+k; if(y>=0&&y<h) img[y*w+x]=data[off+3+k]; }
+      off += len+4;
+    }
+  }
+  return {w,h,img};
+}
+function getPatch(name){
+  if (!(name in W.patchCache)){ const l=W.lump(name); W.patchCache[name]= l?patchImage(l):null; }
+  return W.patchCache[name];
+}
+function compose(name){
+  const [w,h,pa]=W.texdefs[name]; const img=new Uint8Array(w*h);
+  for (const [ox,oy,pname] of pa){
+    const p=getPatch(pname); if(!p) continue;
+    for (let y=0;y<p.h;y++) for (let x=0;x<p.w;x++){
+      const v=p.img[y*p.w+x], X=x+ox, Y=y+oy;
+      if (v>=0 && X>=0 && X<w && Y>=0 && Y<h) img[Y*w+X]=v;
+    }
+  }
+  return {w,h,img};
+}
+
+/* ---------- quantizador (igual ao wad_textures.py, V2 desligado) ---------- */
+const dist2 = (a,b)=>2*(a[0]-b[0])**2+4*(a[1]-b[1])**2+3*(a[2]-b[2])**2;
+function nearest(pal,c){ let b=1,bd=1e18; for(let i=1;i<16;i++){const d=dist2(c,pal[i]); if(d<bd){bd=d;b=i;}} return b; }
+function nearestPair(pal,c){
+  const idx=[]; for(let i=1;i<16;i++) idx.push(i);
+  idx.sort((x,y)=>dist2(c,pal[x])-dist2(c,pal[y]));
+  const cand=idx.slice(0,6); let best=null;
+  for (const p of cand) for (const q of cand){
+    const m=[0,1,2].map(k=>(pal[p][k]+pal[q][k])/2);
+    const d=dist2(c,m)+(p===q?0:40);
+    if (best===null||d<best[0]) best=[d,p,q];
+  }
+  return [best[1],best[2]];
+}
+const scale = (c,f)=>[Math.min(255,c[0]*f),Math.min(255,c[1]*f),Math.min(255,c[2]*f)];
+
+/* ---------- desenho ---------- */
+function mk(w,h,z){ const c=document.createElement("canvas"); c.width=w; c.height=h; c.style.width=(w*z)+"px"; c.style.height=(h*z)+"px"; return c; }
+function put(c,fn){ const ctx=c.getContext("2d"), im=ctx.createImageData(c.width,c.height);
+  fn((x,y,col)=>{const o=(y*c.width+x)*4; im.data[o]=col[0]; im.data[o+1]=col[1]; im.data[o+2]=col[2]; im.data[o+3]=255;});
+  ctx.putImageData(im,0,0); return c; }
+function item(label, canvases){
+  const d=document.createElement("div"); d.className="it";
+  const r=document.createElement("div"); r.className="row"; canvases.forEach(c=>r.appendChild(c)); d.appendChild(r);
+  const s=document.createElement("small"); s.textContent=label; d.appendChild(s); return d;
+}
+const WALLS=["STARTAN3","STARG3","STARTAN2","COMPSPAN","COMPTALL","BROWN1","BROWNGRN","BROWN96","GRAY1","GRAYBIG","SLADWALL","TEKWALL1","TEKWALL4","DOOR3","DOORSTOP","METAL2","SUPPORT2","STEP1","SW1STON1","GSTONE1","ZIMMER2","BROWNHUG","STONE","STONE2","STONE3","TEKGREN1","SHAWN2","COMP2","PIPE2","LITE3","BIGDOOR2","BROWN144","GSTSATYR"];
+const FLATS=["FLOOR4_8","FLOOR0_1","FLOOR0_2","FLOOR5_1","FLOOR7_1","FLAT1","FLAT5_4","FLAT20","FLAT23","MFLR8_1","CEIL3_5","CEIL5_1","CEIL3_1","NUKAGE1","FLOOR3_3","FLOOR4_6","FLAT5","FLAT3","FLOOR0_3","CEIL1_1"];
+const SPRITES=["TROOA1","POSSA1","SPOSA1","SARGA1","BOSSA1","SKULA1","BAR1A0","BON1A0","BON2A0","MEDIA0","STIMA0","ARM1A0","ARM2A0","SHOTA0","CLIPA0","BKEYA0","RKEYA0","COLUA0","ELECA0"];
+
+function zoom(){ return Math.max(1,+document.getElementById("zoom").value||2); }
+function dark(){ return +document.getElementById("dk").value||0.55; }
+
+function renderWalls(pal){
+  const z=zoom(), box=document.getElementById("walls"); box.innerHTML="";
+  for (const nm of WALLS){
+    if (!W.texdefs[nm]) continue;
+    const {w,h,img}=compose(nm);
+    const cells=[]; // cor ideal por célula
+    for (let u=0;u<32;u++) for (let v=0;v<64;v++){
+      const x0=u*w/32,x1=(u+1)*w/32,y0=v*h/64,y1=(v+1)*h/64; let a=[0,0,0],n=0;
+      for (let yy=Math.floor(y0); yy<Math.max(Math.floor(y0)+1,Math.floor(y1)); yy++)
+        for (let xx=Math.floor(x0); xx<Math.max(Math.floor(x0)+1,Math.floor(x1)); xx++){
+          const c=W.pal256[img[yy*w+xx]]; a[0]+=c[0];a[1]+=c[1];a[2]+=c[2];n++; }
+      cells.push([a[0]/n,a[1]/n,a[2]/n]);
+    }
+    const ideal=put(mk(128,64,z),s=>{ for(let u=0;u<32;u++)for(let v=0;v<64;v++){ const c=cells[u*64+v]; for(let k=0;k<4;k++) s(u*4+k,v,c);} });
+    const origC=mk(w,h,z*Math.min(1,128/w)); origC.style.height=(h*z*Math.min(1,128/w))+"px";
+    put(origC,s=>{for(let y=0;y<h;y++)for(let x=0;x<w;x++)s(x,y,W.pal256[img[y*w+x]]);});
+    const variant=f=>put(mk(128,64,z),s=>{ for(let u=0;u<32;u++)for(let v=0;v<64;v++){
+        const [p,q]=nearestPair(pal,scale(cells[u*64+v],f)); s(u*4,v,pal[p]);s(u*4+1,v,pal[q]);s(u*4+2,v,pal[p]);s(u*4+3,v,pal[q]); }});
+    box.appendChild(item(nm+" "+w+"x"+h,[origC,ideal,variant(1.0),variant(dark())]));
+  }
+}
+function renderFlats(pal){
+  const z=zoom(), box=document.getElementById("flats"); box.innerHTML="";
+  for (const nm of FLATS){
+    if (!(nm in W.flats)) continue;
+    const l=W.lumps[W.flats[nm]], d=new Uint8Array(W.buf,l.pos,4096);
+    let a=[0,0,0]; const orig=put(mk(64,64,z),s=>{for(let y=0;y<64;y++)for(let x=0;x<64;x++){const c=W.pal256[d[y*64+x]]; a[0]+=c[0];a[1]+=c[1];a[2]+=c[2]; s(x,y,c);}});
+    const avg=a.map(v=>v/4096);
+    const solid=f=>{const c=pal[nearest(pal,scale(avg,f))]; return put(mk(64,64,z),s=>{for(let y=0;y<64;y++)for(let x=0;x<64;x++)s(x,y,c);});};
+    const strip=f=>{const [p,q]=nearestPair(pal,scale(avg,f)); return put(mk(64,64,z),s=>{for(let y=0;y<64;y++)for(let x=0;x<64;x++)s(x,y,pal[(x&1)?q:p]);});};
+    box.appendChild(item(nm,[orig,solid(1),solid(dark()),strip(1),strip(dark())]));
+  }
+}
+function renderSprites(pal){
+  const z=zoom(), box=document.getElementById("sprites"); box.innerHTML="";
+  const cache={};
+  for (const nm of SPRITES){
+    const l=W.lump(nm); if(!l) continue; const {w,h,img}=patchImage(l);
+    const orig=put(mk(w*2,h,z),s=>{for(let y=0;y<h;y++)for(let x=0;x<w;x++){const v=img[y*w+x]; if(v<0)continue; const c=W.pal256[v]; s(x*2,y,c);s(x*2+1,y,c);}});
+    const proc=put(mk(w*2,h,z),s=>{for(let y=0;y<h;y++)for(let x=0;x<w;x++){const v=img[y*w+x]; if(v<0)continue;
+        const pr=cache[v]||(cache[v]=nearestPair(pal,W.pal256[v])); const [a,b]=(x&1)?[pr[1],pr[0]]:pr; s(x*2,y,pal[a]);s(x*2+1,y,pal[b]);}});
+    box.appendChild(item(nm,[orig,proc]));
+  }
+}
+
+/* ---------- UI ---------- */
+const mapSel=document.getElementById("map");
+for (const m in VDP){ const o=document.createElement("option"); o.value=o.textContent=m; mapSel.appendChild(o); }
+let raf=0; function schedule(){ if(!W) return; cancelAnimationFrame(raf); raf=requestAnimationFrame(redraw); }
+function redraw(){
+  const pal=state[mapSel.value];
+  renderWalls(pal); renderFlats(pal); renderSprites(pal); exportText();
+}
+function buildSwatches(){
+  const box=document.getElementById("sws"); box.innerHTML=""; const m=mapSel.value, pal=state[m];
+  for (let i=0;i<16;i++){
+    const row=document.createElement("div"); row.className="sw";
+    const idx=document.createElement("b"); idx.textContent=i;
+    const inp=document.createElement("input"); inp.type="color"; inp.value="#"+hex2(pal[i]); inp.disabled=(i===0);
+    const code=document.createElement("code");
+    const upd=()=>{ code.textContent="0x"+toVdp(pal[i]).toString(16).padStart(3,"0")+"  #"+hex2(pal[i]);
+      row.classList.toggle("ch", hex2(pal[i])!==hex2(ORIG[m][i])); };
+    inp.addEventListener("input",()=>{ state[m][i]=snapC(parseHex(inp.value)); upd(); saveState(); schedule(); });
+    inp.addEventListener("change",()=>{ inp.value="#"+hex2(state[m][i]); });
+    const rst=document.createElement("button"); rst.textContent="↺"; rst.title="restaurar original";
+    rst.addEventListener("click",()=>{ state[m][i]=ORIG[m][i].slice(); inp.value="#"+hex2(state[m][i]); upd(); saveState(); schedule(); });
+    const wrap=document.createElement("span"); wrap.append(code," ",rst);
+    row.append(idx,inp,wrap); box.appendChild(row); upd();
+  }
+}
+function exportText(){
+  const parts=[];
+  for (const m in state) for (let i=1;i<16;i++) if (hex2(state[m][i])!==hex2(ORIG[m][i])) parts.push(m+":"+i+"="+hex2(state[m][i]).toUpperCase());
+  document.getElementById("out").value = parts.length ? 'MANIFOLD_PAL_SET="'+parts.join(";")+'"' : "(nenhuma alteração em relação às paletas originais)";
+}
+mapSel.addEventListener("change",()=>{ buildSwatches(); schedule(); });
+document.getElementById("resetmap").addEventListener("click",()=>{ state[mapSel.value]=ORIG[mapSel.value].map(c=>c.slice()); saveState(); buildSwatches(); schedule(); });
+document.getElementById("zoom").addEventListener("input",schedule);
+document.getElementById("dk").addEventListener("input",schedule);
+document.getElementById("wad").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ W=parseWad(await f.arrayBuffer()); document.getElementById("status").textContent="WAD carregado: "+f.name; redraw(); }
+  catch(err){ document.getElementById("status").textContent="Erro lendo WAD: "+err; }
+});
+loadState(); buildSwatches(); exportText();
+</script>
+</body>
+</html>
