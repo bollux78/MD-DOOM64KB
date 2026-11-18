@@ -128,7 +128,20 @@ def exact_candidate(lumps,nodes):
     _BSP_NODES=nodes if bsp else None
     raw,tstats=T.true_cells(lumps,nodes,merge=merge)
     clockwise=__import__("os").environ.get("MANIFOLD_WINDING","cw")!="ccw"
-    cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
+    import os as _os
+    if "MANIFOLD_TJ_TOL" in _os.environ:
+        cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
+    else:
+        # 1.1 closes near-miss T-junctions (E1M8 star walls); fall back where it makes edges ambiguous
+        try:
+            _os.environ["MANIFOLD_TJ_TOL"]="1.1"
+            cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
+        except ValueError as _e:
+            print("TJ tol 1.1 rejected (%s); using 0.9"%_e)
+            _os.environ["MANIFOLD_TJ_TOL"]="0.9"
+            cells=T.weld_and_pair(raw,lumps,clockwise=clockwise)
+        finally:
+            _os.environ.pop("MANIFOLD_TJ_TOL",None)
     for c in cells:
         for w in c["walls"]:
             w["a"]=(w["a"][0]*SCALE,w["a"][1]*SCALE)
@@ -167,6 +180,7 @@ def legacy_candidate(lumps,nodes,allow_gaps=False):
     sectors=[source_sector(lumps,i) for i in sorted(polys)]
     cells=[]
     missing=[]
+    two_solid=[]
     pairs=set()
     for i in sorted(polys):
         poly=polys[i]
@@ -181,6 +195,8 @@ def legacy_candidate(lumps,nodes,allow_gaps=False):
             ld=lumps["LINEDEFS"][seg[3]] if seg else None
             if seg is not None and not (ld[2]&4 and ld[5]!=65535 and ld[6]!=65535):
                 neighbor=-1
+            elif seg is not None and neighbor<0:
+                two_solid.append((i,j,a,b,seg[3]))
             if seg is None and neighbor<0:
                 missing.append({"cell":i,"edge":j,"a":a,"b":b})
             if neighbor>=0:
@@ -191,7 +207,8 @@ def legacy_candidate(lumps,nodes,allow_gaps=False):
     points={p for c in cells for w in c["walls"] for p in (w["a"],w["b"])}
     wall_count=sum(len(c["walls"]) for c in cells)
     stats={"cells":len(cells),"walls":wall_count,"vertices":len(points),
-           "portal_pairs":len(pairs),"nonmatching_internal_edges":len(missing)}
+           "portal_pairs":len(pairs),"nonmatching_internal_edges":len(missing),
+           "two_sided_solid_edges":len(two_solid)}
     exceeded={
         k:(stats[k],limit) for k,limit in [
             ("cells",MAX_CELLS),("walls",MAX_WALLS),
