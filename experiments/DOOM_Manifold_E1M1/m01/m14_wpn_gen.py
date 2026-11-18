@@ -288,7 +288,7 @@ static void m14w_place(void) {
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
         u8 inA = (m == 0) || (m == 2 && i < f->nsA);
-        VDP_setSprite(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + m14w_bx, BASE_WEAPON_Y + 8 + f->dy + s->oy + m14w_by,
+        VDP_setSprite(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + m14w_bx, BASE_WEAPON_Y + 8 + f->dy + s->oy + m14w_by + ((m14w_hold && m14w_defs[m14w_cur].sfx == 75) ? 4 : 0),
                       s->size, TILE_ATTR_FULL(PAL0, 0, 0, 0, inA ? ta : tb));
         if (inA) ta += s->nt; else tb += s->nt;
     }
@@ -299,7 +299,7 @@ static void m14w_place(void) {
     m14_sat_update(f->ns);
 }
 void set_weapon_sprite_position_offset(s16 offX, s16 offY) {
-    const m14w_frame *f = m14w_shown; m14w_bx = offX; m14w_by = offY + ((m14w_hold && m14w_defs[m14w_cur].sfx == 75) ? 4 : 0); if (!f) return;
+    const m14w_frame *f = m14w_shown; m14w_bx = offX; m14w_by = offY; if (!f) return; offY += (m14w_hold && m14w_defs[m14w_cur].sfx == 75) ? 4 : 0;
     for (u8 i = 0; i < f->ns; i++) {
         const m14w_spr *s = &f->spr[i];
         VDP_setSpritePosition(sprite_idx_start + i, BASE_WEAPON_X + f->dx + s->ox + offX, BASE_WEAPON_Y + 8 + f->dy + s->oy + offY);
@@ -359,7 +359,7 @@ void m14_fire_anim(void) {
     if (d->sfx == 75) return;               /* chainsaw: its two frames alternate by themselves (m14w_step) */
     m14w_hold = h; m14w_isfire = 1; m14w_show(d->fire, 1 - m14w_ib);
 }
-void m14w_setdip(u8 v) { m14w_hold = v; }   /* chainsaw: hold is unused, it doubles as the 'dip 4 px while running' flag */
+void m14w_setdip(u8 v) { if (m14w_hold != v) { m14w_hold = v; set_weapon_sprite_position_offset(m14w_bx, m14w_by); } }   /* chainsaw: hold is unused, it doubles as the 'dip 4 px while running' flag */
 void m14w_idle(void) { if (m14w_isfire) { m14w_show(m14w_defs[m14w_cur].idle, m14w_ib); m14w_isfire = 0; m14w_hold = 0; } }
 void m14w_step(void) {
     const m14w_def *d = &m14w_defs[m14w_cur];
