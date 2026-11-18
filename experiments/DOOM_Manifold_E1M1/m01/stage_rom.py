@@ -3143,6 +3143,7 @@ void m14_player_damage(u16 dmg) {
         dhud_state.armor -= a; dmg -= a;
     }
     if (dmg >= (u16)dhud_state.health) {
+        { extern int m14_in_finale(void); extern void m14_do_exit(int kind); if (m14_in_finale()) m14_do_exit(1); }   /* E1M8 finale room: dying ends the level (special 11) */
         dhud_state.health = 100; dhud_state.armor = 0;
         dhud_state.ammo[0] = 50; dhud_state.ammo_r = 50;
         m14_player_dead_flag = 1;
@@ -3451,6 +3452,10 @@ def m14_hazards(out):
 extern u32 m14_suit_left;
 extern u32 last_frame_ticks;
 extern void m14_player_damage(u16 dmg);
+int m14_in_finale(void) {
+    if (!cur_portal_map->m14_dmg) return 0;
+    return cur_portal_map->m14_dmg[sector_group(cur_player_pos.cur_sector, cur_portal_map)] == 255;
+}
 void m14_hazards(void) {
     static u32 acc;
 @@DBGB@@    u32 dt = last_frame_ticks; if (dt > 300) dt = 300;
