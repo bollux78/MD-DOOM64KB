@@ -9,6 +9,7 @@ for the 3D view (index 0 = transparent, used for sky), and emits:
   * per-texture average colour index (upper/lower step colours, flats)
 """
 from __future__ import annotations
+import os
 import struct
 from pathlib import Path
 
@@ -165,8 +166,36 @@ def nearest(pal, c, lo=1):
     return min(range(lo, len(pal)), key=lambda i: dist2(c, pal[i]))
 
 
+_NP_CACHE = {}
+
+
+def _nearest_pair_ok(pal, c, lo=1):
+    """OKLab version (MANIFOLD_PAL_V2): best solid colour or 50/50 dither pair, mixing in linear light."""
+    import numpy as np
+    key = (tuple(tuple(x) for x in pal), lo)
+    ent = _NP_CACHE.get(key)
+    if ent is None:
+        def lin(v):
+            v = np.array(v, dtype=float) / 255
+            return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
+        L = [lin(pal[i]) for i in range(len(pal))]
+        pairs = [(p, q) for p in range(lo, len(pal)) for q in range(lo, len(pal))]
+        ml = np.array([(L[p] + L[q]) / 2 for p, q in pairs])
+        labp = _oklab(np.array([L[i] for i in range(len(pal))]))
+        pk = float(os.environ.get("MANIFOLD_PAL_PENK", "2.0"))
+        ent = (pairs, _oklab(ml), np.array([0.0 if p == q else 2e-4 + pk * float(((labp[p] - labp[q]) ** 2).sum()) for p, q in pairs]))
+        _NP_CACHE[key] = ent
+    pairs, lab, pen = ent
+    v = np.array(c, dtype=float) / 255
+    v = np.where(v <= 0.04045, v / 12.92, ((np.clip(v, 0, 1) + 0.055) / 1.055) ** 2.4)
+    d = ((lab - _oklab(v[None, :])) ** 2).sum(-1) + pen
+    return pairs[int(d.argmin())]
+
+
 def nearest_pair(pal, c, lo=1):
     """Best 50/50 dither pair (p, q) for colour c."""
+    if os.environ.get("MANIFOLD_PAL_V2") == "1":
+        return _nearest_pair_ok(pal, c, lo)
     best = None
     cand = sorted(range(lo, len(pal)), key=lambda i: dist2(c, pal[i]))[:6]
     for p in cand:
@@ -238,7 +267,72 @@ def average(rgb_img):
     return (acc[0] / n, acc[1] / n, acc[2] / n)
 
 
-def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1"):
+def _oklab(lin):
+    import numpy as np
+    m1 = np.array([[0.4122214708, 0.5363325363, 0.0514459929], [0.2119034982, 0.6806995451, 0.1073969566], [0.0883024619, 0.2817188376, 0.6299787005]])
+    m2 = np.array([[0.2104542553, 0.7936177850, -0.0040720468], [1.9779984951, -2.4285922050, 0.4505937099], [0.0259040371, 0.7827717662, -0.8086757660]])
+    lms = np.cbrt(np.clip(lin @ m1.T, 0, None))
+    return lms @ m2.T
+
+
+def _md_table():
+    import numpy as np
+    vals = [v * 255 // 7 for v in range(8)]
+    cols = [(r, g, b) for r in range(8) for g in range(8) for b in range(8)]
+    rgb = np.array([[vals[r], vals[g], vals[b]] for r, g, b in cols], dtype=float)
+    lin = np.where(rgb / 255 <= 0.04045, rgb / 255 / 12.92, ((rgb / 255 + 0.055) / 1.055) ** 2.4)
+    return cols, rgb, lin, _oklab(lin)
+
+
+def palette_cost(pal_idx, hist, lin, lab, pair_pen=2e-4):
+    """weighted sum over histogram bins of the squared OKLab error to the best palette colour or 50/50 dither pair."""
+    import numpy as np
+    P = list(pal_idx)
+    cand_lin = [lin[i] for i in P]; pen = [0.0] * len(P)
+    pk = float(os.environ.get("MANIFOLD_PAL_PENK", "2.0"))
+    for a in range(len(P)):
+        for b in range(a + 1, len(P)):
+            cand_lin.append((lin[P[a]] + lin[P[b]]) / 2); pen.append(pair_pen + pk * float(((lab[P[a]] - lab[P[b]]) ** 2).sum()))
+    cl = _oklab(np.array(cand_lin))
+    d = ((lab[:, None, :] - cl[None, :, :]) ** 2).sum(-1) + np.array(pen)[None, :]
+    return float((d.min(1) * hist).sum())
+
+
+def build_palette_v2(hist, seed_pal=None, sweeps=6):
+    """Palette of black + 15 colours minimising the perceptual (OKLab) error of what the game shows, counting 50/50 dither
+    pairs as available colours.  hist: dict (r,g,b 0..7) -> weight.  Greedy init + swap local search."""
+    import numpy as np
+    cols, rgb, lin, lab = _md_table()
+    index = {c: i for i, c in enumerate(cols)}
+    h = np.zeros(len(cols))
+    for c, w in hist.items(): h[index[c]] += w
+    black = index[(0, 0, 0)]
+    # greedy start: best single colours by facility location (black fixed)
+    d1 = ((lab[:, None, :] - lab[None, :, :]) ** 2).sum(-1)
+    best = d1[:, black].copy(); chosen = [black]
+    for _ in range(15):
+        gains = ((np.maximum(best[:, None] - d1, 0)) * h[:, None]).sum(0)
+        gains[chosen] = -1
+        k = int(gains.argmax()); chosen.append(k); best = np.minimum(best, d1[:, k])
+    cost = palette_cost(chosen, h, lin, lab)
+    for sw in range(sweeps):
+        improved = False
+        for pos in range(1, 16):
+            keep = chosen[pos]; bestc, bestk = cost, keep
+            for k in range(len(cols)):
+                if k in chosen: continue
+                chosen[pos] = k
+                c = palette_cost(chosen, h, lin, lab)
+                if c < bestc - 1e-12: bestc, bestk = c, k
+            chosen[pos] = bestk
+            if bestk != keep: cost = bestc; improved = True
+        if not improved: break
+    pal = [tuple(int(v) for v in rgb[i]) for i in chosen]
+    pal = [pal[0]] + sorted(pal[1:], key=lambda c: c[0] * 3 + c[1] * 6 + c[2])
+    return pal, cost, h, lin, lab, cols
+
+
+def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1", sprite_lumps=None):
     """Return dict with palette, per-texture data and colour indices."""
     w = Wad(wad_path)
     pal256 = playpal(w)
@@ -281,6 +375,49 @@ def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1"):
                     if pim[y][x] is not None:
                         samples.extend([pal256[pim[y][x]]] * wgt)
     pal = build_palette(samples)
+    if os.environ.get("MANIFOLD_PAL_V2") == "1":
+        # v10n: palette from a weighted histogram of everything the game shows on this map (walls and flats at several
+        # light levels, plus the sprites of the things placed in it), optimised in OKLab with dither pairs.
+        from collections import defaultdict
+        hist = defaultdict(float)
+        def add(c, w):
+            hist[tuple(min(7, round(v / 255 * 7)) for v in c)] += w
+        wtot = 0.0
+        for wdt, hgt, img in texrgb.values():
+            for y in range(0, hgt, 4):
+                for x in range(0, wdt, 4):
+                    for f, wf in ((1.0, 1.0), (0.58, 0.6), (0.4, 0.3)):
+                        add(scale_rgb(img[y][x], f), wf); wtot += wf
+        for img in flatrgb.values():
+            for y in range(0, 64, 4):
+                for x in range(0, 64, 4):
+                    for f, wf in ((1.0, 3.0), (0.58, 1.8), (0.4, 0.9)):
+                        add(scale_rgb(img[y][x], f), wf); wtot += wf
+        wall_hist = dict(hist)
+        spr_dump = []
+        frac = float(os.environ.get("MANIFOLD_PAL_V2_SPRITES", "0.8"))
+        if sprite_lumps:
+            spr = []
+            for lump, cls in sprite_lumps:
+                try: pw, ph, pim = patch_image(w.lump(lump))
+                except KeyError: continue
+                pts = [pal256[pim[y][x]] for y in range(ph) for x in range(pw) if pim[y][x] is not None]
+                if pts: spr.append((pts, 6.0 if cls == "monster" else 1.0)); spr_dump.append((lump, cls, pts))
+            tw = sum(c for _, c in spr)
+            for pts, cw in spr:
+                each = wtot * frac * (cw / tw) / len(pts) if tw else 0
+                for c in pts:
+                    for f, wf in ((1.0, 1.0), (0.6, 0.5)):
+                        add(scale_rgb(c, f), each * wf)
+        if os.environ.get("MANIFOLD_PAL_V2_DUMP"):
+            import pickle
+            pickle.dump({"wall": wall_hist, "wtot": wtot, "spr": spr_dump}, open(os.environ["MANIFOLD_PAL_V2_DUMP"] + "." + os.environ.get("MANIFOLD_MAP", "E1M1") + ".pkl", "wb"))
+        old_pal = pal
+        pal, cost, h, lin, lab, cols = build_palette_v2(hist)
+        idx = {c: i for i, c in enumerate(cols)}
+        old_idx = [idx[tuple(min(7, round(v / 255 * 7)) for v in c)] for c in old_pal]
+        old_cost = palette_cost(old_idx, h, lin, lab)
+        print("palette v2: cost %.4f -> %.4f (%.0f%% lower)" % (old_cost, cost, 100 * (1 - cost / old_cost)))
     # v10m: hand-picked palette entries, MANIFOLD_PAL_SET="E1M1:11=B64800;E1M2:.." (map:index=RRGGBB, 3-bit snapped later)
     for item in os.environ.get("MANIFOLD_PAL_SET", "").split(";"):
         if ":" in item and "=" in item:

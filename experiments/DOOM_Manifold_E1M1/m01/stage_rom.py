@@ -906,7 +906,15 @@ def apply_doom_textures(out, lumps, cells, wad):
     default="STARTAN3" if "STARTAN3" in names else names[0]
     if len(names)>64: raise ValueError(f"{len(names)} textures > Manifold limit 64")
     flats=sorted({_nm(x) for sec in lumps["SECTORS"] for x in (sec[2],sec[3])})
-    res=WT.build_resources(wad,names,[f for f in flats if f!="F_SKY1"])
+    sprite_lumps=None
+    if os.environ.get("MANIFOLD_PAL_V2")=="1":
+        import m12_objects as MO
+        by_id={tid:(lump,name) for tid,lump,name,*_ in MO.TYPES}
+        mon={3004,9,3001,3002,58,3003}
+        used={th[3] for th in lumps["THINGS"]}
+        sprite_lumps=[(by_id[t][0],"monster" if t in mon else "item") for t in sorted(used) if t in by_id]
+        print("palette v2 sprites:",[l for l,_ in sprite_lumps])
+    res=WT.build_resources(wad,names,[f for f in flats if f!="F_SKY1"],sprite_lumps=sprite_lumps)
     pal=res["pal"]
     tex={"index":{n:i for i,n in enumerate(names)},"default":default,
          "avg":{n:WT.nearest(pal,WT.average(res["tex"][n][2])) for n in names},
