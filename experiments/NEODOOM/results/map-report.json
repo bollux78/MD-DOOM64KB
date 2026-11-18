@@ -1,0 +1,13 @@
+{
+  "name": "NeoDoom P0",
+  "map": "E1M1",
+  "wad_sha256": "1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771",
+  "original_bsp_leaves": 237,
+  "nonempty_cells": 237,
+  "convex_rooms": 197,
+  "directed_edges": 1081,
+  "directed_portals": 734,
+  "textures": 32,
+  "poses": 16,
+  "runtime_bsp_nodes": 0
+}
