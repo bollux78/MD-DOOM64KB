@@ -3,6 +3,9 @@ from pathlib import Path
 import struct,json
 
 def apply(lumps,mode,edit,mutable,side_rows):
+    # Keep actor allocation addresses stable: stock sight throttling hashes pointers.
+    edit('src/i_genesis.c','static uint8_t heap[HEAP_SIZE];',
+         'static uint8_t heap[HEAP_SIZE] __attribute__((aligned(32)));')
     by_name={name:data for name,data in lumps if data}
     segs=[by_name['SEGS'][i:i+32] for i in range(0,len(by_name['SEGS']),32)]
     native_nodes=bytearray()
