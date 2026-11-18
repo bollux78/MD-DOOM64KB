@@ -32,7 +32,7 @@ export DOOM_R20_BGM_VGM="$source/res/e1m1.vgm"
 export R128_EPISODE_WAD="$scratch/shareware-e1.wad"
 export HUD_WORK="$scratch/variants"
 export MAKEFLAGS=-j1
-export HUD_BSS_SLACK=128
+export HUD_BSS_SLACK=384
 lab=scripts/lab/r128-shareware
 
 python3 scripts/lab/convert_r128_shareware_e1.py "$shareware" --out "$R128_EPISODE_WAD" > "$output/shareware-e1.json"
@@ -66,6 +66,7 @@ fi
 if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
+python3 "$lab/install_batches.py"
 fish -n scripts/lab/build_r35_linear.fish
 python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee "$output/build.log"
 cp -a dist/hud/. "$output/"
