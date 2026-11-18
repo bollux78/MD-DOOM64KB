@@ -281,6 +281,13 @@ def build_resources(wad_path, tex_names, flat_names, sky_name="SKY1"):
                     if pim[y][x] is not None:
                         samples.extend([pal256[pim[y][x]]] * wgt)
     pal = build_palette(samples)
+    # v10m: hand-picked palette entries, MANIFOLD_PAL_SET="E1M1:11=B64800;E1M2:.." (map:index=RRGGBB, 3-bit snapped later)
+    for item in os.environ.get("MANIFOLD_PAL_SET", "").split(";"):
+        if ":" in item and "=" in item:
+            mp, rest = item.split(":", 1); ix, col = rest.split("=", 1)
+            if mp == os.environ.get("MANIFOLD_MAP", "E1M1"):
+                pal[int(ix)] = tuple(int(col[k:k + 2], 16) for k in (0, 2, 4))
+                print("palette entry", ix, "set to", col)
     return {"pal": pal, "tex": texrgb, "flats": flatrgb, "sky": sky}
 
 
