@@ -79,6 +79,11 @@ def apply(lumps,mode,edit,mutable,side_rows):
             assert len(page)==128
             pages.append(page)
         directory.append((first_page,sector,count,len(pages)-first_page))
+    if mode in ('chunkpvs','chunkslim','chunkall'):
+        native_leaves=[]
+        for first_page,sector,count,page_count in directory:
+            native_leaves.append([pages[first_page+j//3][16+(j%3)*32:48+(j%3)*32].hex() for j in range(count)])
+        Path('src/rvis_input.json').write_text(json.dumps(native_leaves))
     assert len(pages)<65535
     def emit(values):
         return '{'+','.join(str(v) for v in values)+'}'
