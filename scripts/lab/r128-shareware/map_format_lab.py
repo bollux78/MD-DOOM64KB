@@ -14,9 +14,9 @@ for original in ('src/i_genesis.c','src/r_defs.h','src/doomdata.h','src/r_draw.c
     if target.exists():shutil.copy2(target,original)
     else:shutil.copy2(original,target)
 requested=os.environ['R128_MAP_FORMAT']
-assert requested in ('control','side8','seg32','chunkrom','chunk128')
+assert requested in ('control','side8','seg32','chunkrom','chunk128','chunkpvs','chunkslim','chunkall')
 mode='seg32' if requested.startswith('chunk') else requested
-for generated in ('src/rchunk_state.c','src/rchunk_data.c','src/rchunk_data.h','src/rchunk_state.h'):
+for generated in ('src/rchunk_state.c','src/rchunk_data.c','src/rchunk_data.h','src/rchunk_state.h','src/rvis_data.h'):
     Path(generated).unlink(missing_ok=True)
 path=Path('scripts/doom64.wad')
 lumps=read_wad(path.read_bytes(),True)
@@ -105,5 +105,8 @@ report=dict(format=requested,maps=['E1M1'],sides=len(side_rows),segs=len(segs)//
             seg_stride=32 if mode=='seg32' else 18,wad_bytes=path.stat().st_size)
 if requested.startswith('chunk'):
     report.update(chunk_report)
+    if requested in ('chunkpvs','chunkslim','chunkall'):
+        from visibility_format import apply as apply_visibility
+        report=apply_visibility(lumps,edit,report,requested!='chunkslim',requested!='chunkpvs')
 Path('src/rmap_lab_report.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
