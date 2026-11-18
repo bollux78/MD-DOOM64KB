@@ -3009,9 +3009,6 @@ void m14_save_and_menu(void) {
     old=f"    const int init_player_sector = {spawn_cell};"
     assert t.count(old)==1,"level.c init sector anchor"
     t=t.replace(old,f"    {{ extern u16 m14_map_id_var; m14_map_id_var = {mapid}; }}\n"+old,1)
-    _ud=os.environ.get("MANIFOLD_USE_DIST","64")
-    assert t.count("#define MIN_ACTIVATE_DIST 40")==1,"level.c activate dist anchor"
-    t=t.replace("#define MIN_ACTIVATE_DIST 40",f"#define MIN_ACTIVATE_DIST {_ud}",1)
     lv.write_text(t)
 
 def m14_level_exit(out):
@@ -5245,6 +5242,10 @@ def stage(src, wad, out, control=False):
         else:
             m14_start_menu(out,x,y,angle,spawn_cell)
         m14_level_exit(out)
+    # door / lift use range (upstream level.c: 40 units); must run for every start-menu variant
+    _lvp=out/"src/level.c"; _lvt=_lvp.read_text()
+    assert _lvt.count("#define MIN_ACTIVATE_DIST 40")==1,"level.c activate dist anchor"
+    _lvp.write_text(_lvt.replace("#define MIN_ACTIVATE_DIST 40","#define MIN_ACTIVATE_DIST "+os.environ.get("MANIFOLD_USE_DIST","64"),1))
     if os.environ.get("MANIFOLD_WEAPON_FIX","0")=="1":
         m14_weapon_fix(out)
         m14_weapon_sat(out)
