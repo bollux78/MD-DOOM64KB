@@ -72,15 +72,16 @@ const snapC = c => [lvl(snap(c[0])), lvl(snap(c[1])), lvl(snap(c[2]))];
 const hex2 = c => c.map(v=>v.toString(16).padStart(2,"0")).join("");
 const parseHex = h => [1,3,5].map(i=>parseInt(h.substr(i,2),16));
 
-const ORIG = {}, state = {};
-for (const m in VDP) ORIG[m] = VDP[m].map(fromVdp);
+const ORIG = {}, BUILD = {}, state = {};
+for (const m in VDP) { ORIG[m] = VDP[m].map(fromVdp); BUILD[m] = VDP[m].map(fromVdp); }
+// base de trabalho da E1M1 = paleta original só com o laranja (índice 11) trocado; BUILD = o que o conversor gera sozinho
+ORIG.E1M1[11] = snapC([0xB6,0x48,0x00]);
 function loadState(){
   for (const m in ORIG) state[m] = ORIG[m].map(c=>c.slice());
-  state.E1M1[11] = snapC([0xB6,0x48,0x00]);       // laranja escuro aprovado
-  try { const s = JSON.parse(localStorage.getItem("mdpal")||"null");
+  try { const s = JSON.parse(localStorage.getItem("mdpal2")||"null");
         if (s) for (const m in s) if (state[m]) state[m] = s[m].map(c=>c.slice()); } catch(e){}
 }
-function saveState(){ try{ localStorage.setItem("mdpal", JSON.stringify(state)); }catch(e){} }
+function saveState(){ try{ localStorage.setItem("mdpal2", JSON.stringify(state)); }catch(e){} }
 
 /* ---------- WAD ---------- */
 let W = null;
@@ -255,7 +256,7 @@ function buildSwatches(){
 }
 function exportText(){
   const parts=[];
-  for (const m in state) for (let i=1;i<16;i++) if (hex2(state[m][i])!==hex2(ORIG[m][i])) parts.push(m+":"+i+"="+hex2(state[m][i]).toUpperCase());
+  for (const m in state) for (let i=1;i<16;i++) if (hex2(state[m][i])!==hex2(BUILD[m][i])) parts.push(m+":"+i+"="+hex2(state[m][i]).toUpperCase());
   document.getElementById("out").value = parts.length ? 'MANIFOLD_PAL_SET="'+parts.join(";")+'"' : "(nenhuma alteração em relação às paletas originais)";
 }
 mapSel.addEventListener("change",()=>{ buildSwatches(); schedule(); });
