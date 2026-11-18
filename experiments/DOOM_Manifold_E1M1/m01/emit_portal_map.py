@@ -547,7 +547,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         print("M14 generic dynamic sectors (type,target):",{k:v for k,v in sorted(gen_dyn.items())})
     # M14 world: tagged remote actions (walk-over / switch lines) -> sector motion tables
     _S=lumps["SECTORS"]
-    A_DOOR={2,4,29,61,63,86,90,103}; A_RAISE={5,18,20,22,91,92}; A_LOWER={23,36,38,60,70,71,82,98}
+    A_DOOR={2,4,29,61,63,86,90,103}; A_RAISE={5,18,20,22,91,92,7,8}; A_LOWER={23,36,38,60,70,71,82,98}
     A_LIFT={10,21,62,88,120,121,122,123}; A_TELE={39,97}
     A_ALL=A_DOOR|A_RAISE|A_LOWER|A_LIFT|A_TELE
     m14_trig=[]; _V0=lumps["VERTEXES"]
@@ -555,8 +555,31 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         if ln[3] in A_ALL and ln[4]:
             m14_trig.append([_V0[ln[0]][0],_V0[ln[0]][1],_V0[ln[1]][0],_V0[ln[1]][1],ln[3],ln[4],len(m14_trig)])
     m14_trig=m14_trig[:64]
+    # r079: Doom's EV_BuildStairs (S1 7 / W1 8): from each sector with the line's tag, +8 per step,
+    # following lines whose FRONT side is the current sector and whose back sector has the same floor flat.
+    _stag_over={}
+    _SDx=lumps["SIDEDEFS"]
     for t_ in m14_trig:
         sp_,tg_=t_[4],t_[5]
+        if sp_ not in (7,8): continue
+        for si0,s0 in enumerate(_S):
+            if s0[6]!=tg_ or si0 in gen_dyn: continue
+            sec=si0; hgt=s0[0]+8; ftex_=s0[2]; seq=[(sec,hgt)]; done={sec}
+            while True:
+                nxt=None
+                for ln in lumps["LINEDEFS"]:
+                    if not (ln[2]&4) or ln[6]==65535: continue
+                    f_=_SDx[ln[5]][5]; b_=_SDx[ln[6]][5]
+                    if f_!=sec or b_ in done or _S[b_][2]!=ftex_: continue
+                    hgt+=8; nxt=(b_,hgt); break
+                if not nxt: break
+                seq.append(nxt); done.add(nxt[0]); sec=nxt[0]
+            for sec_,h_ in seq:
+                gen_dyn[sec_]=(4,min(h_,_S[sec_][1])); _stag_over[sec_]=tg_
+            print("M14 build-stairs tag",tg_,"steps",[(x,h) for x,h in seq])
+    for t_ in m14_trig:
+        sp_,tg_=t_[4],t_[5]
+        if sp_ in (7,8): continue
         for si,(floor,ceil,fl,ce,light,special,tag) in enumerate(_S):
             if tag!=tg_ or si in gen_dyn or si in door_door_ceilings: continue
             nbf=[_S[n][0] for n in neighbors[si]]; nbc=[_S[n][1] for n in neighbors[si]]
@@ -704,7 +727,7 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
     _dm={5:10,7:5,16:20,4:20,11:255}   # 11 = E1M8 finale sector (r073)
     _tr=[len(m14_trig)]+[v for t_ in m14_trig for v in t_]
     text+="const s16 m14_trig_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_tr))+"};\n"
-    _sg=[sc[6] for sc in lumps["SECTORS"]]
+    _sg=[_stag_over.get(i_,sc[6]) for i_,sc in enumerate(lumps["SECTORS"])]
     text+="const s16 m14_stag_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_sg))+"};\n"
     _te=[len(m14_tele)]+[v for t_ in m14_tele for v in t_]
     text+="const s16 m14_tele_tbl[] __attribute__((aligned(4))) = {"+",".join(map(str,_te))+"};\n"

@@ -251,17 +251,19 @@ static int canary_boot(void) {   /* returns boot count (0 = no persistence / wri
     m14_tele_rec r, v; m14_sram_guard g; int ok;
     g = m14_sram_enter(1);
     m14t_read(M14T_CANARY, &r);
-    if (m14t_valid(&r)) { if (r.w[T_SESS] < 0xFFFF) r.w[T_SESS]++; }
-    else { int i; for (i = 0; i < 32; i++) r.w[i] = 0; r.w[T_MAGIC] = M14T_MAGIC; r.w[T_VER] = M14T_VER; r.w[T_SESS] = 1; }
+    if (m14t_valid(&r)) { if (r.w[T_SESS] < 0xFFFF) r.w[T_SESS]++; r.w[3] = 1; }   /* w3 = a valid record existed before this boot */
+    else { int i; for (i = 0; i < 32; i++) r.w[i] = 0; r.w[T_MAGIC] = M14T_MAGIC; r.w[T_VER] = M14T_VER; r.w[T_SESS] = 1; r.w[3] = 0; }
     m14t_write(M14T_CANARY, &r);
     m14t_read(M14T_CANARY, &v);
     ok = m14t_valid(&v) && v.w[T_SESS] == r.w[T_SESS];
     m14_sram_leave(g);
     return ok ? (int)r.w[T_SESS] : 0;
 }
+#define canary_prev (*(volatile u16 *)0xFF0024)   /* menu has no .bss: ROM-linked statics would be lost */
 static int canary_peek(void) {
     m14_tele_rec r; m14_sram_guard g;
     g = m14_sram_enter(0); m14t_read(M14T_CANARY, &r); m14_sram_leave(g);
+    canary_prev = r.w[3];
     return m14t_valid(&r) ? (int)r.w[T_SESS] : -1;
 }
 
@@ -272,7 +274,7 @@ static const char *const bench_name[NBENCH] = {
     "SRAM LER", "SRAM ESCREVER", "SRAM>WRAM 1KB", "WRAM>WRAM 1KB", "WRAM>SRAM 1KB" };
 static const signed char bench_ref[NBENCH] = { -1, -1, 0, -1, -1, 0, 1, 8, -1, 8 };
 static const u8 bench_sh[NBENCH] = { 6, 6, 6, 4, 4, 6, 6, 9, 9, 9 };   /* log2(ops per call) */
-static volatile u16 bsink;
+#define bsink (*(volatile u16 *)0xFF0026)
 static void bench_once(int id) {
     volatile u16 *w = (volatile u16 *)0xFF8000; volatile u16 *w2 = (volatile u16 *)0xFFA000;
     volatile u16 *sr = M14_SRAM_WORDS + M14T_SCRATCH;
@@ -441,9 +443,10 @@ static void diag_screen(void) {
                     else text(1, 17, "PADRAO DE LEITURA/ESCRITA: OK", 2);
                 }
             }
-            text(1, 21, "SRAM:", 3);
-            if (boots > 0) { text(7, 21, "PERSISTE. BOOT NUMERO", 2); numr(29, 21, (u32)boots, 4, 2); }
-            else text(7, 21, "SEM DADOS ANTERIORES", 3);
+                        if (boots > 0) {
+                text(1, 21, "BOOT NUMERO", 3); numr(13, 21, (u32)boots, 4, 2);
+                text(1, 22, canary_prev ? "DADOS DO BOOT ANTERIOR: ENCONTRADOS" : "DADOS DO BOOT ANTERIOR: NENHUM", canary_prev ? 2 : 3);
+            } else text(1, 21, "SRAM SEM REGISTRO", 3);
             text(1, 24, "A: PAGINA   B OU START: VOLTAR", 2);
             vreg(1, 0x44);
         }

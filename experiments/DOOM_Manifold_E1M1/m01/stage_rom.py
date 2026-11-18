@@ -3485,7 +3485,7 @@ static s32 m14w_px, m14w_py; static u8 m14w_have;
 static u8 m14w_cls(s16 sp) {
     switch (sp) {
     case 2: case 4: case 29: case 61: case 63: case 86: case 90: case 103: return 1;
-    case 5: case 18: case 20: case 22: case 91: case 92: return 2;
+    case 5: case 7: case 8: case 18: case 20: case 22: case 91: case 92: return 2;
     case 23: case 36: case 38: case 60: case 70: case 71: case 82: case 98: return 3;
     case 10: case 21: case 62: case 88: case 120: case 121: case 122: case 123: return 4;
     case 39: case 97: return 5;
@@ -3493,11 +3493,11 @@ static u8 m14w_cls(s16 sp) {
     return 0;
 }
 static u8 m14w_is_switch(s16 sp) {
-    switch (sp) { case 18: case 20: case 21: case 23: case 29: case 61: case 62: case 63: case 70: case 71: case 103: return 1; }
+    switch (sp) { case 7: case 18: case 20: case 21: case 23: case 29: case 61: case 62: case 63: case 70: case 71: case 103: return 1; }
     return 0;
 }
 static u8 m14w_once(s16 sp) {
-    switch (sp) { case 2: case 4: case 5: case 18: case 20: case 21: case 22: case 23: case 29: case 36: case 38: case 39: case 103: return 1; }
+    switch (sp) { case 2: case 4: case 5: case 7: case 8: case 18: case 20: case 21: case 22: case 23: case 29: case 36: case 38: case 39: case 103: return 1; }
     return 0;
 }
 static void m14w_fire(s16 sp, s16 tag) {
