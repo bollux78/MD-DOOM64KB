@@ -59,6 +59,9 @@ SHEET_ORDER = ("PUNGA0 PUNGB0 PUNGC0 PUNGD0 PISGA0 PISGB0 PISGC0 PISGD0 PISGE0 P
                "SAWGA0 SAWGB0 SAWGC0 SAWGD0 CHGGA0 CHGGB0 CHGFA0 CHGFB0 MISFA0 MISFB0 MISFC0 MISFD0 MISGA0 MISGB0").split()
 
 
+SHEET_OFFS = {}      # name -> (dx, dy): where an edited (smaller) frame sits relative to its Doom lump
+
+
 def load_sheet(path, w):
     """User-edited weapon art: one RGBA sheet (transparent background), 16 colours = 15 opaque + transparent.
     Frames are laid out left to right in SHEET_ORDER; each keeps the size (and therefore the Doom offsets) of its WAD lump."""
@@ -71,16 +74,45 @@ def load_sheet(path, w):
         if x - p0 > 3: seg.append((s0, p0)); s0 = x
         p0 = x
     seg.append((s0, p0))
+    npx = lambda s: int((__import__("numpy").array(a.crop((s[0], 0, s[1] + 1, H))) > 0).sum())
+    seg = [s for s in seg if npx(s) >= 60]            # stray specks are not frames
+    order = list(SHEET_ORDER)
+    alias = {}
+    if len(seg) == len(order) + 3:                    # the two shotgun flashes (SHTFA0/SHTFB0) touch: split that block at its widest inner gap
+        i = order.index("SHTFA0"); x0, x1 = seg[i]
+        colsb = [x for x in range(x0, x1 + 1) if a.crop((x, 0, x + 1, H)).getbbox()]
+        gaps = sorted(((colsb[k + 1] - colsb[k], k) for k in range(len(colsb) - 1)), reverse=True)
+        if gaps and gaps[0][0] > 1:
+            k = gaps[0][1]; seg[i:i + 1] = [(x0, colsb[k]), (colsb[k + 1], x1)]
+    if len(seg) != len(order) + 4:
+        raise ValueError("sheet has %d frames, expected %d (30 weapon frames + 4 rocket projectile/explosion frames); frames need >= 4 empty columns between them, and no stray pixels. Frame widths: %s" % (len(seg), len(order) + 4, [s[1] - s[0] + 1 for s in seg]))
     frames = {}
-    for name, (x0, x1) in zip(SHEET_ORDER, seg):
-        pw, ph, _ = WT.patch_image(w.lump(name))
-        ss = float(os.environ.get("MANIFOLD_WPN_SHEET_SCALE", "1"))     # the sheet was drawn at this fraction of the Doom size (e.g. 0.75)
+    for name, (x0, x1) in zip(order, seg):
+        pw, ph, pimg = WT.patch_image(w.lump(name))
+        ss = float(os.environ.get("MANIFOLD_WPN_SHEET_SCALE", "1"))     # legacy: whole sheet drawn at this fraction of the Doom size
         if ss != 1.0: pw, ph = round(pw * ss), round(ph * ss)
-        if abs(x1 - x0 + 1 - pw) > (1 if ss != 1.0 else 0): raise ValueError("sheet frame %s width %d != expected %d" % (name, x1 - x0 + 1, pw))
-        pw = x1 - x0 + 1
-        top = a.crop((x0, 0, x1 + 1, H)).getbbox()[1]
-        if top + ph > H: top = H - ph
-        frames[name] = im.crop((x0, top, x0 + pw, top + ph))
+        crop = a.crop((x0, 0, x1 + 1, H)).getbbox()
+        fw, fh = x1 - x0 + 1, crop[3] - crop[1]
+        top = crop[1]
+        if top + max(fh, ph if (fw, fh) == (pw, ph) else fh) > H: top = max(0, H - fh)
+        frames[name] = im.crop((x0, top, x0 + fw, top + fh))
+        SHEET_OFFS[name] = (0, 0)
+        if os.environ.get("MANIFOLD_WPN_SHEET_ANCHOR") == "1":
+            SHEET_OFFS[name] = ("anchor", pw, ph, fw, fh)
+        elif ss == 1.0 and (fw, fh) != (pw, ph):
+            # an edited frame smaller than the Doom lump (cropped / redrawn): find where it sits inside the original silhouette
+            import numpy as np
+            m = np.array(frames[name].getchannel("A")) > 0
+            o = np.array([[p is not None for p in r] for r in pimg])
+            best = (-1, 0, 0)
+            for dy in range(-2, ph - fh + 3):
+                for dx in range(-2, pw - fw + 3):
+                    y0, y1, xa, xb = max(0, dy), min(ph, dy + fh), max(0, dx), min(pw, dx + fw)
+                    if y1 <= y0 or xb <= xa: continue
+                    inter = int((m[y0 - dy:y1 - dy, xa - dx:xb - dx] & o[y0:y1, xa:xb]).sum())
+                    if inter > best[0]: best = (inter, dx, dy)
+            SHEET_OFFS[name] = (best[1], best[2])
+    for k, v in alias.items(): frames[k] = frames[v]; SHEET_OFFS[k] = SHEET_OFFS[v]
     colors = sorted({px[:3] for px in im.getdata() if px[3] > 0})
     if len(colors) > 15: raise ValueError("sheet has %d opaque colours (max 15)" % len(colors))
     return frames, colors
@@ -101,7 +133,10 @@ def build(w, rgb, cut, sheet=None):
         lo, to = struct.unpack("<hh", l[4:8])
         if sheet_frames and name in sheet_frames:
             ss = float(os.environ.get("MANIFOLD_WPN_SHEET_SCALE", "1"))
-            X, Y = -lo, -to
+            so = SHEET_OFFS.get(name, (0, 0))
+            if so[0] == "anchor":      # drawn as the visible part only: bottom on the viewport line, centred where the Doom frame was
+                X, Y = 160 - so[3] // 2, (BASE_BOTTOM - cut) - so[4]          # centred on the screen, standing on the viewport line
+            else: X, Y = -lo + so[0], -to + so[1]
             if ss != 1.0: X, Y = round(160 + (X - 160) * ss), round(BASE_BOTTOM - cut + (Y - (BASE_BOTTOM - cut)) * ss)   # same anchor as SCALE
             return sheet_frames[name].copy(), X, Y
         import wad_textures as WT
@@ -128,6 +163,9 @@ def build(w, rgb, cut, sheet=None):
 
     def frame_canvas(names, maxtiles, sc=1.0):
         layers = [scaled(n, sc) for n in names]
+        if sheet_frames and os.environ.get("MANIFOLD_WPN_SHEET_ANCHOR") == "1" and len(layers) > 1:
+            g0, f1 = layers[0], layers[1]      # muzzle flash: centred on the gun and sitting on top of it (4 px overlap)
+            layers[1] = (f1[0], g0[1] + g0[0].width // 2 - f1[0].width // 2, g0[2] - f1[0].height + 4)
         bx0 = min(X for _, X, _ in layers); bx1 = max(X + im.width for im, X, _ in layers)
         by0 = min(Y for _, _, Y in layers)
         tw = math.ceil((bx1 - bx0) / 8); th = math.ceil((bottom - by0) / 8)
@@ -342,7 +380,7 @@ def gen_c(ws):
             n = "w%df%d" % (i, j)
             s.append("static const m14w_spr %s_s[] = {%s};" % (n, ",".join("{%d,%d,0x%02X,%d}" % x for x in f["spr"])))
             d = f["data"]
-            s.append("static const u32 %s_t[] __attribute__((section(\".wpndata\"))) = {%s};" % (n, ",".join("0x%08X" % v for v in d)))
+            s.append("static const u32 %s_t[] __attribute__((section(\"%s\"))) = {%s};" % (n, ".wpndata2" if j == 1 else ".wpndata", ",".join("0x%08X" % v for v in d)))   # fire frames live in the big window
             s.append("static const m14w_frame %s = {%d,%d,%d,%d,%d,%s_s,%s_t};" % (n, f["dx"], f["dy"], len(f["spr"]), f["nsA"], len(d) // 8, n, n))
         for j, f in enumerate(wp["post"]):
             n = "w%dp%d" % (i, j)
