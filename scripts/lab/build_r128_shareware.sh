@@ -30,7 +30,7 @@ export PATH="$gdk/bin:$PATH"
 export DOOM_MD_GDK="$gdk"
 export DOOM_R20_BGM_VGM="$source/res/e1m1.vgm"
 export R128_EPISODE_WAD="$scratch/shareware-e1.wad"
-export HUD_WORK="$scratch/variants"
+export HUD_WORK="$output/prepared"
 export MAKEFLAGS=-j1
 export HUD_BSS_SLACK=384
 lab=scripts/lab/r128-shareware
@@ -67,6 +67,15 @@ if [[ "${R128_SGDK211_COMPAT:-0}" == 1 ]]; then
     cp "$lab/sgdk211_memcmp.c" src/r128_sgdk_memcmp.c
 fi
 python3 "$lab/install_batches.py"
+python3 - <<'PYHOOK'
+from pathlib import Path
+p=Path('scripts/lab/build_r35_linear.fish')
+s=p.read_text()
+anchor='    rm -rf out\n    rm -f res/music.rs res/music.d\n'
+assert s.count(anchor)==1
+s=s.replace(anchor,'    python3 scripts/lab/r128-shareware/map_format_lab.py; or exit 1\n'+anchor)
+p.write_text(s)
+PYHOOK
 python3 "$lab/install_e1m1_menu_bench.py"
 fish -n scripts/lab/build_r35_linear.fish
 python3 scripts/lab/build_r71a12mul_hud.py 2>&1 | tee "$output/build.log"
