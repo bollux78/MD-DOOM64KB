@@ -542,6 +542,21 @@ def relocate_free_tiles_after_sgdk2_framebuffer(out):
     p.write_text(s)
     print("Game tiles relocated after SGDK2 framebuffer (TILE_USER_INDEX+896)")
 
+def shrink_visit_graph_vertex_buffer(out):
+    """r079 v10g: visit_graph kept a fixed Vect2D_s16[36] (144 B) in every recursion frame although a
+    sector needs 2*num_walls entries. A sized (VLA) buffer shrinks the frame so the same stack reaches
+    deeper portal chains (telemetry: every map clipped by the stack margin)."""
+    import os
+    if os.environ.get("MANIFOLD_VLA_VERTS")!="1": return
+    p=out/"src/portal.c"
+    s=p.read_text()
+    import re
+    i0=s.index("void visit_graph(")
+    m=re.search(r"    Vect2D_s16 transformed_vert_buffer\[\d+\];\n",s[i0:])
+    if not m: raise ValueError("visit_graph vertex buffer changed")
+    s=s[:i0+m.start()]+"    Vect2D_s16 transformed_vert_buffer[2*num_walls+2];\n"+s[i0+m.end():]
+    p.write_text(s)
+
 def guard_portal_recursion_stack(out):
     """visit_graph recurses once per portal hop. E1M1 chains far deeper than
     upstream maps and the stack (above the heap/framebuffers) grew down into
@@ -4949,7 +4964,7 @@ def stage(src, wad, out, control=False):
         raise ValueError("destination already exists: "+str(out))
     shutil.copytree(src,out,ignore=shutil.ignore_patterns(".git","out","__pycache__"))
     skip=set(filter(None,os.environ.get('MANIFOLD_SKIP','').split(',')))
-    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
+    for step in (stage_missing_resources,normalize_legacy_asm,namespace_legacy_allocators,normalize_legacy_s16_bounds,normalize_legacy_fixed_point_api,normalize_wide_sprite_registers,normalize_legacy_palette_and_asm,normalize_game_integration,normalize_weapon_api_declaration,normalize_remaining_palettes,normalize_menu_callbacks,normalize_math_and_menu,normalize_bitmap_legacy_symbols,normalize_pvs_entry_types,normalize_toggle_declarations,normalize_weapon_sprite_frame_layout,normalize_header_global_definitions,mute_legacy_emulator_debug_logging,restore_generated_scalers_with_correct_constraints,fix_sgdk2_hint_callbacks,harden_inline_asm,fail_loud_on_heap_exhaustion,widen_sector_vertex_buffers,relocate_free_tiles_after_sgdk2_framebuffer,instrument_portal_renderer,default_texture_repetitions,poll_joypad_each_frame,saturate_far_depth_and_guard_windows,clamp_native_vertical_lines,guard_portal_recursion_stack,shrink_visit_graph_vertex_buffer,robust_sector_crossing,guard_zero_reciprocal_in_texture_columns,guard_zero_width_edges,limit_repeated_sector_overdraw,far_portal_fog,fix_fps_font_base,textured_portal_steps,keep_overlays_off_sky,scale_light_distances,hud_fps_and_build_tag,weapon_buffers_fit_vram,):
         if step.__name__ in skip:
             print('SKIPPED stage step:',step.__name__); continue
         step(out)
