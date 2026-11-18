@@ -15,10 +15,10 @@ from pathlib import Path
 # Doom refire: fist 22 tics (punch cycle), pistol 14, shotgun 37, chaingun 4, rocket 20, saw 4
 WEAPONS = [
     ("FIST",    ["PUNGA0"], ["PUNGC0"],            189, 86, 0, "punch"),
-    ("PISTOL",  ["PISGA0"], ["PISGB0", "PISFA0"],  120, 60, 1, "pistol"),
+    ("PISTOL",  ["PISGA0"], ["PISGB0", "PISFA0"],  190, 60, 1, "pistol"),
     ("SHOTGUN", ["SHTGA0"], ["SHTGA0", "SHTFB0"],  317, 60, 3, "shotgun"),
     ("CHAINGUN",["CHGGA0"], ["CHGGB0", "CHGFB0"],   34, 17, 1, "pistol"),
-    ("ROCKET",  ["MISGA0"], ["MISGB0", "MISFB0"],  171, 60, 1, "rocket"),
+    ("ROCKET",  ["MISGA0"], ["MISGB0", "MISFB0"],  300, 60, 1, "rocket"),
     ("SAW",     ["SAWGC0"], ["SAWGD0"],             34, 34, 0, "saw"),
 ]
 if os.environ.get("MANIFOLD_WPN_GAME") == "heretic":
@@ -276,6 +276,7 @@ typedef struct { const m14w_frame *idle, *fire; u16 pal[15]; u16 cad, hold; u8 p
 u8 m14w_cur = 1;
 static const m14w_frame *m14w_shown; static u8 m14w_isfire; static u16 m14w_hold;
 static s16 m14w_bx, m14w_by; static u8 m14w_pi = 0xFF, m14w_pt;
+s32 m14_cd;
 u16 m14w_cad(void) { return m14w_defs[m14w_cur].cad; }
 u8 m14w_pellets(void) { return m14w_defs[m14w_cur].pel; }
 u8 m14w_sfx(void) { return m14w_defs[m14w_cur].sfx; }
@@ -459,8 +460,9 @@ def apply(out, wad):
     { extern void m14_weapon_preload(void); m14_weapon_preload(); }
 }""", "void init_shotgun() { extern void m14w_select(u8 id); extern u8 m14w_cur; m14w_select(m14w_cur); }")
     rep("        if(shooting == m14_anim_at) { { extern void m14_fire_anim(void); m14_fire_anim(); } }\n", "")
+    rep("        shooting--;\n", "        { extern s32 m14_cd; s32 ft = last_frame_ticks ? (s32)last_frame_ticks : 1; m14_cd -= ft; shooting = (m14_cd > 0) ? (int)(m14_cd / ft) + 1 : 0; }\n")
     rep("{ s32 sl = 135 / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 2) sl = 2; if (sl > 12) sl = 12; shooting = sl; m14_anim_at = (sl > 4) ? 4 : 1; }",
-        "{ extern u16 m14w_cad(void); extern void m14_fire_anim(void); s32 sl = m14w_cad() / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 1) sl = 1; if (sl > 120) sl = 120; shooting = sl; m14_anim_at = -1; { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) m14_fire_anim(); } }")
+        "{ extern u16 m14w_cad(void); extern void m14_fire_anim(void); s32 sl = m14w_cad() / (last_frame_ticks ? last_frame_ticks : 1); if (sl < 1) sl = 1; if (sl > 120) sl = 120; { extern s32 m14_cd; m14_cd = (s32)m14w_cad(); } shooting = sl + 1; m14_anim_at = -1; { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) m14_fire_anim(); } }")
     rep("        play_sfx(SFX_SHOTGUN_ID, 15);\n        run_in_phs", "        { extern u8 m14w_sfx(void); if (m14w_sfx() != 75) play_sfx(m14w_sfx(), 15); }\n        run_in_phs")
     rep("if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); m14_shoot_dec(sprite_on_center_col, center_object_sector); }",
         "if (drawn_to_center_cols == DECORATION) { extern void m14_shoot_dec(u8 l, u16 s); extern u8 m14w_pellets(void); for (u8 m14_p = 0; m14_p < m14w_pellets(); m14_p++) m14_shoot_dec(sprite_on_center_col, center_object_sector); }")
