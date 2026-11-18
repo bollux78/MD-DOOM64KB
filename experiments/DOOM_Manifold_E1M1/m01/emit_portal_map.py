@@ -733,7 +733,21 @@ def emit(lumps,cells,tex=None,things=None,doors=False):
         bt=bsp_tables(cells)
         text+=f"const u16 e1_bsp_num_nodes = {len(bt)//14};\n"
         text+="const s16 e1_bsp_nodes[] = {"+",".join(map(str,bt))+"};\n"
-    boffs,bflat,_=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,4,5)})
+    boffs,bflat,_bsegs=blocking_segments(lumps,cells,{k for k,v in gen_dyn.items() if v[0] in (3,4,5)})
+    _bb=__import__('os').environ.get('MANIFOLD_BLOCK_DUMP')
+    if _bb:
+        x0,y0,x1,y1=map(int,_bb.split(','))
+        for a,b,h in _bsegs:
+            if min(a[0],b[0])<=x1 and max(a[0],b[0])>=x0 and min(a[1],b[1])<=y1 and max(a[1],b[1])>=y0: print('BLOCKSEG',a,b,h)
+        _ca=__import__('os').environ.get('MANIFOLD_CELL_AT')
+        if _ca:
+            from shapely.geometry import Polygon as _P, Point as _Pt
+            for q in _ca.split(';'):
+                qx,qy=map(float,q.split(','))
+                for i_,c_ in enumerate(cells):
+                    if _P([(w_['a'][0]/SCALE,w_['a'][1]/SCALE) for w_ in c_['walls']]).buffer(0.01).contains(_Pt(qx,qy)):
+                        print('CELLAT',qx,qy,'cell',i_,'sector',c_['doom_sector'],'floor',lumps['SECTORS'][c_['doom_sector']][0])
+        print('M14 dyn sectors skipped',sorted(k for k,v in gen_dyn.items() if v[0] in (3,4,5)))
     # M14: exit switches (Doom specials 11 = exit, 51 = secret exit).  Fixed linker slot
     # (.rodata.m14_exit @ 0x31080) so the shared common code can reference it by address.
     _ex=[ln for ln in lumps["LINEDEFS"] if ln[3] in (11,51)][:4]

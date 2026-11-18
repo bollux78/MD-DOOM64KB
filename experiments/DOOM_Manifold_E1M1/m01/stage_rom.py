@@ -1820,6 +1820,24 @@ def player_radius_collision(out):
     buffers then alternate stale images. Also removes the x==wall ZERO DIVIDE."""
     p=out/"src/collision.c"
     s=p.read_text()
+    if os.environ.get("MANIFOLD_FAR_FIX","1")=="1":
+        # M14b root cause of the E1M8 "invisible wall": point_sign_int_vert multiplies an integer edge delta by a 22.10
+        # fixed-point offset; for cells thousands of units wide (the pit around the star) ndy*dx overflows 32 bits,
+        # within_sector() gives the wrong side everywhere and the player cannot move at all. Scale both offsets by 1/32.
+        _mp=out/"src/math3d.c"; _m=_mp.read_text()
+        _ma="    f32 left = ndy*dx;\n    f32 right = dy*ndx;\n"
+        assert _m.count(_ma)==1,"math3d sign anchor"
+        _mp.write_text(_m.replace(_ma,"    f32 left = ndy*(dx >> 5);\n    f32 right = (dy >> 5)*ndx;\n",1))
+        # M14b: distance^2 is 22.10 fixed point and overflows for segments hundreds of units away; huge cells (E1M8
+        # pit, one cell ~3000 units across) then report a bogus tiny distance -> the player is "inside a wall" and
+        # cannot move at all. Reject by bounding box (128 units margin, > player radius and door use range).
+        _fa="f32 sq_shortest_dist_to_point(fix32 px, fix32 py, vertex a, vertex b) {\n    s16 dx = b.x - a.x;\n"
+        assert s.count(_fa)==1,"sq_shortest_dist anchor"
+        s=s.replace(_fa,"f32 sq_shortest_dist_to_point(fix32 px, fix32 py, vertex a, vertex b) {\n"
+          "    { s32 pxi = px >> FIX32_FRAC_BITS, pyi = py >> FIX32_FRAC_BITS;\n"
+          "      s32 lox = a.x < b.x ? a.x : b.x, hix = a.x < b.x ? b.x : a.x, loy = a.y < b.y ? a.y : b.y, hiy = a.y < b.y ? b.y : a.y;\n"
+          "      if (pxi < lox - 128 || pxi > hix + 128 || pyi < loy - 128 || pyi > hiy + 128) return 0x7FFFFFFF; }\n"
+          "    s16 dx = b.x - a.x;\n",1)
     sig="collision_result check_for_collision_radius(fix32 curx, fix32 cury, fix32 cur_z, fix32 newx, fix32 newy, f32 radius_sqr, u16 cur_sector) {\n"
     if s.count(sig)!=1: raise ValueError("radius collision signature changed")
     wrapper="#define MANIFOLD_SWEPT "+("0" if os.environ.get("MANIFOLD_SWEPT","1")=="0" else "1")+"\n"+"""
@@ -2991,6 +3009,9 @@ void m14_save_and_menu(void) {
     old=f"    const int init_player_sector = {spawn_cell};"
     assert t.count(old)==1,"level.c init sector anchor"
     t=t.replace(old,f"    {{ extern u16 m14_map_id_var; m14_map_id_var = {mapid}; }}\n"+old,1)
+    _ud=os.environ.get("MANIFOLD_USE_DIST","64")
+    assert t.count("#define MIN_ACTIVATE_DIST 40")==1,"level.c activate dist anchor"
+    t=t.replace("#define MIN_ACTIVATE_DIST 40",f"#define MIN_ACTIVATE_DIST {_ud}",1)
     lv.write_text(t)
 
 def m14_level_exit(out):
@@ -3612,13 +3633,14 @@ void m14_world_use(void) {
         s32 u = dx * (px - ax) + dy * (py - ay);
         s32 cr = dx * (py - ay) - dy * (px - ax); if (cr < 0) cr = -cr;
         s32 len = m14w_isqrt(dd);
-        if (u < -(len * 16) || u > dd + len * 16) continue;
-        if (cr > 72 * len) continue;
+        if (u < -(len * @@UE@@) || u > dd + len * @@UE@@) continue;
+        if (cr > @@UP@@ * len) continue;
         m14w_fired[l[6]] = 1;
         m14w_fire(sp, l[5]);
     }
 }
 """
+    t=t.replace("@@UE@@",os.environ.get("MANIFOLD_USE_END","32")).replace("@@UP@@",os.environ.get("MANIFOLD_USE_PERP","96"))
     t=t.replace("@@DBGB@@", "    { extern void m14_baron_check(void); m14_baron_check(); }\n" if os.environ.get("MANIFOLD_DBG_BARON")=="1" else "")
     sb.write_text(t)
     g=out/"src/game.c"; t=g.read_text()
