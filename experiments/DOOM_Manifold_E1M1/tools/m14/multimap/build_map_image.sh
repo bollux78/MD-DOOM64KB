@@ -30,7 +30,7 @@ F="$(cat /tmp/m14x/flags_walk.txt) MANIFOLD_LAT_CLIP=${LAT_CLIP:-1} ${EXTRA_ENV:
 export MANIFOLD_VISITS=${VISITS:-7}
 export MANIFOLD_MONSTERS=1 MANIFOLD_MONSTERS_INACTIVE=1 MANIFOLD_MUSIC=1 MANIFOLD_MUSIC_VGM=$R/res/r25-$(echo $m | tr A-Z a-z).vgm
 out=/tmp/m12/$name; rm -rf "$out"
-env $F $doors MANIFOLD_MAP=$m MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 MANIFOLD_GRATE_SPRITES=0 MANIFOLD_GRATES=0 MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1 \
+env $F $doors MANIFOLD_MAP=$m MANIFOLD_VDP_SAFE=2 MANIFOLD_SWEPT=1 MANIFOLD_GRATE_SPRITES=${GRATE_SPR:-1} MANIFOLD_GRATES=${GRATE_COL:-1} MANIFOLD_FALL=1 MANIFOLD_FALL_FAST=1 \
   MANIFOLD_WEAPON_FIX=1 MANIFOLD_INPUT_FIX=1 MANIFOLD_UNPACK_MAP=1 MANIFOLD_VG_MICRO=1 MANIFOLD_SPLIT_LINES=${SPLIT:-2} MANIFOLD_OBJ_HEIGHT_PCT=${HPCT:-80} MANIFOLD_START_MENU=1 $extra \
   python3 $R/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source /home/claude/manifold-up --wad /home/claude/wad/d.wad --out "$out" > "$out.stage.log" 2>&1 || { tail -5 "$out.stage.log"; exit 1; }
 ln -sf math3d.h "$out/src/math3D.h"

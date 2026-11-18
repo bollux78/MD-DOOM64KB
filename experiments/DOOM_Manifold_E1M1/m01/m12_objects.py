@@ -147,6 +147,15 @@ TYPES = (
  (9520,"BAL1A0","fball0",0,0),
  (9522,"BAL1C0","fbx0",0,0),
  (9525,"MISLA1","rocketp",0,0),
+ # M14b: BRNSMAL lattice slices (64-high textures -> box height 112)
+ (9007,"GRATE_SC0","grate_sc0",44,112),
+ (9008,"GRATE_SC1","grate_sc1",44,112),
+ (9009,"GRATE_SL","grate_sl",44,112),
+ (9010,"GRATE_SR","grate_sr",44,112),
+ (9011,"GRATE_S10","grate_s10",44,112),
+ (9012,"GRATE_S11","grate_s11",44,112),
+ (9013,"GRATE_S20","grate_s20",44,112),
+ (9014,"GRATE_S21","grate_s21",44,112),
 )
 
 def _masked_texture(w,texdefs,name):
@@ -162,24 +171,47 @@ def _masked_texture(w,texdefs,name):
                 if v is not None and 0<=x+ox<wdt and 0<=y+oy<hgt: img[y+oy][x+ox]=v
     return wdt,hgt,img
 
+GRATE_TEX={  # mid texture -> slice sprite names (32 texels each, in U order)
+ "BRNBIGL":("GRATE_L",),"BRNBIGR":("GRATE_R",),
+ "BRNBIGC":("GRATE_C0","GRATE_C1","GRATE_C2","GRATE_C3"),
+ "BRNSMALC":("GRATE_SC0","GRATE_SC1"),"BRNSMALL":("GRATE_SL",),"BRNSMALR":("GRATE_SR",),
+ "BRNSMAL1":("GRATE_S10","GRATE_S11"),"BRNSMAL2":("GRATE_S20","GRATE_S21")}
+GRATE_KIND={t[1]:t[0] for t in TYPES if t[1].startswith("GRATE_")}
+def _nm(raw):
+    return (raw if isinstance(raw,str) else bytes(raw).split(b"\0")[0].decode("latin1")).strip().upper()
+
 def grate_extra(w):
-    """name -> (pw,ph,img) 32-wide slices of BRNBIGL / BRNBIGR / BRNBIGC."""
+    """name -> (pw,ph,img) 32-wide slices of every BRNBIG*/BRNSMAL* texture."""
     td=WT.textures(w);out={}
-    if "BRNBIGL" not in td: return {}
-    for key,tex,x0 in (("GRATE_L","BRNBIGL",0),("GRATE_R","BRNBIGR",0),("GRATE_C0","BRNBIGC",0),
-                       ("GRATE_C1","BRNBIGC",32),("GRATE_C2","BRNBIGC",64),("GRATE_C3","BRNBIGC",96)):
+    for tex,names in GRATE_TEX.items():
+        if tex not in td: continue
         wdt,hgt,img=_masked_texture(w,td,tex)
-        out[key]=(32,hgt,[row[x0:x0+32] for row in img])
+        for k,nm in enumerate(names):
+            out[nm]=(32,hgt,[row[32*k:32*k+32] for row in img])
     return out
 
 ZCODE={}
-def grate_placements():
-    """(x,y,kind) of the slices: west fence x=2888 and east fence x=3128 of
-    E1M1 (linedefs 298-303); y runs -4352..-4160, 32 units per slice."""
-    ys=[-4336,-4304,-4272,-4240,-4208,-4176]
-    west=[9001,9003,9004,9005,9006,9002]
-    east=[9002,9003,9004,9005,9006,9001]
-    return [(2888,y,k) for y,k in zip(ys,west)]+[(3128,y,k) for y,k in zip(ys,east)]
+def grate_placements(lumps):
+    """[(x,y,kind_id,floor)] 32-unit slices along every two-sided linedef whose front
+    mid texture is a lattice (BRNBIG*/BRNSMAL*).  U grows from v1 to v2 on the front side;
+    the texture tiles when the line is longer than the texture.  floor = higher of the two
+    sector floors (mid textures sit on it), so the slice goes into the cell on that side."""
+    import math
+    V=lumps["VERTEXES"];SD=lumps["SIDEDEFS"];S=lumps["SECTORS"]
+    out=[]
+    for ld in lumps["LINEDEFS"]:
+        if ld[6]==65535: continue
+        nm=_nm(SD[ld[5]][4])
+        names=GRATE_TEX.get(nm)
+        if not names: continue
+        a=(V[ld[0]][0],V[ld[0]][1]);b=(V[ld[1]][0],V[ld[1]][1])
+        L=math.hypot(b[0]-a[0],b[1]-a[1]);n=max(1,round(L/32))
+        ux,uy=(b[0]-a[0])/L,(b[1]-a[1])/L
+        fl=max(S[SD[ld[5]][5]][0],S[SD[ld[6]][5]][0])
+        for k in range(n):
+            t=32*k+16
+            out.append((a[0]+ux*t,a[1]+uy*t,(ux,uy),GRATE_KIND[names[k%len(names)]],fl))
+    return out
 def kinds_has_grates(w):
     return True
 
@@ -209,16 +241,18 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     rgb=WT.playpal(w)
     palette=[(((v>>1)&7)*255//7,((v>>5)&7)*255//7,((v>>9)&7)*255//7) for v in vdp_palette]
     lines=['#include <genesis.h>','#include "obj_sprite.h"']
-    templates=[]; mapping={}
+    templates=[]; mapping={}; _DEDUP={}
     seen={}
     extra=grate_extra(w) if kinds_has_grates(w) else {}
+    _gp=grate_placements(lumps) if os.environ.get("MANIFOLD_GRATE_SPRITES","1")=="1" else []
+    _gkinds={g[3] for g in _gp}
     _present={k for _x,_y,_a,k,f in lumps["THINGS"] if f&2 and not f&16}
     _diet={}; colinfo={}
     _lk={}
     for _k,_l2,_n,_w,_h in TYPES: _lk.setdefault(_l2,set()).add(_k)
     _map=os.environ.get("MANIFOLD_MAP","E1M1")
     def _unused(kind,lump,name):        # r068: sprites of things this map never places keep header + size but carry no columns
-        if name.startswith("grate_"): return not (_map=="E1M1" and os.environ.get("MANIFOLD_GRATE_SPRITES","1")=="1")
+        if name.startswith("grate_"): return kind not in _gkinds
         if name.startswith("bexp"): return 2035 not in _present
         if kind<9000: return not any(k in _present for k in _lk[lump])
         return False
@@ -298,8 +332,15 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 spans.extend((skip,y-first))
             if spans:
                 a=f"m12_{idx}_{x}_sp";b=f"m12_{idx}_{x}_px"
+                _dk=(tuple(spans),tuple(texels),name.split("_")[0] in os.environ.get("MANIFOLD_GAPFAMS","").split(","))
+                if os.environ.get("MANIFOLD_COL_DEDUP","1")=="1" and _dk in _DEDUP:
+                    # M14b: identical column data (e.g. 32-texel slices upscaled to 64 columns) is stored once
+                    lines.append(f"#define {a} {_DEDUP[_dk][0]}");lines.append(f"#define {b} {_DEDUP[_dk][1]}")
+                    cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}"); _ci.append(len(spans)//2)
+                    continue
+                _DEDUP[_dk]=(a,b)
                 _fm=name.split("_")[0]
-                _sec=(' __attribute__((section(".mapgap")))' if _fm in os.environ.get("MANIFOLD_GAPFAMS","").split(",") else ' __attribute__((section(".mapextra")))') if _fm in ("zombieman","sergeant","imp","demon","spectre","baron") else (' __attribute__((section(".mapextra")))' if name.startswith(("fball","fbx","rocketp","rbx")) else "")   # r068: .mapgap = free bytes inside the fixed layout of the map block
+                _sec=(' __attribute__((section(".mapgap")))' if _fm in os.environ.get("MANIFOLD_GAPFAMS","").split(",") else ' __attribute__((section(".mapextra")))') if _fm in ("zombieman","sergeant","imp","demon","spectre","baron") else (' __attribute__((section(".mapextra")))' if name.startswith(("fball","fbx","rocketp","rbx","grate")) else "")   # r068: .mapgap = free bytes inside the fixed layout of the map block
                 lines.append(f"static const u16{_sec} {a}[] = {{{','.join(map(str,spans))}}};")
                 lines.append(f"static const u8{_sec} {b}[] = {{{','.join(map(str,texels))}}};")
                 cols.append(f"{{.num_spans={len(spans)//2},.spans={a},.texels={b}}}"); _ci.append(len(spans)//2)
@@ -325,15 +366,28 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
         if len(matches)!=1: skipped[kind]+=1;continue
         placements.append((matches[0],x,y,mapping[kind]))
         ZCODE[(matches[0],x,y)]=((angle*128//360)&127)|(128 if flags&8 else 0)   # facing (7 bits) + deaf/ambush
-    if extra and __import__("os").environ.get("MANIFOLD_MAP","E1M1")=="E1M1" and __import__("os").environ.get("MANIFOLD_GRATE_SPRITES","1")=="1":
-        for x,y,kind in grate_placements():
+    grates=[]
+    if extra and _gp:
+        _S=lumps["SECTORS"]
+        for gx,gy,(ux,uy),kind,gfl in _gp:
             if kind not in mapping: continue
-            m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],(x*16,y*16))]
-            if len(m)!=1:
-                # on a cell boundary: nudge one unit into the room
-                m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],((x+(1 if x<3000 else -1))*16,y*16))]
-            if len(m)!=1: print("M14 grate slice skipped",x,y,len(m));continue
-            placements.append((m[0],x+(1 if x<3000 else -1),y,mapping[kind]))
+            cand=[]
+            for off in (0,1,-1,2,-2):                       # across the fence, 1-2 units each side
+                px,py=gx-uy*off,gy+ux*off
+                m=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],(px*16,py*16))]
+                if len(m)==1: cand.append((m[0],px,py))
+            hi=[c for c in cand if _S[cells[c[0]]["doom_sector"]][0]==gfl]
+            pick_=(hi or cand or [None])[0]
+            if pick_ is None: print("M14 grate slice skipped",gx,gy);continue
+            grates.append((pick_[0],round(pick_[1]),round(pick_[2]),mapping[kind]))
+            if os.environ.get("MANIFOLD_GRATE_DBG")=="1":
+                vc=[]
+                for sgn in (1,-1):
+                    qx,qy=gx-uy*48*sgn,gy+ux*48*sgn
+                    mm=[i for i,c in enumerate(cells) if point_inside([wl["a"] for wl in c["walls"]],(qx*16,qy*16))]
+                    vc.append((mm[0] if len(mm)==1 else -1,round(qx),round(qy)))
+                print("GRATEDBG",kind,round(gx),round(gy),"cell",pick_[0],"view",vc)
+        print("M14 grate slices",len(grates),"kinds",sorted(_gkinds))
     import os as _os
     monster_idx={mapping[k] for k in (3004,9,3001,3002,58,3003) if k in mapping}
     if _os.environ.get("MANIFOLD_MONSTERS","0")=="1":
@@ -350,7 +404,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
                 2045,2026,2010,2005,8,5,6,13}
     item_idx={mapping[k] for k in ITEM_KINDS if k in mapping}
     total=int(_os.environ.get("MANIFOLD_DEC_CAP","254"))
-    cap=total-len(mons)-int(_os.environ.get("MANIFOLD_CORPSE_RESERVE","24"))
+    cap=total-len(mons)-len(grates)-int(_os.environ.get("MANIFOLD_CORPSE_RESERVE","24"))
     items=[pl for pl in decs if pl[3] in item_idx]
     scen=[pl for pl in decs if pl[3] not in item_idx]
     if len(items)>cap:
@@ -364,7 +418,7 @@ def generate(wad, lumps, cells, vdp_palette, point_inside):
     room=cap-len(items)
     if len(scen)>room:
         st=len(scen)/room if room else 1; scen=[scen[int(i*st)] for i in range(room)] if room else []
-    decs=items+scen
+    decs=items+scen+grates
     placements=decs+mons
     print("M12 THINGS inserted",len(placements),"skipped ambiguous:",dict(skipped))
     return "\n".join(lines)+"\n",templates,placements
@@ -393,4 +447,4 @@ def install_templates(out,templates):
         # The visual test showed an oversized barrel; reduce both projected
         # dimensions by 25% while preserving the same sprite pixels/THINGS.
         entries.append(f'{{.sprite=&{ident},.name="{name}",.width={width*3//2},.height={height*24*_hp//100},.flags=FLAGS_ANCHOR_BOT_MASK,.init_state=IDLE_STATE,.type=DECORATION}}')
-    p.write_text(s[:a]+externs+"const object_template object_types[128] = {\n"+",\n".join(entries)+"\n};"+s[b:])
+    p.write_text(s[:a]+externs+"const object_template object_types[160] = {\n"+",\n".join(entries)+"\n};"+s[b:])

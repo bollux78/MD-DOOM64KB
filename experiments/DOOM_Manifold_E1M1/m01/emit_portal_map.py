@@ -361,7 +361,7 @@ def blocking_segments(lumps,cells,skip_sectors=()):
         for ld in lumps["LINEDEFS"]:
             if not ld[2]&1 or ld[6]==65535: continue
             mids=[_nm(SDx[sd][4]) for sd in (ld[5],ld[6])]
-            if any(m.startswith("BRNBIG") for m in mids):
+            if any(m.startswith(("BRNBIG","BRNSMAL")) for m in mids):
                 a=(Vx[ld[0]][0],Vx[ld[0]][1]);b=(Vx[ld[1]][0],Vx[ld[1]][1])
                 solid.append((a,b,None))
                 print("M14 grate collision segment",a,b)

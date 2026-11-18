@@ -590,7 +590,7 @@ def m14_pool_sizes(out):
     decorations  = static decorations + one corpse/effect per mover (a dead monster becomes a decoration) + DEC_SLACK (explosions, projectiles)"""
     import re
     oc=(out/"src/object.c").read_text()
-    blk=oc[oc.index("object_types[128] = {"):]; blk=blk[:blk.index("\n};")]
+    blk=oc[oc.index("object_types[160] = {"):]; blk=blk[:blk.index("\n};")]
     rows=[l for l in blk.split("\n")[1:] if l.startswith("{")]
     idle=[("init_state=IDLE_STATE" in r) for r in rows]
     mf=[p for p in (out/"src").glob("*map*.c") if "map_object e1_m" in p.read_text()][0].read_text()
@@ -3042,7 +3042,7 @@ def _m14_ai_tables():
     for k,f in enumerate(_M14_FAMS,1):
         sufs=["","W1","WB","WD","AIM","ATK","PAIN","BK0","BK1","SL","SR"] if k<=3 else ["","W1","AIM","ATK","PAIN","BK0","BK1","SL","SR"]
         ent+=[f"[{I(f,x)}]={k}" for x in sufs]
-    fam="static const u8 m14_fam[128]={"+",".join(ent)+",};"
+    fam="static const u8 m14_fam[160]={"+",".join(ent)+",};"
     def row(fn): return "{0,0,0,0}," if fn is None else "{"+",".join(fn)+"},"
     walk=["{0,0,0,0}"]
     for k,f in enumerate(_M14_FAMS,1):
@@ -3175,7 +3175,7 @@ extern u8 m14_player_dead_flag;
 extern void m14_player_damage(u16 dmg);
 static u8 m14_force_wake;
 @@FAM@@
-static u8 m14_kind(u8 t) { return t<128 ? m14_fam[t] : 0; }
+static u8 m14_kind(u8 t) { return t<160 ? m14_fam[t] : 0; }
 extern u32 last_frame_ticks; extern void play_sfx(u8 id, u8 priority);
 /* r057 animation: walk A,B,C,D (Doom run frames, 4 tics = 34/300 s each), pain, death sequence */
 @@TABLES@@
@@ -3636,7 +3636,7 @@ void m14_world_use(void) {
 /* ---- M14 barrels: shoot -> explosion animation + radius damage + chain reaction ---- */
 extern u32 last_frame_ticks;
 extern void play_sfx(u8 id, u8 priority);
-static u8 m14b_hp[128];
+static u8 m14b_hp[160];
 typedef struct { u8 link; u8 frame; u16 sector; s16 left; } m14_expl_t;
 static m14_expl_t m14x[10];
 static u8 m14x_n;
