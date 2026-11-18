@@ -210,7 +210,10 @@ SECTIONS
     */src/portal.o(.bss .bss.* COMMON)
     */src/sector_group.o(.bss .bss.* COMMON)
     */src/textures.o(.bss .bss.* COMMON)
-    . = 0x1F44;
+    /* Native checkpoint/menu adds a few bytes of persistent RAM state.
+       Reserve 64 extra bytes while preserving the exact shared BSS layout
+       across all map images. */
+    . = 0x1F84;
     _bend = . ;
   } > ram
   .stab 0 (NOLOAD) : { *(.stab) }
