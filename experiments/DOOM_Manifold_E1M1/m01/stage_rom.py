@@ -3352,6 +3352,19 @@ int follow_player(object_link cur_obj, uint16_t cur_sector) {
 }
 
 static u8 m14_dx_free(void) { return m14dx_n < 12; }
+/* v10l: persistent corpses are capped (each visible corpse costs ~10 ms/frame when close, measured in MAME): the oldest ones are removed */
+#define M14_MAX_CORPSES 6
+static void m14_dec_unlink(u8 link, u16 sector);
+static struct { u8 link; u8 k; u16 sector; } m14cp[M14_MAX_CORPSES]; static u8 m14cp_n, m14cp_h;
+static void m14_corpse_add(u8 link, u8 k, u16 sector) {
+    if (m14cp_n >= M14_MAX_CORPSES) {
+        u8 i = m14cp_h, ok_k = m14cp[i].k, t = DEC_LINK_DEREF(m14cp[i].link).object_type;
+        for (u8 j = 0; j < m14dx_n; j++) if (m14dx[j].link == m14cp[i].link) { m14dx[j] = m14dx[--m14dx_n]; break; }
+        if (t == m14_dead_id[ok_k] || t == m14_dseq[ok_k][0] || t == m14_dseq[ok_k][1]) m14_dec_unlink(m14cp[i].link, m14cp[i].sector);
+        m14cp_h = (u8)((i + 1) % M14_MAX_CORPSES); m14cp_n--;
+    }
+    { u8 ix = (u8)((m14cp_h + m14cp_n) % M14_MAX_CORPSES); m14cp[ix].link = link; m14cp[ix].k = k; m14cp[ix].sector = sector; m14cp_n++; }
+}
 /* r073: Doom's tag-666 rule (E1M8): when no Baron of Hell is left alive, lower the tagged walls */
 void m14_baron_check(void) {
     for (int s = 0; s < num_sector_lists; s++)
@@ -3373,6 +3386,7 @@ void m14_hit_object(object_link o, u16 sector) {
         decoration_link dl = alloc_decoration_in_sector(sector, F32_toInt(OBJ_LINK_DEREF(o).x), F32_toInt(OBJ_LINK_DEREF(o).y),
                                    OBJ_LINK_DEREF(o).z, m14_dx_free() ? m14_dseq[k][0] : m14_dead_id[k]);
         if (dl != NULL_DEC_LINK && m14dx_n < 12) { m14_death_t* e=&m14dx[m14dx_n++]; e->link=dl; e->frame=0; e->k=k; e->sector=sector; e->left=43; }
+        if (dl != NULL_DEC_LINK) m14_corpse_add(dl, k, sector);
         m14_wf[o&63]&=3; m14_pt[o&63]=0; play_sfx(77, 6);
         free_object(o, sector);
         if (k==6) m14_baron_check();

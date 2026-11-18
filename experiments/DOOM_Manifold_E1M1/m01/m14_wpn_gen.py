@@ -143,6 +143,8 @@ def build(w, rgb, cut, sheet=None):
             so = SHEET_OFFS.get(name, (0, 0))
             if so[0] == "anchor":      # drawn as the visible part only: bottom on the viewport line, centred where the Doom frame was
                 X, Y = 160 - so[3] // 2, (BASE_BOTTOM - cut) - so[4]          # centred on the screen, standing on the viewport line
+                if name in ("SHTGB0", "SHTGC0", "SHTGD0"):         # shotgun pump frames sway to the left like the original (centred where the Doom lump was)
+                    X = round(-lo + so[1] / 2 - so[3] / 2)
             else: X, Y = -lo + so[0], -to + so[1]
             if ss != 1.0: X, Y = round(160 + (X - 160) * ss), round(BASE_BOTTOM - cut + (Y - (BASE_BOTTOM - cut)) * ss)   # same anchor as SCALE
             return sheet_frames[name].copy(), X, Y
