@@ -722,8 +722,16 @@ def m14_early_backface(out):
     This is the *same* test evaluated early, only for walls that need no clipping at all (both ends inside both
     frustum planes and in front of the near plane), where the later code would project exactly these x values.
     Same exception as the late test: a portal of the source sector is never culled here."""
-    if os.environ.get("MANIFOLD_EARLY_CULL","0")!="1": return
+    wl=os.environ.get("MANIFOLD_WALL_LOOP","0")=="1"
+    if os.environ.get("MANIFOLD_EARLY_CULL","0")!="1" and not wl: return
     p=out/"src/portal.c"; t=p.read_text()
+    if wl:
+        # fog test: cheap depth compares first, sector-group lookup only if they pass (pure => same result)
+        f=("             && get_sector_group_ceil_color(sector_group(portal_sector, map)) != 0\n"
+           "             && trans_v1.y > (1600<<TRANS_Z_FRAC_BITS) && trans_v2.y > (1600<<TRANS_Z_FRAC_BITS)) {")
+        g=("             && trans_v1.y > (1600<<TRANS_Z_FRAC_BITS) && trans_v2.y > (1600<<TRANS_Z_FRAC_BITS)\n"
+           "             && get_sector_group_ceil_color(sector_group(portal_sector, map)) != 0) {")
+        assert t.count(f)==1, "fog anchor"; t=t.replace(f,g)
     a="        u8 tex_idx = map->wall_colors[(portal_idx<<WALL_COLOR_NUM_PARAMS_SHIFT)+WALL_TEXTURE_IDX];\n"
     assert t.count(a)==2 and t.index(a)<t.index("void pvs_scan"), t.count(a)   # first occurrence is visit_graph
     t=t.replace(a,"""        if (sector != src_sector || !is_portal) {
@@ -732,8 +740,10 @@ def m14_early_backface(out):
                 ecz1 + 16 * ecx1 >= 0 && ecz1 - 16 * ecx1 >= 0 && ecz2 + 16 * ecx2 >= 0 && ecz2 - 16 * ecx2 >= 0) {
                 u16 erc1 = z_recip_table_16[ecz1 >> TRANS_Z_FRAC_BITS];
                 u16 erc2 = z_recip_table_16[ecz2 >> TRANS_Z_FRAC_BITS];
-                if (project_and_adjust_x(trans_v1.x, erc1) >= project_and_adjust_x(trans_v2.x, erc2)) continue;
-            }
+                s16 epx1 = project_and_adjust_x(trans_v1.x, erc1), epx2 = project_and_adjust_x(trans_v2.x, erc2);
+                if (epx1 >= epx2) continue;
+"""+("""                if (epx1 > window_max || epx2 <= window_min) continue;  /* unclipped: the late code discards it too */
+""" if wl else "")+"""            }
         }
 """+a,1)
     p.write_text(t); print("early backface cull installed")
