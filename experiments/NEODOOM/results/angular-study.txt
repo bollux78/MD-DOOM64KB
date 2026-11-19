@@ -1,0 +1,18 @@
+cell 16
+porta 936 single 96.2 opaque 0.0 missing 0.0
+sala 5184 single 63.2 opaque 29.6 missing 0.0
+janela 1512 single 74.4 opaque 9.6 missing 0.0
+caminhada 1800 single 67.9 opaque 0.0 missing 0.0
+sampled cells 17 bytes 4730 full dense index KiB 12699.8
+cell 32
+porta 936 single 83.8 opaque 0.0 missing 0.0
+sala 5184 single 43.7 opaque 19.5 missing 0.0
+janela 1512 single 50.9 opaque 1.0 missing 0.0
+caminhada 1800 single 59.9 opaque 0.0 missing 0.0
+sampled cells 10 bytes 2998 full dense index KiB 3204.0
+cell 64
+porta 936 single 50.0 opaque 0.0 missing 0.0
+sala 5184 single 16.4 opaque 4.7 missing 0.0
+janela 1512 single 11.6 opaque 0.0 missing 0.0
+caminhada 1800 single 44.8 opaque 0.0 missing 0.0
+sampled cells 7 bytes 2786 full dense index KiB 810.0
