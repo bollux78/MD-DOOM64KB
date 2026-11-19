@@ -135,6 +135,8 @@ SECTIONS
     */src/e1m1_map.o(.rodata.e1m1_map)
     . = 0x46300;
     */src/e1m1_map.o(.rodata.m14_exit_tbl)
+    . = 0x46330;
+    */src/e1m1_map.o(.rodata.m14b_tbl)
     . = 0x46380;
     */src/e1m1_map.o(.rodata.e1_block_segs)
     */src/e1m1_map.o(.rodata.str1.1)

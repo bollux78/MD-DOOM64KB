@@ -5393,6 +5393,8 @@ def stage(src, wad, out, control=False):
         m14_ai_throttle(out)
     if os.environ.get("MANIFOLD_FPS_ONLY","0")=="1":
         m14_fps_only(out)
+    if os.environ.get("MANIFOLD_BENCH","0")=="1":
+        from m14_bench import m14_bench; m14_bench(out)
     (out.parent/"e1m1-stage.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
