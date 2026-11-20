@@ -27,7 +27,7 @@ static int16_t closed;
 static int32_t view_x4, view_y4;   /* map units * 4 */
 static int16_t view_z;
 static int32_t vsin, vcos;         /* Q14 */
-static uint8_t *fbuf;
+static uint8_t *rfb;
 
 void R_Init(void)
 {
@@ -177,7 +177,7 @@ static void draw_seg(const MapSeg *s)
          iz += diz, uz += duz, Yc += dYc, Yf += dYf, Ybc += dYbc, Ybf += dYbf) {
         int top = ceilclip[c], bot = floorclip[c];
         if (top >= bot) continue;
-        uint8_t *col = FB_COL(fbuf, c);
+        uint8_t *col = FB_COL(rfb, c);
         const int yc = clampi(ceil16(Yc), top, bot);
         const int yf = clampi(ceil16(Yf), yc, bot);
         if (yc > top) fill_col(col, top, yc, ccol);
@@ -277,7 +277,7 @@ int R_PointInSub(int16_t x, int16_t y)
 
 void R_RenderView(const View *v, uint8_t *fb)
 {
-    fbuf = fb;
+    rfb = fb;
     frame_id++;
     if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
