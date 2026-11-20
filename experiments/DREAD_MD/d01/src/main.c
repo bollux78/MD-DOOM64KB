@@ -47,12 +47,16 @@ static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x4000000
 
 #if COLB == 1
 /* rows shown twice: before each screen line of the view, scroll plane A up by half the lines so far */
-static volatile uint16_t hline;
+static volatile uint8_t hint_on;
 static HINTERRUPT_CALLBACK hint_cb(void)
 {
+    /* fires every 2 lines (counter 1); the pair alignment does not matter */
     const uint16_t L = (uint16_t)(*(volatile uint8_t *)0xC00008) + 1;   /* next line, from the V counter */
     int16_t v = 0;
-    if (L >= VTOP) v = (L < VTOP + 2 * VIEW_H) ? (int16_t)-((L - VTOP + 1) >> 1) : (int16_t)-VIEW_H;
+    if (L >= VTOP) {
+        if (L >= VTOP + 2 * VIEW_H) { v = (int16_t)-VIEW_H; *(volatile uint16_t *)0xC00004 = 0x8004; }   /* view done: H-int off until the VBlank */
+        else v = (int16_t)-((L - VTOP + 1) >> 1);
+    }
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;   /* VSRAM 0 */
     *(volatile uint16_t *)0xC00000 = (uint16_t)v;
 }
@@ -62,9 +66,9 @@ static void vint_cb(void)
 {
     vints++;
 #if COLB == 1
-    hline = 0;
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;
     *(volatile uint16_t *)0xC00000 = 0;
+    if (hint_on) *(volatile uint16_t *)0xC00004 = 0x8014;      /* H-int back on for the next frame */
 #endif
     HUD_VBlank();
     if (dma_src) {
@@ -266,8 +270,9 @@ int main(bool hard)
     HUD_Opening();
     setup_screen();
 #if COLB == 1
-    VDP_setHIntCounter(0);
+    VDP_setHIntCounter(1);
     VDP_setHInterrupt(TRUE);
+    hint_on = 1;
 #endif
     HUD_Init(HUD_ROW0);
     HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };

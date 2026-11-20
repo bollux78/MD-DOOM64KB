@@ -27,7 +27,7 @@
 #define FOCAL    HALF_W            /* 90 degree horizontal field of view */
 #ifndef VFOCAL
 /* vertical focal in rows: logical pixel = 2*COLB H40 pixels (0.93 wide each) by (COLB==1 ? 2 : 1) lines */
-#define VFOCAL   (COLB == 2 ? 149 : 75)
+#define VFOCAL   (COLB == 2 ? 179 : 90)          /* Doom's proportions: 160/200 of the screen height per unit */
 #endif
 #define FB_TCOLS (VIEW_W * COLB / 4)               /* tile columns */
 #define FB_BYTES (FB_TCOLS * VIEW_H * 4)
