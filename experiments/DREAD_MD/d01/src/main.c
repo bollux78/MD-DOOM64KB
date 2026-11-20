@@ -9,10 +9,12 @@
 #define ROM_NAME   "DREAD-MD D01 E1M1"
 #define VIEW_TROWS (VIEW_H / 8)
 #define VIEW_ROW0  ((28 - VIEW_TROWS) / 2 - 2)   /* tile row of the view on screen */
-#define TILE_FB0   64
+/* SGDK 2.x VRAM: plane A name table at 0xE000 (we flip it with 0xA000), plane B 0xC000 (text),
+ * window 0xD000, font right after the 16 system tiles. Our tiles start at tile 128 (0x1000). */
+#define TILE_FB0   128
 #define TILE_FB1   (TILE_FB0 + 32 * VIEW_TROWS)
-#define NT0        0xC000
-#define NT1        0x8000
+#define NT0        0xE000
+#define NT1        0xA000
 #define DMA_CHUNK  2048
 
 static uint8_t fbuf[2][FB_BYTES];
@@ -49,7 +51,9 @@ static void vint_cb(void)
 
 static void setup_screen(void)
 {
+    SYS_disableInts();
     VDP_setScreenWidth256();
+    *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     /* palette */
     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
     for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[i];
@@ -69,6 +73,7 @@ static void setup_screen(void)
     }
     *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
     shown = 0;
+    SYS_enableInts();
 }
 
 /* ---- movement and collision */
@@ -136,6 +141,7 @@ static void title(void)
     VDP_drawText("15 segundos", 4, 21);
     const uint16_t t0 = vints;
     while ((uint16_t)(vints - t0) < 15 * 60) {
+        JOY_update();
         const uint16_t j = JOY_readJoypad(JOY_1);
         if (j & BUTTON_START) break;
         if (j & BUTTON_B) { bench_req = 1; break; }
@@ -167,6 +173,7 @@ int main(bool hard)
         uint16_t now = vints;
         uint16_t dt = now - last; last = now;
         if (dt > 8) dt = 8;
+        JOY_update();
         uint16_t j = JOY_readJoypad(JOY_1);
         if (bench_req && !bench_done) {
             script_t += dt;
@@ -211,12 +218,16 @@ int main(bool hard)
             const uint16_t dv = vints - fps_v0; fps_v0 = vints; fps_n = 0;
             const uint16_t f10 = dv ? (uint16_t)(16UL * 600 / dv) : 0;
             sprintf(txt, "FPS %2u.%u  SEGS %3u ", f10 / 10, f10 % 10, frame_segs);
+            SYS_disableInts();
             VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL1, 1, 0, 0), 1, 25, CPU);
+            SYS_enableInts();
         }
         if (bench_done == 1) {
             const uint16_t f100 = (uint16_t)(bench_frames * 6000UL / (bench_vints ? bench_vints : 1));
             sprintf(txt, "BENCH %u quadros %u.%u%u FPS", (uint16_t)bench_frames, f100 / 100, (f100 / 10) % 10, f100 % 10);
+            SYS_disableInts();
             VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL1, 1, 0, 0), 1, 26, CPU);
+            SYS_enableInts();
             bench_done = 2;
         }
     }
