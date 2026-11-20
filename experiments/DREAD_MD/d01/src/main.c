@@ -6,7 +6,11 @@
 #include <genesis.h>
 #include "render.h"
 
+#ifdef ROM_TAG_3PAL
+#define ROM_NAME   "DREAD-MD D01 E1M1 3PAL"
+#else
 #define ROM_NAME   "DREAD-MD D01 E1M1"
+#endif
 #define VIEW_TROWS (VIEW_H / 8)
 #define VIEW_ROW0  ((28 - VIEW_TROWS) / 2 - 2)   /* tile row of the view on screen */
 /* SGDK 2.x VRAM: plane A name table at 0xE000 (we flip it with 0xA000), plane B 0xC000 (text),

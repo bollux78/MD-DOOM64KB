@@ -27,7 +27,7 @@ jobs:
           stage="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
           rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
           cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
-          python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
+          DREAD_NPAL=1 python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
           gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
           "$stage/pvsgen" "$stage/src/pvs.c" | tee -a "$stage/conv.log"
           gdk=""
@@ -60,7 +60,7 @@ jobs:
           pathlib.Path(sys.argv[2]).write_text(s)
           PY
           export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
-          make -C "$stage" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" 2>&1 | tail -25
+          make -C "$stage" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" 2>&1 | tail -25
           test -s "$stage/out/rom.bin"
           out="$HOME/Projetos/Personal/dread-md/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
@@ -68,6 +68,16 @@ jobs:
           ls -l "$out"
           echo "OUT=$out" >> "$GITHUB_ENV"
           echo "STAGE=$stage" >> "$GITHUB_ENV"
+          # variant: 3 view palettes (tile ownership + remap)
+          s3="$stage-3pal"; rm -rf "$s3"; cp -r "$stage" "$s3"; rm -rf "$s3/out"
+          DREAD_NPAL=3 python3 $D/tools/conv.py "$WAD" E1M1 "$s3/src" > "$s3/conv.log"
+          gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$s3/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$s3/src/mapdata.c"
+          "$s3/pvsgen" "$s3/src/pvs.c" >> "$s3/conv.log"
+          d3="${dst/$stage/$s3}"; sed -i 's/DREAD-MD D01 E1M1     /DREAD-MD D01 E1M1 3PAL/' "$d3" || true
+          if make -C "$s3" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=3 -DROM_TAG_3PAL" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$s3/build.log" 2>&1; then
+            cp "$s3/out/rom.bin" "$out/dread-md-d01-e1m1-3pal.bin"
+          else echo "::warning::3pal build failed"; tail -20 "$s3/build.log"; fi
+          (cd "$out" && zip -q dread-md-d01-roms.zip dread-md-d01-e1m1*.bin) || true
       - name: BlastEm bench route
         shell: bash
         run: |

@@ -119,7 +119,9 @@ texnm_end:
 #define J_CPAL 88
 #define J_FPAL 92
 #define J_TOFF 96
+#ifndef NPAL
 #define NPAL 3
+#endif
 #define TROWS (VIEW_H / 8)
 
 seg_columns:
@@ -277,6 +279,13 @@ fillc_end:
    Splits the span at tile rows; the first span in a tile claims it; other palettes are remapped.
    preserves d0-d3, d6, d7, a2, a3, a5, a6 */
 span_fill:
+#if NPAL == 1
+        add.w   %d5,%d5                     /* one palette: plain fill, no tile ownership */
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  2(%a4),%d5
+        bra     fill_core
+#endif
         movem.l %d0-%d3/%d6/%a3,-(%sp)
         move.l  r_tilepal,%a3
         adda.w  J_TOFF(%a6),%a3
@@ -430,6 +439,11 @@ tex_part:
         add.w   %d7,%d0                     /* d0 = cursor (exclusive bottom) */
         move.l  r_tilepal,%a5
         adda.w  J_TOFF(%a6),%a5
+#if NPAL == 1
+        move.w  t_y0,%d7                    /* one palette: whole span in one draw */
+        move.w  8(%a4),%d5
+        bra     9f
+#endif
         /* fast path: claim every tile row the span touches; if none belongs to another palette,
            draw the whole span in one go */
         move.w  t_y0,%d6
