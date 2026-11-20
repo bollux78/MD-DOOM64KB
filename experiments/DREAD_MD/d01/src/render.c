@@ -525,7 +525,21 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 }
             }
             const int m = n > 0 ? n : 1;
-            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)((uint32_t)ua8 >> 16); a_zpp[k] = (uint16_t)((uint32_t)zp >> 16); ua8 += du8; zp += dzp; }
+            {
+                int16_t cnt = (int16_t)(m < xe - k ? m : xe - k);
+                uint16_t *pu = &a_u[k], *pz = &a_zpp[k];
+                k += cnt;
+#if defined(__m68k__) || defined(__mc68000__)
+                __asm__ volatile(
+                    "subq.w #1,%2\n"
+                    "1: swap %0\n\tmove.w %0,(%3)+\n\tswap %0\n\tadd.l %4,%0\n"
+                    "\tswap %1\n\tmove.w %1,(%5)+\n\tswap %1\n\tadd.l %6,%1\n"
+                    "\tdbra %2,1b"
+                    : "+d"(ua8), "+d"(zp), "+d"(cnt), "+a"(pu), "+d"(du8), "+a"(pz), "+d"(dzp) : : "cc", "memory");
+#else
+                do { *pu++ = (uint16_t)((uint32_t)ua8 >> 16); *pz++ = (uint16_t)((uint32_t)zp >> 16); ua8 += du8; zp += dzp; } while (--cnt);
+#endif
+            }
             if (n == ANCHOR) { iz += diz8; uz += duz8; } else { iz += mul32k(diz, (int16_t)m); uz += mul32k(duz, (int16_t)m); }
         }
     }
