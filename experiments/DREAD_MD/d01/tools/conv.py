@@ -382,6 +382,19 @@ def main():
     H.append("const uint8_t pal_rgb_all[%d][16][3] = {%s};" % (NPAL, ",".join("{%s}" % ",".join(
         "{%d,%d,%d}" % tuple(int(DAC[l]) for l in c) for c in pl.lv) for pl in pals)))
     H.append("const uint16_t num_palettes = %d;" % NPAL)
+    # remap[A][B]: a pair byte of palette A -> the closest pair byte in palette B. Stored at (byte ^ 0x80)
+    # so the 68000 can index it with a sign-extended byte (table base + 128).
+    rem = []
+    for A in range(NPAL):
+        for Bp in range(NPAL):
+            t = [0] * 256
+            for bt in range(256):
+                x, y = bt >> 4, bt & 15
+                la, lb = (pals[A].rgb[x] / 255.0) ** 2.2, (pals[A].rgb[y] / 255.0) ** 2.2
+                rgb = ((la + lb) / 2) ** (1 / 2.2) * 255.0
+                t[bt ^ 0x80] = bt if A == Bp else pals[Bp].byte(rgb)
+            rem.append("{%s}" % ",".join(map(str, t)))
+    H.append("const uint8_t pal_remap[%d][256] = {%s};" % (NPAL * NPAL, ",".join(rem)))
     H.append("const int16_t map_verts[%d][2] = {%s};" % (len(verts), ",".join("{%d,%d}" % v for v in verts)))
     H.append("const MapSeg map_segs[%d] = {%s};" % (len(seg_rows), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in seg_rows)))

@@ -45,6 +45,7 @@ typedef struct {
 extern const uint16_t md_palette[][16];
 extern const uint8_t pal_rgb_all[][16][3];
 extern const uint16_t num_palettes;
+extern const uint8_t pal_remap[][256];   /* [A*NPAL+B][byte ^ 0x80] */
 extern const int16_t map_verts[][2];
 extern const MapSeg map_segs[];
 extern const MapSub map_subs[];

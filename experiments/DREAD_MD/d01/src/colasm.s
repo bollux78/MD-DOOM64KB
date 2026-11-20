@@ -117,8 +117,9 @@ texnm_end:
 #define J_UP 56
 #define J_LO 72
 #define J_CPAL 88
-#define J_FPAL 90
-#define J_TOFF 92
+#define J_FPAL 92
+#define J_TOFF 96
+#define NPAL 3
 #define TROWS (VIEW_H / 8)
 
 seg_columns:
@@ -170,26 +171,14 @@ seg_columns:
         sub.w   %d0,%d4
         ble.s   1f
         move.w  %d0,%d5
-        move.l  r_tilecnt,%a0
-        adda.w  J_CPAL(%a6),%a0
-        bsr     cnt_add
-        add.w   %d5,%d5
-        add.w   %d5,%d5
-        lea     -4(%a2,%d5.w),%a0
-        move.w  J_CCOL(%a6),%d5
-        bsr     fill_core
+        lea     J_CPAL(%a6),%a4
+        bsr     span_fill
 1:      move.w  %d1,%d4                     /* floor: yf .. bot */
         sub.w   %d3,%d4
         ble.s   1f
         move.w  %d3,%d5
-        move.l  r_tilecnt,%a0
-        adda.w  J_FPAL(%a6),%a0
-        bsr     cnt_add
-        add.w   %d5,%d5
-        add.w   %d5,%d5
-        lea     -4(%a2,%d5.w),%a0
-        move.w  J_FCOL(%a6),%d5
-        bsr     fill_core
+        lea     J_FPAL(%a6),%a4
+        bsr     span_fill
 1:
         move.w  J_FLAGS(%a6),%d4
         btst    #0,%d4
@@ -284,13 +273,68 @@ fill_core:
 fillc_end:
         rts
 
-/* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.
+/* span_fill: a4 -> {palette.w, colour.w}, d5 = y0, d4 = n (> 0), a2 column, J_TOFF set.
+   Splits the span at tile rows; the first span in a tile claims it; other palettes are remapped.
    preserves d0-d3, d6, d7, a2, a3, a5, a6 */
+span_fill:
+        movem.l %d0-%d3/%d6/%a3,-(%sp)
+        move.l  r_tilepal,%a3
+        adda.w  J_TOFF(%a6),%a3
+        move.w  %d5,%d1                     /* cursor */
+        move.w  %d5,%d3
+        add.w   %d4,%d3                     /* end */
+        moveq   #0,%d2
+        move.w  (%a4),%d2                   /* span palette */
+1:      move.w  %d1,%d6
+        lsr.w   #3,%d6                      /* tile row */
+        move.w  %d6,%d0
+        addq.w  #1,%d0
+        lsl.w   #3,%d0
+        cmp.w   %d3,%d0
+        ble.s   2f
+        move.w  %d3,%d0                     /* piece end */
+2:      moveq   #0,%d4
+        move.b  0(%a3,%d6.w),%d4            /* tile palette (0xFF = free) */
+        cmpi.b  #0xFF,%d4
+        bne.s   3f
+        move.b  %d2,0(%a3,%d6.w)
+        move.w  %d2,%d4
+3:      move.w  2(%a4),%d5                  /* colour byte */
+        cmp.w   %d2,%d4
+        beq.s   4f
+        move.w  %d2,%d6                     /* remap[(span*NPAL + tile)][colour ^ 0x80] */
+        mulu.w  #NPAL*256,%d6
+        lsl.w   #8,%d4
+        add.w   %d4,%d6
+        eori.w  #0x80,%d5
+        andi.w  #0xFF,%d5
+        add.w   %d5,%d6
+        move.l  r_remap,%a0
+        move.b  0(%a0,%d6.w),%d5
+4:      move.w  %d0,%d4
+        sub.w   %d1,%d4                     /* piece rows */
+        move.w  %d1,%d6
+        add.w   %d6,%d6
+        add.w   %d6,%d6
+        lea     -4(%a2,%d6.w),%a0
+        bsr     fill_core
+        move.w  %d0,%d1
+        cmp.w   %d3,%d1
+        blt.s   1b
+        movem.l (%sp)+,%d0-%d3/%d6/%a3
+        rts
+
+/* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.
+   Draws bottom-up tile piece by tile piece; pieces in a tile owned by another palette go through
+   the remap table.  preserves d0-d3, d6, d7, a2, a3, a5, a6 */
 tex_part:
-        move.l  r_tilecnt,%a0
-        adda.w  10(%a4),%a0
-        bsr     cnt_add
-        movem.l %d0-%d3/%d6-%d7,-(%sp)
+        movem.l %d0-%d3/%d6-%d7/%a3/%a5,-(%sp)
+        move.w  10(%a4),%d0                 /* span palette */
+        move.w  %d0,t_spal
+        mulu.w  #NPAL*256,%d0
+        addi.w  #128,%d0
+        move.w  %d0,t_spoff                 /* span*NPAL*256 + 128 (remap base offset) */
+        move.w  %d5,t_y0
         move.l  J_ZPP(%a6),%a1
         move.w  %d7,%d1
         add.w   %d1,%d1
@@ -307,8 +351,7 @@ tex_part:
         move.l  (%a4),%a1
         adda.l  %d6,%a1                     /* a1 = texture column */
         move.w  %d4,%d7                     /* d7 = n */
-        /* k = HORIZON - (y0 + n - 1);  prod = zpp * k (signed k) */
-        move.w  %d5,%d0
+        move.w  %d5,%d0                     /* k = HORIZON - (y0 + n - 1) */
         add.w   %d4,%d0
         subq.w  #1,%d0
         neg.w   %d0
@@ -329,8 +372,7 @@ tex_part:
         neg.l   %d1
 1:      move.l  12(%a4),%d2
         sub.l   %d1,%d2                     /* d2 = v at the bottom row */
-        /* span = zpp * (n - 1) */
-        move.w  %d7,%d0
+        move.w  %d7,%d0                     /* span = zpp * (n - 1) */
         subq.w  #1,%d0
         move.l  %d3,%d1
         swap    %d1
@@ -340,49 +382,87 @@ tex_part:
         move.w  %d3,%d6
         mulu.w  %d0,%d6
         add.l   %d6,%d1                     /* d1 = span */
-        add.w   %d5,%d5                     /* a0 = column + y0*4 - 4 */
-        add.w   %d5,%d5
-        lea     -4(%a2,%d5.w),%a0
         neg.l   %d3                         /* step = -zpp */
         moveq   #0,%d0
         move.w  8(%a4),%d0                  /* hmask */
+        move.w  %d0,%d5                     /* d5 = hmask (masked cores) */
         swap    %d0
+        clr.w   t_mode
         cmp.l   %d0,%d1
-        bcc.s   .Lmasked
-        move.w  #-1,%d0                     /* v = (v & (hmask<<16 | 0xFFFF)) + (hmask+1) << 16 */
+        bcc.s   1f
+        move.w  #-1,%d0                     /* unmasked: v = (v & (hmask<<16|FFFF)) + (hmask+1)<<16 */
         and.l   %d0,%d2
         moveq   #0,%d0
-        move.w  8(%a4),%d0
+        move.w  %d5,%d0
         addq.l  #1,%d0
         swap    %d0
         add.l   %d0,%d2
-        move.l  %d3,%d4
+        move.w  #1,t_mode
+1:      move.l  %d3,%d4
         swap    %d3                         /* d3.w step int, d4.w step frac */
         move.l  %d2,%d1
         swap    %d1                         /* d1.w v int, d2.w v frac */
-        mulu.w  #10,%d7
-        lea     tnm_end(%pc),%a4
-        suba.w  %d7,%a4
-        jsr     (%a4)
-        movem.l (%sp)+,%d0-%d3/%d6-%d7
-        rts
-.Lmasked:
-        move.w  8(%a4),%d5                  /* d5 = hmask */
-        move.l  %d3,%d4
-        swap    %d3
-        move.l  %d2,%d1
-        swap    %d1
-        move.w  %d7,%d0                     /* n*14 */
-        add.w   %d0,%d0
+        move.w  t_y0,%d0
+        add.w   %d7,%d0                     /* d0 = cursor (exclusive bottom) */
+        move.l  r_tilepal,%a5
+        adda.w  J_TOFF(%a6),%a5
+.Lpiece:
+        move.w  %d0,%d7                     /* piece top = max(y0, (cursor-1) & ~7) */
+        subq.w  #1,%d7
+        andi.w  #0xFFF8,%d7
+        cmp.w   t_y0,%d7
+        bge.s   1f
+        move.w  t_y0,%d7
+1:      move.w  %d7,%d6
+        lsr.w   #3,%d6                      /* tile row */
+        cmpi.b  #0xFF,0(%a5,%d6.w)
+        bne.s   1f
+        move.b  t_spal+1,0(%a5,%d6.w)       /* claim */
+1:      move.b  0(%a5,%d6.w),%d6
+        cmp.b   t_spal+1,%d6
+        beq.s   .Lplain
+        andi.w  #0xFF,%d6                   /* a3 = remap table (span -> tile) + 128 */
+        lsl.w   #8,%d6
+        move.l  r_remap,%a3
+        adda.w  %d6,%a3
+        adda.w  t_spoff,%a3
+        move.w  %d7,%d6
+        add.w   %d6,%d6
+        add.w   %d6,%d6
+        lea     -4(%a2,%d6.w),%a0
         move.w  %d0,%d6
-        lsl.w   #3,%d0
-        sub.w   %d6,%d0
+        sub.w   %d7,%d6                     /* piece rows */
+        tst.w   t_mode
+        beq.s   2f
+        lsl.w   #4,%d6                      /* *16 */
+        lea     tnr_end(%pc),%a4
+        bra.s   3f
+2:      mulu.w  #20,%d6
+        lea     tmr_end(%pc),%a4
+        bra.s   3f
+.Lplain:
+        move.w  %d7,%d6
+        add.w   %d6,%d6
+        add.w   %d6,%d6
+        lea     -4(%a2,%d6.w),%a0
+        move.w  %d0,%d6
+        sub.w   %d7,%d6
+        tst.w   t_mode
+        beq.s   2f
+        mulu.w  #10,%d6
+        lea     tnm_end(%pc),%a4
+        bra.s   3f
+2:      mulu.w  #14,%d6
         lea     tmk_end(%pc),%a4
-        suba.w  %d0,%a4
+3:      suba.w  %d6,%a4
         jsr     (%a4)
-        movem.l (%sp)+,%d0-%d3/%d6-%d7
+        move.w  %d7,%d0                     /* next piece above */
+        cmp.w   t_y0,%d0
+        bgt     .Lpiece
+        movem.l (%sp)+,%d0-%d3/%d6-%d7/%a3/%a5
         rts
 
+/* cores: entry = end - n*size, draw bottom-up from k = n; d1/d2 v, d3/d4 step, a0 = top - 4, a1 texels */
         .set    k,VIEW_H
         .rept   VIEW_H
         move.b  0(%a1,%d1.w),k*4(%a0)
@@ -405,25 +485,35 @@ tnm_end:
 tmk_end:
         rts
 
-/* cnt_add: a0 = tile counters of one palette, J_TOFF(a6) = tile column offset,
-   d5 = y0, d4 = n (> 0). Adds the pixels of rows [y0, y0+n) to each 8-row tile.
-   preserves everything except a0. */
-cnt_add:
-        movem.l %d0/%d4-%d6,-(%sp)
-        adda.w  J_TOFF(%a6),%a0
-        add.w   %d5,%d4                     /* d4 = end */
-2:      move.w  %d5,%d6                     /* tile row */
-        lsr.w   #3,%d6
-        move.w  %d6,%d0
-        addq.w  #1,%d0
-        lsl.w   #3,%d0                      /* next tile boundary */
-        cmp.w   %d4,%d0
-        ble.s   1f
-        move.w  %d4,%d0
-1:      sub.w   %d5,%d0                     /* rows in this tile */
-        add.b   %d0,0(%a0,%d6.w)
-        add.w   %d0,%d5
-        cmp.w   %d4,%d5
-        blt.s   2b
-        movem.l (%sp)+,%d0/%d4-%d6
+        .set    k,VIEW_H
+        .rept   VIEW_H
+        move.b  0(%a1,%d1.w),%d6
+        ext.w   %d6
+        move.b  0(%a3,%d6.w),k*4(%a0)
+        add.w   %d4,%d2
+        addx.w  %d3,%d1
+        .set    k,k-1
+        .endr
+tnr_end:
         rts
+
+        .set    k,VIEW_H
+        .rept   VIEW_H
+        move.w  %d1,%d6
+        and.w   %d5,%d6
+        move.b  0(%a1,%d6.w),%d6
+        ext.w   %d6
+        move.b  0(%a3,%d6.w),k*4(%a0)
+        add.w   %d4,%d2
+        addx.w  %d3,%d1
+        .set    k,k-1
+        .endr
+tmr_end:
+        rts
+
+        .bss
+        .even
+t_spal:  .skip 2
+t_spoff: .skip 2
+t_y0:    .skip 2
+t_mode:  .skip 2
