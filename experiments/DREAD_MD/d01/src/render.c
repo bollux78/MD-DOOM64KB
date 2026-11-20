@@ -134,7 +134,7 @@ static inline int32_t advance(int32_t a, int32_t delta, int32_t f8)
              + (muls16((int16_t)(d8 >> 16), (int16_t)part) << 16) + (int32_t)mulu16((uint16_t)d8, part);
 }
 
-uint16_t r_vw, r_vh, r_colb, r_halfw, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
+uint16_t r_vw, r_vh, r_colb, r_halfw, r_focal, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
 uint16_t r_colofs[VW_MAX];
 #if defined(__m68k__) || defined(__mc68000__)
 /* colasm.s: per-mode entry points of the unrolled cores */
@@ -143,8 +143,10 @@ extern const uint32_t scal_b[], scal_w[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
 uint16_t r_tmk_sz, r_tsh;
 #endif
-void R_SetMode(uint16_t colb, uint16_t tcols)
+void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
+    r_focal = colb == 2 ? tcols : tcols * 2;          /* half of the full-screen width in columns */
+    tcols -= 2 * crop;
     r_colb = colb; r_tcols = tcols;
     r_vw = colb == 2 ? tcols * 2 : tcols * 4;
     r_vh = colb == 2 ? 144 : 72;
@@ -156,9 +158,9 @@ void R_SetMode(uint16_t colb, uint16_t tcols)
     r_fbbytes = tcols * r_vh * 4;
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
 #if defined(__m68k__) || defined(__mc68000__)
-    RCPF = rcpf_tab[r_halfw == 80 ? 0 : r_halfw == 40 ? 1 : r_halfw == 64 ? 2 : 3];
+    RCPF = rcpf_tab[r_focal == 80 ? 0 : r_focal == 40 ? 1 : r_focal == 64 ? 2 : 3];
 #else
-    for (int z = 16; z < 1024; z++) RCPF[z] = (uint16_t)(((1UL << 19) / 64 * r_halfw) / (uint32_t)z);
+    for (int z = 16; z < 1024; z++) RCPF[z] = (uint16_t)(((1UL << 19) / 64 * r_focal) / (uint32_t)z);
 #endif
     for (int x = 0; x < r_vw; x++) r_colofs[x] = (uint16_t)(((x * colb) >> 2) * (r_vh * 4) + ((x * colb) & 3));
 #if defined(__m68k__) || defined(__mc68000__)
@@ -175,7 +177,7 @@ void R_Init(void)
 #ifndef COLB0
 #define COLB0 1
 #endif
-    R_SetMode(COLB0, 40);
+    R_SetMode(COLB0, 40, 0);
 #if !(defined(__m68k__) || defined(__mc68000__))
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
 #endif

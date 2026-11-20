@@ -15,21 +15,21 @@ typedef long long dread_i64;   /* SGDK 2.x has no int64_t, newer ones typedef it
 #define VW_MAX   160
 #define VH_MAX   144
 #define FB_MAX   (40 * 144 * 4)                 /* bytes: the largest mode (H40 column-doubled) */
-extern uint16_t r_vw, r_vh, r_colb, r_halfw, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
+extern uint16_t r_vw, r_vh, r_colb, r_halfw, r_focal, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
 extern uint16_t r_colofs[VW_MAX];               /* byte offset of each logical column in the framebuffer */
 #define COLB     r_colb
 #define VIEW_W   r_vw
 #define VIEW_H   r_vh
 #define HALF_W   r_halfw
 #define HORIZON  r_horizon
-#define FOCAL    r_halfw            /* 90 degree horizontal field of view */
+#define FOCAL    r_focal            /* 90 degrees over the full screen width (side crop keeps it) */
 #define VFOCAL   r_vfocal
 #define FB_TCOLS r_tcols
 #define FB_BYTES r_fbbytes
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
  * a byte is a pair of 4bpp pixels; logical column x starts at byte x*COLB of the 4-byte tile rows. */
 #define FB_COL(fb, x) ((fb) + r_colofs[x])
-void R_SetMode(uint16_t colb, uint16_t tcols);  /* tcols = 40 (H40) or 32 (H32) */
+void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop);  /* tcols = 40 (H40) or 32 (H32), crop = tiles removed per side */
 
 typedef struct {
     int32_t x, y;                  /* 16.16 map units */

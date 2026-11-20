@@ -66,13 +66,17 @@ static void vint_cb(void)
 }
 
 /* switch the screen mode (detail level): resolution H40/H32, row- or column-doubled view */
+#ifndef START_CROP
+#define START_CROP 0
+#endif
+static uint16_t crop = START_CROP;                         /* side crop: tiles removed on each side (0, 2, 4) */
 static void set_mode(uint16_t m)
 {
     while (dma_src) {}
     SYS_disableInts();
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
-    R_SetMode(colb, h40 ? 40 : 32);
+    R_SetMode(colb, h40 ? 40 : 32, crop);
     if (h40) VDP_setScreenWidth320(); else VDP_setScreenWidth256();
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     view_trows = VIEW_H / 8;
@@ -90,7 +94,7 @@ static void set_mode(uint16_t m)
             for (int tx = 0; tx < 64; tx++) {
                 uint16_t v = 0;
                 const uint16_t r = colb == 2 ? ty - VIEW_ROW0 : ty - VIEW_ROW0;   /* row-doubled: tile rows 0..8 (vscroll repeats lines) */
-                if (tx < TCOLS && ty >= VIEW_ROW0 && r < view_trows) v = base + tx * view_trows + r;
+                if (tx >= crop && tx < crop + TCOLS && ty >= VIEW_ROW0 && r < view_trows) v = base + (tx - crop) * view_trows + r;
                 *(volatile uint16_t *)0xC00000 = v;
             }
         }
@@ -230,15 +234,17 @@ static const uint16_t bench_script[][2] = {
 static void menu_draw(uint16_t sel)
 {
     static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[2] = { "LINHAS DUPLICADAS ", "COLUNAS DUPLICADAS" };
-    char l[3][36];
+    static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
+    char l[4][36];
     sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
     sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[mode & 1]);
-    sprintf(l[2], "%c VOLTAR", sel == 2 ? '>' : ' ');
+    sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
+    sprintf(l[3], "%c VOLTAR", sel == 3 ? '>' : ' ');
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
     VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 3);
-    for (int i = 0; i < 3; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
-    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 9);
+    for (int i = 0; i < 4; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
+    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 10);
     SYS_enableInts();
 }
 static void menu(void)
@@ -247,7 +253,7 @@ static void menu(void)
     while (dma_src) {}
     SYS_disableInts();
     VDP_setTextPalette(PAL3);
-    VDP_setWindowVPos(FALSE, 11);
+    VDP_setWindowVPos(FALSE, 12);
     SYS_enableInts();
     menu_draw(sel);
     for (;;) {
@@ -256,12 +262,13 @@ static void menu(void)
         const uint16_t j = JOY_readJoypad(JOY_1), e = j & ~pj;
         pj = j;
         if (e & BUTTON_START) break;
-        if (e & BUTTON_UP) { sel = (sel + 2) % 3; menu_draw(sel); }
-        if (e & BUTTON_DOWN) { sel = (sel + 1) % 3; menu_draw(sel); }
+        if (e & BUTTON_UP) { sel = (sel + 3) % 4; menu_draw(sel); }
+        if (e & BUTTON_DOWN) { sel = (sel + 1) % 4; menu_draw(sel); }
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
-            if (sel == 2) break;
-            set_mode(mode ^ (sel == 0 ? 2 : 1));
-            SYS_disableInts(); VDP_setWindowVPos(FALSE, 11); SYS_enableInts();
+            if (sel == 3) break;
+            if (sel == 2) { crop = (uint16_t)((crop + ((e & BUTTON_LEFT) ? 4 : 2)) % 6); set_mode(mode); }
+            else set_mode(mode ^ (sel == 0 ? 2 : 1));
+            SYS_disableInts(); VDP_setWindowVPos(FALSE, 12); SYS_enableInts();
             menu_draw(sel);
         }
     }
