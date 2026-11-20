@@ -128,8 +128,10 @@ static inline int32_t mulhi15(int32_t a, int16_t k)
 /* a + delta * f8 / 256, f8 = 0..32767 (sub-column offset in 1/256 column) */
 static inline int32_t advance(int32_t a, int32_t delta, int32_t f8)
 {
-    const int16_t whole = (int16_t)(f8 >> 8), part = (int16_t)(f8 & 255);   /* whole <= 8192 columns */
-    return a + mul32k(delta, whole) + mul32k(delta >> 8, part);
+    const uint16_t whole = (uint16_t)(f8 >> 8), part = (uint16_t)(f8 & 255);   /* whole <= 8192 columns, f8 >= 0 */
+    const int32_t d8 = delta >> 8;
+    return a + (muls16((int16_t)(delta >> 16), (int16_t)whole) << 16) + (int32_t)mulu16((uint16_t)delta, whole)
+             + (muls16((int16_t)(d8 >> 16), (int16_t)part) << 16) + (int32_t)mulu16((uint16_t)d8, part);
 }
 
 uint16_t r_vw, r_vh, r_colb, r_halfw, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
@@ -250,6 +252,19 @@ static inline int32_t ydelta(int16_t dh, int32_t diz)
     const uint32_t lo = mulu16((uint16_t)diz, ak);
     const int32_t r = (muls16((int16_t)(diz >> 16), (int16_t)ak) << 12) + (int32_t)(lo >> 4);
     return a < 0 ? r : -r;
+}
+
+/* both at once: Y = yrow(dh, iz), dY = ydelta(dh, diz) (one height factor) */
+static inline void yrows(int16_t dh, int32_t iz, int32_t diz, int32_t *Y, int32_t *dY)
+{
+    int32_t a = muls16(dh, (int16_t)VFOCAL) >> 2;
+    if (a > 32767) a = 32767;
+    if (a < -32767) a = -32767;
+    int32_t b = iz >> 5; if (b > 32767) b = 32767;
+    *Y = ((int32_t)HORIZON << 16) - (muls16((int16_t)a, (int16_t)b) << 1);
+    const uint16_t ak = (uint16_t)(a < 0 ? -a : a);
+    const int32_t r = (muls16((int16_t)(diz >> 16), (int16_t)ak) << 12) + (int32_t)(mulu16((uint16_t)diz, ak) >> 4);
+    *dY = a < 0 ? r : -r;
 }
 
 /* z4 = 2^24 / iz and u = uz / iz with 16-bit divides */
@@ -504,13 +519,19 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 
     /* inverse depth (2^24 / z4) and u (half texels) at both ends */
     const int32_t iz1 = inv_z(z1), iz2 = inv_z(z2);
-    int32_t u1 = s->xoff, u2 = s->xoff + s->len;
-    if (t1) u1 += (int32_t)(((int64_t)s->len * t1) >> 16);
-    if (t2 != 65536) u2 = s->xoff + (int32_t)(((int64_t)s->len * t2) >> 16);
-    u1 >>= 1; u2 >>= 1;
-    const int32_t ub = u1 & ~1023;
-    /* u/z / 256: (u - ub) < 2048, iz < 2^20 -> fits after the shift */
-    const int32_t uz1 = muls16((int16_t)(u1 - ub), (int16_t)(iz1 >> 8)), uz2 = muls16((int16_t)(u2 - ub), (int16_t)(iz2 >> 8));
+    /* textured at all? (portals without upper/lower parts skip u entirely) */
+    const int ntex = bs ? ((bs->ceil < fs->ceil && !(fs->sky && bs->sky) && s->upper != 0xFF) || (bs->floor > fs->floor && s->lower != 0xFF))
+                        : (s->mid != 0xFF);
+    int32_t uz1 = 0, uz2 = 0;
+    if (ntex) {
+        int32_t u1 = s->xoff, u2 = s->xoff + s->len;
+        if (t1) u1 += (int32_t)(((int64_t)s->len * t1) >> 16);
+        if (t2 != 65536) u2 = s->xoff + (int32_t)(((int64_t)s->len * t2) >> 16);
+        u1 >>= 1; u2 >>= 1;
+        const int32_t ub = u1 & ~1023;
+        /* u/z / 256: (u - ub) < 2048, iz < 2^20 -> fits after the shift */
+        uz1 = muls16((int16_t)(u1 - ub), (int16_t)(iz1 >> 8)); uz2 = muls16((int16_t)(u2 - ub), (int16_t)(iz2 >> 8));
+    }
 
     const int32_t span8 = (sx2 - sx1) >> 8;       /* columns * 256 */
     const int16_t rcp = span8 > 256 ? (int16_t)divu16(1UL << 23, (uint16_t)(span8 > 65535 ? 65535 : span8)) : 32767;
@@ -520,13 +541,13 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 
     const int32_t diz = lstep(iz1, iz2, rcp);
     int32_t iz = advance(iz1, diz, f8);
-    const int32_t duz = lstep(uz1, uz2, rcp);
-    int32_t uz = advance(uz1, duz, f8);
+    int32_t duz = 0, uz = 0;
+    if (ntex) { duz = lstep(uz1, uz2, rcp); uz = advance(uz1, duz, f8); }
 
     const int16_t fc = fs->ceil - view_z, ff = fs->floor - view_z;
     /* rows are linear in iz: Y(iz) = HORIZON - a*iz/16, so start = yrow(h, iz at xs), step = -a*diz/16 */
-    const int32_t dYc = ydelta(fc, diz), dYf = ydelta(ff, diz);
-    int32_t Yc = yrow(fc, iz), Yf = yrow(ff, iz);
+    int32_t Yc, Yf, dYc, dYf;
+    yrows(fc, iz, diz, &Yc, &dYc); yrows(ff, iz, diz, &Yf, &dYf);
 
     Part mid = {0}, up = {0}, lo = {0};
     int has_mid = 0, has_up = 0, has_lo = 0;
@@ -543,14 +564,14 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             const int16_t textop = (s->flags & 1) ? fs->ceil : bs->ceil + map_tex[s->upper].realh;
             setup_part(&up, s->upper, bucket, textop, s->yoff);
             const int16_t bc = bs->ceil - view_z;
-            dYbc = ydelta(bc, diz); Ybc = yrow(bc, iz);
+            yrows(bc, iz, diz, &Ybc, &dYbc);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
             const int16_t textop = (s->flags & 2) ? fs->ceil : bs->floor;
             setup_part(&lo, s->lower, bucket, textop, s->yoff);
             const int16_t bf = bs->floor - view_z;
-            dYbf = ydelta(bf, diz); Ybf = yrow(bf, iz);
+            yrows(bf, iz, diz, &Ybf, &dYbf);
         }
     }
     const int need_tex = has_mid | has_up | has_lo;
