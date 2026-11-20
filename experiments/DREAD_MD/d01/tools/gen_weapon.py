@@ -31,7 +31,7 @@ def main():
             d = sprites[nm]
             w, h, lo, to = struct.unpack_from("<HHhh", d, 0)
             img = read_patch(d)
-            x0, y0 = 1 - lo, 32 - to - 16      # 168-line view: centery 84 vs BASEYCENTER 100
+            x0, y0 = 1 - lo, 32 - to - 44      # raised so the hand shows above the bar (our view is 112 rows)
             for y in range(h):
                 for x in range(w):
                     if img[y, x] >= 0 and 0 <= y0 + y < 200 and 0 <= x0 + x < 320:
