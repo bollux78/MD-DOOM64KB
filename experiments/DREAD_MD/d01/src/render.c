@@ -27,6 +27,15 @@ static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
 
 static uint8_t ceilclip[VIEW_W], floorclip[VIEW_W];
+/* next open column at or after c (union-find with path halving); closed columns are skipped
+ * in O(1) instead of being walked by every seg behind them */
+static uint8_t nxt[VIEW_W + 1];
+static inline int find_open(int c)
+{
+    while (nxt[c] != c) { nxt[c] = nxt[nxt[c]]; c = nxt[c]; }
+    return c;
+}
+static inline void close_col(int c) { ceilclip[c] = floorclip[c] = 0; nxt[c] = (uint8_t)(c + 1); }
 static int16_t closed;
 
 static int16_t view_xi, view_yi;   /* integer map position */
@@ -202,6 +211,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     if (xs < 0) xs = 0;
     if (xe > VIEW_W) xe = VIEW_W;
     if (xs >= xe) return;
+    int c = find_open(xs);
+    if (c >= xe) return;                    /* fully hidden behind closed columns */
     rstats.segs_drawn++;
 
     const MapSector *fs = &map_sectors[s->front];
@@ -268,8 +279,17 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int left = 0;
     const int32_t diz8 = diz << 3, duz8 = duz << 3;
 
-    for (int c = xs; c < xe; c++, iz += diz, uz += duz, Yc += dYc, Yf += dYf, Ybc += dYbc, Ybf += dYbf,
-                                 ua8 += du8, zpa += dzp, left--) {
+    int cur = xs;
+    while (c < xe) {
+        if (c != cur) {                     /* skipped closed columns: move every interpolant */
+            const int16_t k = (int16_t)(c - cur);
+            iz += mul32k(diz, k); uz += mul32k(duz, k);
+            Yc += mul32k(dYc, k); Yf += mul32k(dYf, k);
+            if (has_up) Ybc += mul32k(dYbc, k);
+            if (has_lo) Ybf += mul32k(dYbf, k);
+            left = 0;
+            cur = c;
+        }
         if (need_tex && left <= 0) {
             int n = xe - 1 - c; if (n > ANCHOR) n = ANCHOR;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
@@ -289,8 +309,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             } else { du8 = 0; dzp = 0; }
             left = n > 0 ? n : 1;
         }
+        do {
         const int top = ceilclip[c], bot = floorclip[c];
-        if (top >= bot) continue;
         uint8_t *col = FB_COL(rfb, c);
         const int yc = clampi(ceil16(Yc), top, bot);
         const int yf = clampi(ceil16(Yf), yc, bot);
@@ -299,9 +319,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         const uint16_t u = (uint16_t)(ua8 >> 8);
         if (!bs) {
             if (has_mid && yf > yc) draw_part(col, yc, yf, &mid, u, zpa);
-            ceilclip[c] = floorclip[c] = 0;
-            closed++;
-            continue;
+            close_col(c); closed++;
+            break;
         }
         int ntop = yc, nbot = yf;
         if (has_up) {
@@ -314,8 +333,14 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             if (yf > ybf) draw_part(col, ybf, yf, &lo, u, zpa);
             nbot = ybf;
         }
-        if (ntop >= nbot) { ceilclip[c] = floorclip[c] = 0; closed++; }
+        if (ntop >= nbot) { close_col(c); closed++; }
         else { ceilclip[c] = ntop; floorclip[c] = nbot; }
+        } while (0);
+        /* next column */
+        iz += diz; uz += duz; Yc += dYc; Yf += dYf; Ybc += dYbc; Ybf += dYbf;
+        ua8 += du8; zpa += dzp; left--;
+        cur = c + 1;
+        c = find_open(c + 1);
     }
 }
 
@@ -341,9 +366,7 @@ __attribute__((noinline)) static int bbox_visible(const int16_t *bb)
     int a = ceil16(minx), b = ceil16(maxx);
     if (a < 0) a = 0;
     if (b > VIEW_W) b = VIEW_W;
-    for (int c = a; c < b; c++)
-        if (ceilclip[c] < floorclip[c]) return 1;
-    return 0;
+    return a < b && find_open(a) < b;
 }
 
 static void render_node(uint16_t n)
@@ -388,7 +411,8 @@ void R_RenderView(const View *v, uint8_t *fb)
     /* Q14 units * Q14 = Q28 units; camera space is units * 4 -> >> 26 */
     frac_tz = (muls16(fx, vcos) + muls16(fy, vsin)) >> 26;
     frac_tx = (muls16(fx, vsin) - muls16(fy, vcos)) >> 26;
-    for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; }
+    for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; nxt[c] = (uint8_t)c; }
+    nxt[VIEW_W] = VIEW_W;
     closed = 0;
     rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = 0;
     render_node(map_counts[3] - 1);
