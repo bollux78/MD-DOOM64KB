@@ -43,7 +43,7 @@ try:
     funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
     keys = [f[0] for f in funcs]
     hist = collections.Counter(); fine = collections.Counter()
-    frames = 0; stats = []; cv = []
+    frames = 0; stats = []; cv = []; since = 0
     want = {1, 20, 45, 70, 95, 120, 150}
     while True:
         g.cont()
@@ -54,9 +54,14 @@ try:
             ipc = int.from_bytes(g.readmem(sp + 2, 4), "big") & 0xffffff
             k = bisect.bisect_right(keys, ipc) - 1
             hist[funcs[k][1] if k >= 0 else hex(ipc)] += 1
+            since += 1
+            if since > 600:   # no frame for 10 s: stuck or crashed
+                res["stuck_pc"] = [hex(ipc), funcs[k][1] if k >= 0 else "?", hex(ipc - funcs[k][0]) if k >= 0 else ""]
+                res["stuck_regs"] = regs[:16 * 8]
+                break
             if k >= 0 and funcs[k][1] == "draw_seg": fine[(ipc - funcs[k][0]) // 32 * 32] += 1
             continue
-        frames += 1
+        frames += 1; since = 0
         done = rd(g, "bench_done", 2)
         segs, nodes = rd(g, "frame_segs", 2), rd(g, "frame_nodes", 2)
         if frames > 1: stats.append((segs, nodes)); cv.append((rd(g, "frame_cols", 2), rd(g, "frame_anchors", 2)))
