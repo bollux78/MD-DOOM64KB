@@ -36,8 +36,9 @@ jobs:
             while IFS= read -r f; do gdk="${f%/makefile.gen}"; break; done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -5)
           fi
           test -n "$gdk"; echo "SGDK: $gdk"
-          ls "$gdk/src/boot" || true
-          cp -r "$gdk/src/boot" "$stage/src/boot"
+          bootdir="$(dirname "$(find "$gdk" -path '*boot/rom_head.c' | head -1)")"
+          echo "boot: $bootdir"; ls "$bootdir"
+          mkdir -p "$stage/src/boot"; cp "$bootdir"/rom_head.c "$bootdir"/sega.s "$stage/src/boot/"
           python3 - "$stage/src/boot/rom_head.c" <<'PY'
           import re,sys,pathlib
           p=pathlib.Path(sys.argv[1]); s=p.read_text()
