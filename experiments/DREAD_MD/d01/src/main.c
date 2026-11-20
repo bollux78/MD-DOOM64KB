@@ -40,28 +40,16 @@ volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
 
 static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(addr & 0x3FFF) << 16) | (addr >> 14); }
 
-/* rows shown twice: before each screen line of the view, scroll plane A up by half the lines so far */
+/* rows shown twice: hint.s scrolls plane A up by one row every 2 lines inside the view */
+extern void hint_a(void), hint_b(void);
 static volatile uint8_t hint_on;
-static HINTERRUPT_CALLBACK hint_cb(void)
-{
-    /* fires every 2 lines (counter 1); the pair alignment does not matter */
-    const uint16_t L = (uint16_t)(*(volatile uint8_t *)0xC00008) + 1;   /* next line, from the V counter */
-    int16_t v = 0;
-    if (L >= 224) v = 0;          /* in the VBlank (a pending H-int raised when the VBlank re-enables it) */
-    else if (L >= VTOP) {
-        if (L >= VTOP + 2 * VIEW_H) { v = (int16_t)-VIEW_H; *(volatile uint16_t *)0xC00004 = 0x8004; }   /* view done: H-int off until the VBlank */
-        else v = (int16_t)-((L - VTOP + 1) >> 1);
-    }
-    *(volatile uint32_t *)0xC00004 = 0x40000010UL;   /* VSRAM 0 */
-    *(volatile uint16_t *)0xC00000 = (uint16_t)v;
-}
 
 static void vint_cb(void)
 {
     vints++;
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;
     *(volatile uint16_t *)0xC00000 = 0;
-    if (hint_on) *(volatile uint16_t *)0xC00004 = 0x8014;      /* H-int back on for the next frame */
+    if (hint_on) { SYS_setHIntCallback(hint_a); *(volatile uint16_t *)0xC00004 = 0x8014; }   /* H-int back on for the next frame */
     HUD_VBlank();
     if (dma_src) {
         const uint16_t n = (FB_BYTES - dma_pos) > DMA_CHUNK ? DMA_CHUNK : (FB_BYTES - dma_pos);
@@ -310,7 +298,7 @@ int main(bool hard)
     (void)hard;
     SYS_disableInts();
     SYS_setVIntCallback(vint_cb);
-    SYS_setHIntCallback(hint_cb);
+    SYS_setHIntCallback(hint_a);
     SYS_enableInts();
     R_Init();
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
