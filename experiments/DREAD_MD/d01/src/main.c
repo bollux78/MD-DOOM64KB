@@ -5,6 +5,7 @@
  * previous one into the hidden VRAM copy, then flips plane A's name table. */
 #include <genesis.h>
 #include "render.h"
+#include "game_hud.h"
 
 #ifdef ROM_TAG_3PAL
 #define ROM_NAME   "DREAD-MD D01 E1M1 3PAL"
@@ -12,7 +13,6 @@
 #define ROM_NAME   "DREAD-MD D01 E1M1"
 #endif
 #define VIEW_TROWS (VIEW_H / 8)
-#define VIEW_ROW0  ((28 - VIEW_TROWS) / 2 - 2)   /* tile row of the view on screen */
 /* SGDK 2.x VRAM: plane A name table at 0xE000 (we flip it with 0xA000), plane B 0xC000 (text),
  * window 0xD000, font right after the 16 system tiles. Our tiles start at tile 128 (0x1000). */
 #define TILE_FB0   128
@@ -41,6 +41,7 @@ static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x4000000
 static void vint_cb(void)
 {
     vints++;
+    HUD_WeaponVBlank();
     if (dma_src) {
         const uint16_t n = (FB_BYTES - dma_pos) > DMA_CHUNK ? DMA_CHUNK : (FB_BYTES - dma_pos);
         const uint16_t dst = (shown ? TILE_FB0 : TILE_FB1) * 32 + dma_pos;
@@ -68,8 +69,6 @@ static void setup_screen(void)
     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
     for (int p = 0; p < num_palettes && p < 3; p++)
         for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[p][i];
-    *(volatile uint32_t *)0xC00004 = 0xC07E0000UL;   /* CRAM 63: PAL3 colour 15 = white text */
-    *(volatile uint16_t *)0xC00000 = 0x0EEE;
     /* both name tables: view rows point at the framebuffer tiles, column-major */
     for (int b = 0; b < 2; b++) {
         const uint16_t nt = b ? NT1 : NT0, base = b ? TILE_FB1 : TILE_FB0;
@@ -212,8 +211,8 @@ static void title(void)
     VDP_drawText("em cor solida, E1M1 do Doom.", 4, 11);
     VDP_drawText("Mede FPS (canto inferior).", 4, 13);
     VDP_drawText("Cima/baixo anda, lados gira,", 4, 15);
-    VDP_drawText("C+lados anda de lado, A corre.", 4, 16);
-    VDP_drawText("B abre portas.", 4, 17);
+    VDP_drawText("C+lados anda de lado,", 4, 16);
+    VDP_drawText("A atira, B abre portas.", 4, 17);
     VDP_drawText("aperte START ou aguarde", 4, 20);
     VDP_drawText("15 segundos", 4, 21);
     const uint16_t t0 = vints;
@@ -236,7 +235,13 @@ int main(bool hard)
     R_Init();
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
     title();
+    HUD_Opening();
     setup_screen();
+    HUD_Init(HUD_ROW0);
+    HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };
+    HUD_Draw(&hud);
+    uint16_t face_t = 0, weap_t = 0, weap_step = 0, bob = 0;
+    static const uint8_t weap_seq[4][2] = { {1, 10}, {2, 7}, {3, 8}, {0, 0} };   /* frame, vblanks (Doom 6/4/5 tics) */
 
     view.x = (int32_t)map_start[0] << 16; view.y = (int32_t)map_start[1] << 16;
     view.angle = (uint16_t)((int32_t)map_start[2] * 65536 / 360);
@@ -268,7 +273,18 @@ int main(bool hard)
         doors_tick(dt);
         /* turn / move (per vblank speeds, Doom-like) */
         const int strafe = (j & BUTTON_C) != 0;
-        const int32_t speed = (j & BUTTON_A) ? 0x40000 : 0x20000;     /* map units per vblank, 16.16 */
+        const int32_t speed = 0x30000;     /* map units per vblank, 16.16 */
+        /* pistol: A fires (Doom timing), the status bar counts the bullets */
+        if (weap_step == 0 && (j & BUTTON_A) && hud.ammo[0]) {
+            weap_step = 1; weap_t = weap_seq[0][1]; HUD_WeaponFrame(weap_seq[0][0]);
+            hud.ammo[0]--; hud.ammo_cur = hud.ammo[0]; HUD_Draw(&hud);
+        } else if (weap_step) {
+            if (weap_t > dt) weap_t -= dt;
+            else { HUD_WeaponFrame(weap_seq[weap_step][0]); weap_t = weap_seq[weap_step][1]; weap_step = weap_seq[weap_step][1] ? weap_step + 1 : 0; }
+        }
+        /* face looks around */
+        face_t += dt;
+        if (face_t > 90) { face_t = 0; hud.face = (int16_t)((hud.face + 1 + (vints & 1)) % 3); HUD_Draw(&hud); }
         if (!strafe) {
             if (j & BUTTON_LEFT) view.angle += 400 * dt;
             if (j & BUTTON_RIGHT) view.angle -= 400 * dt;
@@ -280,6 +296,11 @@ int main(bool hard)
         if (j & BUTTON_DOWN) fwd = -speed * dt;
         if (strafe && (j & BUTTON_LEFT)) side = -speed * dt;
         if (strafe && (j & BUTTON_RIGHT)) side = speed * dt;
+        if (fwd || side) {
+            bob += dt;
+            const int16_t sx = sintab[(bob * 12) & 1023] >> 11, sy = sintab[(bob * 24) & 1023] >> 11;
+            HUD_WeaponBob(sx, sy < 0 ? -sy : sy);
+        }
         if (fwd || side) {
             const int32_t mx = ((fwd >> 8) * cs + (side >> 8) * sn) >> 6;
             const int32_t my = ((fwd >> 8) * sn - (side >> 8) * cs) >> 6;

@@ -30,6 +30,10 @@ jobs:
           DREAD_NPAL=1 python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
           gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
           "$stage/pvsgen" "$stage/src/pvs.c" | tee -a "$stage/conv.log"
+          python3 $D/tools/gen_hud.py --wad "$WAD" --out "$stage/src/hud_assets.h" | tee -a "$stage/conv.log"
+          sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"
+          python3 $D/tools/gen_weapon.py "$WAD" "$stage/src/weapon.c" | tee -a "$stage/conv.log"
+          python3 $D/tools/gen_title.py $D/tools/title-md-32col.png "$stage/src/title.c" | tee -a "$stage/conv.log"
           gdk=""
           for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
             if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
@@ -68,15 +72,6 @@ jobs:
           ls -l "$out"
           echo "OUT=$out" >> "$GITHUB_ENV"
           echo "STAGE=$stage" >> "$GITHUB_ENV"
-          # variant: 3 view palettes (tile ownership + remap)
-          s3="$stage-3pal"; rm -rf "$s3"; cp -r "$stage" "$s3"; rm -rf "$s3/out"
-          DREAD_NPAL=3 python3 $D/tools/conv.py "$WAD" E1M1 "$s3/src" > "$s3/conv.log"
-          gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$s3/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$s3/src/mapdata.c"
-          "$s3/pvsgen" "$s3/src/pvs.c" >> "$s3/conv.log"
-          d3="${dst/$stage/$s3}"; sed -i 's/DREAD-MD D01 E1M1     /DREAD-MD D01 E1M1 3PAL/' "$d3" || true
-          if make -C "$s3" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=3 -DROM_TAG_3PAL" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$s3/build.log" 2>&1; then
-            cp "$s3/out/rom.bin" "$out/dread-md-d01-e1m1-3pal.bin"
-          else echo "::warning::3pal build failed"; tail -20 "$s3/build.log"; fi
           python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-e1m1*.bin\"))]; z.close()" "$out"
       - name: BlastEm bench route
         shell: bash

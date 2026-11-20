@@ -1,0 +1,159 @@
+/* DREAD-MD: opening image, Doom status bar (Claudio's HUD from the WAD, as in R128/Manifold) and the
+ * pistol view sprite. Mega Drive only. */
+#include <genesis.h>
+#include "render.h"
+#include "game_hud.h"
+#include "hud_assets.h"
+
+extern const uint16_t weap_pal[16], weap_x, weap_y, weap_tiles, weap_nframes, weap_npieces;
+extern const uint8_t weap_piece[][4];
+extern const uint32_t weap_data[];
+extern const uint16_t title_w, title_h, title_pal[32];
+extern const uint8_t title_attr[];
+extern const uint32_t title_tiles[];
+
+#define TILE_HUD    1024                       /* 0x8000: bar tiles, then the 16-tile face slot */
+#define TILE_FACE   (TILE_HUD + HUDW_NTILES)
+#define TILE_WEAP   1200                       /* 0x9600 */
+#define TILE_TITLE  128
+#define BGB         0xC000                     /* SGDK 2.x plane B */
+#define BGA         0xE000
+#define SLIST       0xF400
+
+static inline void vram_addr(uint16_t a) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(a & 0x3FFF) << 16) | (a >> 14); }
+static inline void vram_w(uint16_t v) { *(volatile uint16_t *)0xC00000 = v; }
+static inline void cram_set(uint16_t idx, const uint16_t *src, uint16_t n)
+{
+    *(volatile uint32_t *)0xC00004 = 0xC0000000UL | ((uint32_t)(idx * 2) << 16);
+    while (n--) *(volatile uint16_t *)0xC00000 = *src++;
+}
+static void vram_copy32(uint16_t dst_tile, const uint32_t *src, uint16_t ntiles)
+{
+    vram_addr(dst_tile * 32);
+    for (uint32_t i = 0; i < (uint32_t)ntiles * 8; i++) {
+        const uint32_t w = src[i];
+        vram_w((uint16_t)(w >> 16)); vram_w((uint16_t)w);
+    }
+}
+
+/* ---- opening image (H40, 2 palettes). START (or 8 s) continues. */
+void HUD_Opening(void)
+{
+    SYS_disableInts();
+    VDP_setScreenWidth320();
+    *(volatile uint16_t *)0xC00004 = 0x8F02;
+    cram_set(0, title_pal, 32);
+    vram_copy32(TILE_TITLE, title_tiles, (uint16_t)(title_w * title_h));
+    for (uint16_t y = 0; y < 32; y++) {
+        vram_addr(BGA + y * 128);
+        for (uint16_t x = 0; x < 64; x++) {
+            uint16_t v = 0;
+            if (x < title_w && y < title_h) {
+                const uint16_t i = y * title_w + x;
+                v = (uint16_t)(TILE_TITLE + i) | (uint16_t)(title_attr[i] << 13);
+            }
+            vram_w(v);
+        }
+    }
+    SYS_enableInts();
+    extern volatile uint16_t vints, bench_req;
+    const uint16_t t0 = vints;
+    while ((uint16_t)(vints - t0) < 8 * 60 && !bench_req) {
+        JOY_update();
+        if (JOY_readJoypad(JOY_1) & BUTTON_START) break;
+    }
+    while (!bench_req) { JOY_update(); if (!(JOY_readJoypad(JOY_1) & BUTTON_START)) break; }   /* wait release */
+    SYS_disableInts();
+    vram_addr(BGA);
+    for (uint16_t i = 0; i < 64 * 32; i++) vram_w(0);
+    SYS_enableInts();
+}
+
+/* ---- status bar on plane B rows [row0, row0+4) */
+static uint16_t hud_row0;
+static int16_t cur_face = -1;
+
+void HUD_Init(uint16_t row0)
+{
+    hud_row0 = row0;
+    SYS_disableInts();
+    cram_set(16, weap_pal, 16);               /* PAL1: weapon */
+    cram_set(32, hudw_fpal, 16);              /* PAL2: faces */
+    cram_set(48, hudw_pal, 16);               /* PAL3: bar, digits, text */
+    vram_copy32(TILE_HUD, &hudw_tiles[0][0], HUDW_NTILES);
+    vram_copy32(TILE_WEAP, weap_data, weap_tiles);
+    /* weapon sprites: one entry per piece, linked */
+    vram_addr(SLIST);
+    for (uint16_t i = 0; i < weap_npieces; i++) {
+        const uint8_t *p = weap_piece[i];
+        uint16_t tile = TILE_WEAP;
+        for (uint16_t k = 0; k < i; k++) tile += weap_piece[k][2] * weap_piece[k][3];
+        vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX));
+        vram_w((uint16_t)(((p[2] - 1) << 10) | ((p[3] - 1) << 8) | (i + 1 < weap_npieces ? i + 1 : 0)));
+        vram_w((uint16_t)(0x8000 | (1 << 13) | tile));
+        vram_w((uint16_t)(128 + weap_x + p[0]));
+    }
+    SYS_enableInts();
+}
+
+void HUD_Draw(const HudState *st)
+{
+    uint16_t rows[4][32];
+    for (int r = 0; r < 4; r++) for (int c = 0; c < 32; c++) rows[r][c] = hudw_bgmap[r][c];
+    const uint16_t vals[3] = { st->ammo_cur, st->health, st->armor };
+    const uint8_t cols[3] = { HUDW_AMMO_C, HUDW_HEALTH_C, HUDW_ARMOR_C };
+    for (int w = 0; w < 3; w++) {
+        const uint16_t v = vals[w] > 999 ? 999 : vals[w];
+        const uint16_t d[3] = { v / 100, v / 10 % 10, v % 10 };
+        const uint8_t lead[3] = { v >= 100, v >= 10, 1 };
+        for (int r = 0; r < 3; r++) {
+            for (int i = 0; i < 3; i++) if (lead[i]) rows[r][cols[w] + i] = hudw_big[w][i][r][d[i]];
+            if (w) rows[r][cols[w] + 3] = hudw_pct[w - 1][r];
+        }
+    }
+    const uint16_t mask = st->arms | (st->keys << 6);
+    for (int k = 0; k < HUDW_NWID; k++) {
+        const uint16_t v = ((mask >> hudw_wid_b0[k]) & 1) | (hudw_wid_b1[k] != 255 ? ((mask >> hudw_wid_b1[k]) & 1) << 1 : 0);
+        rows[hudw_wid_row[k]][hudw_wid_col[k]] = hudw_wid_id[k][v];
+    }
+    for (int t = 0; t < 4; t++)
+        for (int part = 0; part < 2; part++) {
+            const uint16_t v = part ? st->maxammo[t] : st->ammo[t];
+            const uint16_t d[3] = { v / 100, v / 10 % 10, v % 10 };
+            const uint8_t lead[3] = { v >= 100, v >= 10, 1 };
+            for (int i = 0; i < 3; i++) if (lead[i]) rows[HUDW_TABLE_R + t][HUDW_TABLE_C + part * 3 + i] = hudw_ysm[t][d[i]];
+        }
+    SYS_disableInts();
+    if (st->face != cur_face) { cur_face = st->face; vram_copy32(TILE_FACE, &hudw_faces[st->face][0][0], 16); }
+    for (int r = 0; r < 4; r++) {
+        vram_addr(BGB + (hud_row0 + r) * 128);
+        for (int c = 0; c < 32; c++) {
+            const int face = r >= HUDW_FACE_R && r < HUDW_FACE_R + 4 && c >= HUDW_FACE_C && c < HUDW_FACE_C + HUDW_FACE_W;
+            vram_w(face ? (uint16_t)((2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
+                        : (uint16_t)((3 << 13) | (TILE_HUD + rows[r][c])));
+        }
+    }
+    SYS_enableInts();
+}
+
+/* ---- weapon: frame upload is requested here and done by the caller's VBlank (WEAP_VBlank) */
+static volatile int16_t weap_req = -1;
+void HUD_WeaponFrame(uint16_t f) { weap_req = (int16_t)f; }
+void HUD_WeaponVBlank(void)
+{
+    if (weap_req < 0) return;
+    const uint16_t f = (uint16_t)weap_req; weap_req = -1;
+    DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
+}
+void HUD_WeaponBob(int16_t dx, int16_t dy)
+{
+    SYS_disableInts();
+    for (uint16_t i = 0; i < weap_npieces; i++) {
+        const uint8_t *p = weap_piece[i];
+        vram_addr(SLIST + i * 8);
+        vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + dy));
+        vram_addr(SLIST + i * 8 + 6);
+        vram_w((uint16_t)(128 + weap_x + p[0] + dx));
+    }
+    SYS_enableInts();
+}
