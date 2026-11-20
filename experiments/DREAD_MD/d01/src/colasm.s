@@ -486,7 +486,24 @@ tex_part:
         lea     tmr_end(%pc),%a4
         bra.s   3f
 .Lplain:
+        /* merge the tiles above that are free or ours into the same draw */
+8:      cmp.w   t_y0,%d7
+        ble.s   9f
         move.w  %d7,%d6
+        subq.w  #1,%d6
+        lsr.w   #3,%d6
+        cmpi.b  #0xFF,0(%a5,%d6.w)
+        bne.s   10f
+        move.b  t_spal+1,0(%a5,%d6.w)
+        bra.s   11f
+10:     move.b  0(%a5,%d6.w),%d6
+        cmp.b   t_spal+1,%d6
+        bne.s   9f
+11:     subq.w  #8,%d7
+        cmp.w   t_y0,%d7
+        bge.s   8b
+        move.w  t_y0,%d7
+9:      move.w  %d7,%d6
         add.w   %d6,%d6
         add.w   %d6,%d6
         lea     -4(%a2,%d6.w),%a0
