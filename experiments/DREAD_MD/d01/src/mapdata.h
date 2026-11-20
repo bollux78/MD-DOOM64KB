@@ -28,7 +28,7 @@ typedef struct {
 
 typedef struct {
     int16_t floor, ceil;
-    uint8_t floorcol, ceilcol;     /* MD palette index */
+    uint8_t floorcol, ceilcol;     /* pair of MD palette indices (one byte = 2 pixels) */
     uint8_t bucket, sky;
 } MapSector;
 

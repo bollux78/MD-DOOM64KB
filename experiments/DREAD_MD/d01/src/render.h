@@ -24,7 +24,7 @@
 
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
  * a byte is a pair of 4bpp pixels, so logical column x is byte (x&3) of each 4-byte tile row. */
-#define FB_COL(fb, x) ((fb) + ((x) >> 2) * (VIEW_H * 4) + ((x) & 3))
+#define FB_COL(fb, x) ((fb) + (uint16_t)((uint16_t)((x) >> 2) * (uint16_t)(VIEW_H * 4)) + ((x) & 3))
 
 typedef struct {
     int32_t x, y;                  /* 16.16 map units */

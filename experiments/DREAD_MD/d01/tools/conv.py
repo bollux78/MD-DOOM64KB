@@ -223,16 +223,33 @@ def main():
     def nearest(rgb):
         return int(((mdrgb - rgb) ** 2).sum(-1).argmin())
 
-    lut = np.zeros((len(LIGHT_ROWS), 256), np.uint8)
+    # colour mixing: each texel is a PAIR of palette colours side by side (one byte = 2 pixels);
+    # on screen (and on a CRT) the pair blends, giving up to 136 mixed colours from 16.
+    lin = (mdrgb / 255.0) ** 2.2
+    pairs = [(a, b) for a in range(16) for b in range(a, 16)]
+    mix = np.array([((lin[a] + lin[b]) / 2) ** (1 / 2.2) * 255.0 for a, b in pairs])
+    spread = np.array([np.sqrt(((mdrgb[a] - mdrgb[b]) ** 2).sum()) for a, b in pairs])
+    MIXW = float(__import__("os").environ.get("DREAD_MIX_PENALTY", "0.25"))
+
+    def nearest_pair(rgb):
+        d = np.sqrt(((mix - rgb) ** 2).sum(-1)) + MIXW * spread
+        a, b = pairs[int(d.argmin())]
+        return a, b
+
+    lut = np.zeros((len(LIGHT_ROWS), 256, 2), np.uint8)
     for b, row in enumerate(LIGHT_ROWS):
         for i in range(256):
-            lut[b, i] = nearest(pal[cmap[row][i]])
+            lut[b, i] = nearest_pair(pal[cmap[row][i]])
+
+    def pair_byte(rgb):
+        a, b = nearest_pair(rgb)
+        return (a << 4) | b
 
     # sky colour
     sky_rgb = None
     if "SKY1" in texdefs:
         sky_rgb = pal[compose("SKY1").ravel()].mean(0)
-    skycol = nearest(sky_rgb) if sky_rgb is not None else 1
+    skycol = pair_byte(sky_rgb) if sky_rgb is not None else 0x11
 
     # ---- emit textures
     texc = []
@@ -254,8 +271,8 @@ def main():
             for u in range(W2):
                 sx = (u % hw) * 2
                 for v in range(H2):
-                    c = int(lut[b, img[v % h, sx]])
-                    col.append(c | (c << 4))
+                    pa, pb = lut[b, img[v % h, sx]]
+                    col.append((pa << 4 | pb) if (v & 1) == 0 else (pb << 4 | pa))
             offs.append(len(blob))
             blob += col
         # fill missing buckets with the nearest used one
@@ -287,7 +304,7 @@ def main():
         def fc(nm):
             if nm not in flatcol:
                 return skycol
-            return nearest(pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0))
+            return pair_byte(pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0))
         sky = 1 if cp.startswith("F_SKY") else 0
         sec_rows.append((fh, ch, fc(fp), skycol if sky else fc(cp), b, sky))
 
