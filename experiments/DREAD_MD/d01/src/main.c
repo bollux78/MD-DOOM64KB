@@ -17,7 +17,8 @@
 #define TILE_FB0   128
 #define NT0        0xE000
 #define VTOP       (VIEW_ROW0 * 8)
-#define DMA_CHUNK  2048
+static uint16_t dma_chunk = 5632;              /* bytes per VBlank (H40 ~7.7 KB of VBlank DMA, H32 ~6.3 KB, minus the HUD) */
+#define DMA_CHUNK  dma_chunk
 static uint16_t nbuf, tile_fb1, nt1, view_trows, mode;
 #define NBUF       nbuf
 #define TCOLS      FB_TCOLS
@@ -102,6 +103,7 @@ static void set_mode(uint16_t m)
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
+    dma_chunk = h40 ? 5632 : 4608;
     SYS_enableInts();
 }
 
