@@ -63,8 +63,12 @@ int main(int argc, char **argv)
     if (argc > 3 && !strcmp(argv[2], "things")) {   /* things N: views of the first N things from 4 sides */
         int n = atoi(argv[3]), k = 0;
         static const int dx[4] = {96, 0, -96, 0}, dy[4] = {0, 96, 0, -96}, ang[4] = {180, 270, 0, 90};
-        for (int i = 0; i < map_nthings && i < n; i++)
+        const int mons = argc > 4 && argv[4][0] == 'm';
+        for (int i = 0, c = 0; i < map_nthings && c < n; i++) {
+            if (mons && !(map_things[i].flags & 1)) continue;
+            c++;
             for (int d = 0; d < 4; d++, k++) shot(argv[1], k, map_things[i].x + dx[d], map_things[i].y + dy[d], ang[d]);
+        }
         return 0;
     }
     if (argc > 6 && !strcmp(argv[2], "raw")) {   /* raw X16 Y16 Z ANGLE16: exact view (from a ROM RAM dump) */

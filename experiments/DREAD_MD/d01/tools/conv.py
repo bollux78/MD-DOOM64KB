@@ -546,7 +546,7 @@ def main():
     for t in thing_rows: soff[t[3] + 1] += 1
     for i in range(len(ssecs)): soff[i + 1] += soff[i]
     H.append("const uint16_t map_sub_things[%d] = {%s};" % (len(soff), ",".join(map(str, soff))))
-    print("things: %d drawn, %d sprites, sprite blob %d bytes" % (len(thing_rows), len(srows), len(sblob)))
+    print("things: %d drawn (%d monsters), %d sprites %s, sprite blob %d bytes" % (len(thing_rows), sum(t[4] in MONSTERS for t in thing_rows), len(srows), "".join(k[0] + k[1] + " " for k in sprnames), len(sblob)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
     # same texels as words (b, b): column-doubled modes write 4 pixels per texel with one move.w
     H.append("const uint16_t tex_blob_w[%d] = {%s};" % (len(blob), ",".join(str(x * 257) for x in blob)))
