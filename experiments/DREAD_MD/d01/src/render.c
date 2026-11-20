@@ -353,8 +353,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             nbot = ybf;
         }
         if (ntop >= nbot) { close_col(c); closed++; }
-        tm_tex += now_lines() - tt;
         else { ceilclip[c] = ntop; floorclip[c] = nbot; }
+        tm_tex += now_lines() - tt;
         } while (0);
         /* next column */
         iz += diz; uz += duz; Yc += dYc; Yf += dYf; Ybc += dYbc; Ybf += dYbf;
