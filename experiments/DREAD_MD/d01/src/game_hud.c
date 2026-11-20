@@ -8,14 +8,13 @@
 extern const uint16_t weap_pal[16], weap_x, weap_y, weap_tiles, weap_nframes, weap_npieces;
 extern const uint8_t weap_piece[][4];
 extern const uint32_t weap_data[];
-extern const uint16_t title_w, title_h, title_pal[32];
-extern const uint8_t title_attr[];
+extern const uint16_t title_ntiles, title_pal[64], title_mapa[1120], title_mapb[1120];
 extern const uint32_t title_tiles[];
 
 #define TILE_HUD    1024                       /* 0x8000: bar tiles, then the 16-tile face slot */
 #define TILE_FACE   (TILE_HUD + HUDW_NTILES)
 #define TILE_WEAP   1200                       /* 0x9600 */
-#define TILE_TITLE  128
+#define TILE_TITLE  112                        /* after the SGDK font; 1412 tiles end below 0xC000 */
 #define BGB         0xC000                     /* SGDK 2.x plane B */
 #define BGA         0xE000
 #define SLIST       0xF400
@@ -42,17 +41,17 @@ void HUD_Opening(void)
     SYS_disableInts();
     VDP_setScreenWidth320();
     *(volatile uint16_t *)0xC00004 = 0x8F02;
-    cram_set(0, title_pal, 32);
-    vram_copy32(TILE_TITLE, title_tiles, (uint16_t)(title_w * title_h));
-    for (uint16_t y = 0; y < 32; y++) {
-        vram_addr(BGA + y * 128);
-        for (uint16_t x = 0; x < 64; x++) {
-            uint16_t v = 0;
-            if (x < title_w && y < title_h) {
-                const uint16_t i = y * title_w + x;
-                v = (uint16_t)(TILE_TITLE + i) | (uint16_t)(title_attr[i] << 13);
+    cram_set(0, title_pal, 64);
+    vram_copy32(TILE_TITLE, title_tiles, title_ntiles);
+    for (int plane = 0; plane < 2; plane++) {
+        const uint16_t *m = plane ? title_mapa : title_mapb;
+        for (uint16_t y = 0; y < 32; y++) {
+            vram_addr((plane ? BGA : BGB) + y * 128);
+            for (uint16_t x = 0; x < 64; x++) {
+                uint16_t v = 0;
+                if (x < 40 && y < 28) { const uint16_t w = m[y * 40 + x]; v = (uint16_t)((w & 0xE000) | (TILE_TITLE + (w & 0x7FF))); }
+                vram_w(v);
             }
-            vram_w(v);
         }
     }
     SYS_enableInts();
@@ -65,6 +64,8 @@ void HUD_Opening(void)
     while (!bench_req) { JOY_update(); if (!(JOY_readJoypad(JOY_1) & BUTTON_START)) break; }   /* wait release */
     SYS_disableInts();
     vram_addr(BGA);
+    for (uint16_t i = 0; i < 64 * 32; i++) vram_w(0);
+    vram_addr(BGB);
     for (uint16_t i = 0; i < 64 * 32; i++) vram_w(0);
     SYS_enableInts();
 }
