@@ -59,7 +59,7 @@ try:
                 res["stuck_pc"] = [hex(ipc), funcs[k][1] if k >= 0 else "?", hex(ipc - funcs[k][0]) if k >= 0 else ""]
                 res["stuck_regs"] = regs[:16 * 8]
                 break
-            if k >= 0 and funcs[k][1] == "draw_seg": fine[(ipc - funcs[k][0]) // 32 * 32] += 1
+            if k >= 0 and funcs[k][1] in ("draw_seg", "seg_columns", "render_node"): fine[ipc] += 1
             continue
         frames += 1; since = 0
         done = rd(g, "bench_done", 2)
@@ -93,7 +93,14 @@ try:
     res["shots"] = shots
     if cv: res.update(col_visits_avg=round(sum(a for a, b in cv) / len(cv), 1), anchors_avg=round(sum(b for a, b in cv) / len(cv), 1))
     tot = sum(hist.values())
-    res["draw_seg_offsets"] = [(hex(o), c) for o, c in fine.most_common(20)]
+    a2l = os.environ.get("ADDR2LINE")
+    lines = collections.Counter()
+    if a2l and fine:
+        addrs = list(fine)
+        out = subprocess.check_output([a2l, "-e", str(elf)] + [hex(a) for a in addrs], text=True).splitlines()
+        for a, l in zip(addrs, out): lines[l.split("/")[-1]] += fine[a]
+    tot2 = max(sum(hist.values()), 1)
+    res["hot_lines"] = [(l, round(100 * c / tot2, 1)) for l, c in lines.most_common(25)]
     res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in hist.most_common(25)]
 finally:
     g.close()
