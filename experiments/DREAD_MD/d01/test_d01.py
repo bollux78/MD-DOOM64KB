@@ -76,9 +76,9 @@ try:
         if done:
             res = {"bench_frames": rd(g, "bench_frames", 4), "bench_vints": rd(g, "bench_vints", 4)}
             res["fps"] = round(res["bench_frames"] * 60 / max(res["bench_vints"], 1), 2)
-            ts, tl, tt = (rd(g, n, 4) for n in ("tm_setup", "tm_loop", "tm_total"))
+            ts, tl, tt, ta, tf, tx = (rd(g, n, 4) for n in ("tm_setup", "tm_loop", "tm_total", "tm_anchor", "tm_fill", "tm_tex"))
             fr = max(frames, 1); ms = 1000 / 60 / 262
-            res["ms_per_frame"] = {"render_total": round(tt * ms / fr, 1), "seg_setup": round(ts * ms / fr, 1), "column_loops": round(tl * ms / fr, 1),
+            res["ms_per_frame"] = {"render_total": round(tt * ms / fr, 1), "seg_setup": round(ts * ms / fr, 1), "column_loops": round(tl * ms / fr, 1), "anchors": round(ta * ms / fr, 1), "fills": round(tf * ms / fr, 1), "tex": round(tx * ms / fr, 1),
                                    "frame": round(res["bench_vints"] * 1000 / 60 / max(res["bench_frames"], 1), 1)}
             break
         if frames > 1500: res["timeout"] = True; break

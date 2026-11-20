@@ -22,7 +22,7 @@
 MapSector map_sectors[256];
 RenderStats rstats;
 volatile uint16_t dbg_flags;
-uint32_t tm_setup, tm_loop, tm_total;   /* test only: scanline-resolution timers */
+uint32_t tm_setup, tm_loop, tm_total, tm_anchor, tm_fill, tm_tex;   /* test only: scanline-resolution timers */
 #if defined(__m68k__) || defined(__mc68000__)
 extern volatile uint16_t vints;
 static inline uint32_t now_lines(void) { for (;;) { const uint16_t a = vints; const uint8_t v = *(volatile uint8_t *)0xC00008; if (a == vints) return (uint32_t)a * 262 + v; } }
@@ -303,6 +303,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             cur = c;
         }
         if (need_tex && left <= 0) {
+            const uint32_t ta = now_lines();
             rstats.anchors++;
             int n = xe - 1 - c; if (n > ANCHOR) n = ANCHOR;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
@@ -321,6 +322,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 else { du8 = (((int32_t)uB - (int32_t)uA) << 8) / n; dzp = (((int32_t)zB - (int32_t)zA) << 7) / n; }
             } else { du8 = 0; dzp = 0; }
             left = n > 0 ? n : 1;
+            tm_anchor += now_lines() - ta;
         }
         rstats.col_visits++;
         do {
@@ -328,12 +330,15 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         uint8_t *col = FB_COL(rfb, c);
         const int yc = clampi(ceil16(Yc), top, bot);
         const int yf = clampi(ceil16(Yf), yc, bot);
+        const uint32_t tf = now_lines();
         if (!(dbg_flags & 2) && yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), ccol);
         if (!(dbg_flags & 2) && bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), fcol);
+        const uint32_t tt = now_lines(); tm_fill += tt - tf;
         const uint16_t u = (uint16_t)(ua8 >> 8);
         if (!bs) {
             if (has_mid && yf > yc) draw_part(col, yc, yf, &mid, u, zpa);
             close_col(c); closed++;
+            tm_tex += now_lines() - tt;
             break;
         }
         int ntop = yc, nbot = yf;
@@ -348,6 +353,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             nbot = ybf;
         }
         if (ntop >= nbot) { close_col(c); closed++; }
+        tm_tex += now_lines() - tt;
         else { ceilclip[c] = ntop; floorclip[c] = nbot; }
         } while (0);
         /* next column */
