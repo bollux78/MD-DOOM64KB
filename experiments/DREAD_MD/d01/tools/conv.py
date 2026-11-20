@@ -191,18 +191,30 @@ def main():
                 c = pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0)
                 samples.append(np.repeat(c[None, :], 1500, axis=0))
     X = np.concatenate(samples)
+    # weight each distinct colour by sqrt(count): big dark walls must not eat the palette
+    q = np.round(X / 8).astype(np.int64)
+    key = q[:, 0] * 4096 + q[:, 1] * 64 + q[:, 2]
+    uk, inv, cnt = np.unique(key, return_inverse=True, return_counts=True)
+    U = np.zeros((len(uk), 3))
+    np.add.at(U, inv, X)
+    U /= cnt[:, None]
+    w = np.sqrt(cnt)
+    # work in a perceptual-ish space (gamma): dark shades spread less
+    P = (U / 255.0) ** 0.6
     rng = np.random.default_rng(1)
-    if len(X) > 60000:
-        X = X[rng.choice(len(X), 60000, replace=False)]
     K = 15
-    C = X[rng.choice(len(X), K, replace=False)]
-    for _ in range(25):
-        d = ((X[:, None, :] - C[None]) ** 2).sum(-1)
-        a = d.argmin(1)
+    C = [P[np.argmax(w)]]
+    for _ in range(K - 1):          # k-means++ seeding
+        d = np.min(((P[:, None, :] - np.array(C)[None]) ** 2).sum(-1), axis=1) * w
+        C.append(P[rng.choice(len(P), p=d / d.sum())])
+    C = np.array(C)
+    for _ in range(40):
+        a = ((P[:, None, :] - C[None]) ** 2).sum(-1).argmin(1)
         for k in range(K):
-            m = X[a == k]
-            if len(m):
-                C[k] = m.mean(0)
+            m = a == k
+            if m.any():
+                C[k] = (P[m] * w[m, None]).sum(0) / w[m].sum()
+    C = (C ** (1 / 0.6)) * 255.0
     # MD 9-bit colour (levels 0..7 per channel, DAC ~ 0..252)
     mdlev = lambda v: int(max(0, min(7, round(v / 36.43))))
     md = [(0, 0, 0)] + [(mdlev(c[0]), mdlev(c[1]), mdlev(c[2])) for c in C]
