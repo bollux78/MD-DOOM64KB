@@ -10,9 +10,11 @@
 #include "render.h"
 
 #define NEAR4 16                   /* near plane, map units * 4 (= 4 units) */
-#define MAXV  2048
+#ifndef MAXV
+#define MAXV  1024
+#endif
 
-MapSector map_sectors[512];
+MapSector map_sectors[256];
 RenderStats rstats;
 
 static int32_t vtz[MAXV], vtx[MAXV];

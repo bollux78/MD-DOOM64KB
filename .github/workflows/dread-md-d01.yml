@@ -71,6 +71,8 @@ jobs:
         run: |
           set -euo pipefail
           elf="$STAGE/out/release/rom.out"; test -s "$elf" || elf="$STAGE/out/rom.out"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S --size-sort "$elf" | tail -12
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$elf" | grep -iE " _?(_bend|_end|__bss_end|_stack|__stack)$" || true
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
           NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/bench" || echo "::warning::bench failed"
           cp "$STAGE/conv.log" "$OUT/"
