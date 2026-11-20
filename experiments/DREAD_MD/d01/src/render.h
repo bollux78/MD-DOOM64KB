@@ -1,6 +1,13 @@
 #ifndef RENDER_H
 #define RENDER_H
+#ifdef SGDK_GCC
+#include <types.h>   /* SGDK provides the intN_t names */
+#ifndef int64_t
+#define int64_t long long
+#endif
+#else
 #include <stdint.h>
+#endif
 #include "mapdata.h"
 
 #define VIEW_W   128               /* logical columns, each 2 screen pixels wide (H32: 256 px) */

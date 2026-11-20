@@ -1,6 +1,10 @@
 #ifndef MAPDATA_H
 #define MAPDATA_H
+#ifdef SGDK_GCC
+#include <types.h>   /* SGDK provides the intN_t names */
+#else
 #include <stdint.h>
+#endif
 
 #define NUM_BUCKETS 4
 
