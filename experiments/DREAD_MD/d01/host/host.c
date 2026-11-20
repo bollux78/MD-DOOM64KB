@@ -27,9 +27,33 @@ static void shot(const char *pre, int i, int x, int y, int deg)
     printf("%s x=%d y=%d a=%d segs=%u nodes=%u subs=%u closed=%u\n", fn, x, y, deg,
            rstats.segs_drawn, rstats.nodes_visited, rstats.subs_visited, rstats.cols_closed);
 }
+extern int r_pvs_off;
+static uint8_t fb2[FB_BYTES];
+static void sweep(int n)
+{
+    srand(7); long bad = 0; int badviews = 0;
+    for (int i = 0; i < n; i++) {
+        const int s = rand() % map_counts[2];
+        const MapSub *ss = &map_subs[s];
+        double cx = 0, cy = 0;
+        for (int k = 0; k < ss->count; k++) { cx += map_verts[map_segs[ss->first + k].v1][0]; cy += map_verts[map_segs[ss->first + k].v1][1]; }
+        cx /= ss->count; cy /= ss->count;
+        const int k = rand() % ss->count; const int v = map_segs[ss->first + k].v1;
+        const double t = (rand() % 100) / 100.0;
+        View vw; vw.x = (int32_t)((cx + (map_verts[v][0] - cx) * t * 0.9) * 65536); vw.y = (int32_t)((cy + (map_verts[v][1] - cy) * t * 0.9) * 65536);
+        vw.angle = (uint16_t)rand();
+        vw.z = map_sectors[map_subs[R_PointInSub(vw.x >> 16, vw.y >> 16)].sector].floor + 41;
+        r_pvs_off = 1; R_RenderView(&vw, fb2);
+        r_pvs_off = 0; R_RenderView(&vw, fb);
+        long d = 0; for (int b = 0; b < FB_BYTES; b++) d += fb[b] != fb2[b];
+        if (d) { bad += d; badviews++; if (badviews <= 5) printf("diff %ld px at %d,%d a=%u\n", d, vw.x >> 16, vw.y >> 16, vw.angle); }
+    }
+    printf("sweep: %d views, %d with differences, %ld byte diffs\n", n, badviews, bad);
+}
 int main(int argc, char **argv)
 {
     R_Init();
+    if (argc > 2 && !strcmp(argv[2], "sweep")) { sweep(atoi(argv[3])); return 0; }
     if (argc <= 2) {
         for (int i = 0; i < 8; i++) shot(argv[1], i, map_start[0], map_start[1], map_start[2] + i * 45);
     } else {

@@ -28,6 +28,8 @@ jobs:
           rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
           cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
           python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
+          gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
+          "$stage/pvsgen" "$stage/src/pvs.c" | tee -a "$stage/conv.log"
           gdk=""
           for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
             if test -f "$d/makefile.gen"; then gdk="$d"; break; fi

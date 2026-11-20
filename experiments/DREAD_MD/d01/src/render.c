@@ -21,6 +21,16 @@
 
 MapSector map_sectors[256];
 RenderStats rstats;
+#ifdef PVS_GEN
+uint8_t pvs_seen[4096];                 /* generator: subsectors that drew something */
+static uint16_t cur_sub;
+#else
+extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets per subsector */
+extern const uint16_t pvs_nbytes, pvs_sbytes;
+static const uint8_t *pv_n, *pv_s;
+int r_pvs_off;   /* host checks only */
+static const uint8_t pv_all[1024] = {[0 ... 1023] = 0xFF};
+#endif
 volatile uint16_t dbg_flags;
 uint32_t tm_setup, tm_loop, tm_total, tm_anchor, tm_fill, tm_tex;   /* test only: scanline-resolution timers */
 #if defined(__m68k__) || defined(__mc68000__)
@@ -292,6 +302,9 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int c = find_open(xs);
     if (c >= xe) return;                    /* fully hidden behind closed columns */
     rstats.segs_drawn++;
+#ifdef PVS_GEN
+    pvs_seen[cur_sub] = 1;
+#endif
 
     const MapSector *fs = &map_sectors[s->front];
     const MapSector *bs = (s->back != 0xFF) ? &map_sectors[s->back] : 0;
@@ -394,26 +407,34 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     tm_loop += now_lines() - t_mid;
 }
 
+/* Doom's R_CheckBBox idea: only the two silhouette corners of the box matter */
+static const uint8_t checkcoord[12][4] = {
+    {3,0,2,1}, {3,0,2,0}, {3,1,2,0}, {0,0,0,0},
+    {2,0,2,1}, {0,0,0,0}, {3,1,3,0}, {0,0,0,0},
+    {2,0,3,1}, {2,1,3,1}, {2,1,3,0}, {0,0,0,0}
+};
 __attribute__((noinline)) static int bbox_visible(const int16_t *bb)
 {
     /* bb = top, bottom, left, right */
-    if (view_xi >= bb[2] && view_xi <= bb[3] && view_yi >= bb[1] && view_yi <= bb[0]) return 1;
-    int32_t minx = 0x7FFFFFFF, maxx = -0x7FFFFFFF;
-    int behind = 0;
-    for (int k = 0; k < 4; k++) {
-        int32_t x, z;
-        cam((k & 1) ? bb[3] : bb[2], (k & 2) ? bb[0] : bb[1], &x, &z);
-        if (z < NEAR4) { behind++; continue; }
-        if (z > 32767) z = 32767;
-        if (x > 32767) x = 32767;
-        if (x < -32767) x = -32767;
-        const int32_t sx = proj(x, z);
-        if (sx < minx) minx = sx;
-        if (sx > maxx) maxx = sx;
+    const int bx = view_xi <= bb[2] ? 0 : (view_xi < bb[3] ? 1 : 2);
+    const int by = view_yi >= bb[0] ? 0 : (view_yi > bb[1] ? 4 : 8);
+    const int pos = bx + by;
+    if (pos == 5) return 1;
+    const uint8_t *cc = checkcoord[pos];
+    int32_t x1, z1, x2, z2;
+    cam(bb[cc[0]], bb[cc[1]], &x1, &z1);
+    cam(bb[cc[2]], bb[cc[3]], &x2, &z2);
+    if (z1 < NEAR4 || z2 < NEAR4) {
+        if (z1 < 0 && z2 < 0) return 0;      /* both silhouette corners behind: the box (< 180 deg wide) is behind */
+        return 1;
     }
-    if (behind == 4) return 0;
-    if (behind) return 1;
-    int a = ceil16(minx), b = ceil16(maxx);
+    if (z1 > 32767) z1 = 32767;
+    if (z2 > 32767) z2 = 32767;
+    if (x1 > 32767) x1 = 32767; else if (x1 < -32767) x1 = -32767;
+    if (x2 > 32767) x2 = 32767; else if (x2 < -32767) x2 = -32767;
+    int32_t s1 = proj(x1, z1), s2 = proj(x2, z2);
+    if (s1 > s2) { const int32_t t = s1; s1 = s2; s2 = t; }
+    int a = ceil16(s1), b = ceil16(s2);
     if (a < 0) a = 0;
     if (b > VIEW_W) b = VIEW_W;
     return a < b && find_open(a) < b;
@@ -423,11 +444,19 @@ static void render_node(uint16_t n)
 {
     if (closed >= VIEW_W) return;
     if (n & 0x8000) {
+#ifdef PVS_GEN
+        cur_sub = n & 0x7FFF;
+#else
+        if (!(pv_s[(n & 0x7FFF) >> 3] & (1 << (n & 7)))) return;
+#endif
         const MapSub *ss = &map_subs[n & 0x7FFF];
         rstats.subs_visited++;
         for (uint16_t i = 0; i < ss->count; i++) draw_seg(&map_segs[ss->first + i]);
         return;
     }
+#ifndef PVS_GEN
+    if (!(pv_n[n >> 3] & (1 << (n & 7)))) return;   /* nothing in this subtree is visible from here */
+#endif
     const MapNode *nd = &map_nodes[n];
     rstats.nodes_visited++;
     const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
@@ -467,6 +496,14 @@ void R_RenderView(const View *v, uint8_t *fb)
     closed = 0;
     rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = rstats.col_visits = rstats.anchors = 0;
     const uint32_t t0 = now_lines();
+#ifndef PVS_GEN
+    {
+        const int sub = R_PointInSub(view_xi, view_yi);
+        pv_n = pvs_nodes + (uint32_t)sub * pvs_nbytes;
+        pv_s = pvs_subs + (uint32_t)sub * pvs_sbytes;
+        if (r_pvs_off) pv_n = pv_s = pv_all;
+    }
+#endif
     render_node(map_counts[3] - 1);
     tm_total += now_lines() - t0;
     rstats.cols_closed = closed;
