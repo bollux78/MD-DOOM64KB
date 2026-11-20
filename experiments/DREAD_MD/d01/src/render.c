@@ -21,7 +21,14 @@
 
 MapSector map_sectors[256];
 RenderStats rstats;
-volatile uint16_t dbg_flags;   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
+volatile uint16_t dbg_flags;
+uint32_t tm_setup, tm_loop, tm_total;   /* test only: scanline-resolution timers */
+#if defined(__m68k__) || defined(__mc68000__)
+extern volatile uint16_t vints;
+static inline uint32_t now_lines(void) { for (;;) { const uint16_t a = vints; const uint8_t v = *(volatile uint8_t *)0xC00008; if (a == vints) return (uint32_t)a * 262 + v; } }
+#else
+static inline uint32_t now_lines(void) { return 0; }
+#endif   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
 
 static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
 static uint16_t vstamp[MAXV];
@@ -189,6 +196,7 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp) { return mulhi15(
 
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
+    const uint32_t t_in = now_lines();
     xform(s->v1); xform(s->v2);
     int16_t x1 = vtx[s->v1], z1 = vtz[s->v1], x2 = vtx[s->v2], z2 = vtz[s->v2];
     if (z1 < NEAR4 && z2 < NEAR4) return;
@@ -281,6 +289,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int left = 0;
     const int32_t diz8 = diz << 3, duz8 = duz << 3;
 
+    const uint32_t t_mid = now_lines(); tm_setup += t_mid - t_in;
     int cur = xs;
     if (dbg_flags & 4) { for (int k = xs; k < xe; k++) if (ceilclip[k] < floorclip[k]) { close_col(k); closed++; } return; }
     while (c < xe) {
@@ -347,6 +356,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         cur = c + 1;
         c = find_open(c + 1);
     }
+    tm_loop += now_lines() - t_mid;
 }
 
 __attribute__((noinline)) static int bbox_visible(const int16_t *bb)
@@ -420,6 +430,8 @@ void R_RenderView(const View *v, uint8_t *fb)
     nxt[VIEW_W] = VIEW_W;
     closed = 0;
     rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = rstats.col_visits = rstats.anchors = 0;
+    const uint32_t t0 = now_lines();
     render_node(map_counts[3] - 1);
+    tm_total += now_lines() - t0;
     rstats.cols_closed = closed;
 }

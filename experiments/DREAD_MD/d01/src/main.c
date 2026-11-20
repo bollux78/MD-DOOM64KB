@@ -16,7 +16,7 @@
 #define DMA_CHUNK  4096
 
 static uint8_t fbuf[2][FB_BYTES];
-static volatile uint16_t vints;
+volatile uint16_t vints;
 static volatile const uint8_t *dma_src;   /* buffer being sent, 0 = idle */
 static volatile uint16_t dma_pos;
 static volatile uint8_t shown;            /* VRAM copy currently displayed */
