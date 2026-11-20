@@ -549,27 +549,26 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int32_t Yc, Yf, dYc, dYf;
     yrows(fc, iz, diz, &Yc, &dYc); yrows(ff, iz, diz, &Yf, &dYf);
 
-    Part mid = {0}, up = {0}, lo = {0};
     int has_mid = 0, has_up = 0, has_lo = 0;
     int32_t Ybc = 0, Ybf = 0, dYbc = 0, dYbf = 0;
     if (!bs) {
         if (s->mid != 0xFF) {
             has_mid = 1;
             const int16_t textop = (s->flags & 2) ? fs->floor + map_tex[s->mid].realh : fs->ceil;
-            setup_part(&mid, s->mid, bucket, textop, s->yoff);
+            setup_part(&job.mid, s->mid, bucket, textop, s->yoff);
         }
     } else {
         if (bs->ceil < fs->ceil && !(fs->sky && bs->sky) && s->upper != 0xFF) {
             has_up = 1;
             const int16_t textop = (s->flags & 1) ? fs->ceil : bs->ceil + map_tex[s->upper].realh;
-            setup_part(&up, s->upper, bucket, textop, s->yoff);
+            setup_part(&job.up, s->upper, bucket, textop, s->yoff);
             const int16_t bc = bs->ceil - view_z;
             yrows(bc, iz, diz, &Ybc, &dYbc);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
             const int16_t textop = (s->flags & 2) ? fs->ceil : bs->floor;
-            setup_part(&lo, s->lower, bucket, textop, s->yoff);
+            setup_part(&job.lo, s->lower, bucket, textop, s->yoff);
             const int16_t bf = bs->floor - view_z;
             yrows(bf, iz, diz, &Ybf, &dYbf);
         }
@@ -589,7 +588,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     if (has_up) seg_rows1(&a_ybc[xs], Ybc, dYbc, ncols);
     if (has_lo) seg_rows1(&a_ybf[xs], Ybf, dYbf, ncols);
     if (need_tex) {
-        SegA sa = { iz, uz, diz, duz, diz8, duz8, (int16_t)xs, (int16_t)xe, 0, 0, 0 };
+        static SegA sa;
+        sa.iz = iz; sa.uz = uz; sa.diz = diz; sa.duz = duz; sa.diz8 = diz8; sa.duz8 = duz8; sa.xs = (int16_t)xs; sa.xe = (int16_t)xe;
         seg_anchors(&sa);
     }
 
@@ -598,7 +598,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
     job.cpal = fs->ceilpal; job.ccol2 = COLB == 2 ? (uint16_t)(fs->ceilcol << 8 | fs->ceilcol) : fs->ceilcol; job.fpal = fs->floorpal; job.fcol2 = COLB == 2 ? (uint16_t)(fs->floorcol << 8 | fs->floorcol) : fs->floorcol;
     job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
-    job.mid = mid; job.up = up; job.lo = lo;
     job.closed = 0;
     seg_columns(&job);
     closed += job.closed;
