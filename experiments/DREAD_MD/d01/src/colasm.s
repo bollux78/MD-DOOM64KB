@@ -8,6 +8,7 @@
         .text
         .globl  col_fill
         .globl  col_tex
+        .globl  col_tex_nm
 
 col_fill:
         move.l  4(%sp),%a0
@@ -59,4 +60,33 @@ col_tex:
         .endr
 tex_end:
         movem.l (%sp)+,%d2-%d6/%a2
+        rts
+
+/* void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t vbot, int32_t negstep)
+   same as col_tex without the wrap mask (caller guarantees 0 <= v < 2H): 26 cycles / pixel, 10 bytes */
+col_tex_nm:
+        movem.l %d2-%d4/%a2,-(%sp)
+        move.l  20(%sp),%a0         /* p */
+        move.l  24(%sp),%d0         /* n */
+        move.l  28(%sp),%a1         /* texture column (stored twice) */
+        move.l  32(%sp),%d2         /* v 16.16 */
+        move.l  36(%sp),%d4         /* step 16.16 (negative) */
+        subq.l  #4,%a0
+        move.l  %d2,%d1
+        swap    %d1                 /* d1.w = integer v, d2.w = fraction */
+        move.l  %d4,%d3
+        swap    %d3                 /* d3.w = integer step, d4.w = fraction */
+        mulu.w  #10,%d0             /* 10 bytes of code per pixel */
+        lea     texnm_end(%pc),%a2
+        suba.w  %d0,%a2
+        jmp     (%a2)
+        .set    k,128
+        .rept   128
+        move.b  0(%a1,%d1.w),k*4(%a0)
+        add.w   %d4,%d2
+        addx.w  %d3,%d1
+        .set    k,k-1
+        .endr
+texnm_end:
+        movem.l (%sp)+,%d2-%d4/%a2
         rts

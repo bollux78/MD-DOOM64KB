@@ -270,9 +270,11 @@ def main():
             col = bytearray()
             for u in range(W2):
                 sx = (u % hw) * 2
+                one = bytearray()
                 for v in range(H2):
                     pa, pb = lut[b, img[v % h, sx]]
-                    col.append((pa << 4 | pb) if (v & 1) == 0 else (pb << 4 | pa))
+                    one.append((pa << 4 | pb) if (v & 1) == 0 else (pb << 4 | pa))
+                col += one + one          # stored twice: the renderer skips the wrap mask
             offs.append(len(blob))
             blob += col
         # fill missing buckets with the nearest used one

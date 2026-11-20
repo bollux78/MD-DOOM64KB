@@ -65,6 +65,7 @@ static inline uint32_t mulu16(uint16_t a, uint16_t b)
 { uint32_t r = a; __asm__("mulu.w %1,%0" : "+d"(r) : "dm"(b) : "cc"); return r; }
 extern void col_fill(uint8_t *p, uint16_t n, uint16_t c);
 extern void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t vbot, int32_t negstep, uint16_t hmask);
+extern void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t vbot, int32_t negstep);
 #else
 static inline uint16_t divu16(uint32_t n, uint16_t d) { return (uint16_t)(n / d); }
 static inline int16_t divs16(int32_t n, int16_t d) { return (int16_t)(n / d); }
@@ -75,6 +76,8 @@ static void col_fill(uint8_t *p, uint16_t n, uint16_t c)
 /* draws bottom-up like the 68000 version: vbot = v of the last row, negstep = -vstep */
 static void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep, uint16_t hmask)
 { p += (n - 1) * 4; for (; n; n--) { *p = tc[(uint16_t)(v >> 16) & hmask]; p -= 4; v += negstep; } }
+static void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep)
+{ p += (n - 1) * 4; for (; n; n--) { *p = tc[(uint16_t)(v >> 16)]; p -= 4; v += negstep; } }
 #endif
 
 /* signed 32 x small signed 16 (|k| <= 255) */
@@ -186,9 +189,16 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
 static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp)
 {
     if (dbg_flags & 1) return;
-    const uint8_t *tc = p->tex + ((u & p->wmask) << p->hshift);
-    const int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
-    col_tex(col + (y0 << 2), (uint16_t)(y1 - y0), tc, vbot, -zpp, p->hmask);
+    /* texture columns are stored twice (2H texels): no wrap mask needed while the span fits in H */
+    const uint8_t *tc = p->tex + ((u & p->wmask) << (p->hshift + 1));
+    const uint16_t n = (uint16_t)(y1 - y0);
+    int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
+    const int32_t span = mul32k(zpp, (int16_t)(n - 1));
+    if (span < ((int32_t)p->hmask << 16)) {
+        vbot = (vbot & (((int32_t)p->hmask << 16) | 0xFFFF)) + ((int32_t)(p->hmask + 1) << 16);
+        col_tex_nm(col + (y0 << 2), n, tc, vbot, -zpp);
+    } else
+        col_tex(col + (y0 << 2), n, tc, vbot, -zpp, p->hmask);
 }
 
 /* per-column delta of a value over the span: (b - a) * 256 / span8, with rcp = 2^23 / span8 */
@@ -303,7 +313,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             cur = c;
         }
         if (need_tex && left <= 0) {
-            const uint32_t ta = now_lines();
             rstats.anchors++;
             int n = xe - 1 - c; if (n > ANCHOR) n = ANCHOR;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
@@ -322,7 +331,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 else { du8 = (((int32_t)uB - (int32_t)uA) << 8) / n; dzp = (((int32_t)zB - (int32_t)zA) << 7) / n; }
             } else { du8 = 0; dzp = 0; }
             left = n > 0 ? n : 1;
-            tm_anchor += now_lines() - ta;
         }
         rstats.col_visits++;
         do {
@@ -330,16 +338,13 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         uint8_t *col = FB_COL(rfb, c);
         const int yc = clampi(ceil16(Yc), top, bot);
         const int yf = clampi(ceil16(Yf), yc, bot);
-        const uint32_t tf = now_lines();
         if (!(dbg_flags & 2) && yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), ccol);
         if (!(dbg_flags & 2) && bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), fcol);
-        const uint32_t tt = now_lines(); tm_fill += tt - tf;
         const uint16_t u = (uint16_t)(ua8 >> 8);
         if (!bs) {
             if (has_mid && yf > yc) draw_part(col, yc, yf, &mid, u, zpa);
             close_col(c); closed++;
-            tm_tex += now_lines() - tt;
-            break;
+                break;
         }
         int ntop = yc, nbot = yf;
         if (has_up) {
@@ -354,7 +359,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         }
         if (ntop >= nbot) { close_col(c); closed++; }
         else { ceilclip[c] = ntop; floorclip[c] = nbot; }
-        tm_tex += now_lines() - tt;
         } while (0);
         /* next column */
         iz += diz; uz += duz; Yc += dYc; Yf += dYf; Ybc += dYbc; Ybf += dYbf;
