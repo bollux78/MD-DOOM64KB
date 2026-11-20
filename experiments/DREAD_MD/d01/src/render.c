@@ -221,6 +221,18 @@ static int32_t yrow(int16_t dh, int32_t iz)
     return r;
 }
 
+/* per-column change of yrow(dh, iz) for an iz step of diz: -(a * diz) >> 4, a = dh*VFOCAL/4 */
+static inline int32_t ydelta(int16_t dh, int32_t diz)
+{
+    int32_t a = muls16(dh, (int16_t)VFOCAL) >> 2;
+    if (a > 32767) a = 32767;
+    if (a < -32767) a = -32767;
+    const uint16_t ak = (uint16_t)(a < 0 ? -a : a);
+    const uint32_t lo = mulu16((uint16_t)diz, ak);
+    const int32_t r = (muls16((int16_t)(diz >> 16), (int16_t)ak) << 12) + (int32_t)(lo >> 4);
+    return a < 0 ? r : -r;
+}
+
 /* z4 = 2^24 / iz and u = uz / iz with 16-bit divides */
 static inline uint16_t z4_of(int32_t iz)
 {
@@ -433,9 +445,9 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int32_t uz = advance(uz1, duz, f8);
 
     const int16_t fc = fs->ceil - view_z, ff = fs->floor - view_z;
-    const int32_t Yc1 = yrow(fc, iz1), Yc2 = yrow(fc, iz2), Yf1 = yrow(ff, iz1), Yf2 = yrow(ff, iz2);
-    const int32_t dYc = lstep(Yc1, Yc2, rcp), dYf = lstep(Yf1, Yf2, rcp);
-    int32_t Yc = advance(Yc1, dYc, f8), Yf = advance(Yf1, dYf, f8);
+    /* rows are linear in iz: Y(iz) = HORIZON - a*iz/16, so start = yrow(h, iz at xs), step = -a*diz/16 */
+    const int32_t dYc = ydelta(fc, diz), dYf = ydelta(ff, diz);
+    int32_t Yc = yrow(fc, iz), Yf = yrow(ff, iz);
 
     Part mid = {0}, up = {0}, lo = {0};
     int has_mid = 0, has_up = 0, has_lo = 0;
@@ -452,16 +464,14 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             const int16_t textop = (s->flags & 1) ? fs->ceil : bs->ceil + map_tex[s->upper].realh;
             setup_part(&up, s->upper, bucket, textop, s->yoff);
             const int16_t bc = bs->ceil - view_z;
-            const int32_t a = yrow(bc, iz1), b = yrow(bc, iz2);
-            dYbc = lstep(a, b, rcp); Ybc = advance(a, dYbc, f8);
+            dYbc = ydelta(bc, diz); Ybc = yrow(bc, iz);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
             const int16_t textop = (s->flags & 2) ? fs->ceil : bs->floor;
             setup_part(&lo, s->lower, bucket, textop, s->yoff);
             const int16_t bf = bs->floor - view_z;
-            const int32_t a = yrow(bf, iz1), b = yrow(bf, iz2);
-            dYbf = lstep(a, b, rcp); Ybf = advance(a, dYbf, f8);
+            dYbf = ydelta(bf, diz); Ybf = yrow(bf, iz);
         }
     }
     const int need_tex = has_mid | has_up | has_lo;
