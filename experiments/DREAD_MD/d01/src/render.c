@@ -668,6 +668,11 @@ static void draw_sprite(const VisSpr *v)
     const uint8_t *wc = winpool + v->win, *wf = wc + n;
     int32_t u = v->u0;
     const int16_t ht = v->htop - view_z;
+    /* rows are linear in the texel: Y(t) = Ytop + t * K (16.16) */
+    const int32_t Ytop = yrow_iz(ht, v->iz);
+    int32_t b = v->iz >> 5; if (b > 32767) b = 32767;
+    const uint32_t K = (uint32_t)muls16((int16_t)VFOCAL, (int16_t)b) >> 1;
+    const uint16_t Klo = (uint16_t)K, Khi = (uint16_t)(K >> 16);
     for (int k = 0; k < n; k++, u += v->du) {
         const int j = (u >> 16) >> 1;
         if (j < 0 || j >= v->w2) continue;
@@ -678,19 +683,20 @@ static void draw_sprite(const VisSpr *v)
         while (p[0] != 0xFF) {
             const int t = p[0], len = p[1];
             const uint8_t *d = p + 2;
-            const int32_t ya = yrow_iz((int16_t)(ht - t), v->iz), yb = yrow_iz((int16_t)(ht - t - len), v->iz);
+            const int32_t ya = Ytop + (int32_t)(mulu16(Klo, (uint16_t)t) + (mulu16(Khi, (uint16_t)t) << 16));
+            const int32_t yb = ya + (int32_t)(mulu16(Klo, (uint16_t)len) + (mulu16(Khi, (uint16_t)len) << 16));
             int y0 = ceil16(ya), y1 = ceil16(yb);
             if (y0 < top) y0 = top;
             if (y1 > bot) y1 = bot;
 #if defined(__m68k__) || defined(__mc68000__)
             if (y0 < y1 && COLB == 1 && v->zpp < (32 << 16)) {   /* byte modes: the wall scalers, one move per row */
-                const int32_t tv = ((((int32_t)y0 << 16) - ya) >> 8) * (v->zpp >> 8);
+                const int32_t tv = (int32_t)mulu16((uint16_t)((((int32_t)y0 << 16) - ya) >> 8), (uint16_t)(v->zpp >> 8));
                 int i0 = tv >> 16; if (i0 >= len) i0 = len - 1;
                 spr_scale(col + (y0 << 2) - 4, d + i0, (int16_t)(y1 - y0), (uint16_t)(v->zpp >> 6));
             } else
 #endif
             if (y0 < y1) {
-                int32_t tv = ((((int32_t)y0 << 16) - ya) >> 8) * (v->zpp >> 8);
+                int32_t tv = (int32_t)mulu16((uint16_t)((((int32_t)y0 << 16) - ya) >> 8), (uint16_t)(v->zpp >> 8));
                 uint8_t *q = col + (y0 << 2);
                 for (int y = y0; y < y1; y++, q += 4, tv += v->zpp) {
                     int idx = tv >> 16; if (idx >= len) idx = len - 1;
