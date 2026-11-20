@@ -238,6 +238,8 @@ static inline uint16_t u_of(uint32_t uz, int32_t iz)
 /* texels per row (16.16) at depth z4: (z4/4) * 65536 / VFOCAL */
 #define ZPP_K r_zppk
 static inline int32_t zpp_of(uint16_t z4) { return (int32_t)(mulu16(z4, ZPP_K) >> 8); }
+/* the same * 1024 / 65536 (texels per row * 1024), saturated at 32767, kept * 256 for interpolation */
+static inline int32_t zq8_of(uint16_t z4) { const uint32_t q = mulu16(z4, ZPP_K) >> 14; return (int32_t)(q > 32767 ? 32767 : q) << 8; }
 static inline int ceil16(int32_t y) { return (y + 0xFFFF) >> 16; }
 static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -252,7 +254,7 @@ typedef struct {
     uint8_t *fb;                                  /* 0 */
     int16_t *yc, *yf, *ybc, *ybf;                 /* 4 8 12 16  ceil(row) per column */
     uint16_t *u;                                  /* 20 */
-    int32_t *zpp;                                 /* 24 */
+    uint16_t *zpp;                                /* 24: texels per row * 1024 (32767 = 32 or more) */
     int16_t c0, xe;                               /* 28 30 */
     uint16_t ccol, fcol;                          /* 32 34 */
     uint16_t flags;                               /* 36: 1 solid, 2 mid, 4 upper, 8 lower */
@@ -263,7 +265,7 @@ typedef struct {
 } ColJob;
 static int16_t a_yc[VW_MAX], a_yf[VW_MAX], a_ybc[VW_MAX], a_ybf[VW_MAX];
 static uint16_t a_u[VW_MAX];
-static int32_t a_zpp[VW_MAX];
+static uint16_t a_zpp[VW_MAX];
 static ColJob job;
 /* per 8x8 tile: the palette of the first (= nearest, front-to-back) span drawn in it; later spans of
  * another colour family are drawn through pal_remap so no pixel ever shows in the wrong palette */
@@ -301,18 +303,18 @@ static void seg_columns(ColJob *j)
         if (yc > top) span_fill(c, top, yc - top, (uint8_t)j->cpal, (uint8_t)j->ccol);
         if (bot > yf) span_fill(c, yf, bot - yf, (uint8_t)j->fpal, (uint8_t)j->fcol);
         if (j->flags & 1) {
-            if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, j->u[c], j->zpp[c]);
+            if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, j->u[c], ((int32_t)j->zpp[c] << 6));
             close_col(c); j->closed++;
         } else {
             int ntop = yc, nbot = yf;
             if (j->flags & 4) {
                 int y = j->ybc[c]; if (y < yc) y = yc; if (y > yf) y = yf;
-                if (y > yc) draw_part(col, yc, y, &j->up, j->u[c], j->zpp[c]);
+                if (y > yc) draw_part(col, yc, y, &j->up, j->u[c], ((int32_t)j->zpp[c] << 6));
                 ntop = y;
             }
             if (j->flags & 8) {
                 int y = j->ybf[c]; if (y < ntop) y = ntop; if (y > yf) y = yf;
-                if (yf > y) draw_part(col, y, yf, &j->lo, j->u[c], j->zpp[c]);
+                if (yf > y) draw_part(col, y, yf, &j->lo, j->u[c], ((int32_t)j->zpp[c] << 6));
                 nbot = y;
             }
             if (ntop >= nbot) { close_col(c); j->closed++; }
@@ -490,7 +492,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             rstats.anchors++;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
             const uint16_t uA = u_of((uint32_t)uzA << 8, izA), zA = z4_of(izA);
-            int32_t ua8 = (int32_t)uA << 8, zp = zpp_of(zA), du8 = 0, dzp = 0;
+            int32_t ua8 = (int32_t)uA << 8, zp = zq8_of(zA), du8 = 0, dzp = 0;
             if (n > 0) {
                 int32_t izB, uzB;
                 if (n == ANCHOR) { izB = iz + diz8; uzB = uz + duz8; }
@@ -498,15 +500,15 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 if (izB < 1) izB = 1;
                 if (uzB < 0) uzB = 0;
                 const uint16_t uB = u_of((uint32_t)uzB << 8, izB), zB = z4_of(izB);
-                if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = (zpp_of(zB) - zp) >> 3; }
+                if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = (zq8_of(zB) - zp) >> 3; }
                 else {
                     const int32_t du = (int32_t)uB - (int32_t)uA, dz = (int32_t)zB - (int32_t)zA;
                     du8 = (du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n;
-                    (void)dz; dzp = (zpp_of(zB) - zp) / n;
+                    (void)dz; dzp = (zq8_of(zB) - zp) / n;
                 }
             }
             const int m = n > 0 ? n : 1;
-            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)(ua8 >> 8); a_zpp[k] = zp; ua8 += du8; zp += dzp; }
+            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)(ua8 >> 8); a_zpp[k] = (uint16_t)(zp >> 8); ua8 += du8; zp += dzp; }
             if (n == ANCHOR) { iz += diz8; uz += duz8; } else { iz += mul32k(diz, (int16_t)m); uz += mul32k(duz, (int16_t)m); }
         }
     }
