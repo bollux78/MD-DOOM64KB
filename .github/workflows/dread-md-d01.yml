@@ -26,7 +26,7 @@ jobs:
           D=experiments/DREAD_MD/d01
           stage="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
           rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
-          cp $D/src/*.c $D/src/*.h "$stage/src/"
+          cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
           python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
           gdk=""
           for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
