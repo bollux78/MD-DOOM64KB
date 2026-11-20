@@ -24,12 +24,17 @@ se o push só mexer no yml: `gh workflow run dread-md-d01.yml --ref exp-dread-md
   (limite 4 MB sem mapper — atenção ao adicionar sprites!).
 - HUD do Doom (plane B, PAL3), rosto (PAL2), pistola por sprites de hardware (PAL1), abertura
   "REPROGRAMMED BY BOLLUX78 2026". Portas abrem com B. Colisão em `blocked()`.
-- Bench (BlastEm, rota fixa, dt fixo = 4): linhas H40 6,0 fps antes dos escaladores. O run atual mede
-  o ganho dos escaladores. Meta: passar o DreadMD do happy ferret (~7 fps).
+- Bench (BlastEm, rota fixa, dt fixo = 4), H40 linhas: **5,78 fps** (run 44805439030). O número
+  anterior de 6,0 estava inflado: a HInt de duplicar linhas se desligava sozinha no 1º quadro (HInt
+  pendente ao religar no VBlank); corrigido, ela custa ~10% da CPU (≈80 disparos/quadro).
+  Perfil: draw_seg 33%, seg_columns 15%, tex_part (setup por coluna) 13%, escaladores 7%,
+  bbox_visible 5%, span_fill 5%, xform 4,5%, render_node 4,4%, proj 4%, blocked 2,5%.
+  Meta: passar o DreadMD do happy ferret (~7 fps). O bench de colunas falha no harness (RSP EOF) —
+  investigar `test_d01.py` com COLB=2 também é uma frente útil.
 
 ## O que o Claude está fazendo agora (NÃO mexer para evitar conflito)
 
-- `src/colasm.s` (seg_columns, tex_part, escaladores, fills) e `tools/gen_scalers.py`.
+- `src/colasm.s` (seg_columns, tex_part, escaladores, fills, futura HInt em asm) e `tools/gen_scalers.py`.
 - `draw_seg()` em `src/render.c`: fase A (arrays por coluna: yc/yf/ybc/ybf, âncoras de u/zpp) e o
   setup por seg → asm. Hoje draw_seg ≈ 25% do quadro.
 - Menu/modos (`set_mode`, `menu` em `main.c`).
