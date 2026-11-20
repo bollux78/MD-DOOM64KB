@@ -497,7 +497,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
                 uA = u_of((uint32_t)uzA << 8, izA); zp = zq8_of(z4_of(izA));
             }
-            int32_t ua8 = (int32_t)uA << 8, du8 = 0, dzp = 0;
+            int32_t ua8 = (int32_t)uA << 16, du8 = 0, dzp = 0;   /* 16.16 both: the stores take the high word */
+            zp <<= 8;
             haveB = 0;
             if (n > 0) {
                 int32_t izB, uzB;
@@ -507,14 +508,14 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 if (uzB < 0) uzB = 0;
                 uB = u_of((uint32_t)uzB << 8, izB); zqB = zq8_of(z4_of(izB));
                 const int32_t du = (int32_t)uB - (int32_t)uA;
-                if (n == ANCHOR) { du8 = du << 5; dzp = (zqB - zp) >> 3; haveB = 1; }
+                if (n == ANCHOR) { du8 = du << 13; dzp = ((zqB << 8) - zp) >> 3; haveB = 1; }
                 else {
-                    du8 = (du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n;
-                    dzp = (zqB - zp) / n;
+                    du8 = ((du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n) << 8;
+                    dzp = (((zqB << 8) - zp) >> 8) / n << 8;
                 }
             }
             const int m = n > 0 ? n : 1;
-            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)(ua8 >> 8); a_zpp[k] = (uint16_t)(zp >> 8); ua8 += du8; zp += dzp; }
+            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)((uint32_t)ua8 >> 16); a_zpp[k] = (uint16_t)((uint32_t)zp >> 16); ua8 += du8; zp += dzp; }
             if (n == ANCHOR) { iz += diz8; uz += duz8; } else { iz += mul32k(diz, (int16_t)m); uz += mul32k(duz, (int16_t)m); }
         }
     }
