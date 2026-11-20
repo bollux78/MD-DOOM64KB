@@ -75,7 +75,7 @@ jobs:
           "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$elf" | grep -iE " _?(_bend|_end|__bss_end|_stack|__stack)$" || true
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
           NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/bench" || echo "::warning::bench failed"
-          for d in 1 2 3 4; do DBG=$d PROF_SAMPLES=0 NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/dbg$d" 2>&1 | grep "D01 RESULT" | sed "s/^/DBG=$d /" | cut -c1-140 || true; done
+          for d in 1 2 3 4; do DBG=$d PROF_SAMPLES=0 NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/dbg$d" 2>&1 | tail -4 | sed "s/^/DBG=$d /" | cut -c1-220 || true; done
           "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" -d "$elf" > "$OUT/rom.dis" || true; cp "$STAGE/conv.log" "$OUT/"; gzip -c "$STAGE/src/mapdata.c" > "$OUT/mapdata.c.gz"
       - uses: actions/upload-artifact@v4
         with:
