@@ -36,10 +36,25 @@ try:
     assert g.req(f"Z0,{sym['R_RenderView']:x},2") == "OK"
     pal = struct.unpack(">16H", readbig(g, sym["md_palette"], 32))
     rgb = [((c >> 1 & 7) * 36, (c >> 5 & 7) * 36, (c >> 9 & 7) * 36) for c in pal]
+    import bisect, collections
+    vec = int.from_bytes(rom.read_bytes()[0x78:0x7C], "big") & 0xffffff
+    assert g.req(f"Z0,{vec:x},2") == "OK"
+    funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
+    keys = [f[0] for f in funcs]
+    hist = collections.Counter()
     frames = 0; stats = []
     want = {1, 20, 45, 70, 95, 120, 150}
     while True:
-        g.cont(); frames += 1
+        g.cont()
+        regs = g.req("g")
+        pc = int(regs[17 * 8:18 * 8], 16) & 0xffffff
+        if pc == vec:   # VBlank: the stacked PC is a 60 Hz profile sample
+            sp = int(regs[15 * 8:16 * 8], 16) & 0xffffff
+            ipc = int.from_bytes(g.readmem(sp + 2, 4), "big") & 0xffffff
+            k = bisect.bisect_right(keys, ipc) - 1
+            hist[funcs[k][1] if k >= 0 else hex(ipc)] += 1
+            continue
+        frames += 1
         done = rd(g, "bench_done", 2)
         segs, nodes = rd(g, "frame_segs", 2), rd(g, "frame_nodes", 2)
         if frames > 1: stats.append((segs, nodes))
@@ -65,21 +80,6 @@ try:
         s = [a for a, b in stats]; n = [b for a, b in stats]
         res.update(segs_avg=round(sum(s) / len(s), 1), segs_max=max(s), nodes_avg=round(sum(n) / len(n), 1), nodes_max=max(n))
     res["shots"] = shots
-    # profile: the VBlank vector interrupts the CPU at 60 Hz; the stacked PC is a sample
-    import bisect, collections
-    assert g.req(f"z0,{sym['R_RenderView']:x},2") == "OK"
-    vec = int.from_bytes(rom.read_bytes()[0x78:0x7C], "big") & 0xffffff
-    assert g.req(f"Z0,{vec:x},2") == "OK"
-    funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
-    keys = [f[0] for f in funcs]
-    hist = collections.Counter()
-    for i in range(int(os.environ.get("PROF_SAMPLES", "900"))):
-        g.cont()
-        regs = g.req("g")
-        sp = int(regs[15 * 8:16 * 8], 16) & 0xffffff
-        pc = int.from_bytes(g.readmem(sp + 2, 4), "big") & 0xffffff
-        k = bisect.bisect_right(keys, pc) - 1
-        hist[funcs[k][1] if k >= 0 else hex(pc)] += 1
     tot = sum(hist.values())
     res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in hist.most_common(25)]
 finally:
