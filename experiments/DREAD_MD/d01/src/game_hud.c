@@ -49,7 +49,7 @@ void HUD_Opening(void)
             vram_addr((plane ? BGA : BGB) + y * 128);
             for (uint16_t x = 0; x < 64; x++) {
                 uint16_t v = 0;
-                if (x < 40 && y < 28) { const uint16_t w = m[y * 40 + x]; v = (uint16_t)((w & 0xE000) | (TILE_TITLE + (w & 0x7FF))); }
+                if (x < 40 && y < 28 && (plane == 0 || m[y * 40 + x])) { const uint16_t w = m[y * 40 + x]; v = (uint16_t)((w & 0xE000) | (TILE_TITLE + (w & 0x7FF))); }
                 vram_w(v);
             }
         }
