@@ -389,6 +389,13 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp)
 
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
+    {   /* map-space back-face test before any transform: cross(v1 - p, v2 - p) > 0 is the back side
+           (the fractional camera position moves it by at most |v2 - v1|, hence the margin) */
+        const int16_t ax = map_verts[s->v1][0] - view_xi, ay = map_verts[s->v1][1] - view_yi;
+        const int16_t bx = map_verts[s->v2][0] - view_xi, by = map_verts[s->v2][1] - view_yi;
+        const int16_t ex = bx - ax, ey = by - ay;
+        if (muls16(ax, by) - muls16(bx, ay) > (int32_t)(ex < 0 ? -ex : ex) + (ey < 0 ? -ey : ey) + 2) return;
+    }
     xform(s->v1); xform(s->v2);
     int16_t x1 = vtx[s->v1], z1 = vtz[s->v1], x2 = vtx[s->v2], z2 = vtz[s->v2];
     if (z1 < NEAR4 && z2 < NEAR4) return;
