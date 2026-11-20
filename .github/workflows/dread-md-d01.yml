@@ -39,8 +39,8 @@ jobs:
           echo "OUT=$out" >> "$GITHUB_ENV"
           base="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
           echo "STAGE=$base" >> "$GITHUB_ENV"
-          build() {   # build START_MODE NAME FILE [CROP]
-            local mode=$1 name=$2 file=$3 crop=${4:-0} stage="$base-$1-${4:-0}"
+          build() {   # build START_MODE NAME FILE [CROP] [MUSIC]
+            local mode=$1 name=$2 file=$3 crop=${4:-0} mus=${5:-1} stage="$base-$1-${4:-0}-${5:-1}"
             rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
             cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
             DREAD_NPAL=1 python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" > "$stage/conv.log"
@@ -52,6 +52,7 @@ jobs:
             python3 $D/tools/gen_title.py "$stage/src/title.c" >> "$stage/conv.log"
             python3 $D/tools/gen_scalers.py "$stage/src/scalers.s" >> "$stage/conv.log"
             python3 $D/tools/gen_tables.py "$stage/src/tables.c" >> "$stage/conv.log"
+            python3 $D/tools/gen_music.py "$stage/res" >> "$stage/conv.log"
             hdr="$(find "$gdk" -path '*boot/rom_header.c' | head -1)"
             local dst="$stage/src/rom_header.c"; cp "$hdr" "$dst"
             python3 - "$dst" "$name" <<'PY'
@@ -68,28 +69,29 @@ jobs:
           s=s.replace("-flto -flto=auto -ffat-lto-objects","-fno-lto")
           pathlib.Path(sys.argv[2]).write_text(s)
           PY
-            make -C "$stage" -f "$stage/makefile.gen" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DSTART_MODE=$mode -DSTART_CROP=$crop" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$stage/build.log" 2>&1 || { tail -30 "$stage/build.log"; return 1; }
+            make -C "$stage" -f "$stage/makefile.gen" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DSTART_MODE=$mode -DSTART_CROP=$crop -DSTART_MUSIC=$mus" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$stage/build.log" 2>&1 || { tail -30 "$stage/build.log"; return 1; }
             cp "$stage/out/rom.bin" "$out/$file"
             cat "$stage/conv.log" | grep -E "^map|^pvs|^weapon|^title|^things" || true
           }
-          build 0 "DREAD-MD D01 OBJETOS" dread-md-d01-objetos.bin
+          build 0 "DREAD-MD D01 SOM" dread-md-d01-som.bin
           # host renderer: close views of things (sprite conversion check), PNG
-          gcc -O2 -I$D/src -I"$base-0-0/src" -o "$base-0-0/host" $D/host/host.c $D/src/render.c "$base-0-0/src/mapdata.c" "$base-0-0/src/pvs.c"
-          mkdir -p "$out/things" && (cd "$out/things" && "$base-0-0/host" t things 24 > /dev/null; "$base-0-0/host" m things 12 m > /dev/null) && python3 -c "import glob,PIL.Image as I; [I.open(f).save(f[:-4]+'.png') for f in glob.glob('$out/things/*.ppm')]" && rm -f "$out"/things/*.ppm || echo "::warning::things views failed"
-          build 1 "DREAD-MD D01 OBJETOS (BENCH COLUNAS)" bench-colunas.bin
-          build 0 "DREAD-MD D01 OBJETOS (BENCH RECORTE 2)" bench-recorte2.bin 2
-          build 0 "DREAD-MD D01 OBJETOS (BENCH RECORTE 4)" bench-recorte4.bin 4
+          gcc -O2 -I$D/src -I"$base-0-0-1/src" -o "$base-0-0-1/host" $D/host/host.c $D/src/render.c "$base-0-0-1/src/mapdata.c" "$base-0-0-1/src/pvs.c"
+          mkdir -p "$out/things" && (cd "$out/things" && "$base-0-0-1/host" t things 24 > /dev/null; "$base-0-0-1/host" m things 12 m > /dev/null) && python3 -c "import glob,PIL.Image as I; [I.open(f).save(f[:-4]+'.png') for f in glob.glob('$out/things/*.ppm')]" && rm -f "$out"/things/*.ppm || echo "::warning::things views failed"
+          build 1 "DREAD-MD D01 SOM (BENCH COLUNAS)" bench-colunas.bin
+          build 0 "DREAD-MD D01 SOM (BENCH RECORTE 2)" bench-recorte2.bin 2
+          build 0 "DREAD-MD D01 SOM (BENCH RECORTE 4)" bench-recorte4.bin 4
+          build 0 "DREAD-MD D01 SOM (BENCH SEM MUSICA)" bench-semmusica.bin 0 0
           ls -l "$out"
-          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-objetos.bin\"))]; z.close()" "$out"
+          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-som.bin\"))]; z.close()" "$out"
       - name: BlastEm bench route (both)
         shell: bash
         run: |
           set -euo pipefail
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
-          for v in 0-0 1-0 0-2 0-4; do
-            case $v in 0-0) f=linhas; rom=dread-md-d01-objetos.bin;; 1-0) f=colunas; rom=bench-colunas.bin;; 0-2) f=recorte2; rom=bench-recorte2.bin;; 0-4) f=recorte4; rom=bench-recorte4.bin;; esac
+          for v in 0-0-1 1-0-1 0-2-1 0-4-1 0-0-0; do
+            case $v in 0-0-1) f=linhas; rom=dread-md-d01-som.bin;; 1-0-1) f=colunas; rom=bench-colunas.bin;; 0-2-1) f=recorte2; rom=bench-recorte2.bin;; 0-4-1) f=recorte4; rom=bench-recorte4.bin;; 0-0-0) f=semmusica; rom=bench-semmusica.bin;; esac
             elf="$STAGE-$v/out/release/rom.out"; test -s "$elf" || elf="$STAGE-$v/out/rom.out"
-            COLB=$([ $v = 1-0 ] && echo 2 || echo 1) ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/$rom" "$elf" "$OUT/bench-$f" | sed "s/^/[$f] /" || echo "::warning::bench $f failed"
+            COLB=$([ $v = 1-0-1 ] && echo 2 || echo 1) ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/$rom" "$elf" "$OUT/bench-$f" | sed "s/^/[$f] /" || echo "::warning::bench $f failed"
           done
       - uses: actions/upload-artifact@v4
         with:

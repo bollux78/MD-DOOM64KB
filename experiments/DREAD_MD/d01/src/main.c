@@ -6,8 +6,13 @@
 #include <genesis.h>
 #include "render.h"
 #include "game_hud.h"
+#include "music.h"                             /* rescomp: bgm_intro, bgm_e1m1 (XGM2, Z80 driver) */
+#ifndef START_MUSIC
+#define START_MUSIC 1
+#endif
+static uint16_t music_on = START_MUSIC;
 
-#define ROM_NAME   "DREAD-MD D01 OBJETOS"
+#define ROM_NAME   "DREAD-MD D01 SOM"
 #ifndef START_MODE
 #define START_MODE 0                           /* 0 H40 linhas, 1 H40 colunas, 2 H32 linhas, 3 H32 colunas */
 #endif
@@ -235,16 +240,17 @@ static void menu_draw(uint16_t sel)
 {
     static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[2] = { "LINHAS DUPLICADAS ", "COLUNAS DUPLICADAS" };
     static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
-    char l[4][36];
+    char l[5][36];
     sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
     sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[mode & 1]);
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
-    sprintf(l[3], "%c VOLTAR", sel == 3 ? '>' : ' ');
+    sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
+    sprintf(l[4], "%c VOLTAR", sel == 4 ? '>' : ' ');
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
     VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 3);
-    for (int i = 0; i < 4; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
-    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 10);
+    for (int i = 0; i < 5; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
+    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 11);
     SYS_enableInts();
 }
 static void menu(void)
@@ -253,7 +259,7 @@ static void menu(void)
     while (dma_src) {}
     SYS_disableInts();
     VDP_setTextPalette(PAL3);
-    VDP_setWindowVPos(FALSE, 12);
+    VDP_setWindowVPos(FALSE, 13);
     SYS_enableInts();
     menu_draw(sel);
     for (;;) {
@@ -262,13 +268,19 @@ static void menu(void)
         const uint16_t j = JOY_readJoypad(JOY_1), e = j & ~pj;
         pj = j;
         if (e & BUTTON_START) break;
-        if (e & BUTTON_UP) { sel = (sel + 3) % 4; menu_draw(sel); }
-        if (e & BUTTON_DOWN) { sel = (sel + 1) % 4; menu_draw(sel); }
+        if (e & BUTTON_UP) { sel = (sel + 4) % 5; menu_draw(sel); }
+        if (e & BUTTON_DOWN) { sel = (sel + 1) % 5; menu_draw(sel); }
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
-            if (sel == 3) break;
+            if (sel == 4) break;
+            if (sel == 3) {
+                music_on ^= 1;
+                if (music_on) XGM2_play(bgm_e1m1); else XGM2_stop();
+                menu_draw(sel);
+                continue;
+            }
             if (sel == 2) { crop = (uint16_t)((crop + ((e & BUTTON_LEFT) ? 4 : 2)) % 6); set_mode(mode); }
             else set_mode(mode ^ (sel == 0 ? 2 : 1));
-            SYS_disableInts(); VDP_setWindowVPos(FALSE, 12); SYS_enableInts();
+            SYS_disableInts(); VDP_setWindowVPos(FALSE, 13); SYS_enableInts();
             menu_draw(sel);
         }
     }
@@ -286,7 +298,7 @@ static void title(void)
     VDP_drawText("Renderer estilo Dread:", 4, 9);
     VDP_drawText("paredes por coluna, chao/teto", 4, 10);
     VDP_drawText("em cor solida, E1M1 do Doom,", 4, 11);
-    VDP_drawText("objetos e inimigos (parados).", 4, 12);
+    VDP_drawText("objetos, inimigos e musica.", 4, 12);
     VDP_drawText("Mede FPS. START no jogo: menu", 4, 13);
     VDP_drawText("de modos (H40/H32, linhas ou", 4, 14);
     VDP_drawText("colunas duplicadas).", 4, 15);
@@ -315,8 +327,11 @@ int main(bool hard)
     SYS_enableInts();
     R_Init();
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
+    XGM2_loadDriver(TRUE);
+    if (music_on) XGM2_play(bgm_intro);
     title();
     HUD_Opening();
+    if (music_on) XGM2_play(bgm_e1m1);
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);
     set_mode(START_MODE);
