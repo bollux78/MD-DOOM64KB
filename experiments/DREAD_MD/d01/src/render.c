@@ -459,6 +459,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 
     const int32_t span8 = (sx2 - sx1) >> 8;       /* columns * 256 */
     const int16_t rcp = span8 > 256 ? (int16_t)divu16(1UL << 23, (uint16_t)(span8 > 65535 ? 65535 : span8)) : 32767;
+    xs = c;                                       /* every interpolant starts at the first open column */
     int32_t f8 = (((int32_t)xs << 16) - sx1) >> 8;
     lspan8 = span8;
 
@@ -504,14 +505,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     /* only the open part of the span matters: [c, xe2) */
     int xe2 = xe;
     while (xe2 > c && ceilclip[xe2 - 1] >= floorclip[xe2 - 1]) xe2--;
-    if (c > xs) {   /* move every interpolant to the first open column */
-        const int16_t k = (int16_t)(c - xs);
-        iz += mul32k(diz, k); uz += mul32k(duz, k);
-        Yc += mul32k(dYc, k); Yf += mul32k(dYf, k);
-        if (has_up) Ybc += mul32k(dYbc, k);
-        if (has_lo) Ybf += mul32k(dYbf, k);
-        xs = c;
-    }
     xe = xe2;
 
     /* phase A: per-column values in plain arrays (cheap linear loops) */
