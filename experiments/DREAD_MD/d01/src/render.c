@@ -115,8 +115,8 @@ static inline int32_t mulhi15(int32_t a, int16_t k)
 /* a + delta * f8 / 256, f8 = 0..32767 (sub-column offset in 1/256 column) */
 static inline int32_t advance(int32_t a, int32_t delta, int32_t f8)
 {
-    const int16_t whole = (int16_t)(f8 >> 8), part = (int16_t)(f8 & 255);
-    return a + mul32k(delta, whole > 255 ? 255 : whole) + mul32k(delta >> 8, part);
+    const int16_t whole = (int16_t)(f8 >> 8), part = (int16_t)(f8 & 255);   /* whole <= 8192 columns */
+    return a + mul32k(delta, whole) + mul32k(delta >> 8, part);
 }
 
 void R_Init(void)
@@ -322,7 +322,14 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
 }
 
 /* per-column delta of a value over the span: (b - a) * 256 / span8, with rcp = 2^23 / span8 */
-static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp) { return mulhi15(b - a, rcp); }
+static int32_t lspan8;   /* span of the current seg, columns * 256 */
+static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp)
+{
+    if (lspan8 <= 65535) return mulhi15(b - a, rcp);
+    /* very wide projected span (a wall passing right beside the camera): exact 32/16 divide */
+    const int32_t d = b - a; const uint16_t n = (uint16_t)(lspan8 >> 8);
+    return d < 0 ? -(int32_t)udiv32_16((uint32_t)-d, n) : (int32_t)udiv32_16((uint32_t)d, n);
+}
 
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
@@ -374,7 +381,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     const int32_t span8 = (sx2 - sx1) >> 8;       /* columns * 256 */
     const int16_t rcp = span8 > 256 ? (int16_t)divu16(1UL << 23, (uint16_t)(span8 > 65535 ? 65535 : span8)) : 32767;
     int32_t f8 = (((int32_t)xs << 16) - sx1) >> 8;
-    if (f8 > 32767) f8 = 32767;
+    lspan8 = span8;
 
     const int32_t diz = lstep(iz1, iz2, rcp);
     int32_t iz = advance(iz1, diz, f8);
