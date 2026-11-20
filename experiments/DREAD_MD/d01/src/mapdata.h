@@ -61,6 +61,13 @@ extern const uint16_t tex_blob_w[];
 extern const MapTex map_tex[];
 extern const int16_t map_start[3];
 extern const uint16_t map_counts[6];
+typedef struct { int16_t w2, h, leftoff, topoff; uint32_t off[NUM_BUCKETS]; } MapSprite;   /* w2 = half width */
+typedef struct { int16_t x, y; uint16_t sprite, sub, flags; } MapThing;   /* flags 1 = monster; sorted by sub */
+extern const uint8_t spr_blob[];
+extern const MapSprite map_sprites[];
+extern const MapThing map_things[];
+extern const uint16_t map_nthings;
+extern const uint16_t map_sub_things[];   /* things of subsector s: [map_sub_things[s], map_sub_things[s+1]) */
 extern const int16_t map_bm[4];          /* collision grid: x0, y0, width, height (128-unit cells) */
 extern const uint16_t map_bm_off[], map_bm_list[];   /* verts, segs, subsectors, nodes, sectors, lines */
 #endif

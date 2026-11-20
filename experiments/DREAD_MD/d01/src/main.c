@@ -7,7 +7,7 @@
 #include "render.h"
 #include "game_hud.h"
 
-#define ROM_NAME   "DREAD-MD D01 MODOS"
+#define ROM_NAME   "DREAD-MD D01 OBJETOS"
 #ifndef START_MODE
 #define START_MODE 0                           /* 0 H40 linhas, 1 H40 colunas, 2 H32 linhas, 3 H32 colunas */
 #endif
@@ -278,7 +278,8 @@ static void title(void)
     VDP_drawText(ROM_NAME, 4, 6);
     VDP_drawText("Renderer estilo Dread:", 4, 9);
     VDP_drawText("paredes por coluna, chao/teto", 4, 10);
-    VDP_drawText("em cor solida, E1M1 do Doom.", 4, 11);
+    VDP_drawText("em cor solida, E1M1 do Doom,", 4, 11);
+    VDP_drawText("objetos e inimigos (parados).", 4, 12);
     VDP_drawText("Mede FPS. START no jogo: menu", 4, 13);
     VDP_drawText("de modos (H40/H32, linhas ou", 4, 14);
     VDP_drawText("colunas duplicadas).", 4, 15);

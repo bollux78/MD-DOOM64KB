@@ -178,6 +178,52 @@ def main():
                 f = np.frombuffer(flats[nm][:4096], np.uint8)
                 flatcol[nm] = f
 
+    # ---- things (objects and monsters, skill "medium", no multiplayer-only things) and their sprites
+    THING_SPR = {   # Doom type -> sprite prefix (frame A, front view)
+        3004: "POSS", 9: "SPOS", 3001: "TROO", 3002: "SARG", 58: "SARG", 3006: "SKUL", 3005: "HEAD", 3003: "BOSS",
+        2035: "BAR1", 2028: "COLU", 2018: "ARM1", 2019: "ARM2", 2014: "BON1", 2015: "BON2", 2011: "STIM", 2012: "MEDI",
+        2007: "CLIP", 2008: "SHEL", 2048: "AMMO", 2049: "SBOX", 2010: "ROCK", 2046: "BROK", 2047: "CELL", 17: "CELP",
+        2001: "SHOT", 2002: "MGUN", 2003: "LAUN", 2004: "PLAS", 2005: "CSAW", 2006: "BFUG", 8: "BPAK",
+        2013: "SOUL", 2022: "PINV", 2023: "PSTR", 2024: "PINS", 2025: "SUIT", 2026: "PMAP", 2045: "PVIS",
+        5: "BKEY", 6: "YKEY", 13: "RKEY", 38: "RSKU", 39: "YSKU", 40: "BSKU",
+        34: "CAND", 35: "CBRA", 44: "TBLU", 45: "TGRN", 46: "TRED", 48: "ELEC", 30: "COL1", 31: "COL2", 32: "COL3",
+        33: "COL4", 36: "COL5", 37: "COL6", 41: "CEYE", 42: "FSKU", 43: "TRE1", 47: "SMIT", 54: "TRE2", 55: "SMBT",
+        56: "SMGT", 57: "SMRT", 10: "PLAY", 12: "PLAY", 15: "PLAY", 24: "POL5", 27: "POL4", 28: "POL2", 29: "POL3",
+        25: "POL1", 26: "POL6", 18: "POSS", 19: "SPOS", 20: "TROO", 21: "SARG", 22: "HEAD", 23: "SKUL",
+    }
+    THING_FRAME = {10: "W", 12: "W", 15: "N", 18: "L", 19: "L", 20: "M", 21: "N", 22: "L", 23: "K"}
+    MONSTERS = {3004, 9, 3001, 3002, 58, 3006, 3005, 3003}
+    sprlumps = wad.range(("S_START", "SS_START"), ("S_END", "SS_END"))
+    def sprite_lump(prefix, fr):
+        for rot in "10":
+            nm = prefix + fr + rot
+            if nm in sprlumps: return sprlumps[nm]
+            for k, v in sprlumps.items():          # combined rotations, e.g. POSSA2A8 (we want 1 or 0)
+                if k.startswith(prefix + fr + rot) or (len(k) == 8 and k[4:6] == fr + rot and k.startswith(prefix)):
+                    return v
+        return None
+    def sub_of(x, y):
+        n = len(nodes) - 1
+        while not (n & 0x8000):
+            nx, ny, ndx, ndy = nodes[n][:4]
+            side = 0 if ndy * (x - nx) > ndx * (y - ny) else 1
+            n = nodes[n][12 + side]
+        return n & 0x7FFF
+    thing_rows, sprnames, sprimg = [], [], {}
+    for (tx, ty, ta, tt, tf) in things:
+        if tt not in THING_SPR or not (tf & 2) or (tf & 16): continue
+        key = (THING_SPR[tt], THING_FRAME.get(tt, "A"))
+        if key not in sprimg:
+            d = sprite_lump(*key)
+            if d is None: continue
+            w_, h_, lo_, to_ = struct.unpack_from("<HHhh", d, 0)
+            sprimg[key] = (read_patch(d), lo_, to_)
+            sprnames.append(key)
+        sub = sub_of(tx, ty)
+        thing_rows.append([tx, ty, sprnames.index(key), sub, tt])
+    # light bucket of each thing: its sector's
+    spr_used = {}   # sprite index -> set(buckets)
+
     # ---- colour: NPAL palettes (one per 8x8 screen tile), each fitted FOR colour pairs.
     # Items = (texture, light bucket) and (flat, light bucket); every item gets one palette.
     import os
@@ -204,6 +250,14 @@ def main():
                 items.append((("f", nm, b), np.repeat(c[None, :], 400, axis=0)))
     sky_rgb = pal[compose("SKY1").ravel()].mean(0) if "SKY1" in texdefs else np.array([80., 80., 120.])
     items.append((("s",), np.repeat(sky_rgb[None, :], 400, axis=0)))
+    for (tx, ty, si, sub, tt) in thing_rows:
+        secn = sides[lines[segs[ssecs[sub][1]][3]][5 if segs[ssecs[sub][1]][4] == 0 else 6]][5]
+        spr_used.setdefault(si, set()).add(bucket_of(secs[secn][4]))
+    for si, bs_ in spr_used.items():
+        img = sprimg[sprnames[si]][0]
+        px = img[img >= 0].astype(np.int64)
+        for b in bs_:
+            if len(px): items.append((("p", si, b), np.repeat(pal[cmap[LIGHT_ROWS[b]][px]], 2, axis=0)))
 
     def summarize(X, cap):
         q = np.round(X / 8).astype(np.int64)
@@ -446,6 +500,52 @@ def main():
     H.append("const MapDoor map_doors[%d] = {%s};" % (max(1, len(door_rows)), ",".join("{%d,%d}" % r for r in door_rows) or "{0,0}"))
     H.append("const uint16_t map_ndoors = %d;" % len(door_rows))
     H.append("const int16_t map_sector_tag[%d] = {%s};" % (len(secs), ",".join(str(sc[6]) for sc in secs)))
+    # sprites: half width like the walls (one byte = a pair of MD colours, vertical-line mixing), per light
+    # bucket: column table (w2 x uint16, offsets from the table) then posts {top, len, len bytes}, 0xFF ends
+    sblob = bytearray(); srows = []
+    for si, key in enumerate(sprnames):
+        img, lo_, to_ = sprimg[key]
+        h_, w_ = img.shape
+        w2 = max(1, (w_ + 1) // 2)
+        offs = []
+        for b in range(len(LIGHT_ROWS)):
+            if b not in spr_used.get(si, ()):
+                offs.append(None); continue
+            k = pal_of.get(("p", si, b), 0)
+            L = lut_for(b, k)
+            base = len(sblob)
+            cols = []
+            for j in range(w2):
+                col = bytearray(); y = 0; sx = min(2 * j, w_ - 1)
+                while y < h_:
+                    if img[y, sx] < 0: y += 1; continue
+                    y1 = y
+                    while y1 < h_ and img[y1, sx] >= 0 and y1 - y < 250: y1 += 1
+                    col += bytes([y, y1 - y]) + bytes((L[img[yy, sx]][0] << 4) | L[img[yy, sx]][1] for yy in range(y, y1))
+                    y = y1
+                col.append(0xFF)
+                cols.append(col)
+            tab = bytearray(); pos = 2 * w2
+            for col in cols: tab += struct.pack(">H", pos); pos += len(col)
+            sblob += tab
+            for col in cols: sblob += col
+            if len(sblob) & 1: sblob.append(0xFF)
+            offs.append(base)
+        first = next((o for o in offs if o is not None), 0)
+        offs = [o if o is not None else first for o in offs]
+        srows.append((w2, h_, lo_, to_, offs))
+    H.append("const uint8_t spr_blob[%d] = {%s};" % (max(2, len(sblob)), ",".join(map(str, sblob)) or "0,0"))
+    H.append("const MapSprite map_sprites[%d] = {%s};" % (max(1, len(srows)), ",".join(
+        "{%d,%d,%d,%d,{%s}}" % (r[0], r[1], r[2], r[3], ",".join(map(str, r[4]))) for r in srows) or "{0}"))
+    thing_rows.sort(key=lambda t: t[3])
+    H.append("const MapThing map_things[%d] = {%s};" % (max(1, len(thing_rows)), ",".join(
+        "{%d,%d,%d,%d,%d}" % (t[0], t[1], t[2], t[3], 1 if t[4] in MONSTERS else 0) for t in thing_rows) or "{0}"))
+    H.append("const uint16_t map_nthings = %d;" % len(thing_rows))
+    soff = [0] * (len(ssecs) + 1)
+    for t in thing_rows: soff[t[3] + 1] += 1
+    for i in range(len(ssecs)): soff[i + 1] += soff[i]
+    H.append("const uint16_t map_sub_things[%d] = {%s};" % (len(soff), ",".join(map(str, soff))))
+    print("things: %d drawn, %d sprites, sprite blob %d bytes" % (len(thing_rows), len(srows), len(sblob)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
     # same texels as words (b, b): column-doubled modes write 4 pixels per texel with one move.w
     H.append("const uint16_t tex_blob_w[%d] = {%s};" % (len(blob), ",".join(str(x * 257) for x in blob)))

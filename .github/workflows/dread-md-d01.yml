@@ -70,12 +70,12 @@ jobs:
           PY
             make -C "$stage" -f "$stage/makefile.gen" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DSTART_MODE=$mode" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$stage/build.log" 2>&1 || { tail -30 "$stage/build.log"; return 1; }
             cp "$stage/out/rom.bin" "$out/$file"
-            cat "$stage/conv.log" | grep -E "^map|^pvs|^weapon|^title" || true
+            cat "$stage/conv.log" | grep -E "^map|^pvs|^weapon|^title|^things" || true
           }
-          build 0 "DREAD-MD D01 MODOS" dread-md-d01-modos.bin
-          build 1 "DREAD-MD D01 MODOS (BENCH COLUNAS)" bench-colunas.bin
+          build 0 "DREAD-MD D01 OBJETOS" dread-md-d01-objetos.bin
+          build 1 "DREAD-MD D01 OBJETOS (BENCH COLUNAS)" bench-colunas.bin
           ls -l "$out"
-          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-modos.bin\"))]; z.close()" "$out"
+          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-objetos.bin\"))]; z.close()" "$out"
       - name: BlastEm bench route (both)
         shell: bash
         run: |
@@ -83,7 +83,7 @@ jobs:
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
           for v in 0 1; do
             f=$([ $v = 0 ] && echo linhas || echo colunas)
-            rom=$([ $v = 0 ] && echo dread-md-d01-modos.bin || echo bench-colunas.bin)
+            rom=$([ $v = 0 ] && echo dread-md-d01-objetos.bin || echo bench-colunas.bin)
             elf="$STAGE-$v/out/release/rom.out"; test -s "$elf" || elf="$STAGE-$v/out/rom.out"
             COLB=$((v+1)) ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/$rom" "$elf" "$OUT/bench-$f" | sed "s/^/[$f] /" || echo "::warning::bench $f failed"
           done

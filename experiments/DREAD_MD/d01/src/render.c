@@ -604,6 +604,106 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     rstats.col_visits++;
 }
 
+/* ---------------------------------------------------------------- things (objects, monsters)
+ * Collected while the BSP walk enters their subsector, BEFORE that subsector's walls are drawn: the
+ * open window of each column (ceilclip/floorclip) at that moment is exactly the part not hidden by
+ * nearer walls. After the walls, sprites are drawn far to near inside their saved windows.        */
+#ifndef PVS_GEN
+#define MAXVIS 32
+#define WINPOOL 3072
+typedef struct {
+    int16_t x0, x1, w2, htop;        /* columns [x0, x1), half width, world height of the top */
+    int32_t u0, du, iz, zpp, z4;     /* source pixel (16.16) at x0 and per column, inverse depth, texels per row */
+    const uint8_t *tab;              /* column table of the light bucket */
+    uint16_t win;                    /* offset in winpool: ceil[n] then floor[n] */
+} VisSpr;
+static VisSpr vis[MAXVIS];
+static uint8_t vorder[MAXVIS];
+static uint16_t nvis, winused;
+static uint8_t winpool[WINPOOL];
+
+static void project_thing(const MapThing *t)
+{
+    if (nvis >= MAXVIS) return;
+    int32_t x4, z4;
+    cam(t->x, t->y, &x4, &z4);
+    if (z4 < 64 || z4 > 32767) return;
+    const MapSprite *sp = &map_sprites[t->sprite];
+    const int32_t sxl = proj(x4 - (int32_t)sp->leftoff * 4, z4), sxr = proj(x4 + (int32_t)(sp->w2 * 2 - sp->leftoff) * 4, z4);
+    int xa = ceil16(sxl), xb = ceil16(sxr);
+    if (xa < 0) xa = 0;
+    if (xb > VIEW_W) xb = VIEW_W;
+    if (xa >= xb || find_open(xa) >= xb) return;
+    const int n = xb - xa;
+    if (winused + 2 * n > WINPOOL) return;
+    VisSpr *v = &vis[nvis];
+    v->x0 = (int16_t)xa; v->x1 = (int16_t)xb; v->w2 = sp->w2;
+    const MapSector *sec = &map_sectors[map_subs[t->sub].sector];
+    v->htop = sec->floor + sp->topoff;
+    v->du = (int32_t)(((uint32_t)z4 << 14) / (uint32_t)FOCAL);           /* source pixels per column */
+    v->u0 = (int32_t)(((int64_t)(((int32_t)xa << 16) - sxl) * v->du) >> 16);
+    v->iz = inv_z(z4); v->zpp = zpp_of((uint16_t)z4); v->z4 = z4;
+    v->tab = spr_blob + sp->off[sec->bucket];
+    v->win = winused;
+    for (int k = 0; k < n; k++) { winpool[winused + k] = ceilclip[xa + k]; winpool[winused + n + k] = floorclip[xa + k]; }
+    winused += (uint16_t)(2 * n);
+    nvis++;
+}
+
+static inline int32_t yrow_iz(int16_t dh, int32_t iz)
+{
+    int32_t a = muls16(dh, (int16_t)VFOCAL) >> 2;
+    if (a > 32767) a = 32767;
+    if (a < -32767) a = -32767;
+    int32_t b = iz >> 5; if (b > 32767) b = 32767;
+    return ((int32_t)HORIZON << 16) - (muls16((int16_t)a, (int16_t)b) << 1);
+}
+
+static void draw_sprite(const VisSpr *v)
+{
+    const int n = v->x1 - v->x0;
+    const uint8_t *wc = winpool + v->win, *wf = wc + n;
+    int32_t u = v->u0;
+    const int16_t ht = v->htop - view_z;
+    for (int k = 0; k < n; k++, u += v->du) {
+        const int j = (u >> 16) >> 1;
+        if (j < 0 || j >= v->w2) continue;
+        const int top = wc[k], bot = wf[k];
+        if (top >= bot) continue;
+        uint8_t *col = FB_COL(rfb, v->x0 + k);
+        const uint8_t *p = v->tab + ((v->tab[2 * j] << 8) | v->tab[2 * j + 1]);
+        while (p[0] != 0xFF) {
+            const int t = p[0], len = p[1];
+            const uint8_t *d = p + 2;
+            const int32_t ya = yrow_iz((int16_t)(ht - t), v->iz), yb = yrow_iz((int16_t)(ht - t - len), v->iz);
+            int y0 = ceil16(ya), y1 = ceil16(yb);
+            if (y0 < top) y0 = top;
+            if (y1 > bot) y1 = bot;
+            if (y0 < y1) {
+                int32_t tv = ((((int32_t)y0 << 16) - ya) >> 8) * (v->zpp >> 8);
+                uint8_t *q = col + (y0 << 2);
+                for (int y = y0; y < y1; y++, q += 4, tv += v->zpp) {
+                    int idx = tv >> 16; if (idx >= len) idx = len - 1;
+                    q[0] = d[idx];
+                    if (COLB == 2) q[1] = d[idx];
+                }
+            }
+            p += 2 + len;
+        }
+    }
+}
+
+static void draw_things(void)
+{
+    for (int i = 0; i < nvis; i++) {           /* far to near (insertion sort on depth) */
+        int k = i;
+        while (k > 0 && vis[vorder[k - 1]].z4 < vis[i].z4) { vorder[k] = vorder[k - 1]; k--; }
+        vorder[k] = (uint8_t)i;
+    }
+    for (int i = 0; i < nvis; i++) draw_sprite(&vis[vorder[i]]);
+}
+#endif
+
 /* Doom's R_CheckBBox idea: only the two silhouette corners of the box matter */
 static const uint8_t checkcoord[12][4] = {
     {3,0,2,1}, {3,0,2,0}, {3,1,2,0}, {0,0,0,0},
@@ -648,6 +748,9 @@ static void render_node(uint16_t n)
 #endif
         const MapSub *ss = &map_subs[n & 0x7FFF];
         rstats.subs_visited++;
+#ifndef PVS_GEN
+        for (uint16_t ti = map_sub_things[n & 0x7FFF]; ti < map_sub_things[(n & 0x7FFF) + 1]; ti++) project_thing(&map_things[ti]);
+#endif
         for (uint16_t i = 0; i < ss->count; i++) draw_seg(&map_segs[ss->first + i]);
         return;
     }
@@ -704,7 +807,13 @@ void R_RenderView(const View *v, uint8_t *fb)
         if (r_pvs_off) pv_n = pv_s = pv_all;
     }
 #endif
+#ifndef PVS_GEN
+    nvis = 0; winused = 0;
+#endif
     render_node(map_counts[3] - 1);
+#ifndef PVS_GEN
+    draw_things();
+#endif
     tm_total += now_lines() - t0;
     rstats.cols_closed = closed;
 }
