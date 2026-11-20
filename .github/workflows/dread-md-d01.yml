@@ -1,0 +1,79 @@
+name: DREAD-MD D01 (Dread-style renderer, E1M1)
+on:
+  push:
+    branches: [exp-dread-md-d01]
+    paths:
+      - 'experiments/DREAD_MD/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Convert E1M1 and build ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$WAD"
+          D=experiments/DREAD_MD/d01
+          stage="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
+          rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
+          cp $D/src/*.c $D/src/*.h "$stage/src/"
+          python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
+          gdk=""
+          for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          if test -z "$gdk"; then
+            while IFS= read -r f; do gdk="${f%/makefile.gen}"; break; done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -5)
+          fi
+          test -n "$gdk"; echo "SGDK: $gdk"
+          mkdir -p "$stage/src/boot"
+          cp "$gdk/src/boot/rom_head.c" "$gdk/src/boot/sega.s" "$stage/src/boot/"
+          python3 - "$stage/src/boot/rom_head.c" <<'PY'
+          import re,sys,pathlib
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          strs=re.findall(r'"([^"]*)"',s)
+          for old in strs:
+              if len(old)==48 and old.strip():
+                  s=s.replace('"%s"'%old,'"%s"'%"DREAD-MD D01 E1M1".ljust(48),1)
+          p.write_text(s)
+          PY
+          grep -n "DREAD" "$stage/src/boot/rom_head.c" | head -3
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          mk="$stage/makefile.gen"
+          python3 - "$gdk/makefile.gen" "$mk" <<'PY'
+          import pathlib,sys
+          s=pathlib.Path(sys.argv[1]).read_text()
+          s=s.replace("-flto -flto=auto -ffat-lto-objects","-fno-lto")
+          pathlib.Path(sys.argv[2]).write_text(s)
+          PY
+          export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
+          make -C "$stage" -f "$mk" -j4 release OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" 2>&1 | tail -25
+          test -s "$stage/out/rom.bin"
+          out="$HOME/Projetos/Personal/dread-md/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cp "$stage/out/rom.bin" "$out/dread-md-d01-e1m1.bin"
+          ls -l "$out"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "STAGE=$stage" >> "$GITHUB_ENV"
+      - name: BlastEm bench route
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf="$STAGE/out/release/rom.out"; test -s "$elf" || elf="$STAGE/out/rom.out"
+          python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
+          NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/bench" || echo "::warning::bench failed"
+          cp "$STAGE/conv.log" "$OUT/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dread-md-d01
+          path: ${{ env.OUT }}
