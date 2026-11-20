@@ -9,6 +9,7 @@
         .globl  col_fill
         .globl  col_tex
         .globl  col_tex_nm
+        .globl  seg_columns
 
 col_fill:
         move.l  4(%sp),%a0
@@ -89,4 +90,300 @@ col_tex_nm:
         .endr
 texnm_end:
         movem.l (%sp)+,%d2-%d4/%a2
+        rts
+
+/* ======================================================================================
+   void seg_columns(ColJob *j)   -- the per-column work of one seg (see ColJob in render.c)
+   registers: d0 top/ntop  d1 bot/nbot  d2 yc  d3 yf  d6 c*2  d7 c
+              a2 column pointer  a3 nxt[]  a5 clip[] (ceil at +0, floor at +VIEW_W)  a6 job
+   ====================================================================================== */
+#define VIEW_W 128
+#define VIEW_H 112
+#define HORIZON 56
+#define J_FB 0
+#define J_YC 4
+#define J_YF 8
+#define J_YBC 12
+#define J_YBF 16
+#define J_U 20
+#define J_ZPP 24
+#define J_C0 28
+#define J_XE 30
+#define J_CCOL 32
+#define J_FCOL 34
+#define J_FLAGS 36
+#define J_CLOSED 38
+#define J_MID 40
+#define J_UP 56
+#define J_LO 72
+
+seg_columns:
+        movem.l %d2-%d7/%a2-%a6,-(%sp)
+        move.l  48(%sp),%a6
+        move.l  r_clipbuf,%a5
+        lea     VIEW_W(%a5),%a5             /* a5 = floor clip; ceiling clip at -VIEW_W */
+        move.l  r_nxt,%a3
+        move.w  J_C0(%a6),%d7
+.Lcol:
+        cmp.w   J_XE(%a6),%d7
+        bge     .Ldone
+        moveq   #0,%d0
+        move.b  -VIEW_W(%a5,%d7.w),%d0            /* top */
+        moveq   #0,%d1
+        move.b  0(%a5,%d7.w),%d1       /* bot */
+        move.w  %d7,%d4                     /* column pointer: fb + (c>>2)*VIEW_H*4 + (c&3) */
+        lsr.w   #2,%d4
+        mulu.w  #VIEW_H*4,%d4
+        move.w  %d7,%d5
+        andi.w  #3,%d5
+        add.w   %d5,%d4
+        move.l  J_FB(%a6),%a2
+        adda.w  %d4,%a2
+        move.w  %d7,%d6
+        add.w   %d6,%d6
+        move.l  J_YC(%a6),%a0
+        move.w  0(%a0,%d6.w),%d2            /* yc = clamp(yc, top, bot) */
+        cmp.w   %d0,%d2
+        bge.s   1f
+        move.w  %d0,%d2
+1:      cmp.w   %d1,%d2
+        ble.s   1f
+        move.w  %d1,%d2
+1:      move.l  J_YF(%a6),%a0
+        move.w  0(%a0,%d6.w),%d3            /* yf = clamp(yf, yc, bot) */
+        cmp.w   %d2,%d3
+        bge.s   1f
+        move.w  %d2,%d3
+1:      cmp.w   %d1,%d3
+        ble.s   1f
+        move.w  %d1,%d3
+1:
+        move.w  %d2,%d4                     /* ceiling: top .. yc */
+        sub.w   %d0,%d4
+        ble.s   1f
+        move.w  %d0,%d5
+        add.w   %d5,%d5
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  J_CCOL(%a6),%d5
+        bsr     fill_core
+1:      move.w  %d1,%d4                     /* floor: yf .. bot */
+        sub.w   %d3,%d4
+        ble.s   1f
+        move.w  %d3,%d5
+        add.w   %d5,%d5
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  J_FCOL(%a6),%d5
+        bsr     fill_core
+1:
+        move.w  J_FLAGS(%a6),%d4
+        btst    #0,%d4
+        beq.s   .Lportal
+        btst    #1,%d4                      /* solid wall */
+        beq.s   .Lclose
+        move.w  %d3,%d4
+        sub.w   %d2,%d4
+        ble.s   .Lclose
+        move.w  %d2,%d5
+        lea     J_MID(%a6),%a4
+        bsr     tex_part
+.Lclose:
+        clr.b   -VIEW_W(%a5,%d7.w)
+        clr.b   0(%a5,%d7.w)
+        move.w  %d7,%d4
+        addq.w  #1,%d4
+        move.b  %d4,0(%a3,%d7.w)
+        addq.w  #1,J_CLOSED(%a6)
+        bra.s   .Lnext
+.Lportal:
+        move.w  %d2,%d0                     /* ntop = yc, nbot = yf */
+        move.w  %d3,%d1
+        btst    #2,%d4
+        beq.s   .Lnoup
+        move.l  J_YBC(%a6),%a0
+        move.w  0(%a0,%d6.w),%d5            /* ybc = clamp(ybc, yc, yf) */
+        cmp.w   %d2,%d5
+        bge.s   1f
+        move.w  %d2,%d5
+1:      cmp.w   %d3,%d5
+        ble.s   1f
+        move.w  %d3,%d5
+1:      move.w  %d5,%d0
+        move.w  %d5,%d4
+        sub.w   %d2,%d4
+        ble.s   .Lnoup
+        move.w  %d2,%d5
+        lea     J_UP(%a6),%a4
+        bsr     tex_part
+.Lnoup:
+        move.w  J_FLAGS(%a6),%d4
+        btst    #3,%d4
+        beq.s   .Lnolo
+        move.l  J_YBF(%a6),%a0
+        move.w  0(%a0,%d6.w),%d5            /* ybf = clamp(ybf, ntop, yf) */
+        cmp.w   %d0,%d5
+        bge.s   1f
+        move.w  %d0,%d5
+1:      cmp.w   %d3,%d5
+        ble.s   1f
+        move.w  %d3,%d5
+1:      move.w  %d5,%d1
+        move.w  %d3,%d4
+        sub.w   %d5,%d4
+        ble.s   .Lnolo
+        lea     J_LO(%a6),%a4
+        bsr     tex_part
+.Lnolo:
+        cmp.w   %d1,%d0
+        bge.s   .Lclose
+        move.b  %d0,-VIEW_W(%a5,%d7.w)
+        move.b  %d1,0(%a5,%d7.w)
+.Lnext:
+        addq.w  #1,%d7                      /* c = find_open(c + 1), path halving */
+.Lfind:
+        moveq   #0,%d4
+        move.b  0(%a3,%d7.w),%d4
+        cmp.w   %d4,%d7
+        beq     .Lcol
+        move.b  0(%a3,%d4.w),%d5
+        move.b  %d5,0(%a3,%d7.w)
+        moveq   #0,%d7
+        move.b  %d5,%d7
+        bra.s   .Lfind
+.Ldone:
+        movem.l (%sp)+,%d2-%d7/%a2-%a6
+        rts
+
+/* fill_core: a0 = first pixel - 4, d4 = n (>0), d5 = colour byte. clobbers a1, d4 */
+fill_core:
+        add.w   %d4,%d4
+        add.w   %d4,%d4
+        lea     fillc_end(%pc),%a1
+        suba.w  %d4,%a1
+        jmp     (%a1)
+        .set    k,VIEW_H
+        .rept   VIEW_H
+        move.b  %d5,k*4(%a0)
+        .set    k,k-1
+        .endr
+fillc_end:
+        rts
+
+/* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.
+   preserves d0-d3, d6, d7, a2, a3, a5, a6 */
+tex_part:
+        movem.l %d0-%d3/%d6-%d7,-(%sp)
+        move.l  J_ZPP(%a6),%a1
+        move.w  %d7,%d1
+        add.w   %d1,%d1
+        add.w   %d1,%d1
+        move.l  0(%a1,%d1.w),%d3            /* zpp (texels per row, 16.16, > 0) */
+        move.l  J_U(%a6),%a1
+        move.w  %d7,%d1
+        add.w   %d1,%d1
+        moveq   #0,%d6
+        move.w  0(%a1,%d1.w),%d6            /* u */
+        and.w   4(%a4),%d6                  /* & wmask */
+        move.w  6(%a4),%d1
+        lsl.l   %d1,%d6                     /* << hs2 */
+        move.l  (%a4),%a1
+        adda.l  %d6,%a1                     /* a1 = texture column */
+        move.w  %d4,%d7                     /* d7 = n */
+        /* k = HORIZON - (y0 + n - 1);  prod = zpp * k (signed k) */
+        move.w  %d5,%d0
+        add.w   %d4,%d0
+        subq.w  #1,%d0
+        neg.w   %d0
+        addi.w  #HORIZON,%d0
+        move.w  %d0,%d2
+        bpl.s   1f
+        neg.w   %d2
+1:      move.l  %d3,%d1
+        swap    %d1
+        mulu.w  %d2,%d1
+        swap    %d1
+        clr.w   %d1
+        move.w  %d3,%d6
+        mulu.w  %d2,%d6
+        add.l   %d6,%d1
+        tst.w   %d0
+        bpl.s   1f
+        neg.l   %d1
+1:      move.l  12(%a4),%d2
+        sub.l   %d1,%d2                     /* d2 = v at the bottom row */
+        /* span = zpp * (n - 1) */
+        move.w  %d7,%d0
+        subq.w  #1,%d0
+        move.l  %d3,%d1
+        swap    %d1
+        mulu.w  %d0,%d1
+        swap    %d1
+        clr.w   %d1
+        move.w  %d3,%d6
+        mulu.w  %d0,%d6
+        add.l   %d6,%d1                     /* d1 = span */
+        add.w   %d5,%d5                     /* a0 = column + y0*4 - 4 */
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        neg.l   %d3                         /* step = -zpp */
+        moveq   #0,%d0
+        move.w  8(%a4),%d0                  /* hmask */
+        swap    %d0
+        cmp.l   %d0,%d1
+        bcc.s   .Lmasked
+        move.w  #-1,%d0                     /* v = (v & (hmask<<16 | 0xFFFF)) + (hmask+1) << 16 */
+        and.l   %d0,%d2
+        moveq   #0,%d0
+        move.w  8(%a4),%d0
+        addq.l  #1,%d0
+        swap    %d0
+        add.l   %d0,%d2
+        move.l  %d3,%d4
+        swap    %d3                         /* d3.w step int, d4.w step frac */
+        move.l  %d2,%d1
+        swap    %d1                         /* d1.w v int, d2.w v frac */
+        mulu.w  #10,%d7
+        lea     tnm_end(%pc),%a4
+        suba.w  %d7,%a4
+        jsr     (%a4)
+        movem.l (%sp)+,%d0-%d3/%d6-%d7
+        rts
+.Lmasked:
+        move.w  8(%a4),%d5                  /* d5 = hmask */
+        move.l  %d3,%d4
+        swap    %d3
+        move.l  %d2,%d1
+        swap    %d1
+        move.w  %d7,%d0                     /* n*14 */
+        add.w   %d0,%d0
+        move.w  %d0,%d6
+        lsl.w   #3,%d0
+        sub.w   %d6,%d0
+        lea     tmk_end(%pc),%a4
+        suba.w  %d0,%a4
+        jsr     (%a4)
+        movem.l (%sp)+,%d0-%d3/%d6-%d7
+        rts
+
+        .set    k,VIEW_H
+        .rept   VIEW_H
+        move.b  0(%a1,%d1.w),k*4(%a0)
+        add.w   %d4,%d2
+        addx.w  %d3,%d1
+        .set    k,k-1
+        .endr
+tnm_end:
+        rts
+
+        .set    k,VIEW_H
+        .rept   VIEW_H
+        move.w  %d1,%d6
+        and.w   %d5,%d6
+        move.b  0(%a1,%d6.w),k*4(%a0)
+        add.w   %d4,%d2
+        addx.w  %d3,%d1
+        .set    k,k-1
+        .endr
+tmk_end:
         rts

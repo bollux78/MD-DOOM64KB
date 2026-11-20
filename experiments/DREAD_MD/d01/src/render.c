@@ -34,7 +34,9 @@ static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) 
 static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
 
-static uint8_t ceilclip[VIEW_W], floorclip[VIEW_W];
+static uint8_t clipbuf[2 * VIEW_W];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
+#define ceilclip clipbuf
+#define floorclip (clipbuf + VIEW_W)
 /* next open column at or after c (union-find with path halving); closed columns are skipped
  * in O(1) instead of being walked by every seg behind them */
 static uint8_t nxt[VIEW_W + 1];
@@ -171,17 +173,73 @@ static inline uint16_t u_of(uint32_t uz, int32_t iz)
 static inline int ceil16(int32_t y) { return (y + 0xFFFF) >> 16; }
 static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+/* layout shared with colasm.s (offsets 0,4,6,8,10,12) */
 typedef struct {
-    const uint8_t *tex; uint16_t wmask, hmask; uint8_t hshift;
+    const uint8_t *tex; uint16_t wmask, hs2, hmask, pad;
     int32_t vbase16;              /* (textop - viewz + yoff) << 16 */
 } Part;
+
+/* one seg's column job, consumed by seg_columns() (offsets used by colasm.s) */
+typedef struct {
+    uint8_t *fb;                                  /* 0 */
+    int16_t *yc, *yf, *ybc, *ybf;                 /* 4 8 12 16  ceil(row) per column */
+    uint16_t *u;                                  /* 20 */
+    int32_t *zpp;                                 /* 24 */
+    int16_t c0, xe;                               /* 28 30 */
+    uint16_t ccol, fcol;                          /* 32 34 */
+    uint16_t flags;                               /* 36: 1 solid, 2 mid, 4 upper, 8 lower */
+    uint16_t closed;                              /* 38 */
+    Part mid, up, lo;                             /* 40 56 72 */
+} ColJob;
+static int16_t a_yc[VIEW_W], a_yf[VIEW_W], a_ybc[VIEW_W], a_ybf[VIEW_W];
+static uint16_t a_u[VIEW_W];
+static int32_t a_zpp[VIEW_W];
+static ColJob job;
+#if defined(__m68k__) || defined(__mc68000__)
+extern void seg_columns(ColJob *j);
+uint8_t *const r_clipbuf = clipbuf;   /* exported for colasm.s */
+uint8_t *const r_nxt = nxt;
+#else
+static void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp);
+static void seg_columns(ColJob *j)
+{
+    int c = j->c0;
+    while (c < j->xe) {
+        const int top = ceilclip[c], bot = floorclip[c];
+        uint8_t *col = FB_COL(j->fb, c);
+        int yc = j->yc[c]; if (yc < top) yc = top; if (yc > bot) yc = bot;
+        int yf = j->yf[c]; if (yf < yc) yf = yc; if (yf > bot) yf = bot;
+        if (yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), j->ccol);
+        if (bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), j->fcol);
+        if (j->flags & 1) {
+            if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, j->u[c], j->zpp[c]);
+            close_col(c); j->closed++;
+        } else {
+            int ntop = yc, nbot = yf;
+            if (j->flags & 4) {
+                int y = j->ybc[c]; if (y < yc) y = yc; if (y > yf) y = yf;
+                if (y > yc) draw_part(col, yc, y, &j->up, j->u[c], j->zpp[c]);
+                ntop = y;
+            }
+            if (j->flags & 8) {
+                int y = j->ybf[c]; if (y < ntop) y = ntop; if (y > yf) y = yf;
+                if (yf > y) draw_part(col, y, yf, &j->lo, j->u[c], j->zpp[c]);
+                nbot = y;
+            }
+            if (ntop >= nbot) { close_col(c); j->closed++; }
+            else { ceilclip[c] = (uint8_t)ntop; floorclip[c] = (uint8_t)nbot; }
+        }
+        c = find_open(c + 1);
+    }
+}
+#endif
 
 static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16_t yoff)
 {
     const MapTex *m = &map_tex[t];
     p->tex = tex_blob + m->off[bucket];
     p->wmask = (1u << m->wshift) - 1;
-    p->hshift = m->hshift;
+    p->hs2 = m->hshift + 1;                       /* columns are stored twice */
     p->hmask = (1u << m->hshift) - 1;
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;
 }
@@ -190,7 +248,7 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
 {
     if (dbg_flags & 1) return;
     /* texture columns are stored twice (2H texels): no wrap mask needed while the span fits in H */
-    const uint8_t *tc = p->tex + ((u & p->wmask) << (p->hshift + 1));
+    const uint8_t *tc = p->tex + ((u & p->wmask) << p->hs2);
     const uint16_t n = (uint16_t)(y1 - y0);
     int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
     const int32_t span = mul32k(zpp, (int16_t)(n - 1));
@@ -291,81 +349,48 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             dYbf = lstep(a, b, rcp); Ybf = advance(a, dYbf, f8);
         }
     }
-    const uint16_t ccol = fs->ceilcol, fcol = fs->floorcol;
     const int need_tex = has_mid | has_up | has_lo;
-
-    /* anchors: exact u and texel step every ANCHOR columns, linear in between (8.8 u, 16.16 step) */
-    int32_t ua8 = 0, du8 = 0, zpa = 0, dzp = 0;
-    int left = 0;
     const int32_t diz8 = diz << 3, duz8 = duz << 3;
-
     const uint32_t t_mid = now_lines(); tm_setup += t_mid - t_in;
-    int cur = xs;
     if (dbg_flags & 4) { for (int k = xs; k < xe; k++) if (ceilclip[k] < floorclip[k]) { close_col(k); closed++; } return; }
-    while (c < xe) {
-        if (c != cur) {                     /* skipped closed columns: move every interpolant */
-            const int16_t k = (int16_t)(c - cur);
-            iz += mul32k(diz, k); uz += mul32k(duz, k);
-            Yc += mul32k(dYc, k); Yf += mul32k(dYf, k);
-            if (has_up) Ybc += mul32k(dYbc, k);
-            if (has_lo) Ybf += mul32k(dYbf, k);
-            left = 0;
-            cur = c;
-        }
-        if (need_tex && left <= 0) {
+
+    /* phase A: per-column values in plain arrays (cheap linear loops) */
+    for (int k = xs; k < xe; k++) { a_yc[k] = (int16_t)ceil16(Yc); a_yf[k] = (int16_t)ceil16(Yf); Yc += dYc; Yf += dYf; }
+    if (has_up) for (int k = xs; k < xe; k++) { a_ybc[k] = (int16_t)ceil16(Ybc); Ybc += dYbc; }
+    if (has_lo) for (int k = xs; k < xe; k++) { a_ybf[k] = (int16_t)ceil16(Ybf); Ybf += dYbf; }
+    if (need_tex) {
+        /* exact u and texel step every ANCHOR columns, linear in between */
+        for (int k = xs; k < xe; ) {
+            int n = xe - 1 - k; if (n > ANCHOR) n = ANCHOR;
             rstats.anchors++;
-            int n = xe - 1 - c; if (n > ANCHOR) n = ANCHOR;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
-            const uint16_t uA = u_of((uint32_t)uzA << 8, izA);
-            const uint16_t zA = z4_of(izA);
-            ua8 = (int32_t)uA << 8; zpa = (int32_t)zA << 7;    /* zpp16 = z4/4 * 65536 / VFOCAL(128) */
+            const uint16_t uA = u_of((uint32_t)uzA << 8, izA), zA = z4_of(izA);
+            int32_t ua8 = (int32_t)uA << 8, zp = (int32_t)zA << 7, du8 = 0, dzp = 0;
             if (n > 0) {
                 int32_t izB, uzB;
                 if (n == ANCHOR) { izB = iz + diz8; uzB = uz + duz8; }
                 else { izB = iz + mul32k(diz, (int16_t)n); uzB = uz + mul32k(duz, (int16_t)n); }
                 if (izB < 1) izB = 1;
                 if (uzB < 0) uzB = 0;
-                const uint16_t uB = u_of((uint32_t)uzB << 8, izB);
-                const uint16_t zB = z4_of(izB);
+                const uint16_t uB = u_of((uint32_t)uzB << 8, izB), zB = z4_of(izB);
                 if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = ((int32_t)zB - (int32_t)zA) << 4; }
                 else { du8 = (((int32_t)uB - (int32_t)uA) << 8) / n; dzp = (((int32_t)zB - (int32_t)zA) << 7) / n; }
-            } else { du8 = 0; dzp = 0; }
-            left = n > 0 ? n : 1;
+            }
+            const int m = n > 0 ? n : 1;
+            for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)(ua8 >> 8); a_zpp[k] = zp; ua8 += du8; zp += dzp; }
+            if (n == ANCHOR) { iz += diz8; uz += duz8; } else { iz += mul32k(diz, (int16_t)m); uz += mul32k(duz, (int16_t)m); }
         }
-        rstats.col_visits++;
-        do {
-        const int top = ceilclip[c], bot = floorclip[c];
-        uint8_t *col = FB_COL(rfb, c);
-        const int yc = clampi(ceil16(Yc), top, bot);
-        const int yf = clampi(ceil16(Yf), yc, bot);
-        if (!(dbg_flags & 2) && yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), ccol);
-        if (!(dbg_flags & 2) && bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), fcol);
-        const uint16_t u = (uint16_t)(ua8 >> 8);
-        if (!bs) {
-            if (has_mid && yf > yc) draw_part(col, yc, yf, &mid, u, zpa);
-            close_col(c); closed++;
-                break;
-        }
-        int ntop = yc, nbot = yf;
-        if (has_up) {
-            const int ybc = clampi(ceil16(Ybc), yc, yf);
-            if (ybc > yc) draw_part(col, yc, ybc, &up, u, zpa);
-            ntop = ybc;
-        }
-        if (has_lo) {
-            const int ybf = clampi(ceil16(Ybf), ntop, yf);
-            if (yf > ybf) draw_part(col, ybf, yf, &lo, u, zpa);
-            nbot = ybf;
-        }
-        if (ntop >= nbot) { close_col(c); closed++; }
-        else { ceilclip[c] = ntop; floorclip[c] = nbot; }
-        } while (0);
-        /* next column */
-        iz += diz; uz += duz; Yc += dYc; Yf += dYf; Ybc += dYbc; Ybf += dYbf;
-        ua8 += du8; zpa += dzp; left--;
-        cur = c + 1;
-        c = find_open(c + 1);
     }
+
+    /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */
+    job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
+    job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
+    job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
+    job.mid = mid; job.up = up; job.lo = lo;
+    job.closed = 0;
+    seg_columns(&job);
+    closed += job.closed;
+    rstats.col_visits++;
     tm_loop += now_lines() - t_mid;
 }
 
@@ -425,6 +450,7 @@ int R_PointInSub(int16_t x, int16_t y)
 void R_RenderView(const View *v, uint8_t *fb)
 {
     rfb = fb;
+    job.yc = a_yc; job.yf = a_yf; job.ybc = a_ybc; job.ybf = a_ybf; job.u = a_u; job.zpp = a_zpp;
     frame_id++;
     if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
