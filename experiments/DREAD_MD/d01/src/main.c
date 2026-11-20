@@ -251,6 +251,7 @@ int main(bool hard)
         uint16_t now = vints;
         uint16_t dt = now - last; last = now;
         if (dt > 8) dt = 8;
+        if (bench_req && !bench_done) dt = 4;    /* bench: same camera path at any speed (frames are comparable) */
         JOY_update();
         uint16_t j = JOY_readJoypad(JOY_1);
         if (bench_req && !bench_done) {
