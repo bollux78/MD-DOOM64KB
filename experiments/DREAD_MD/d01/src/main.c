@@ -131,8 +131,11 @@ static int blocked(int16_t x, int16_t y)
 {
     const int16_t R = 16;
     const MapSector *here = &map_sectors[map_subs[R_PointInSub(x, y)].sector];
-    for (uint16_t i = 0; i < map_counts[5]; i++) {
-        const MapLine *l = &map_lines[i];
+    const int16_t gx = (int16_t)((x - map_bm[0]) >> 7), gy = (int16_t)((y - map_bm[1]) >> 7);
+    if (gx < 0 || gy < 0 || gx >= map_bm[2] || gy >= map_bm[3]) return 1;
+    const uint16_t cell = (uint16_t)(gy * map_bm[2] + gx);
+    for (uint16_t k = map_bm_off[cell]; k < map_bm_off[cell + 1]; k++) {
+        const MapLine *l = &map_lines[map_bm_list[k]];
         const int16_t ax = map_verts[l->v1][0], ay = map_verts[l->v1][1];
         const int16_t bx = map_verts[l->v2][0], by = map_verts[l->v2][1];
         if ((ax < bx ? ax : bx) > x + R || (ax > bx ? ax : bx) < x - R) continue;

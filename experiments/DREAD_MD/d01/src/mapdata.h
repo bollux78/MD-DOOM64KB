@@ -60,5 +60,7 @@ extern const uint8_t tex_blob[];
 extern const uint16_t tex_blob_w[];
 extern const MapTex map_tex[];
 extern const int16_t map_start[3];
-extern const uint16_t map_counts[6];   /* verts, segs, subsectors, nodes, sectors, lines */
+extern const uint16_t map_counts[6];
+extern const int16_t map_bm[4];          /* collision grid: x0, y0, width, height (128-unit cells) */
+extern const uint16_t map_bm_off[], map_bm_list[];   /* verts, segs, subsectors, nodes, sectors, lines */
 #endif

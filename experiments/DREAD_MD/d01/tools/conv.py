@@ -406,6 +406,23 @@ def main():
         "{%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in sec_rows)))
     H.append("const MapLine map_lines[%d] = {%s};" % (len(lines), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d}" % (l[0], l[1], l[2], sec_of_side(l[5]), sec_of_side(l[6]), l[3], l[4]) for l in lines)))
+    # collision grid (128-unit cells): every line listed in the cells its bbox, grown by the player radius, touches
+    BM, RAD = 128, 24
+    xs_ = [v[0] for v in verts]; ys_ = [v[1] for v in verts]
+    bx0, by0 = min(xs_) - RAD, min(ys_) - RAD
+    bw, bh = (max(xs_) + RAD - bx0) // BM + 1, (max(ys_) + RAD - by0) // BM + 1
+    cells = [[] for _ in range(bw * bh)]
+    for i, l in enumerate(lines):
+        ax, ay = verts[l[0]]; bx, by = verts[l[1]]
+        for cy in range((min(ay, by) - RAD - by0) // BM, (max(ay, by) + RAD - by0) // BM + 1):
+            for cx in range((min(ax, bx) - RAD - bx0) // BM, (max(ax, bx) + RAD - bx0) // BM + 1):
+                cells[cy * bw + cx].append(i)
+    offs, lst = [], []
+    for c in cells: offs.append(len(lst)); lst += c
+    offs.append(len(lst))
+    H.append("const int16_t map_bm[4] = {%d,%d,%d,%d};" % (bx0, by0, bw, bh))
+    H.append("const uint16_t map_bm_off[%d] = {%s};" % (len(offs), ",".join(map(str, offs))))
+    H.append("const uint16_t map_bm_list[%d] = {%s};" % (max(1, len(lst)), ",".join(map(str, lst)) or "0"))
     # doors: sectors behind manual door lines, plus sectors tagged by switch/use door lines.
     # open height = lowest neighbouring ceiling - 4 (as in Doom)
     MANUAL = {1, 26, 27, 28, 31, 32, 33, 34, 117, 118}
