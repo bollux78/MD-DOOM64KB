@@ -43,7 +43,8 @@ static inline uint32_t now_lines(void) { return 0; }
 static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
 static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
-static uint16_t RCP4[1024];        /* 2^20 / z, z = 16..1023 */
+static uint16_t RCP4[1024];
+static uint16_t RCPF[1024];       /* 2^19 * FOCAL / 64 / z (per mode) */        /* 2^20 / z, z = 16..1023 */
 
 static uint8_t clipbuf[2 * VW_MAX];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
 #define ceilclip clipbuf
@@ -139,6 +140,7 @@ void R_SetMode(uint16_t colb, uint16_t tcols)
     r_vfocal = colb == 2 ? 179 : 90;
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
+    for (int z = 16; z < 1024; z++) RCPF[z] = (uint16_t)(((1UL << 19) / 64 * r_halfw) / (uint32_t)z);
     for (int x = 0; x < r_vw; x++) r_colofs[x] = (uint16_t)(((x * colb) >> 2) * (r_vh * 4) + ((x * colb) & 3));
 #if defined(__m68k__) || defined(__mc68000__)
     r_fill_end = colb == 2 ? fillw_end : fillb_end;
@@ -199,10 +201,11 @@ __attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
 {
     int32_t ax = x4 < 0 ? -x4 : x4;
     if (ax >= (z4 << 6)) ax = (z4 << 6) - 1;
-    int sh; const uint16_t r = rcp_norm(z4, &sh);
-    /* ax * 2^14 / z = ax * (2^20/zn) >> (6 + sh) ; result as 24.8 then << 8 */
-    int32_t q = (int32_t)(mulu16((uint16_t)ax, r) >> (6 + sh));     /* ax * 64 * 256 / z */
-    q = mul32k(q, FOCAL) >> 6;                                        /* * FOCAL / 64 */
+    int sh = 0;
+    int32_t z = z4;
+    while (z >= 1024) { z >>= 1; sh++; }
+    const uint16_t r = RCPF[z < 16 ? 16 : z];                         /* 2^19 * FOCAL / 64 / z */
+    int32_t q = (int32_t)(mulu16((uint16_t)ax, r) >> (5 + sh));       /* ax * FOCAL * 256 / z */
     if (x4 < 0) q = -q;
     return ((int32_t)HALF_W << 16) + (q << 8);
 }
@@ -211,7 +214,7 @@ __attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
 static int32_t yrow(int16_t dh, int32_t iz)
 {
     int32_t b = iz >> 5; if (b > 32767) b = 32767;
-    int32_t a = ((int32_t)dh * VFOCAL) >> 2;
+    int32_t a = muls16(dh, (int16_t)VFOCAL) >> 2;
     if (a > 32767) a = 32767;
     if (a < -32767) a = -32767;
     int32_t r = ((int32_t)HORIZON << 16) - (muls16((int16_t)a, (int16_t)b) << 1);
@@ -511,7 +514,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */
     job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
-    job.cpal = fs->ceilpal; job.ccol2 = fs->ceilcol * (COLB == 2 ? 0x101 : 1); job.fpal = fs->floorpal; job.fcol2 = fs->floorcol * (COLB == 2 ? 0x101 : 1);
+    job.cpal = fs->ceilpal; job.ccol2 = COLB == 2 ? (uint16_t)(fs->ceilcol << 8 | fs->ceilcol) : fs->ceilcol; job.fpal = fs->floorpal; job.fcol2 = COLB == 2 ? (uint16_t)(fs->floorcol << 8 | fs->floorcol) : fs->floorcol;
     job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
     job.mid = mid; job.up = up; job.lo = lo;
     job.closed = 0;
