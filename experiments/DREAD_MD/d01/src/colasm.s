@@ -362,11 +362,13 @@ span_fill:
    the remap table.  preserves d0-d3, d6, d7, a2, a3, a5, a6 */
 tex_part:
         movem.l %d0-%d3/%d6-%d7/%a3/%a5,-(%sp)
+#if NPAL != 1
         move.w  10(%a4),%d0                 /* span palette */
         move.w  %d0,t_spal
         mulu.w  #NPAL*256,%d0
         addi.w  #128,%d0
         move.w  %d0,t_spoff                 /* span*NPAL*256 + 128 (remap base offset) */
+#endif
         move.w  %d5,t_y0
         move.l  J_ZPP(%a6),%a1
         move.w  %d7,%d1

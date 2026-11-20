@@ -559,7 +559,9 @@ void R_RenderView(const View *v, uint8_t *fb)
     frac_tz = (muls16(fx, vcos) + muls16(fy, vsin)) >> 26;
     frac_tx = (muls16(fx, vsin) - muls16(fy, vcos)) >> 26;
     for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; nxt[c] = (uint8_t)c; }
+#if !defined(NPAL) || NPAL != 1
     { uint32_t *t = (uint32_t *)tilepal; for (int i = 0; i < (int)(sizeof tilepal / 4); i++) t[i] = 0xFFFFFFFFUL; }
+#endif
     nxt[VIEW_W] = VIEW_W;
     closed = 0;
     rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = rstats.col_visits = rstats.anchors = 0;

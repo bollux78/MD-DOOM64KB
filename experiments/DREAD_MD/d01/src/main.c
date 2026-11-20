@@ -47,9 +47,11 @@ static void vint_cb(void)
         DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
         dma_pos += n;
         if (dma_pos >= FB_BYTES) {
+#if !defined(NPAL) || NPAL != 1
             const uint16_t nt = shown ? NT0 : NT1;
             for (int r = 0; r < VIEW_TROWS; r++)
                 DMA_doDma(DMA_VRAM, (void *)(ntbuf + r * 32), nt + (VIEW_ROW0 + r) * 128, 32, 2);
+#endif
             shown ^= 1;
             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
             dma_src = 0;
@@ -219,7 +221,9 @@ int main(bool hard)
         R_RenderView(&view, fbuf[cur_buf]);
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
+#if !defined(NPAL) || NPAL != 1
         R_BuildNametable(ntbuf, shown ? TILE_FB0 : TILE_FB1);   /* goes to the hidden copy */
+#endif
         dma_pos = 0; dma_src = fbuf[cur_buf];
         cur_buf ^= 1;
         if (bench_req && !bench_done) bench_frames++;
