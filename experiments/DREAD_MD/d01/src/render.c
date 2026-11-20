@@ -43,6 +43,7 @@ static inline uint32_t now_lines(void) { return 0; }
 static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
 static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
+static uint16_t RCP4[1024];        /* 2^20 / z, z = 16..1023 */
 
 static uint8_t clipbuf[2 * VIEW_W];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
 #define ceilclip clipbuf
@@ -120,6 +121,7 @@ static inline int32_t advance(int32_t a, int32_t delta, int32_t f8)
 
 void R_Init(void)
 {
+    for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
     for (int i = 0; i < map_counts[4]; i++) map_sectors[i] = map_sectors_init[i];
     for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF;
 }
@@ -144,13 +146,28 @@ static void xform(uint16_t v)
 }
 
 /* screen x in 16.16 for a camera-space point (x4, z4), z4 >= NEAR4 */
+/* reciprocal table: RCP4[z] = 2^20 / z for z in 16..1023 (larger z are normalised by shifting) */
+static inline uint16_t rcp_norm(int32_t z, int *sh)
+{
+    int s2 = 0;
+    while (z >= 1024) { z >>= 1; s2++; }
+    *sh = s2;
+    return RCP4[z < 16 ? 16 : z];
+}
+/* 2^24 / z4 */
+static inline int32_t inv_z(int32_t z4)
+{
+    int sh; const uint16_t r = rcp_norm(z4, &sh);
+    return ((int32_t)r << 4) >> sh;
+}
+/* screen x in 16.16: HALF_W + x*FOCAL/z  (FOCAL = 64) */
 __attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
 {
-    /* x/z * FOCAL; |x/z| is clamped to 64 screens */
     int32_t ax = x4 < 0 ? -x4 : x4;
     if (ax >= (z4 << 6)) ax = (z4 << 6) - 1;
-    /* (ax * 64 << 8) / z4 : ax < 2^15 so ax << 14 < 2^29, quotient < 2^20 -> split divide */
-    int32_t q = (int32_t)udiv32_16((uint32_t)ax << 14, (uint16_t)z4);   /* ax*FOCAL*256/z4 (FOCAL = 64) */
+    int sh; const uint16_t r = rcp_norm(z4, &sh);
+    /* ax * 2^14 / z = ax * (2^20/zn) >> (6 + sh) ; result as 24.8 then << 8 */
+    int32_t q = (int32_t)(mulu16((uint16_t)ax, r) >> (6 + sh));
     if (x4 < 0) q = -q;
     return ((int32_t)HALF_W << 16) + (q << 8);
 }
@@ -310,7 +327,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     const uint8_t bucket = fs->bucket;
 
     /* inverse depth (2^24 / z4) and u (half texels) at both ends */
-    const int32_t iz1 = (int32_t)udiv32_16(1UL << 24, (uint16_t)z1), iz2 = (int32_t)udiv32_16(1UL << 24, (uint16_t)z2);
+    const int32_t iz1 = inv_z(z1), iz2 = inv_z(z2);
     int32_t u1 = s->xoff, u2 = s->xoff + s->len;
     if (t1) u1 += (int32_t)(((int64_t)s->len * t1) >> 16);
     if (t2 != 65536) u2 = s->xoff + (int32_t)(((int64_t)s->len * t2) >> 16);

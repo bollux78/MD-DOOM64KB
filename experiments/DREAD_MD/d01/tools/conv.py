@@ -202,23 +202,52 @@ def main():
     # work in a perceptual-ish space (gamma): dark shades spread less
     P = (U / 255.0) ** 0.6
     rng = np.random.default_rng(1)
-    K = 15
-    C = [P[np.argmax(w)]]
-    for _ in range(K - 1):          # k-means++ seeding
-        d = np.min(((P[:, None, :] - np.array(C)[None]) ** 2).sum(-1), axis=1) * w
-        C.append(P[rng.choice(len(P), p=d / d.sum())])
-    C = np.array(C)
-    for _ in range(40):
-        a = ((P[:, None, :] - C[None]) ** 2).sum(-1).argmin(1)
-        for k in range(K):
-            m = a == k
-            if m.any():
-                C[k] = (P[m] * w[m, None]).sum(0) / w[m].sum()
-    C = (C ** (1 / 0.6)) * 255.0
-    # MD 9-bit colour (levels 0..7 per channel, DAC ~ 0..252)
-    mdlev = lambda v: int(max(0, min(7, round(v / 36.43))))
-    md = [(0, 0, 0)] + [(mdlev(c[0]), mdlev(c[1]), mdlev(c[2])) for c in C]
-    mdrgb = np.array([[l * 36.43 for l in c] for c in md])
+    # ---- palette chosen FOR colour pairs: the screen shows 2-pixel mixes, so pick the 16 MD colours
+    # whose 136 pair-mixes best cover the map's colours (greedy over all 512 MD colours + local refine).
+    import os
+    MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
+    DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
+    cand_lv = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
+    cand = DAC[cand_lv]                                   # 512 x 3, sRGB-ish
+    lin_c = (cand / 255.0) ** 2.2
+    # samples: distinct colours weighted by sqrt(count) (cap for speed)
+    if len(U) > 3000:
+        keep = np.argsort(-w)[:3000]; U2, w2 = U[keep], w[keep]
+    else:
+        U2, w2 = U, w
+    def mixd(ia, ib):                                      # distance of samples to the mix of candidates ia, ib (arrays)
+        m = ((lin_c[ia] + lin_c[ib]) / 2) ** (1 / 2.2) * 255.0
+        sp = np.sqrt(((cand[ia] - cand[ib]) ** 2).sum(-1))
+        return np.sqrt(((U2[:, None, :] - m[None]) ** 2).sum(-1)) + MIXW * sp[None]
+    chosen = [0]
+    err = mixd(np.array([0]), np.array([0]))[:, 0]
+    for step in range(15):
+        best = None
+        for c in range(512):
+            if c in chosen: continue
+            ia = np.array(chosen + [c]); ib = np.full(len(ia), c)
+            e = np.minimum(err, mixd(ia, ib).min(1))
+            tot = (e * w2).sum()
+            if best is None or tot < best[0]: best = (tot, c, e)
+        chosen.append(best[1]); err = best[2]
+    def total(ch):
+        ch = np.array(ch); ia, ib = np.triu_indices(len(ch))
+        return (mixd(ch[ia], ch[ib]).min(1) * w2).sum()
+    cur = total(chosen)
+    for it in range(3):                                    # refine: move each colour one DAC step if it helps
+        improved = False
+        for i in range(1, 16):
+            lv = cand_lv[chosen[i]]
+            for d in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1),(1,1,1),(-1,-1,-1)]:
+                nl = np.clip(lv + d, 0, 7); nc = int(nl[0] * 64 + nl[1] * 8 + nl[2])
+                if nc in chosen: continue
+                trial = chosen[:i] + [nc] + chosen[i + 1:]
+                t = total(trial)
+                if t < cur: cur, chosen, improved = t, trial, True; lv = nl
+        if not improved: break
+    md = [tuple(int(v) for v in cand_lv[c]) for c in chosen]
+    mdrgb = cand[chosen]
+    print("palette fit: mean pair error %.1f" % (cur / w2.sum()))
 
     def nearest(rgb):
         return int(((mdrgb - rgb) ** 2).sum(-1).argmin())
@@ -229,7 +258,6 @@ def main():
     pairs = [(a, b) for a in range(16) for b in range(a, 16)]
     mix = np.array([((lin[a] + lin[b]) / 2) ** (1 / 2.2) * 255.0 for a, b in pairs])
     spread = np.array([np.sqrt(((mdrgb[a] - mdrgb[b]) ** 2).sum()) for a, b in pairs])
-    MIXW = float(__import__("os").environ.get("DREAD_MIX_PENALTY", "0.25"))
 
     def nearest_pair(rgb):
         d = np.sqrt(((mix - rgb) ** 2).sum(-1)) + MIXW * spread
@@ -324,7 +352,7 @@ def main():
     H.append("#include \"mapdata.h\"")
     H.append("const uint16_t md_palette[16] = {%s};" % ",".join(
         "0x%03X" % ((c[2] * 2) << 8 | (c[1] * 2) << 4 | (c[0] * 2)) for c in md))
-    H.append("const uint8_t pal_rgb[16][3] = {%s};" % ",".join("{%d,%d,%d}" % tuple(int(l * 36.43) for l in c) for c in md))
+    H.append("const uint8_t pal_rgb[16][3] = {%s};" % ",".join("{%d,%d,%d}" % tuple(int(DAC[l]) for l in c) for c in md))
     H.append("const int16_t map_verts[%d][2] = {%s};" % (len(verts), ",".join("{%d,%d}" % v for v in verts)))
     H.append("const MapSeg map_segs[%d] = {%s};" % (len(seg_rows), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in seg_rows)))
