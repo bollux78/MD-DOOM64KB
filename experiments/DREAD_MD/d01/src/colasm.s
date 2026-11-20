@@ -162,14 +162,28 @@ seg_columns:
         sub.w   %d0,%d4
         ble.s   1f
         move.w  %d0,%d5
-        move.w  J_CPAL+2(%a6),%a4
-        bsr     span_fill
+        add.w   %d5,%d5                     /* fill inline: a0 = column + y0*4 - 4, jump into the core */
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  J_CPAL+2(%a6),%d5
+        add.w   %d4,%d4
+        add.w   %d4,%d4
+        move.l  r_fill_end,%a1
+        suba.w  %d4,%a1
+        jsr     (%a1)
 1:      move.w  %d1,%d4                     /* floor: yf .. bot */
         sub.w   %d3,%d4
         ble.s   1f
         move.w  %d3,%d5
-        move.w  J_FPAL+2(%a6),%a4
-        bsr     span_fill
+        add.w   %d5,%d5                     /* fill inline: a0 = column + y0*4 - 4, jump into the core */
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  J_FPAL+2(%a6),%d5
+        add.w   %d4,%d4
+        add.w   %d4,%d4
+        move.l  r_fill_end,%a1
+        suba.w  %d4,%a1
+        jsr     (%a1)
 1:
         move.w  J_FLAGS(%a6),%d4
         btst    #0,%d4
@@ -211,6 +225,8 @@ seg_columns:
         lea     J_UP(%a6),%a4
         bsr     tex_part
 .Lnoup:
+        move.w  %d7,%d6                     /* tex_part does not keep d6 */
+        add.w   %d6,%d6
         move.w  J_FLAGS(%a6),%d4
         btst    #3,%d4
         beq.s   .Lnolo
@@ -279,13 +295,13 @@ fillb_end:
 fillw_end:
         rts
 
-/* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.  preserves d0-d3, d6, d7, a2, a3, a5, a6
+/* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.  preserves d0-d3, d7, a2, a3, a5, a6
    Part: 0 texels.l  4 wmask  6 hs2  8 hmask  10 pal  12 v at the horizon (16.16)
    Fast path (Dread's scalers): one unrolled routine per quantised texel step, every row a single
    move with constant offsets (16 cycles); a1 = column + v of the top row. Spans that would run past
    the twice-stored column use the masked interpolating core. */
 tex_part:
-        movem.l %d0-%d3/%d6-%d7/%a3,-(%sp)
+        movem.l %d0-%d3,-(%sp)              /* caller keeps d6 = c*2 itself (recomputed after the call) */
         move.w  %d7,%d1
         add.w   %d1,%d1
         move.l  J_U(%a6),%a1
@@ -304,14 +320,14 @@ tex_part:
         lsl.l   #6,%d1
         move.l  12(%a4),%d2
         sub.l   %d1,%d2                     /* d2 = v of the top row (16.16) */
-        move.w  %d4,%d7                     /* d7 = n */
-        subq.w  #1,%d4
-        move.w  %d3,%d1
-        mulu.w  %d4,%d1                     /* d1 = span * 1024 */
         move.w  8(%a4),%d0                  /* hmask */
         add.w   %d5,%d5
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0           /* a0 = top - 4 */
+        move.w  %d4,%a4                     /* a4 = n (the Part is no longer needed) */
+        subq.w  #1,%d4
+        move.w  %d3,%d1
+        mulu.w  %d4,%d1                     /* d1 = span * 1024 */
         cmpi.w  #32767,%d3
         beq.s   .Lmasked                    /* 32 texels per row or more: no scaler */
         move.l  %d2,%d6
@@ -321,9 +337,9 @@ tex_part:
         move.l  %d1,%d4
         lsr.l   #8,%d4
         lsr.l   #2,%d4                      /* d4 = span (integer texels) */
-        move.w  %d4,%a3
+        move.w  %d4,%d5
         lsr.w   #5,%d4
-        add.w   %a3,%d4
+        add.w   %d5,%d4
         add.w   %d6,%d4
         addq.w  #1,%d4                      /* v + span * 33/32 + 1 (quantisation margin) */
         move.w  %d0,%d5
@@ -333,21 +349,21 @@ tex_part:
         move.w  r_tsh,%d5
         lsl.w   %d5,%d6
         adda.w  %d6,%a1                     /* a1 = first texel */
-        lea     scal_q,%a3
-        moveq   #0,%d5
-        move.b  0(%a3,%d3.w),%d5            /* scaler level */
-        add.w   %d5,%d5
-        add.w   %d5,%d5
-        move.l  r_scal,%a3
-        move.l  0(%a3,%d5.w),%a3            /* end of the scaler */
-        move.w  %d7,%d5
+        move.w  %a4,%d5                     /* n * 6 */
         add.w   %d5,%d5
         move.w  %d5,%d6
         add.w   %d5,%d5
-        add.w   %d6,%d5                     /* n * 6 */
-        suba.w  %d5,%a3
-        jsr     (%a3)
-        movem.l (%sp)+,%d0-%d3/%d6-%d7/%a3
+        add.w   %d6,%d5
+        lea     scal_q,%a4
+        moveq   #0,%d4
+        move.b  0(%a4,%d3.w),%d4            /* scaler level */
+        add.w   %d4,%d4
+        add.w   %d4,%d4
+        move.l  r_scal,%a4
+        move.l  0(%a4,%d4.w),%a4            /* end of the scaler */
+        suba.w  %d5,%a4
+        jsr     (%a4)
+        movem.l (%sp)+,%d0-%d3
         rts
 .Lmasked:
         lsl.l   #6,%d1                      /* span 16.16 */
@@ -361,12 +377,12 @@ tex_part:
         swap    %d3                         /* d3.w step int, d4.w step frac */
         move.l  %d2,%d1
         swap    %d1                         /* d1.w v int, d2.w v frac */
-        move.w  %d7,%d6
+        move.w  %a4,%d6
         mulu.w  r_tmk_sz,%d6
-        move.l  r_tmk_end,%a3
-        suba.w  %d6,%a3
-        jsr     (%a3)
-        movem.l (%sp)+,%d0-%d3/%d6-%d7/%a3
+        move.l  r_tmk_end,%a4
+        suba.w  %d6,%a4
+        jsr     (%a4)
+        movem.l (%sp)+,%d0-%d3
         rts
 
 /* masked cores: entry = end - n*size, bottom-up from k = n; d1/d2 v, d3/d4 step, d5 hmask, a0 = top - 4, a1 texels */
