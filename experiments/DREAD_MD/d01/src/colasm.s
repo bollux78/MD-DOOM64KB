@@ -331,21 +331,20 @@ tex_part:
         cmpi.l  #0x1FFFFF,%d3
         bhi.s   .Lmasked                    /* > 32 texels per row: no scaler */
         move.l  %d2,%d6
+        addi.l  #0x8000,%d6                 /* nearest texel: v = -0.3 must not wrap to H - 1 */
         swap    %d6
         and.w   %d0,%d6                     /* d6 = v top, integer, in [0, H) */
         move.l  %d1,%d4
         swap    %d4                         /* d4 = span (integer texels) */
-        add.w   %d4,%d6
-        lsr.w   #4,%d4
-        add.w   %d4,%d6
-        addq.w  #2,%d6                      /* v + span * 17/16 + 2 (quantisation margin) */
+        move.w  %d4,%a3
+        lsr.w   #5,%d4
+        add.w   %a3,%d4
+        add.w   %d6,%d4
+        addq.w  #1,%d4                      /* v + span * 33/32 + 1 (quantisation margin) */
         add.w   %d0,%d0
-        cmp.w   %d0,%d6
+        cmp.w   %d0,%d4
         bgt.s   .Lmasked2                   /* would leave the 2H stored texels */
-        move.l  %d2,%d6
-        swap    %d6
         lsr.w   #1,%d0
-        and.w   %d0,%d6                     /* v top */
         move.w  r_tsh,%d0
         lsl.w   %d0,%d6
         adda.w  %d6,%a1                     /* a1 = first texel */
