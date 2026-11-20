@@ -77,7 +77,7 @@ jobs:
           if make -C "$s3" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=3 -DROM_TAG_3PAL" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$s3/build.log" 2>&1; then
             cp "$s3/out/rom.bin" "$out/dread-md-d01-e1m1-3pal.bin"
           else echo "::warning::3pal build failed"; tail -20 "$s3/build.log"; fi
-          (cd "$out" && zip -q dread-md-d01-roms.zip dread-md-d01-e1m1*.bin) || true
+          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-e1m1*.bin\"))]; z.close()" "$out"
       - name: BlastEm bench route
         shell: bash
         run: |
