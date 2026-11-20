@@ -165,3 +165,45 @@ O que precisa adaptar:
 - Sem merge na main sem autorização. BlastEm ≤ 10.000 quadros por execução. Nada de segredos em logs.
 - Sem SRAM e sem mapper/SSF; RAM livre é para mapas grandes, atores e projéteis.
 - Conversão de cor dos sprites: sempre por pares de cores lado a lado (linhas verticais), paleta única.
+
+---------------------------------------------------------------------------------------------------
+## 7. Referências da versão Manifold (branch `m14ns`) para reaproveitar
+
+Tudo do Manifold está na branch **`m14ns`**: https://github.com/bollux78/MD-DOOM64KB/tree/m14ns
+O código do jogo Manifold é gerado aplicando patches ao fonte do motor em `stage_rom.py`
+(https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py); cada função `m14_*` é um bloco autocontido.
+
+**Céu (feito pelo usuário)**
+- Imagem 256×72 cinza com dither de linhas verticais: https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/sky_e1doom_256x72_pal.png
+  (outras versões: `sky_e1doom_256x72.png`, `sky_e1doom_256.png` na mesma pasta)
+- Instalação/rolagem: `install_sky` (https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py#L1424), `m14_sky_dma` (#L3818), `m14_sky_gate` (#L3845)
+- Commits: r061 https://github.com/bollux78/MD-DOOM64KB/commit/6a95ecd · r062 https://github.com/bollux78/MD-DOOM64KB/commit/d9b9d0c · r063 https://github.com/bollux78/MD-DOOM64KB/commit/22c73f1 · r064 https://github.com/bollux78/MD-DOOM64KB/commit/ebfc9db ·
+  gate https://github.com/bollux78/MD-DOOM64KB/commit/e9f0d82 · explicação das barras https://github.com/bollux78/MD-DOOM64KB/commit/18ca552
+- Na Dread: setores com teto `F_SKY1` já são marcados (`sky` em `MapSector`, cor `skycol`); o céu pode ir no
+  plane B atrás da vista (cor 0 transparente no teto de céu) com rolagem horizontal pelo ângulo.
+
+**Armas (todas da shareware)**
+- Handoff de armas: https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/docs/agent-handoffs/MANIFOLD-M14-WEAPONS.md
+- Gerador de dados das armas: https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/m14_wpn_gen.py
+- `m14_weapon` (#L4679), `m14_weapon_fix` (#L4115), `m14_weapon_sat` (#L4633) em https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/stage_rom.py
+- Commits: r041 SAT no VBlank https://github.com/bollux78/MD-DOOM64KB/commit/bd837af · r043 offsets reais do Doom https://github.com/bollux78/MD-DOOM64KB/commit/de3f26a ·
+  r045 todas as armas (A troca, C atira) https://github.com/bollux78/MD-DOOM64KB/commit/8e2d5ad · r046 corte/escala https://github.com/bollux78/MD-DOOM64KB/commit/3bb1c1f ·
+  r050 tiro automático https://github.com/bollux78/MD-DOOM64KB/commit/af449d4 · r069 dano por pellet https://github.com/bollux78/MD-DOOM64KB/commit/bef5770
+- Na Dread a arma já é sprite de hardware (`game_hud.c`, PAL1, tiles 848+); trocar arma = DMA dos tiles do frame.
+
+**Inimigos e lógica**
+- `m14_monsters` (#L3007): IA, estados, ataque, dano, morte; `m14_hazards` (#L3385); `m14_level_exit` (#L2941);
+  `m14_ai_throttle` (#L4553); sprites: `m14_sprite_xform` (#L4265), `m14_sprite_runs` (#L4440),
+  `m14_sprite_cap` (#L4492), `m14_sprite_zoom` (#L4529)
+- Objetos/itens: https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/m12_objects.py ·
+  https://github.com/bollux78/MD-DOOM64KB/blob/m14ns/experiments/DOOM_Manifold_E1M1/m01/m12_pickups.py
+- Commits: IA básica https://github.com/bollux78/MD-DOOM64KB/commit/8c3d6d0 · r057 animação andar/morte, dor, sons do WAD https://github.com/bollux78/MD-DOOM64KB/commit/2f20943 ·
+  r074 final da E1M8 e Barão https://github.com/bollux78/MD-DOOM64KB/commit/193f5e2 · r077 desempenho da IA (matemática 16 bits) https://github.com/bollux78/MD-DOOM64KB/commit/2ca00a7 ·
+  r079 IA adaptativa (a cada 3 quadros abaixo de ~8 fps) https://github.com/bollux78/MD-DOOM64KB/commit/f6a530a ·
+  r080–r085 sprites https://github.com/bollux78/MD-DOOM64KB/commit/2589b91 https://github.com/bollux78/MD-DOOM64KB/commit/72e42a3 https://github.com/bollux78/MD-DOOM64KB/commit/af91c7c · r082 invencível https://github.com/bollux78/MD-DOOM64KB/commit/4d1dd7a
+
+**Fases, intervalo, música, menu**
+- Composição das 9 fases, intervalo, créditos, música do intervalo: https://github.com/bollux78/MD-DOOM64KB/tree/m14ns/experiments/DOOM_Manifold_E1M1/tools/m14/multimap
+  (`gen_inter.py`, `gen_inter_music.py`, `gen_music.py`, `gen_credits.py`, `compose.py`)
+- Portas genéricas `m14_generic_doors` (#L3720), escadas `m14_stairs_down` (#L4246), menu `m14_start_menu` (#L2910)
+- Atenção: o Manifold usava 12 MB com SSF; **na Dread não** — só reaproveitar lógica e arte, não o layout de ROM.
