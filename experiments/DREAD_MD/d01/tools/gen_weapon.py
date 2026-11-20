@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from conv import Wad, read_patch
 import struct
 
-VIEW_W, VIEW_H = 256, 112
+VIEW_W, VIEW_H = 320, 144
 SX, SY = VIEW_W / 320.0, VIEW_H / 168.0
 FRAMES = [("PISGA0",), ("PISGB0", "PISFA0"), ("PISGC0",), ("PISGB0",)]
 
@@ -31,7 +31,7 @@ def main():
             d = sprites[nm]
             w, h, lo, to = struct.unpack_from("<HHhh", d, 0)
             img = read_patch(d)
-            x0, y0 = 1 - lo, 32 - to - 44      # raised so the hand shows above the bar (our view is 112 rows)
+            x0, y0 = 1 - lo, 32 - to - 16      # 168-line Doom view: centery 84 vs BASEYCENTER 100
             for y in range(h):
                 for x in range(w):
                     if img[y, x] >= 0 and 0 <= y0 + y < 200 and 0 <= x0 + x < 320:

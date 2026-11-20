@@ -10,21 +10,31 @@
 #endif
 #include "mapdata.h"
 
-#define VIEW_W   128               /* logical columns, each 2 screen pixels wide (H32: 256 px) */
+/* screen variants (H40, 320x144 on screen like Dread MD):
+ *   default / ROWDUP: 160 columns x 72 rows, each row shown twice by per-line vertical scroll
+ *   COLDUP (COLB=2): 80 columns of 4 pixels x 144 rows                                   */
+#ifndef COLB
+#define COLB     1                 /* bytes (pixel pairs) per logical column */
+#endif
+#ifndef VIEW_W
+#define VIEW_W   (COLB == 2 ? 80 : 160)
+#endif
 #ifndef VIEW_H
-#define VIEW_H   112               /* rows */
+#define VIEW_H   (COLB == 2 ? 144 : 72)
 #endif
 #define HALF_W   (VIEW_W / 2)
 #define HORIZON  (VIEW_H / 2)
 #define FOCAL    HALF_W            /* 90 degree horizontal field of view */
 #ifndef VFOCAL
-#define VFOCAL   128               /* vertical focal length in rows (column = ~2.3 rows wide on a 4:3 TV) */
+/* vertical focal in rows: logical pixel = 2*COLB H40 pixels (0.93 wide each) by (COLB==1 ? 2 : 1) lines */
+#define VFOCAL   (COLB == 2 ? 149 : 75)
 #endif
-#define FB_BYTES ((VIEW_W / 4) * VIEW_H * 4)
+#define FB_TCOLS (VIEW_W * COLB / 4)               /* tile columns */
+#define FB_BYTES (FB_TCOLS * VIEW_H * 4)
 
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
- * a byte is a pair of 4bpp pixels, so logical column x is byte (x&3) of each 4-byte tile row. */
-#define FB_COL(fb, x) ((fb) + (uint16_t)((uint16_t)((x) >> 2) * (uint16_t)(VIEW_H * 4)) + ((x) & 3))
+ * a byte is a pair of 4bpp pixels; logical column x starts at byte x*COLB of the 4-byte tile rows. */
+#define FB_COL(fb, x) ((fb) + (uint16_t)((uint16_t)(((x) * COLB) >> 2) * (uint16_t)(VIEW_H * 4)) + (((x) * COLB) & 3))
 
 typedef struct {
     int32_t x, y;                  /* 16.16 map units */

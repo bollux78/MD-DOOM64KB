@@ -7,22 +7,29 @@
 #include "render.h"
 #include "game_hud.h"
 
-#ifdef ROM_TAG_3PAL
-#define ROM_NAME   "DREAD-MD D01 E1M1 3PAL"
+#if COLB == 2
+#define ROM_NAME   "DREAD-MD D01 H40 COLUNAS DUP"
 #else
-#define ROM_NAME   "DREAD-MD D01 E1M1"
+#define ROM_NAME   "DREAD-MD D01 H40 LINHAS DUP"
 #endif
 #define VIEW_TROWS (VIEW_H / 8)
 /* SGDK 2.x VRAM: plane A name table at 0xE000 (we flip it with 0xA000), plane B 0xC000 (text),
  * window 0xD000, font right after the 16 system tiles. Our tiles start at tile 128 (0x1000). */
+#if COLB == 2
+#define NBUF       1                           /* 23 KB frame: one RAM + one VRAM copy (VRAM/RAM budget) */
+#else
+#define NBUF       2
+#endif
+#define TCOLS      FB_TCOLS                    /* 40 tile columns (H40) */
 #define TILE_FB0   128
-#define TILE_FB1   (TILE_FB0 + 32 * VIEW_TROWS)
+#define TILE_FB1   (NBUF == 2 ? TILE_FB0 + TCOLS * VIEW_TROWS : TILE_FB0)
 #define NT0        0xE000
-#define NT1        0xA000
+#define NT1        (NBUF == 2 ? 0xA000 : 0xE000)
+#define VTOP       (VIEW_ROW0 * 8)
 #define DMA_CHUNK  2048
 
-static uint8_t fbuf[2][FB_BYTES];
-static uint16_t ntbuf[VIEW_TROWS * 32];        /* view name table rows with per-tile palettes */
+static uint8_t fbuf[NBUF][FB_BYTES];
+static uint16_t ntbuf[VIEW_TROWS * TCOLS];        /* view name table rows with per-tile palettes */
 volatile uint16_t vints;
 static const uint8_t *volatile dma_src;   /* buffer being sent, 0 = idle (the POINTER is volatile) */
 static volatile uint16_t dma_pos;
@@ -38,10 +45,28 @@ volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
 
 static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(addr & 0x3FFF) << 16) | (addr >> 14); }
 
+#if COLB == 1
+/* rows shown twice: before each screen line of the view, scroll plane A up by half the lines so far */
+static volatile uint16_t hline;
+static HINTERRUPT_CALLBACK hint_cb(void)
+{
+    const uint16_t L = (uint16_t)(*(volatile uint8_t *)0xC00008) + 1;   /* next line, from the V counter */
+    int16_t v = 0;
+    if (L >= VTOP) v = (L < VTOP + 2 * VIEW_H) ? (int16_t)-((L - VTOP + 1) >> 1) : (int16_t)-VIEW_H;
+    *(volatile uint32_t *)0xC00004 = 0x40000010UL;   /* VSRAM 0 */
+    *(volatile uint16_t *)0xC00000 = (uint16_t)v;
+}
+#endif
+
 static void vint_cb(void)
 {
     vints++;
-    HUD_WeaponVBlank();
+#if COLB == 1
+    hline = 0;
+    *(volatile uint32_t *)0xC00004 = 0x40000010UL;
+    *(volatile uint16_t *)0xC00000 = 0;
+#endif
+    HUD_VBlank();
     if (dma_src) {
         const uint16_t n = (FB_BYTES - dma_pos) > DMA_CHUNK ? DMA_CHUNK : (FB_BYTES - dma_pos);
         const uint16_t dst = (shown ? TILE_FB0 : TILE_FB1) * 32 + dma_pos;
@@ -51,7 +76,7 @@ static void vint_cb(void)
 #if !defined(NPAL) || NPAL != 1
             const uint16_t nt = shown ? NT0 : NT1;
             for (int r = 0; r < VIEW_TROWS; r++)
-                DMA_doDma(DMA_VRAM, (void *)(ntbuf + r * 32), nt + (VIEW_ROW0 + r) * 128, 32, 2);
+                DMA_doDma(DMA_VRAM, (void *)(ntbuf + r * TCOLS), nt + (VIEW_ROW0 + r) * 128, TCOLS, 2);
 #endif
             shown ^= 1;
             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
@@ -63,20 +88,20 @@ static void vint_cb(void)
 static void setup_screen(void)
 {
     SYS_disableInts();
-    VDP_setScreenWidth256();
+    VDP_setScreenWidth320();
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     /* palette */
     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
     for (int p = 0; p < num_palettes && p < 3; p++)
         for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[p][i];
     /* both name tables: view rows point at the framebuffer tiles, column-major */
-    for (int b = 0; b < 2; b++) {
+    for (int b = 0; b < NBUF; b++) {
         const uint16_t nt = b ? NT1 : NT0, base = b ? TILE_FB1 : TILE_FB0;
         for (int ty = 0; ty < 32; ty++) {
             vram_cmd(nt + ty * 128);
             for (int tx = 0; tx < 64; tx++) {
                 uint16_t v = 0;
-                if (tx < 32 && ty >= VIEW_ROW0 && ty < VIEW_ROW0 + VIEW_TROWS) v = base + tx * VIEW_TROWS + (ty - VIEW_ROW0);
+                if (tx < TCOLS && ty >= VIEW_ROW0 && ty < VIEW_ROW0 + VIEW_TROWS) v = base + tx * VIEW_TROWS + (ty - VIEW_ROW0);
                 *(volatile uint16_t *)0xC00000 = v;
             }
         }
@@ -231,12 +256,19 @@ int main(bool hard)
     (void)hard;
     SYS_disableInts();
     SYS_setVIntCallback(vint_cb);
+#if COLB == 1
+    SYS_setHIntCallback(hint_cb);
+#endif
     SYS_enableInts();
     R_Init();
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
     title();
     HUD_Opening();
     setup_screen();
+#if COLB == 1
+    VDP_setHIntCounter(0);
+    VDP_setHInterrupt(TRUE);
+#endif
     HUD_Init(HUD_ROW0);
     HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };
     HUD_Draw(&hud);
@@ -310,6 +342,9 @@ int main(bool hard)
         view.z = cur_floor + 41;
 
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
+#if NBUF == 1
+        while (dma_src) {}                  /* one buffer: the previous frame must be out first */
+#endif
         R_RenderView(&view, fbuf[cur_buf]);
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
@@ -317,23 +352,19 @@ int main(bool hard)
         R_BuildNametable(ntbuf, shown ? TILE_FB0 : TILE_FB1);   /* goes to the hidden copy */
 #endif
         dma_pos = 0; dma_src = fbuf[cur_buf];
-        cur_buf ^= 1;
+        cur_buf ^= (NBUF - 1);
         if (bench_req && !bench_done) bench_frames++;
 
         if (++fps_n == 16) {
             const uint16_t dv = vints - fps_v0; fps_v0 = vints; fps_n = 0;
             const uint16_t f10 = dv ? (uint16_t)(16UL * 600 / dv) : 0;
             sprintf(txt, "FPS %2u.%u  SEGS %3u ", f10 / 10, f10 % 10, frame_segs);
-            SYS_disableInts();
-            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL3, 1, 0, 0), 1, 25, CPU);
-            SYS_enableInts();
+            HUD_Text(0, txt);
         }
         if (bench_done == 1) {
             const uint16_t f100 = (uint16_t)(bench_frames * 6000UL / (bench_vints ? bench_vints : 1));
             sprintf(txt, "BENCH %u quadros %u.%u%u FPS", (uint16_t)bench_frames, f100 / 100, (f100 / 10) % 10, f100 % 10);
-            SYS_disableInts();
-            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL3, 1, 0, 0), 1, 26, CPU);
-            SYS_enableInts();
+            HUD_Text(1, txt);
             bench_done = 2;
         }
     }

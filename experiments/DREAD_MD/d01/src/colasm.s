@@ -97,9 +97,26 @@ texnm_end:
    registers: d0 top/ntop  d1 bot/nbot  d2 yc  d3 yf  d6 c*2  d7 c
               a2 column pointer  a3 nxt[]  a5 clip[] (ceil at +0, floor at +VIEW_W)  a6 job
    ====================================================================================== */
-#define VIEW_W 128
-#define VIEW_H 112
-#define HORIZON 56
+#ifndef COLB
+#define COLB 1
+#endif
+#if COLB == 2
+#define VIEW_W 80
+#define VIEW_H 144
+#else
+#define VIEW_W 160
+#define VIEW_H 72
+#endif
+#define HORIZON (VIEW_H / 2)
+#if COLB == 2
+#define TNM_SZ 14
+#define TMK_SZ 16
+#else
+#define TNM_SZ 10
+#define TMK_SZ 14
+#endif
+#define CEIL_D (-128)
+#define FLOOR_D (VIEW_W - 128)
 #define J_FB 0
 #define J_YC 4
 #define J_YF 8
@@ -128,25 +145,31 @@ seg_columns:
         movem.l %d2-%d7/%a2-%a6,-(%sp)
         move.l  48(%sp),%a6
         move.l  r_clipbuf,%a5
-        lea     VIEW_W(%a5),%a5             /* a5 = floor clip; ceiling clip at -VIEW_W */
+        lea     128(%a5),%a5                /* a5 = clip + 128: ceiling at CEIL_D, floor at FLOOR_D (8-bit displacements) */
         move.l  r_nxt,%a3
         move.w  J_C0(%a6),%d7
 .Lcol:
         cmp.w   J_XE(%a6),%d7
         bge     .Ldone
         moveq   #0,%d0
-        move.b  -VIEW_W(%a5,%d7.w),%d0            /* top */
+        move.b  CEIL_D(%a5,%d7.w),%d0            /* top */
         moveq   #0,%d1
-        move.b  0(%a5,%d7.w),%d1       /* bot */
-        move.w  %d7,%d4                     /* column pointer: fb + (c>>2)*VIEW_H*4 + (c&3) */
+        move.b  FLOOR_D(%a5,%d7.w),%d1       /* bot */
+        move.w  %d7,%d4                     /* column pointer: fb + (bx>>2)*VIEW_H*4 + (bx&3), bx = c*COLB */
+#if COLB == 2
+        add.w   %d4,%d4
+#endif
+        move.w  %d4,%d5
         lsr.w   #2,%d4
         mulu.w  #VIEW_H*4,%d4
-        move.w  %d7,%d5
         andi.w  #3,%d5
         add.w   %d5,%d4
         move.l  J_FB(%a6),%a2
         adda.w  %d4,%a2
-        move.w  %d7,%d4                     /* tile counters offset: (c >> 2) * TROWS */
+        move.w  %d7,%d4                     /* tile offset: ((c*COLB) >> 2) * TROWS */
+#if COLB == 2
+        add.w   %d4,%d4
+#endif
         lsr.w   #2,%d4
         mulu.w  #TROWS,%d4
         move.w  %d4,J_TOFF(%a6)
@@ -194,8 +217,8 @@ seg_columns:
         lea     J_MID(%a6),%a4
         bsr     tex_part
 .Lclose:
-        clr.b   -VIEW_W(%a5,%d7.w)
-        clr.b   0(%a5,%d7.w)
+        clr.b   CEIL_D(%a5,%d7.w)
+        clr.b   FLOOR_D(%a5,%d7.w)
         move.w  %d7,%d4
         addq.w  #1,%d4
         move.b  %d4,0(%a3,%d7.w)
@@ -242,8 +265,8 @@ seg_columns:
 .Lnolo:
         cmp.w   %d1,%d0
         bge.s   .Lclose
-        move.b  %d0,-VIEW_W(%a5,%d7.w)
-        move.b  %d1,0(%a5,%d7.w)
+        move.b  %d0,CEIL_D(%a5,%d7.w)
+        move.b  %d1,FLOOR_D(%a5,%d7.w)
 .Lnext:
         addq.w  #1,%d7                      /* c = find_open(c + 1), path halving */
 .Lfind:
@@ -269,7 +292,11 @@ fill_core:
         jmp     (%a1)
         .set    k,VIEW_H
         .rept   VIEW_H
+#if COLB == 2
+        move.w  %d5,k*4(%a0)
+#else
         move.b  %d5,k*4(%a0)
+#endif
         .set    k,k-1
         .endr
 fillc_end:
@@ -527,10 +554,10 @@ tex_part:
         sub.w   %d7,%d6
         tst.w   t_mode
         beq.s   2f
-        mulu.w  #10,%d6
+        mulu.w  #TNM_SZ,%d6
         lea     tnm_end(%pc),%a4
         bra.s   3f
-2:      mulu.w  #14,%d6
+2:      mulu.w  #TMK_SZ,%d6
         lea     tmk_end(%pc),%a4
 3:      suba.w  %d6,%a4
         jsr     (%a4)
@@ -543,7 +570,13 @@ tex_part:
 /* cores: entry = end - n*size, draw bottom-up from k = n; d1/d2 v, d3/d4 step, a0 = top - 4, a1 texels */
         .set    k,VIEW_H
         .rept   VIEW_H
+#if COLB == 2
+        move.w  %d1,%d6
+        add.w   %d6,%d6
+        move.w  0(%a1,%d6.w),k*4(%a0)
+#else
         move.b  0(%a1,%d1.w),k*4(%a0)
+#endif
         add.w   %d4,%d2
         addx.w  %d3,%d1
         .set    k,k-1
@@ -555,7 +588,12 @@ tnm_end:
         .rept   VIEW_H
         move.w  %d1,%d6
         and.w   %d5,%d6
+#if COLB == 2
+        add.w   %d6,%d6
+        move.w  0(%a1,%d6.w),k*4(%a0)
+#else
         move.b  0(%a1,%d6.w),k*4(%a0)
+#endif
         add.w   %d4,%d2
         addx.w  %d3,%d1
         .set    k,k-1

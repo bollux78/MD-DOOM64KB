@@ -13,8 +13,10 @@ for line in subprocess.check_output([nm, "-S", elf], text=True).splitlines():
     f = line.split()
     if len(f) == 4: sym[f[3]] = int(f[0], 16) & 0xffffff; size[f[3]] = int(f[1], 16)
     elif len(f) == 3: sym.setdefault(f[2], int(f[0], 16) & 0xffffff)
-VW, VH = 128, int(os.environ.get("VIEW_H", "112"))
-FB = VW // 4 * VH * 4
+COLB = int(os.environ.get("COLB", "1"))
+VW, VH = (80, 144) if COLB == 2 else (160, 72)
+TC = VW * COLB // 4
+FB = TC * VH * 4
 def rd(g, name, n):
     return int.from_bytes(g.readmem(sym[name], n), "big")
 def readbig(g, addr, n):
@@ -74,15 +76,17 @@ try:
             fb = readbig(g, sym["fbuf"] + (cb ^ 1) * FB, FB)
             nt = struct.unpack(">%dH" % (VH // 8 * 32), readbig(g, sym["ntbuf"], VH // 8 * 64)) if "ntbuf" in sym else None
             from PIL import Image
-            im = Image.new("RGB", (VW * 2, VH))
+            RD = 2 if COLB == 1 else 1
+            im = Image.new("RGB", (TC * 8, VH * RD))
             px = im.load()
-            for x in range(VW):
-                base = (x >> 2) * VH * 4 + (x & 3)
-                for y in range(VH):
-                    b = fb[base + y * 4]
-                    rgb = pals[(nt[(y >> 3) * 32 + (x >> 2)] >> 13) & 3] if nt else pals[0]
-                    px[2 * x, y] = rgb[b >> 4]; px[2 * x + 1, y] = rgb[b & 15]
-            im.resize((VW * 4, VH * 2), Image.NEAREST).save(outdir / f"frame_{frames:03d}.png")
+            for y in range(VH * RD):
+                r = y // RD
+                for x in range(TC * 8):
+                    bx = x >> 1
+                    b = fb[(bx >> 2) * VH * 4 + r * 4 + (bx & 3)]
+                    rgb = pals[0]
+                    px[x, y] = rgb[b & 15] if (x & 1) else rgb[b >> 4]
+            im.resize((TC * 16, VH * RD * 2), Image.NEAREST).save(outdir / f"frame_{frames:03d}.png")
             shots.append(frames)
         if done:
             res = {"bench_frames": rd(g, "bench_frames", 4), "bench_vints": rd(g, "bench_vints", 4)}

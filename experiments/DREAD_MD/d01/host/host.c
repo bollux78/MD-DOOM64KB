@@ -8,15 +8,18 @@
 static uint8_t fb[FB_BYTES];
 static void save(const char *fn)
 {
-    FILE *f = fopen(fn, "wb");
-    static uint16_t nt[(VIEW_H / 8) * 32];
+    /* as on screen: 320 pixels wide, rows doubled in the row-duplicated variant */
+    static uint16_t nt[(VIEW_H / 8) * FB_TCOLS];
     R_BuildNametable(nt, 0);
-    fprintf(f, "P6 %d %d 255\n", VIEW_W * 2, VIEW_H);
-    for (int y = 0; y < VIEW_H; y++)
-        for (int x = 0; x < VIEW_W; x++) {
-            const uint8_t b = FB_COL(fb, x)[y * 4];
-            const int pl = nt[(y >> 3) * 32 + (x >> 2)] >> 13;
-            for (int k = 0; k < 2; k++) fwrite(pal_rgb_all[pl][k ? (b & 15) : (b >> 4)], 1, 3, f);
+    const int RD = COLB == 1 ? 2 : 1;
+    FILE *f = fopen(fn, "wb");
+    fprintf(f, "P6 %d %d 255\n", FB_TCOLS * 8, VIEW_H * RD);
+    for (int y = 0; y < VIEW_H * RD; y++)
+        for (int x = 0; x < FB_TCOLS * 8; x++) {
+            const int r = y / RD, bx = x >> 1;
+            const uint8_t b = fb[(bx >> 2) * VIEW_H * 4 + r * 4 + (bx & 3)];
+            const int pl = nt[(r >> 3) * FB_TCOLS + (bx >> 2)] >> 13;
+            fwrite(pal_rgb_all[pl][(x & 1) ? (b & 15) : (b >> 4)], 1, 3, f);
         }
     fclose(f);
 }

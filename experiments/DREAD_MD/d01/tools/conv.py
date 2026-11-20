@@ -329,6 +329,8 @@ def main():
                 for v in range(H2):
                     pa, pb = L[img[v % h, sx]]
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
+                if os.environ.get("DREAD_COLB", "1") == "2":
+                    one = bytes(x for bb in one for x in (bb, bb))   # words: the column is 4 pixels wide
                 col += one + one          # stored twice: the renderer skips the wrap mask
             offs.append(len(blob)); pids.append(k)
             blob += col

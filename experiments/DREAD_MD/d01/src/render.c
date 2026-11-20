@@ -85,12 +85,12 @@ static inline int16_t divs16(int32_t n, int16_t d) { return (int16_t)(n / d); }
 static inline int32_t muls16(int16_t a, int16_t b) { return (int32_t)a * b; }
 static inline uint32_t mulu16(uint16_t a, uint16_t b) { return (uint32_t)a * b; }
 static void col_fill(uint8_t *p, uint16_t n, uint16_t c)
-{ for (; n; n--) { *p = (uint8_t)c; p += 4; } }
+{ for (; n; n--) { p[0] = (uint8_t)c; if (COLB == 2) p[1] = (uint8_t)c; p += 4; } }
 /* draws bottom-up like the 68000 version: vbot = v of the last row, negstep = -vstep */
 static void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep, uint16_t hmask)
-{ p += (n - 1) * 4; for (; n; n--) { *p = tc[(uint16_t)(v >> 16) & hmask]; p -= 4; v += negstep; } }
+{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[((uint16_t)(v >> 16) & hmask) * COLB]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 static void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep)
-{ p += (n - 1) * 4; for (; n; n--) { *p = tc[(uint16_t)(v >> 16)]; p -= 4; v += negstep; } }
+{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[(uint16_t)(v >> 16) * COLB]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 #endif
 
 /* signed 32 x small signed 16 (|k| <= 255) */
@@ -167,7 +167,8 @@ __attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
     if (ax >= (z4 << 6)) ax = (z4 << 6) - 1;
     int sh; const uint16_t r = rcp_norm(z4, &sh);
     /* ax * 2^14 / z = ax * (2^20/zn) >> (6 + sh) ; result as 24.8 then << 8 */
-    int32_t q = (int32_t)(mulu16((uint16_t)ax, r) >> (6 + sh));
+    int32_t q = (int32_t)(mulu16((uint16_t)ax, r) >> (6 + sh));     /* ax * 64 * 256 / z */
+    q = mul32k(q, FOCAL) >> 6;                                        /* * FOCAL / 64 */
     if (x4 < 0) q = -q;
     return ((int32_t)HALF_W << 16) + (q << 8);
 }
@@ -176,7 +177,7 @@ __attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
 static int32_t yrow(int16_t dh, int32_t iz)
 {
     int32_t b = iz >> 5; if (b > 32767) b = 32767;
-    int32_t a = (int32_t)dh * (VFOCAL / 4);
+    int32_t a = ((int32_t)dh * VFOCAL) >> 2;
     if (a > 32767) a = 32767;
     if (a < -32767) a = -32767;
     int32_t r = ((int32_t)HORIZON << 16) - (muls16((int16_t)a, (int16_t)b) << 1);
@@ -197,6 +198,9 @@ static inline uint16_t u_of(uint32_t uz, int32_t iz)
     return (uz >= ((uint32_t)iz << 16)) ? 65535 : divu16(uz, (uint16_t)iz);
 }
 
+/* texels per row (16.16) at depth z4: (z4/4) * 65536 / VFOCAL */
+#define ZPP_K ((uint16_t)(4194304UL / VFOCAL))
+static inline int32_t zpp_of(uint16_t z4) { return (int32_t)(mulu16(z4, ZPP_K) >> 8); }
 static inline int ceil16(int32_t y) { return (y + 0xFFFF) >> 16; }
 static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -227,7 +231,7 @@ static ColJob job;
 /* per 8x8 tile: the palette of the first (= nearest, front-to-back) span drawn in it; later spans of
  * another colour family are drawn through pal_remap so no pixel ever shows in the wrong palette */
 #define TROWS (VIEW_H / 8)
-#define TILES (32 * TROWS)
+#define TILES (FB_TCOLS * TROWS)
 uint8_t tilepal[TILES];
 uint8_t *const r_tilepal = tilepal;
 const uint8_t *const r_remap = &pal_remap[0][0];
@@ -239,7 +243,7 @@ uint8_t *const r_nxt = nxt;
 static void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp);
 static inline uint8_t claim(int c, int y, uint8_t pal)
 {
-    uint8_t *t = &tilepal[(c >> 2) * TROWS + (y >> 3)];
+    uint8_t *t = &tilepal[((c * COLB) >> 2) * TROWS + (y >> 3)];
     if (*t == 0xFF) *t = pal;
     return *t;
 }
@@ -247,7 +251,7 @@ static inline uint8_t remap(uint8_t from, uint8_t to, uint8_t b) { return from =
 static void span_fill(int c, int y0, int n, uint8_t pal, uint8_t col)
 {
     uint8_t *p = FB_COL(rfb, c);
-    for (int y = y0; y < y0 + n; y++) p[y << 2] = remap(pal, claim(c, y, pal), col);
+    for (int y = y0; y < y0 + n; y++) { p[y << 2] = remap(pal, claim(c, y, pal), col); if (COLB == 2) p[(y << 2) + 1] = p[y << 2]; }
 }
 static void seg_columns(ColJob *j)
 {
@@ -287,7 +291,7 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
     const MapTex *m = &map_tex[t];
     p->tex = tex_blob + m->off[bucket];
     p->wmask = (1u << m->wshift) - 1;
-    p->hs2 = m->hshift + 1;                       /* columns are stored twice */
+    p->hs2 = m->hshift + 1 + (COLB - 1);         /* columns are stored twice (and as words when COLB = 2) */
     p->hmask = (1u << m->hshift) - 1;
     p->pal = m->pal[bucket];
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;
@@ -298,13 +302,14 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
     if (dbg_flags & 1) return;
 #if !(defined(__m68k__) || defined(__mc68000__))
     {   /* host reference of the 68000 path: draw, then remap rows whose tile belongs to another palette */
-        const int c = (int)(((col - rfb) / (VIEW_H * 4)) * 4 + ((col - rfb) % (VIEW_H * 4)));
+        const int c = (int)((((col - rfb) / (VIEW_H * 4)) * 4 + ((col - rfb) % (VIEW_H * 4))) / COLB);
         const uint8_t *tc = p->tex + ((u & p->wmask) << p->hs2);
         const int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
         for (int y = y1 - 1, k = 0; y >= y0; y--, k++) {
             const int32_t v = vbot - zpp * k;
-            const uint8_t b = tc[(uint16_t)(v >> 16) & p->hmask];
+            const uint8_t b = tc[((uint16_t)(v >> 16) & p->hmask) * COLB];
             col[y << 2] = remap((uint8_t)p->pal, claim(c, y, (uint8_t)p->pal), b);
+            if (COLB == 2) col[(y << 2) + 1] = col[y << 2];
         }
         return;
     }
@@ -448,7 +453,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             rstats.anchors++;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
             const uint16_t uA = u_of((uint32_t)uzA << 8, izA), zA = z4_of(izA);
-            int32_t ua8 = (int32_t)uA << 8, zp = (int32_t)zA << 7, du8 = 0, dzp = 0;
+            int32_t ua8 = (int32_t)uA << 8, zp = zpp_of(zA), du8 = 0, dzp = 0;
             if (n > 0) {
                 int32_t izB, uzB;
                 if (n == ANCHOR) { izB = iz + diz8; uzB = uz + duz8; }
@@ -456,11 +461,11 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 if (izB < 1) izB = 1;
                 if (uzB < 0) uzB = 0;
                 const uint16_t uB = u_of((uint32_t)uzB << 8, izB), zB = z4_of(izB);
-                if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = ((int32_t)zB - (int32_t)zA) << 4; }
+                if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = (zpp_of(zB) - zp) >> 3; }
                 else {
                     const int32_t du = (int32_t)uB - (int32_t)uA, dz = (int32_t)zB - (int32_t)zA;
                     du8 = (du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n;
-                    dzp = (dz > -256 && dz < 256) ? divs16(dz << 7, (int16_t)n) : (dz << 7) / n;
+                    (void)dz; dzp = (zpp_of(zB) - zp) / n;
                 }
             }
             const int m = n > 0 ? n : 1;
@@ -472,7 +477,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */
     job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
-    job.cpal = fs->ceilpal; job.ccol2 = fs->ceilcol; job.fpal = fs->floorpal; job.fcol2 = fs->floorcol;
+    job.cpal = fs->ceilpal; job.ccol2 = fs->ceilcol * (COLB == 2 ? 0x101 : 1); job.fpal = fs->floorpal; job.fcol2 = fs->floorcol * (COLB == 2 ? 0x101 : 1);
     job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
     job.mid = mid; job.up = up; job.lo = lo;
     job.closed = 0;
@@ -589,10 +594,10 @@ void R_RenderView(const View *v, uint8_t *fb)
 /* name table entries for the view (row-major, TROWS x 32): tile index | majority palette << 13 */
 void R_BuildNametable(uint16_t *nt, uint16_t tilebase)
 {
-    for (int tc = 0; tc < 32; tc++)
+    for (int tc = 0; tc < FB_TCOLS; tc++)
         for (int tr = 0; tr < TROWS; tr++) {
             const int i = tc * TROWS + tr;
             const uint16_t k = tilepal[i] == 0xFF ? 0 : tilepal[i];
-            nt[tr * 32 + tc] = (uint16_t)(tilebase + i) | (uint16_t)(k << 13);
+            nt[tr * FB_TCOLS + tc] = (uint16_t)(tilebase + i) | (uint16_t)(k << 13);
         }
 }

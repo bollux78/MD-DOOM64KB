@@ -13,7 +13,7 @@ extern const uint32_t title_tiles[];
 
 #define TILE_HUD    1024                       /* 0x8000: bar tiles, then the 16-tile face slot */
 #define TILE_FACE   (TILE_HUD + HUDW_NTILES)
-#define TILE_WEAP   1200                       /* 0x9600 */
+#define TILE_WEAP   848                        /* right after the framebuffer tiles (128 + 720); up to 176 tiles before the HUD at 1024 */
 #define TILE_TITLE  112                        /* after the SGDK font; 1412 tiles end below 0xC000 */
 #define BGB         0xC000                     /* SGDK 2.x plane B */
 #define BGA         0xE000
@@ -73,6 +73,11 @@ void HUD_Opening(void)
 /* ---- status bar on plane B rows [row0, row0+4) */
 static uint16_t hud_row0;
 static int16_t cur_face = -1;
+static uint16_t hud_nt[4][32];
+static volatile uint8_t hud_dirty, face_dirty, sat_dirty;
+static int16_t bob_x, bob_y;
+static uint16_t txt_nt[2][40];
+static volatile uint8_t txt_dirty;
 
 void HUD_Init(uint16_t row0)
 {
@@ -124,37 +129,54 @@ void HUD_Draw(const HudState *st)
             const uint8_t lead[3] = { v >= 100, v >= 10, 1 };
             for (int i = 0; i < 3; i++) if (lead[i]) rows[HUDW_TABLE_R + t][HUDW_TABLE_C + part * 3 + i] = hudw_ysm[t][d[i]];
         }
-    SYS_disableInts();
-    if (st->face != cur_face) { cur_face = st->face; vram_copy32(TILE_FACE, &hudw_faces[st->face][0][0], 16); }
-    for (int r = 0; r < 4; r++) {
-        vram_addr(BGB + (hud_row0 + r) * 128);
+    /* VRAM writes happen in the VBlank (HUD_VBlank): no interrupt masking during the frame,
+       so the per-line scroll interrupt (row-doubled view) never misses a line */
+    if (st->face != cur_face) { cur_face = st->face; face_dirty = 1; }
+    for (int r = 0; r < 4; r++)
         for (int c = 0; c < 32; c++) {
             const int face = r >= HUDW_FACE_R && r < HUDW_FACE_R + 4 && c >= HUDW_FACE_C && c < HUDW_FACE_C + HUDW_FACE_W;
-            vram_w(face ? (uint16_t)((2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
-                        : (uint16_t)((3 << 13) | (TILE_HUD + rows[r][c])));
+            hud_nt[r][c] = face ? (uint16_t)((2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
+                                : (uint16_t)((3 << 13) | (TILE_HUD + rows[r][c]));
         }
-    }
-    SYS_enableInts();
+    hud_dirty = 1;
 }
 
 /* ---- weapon: frame upload is requested here and done by the caller's VBlank (WEAP_VBlank) */
 static volatile int16_t weap_req = -1;
 void HUD_WeaponFrame(uint16_t f) { weap_req = (int16_t)f; }
-void HUD_WeaponVBlank(void)
+void HUD_WeaponBob(int16_t dx, int16_t dy) { bob_x = dx; bob_y = dy; sat_dirty = 1; }
+
+void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26 */
 {
-    if (weap_req < 0) return;
-    const uint16_t f = (uint16_t)weap_req; weap_req = -1;
-    DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
-}
-void HUD_WeaponBob(int16_t dx, int16_t dy)
-{
-    SYS_disableInts();
-    for (uint16_t i = 0; i < weap_npieces; i++) {
-        const uint8_t *p = weap_piece[i];
-        vram_addr(SLIST + i * 8);
-        vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + dy));
-        vram_addr(SLIST + i * 8 + 6);
-        vram_w((uint16_t)(128 + weap_x + p[0] + dx));
+    for (int i = 0; i < 40; i++) {
+        const char ch = *s ? *s++ : ' ';
+        txt_nt[line][i] = (uint16_t)((3 << 13) | 0x8000 | (TILE_FONT_INDEX + (ch - 32)));
     }
-    SYS_enableInts();
+    txt_dirty |= (uint8_t)(1 << line);
+}
+
+/* called from the VBlank interrupt: every VRAM update of the HUD, face, weapon and text */
+void HUD_VBlank(void)
+{
+    if (weap_req >= 0) {
+        const uint16_t f = (uint16_t)weap_req; weap_req = -1;
+        DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
+    }
+    if (face_dirty) { face_dirty = 0; DMA_doDma(DMA_VRAM, (void *)&hudw_faces[cur_face][0][0], TILE_FACE * 32, 16 * 16, 2); }
+    if (hud_dirty) {
+        hud_dirty = 0;
+        for (int r = 0; r < 4; r++) DMA_doDma(DMA_VRAM, hud_nt[r], BGB + (hud_row0 + r) * 128 + HUD_COL0 * 2, 32, 2);
+    }
+    for (int l = 0; l < 2; l++)
+        if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); }
+    if (sat_dirty) {
+        sat_dirty = 0;
+        for (uint16_t i = 0; i < weap_npieces; i++) {
+            const uint8_t *p = weap_piece[i];
+            vram_addr(SLIST + i * 8);
+            vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + bob_y));
+            vram_addr(SLIST + i * 8 + 6);
+            vram_w((uint16_t)(128 + weap_x + p[0] + bob_x));
+        }
+    }
 }

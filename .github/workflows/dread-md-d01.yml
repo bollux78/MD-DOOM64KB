@@ -18,22 +18,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Convert E1M1 and build ROM
+      - name: Convert E1M1 and build ROMs (H40 row-doubled / column-doubled)
         shell: bash
         run: |
           set -euo pipefail
           test -f "$WAD"
           D=experiments/DREAD_MD/d01
-          stage="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
-          rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
-          cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
-          DREAD_NPAL=1 python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" | tee "$stage/conv.log"
-          gcc -O2 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
-          "$stage/pvsgen" "$stage/src/pvs.c" | tee -a "$stage/conv.log"
-          python3 $D/tools/gen_hud.py --wad "$WAD" --out "$stage/src/hud_assets.h" | tee -a "$stage/conv.log"
-          sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"
-          python3 $D/tools/gen_weapon.py "$WAD" "$stage/src/weapon.c" | tee -a "$stage/conv.log"
-          python3 $D/tools/gen_title.py "$stage/src/title.c" | tee -a "$stage/conv.log"
           gdk=""
           for d in "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
             if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
@@ -42,47 +32,58 @@ jobs:
             while IFS= read -r f; do gdk="${f%/makefile.gen}"; break; done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -5)
           fi
           test -n "$gdk"; echo "SGDK: $gdk"
-          hdr="$(find "$gdk" -path '*boot/rom_header.c' | head -1)"
-          if [ -n "$hdr" ]; then dst="$stage/src/rom_header.c"; else hdr="$(find "$gdk" -path '*boot/rom_head.c' | head -1)"; mkdir -p "$stage/src/boot"; dst="$stage/src/boot/rom_head.c"; cp "$(dirname "$hdr")/sega.s" "$stage/src/boot/"; fi
-          echo "header: $hdr -> $dst"; cp "$hdr" "$dst"
-          python3 - "$dst" <<'PY'
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
+          out="$HOME/Projetos/Personal/dread-md/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          base="$RUNNER_TEMP/dread-d01-$GITHUB_RUN_ID"
+          echo "STAGE=$base" >> "$GITHUB_ENV"
+          build() {   # build COLB NAME FILE
+            local colb=$1 name=$2 file=$3 stage="$base-$1"
+            rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
+            cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
+            DREAD_NPAL=1 DREAD_COLB=$colb python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" > "$stage/conv.log"
+            gcc -O2 -DCOLB=$colb -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
+            "$stage/pvsgen" "$stage/src/pvs.c" >> "$stage/conv.log"
+            python3 $D/tools/gen_hud.py --wad "$WAD" --out "$stage/src/hud_assets.h" >> "$stage/conv.log"
+            sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"
+            python3 $D/tools/gen_weapon.py "$WAD" "$stage/src/weapon.c" >> "$stage/conv.log"
+            python3 $D/tools/gen_title.py "$stage/src/title.c" >> "$stage/conv.log"
+            hdr="$(find "$gdk" -path '*boot/rom_header.c' | head -1)"
+            local dst="$stage/src/rom_header.c"; cp "$hdr" "$dst"
+            python3 - "$dst" "$name" <<'PY'
           import re,sys,pathlib
           p=pathlib.Path(sys.argv[1]); s=p.read_text()
-          strs=re.findall(r'"([^"]*)"',s)
-          for old in strs:
+          for old in re.findall(r'"([^"]*)"',s):
               if len(old)==48 and old.strip():
-                  s=s.replace('"%s"'%old,'"%s"'%"DREAD-MD D01 E1M1".ljust(48),1)
+                  s=s.replace('"%s"'%old,'"%s"'%sys.argv[2].ljust(48)[:48],1)
           p.write_text(s)
           PY
-          grep -n "DREAD" "$dst" | head -3
-          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
-          mk="$stage/makefile.gen"
-          python3 - "$gdk/makefile.gen" "$mk" <<'PY'
+            python3 - "$gdk/makefile.gen" "$stage/makefile.gen" <<'PY'
           import pathlib,sys
           s=pathlib.Path(sys.argv[1]).read_text()
           s=s.replace("-flto -flto=auto -ffat-lto-objects","-fno-lto")
           pathlib.Path(sys.argv[2]).write_text(s)
           PY
-          export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
-          make -C "$stage" -f "$mk" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" 2>&1 | tail -25
-          test -s "$stage/out/rom.bin"
-          out="$HOME/Projetos/Personal/dread-md/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out"
-          cp "$stage/out/rom.bin" "$out/dread-md-d01-e1m1.bin"
+            make -C "$stage" -f "$stage/makefile.gen" -j4 release EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DCOLB=$colb" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$stage/build.log" 2>&1 || { tail -30 "$stage/build.log"; return 1; }
+            cp "$stage/out/rom.bin" "$out/$file"
+            cat "$stage/conv.log" | grep -E "^map|^pvs|^weapon|^title" || true
+          }
+          build 1 "DREAD-MD D01 H40 LINHAS DUPLICADAS" dread-md-d01-h40-linhas.bin
+          build 2 "DREAD-MD D01 H40 COLUNAS DUPLICADAS" dread-md-d01-h40-colunas.bin
           ls -l "$out"
-          echo "OUT=$out" >> "$GITHUB_ENV"
-          echo "STAGE=$stage" >> "$GITHUB_ENV"
-          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-e1m1*.bin\"))]; z.close()" "$out"
-      - name: BlastEm bench route
+          python3 -c "import zipfile,glob,os,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+\"/dread-md-d01-roms.zip\",\"w\",zipfile.ZIP_DEFLATED); [z.write(f,os.path.basename(f)) for f in sorted(glob.glob(o+\"/dread-md-d01-*.bin\"))]; z.close()" "$out"
+      - name: BlastEm bench route (both)
         shell: bash
         run: |
           set -euo pipefail
-          elf="$STAGE/out/release/rom.out"; test -s "$elf" || elf="$STAGE/out/rom.out"
-          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S --size-sort "$elf" | tail -12
-          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$elf" | grep -iE " _?(_bend|_end|__bss_end|_stack|__stack)$" || true
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
-          ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-e1m1.bin" "$elf" "$OUT/bench" || echo "::warning::bench failed"
-          "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" -d "$elf" > "$OUT/rom.dis" || true; cp "$STAGE/conv.log" "$OUT/"; gzip -c "$STAGE/src/mapdata.c" > "$OUT/mapdata.c.gz"
+          for v in 1 2; do
+            f=$([ $v = 1 ] && echo linhas || echo colunas)
+            elf="$STAGE-$v/out/release/rom.out"; test -s "$elf" || elf="$STAGE-$v/out/rom.out"
+            COLB=$v ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/dread-md-d01-h40-$f.bin" "$elf" "$OUT/bench-$f" | sed "s/^/[$f] /" || echo "::warning::bench $f failed"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: dread-md-d01
