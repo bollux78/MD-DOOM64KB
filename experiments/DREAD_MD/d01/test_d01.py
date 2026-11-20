@@ -65,18 +65,19 @@ try:
         s = [a for a, b in stats]; n = [b for a, b in stats]
         res.update(segs_avg=round(sum(s) / len(s), 1), segs_max=max(s), nodes_avg=round(sum(n) / len(n), 1), nodes_max=max(n))
     res["shots"] = shots
-    # statistical profile: interrupt BlastEm at random wall-clock moments, record the PC
-    import time, random, bisect, collections
+    # profile: the VBlank vector interrupts the CPU at 60 Hz; the stacked PC is a sample
+    import bisect, collections
     assert g.req(f"z0,{sym['R_RenderView']:x},2") == "OK"
+    vec = int.from_bytes(rom.read_bytes()[0x78:0x7C], "big") & 0xffffff
+    assert g.req(f"Z0,{vec:x},2") == "OK"
     funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
     keys = [f[0] for f in funcs]
     hist = collections.Counter()
-    for i in range(int(os.environ.get("PROF_SAMPLES", "400"))):
-        g.send("c"); time.sleep(random.uniform(0.01, 0.05))
-        g.proc.stdin.write(b"\x03"); g.proc.stdin.flush()
-        r = g.recv(timeout=30)
+    for i in range(int(os.environ.get("PROF_SAMPLES", "900"))):
+        g.cont()
         regs = g.req("g")
-        pc = int(regs[17 * 8:18 * 8], 16) & 0xffffff
+        sp = int(regs[15 * 8:16 * 8], 16) & 0xffffff
+        pc = int.from_bytes(g.readmem(sp + 2, 4), "big") & 0xffffff
         k = bisect.bisect_right(keys, pc) - 1
         hist[funcs[k][1] if k >= 0 else hex(pc)] += 1
     tot = sum(hist.values())
