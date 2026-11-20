@@ -274,7 +274,6 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp) { return mulhi15(
 
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
-    const uint32_t t_in = now_lines();
     xform(s->v1); xform(s->v2);
     int16_t x1 = vtx[s->v1], z1 = vtz[s->v1], x2 = vtx[s->v2], z2 = vtz[s->v2];
     if (z1 < NEAR4 && z2 < NEAR4) return;
@@ -364,8 +363,20 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     }
     const int need_tex = has_mid | has_up | has_lo;
     const int32_t diz8 = diz << 3, duz8 = duz << 3;
-    const uint32_t t_mid = now_lines(); tm_setup += t_mid - t_in;
     if (dbg_flags & 4) { for (int k = xs; k < xe; k++) if (ceilclip[k] < floorclip[k]) { close_col(k); closed++; } return; }
+
+    /* only the open part of the span matters: [c, xe2) */
+    int xe2 = xe;
+    while (xe2 > c && ceilclip[xe2 - 1] >= floorclip[xe2 - 1]) xe2--;
+    if (c > xs) {   /* move every interpolant to the first open column */
+        const int16_t k = (int16_t)(c - xs);
+        iz += mul32k(diz, k); uz += mul32k(duz, k);
+        Yc += mul32k(dYc, k); Yf += mul32k(dYf, k);
+        if (has_up) Ybc += mul32k(dYbc, k);
+        if (has_lo) Ybf += mul32k(dYbf, k);
+        xs = c;
+    }
+    xe = xe2;
 
     /* phase A: per-column values in plain arrays (cheap linear loops) */
     for (int k = xs; k < xe; k++) { a_yc[k] = (int16_t)ceil16(Yc); a_yf[k] = (int16_t)ceil16(Yf); Yc += dYc; Yf += dYf; }
@@ -387,7 +398,11 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
                 if (uzB < 0) uzB = 0;
                 const uint16_t uB = u_of((uint32_t)uzB << 8, izB), zB = z4_of(izB);
                 if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = ((int32_t)zB - (int32_t)zA) << 4; }
-                else { du8 = (((int32_t)uB - (int32_t)uA) << 8) / n; dzp = (((int32_t)zB - (int32_t)zA) << 7) / n; }
+                else {
+                    const int32_t du = (int32_t)uB - (int32_t)uA, dz = (int32_t)zB - (int32_t)zA;
+                    du8 = (du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n;
+                    dzp = (dz > -256 && dz < 256) ? divs16(dz << 7, (int16_t)n) : (dz << 7) / n;
+                }
             }
             const int m = n > 0 ? n : 1;
             for (int q = 0; q < m && k < xe; q++, k++) { a_u[k] = (uint16_t)(ua8 >> 8); a_zpp[k] = zp; ua8 += du8; zp += dzp; }
@@ -404,7 +419,6 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     seg_columns(&job);
     closed += job.closed;
     rstats.col_visits++;
-    tm_loop += now_lines() - t_mid;
 }
 
 /* Doom's R_CheckBBox idea: only the two silhouette corners of the box matter */
