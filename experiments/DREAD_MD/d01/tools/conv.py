@@ -234,6 +234,8 @@ def main():
     def nearest_pair(rgb):
         d = np.sqrt(((mix - rgb) ** 2).sum(-1)) + MIXW * spread
         a, b = pairs[int(d.argmin())]
+        if mdrgb[a].sum() > mdrgb[b].sum():
+            a, b = b, a
         return a, b
 
     lut = np.zeros((len(LIGHT_ROWS), 256, 2), np.uint8)
@@ -273,7 +275,7 @@ def main():
                 one = bytearray()
                 for v in range(H2):
                     pa, pb = lut[b, img[v % h, sx]]
-                    one.append((pa << 4 | pb) if (v & 1) == 0 else (pb << 4 | pa))
+                    one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
                 col += one + one          # stored twice: the renderer skips the wrap mask
             offs.append(len(blob))
             blob += col
