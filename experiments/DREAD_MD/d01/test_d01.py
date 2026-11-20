@@ -33,6 +33,7 @@ try:
     g.cont()
     assert g.req(f"z0,{sym['main']:x},2") == "OK"
     assert g.req("M%x,2:0001" % sym["bench_req"]) == "OK"
+    if os.environ.get("DBG"): assert g.req("M%x,2:%04x" % (sym["dbg_flags"], int(os.environ["DBG"]))) == "OK"
     assert g.req(f"Z0,{sym['R_RenderView']:x},2") == "OK"
     pal = struct.unpack(">16H", readbig(g, sym["md_palette"], 32))
     rgb = [((c >> 1 & 7) * 36, (c >> 5 & 7) * 36, (c >> 9 & 7) * 36) for c in pal]

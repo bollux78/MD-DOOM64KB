@@ -21,6 +21,7 @@
 
 MapSector map_sectors[256];
 RenderStats rstats;
+volatile uint16_t dbg_flags;   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
 
 static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
 static uint16_t vstamp[MAXV];
@@ -177,6 +178,7 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
 
 static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp)
 {
+    if (dbg_flags & 1) return;
     const uint8_t *tc = p->tex + ((u & p->wmask) << p->hshift);
     const int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
     col_tex(col + (y0 << 2), (uint16_t)(y1 - y0), tc, vbot, -zpp, p->hmask);
@@ -280,6 +282,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     const int32_t diz8 = diz << 3, duz8 = duz << 3;
 
     int cur = xs;
+    if (dbg_flags & 4) { for (int k = xs; k < xe; k++) if (ceilclip[k] < floorclip[k]) { close_col(k); closed++; } return; }
     while (c < xe) {
         if (c != cur) {                     /* skipped closed columns: move every interpolant */
             const int16_t k = (int16_t)(c - cur);
@@ -316,8 +319,8 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
         uint8_t *col = FB_COL(rfb, c);
         const int yc = clampi(ceil16(Yc), top, bot);
         const int yf = clampi(ceil16(Yf), yc, bot);
-        if (yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), ccol);
-        if (bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), fcol);
+        if (!(dbg_flags & 2) && yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), ccol);
+        if (!(dbg_flags & 2) && bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), fcol);
         const uint16_t u = (uint16_t)(ua8 >> 8);
         if (!bs) {
             if (has_mid && yf > yc) draw_part(col, yc, yf, &mid, u, zpa);
