@@ -112,7 +112,7 @@ static void xform(uint16_t v)
 }
 
 /* screen x in 16.16 for a camera-space point (x4, z4), z4 >= NEAR4 */
-static int32_t proj(int32_t x4, int32_t z4)
+__attribute__((noinline)) static int32_t proj(int32_t x4, int32_t z4)
 {
     /* x/z * FOCAL; |x/z| is clamped to 64 screens */
     int32_t ax = x4 < 0 ? -x4 : x4;
@@ -176,7 +176,7 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
 /* per-column delta of a value over the span: (b - a) * 256 / span8, with rcp = 2^23 / span8 */
 static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp) { return mulhi15(b - a, rcp); }
 
-static void draw_seg(const MapSeg *s)
+__attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
     xform(s->v1); xform(s->v2);
     int16_t x1 = vtx[s->v1], z1 = vtz[s->v1], x2 = vtx[s->v2], z2 = vtz[s->v2];
@@ -319,7 +319,7 @@ static void draw_seg(const MapSeg *s)
     }
 }
 
-static int bbox_visible(const int16_t *bb)
+__attribute__((noinline)) static int bbox_visible(const int16_t *bb)
 {
     /* bb = top, bottom, left, right */
     if (view_xi >= bb[2] && view_xi <= bb[3] && view_yi >= bb[1] && view_yi <= bb[0]) return 1;

@@ -41,7 +41,7 @@ try:
     assert g.req(f"Z0,{vec:x},2") == "OK"
     funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
     keys = [f[0] for f in funcs]
-    hist = collections.Counter()
+    hist = collections.Counter(); fine = collections.Counter()
     frames = 0; stats = []
     want = {1, 20, 45, 70, 95, 120, 150}
     while True:
@@ -53,6 +53,7 @@ try:
             ipc = int.from_bytes(g.readmem(sp + 2, 4), "big") & 0xffffff
             k = bisect.bisect_right(keys, ipc) - 1
             hist[funcs[k][1] if k >= 0 else hex(ipc)] += 1
+            if k >= 0 and funcs[k][1] == "draw_seg": fine[(ipc - funcs[k][0]) // 32 * 32] += 1
             continue
         frames += 1
         done = rd(g, "bench_done", 2)
@@ -81,6 +82,7 @@ try:
         res.update(segs_avg=round(sum(s) / len(s), 1), segs_max=max(s), nodes_avg=round(sum(n) / len(n), 1), nodes_max=max(n))
     res["shots"] = shots
     tot = sum(hist.values())
+    res["draw_seg_offsets"] = [(hex(o), c) for o, c in fine.most_common(20)]
     res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in hist.most_common(25)]
 finally:
     g.close()
