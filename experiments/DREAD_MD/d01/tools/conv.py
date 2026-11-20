@@ -521,7 +521,8 @@ def main():
                     if img[y, sx] < 0: y += 1; continue
                     y1 = y
                     while y1 < h_ and img[y1, sx] >= 0 and y1 - y < 250: y1 += 1
-                    col += bytes([y, y1 - y]) + bytes((L[img[yy, sx]][0] << 4) | L[img[yy, sx]][1] for yy in range(y, y1))
+                    run = bytes((L[img[yy, sx]][0] << 4) | L[img[yy, sx]][1] for yy in range(y, y1))
+                    col += bytes([y, y1 - y]) + run + run[-1:] * 3   # 3 pad bytes: the scalers' rounding may read past the end
                     y = y1
                 col.append(0xFF)
                 cols.append(col)

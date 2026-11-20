@@ -399,6 +399,30 @@ tex_part:
 tex_solid:
         TEXPART 0
 
+/* void spr_scale(uint8_t *dst_m4, const uint8_t *src, int16_t n, uint16_t zq): n rows of a sprite post
+   through the byte scalers (row k at k*4(dst_m4), texel round((k-1)*z) of src) */
+        .globl  spr_scale
+spr_scale:
+        move.l  %a2,-(%sp)
+        movem.l 8(%sp),%a0-%a1
+        move.w  18(%sp),%d0                 /* n */
+        move.w  22(%sp),%d1                 /* zq */
+        lea     scal_q,%a2
+        move.b  0(%a2,%d1.w),%d1
+        andi.w  #0xFF,%d1
+        add.w   %d1,%d1
+        add.w   %d1,%d1
+        lea     scal_b,%a2
+        move.l  0(%a2,%d1.w),%a2
+        add.w   %d0,%d0
+        move.w  %d0,%d1
+        add.w   %d0,%d0
+        add.w   %d1,%d0                     /* n * 6 */
+        suba.w  %d0,%a2
+        jsr     (%a2)
+        move.l  (%sp)+,%a2
+        rts
+
 /* masked cores: entry = end - n*size, bottom-up from k = n; d1/d2 v, d3/d4 step, d5 hmask, a0 = top - 4, a1 texels */
         .globl  tmkb_start
 tmkb_start:

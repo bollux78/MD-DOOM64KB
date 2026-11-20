@@ -618,6 +618,9 @@ typedef struct {
     uint16_t win;                    /* offset in winpool: ceil[n] then floor[n] */
 } VisSpr;
 static VisSpr vis[MAXVIS];
+#if defined(__m68k__) || defined(__mc68000__)
+extern void spr_scale(uint8_t *dst_m4, const uint8_t *src, int16_t n, uint16_t zq);   /* colasm.s */
+#endif
 static uint8_t vorder[MAXVIS];
 static uint16_t nvis, winused;
 static uint8_t winpool[WINPOOL];
@@ -679,6 +682,13 @@ static void draw_sprite(const VisSpr *v)
             int y0 = ceil16(ya), y1 = ceil16(yb);
             if (y0 < top) y0 = top;
             if (y1 > bot) y1 = bot;
+#if defined(__m68k__) || defined(__mc68000__)
+            if (y0 < y1 && COLB == 1 && v->zpp < (32 << 16)) {   /* byte modes: the wall scalers, one move per row */
+                const int32_t tv = ((((int32_t)y0 << 16) - ya) >> 8) * (v->zpp >> 8);
+                int i0 = tv >> 16; if (i0 >= len) i0 = len - 1;
+                spr_scale(col + (y0 << 2) - 4, d + i0, (int16_t)(y1 - y0), (uint16_t)(v->zpp >> 6));
+            } else
+#endif
             if (y0 < y1) {
                 int32_t tv = ((((int32_t)y0 << 16) - ya) >> 8) * (v->zpp >> 8);
                 uint8_t *q = col + (y0 << 2);
@@ -688,7 +698,7 @@ static void draw_sprite(const VisSpr *v)
                     if (COLB == 2) q[1] = d[idx];
                 }
             }
-            p += 2 + len;
+            p += 2 + len + 3;
         }
     }
 }
