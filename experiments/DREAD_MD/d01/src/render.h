@@ -33,7 +33,7 @@ typedef struct {
 } View;
 
 typedef struct {
-    uint16_t segs_drawn, nodes_visited, cols_closed, subs_visited;
+    uint16_t segs_drawn, nodes_visited, cols_closed, subs_visited, col_visits, anchors;
 } RenderStats;
 
 extern MapSector map_sectors[];

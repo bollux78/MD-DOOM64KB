@@ -27,7 +27,7 @@ volatile uint16_t bench_joy;
 volatile uint32_t bench_frames, bench_vints;
 volatile uint16_t bench_done;
 volatile uint16_t cur_buf;
-volatile uint16_t frame_segs, frame_nodes;
+volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
 
 static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(addr & 0x3FFF) << 16) | (addr >> 14); }
 
@@ -201,7 +201,7 @@ int main(bool hard)
 
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
         R_RenderView(&view, fbuf[cur_buf]);
-        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited;
+        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
         dma_pos = 0; dma_src = fbuf[cur_buf];
         cur_buf ^= 1;

@@ -42,7 +42,7 @@ try:
     funcs = sorted((a, n) for n, a in sym.items() if a < 0x400000)
     keys = [f[0] for f in funcs]
     hist = collections.Counter(); fine = collections.Counter()
-    frames = 0; stats = []
+    frames = 0; stats = []; cv = []
     want = {1, 20, 45, 70, 95, 120, 150}
     while True:
         g.cont()
@@ -58,7 +58,7 @@ try:
         frames += 1
         done = rd(g, "bench_done", 2)
         segs, nodes = rd(g, "frame_segs", 2), rd(g, "frame_nodes", 2)
-        if frames > 1: stats.append((segs, nodes))
+        if frames > 1: stats.append((segs, nodes)); cv.append((rd(g, "frame_cols", 2), rd(g, "frame_anchors", 2)))
         if frames in want:
             cb = rd(g, "cur_buf", 2)
             fb = readbig(g, sym["fbuf"] + (cb ^ 1) * FB, FB)
@@ -81,6 +81,7 @@ try:
         s = [a for a, b in stats]; n = [b for a, b in stats]
         res.update(segs_avg=round(sum(s) / len(s), 1), segs_max=max(s), nodes_avg=round(sum(n) / len(n), 1), nodes_max=max(n))
     res["shots"] = shots
+    if cv: res.update(col_visits_avg=round(sum(a for a, b in cv) / len(cv), 1), anchors_avg=round(sum(b for a, b in cv) / len(cv), 1))
     tot = sum(hist.values())
     res["draw_seg_offsets"] = [(hex(o), c) for o, c in fine.most_common(20)]
     res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in hist.most_common(25)]

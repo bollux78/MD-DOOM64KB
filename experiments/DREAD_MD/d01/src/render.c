@@ -291,6 +291,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             cur = c;
         }
         if (need_tex && left <= 0) {
+            rstats.anchors++;
             int n = xe - 1 - c; if (n > ANCHOR) n = ANCHOR;
             const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
             const uint16_t uA = u_of((uint32_t)uzA << 8, izA);
@@ -309,6 +310,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
             } else { du8 = 0; dzp = 0; }
             left = n > 0 ? n : 1;
         }
+        rstats.col_visits++;
         do {
         const int top = ceilclip[c], bot = floorclip[c];
         uint8_t *col = FB_COL(rfb, c);
@@ -414,7 +416,7 @@ void R_RenderView(const View *v, uint8_t *fb)
     for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; nxt[c] = (uint8_t)c; }
     nxt[VIEW_W] = VIEW_W;
     closed = 0;
-    rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = 0;
+    rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = rstats.col_visits = rstats.anchors = 0;
     render_node(map_counts[3] - 1);
     rstats.cols_closed = closed;
 }
