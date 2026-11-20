@@ -202,7 +202,7 @@ static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ?
 
 /* layout shared with colasm.s (offsets 0,4,6,8,10,12) */
 typedef struct {
-    const uint8_t *tex; uint16_t wmask, hs2, hmask, pad;
+    const uint8_t *tex; uint16_t wmask, hs2, hmask, paloff;   /* paloff = palette * TILES (tile counters) */
     int32_t vbase16;              /* (textop - viewz + yoff) << 16 */
 } Part;
 
@@ -217,17 +217,29 @@ typedef struct {
     uint16_t flags;                               /* 36: 1 solid, 2 mid, 4 upper, 8 lower */
     uint16_t closed;                              /* 38 */
     Part mid, up, lo;                             /* 40 56 72 */
+    uint16_t cpaloff, fpaloff;                    /* 88 90 */
+    uint16_t toff;                                /* 92 (scratch: tile column * TROWS) */
 } ColJob;
 static int16_t a_yc[VIEW_W], a_yf[VIEW_W], a_ybc[VIEW_W], a_ybf[VIEW_W];
 static uint16_t a_u[VIEW_W];
 static int32_t a_zpp[VIEW_W];
 static ColJob job;
+/* per 8x8 tile: how many pixels each palette painted; the majority wins (R_BuildNametable) */
+#define TROWS (VIEW_H / 8)
+#define TILES (32 * TROWS)
+uint8_t tilecnt[4 * TILES];
+uint8_t *const r_tilecnt = tilecnt;
 #if defined(__m68k__) || defined(__mc68000__)
 extern void seg_columns(ColJob *j);
 uint8_t *const r_clipbuf = clipbuf;   /* exported for colasm.s */
 uint8_t *const r_nxt = nxt;
 #else
 static void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp);
+static void cnt_add(uint16_t paloff, int c, int y0, int n)
+{
+    uint8_t *t = tilecnt + paloff + (c >> 2) * TROWS;
+    for (int y = y0; y < y0 + n; y++) t[y >> 3]++;
+}
 static void seg_columns(ColJob *j)
 {
     int c = j->c0;
@@ -236,8 +248,8 @@ static void seg_columns(ColJob *j)
         uint8_t *col = FB_COL(j->fb, c);
         int yc = j->yc[c]; if (yc < top) yc = top; if (yc > bot) yc = bot;
         int yf = j->yf[c]; if (yf < yc) yf = yc; if (yf > bot) yf = bot;
-        if (yc > top) col_fill(col + (top << 2), (uint16_t)(yc - top), j->ccol);
-        if (bot > yf) col_fill(col + (yf << 2), (uint16_t)(bot - yf), j->fcol);
+        if (yc > top) { cnt_add(j->cpaloff, c, top, yc - top); col_fill(col + (top << 2), (uint16_t)(yc - top), j->ccol); }
+        if (bot > yf) { cnt_add(j->fpaloff, c, yf, bot - yf); col_fill(col + (yf << 2), (uint16_t)(bot - yf), j->fcol); }
         if (j->flags & 1) {
             if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, j->u[c], j->zpp[c]);
             close_col(c); j->closed++;
@@ -268,12 +280,17 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
     p->wmask = (1u << m->wshift) - 1;
     p->hs2 = m->hshift + 1;                       /* columns are stored twice */
     p->hmask = (1u << m->hshift) - 1;
+    p->paloff = (uint16_t)(m->pal[bucket] * TILES);
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;
 }
 
 static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp)
 {
     if (dbg_flags & 1) return;
+#if !(defined(__m68k__) || defined(__mc68000__))
+    { const int c = (int)(((col - rfb) / (VIEW_H * 4)) * 4 + ((col - rfb) % (VIEW_H * 4)));   /* host: column from pointer */
+      cnt_add(p->paloff, c, y0, y1 - y0); }
+#endif
     /* texture columns are stored twice (2H texels): no wrap mask needed while the span fits in H */
     const uint8_t *tc = p->tex + ((u & p->wmask) << p->hs2);
     const uint16_t n = (uint16_t)(y1 - y0);
@@ -430,6 +447,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */
     job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
+    job.cpaloff = (uint16_t)(fs->ceilpal * TILES); job.fpaloff = (uint16_t)(fs->floorpal * TILES);
     job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
     job.mid = mid; job.up = up; job.lo = lo;
     job.closed = 0;
@@ -523,6 +541,7 @@ void R_RenderView(const View *v, uint8_t *fb)
     frac_tz = (muls16(fx, vcos) + muls16(fy, vsin)) >> 26;
     frac_tx = (muls16(fx, vsin) - muls16(fy, vcos)) >> 26;
     for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; nxt[c] = (uint8_t)c; }
+    { uint32_t *t = (uint32_t *)tilecnt; for (int i = 0; i < (int)(sizeof tilecnt / 4); i++) t[i] = 0; }
     nxt[VIEW_W] = VIEW_W;
     closed = 0;
     rstats.segs_drawn = rstats.nodes_visited = rstats.subs_visited = rstats.col_visits = rstats.anchors = 0;
@@ -538,4 +557,16 @@ void R_RenderView(const View *v, uint8_t *fb)
     render_node(map_counts[3] - 1);
     tm_total += now_lines() - t0;
     rstats.cols_closed = closed;
+}
+
+/* name table entries for the view (row-major, TROWS x 32): tile index | majority palette << 13 */
+void R_BuildNametable(uint16_t *nt, uint16_t tilebase)
+{
+    for (int tc = 0; tc < 32; tc++)
+        for (int tr = 0; tr < TROWS; tr++) {
+            const int i = tc * TROWS + tr;
+            const uint8_t a = tilecnt[i], b = tilecnt[TILES + i], c3 = tilecnt[2 * TILES + i];
+            const uint16_t k = (b > a && b >= c3) ? 1 : ((c3 > a && c3 > b) ? 2 : 0);
+            nt[tr * 32 + tc] = (uint16_t)(tilebase + i) | (uint16_t)(k << 13);
+        }
 }

@@ -30,6 +30,7 @@ typedef struct {
     int16_t floor, ceil;
     uint8_t floorcol, ceilcol;     /* pair of MD palette indices (one byte = 2 pixels) */
     uint8_t bucket, sky;
+    uint8_t floorpal, ceilpal;     /* which of the view palettes (per 8x8 tile) */
 } MapSector;
 
 typedef struct { uint16_t v1, v2, flags; uint16_t front, back; } MapLine;
@@ -38,10 +39,12 @@ typedef struct {
     uint8_t wshift, hshift;        /* stored width (half of the original) and height, log2 */
     int16_t realh, realw;
     uint32_t off[NUM_BUCKETS];     /* offset of each light bucket in tex_blob */
+    uint8_t pal[NUM_BUCKETS];      /* palette of each light bucket */
 } MapTex;
 
-extern const uint16_t md_palette[16];
-extern const uint8_t pal_rgb[16][3];
+extern const uint16_t md_palette[][16];
+extern const uint8_t pal_rgb_all[][16][3];
+extern const uint16_t num_palettes;
 extern const int16_t map_verts[][2];
 extern const MapSeg map_segs[];
 extern const MapSub map_subs[];

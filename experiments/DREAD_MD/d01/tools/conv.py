@@ -178,112 +178,135 @@ def main():
                 f = np.frombuffer(flats[nm][:4096], np.uint8)
                 flatcol[nm] = f
 
-    # ---- palette fit: sample all used pixels (Doom index after light) -> RGB
-    samples = []
-    for nm in texnames:
-        img = teximg[nm].astype(np.int64)
-        for b in used[nm]:
-            samples.append(pal[cmap[LIGHT_ROWS[b]][img.ravel()]])
-    for s in secs:
-        b = bucket_of(s[4])
-        for nm in (s[2], s[3]):
-            if nm in flatcol:
-                c = pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0)
-                samples.append(np.repeat(c[None, :], 1500, axis=0))
-    X = np.concatenate(samples)
-    # weight each distinct colour by sqrt(count): big dark walls must not eat the palette
-    q = np.round(X / 8).astype(np.int64)
-    key = q[:, 0] * 4096 + q[:, 1] * 64 + q[:, 2]
-    uk, inv, cnt = np.unique(key, return_inverse=True, return_counts=True)
-    U = np.zeros((len(uk), 3))
-    np.add.at(U, inv, X)
-    U /= cnt[:, None]
-    w = np.sqrt(cnt)
-    # work in a perceptual-ish space (gamma): dark shades spread less
-    P = (U / 255.0) ** 0.6
-    rng = np.random.default_rng(1)
-    # ---- palette chosen FOR colour pairs: the screen shows 2-pixel mixes, so pick the 16 MD colours
-    # whose 136 pair-mixes best cover the map's colours (greedy over all 512 MD colours + local refine).
+    # ---- colour: NPAL palettes (one per 8x8 screen tile), each fitted FOR colour pairs.
+    # Items = (texture, light bucket) and (flat, light bucket); every item gets one palette.
     import os
+    NPAL = int(os.environ.get("DREAD_NPAL", "3"))
     MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
     DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
     cand_lv = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
-    cand = DAC[cand_lv]                                   # 512 x 3, sRGB-ish
+    cand = DAC[cand_lv]
     lin_c = (cand / 255.0) ** 2.2
-    # samples: distinct colours weighted by sqrt(count) (cap for speed)
-    if len(U) > 3000:
-        keep = np.argsort(-w)[:3000]; U2, w2 = U[keep], w[keep]
-    else:
-        U2, w2 = U, w
-    def mixd(ia, ib):                                      # distance of samples to the mix of candidates ia, ib (arrays)
-        m = ((lin_c[ia] + lin_c[ib]) / 2) ** (1 / 2.2) * 255.0
-        sp = np.sqrt(((cand[ia] - cand[ib]) ** 2).sum(-1))
-        return np.sqrt(((U2[:, None, :] - m[None]) ** 2).sum(-1)) + MIXW * sp[None]
-    chosen = [0]
-    err = mixd(np.array([0]), np.array([0]))[:, 0]
-    for step in range(15):
-        best = None
-        for c in range(512):
-            if c in chosen: continue
-            ia = np.array(chosen + [c]); ib = np.full(len(ia), c)
-            e = np.minimum(err, mixd(ia, ib).min(1))
-            tot = (e * w2).sum()
-            if best is None or tot < best[0]: best = (tot, c, e)
-        chosen.append(best[1]); err = best[2]
-    def total(ch):
-        ch = np.array(ch); ia, ib = np.triu_indices(len(ch))
-        return (mixd(ch[ia], ch[ib]).min(1) * w2).sum()
-    cur = total(chosen)
-    for it in range(3):                                    # refine: move each colour one DAC step if it helps
-        improved = False
-        for i in range(1, 16):
-            lv = cand_lv[chosen[i]]
-            for d in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1),(1,1,1),(-1,-1,-1)]:
-                nl = np.clip(lv + d, 0, 7); nc = int(nl[0] * 64 + nl[1] * 8 + nl[2])
-                if nc in chosen: continue
-                trial = chosen[:i] + [nc] + chosen[i + 1:]
-                t = total(trial)
-                if t < cur: cur, chosen, improved = t, trial, True; lv = nl
-        if not improved: break
-    md = [tuple(int(v) for v in cand_lv[c]) for c in chosen]
-    mdrgb = cand[chosen]
-    print("palette fit: mean pair error %.1f" % (cur / w2.sum()))
+    rng = np.random.default_rng(1)
 
-    def nearest(rgb):
-        return int(((mdrgb - rgb) ** 2).sum(-1).argmin())
+    items = []        # (key, rgb pixels Nx3)
+    for nm in texnames:
+        img = teximg[nm].astype(np.int64).ravel()
+        for b in used[nm]:
+            items.append((("t", nm, b), pal[cmap[LIGHT_ROWS[b]][img]]))
+    flat_items = set()
+    for s_ in secs:
+        b = bucket_of(s_[4])
+        for nm in (s_[2], s_[3]):
+            if nm in flatcol and ("f", nm, b) not in flat_items:
+                flat_items.add(("f", nm, b))
+                c = pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0)
+                items.append((("f", nm, b), np.repeat(c[None, :], 400, axis=0)))
+    sky_rgb = pal[compose("SKY1").ravel()].mean(0) if "SKY1" in texdefs else np.array([80., 80., 120.])
+    items.append((("s",), np.repeat(sky_rgb[None, :], 400, axis=0)))
 
-    # colour mixing: each texel is a PAIR of palette colours side by side (one byte = 2 pixels);
-    # on screen (and on a CRT) the pair blends, giving up to 136 mixed colours from 16.
-    lin = (mdrgb / 255.0) ** 2.2
-    pairs = [(a, b) for a in range(16) for b in range(a, 16)]
-    mix = np.array([((lin[a] + lin[b]) / 2) ** (1 / 2.2) * 255.0 for a, b in pairs])
-    spread = np.array([np.sqrt(((mdrgb[a] - mdrgb[b]) ** 2).sum()) for a, b in pairs])
+    def summarize(X, cap):
+        q = np.round(X / 8).astype(np.int64)
+        key = q[:, 0] * 4096 + q[:, 1] * 64 + q[:, 2]
+        uk, inv, cnt = np.unique(key, return_inverse=True, return_counts=True)
+        U = np.zeros((len(uk), 3)); np.add.at(U, inv, X); U /= cnt[:, None]
+        w = np.sqrt(cnt)
+        if len(U) > cap:
+            k = np.argsort(-w)[:cap]; U, w = U[k], w[k]
+        return U, w
 
-    def nearest_pair(rgb):
-        d = np.sqrt(((mix - rgb) ** 2).sum(-1)) + MIXW * spread
-        a, b = pairs[int(d.argmin())]
-        if mdrgb[a].sum() > mdrgb[b].sum():
-            a, b = b, a
-        return a, b
+    def fit_palette(U2, w2):
+        def mixd(ia, ib):
+            m = ((lin_c[ia] + lin_c[ib]) / 2) ** (1 / 2.2) * 255.0
+            sp = np.sqrt(((cand[ia] - cand[ib]) ** 2).sum(-1))
+            return np.sqrt(((U2[:, None, :] - m[None]) ** 2).sum(-1)) + MIXW * sp[None]
+        chosen = [0]
+        err = mixd(np.array([0]), np.array([0]))[:, 0]
+        for step in range(15):
+            best = None
+            for c in range(512):
+                if c in chosen: continue
+                ia = np.array(chosen + [c]); ib = np.full(len(ia), c)
+                e = np.minimum(err, mixd(ia, ib).min(1))
+                tot = (e * w2).sum()
+                if best is None or tot < best[0]: best = (tot, c, e)
+            chosen.append(best[1]); err = best[2]
+        def total(ch):
+            ch = np.array(ch); ia, ib = np.triu_indices(len(ch))
+            return (mixd(ch[ia], ch[ib]).min(1) * w2).sum()
+        cur = total(chosen)
+        for it in range(2):
+            improved = False
+            for i in range(1, 16):
+                lv = cand_lv[chosen[i]]
+                for d in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1),(1,1,1),(-1,-1,-1)]:
+                    nl = np.clip(lv + d, 0, 7); nc = int(nl[0] * 64 + nl[1] * 8 + nl[2])
+                    if nc in chosen: continue
+                    trial = chosen[:i] + [nc] + chosen[i + 1:]
+                    t = total(trial)
+                    if t < cur: cur, chosen, improved = t, trial, True; lv = nl
+            if not improved: break
+        # luminance order: index i means a similar brightness in every palette, so a tile shown with
+        # the "wrong" palette (two families meeting in one 8x8 tile) keeps its shading
+        lum = (cand[chosen] * [0.3, 0.59, 0.11]).sum(1)
+        chosen = [chosen[i] for i in np.argsort(lum, kind="stable")]
+        return chosen, cur / w2.sum()
 
-    lut = np.zeros((len(LIGHT_ROWS), 256, 2), np.uint8)
-    for b, row in enumerate(LIGHT_ROWS):
-        for i in range(256):
-            lut[b, i] = nearest_pair(pal[cmap[row][i]])
+    class Pal:
+        def __init__(self, chosen):
+            self.lv = [tuple(int(v) for v in cand_lv[c]) for c in chosen]
+            self.rgb = cand[chosen]
+            lin = (self.rgb / 255.0) ** 2.2
+            self.pairs = [(x, y) for x in range(16) for y in range(x, 16)]
+            self.mix = np.array([((lin[x] + lin[y]) / 2) ** (1 / 2.2) * 255.0 for x, y in self.pairs])
+            self.spread = np.array([np.sqrt(((self.rgb[x] - self.rgb[y]) ** 2).sum()) for x, y in self.pairs])
+        def cost(self, X):          # per-pixel error with the best pair
+            d = np.sqrt(((X[:, None, :] - self.mix[None]) ** 2).sum(-1)) + MIXW * self.spread[None]
+            return d.min(1)
+        def pair(self, rgb):
+            d = np.sqrt(((self.mix - rgb) ** 2).sum(-1)) + MIXW * self.spread
+            x, y = self.pairs[int(d.argmin())]
+            if self.rgb[x].sum() > self.rgb[y].sum(): x, y = y, x
+            return x, y
+        def byte(self, rgb):
+            x, y = self.pair(rgb); return (x << 4) | y
 
-    def pair_byte(rgb):
-        a, b = nearest_pair(rgb)
-        return (a << 4) | b
+    # initial grouping: k-means on the items' mean colour (chroma direction), then refine by fit error
+    means = np.array([X.mean(0) for _, X in items])
+    sizes = np.array([len(X) for _, X in items], float)
+    feat = means / (means.sum(1, keepdims=True) + 1)      # chromaticity
+    C = feat[rng.choice(len(feat), NPAL, replace=False)]
+    for _ in range(20):
+        asg = ((feat[:, None] - C[None]) ** 2).sum(-1).argmin(1)
+        for k in range(NPAL):
+            if (asg == k).any(): C[k] = (feat[asg == k] * sizes[asg == k, None]).sum(0) / sizes[asg == k].sum()
+    pals = []
+    for rnd in range(int(os.environ.get("DREAD_PAL_ROUNDS", "2"))):
+        pals = []
+        for k in range(NPAL):
+            sel = [X for (it, X), g in zip(items, asg) if g == k]
+            if not sel: sel = [items[0][1]]
+            U2, w2 = summarize(np.concatenate(sel), 1500)
+            ch, e = fit_palette(U2, w2)
+            pals.append(Pal(ch))
+            print("palette %d: %d items, mean pair error %.1f" % (k, len(sel), e))
+        # reassign every item to the palette that renders it best
+        sub = [X if len(X) <= 600 else X[rng.choice(len(X), 600, replace=False)] for _, X in items]
+        asg = np.array([int(np.argmin([pl.cost(Xs).mean() for pl in pals])) for Xs in sub])
+    pal_of = {it: int(g) for (it, _), g in zip(items, asg)}
 
-    # sky colour
-    sky_rgb = None
-    if "SKY1" in texdefs:
-        sky_rgb = pal[compose("SKY1").ravel()].mean(0)
-    skycol = pair_byte(sky_rgb) if sky_rgb is not None else 0x11
+    lut = {}
+    def lut_for(b, k):
+        if (b, k) not in lut:
+            pl = pals[k]
+            lut[(b, k)] = [pl.pair(pal[cmap[LIGHT_ROWS[b]][i]]) for i in range(256)]
+        return lut[(b, k)]
+
+    skypal = pal_of[("s",)]
+    skycol = pals[skypal].byte(sky_rgb)
 
     # ---- emit textures
-    texc = []
-    texmeta = []     # (wshift, hshift, realh, [offset per bucket])
+    texmeta = []     # (wshift, hshift, realh, realw, [offset per bucket], [palette per bucket])
     blob = bytearray()
     for nm in texnames:
         img = teximg[nm]
@@ -292,27 +315,28 @@ def main():
         wsh = max(0, math.ceil(math.log2(hw)))
         hsh = max(0, math.ceil(math.log2(h)))
         W2, H2 = 1 << wsh, 1 << hsh
-        offs = []
+        offs, pids = [], []
         for b in range(len(LIGHT_ROWS)):
             if b not in used[nm]:
-                offs.append(None)
+                offs.append(None); pids.append(None)
                 continue
+            k = pal_of[("t", nm, b)]
+            L = lut_for(b, k)
             col = bytearray()
             for u in range(W2):
                 sx = (u % hw) * 2
                 one = bytearray()
                 for v in range(H2):
-                    pa, pb = lut[b, img[v % h, sx]]
+                    pa, pb = L[img[v % h, sx]]
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
                 col += one + one          # stored twice: the renderer skips the wrap mask
-            offs.append(len(blob))
+            offs.append(len(blob)); pids.append(k)
             blob += col
-        # fill missing buckets with the nearest used one
         for b in range(len(offs)):
             if offs[b] is None:
                 nb = min(used[nm], key=lambda x: abs(x - b))
-                offs[b] = offs[nb]
-        texmeta.append((wsh, hsh, h, w, offs))
+                offs[b] = offs[nb]; pids[b] = pids[nb]
+        texmeta.append((wsh, hsh, h, w, offs, pids))
     tid = {nm: i for i, nm in enumerate(texnames)}
 
     # ---- map structures
@@ -334,12 +358,15 @@ def main():
     for (fh, ch, fp, cp, light, special, tag) in secs:
         b = bucket_of(light)
         def fc(nm):
-            if nm not in flatcol:
-                return skycol
-            return pair_byte(pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0))
+            if nm not in flatcol or ("f", nm, b) not in pal_of:
+                return skycol, skypal
+            k = pal_of[("f", nm, b)]
+            return pals[k].byte(pal[cmap[LIGHT_ROWS[b]][flatcol[nm]]].mean(axis=0)), k
         sky = 1 if cp.startswith("F_SKY") else 0
-        sec_rows.append((fh, ch, fc(fp), skycol if sky else fc(cp), b, sky))
-
+        fcol, fpal = fc(fp)
+        ccol, cpal = (skycol, skypal) if sky else fc(cp)
+        sec_rows.append((fh, ch, fcol, ccol, b, sky, fpal, cpal))
+    md = pals[0].lv
     ss_sec = []
     for (cnt, first) in ssecs:
         ss_sec.append(seg_rows[first][2])
@@ -350,9 +377,11 @@ def main():
     H = []
     H.append("/* generated by conv.py from %s %s -- do not edit */" % (Path(sys.argv[1]).name, mapname))
     H.append("#include \"mapdata.h\"")
-    H.append("const uint16_t md_palette[16] = {%s};" % ",".join(
-        "0x%03X" % ((c[2] * 2) << 8 | (c[1] * 2) << 4 | (c[0] * 2)) for c in md))
-    H.append("const uint8_t pal_rgb[16][3] = {%s};" % ",".join("{%d,%d,%d}" % tuple(int(DAC[l]) for l in c) for c in md))
+    H.append("const uint16_t md_palette[%d][16] = {%s};" % (NPAL, ",".join("{%s}" % ",".join(
+        "0x%03X" % ((c[2] * 2) << 8 | (c[1] * 2) << 4 | (c[0] * 2)) for c in pl.lv) for pl in pals)))
+    H.append("const uint8_t pal_rgb_all[%d][16][3] = {%s};" % (NPAL, ",".join("{%s}" % ",".join(
+        "{%d,%d,%d}" % tuple(int(DAC[l]) for l in c) for c in pl.lv) for pl in pals)))
+    H.append("const uint16_t num_palettes = %d;" % NPAL)
     H.append("const int16_t map_verts[%d][2] = {%s};" % (len(verts), ",".join("{%d,%d}" % v for v in verts)))
     H.append("const MapSeg map_segs[%d] = {%s};" % (len(seg_rows), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in seg_rows)))
@@ -361,12 +390,12 @@ def main():
     H.append("const MapNode map_nodes[%d] = {%s};" % (len(nodes), ",".join(
         "{%d,%d,%d,%d,{{%d,%d,%d,%d},{%d,%d,%d,%d}},{%d,%d}}" % n for n in nodes)))
     H.append("const MapSector map_sectors_init[%d] = {%s};" % (len(sec_rows), ",".join(
-        "{%d,%d,%d,%d,%d,%d}" % r for r in sec_rows)))
+        "{%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in sec_rows)))
     H.append("const MapLine map_lines[%d] = {%s};" % (len(lines), ",".join(
         "{%d,%d,%d,%d,%d}" % (l[0], l[1], l[2], sec_of_side(l[5]), sec_of_side(l[6])) for l in lines)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
     H.append("const MapTex map_tex[%d] = {%s};" % (max(1, len(texmeta)), ",".join(
-        "{%d,%d,%d,%d,{%s}}" % (m[0], m[1], m[2], m[3], ",".join(str(o) for o in m[4])) for m in texmeta) or "{0}"))
+        "{%d,%d,%d,%d,{%s},{%s}}" % (m[0], m[1], m[2], m[3], ",".join(str(o) for o in m[4]), ",".join(str(x) for x in m[5])) for m in texmeta) or "{0}"))
     H.append("const int16_t sintab[1024] = {%s};" % ",".join(str(int(round(16384 * math.sin(i * 2 * math.pi / 1024)))) for i in range(1024)))
     H.append("const int16_t map_start[3] = {%d,%d,%d};" % (start[0], start[1], start[2]))
     H.append("const uint16_t map_counts[6] = {%d,%d,%d,%d,%d,%d};" % (
@@ -375,7 +404,7 @@ def main():
 
     print("map %s: %d verts %d segs %d subsectors %d nodes %d sectors %d lines; %d textures, texture blob %d bytes; sky %d"
           % (mapname, len(verts), len(seg_rows), len(ssecs), len(nodes), len(sec_rows), len(lines), len(texnames), len(blob), skycol))
-    print("palette", md)
+    for k, pl in enumerate(pals): print("palette", k, pl.lv)
 
 
 if __name__ == "__main__":

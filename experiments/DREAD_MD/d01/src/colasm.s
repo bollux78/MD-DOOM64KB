@@ -116,6 +116,10 @@ texnm_end:
 #define J_MID 40
 #define J_UP 56
 #define J_LO 72
+#define J_CPAL 88
+#define J_FPAL 90
+#define J_TOFF 92
+#define TROWS (VIEW_H / 8)
 
 seg_columns:
         movem.l %d2-%d7/%a2-%a6,-(%sp)
@@ -139,6 +143,10 @@ seg_columns:
         add.w   %d5,%d4
         move.l  J_FB(%a6),%a2
         adda.w  %d4,%a2
+        move.w  %d7,%d4                     /* tile counters offset: (c >> 2) * TROWS */
+        lsr.w   #2,%d4
+        mulu.w  #TROWS,%d4
+        move.w  %d4,J_TOFF(%a6)
         move.w  %d7,%d6
         add.w   %d6,%d6
         move.l  J_YC(%a6),%a0
@@ -162,6 +170,9 @@ seg_columns:
         sub.w   %d0,%d4
         ble.s   1f
         move.w  %d0,%d5
+        move.l  r_tilecnt,%a0
+        adda.w  J_CPAL(%a6),%a0
+        bsr     cnt_add
         add.w   %d5,%d5
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0
@@ -171,6 +182,9 @@ seg_columns:
         sub.w   %d3,%d4
         ble.s   1f
         move.w  %d3,%d5
+        move.l  r_tilecnt,%a0
+        adda.w  J_FPAL(%a6),%a0
+        bsr     cnt_add
         add.w   %d5,%d5
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0
@@ -273,6 +287,9 @@ fillc_end:
 /* tex_part: a2 column, a4 Part, d5 y0, d4 n (>0), d7 c, a6 job.
    preserves d0-d3, d6, d7, a2, a3, a5, a6 */
 tex_part:
+        move.l  r_tilecnt,%a0
+        adda.w  10(%a4),%a0
+        bsr     cnt_add
         movem.l %d0-%d3/%d6-%d7,-(%sp)
         move.l  J_ZPP(%a6),%a1
         move.w  %d7,%d1
@@ -386,4 +403,27 @@ tnm_end:
         .set    k,k-1
         .endr
 tmk_end:
+        rts
+
+/* cnt_add: a0 = tile counters of one palette, J_TOFF(a6) = tile column offset,
+   d5 = y0, d4 = n (> 0). Adds the pixels of rows [y0, y0+n) to each 8-row tile.
+   preserves everything except a0. */
+cnt_add:
+        movem.l %d0/%d4-%d6,-(%sp)
+        adda.w  J_TOFF(%a6),%a0
+        add.w   %d5,%d4                     /* d4 = end */
+2:      move.w  %d5,%d6                     /* tile row */
+        lsr.w   #3,%d6
+        move.w  %d6,%d0
+        addq.w  #1,%d0
+        lsl.w   #3,%d0                      /* next tile boundary */
+        cmp.w   %d4,%d0
+        ble.s   1f
+        move.w  %d4,%d0
+1:      sub.w   %d5,%d0                     /* rows in this tile */
+        add.b   %d0,0(%a0,%d6.w)
+        add.w   %d0,%d5
+        cmp.w   %d4,%d5
+        blt.s   2b
+        movem.l (%sp)+,%d0/%d4-%d6
         rts

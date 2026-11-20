@@ -18,6 +18,7 @@
 #define DMA_CHUNK  2048
 
 static uint8_t fbuf[2][FB_BYTES];
+static uint16_t ntbuf[VIEW_TROWS * 32];        /* view name table rows with per-tile palettes */
 volatile uint16_t vints;
 static const uint8_t *volatile dma_src;   /* buffer being sent, 0 = idle (the POINTER is volatile) */
 static volatile uint16_t dma_pos;
@@ -42,6 +43,9 @@ static void vint_cb(void)
         DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
         dma_pos += n;
         if (dma_pos >= FB_BYTES) {
+            const uint16_t nt = shown ? NT0 : NT1;
+            for (int r = 0; r < VIEW_TROWS; r++)
+                DMA_doDma(DMA_VRAM, (void *)(ntbuf + r * 32), nt + (VIEW_ROW0 + r) * 128, 32, 2);
             shown ^= 1;
             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
             dma_src = 0;
@@ -56,8 +60,9 @@ static void setup_screen(void)
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     /* palette */
     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
-    for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[i];
-    *(volatile uint32_t *)0xC00004 = 0xC03E0000UL;   /* CRAM 31: PAL1 colour 15 = white text */
+    for (int p = 0; p < num_palettes && p < 3; p++)
+        for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[p][i];
+    *(volatile uint32_t *)0xC00004 = 0xC07E0000UL;   /* CRAM 63: PAL3 colour 15 = white text */
     *(volatile uint16_t *)0xC00000 = 0x0EEE;
     /* both name tables: view rows point at the framebuffer tiles, column-major */
     for (int b = 0; b < 2; b++) {
@@ -210,6 +215,7 @@ int main(bool hard)
         R_RenderView(&view, fbuf[cur_buf]);
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
+        R_BuildNametable(ntbuf, shown ? TILE_FB0 : TILE_FB1);   /* goes to the hidden copy */
         dma_pos = 0; dma_src = fbuf[cur_buf];
         cur_buf ^= 1;
         if (bench_req && !bench_done) bench_frames++;
@@ -219,14 +225,14 @@ int main(bool hard)
             const uint16_t f10 = dv ? (uint16_t)(16UL * 600 / dv) : 0;
             sprintf(txt, "FPS %2u.%u  SEGS %3u ", f10 / 10, f10 % 10, frame_segs);
             SYS_disableInts();
-            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL1, 1, 0, 0), 1, 25, CPU);
+            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL3, 1, 0, 0), 1, 25, CPU);
             SYS_enableInts();
         }
         if (bench_done == 1) {
             const uint16_t f100 = (uint16_t)(bench_frames * 6000UL / (bench_vints ? bench_vints : 1));
             sprintf(txt, "BENCH %u quadros %u.%u%u FPS", (uint16_t)bench_frames, f100 / 100, (f100 / 10) % 10, f100 % 10);
             SYS_disableInts();
-            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL1, 1, 0, 0), 1, 26, CPU);
+            VDP_drawTextEx(BG_B, txt, TILE_ATTR(PAL3, 1, 0, 0), 1, 26, CPU);
             SYS_enableInts();
             bench_done = 2;
         }

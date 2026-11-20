@@ -35,8 +35,12 @@ try:
     assert g.req("M%x,2:0001" % sym["bench_req"]) == "OK"
     if os.environ.get("DBG"): assert g.req("M%x,2:%04x" % (sym["dbg_flags"], int(os.environ["DBG"]))) == "OK"
     assert g.req(f"Z0,{sym['R_RenderView']:x},2") == "OK"
-    pal = struct.unpack(">16H", readbig(g, sym["md_palette"], 32))
-    rgb = [((c >> 1 & 7) * 36, (c >> 5 & 7) * 36, (c >> 9 & 7) * 36) for c in pal]
+    npal = rd(g, "num_palettes", 2) if "num_palettes" in sym else 1
+    DAC = [0, 52, 87, 116, 144, 172, 206, 255]
+    pals = []
+    for k in range(npal):
+        pl = struct.unpack(">16H", readbig(g, sym["md_palette"] + 32 * k, 32))
+        pals.append([(DAC[c >> 1 & 7], DAC[c >> 5 & 7], DAC[c >> 9 & 7]) for c in pl])
     import bisect, collections
     vec = int.from_bytes(rom.read_bytes()[0x78:0x7C], "big") & 0xffffff
     assert g.req(f"Z0,{vec:x},2") == "OK"
@@ -68,6 +72,7 @@ try:
         if frames in want:
             cb = rd(g, "cur_buf", 2)
             fb = readbig(g, sym["fbuf"] + (cb ^ 1) * FB, FB)
+            nt = struct.unpack(">%dH" % (VH // 8 * 32), readbig(g, sym["ntbuf"], VH // 8 * 64)) if "ntbuf" in sym else None
             from PIL import Image
             im = Image.new("RGB", (VW * 2, VH))
             px = im.load()
@@ -75,6 +80,7 @@ try:
                 base = (x >> 2) * VH * 4 + (x & 3)
                 for y in range(VH):
                     b = fb[base + y * 4]
+                    rgb = pals[(nt[(y >> 3) * 32 + (x >> 2)] >> 13) & 3] if nt else pals[0]
                     px[2 * x, y] = rgb[b >> 4]; px[2 * x + 1, y] = rgb[b & 15]
             im.resize((VW * 4, VH * 2), Image.NEAREST).save(outdir / f"frame_{frames:03d}.png")
             shots.append(frames)

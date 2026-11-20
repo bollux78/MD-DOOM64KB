@@ -9,11 +9,14 @@ static uint8_t fb[FB_BYTES];
 static void save(const char *fn)
 {
     FILE *f = fopen(fn, "wb");
+    static uint16_t nt[(VIEW_H / 8) * 32];
+    R_BuildNametable(nt, 0);
     fprintf(f, "P6 %d %d 255\n", VIEW_W * 2, VIEW_H);
     for (int y = 0; y < VIEW_H; y++)
         for (int x = 0; x < VIEW_W; x++) {
             const uint8_t b = FB_COL(fb, x)[y * 4];
-            for (int k = 0; k < 2; k++) fwrite(pal_rgb[k ? (b & 15) : (b >> 4)], 1, 3, f);
+            const int pl = nt[(y >> 3) * 32 + (x >> 2)] >> 13;
+            for (int k = 0; k < 2; k++) fwrite(pal_rgb_all[pl][k ? (b & 15) : (b >> 4)], 1, 3, f);
         }
     fclose(f);
 }

@@ -41,6 +41,7 @@ extern RenderStats rstats;
 extern const int16_t sintab[1024];   /* Q14 */
 
 void R_Init(void);
+void R_BuildNametable(uint16_t *nt, uint16_t tilebase);   /* TROWS x 32 entries */
 void R_RenderView(const View *v, uint8_t *fb);
 int  R_PointInSub(int16_t x, int16_t y);
 #endif
