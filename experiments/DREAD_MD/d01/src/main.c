@@ -330,6 +330,9 @@ int main(bool hard)
         if (bench_req && !bench_done) dt = 4;    /* bench: same camera path at any speed (frames are comparable) */
         JOY_update();
         uint16_t j = JOY_readJoypad(JOY_1);
+#ifdef FREEZE_AT
+        if (bench_frames >= FREEZE_AT) { dt = 0; bench_done = 3; }   /* test builds: keep rendering one fixed view */
+#endif
         if (bench_req && !bench_done) {
             script_t += dt;
             while (bench_script[script_i][0] && script_t >= bench_script[script_i][0]) { script_t -= bench_script[script_i][0]; script_i++; }

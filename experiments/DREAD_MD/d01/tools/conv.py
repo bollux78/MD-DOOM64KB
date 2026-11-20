@@ -439,6 +439,8 @@ def main():
     H.append("const uint16_t map_counts[6] = {%d,%d,%d,%d,%d,%d};" % (
         len(verts), len(seg_rows), len(ssecs), len(nodes), len(sec_rows), len(lines)))
     (out / "mapdata.c").write_text("\n".join(H) + "\n")
+    # sizes the renderer's per-vertex caches exactly (RAM budget)
+    (out / "mapcounts.h").write_text("#define MAP_NVERTS %d\n#define MAP_NSECTORS %d\n" % (len(verts), len(sec_rows)))
 
     print("map %s: %d verts %d segs %d subsectors %d nodes %d sectors %d lines; %d textures, texture blob %d bytes; sky %d"
           % (mapname, len(verts), len(seg_rows), len(ssecs), len(nodes), len(sec_rows), len(lines), len(texnames), len(blob), skycol))

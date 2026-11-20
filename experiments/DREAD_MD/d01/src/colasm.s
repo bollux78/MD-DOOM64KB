@@ -195,7 +195,7 @@ seg_columns:
         ble.s   .Lclose
         move.w  %d2,%d5
         lea     J_MID(%a6),%a4
-        bsr     tex_part
+        bsr     tex_solid
 .Lclose:
         clr.b   CEIL_D(%a5,%d7.w)
         clr.b   FLOOR_D(%a5,%d7.w)
@@ -300,8 +300,10 @@ fillw_end:
    Fast path (Dread's scalers): one unrolled routine per quantised texel step, every row a single
    move with constant offsets (16 cycles); a1 = column + v of the top row. Spans that would run past
    the twice-stored column use the masked interpolating core. */
-tex_part:
-        movem.l %d0-%d3,-(%sp)              /* caller keeps d6 = c*2 itself (recomputed after the call) */
+.macro TEXPART save
+        .if \save
+        movem.l %d0-%d3,-(%sp)
+        .endif
         move.w  %d7,%d1
         add.w   %d1,%d1
         move.l  J_U(%a6),%a1
@@ -329,7 +331,7 @@ tex_part:
         move.w  %d3,%d1
         mulu.w  %d4,%d1                     /* d1 = span * 1024 */
         cmpi.w  #32767,%d3
-        beq.s   .Lmasked                    /* 32 texels per row or more: no scaler */
+        beq.s   .Ltm\@                    /* 32 texels per row or more: no scaler */
         move.l  %d2,%d6
         addi.l  #0x8000,%d6                 /* nearest texel: v = -0.3 must not wrap to H - 1 */
         swap    %d6
@@ -345,7 +347,7 @@ tex_part:
         move.w  %d0,%d5
         add.w   %d5,%d5
         cmp.w   %d5,%d4
-        bgt.s   .Lmasked                    /* would leave the 2H stored texels */
+        bgt.s   .Ltm\@                    /* would leave the 2H stored texels */
         move.w  r_tsh,%d5
         lsl.w   %d5,%d6
         adda.w  %d6,%a1                     /* a1 = first texel */
@@ -363,9 +365,11 @@ tex_part:
         move.l  0(%a4,%d4.w),%a4            /* end of the scaler */
         suba.w  %d5,%a4
         jsr     (%a4)
+        .if \save
         movem.l (%sp)+,%d0-%d3
+        .endif
         rts
-.Lmasked:
+.Ltm\@:
         lsl.l   #6,%d1                      /* span 16.16 */
         add.l   %d1,%d2                     /* v of the bottom row; the core steps up by -zpp */
         moveq   #0,%d4
@@ -382,8 +386,18 @@ tex_part:
         move.l  r_tmk_end,%a4
         suba.w  %d6,%a4
         jsr     (%a4)
+        .if \save
         movem.l (%sp)+,%d0-%d3
+        .endif
         rts
+
+.endm
+
+tex_part:
+        TEXPART 1
+/* solid walls: the caller does not need d0-d3 afterwards */
+tex_solid:
+        TEXPART 0
 
 /* masked cores: entry = end - n*size, bottom-up from k = n; d1/d2 v, d3/d4 step, d5 hmask, a0 = top - 4, a1 texels */
         .globl  tmkb_start

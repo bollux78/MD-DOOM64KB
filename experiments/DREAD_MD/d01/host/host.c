@@ -60,6 +60,11 @@ int main(int argc, char **argv)
 {
     R_Init();
     if (argc > 2 && !strcmp(argv[2], "sweep")) { sweep(atoi(argv[3])); return 0; }
+    if (argc > 6 && !strcmp(argv[2], "raw")) {   /* raw X16 Y16 Z ANGLE16: exact view (from a ROM RAM dump) */
+        View v; v.x = atol(argv[3]); v.y = atol(argv[4]); v.z = (int16_t)atoi(argv[5]); v.angle = (uint16_t)atol(argv[6]);
+        memset(fb, 0xEE, sizeof fb); R_RenderView(&v, fb);
+        char fn[256]; snprintf(fn, sizeof fn, "%sraw.ppm", argv[1]); save(fn); return 0;
+    }
     if (argc <= 2) {
         for (int i = 0; i < 8; i++) shot(argv[1], i, map_start[0], map_start[1], map_start[2] + i * 45);
     } else {
