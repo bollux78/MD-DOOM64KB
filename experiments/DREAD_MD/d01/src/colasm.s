@@ -285,6 +285,30 @@ span_fill:
         add.w   %d4,%d3                     /* end */
         moveq   #0,%d2
         move.w  (%a4),%d2                   /* span palette */
+        move.w  %d1,%d6                     /* fast path: claim all touched tiles, one fill if all match */
+        lsr.w   #3,%d6
+        move.w  %d3,%d0
+        subq.w  #1,%d0
+        lsr.w   #3,%d0
+5:      cmpi.b  #0xFF,0(%a3,%d6.w)
+        bne.s   6f
+        move.b  %d2,0(%a3,%d6.w)
+        bra.s   7f
+6:      cmp.b   0(%a3,%d6.w),%d2
+        bne.s   1f
+7:      addq.w  #1,%d6
+        cmp.w   %d0,%d6
+        ble.s   5b
+        move.w  %d3,%d4
+        sub.w   %d1,%d4
+        move.w  %d1,%d6
+        add.w   %d6,%d6
+        add.w   %d6,%d6
+        lea     -4(%a2,%d6.w),%a0
+        move.w  2(%a4),%d5
+        bsr     fill_core
+        movem.l (%sp)+,%d0-%d3/%d6/%a3
+        rts
 1:      move.w  %d1,%d6
         lsr.w   #3,%d6                      /* tile row */
         move.w  %d6,%d0
@@ -406,6 +430,27 @@ tex_part:
         add.w   %d7,%d0                     /* d0 = cursor (exclusive bottom) */
         move.l  r_tilepal,%a5
         adda.w  J_TOFF(%a6),%a5
+        /* fast path: claim every tile row the span touches; if none belongs to another palette,
+           draw the whole span in one go */
+        move.w  t_y0,%d6
+        lsr.w   #3,%d6                      /* first tile row */
+        move.w  %d0,%d7
+        subq.w  #1,%d7
+        lsr.w   #3,%d7                      /* last tile row */
+        move.b  t_spal+1,%d5                /* (masked cores reload d5 below) */
+4:      cmpi.b  #0xFF,0(%a5,%d6.w)
+        bne.s   5f
+        move.b  %d5,0(%a5,%d6.w)
+        bra.s   6f
+5:      cmp.b   0(%a5,%d6.w),%d5
+        bne.s   7f                          /* another palette: piece by piece */
+6:      addq.w  #1,%d6
+        cmp.w   %d7,%d6
+        ble.s   4b
+        move.w  8(%a4),%d5                  /* hmask back (a4 still = Part) */
+        move.w  t_y0,%d7
+        bra     .Lplain
+7:      move.w  8(%a4),%d5
 .Lpiece:
         move.w  %d0,%d7                     /* piece top = max(y0, (cursor-1) & ~7) */
         subq.w  #1,%d7
