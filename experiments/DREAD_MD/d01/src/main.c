@@ -87,7 +87,23 @@ static void setup_screen(void)
     SYS_enableInts();
 }
 
-/* ---- movement and collision */
+/* ---- doors: B (or C+B) opens the door line in front; manual doors close again after ~4 s */
+static int16_t door_target[64];
+static uint16_t door_wait[64];
+static uint8_t door_manual[64];
+static uint16_t prev_joy;
+static int door_index(uint16_t sector)
+{
+    for (int d = 0; d < map_ndoors && d < 64; d++) if (map_doors[d].sector == sector) return d;
+    return -1;
+}
+static void door_open(int d, int manual)
+{
+    door_target[d] = map_doors[d].open_ceil;
+    door_wait[d] = manual ? 4 * 60 : 0xFFFF;
+    door_manual[d] = (uint8_t)manual;
+}
+
 static View view;
 static int16_t cur_floor;
 
@@ -124,6 +140,55 @@ static int blocked(int16_t x, int16_t y)
     return 0;
 }
 
+static void use_line(void)
+{
+    /* a point 40 units ahead; activate the closest special line within 40 units of it */
+    const uint16_t a = view.angle >> 6;
+    const int32_t px = (view.x >> 16) + ((40 * (int32_t)sintab[(a + 256) & 1023]) >> 14);
+    const int32_t py = (view.y >> 16) + ((40 * (int32_t)sintab[a]) >> 14);
+    int best = -1; int32_t bd = 40 * 40;
+    for (uint16_t i = 0; i < map_counts[5]; i++) {
+        const MapLine *l = &map_lines[i];
+        if (!l->special) continue;
+        const int32_t ax = map_verts[l->v1][0], ay = map_verts[l->v1][1], bx = map_verts[l->v2][0], by = map_verts[l->v2][1];
+        const int32_t dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+        if (!len2) continue;
+        const int32_t t = (px - ax) * dx + (py - ay) * dy;
+        int32_t cx, cy;
+        if (t <= 0) { cx = ax; cy = ay; } else if (t >= len2) { cx = bx; cy = by; }
+        else { cx = ax + (int32_t)((int64_t)dx * t / len2); cy = ay + (int32_t)((int64_t)dy * t / len2); }
+        const int32_t d2 = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+        if (d2 < bd) { bd = d2; best = i; }
+    }
+    if (best < 0) return;
+    const MapLine *l = &map_lines[best];
+    const uint16_t sp = l->special;
+    if ((sp == 1 || (sp >= 26 && sp <= 28) || (sp >= 31 && sp <= 34) || sp == 117 || sp == 118) && l->back != 0xFF) {
+        const int d = door_index(l->back);
+        if (d >= 0) door_open(d, sp == 1 || (sp >= 26 && sp <= 28) || sp == 117);
+    } else if (l->tag) {
+        for (int d = 0; d < map_ndoors && d < 64; d++)
+            if (map_sector_tag[map_doors[d].sector] == (int16_t)l->tag) door_open(d, 0);
+    }
+}
+
+static void doors_tick(uint16_t dt)
+{
+    const int16_t psec = (int16_t)map_subs[R_PointInSub(view.x >> 16, view.y >> 16)].sector;
+    for (int d = 0; d < map_ndoors && d < 64; d++) {
+        MapSector *s = &map_sectors[map_doors[d].sector];
+        const int16_t tgt = door_target[d];
+        if (s->ceil < tgt) { s->ceil += 2 * dt; if (s->ceil > tgt) s->ceil = tgt; }
+        else if (s->ceil > tgt) {
+            if (psec == (int16_t)map_doors[d].sector) { door_target[d] = map_doors[d].open_ceil; continue; }   /* never close on the player */
+            s->ceil -= 2 * dt; if (s->ceil < tgt) s->ceil = tgt;
+        } else if (door_manual[d] && door_wait[d] != 0xFFFF) {
+            if (door_wait[d] > dt) door_wait[d] -= dt;
+            else { door_wait[d] = 0xFFFF; door_target[d] = s->floor; }
+        }
+    }
+}
+
 static void try_move(int32_t mx, int32_t my)
 {
     const int32_t nx = view.x + mx, ny = view.y + my;
@@ -148,6 +213,7 @@ static void title(void)
     VDP_drawText("Mede FPS (canto inferior).", 4, 13);
     VDP_drawText("Cima/baixo anda, lados gira,", 4, 15);
     VDP_drawText("C+lados anda de lado, A corre.", 4, 16);
+    VDP_drawText("B abre portas.", 4, 17);
     VDP_drawText("aperte START ou aguarde", 4, 20);
     VDP_drawText("15 segundos", 4, 21);
     const uint16_t t0 = vints;
@@ -168,6 +234,7 @@ int main(bool hard)
     SYS_setVIntCallback(vint_cb);
     SYS_enableInts();
     R_Init();
+    for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
     title();
     setup_screen();
 
@@ -195,6 +262,9 @@ int main(bool hard)
                 bench_done = 1; bench_vints = vints - bench_v0;
             }
         }
+        if ((j & BUTTON_B) && !(prev_joy & BUTTON_B)) use_line();
+        prev_joy = j;
+        doors_tick(dt);
         /* turn / move (per vblank speeds, Doom-like) */
         const int strafe = (j & BUTTON_C) != 0;
         const int32_t speed = (j & BUTTON_A) ? 0x40000 : 0x20000;     /* map units per vblank, 16.16 */

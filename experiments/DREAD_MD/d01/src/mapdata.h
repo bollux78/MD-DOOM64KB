@@ -33,7 +33,8 @@ typedef struct {
     uint8_t floorpal, ceilpal;     /* which of the view palettes (per 8x8 tile) */
 } MapSector;
 
-typedef struct { uint16_t v1, v2, flags; uint16_t front, back; } MapLine;
+typedef struct { uint16_t v1, v2, flags; uint16_t front, back; uint16_t special, tag; } MapLine;
+typedef struct { uint16_t sector; int16_t open_ceil; } MapDoor;
 
 typedef struct {
     uint8_t wshift, hshift;        /* stored width (half of the original) and height, log2 */
@@ -52,6 +53,9 @@ extern const MapSub map_subs[];
 extern const MapNode map_nodes[];
 extern const MapSector map_sectors_init[];
 extern const MapLine map_lines[];
+extern const MapDoor map_doors[];
+extern const uint16_t map_ndoors;
+extern const int16_t map_sector_tag[];
 extern const uint8_t tex_blob[];
 extern const MapTex map_tex[];
 extern const int16_t map_start[3];

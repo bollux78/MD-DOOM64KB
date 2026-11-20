@@ -405,7 +405,30 @@ def main():
     H.append("const MapSector map_sectors_init[%d] = {%s};" % (len(sec_rows), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in sec_rows)))
     H.append("const MapLine map_lines[%d] = {%s};" % (len(lines), ",".join(
-        "{%d,%d,%d,%d,%d}" % (l[0], l[1], l[2], sec_of_side(l[5]), sec_of_side(l[6])) for l in lines)))
+        "{%d,%d,%d,%d,%d,%d,%d}" % (l[0], l[1], l[2], sec_of_side(l[5]), sec_of_side(l[6]), l[3], l[4]) for l in lines)))
+    # doors: sectors behind manual door lines, plus sectors tagged by switch/use door lines.
+    # open height = lowest neighbouring ceiling - 4 (as in Doom)
+    MANUAL = {1, 26, 27, 28, 31, 32, 33, 34, 117, 118}
+    TAGGED = {29, 50, 63, 103, 111, 112, 113, 114, 115, 61, 42, 116}
+    neigh = {}
+    for (v1, v2, fl, sp, tg, r, l) in lines:
+        if r != 0xFFFF and l != 0xFFFF:
+            a, b = sides[r][5], sides[l][5]
+            neigh.setdefault(a, set()).add(b); neigh.setdefault(b, set()).add(a)
+    doors = set()
+    for (v1, v2, fl, sp, tg, r, l) in lines:
+        if sp in MANUAL and l != 0xFFFF: doors.add(sides[l][5])
+        if sp in TAGGED and tg:
+            for i, sc in enumerate(secs):
+                if sc[6] == tg: doors.add(i)
+    door_rows = []
+    for d in sorted(doors):
+        ns = [secs[n][1] for n in neigh.get(d, ()) if n != d]
+        top = (min(ns) - 4) if ns else secs[d][1] + 72
+        if top > secs[d][0]: door_rows.append((d, top))
+    H.append("const MapDoor map_doors[%d] = {%s};" % (max(1, len(door_rows)), ",".join("{%d,%d}" % r for r in door_rows) or "{0,0}"))
+    H.append("const uint16_t map_ndoors = %d;" % len(door_rows))
+    H.append("const int16_t map_sector_tag[%d] = {%s};" % (len(secs), ",".join(str(sc[6]) for sc in secs)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
     H.append("const MapTex map_tex[%d] = {%s};" % (max(1, len(texmeta)), ",".join(
         "{%d,%d,%d,%d,{%s},{%s}}" % (m[0], m[1], m[2], m[3], ",".join(str(o) for o in m[4]), ",".join(str(x) for x in m[5])) for m in texmeta) or "{0}"))
