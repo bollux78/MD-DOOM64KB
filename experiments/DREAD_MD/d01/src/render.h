@@ -2,39 +2,34 @@
 #define RENDER_H
 #ifdef SGDK_GCC
 #include <types.h>   /* SGDK provides the intN_t names */
-#ifndef int64_t
-#define int64_t long long
-#endif
+typedef long long dread_i64;   /* SGDK 2.x has no int64_t, newer ones typedef it */
+#define int64_t dread_i64
 #else
 #include <stdint.h>
 #endif
 #include "mapdata.h"
 
-/* screen variants (H40, 320x144 on screen like Dread MD):
- *   default / ROWDUP: 160 columns x 72 rows, each row shown twice by per-line vertical scroll
- *   COLDUP (COLB=2): 80 columns of 4 pixels x 144 rows                                   */
-#ifndef COLB
-#define COLB     1                 /* bytes (pixel pairs) per logical column */
-#endif
-#ifndef VIEW_W
-#define VIEW_W   (COLB == 2 ? 80 : 160)
-#endif
-#ifndef VIEW_H
-#define VIEW_H   (COLB == 2 ? 144 : 72)
-#endif
-#define HALF_W   (VIEW_W / 2)
-#define HORIZON  (VIEW_H / 2)
-#define FOCAL    HALF_W            /* 90 degree horizontal field of view */
-#ifndef VFOCAL
-/* vertical focal in rows: logical pixel = 2*COLB H40 pixels (0.93 wide each) by (COLB==1 ? 2 : 1) lines */
-#define VFOCAL   (COLB == 2 ? 179 : 90)          /* Doom's proportions: 160/200 of the screen height per unit */
-#endif
-#define FB_TCOLS (VIEW_W * COLB / 4)               /* tile columns */
-#define FB_BYTES (FB_TCOLS * VIEW_H * 4)
-
+/* screen modes, switchable at run time (detail levels; 320x144 in H40, 256x144 in H32):
+ *   row-doubled  (COLB 1): W x 72 logical pixels of 2 screen pixels, each row shown twice by per-line vscroll
+ *   column-doubled (COLB 2): W/2 x 144 logical pixels of 4 screen pixels                                   */
+#define VW_MAX   160
+#define VH_MAX   144
+#define FB_MAX   (40 * 144 * 4)                 /* bytes: the largest mode (H40 column-doubled) */
+extern uint16_t r_vw, r_vh, r_colb, r_halfw, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
+extern uint16_t r_colofs[VW_MAX];               /* byte offset of each logical column in the framebuffer */
+#define COLB     r_colb
+#define VIEW_W   r_vw
+#define VIEW_H   r_vh
+#define HALF_W   r_halfw
+#define HORIZON  r_horizon
+#define FOCAL    r_halfw            /* 90 degree horizontal field of view */
+#define VFOCAL   r_vfocal
+#define FB_TCOLS r_tcols
+#define FB_BYTES r_fbbytes
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
  * a byte is a pair of 4bpp pixels; logical column x starts at byte x*COLB of the 4-byte tile rows. */
-#define FB_COL(fb, x) ((fb) + (uint16_t)((uint16_t)(((x) * COLB) >> 2) * (uint16_t)(VIEW_H * 4)) + (((x) * COLB) & 3))
+#define FB_COL(fb, x) ((fb) + r_colofs[x])
+void R_SetMode(uint16_t colb, uint16_t tcols);  /* tcols = 40 (H40) or 32 (H32) */
 
 typedef struct {
     int32_t x, y;                  /* 16.16 map units */

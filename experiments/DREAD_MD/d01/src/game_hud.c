@@ -71,7 +71,8 @@ void HUD_Opening(void)
 }
 
 /* ---- status bar on plane B rows [row0, row0+4) */
-static uint16_t hud_row0;
+static uint16_t hud_row0, hud_col0 = HUD_COL0;
+static int16_t weap_dx;
 static int16_t cur_face = -1;
 static uint16_t hud_nt[4][32];
 static volatile uint8_t hud_dirty, face_dirty, sat_dirty;
@@ -165,7 +166,7 @@ void HUD_VBlank(void)
     if (face_dirty) { face_dirty = 0; DMA_doDma(DMA_VRAM, (void *)&hudw_faces[cur_face][0][0], TILE_FACE * 32, 16 * 16, 2); }
     if (hud_dirty) {
         hud_dirty = 0;
-        for (int r = 0; r < 4; r++) DMA_doDma(DMA_VRAM, hud_nt[r], BGB + (hud_row0 + r) * 128 + HUD_COL0 * 2, 32, 2);
+        for (int r = 0; r < 4; r++) DMA_doDma(DMA_VRAM, hud_nt[r], BGB + (hud_row0 + r) * 128 + hud_col0 * 2, 32, 2);
     }
     for (int l = 0; l < 2; l++)
         if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); }
@@ -176,7 +177,15 @@ void HUD_VBlank(void)
             vram_addr(SLIST + i * 8);
             vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + bob_y));
             vram_addr(SLIST + i * 8 + 6);
-            vram_w((uint16_t)(128 + weap_x + p[0] + bob_x));
+            vram_w((uint16_t)(128 + weap_x + p[0] + bob_x + weap_dx));
         }
     }
+}
+
+/* screen mode change (ints disabled by the caller): bar column, weapon x offset */
+void HUD_SetLayout(uint16_t col0, int16_t dx)
+{
+    hud_col0 = col0; weap_dx = dx;
+    for (int r = 0; r < 4; r++) { vram_addr(BGB + (hud_row0 + r) * 128); for (int i = 0; i < 64; i++) vram_w(0); }
+    hud_dirty = 1; sat_dirty = 1;
 }

@@ -329,8 +329,6 @@ def main():
                 for v in range(H2):
                     pa, pb = L[img[v % h, sx]]
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
-                if os.environ.get("DREAD_COLB", "1") == "2":
-                    one = bytes(x for bb in one for x in (bb, bb))   # words: the column is 4 pixels wide
                 col += one + one          # stored twice: the renderer skips the wrap mask
             offs.append(len(blob)); pids.append(k)
             blob += col
@@ -432,6 +430,8 @@ def main():
     H.append("const uint16_t map_ndoors = %d;" % len(door_rows))
     H.append("const int16_t map_sector_tag[%d] = {%s};" % (len(secs), ",".join(str(sc[6]) for sc in secs)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
+    # same texels as words (b, b): column-doubled modes write 4 pixels per texel with one move.w
+    H.append("const uint16_t tex_blob_w[%d] = {%s};" % (len(blob), ",".join(str(x * 257) for x in blob)))
     H.append("const MapTex map_tex[%d] = {%s};" % (max(1, len(texmeta)), ",".join(
         "{%d,%d,%d,%d,{%s},{%s}}" % (m[0], m[1], m[2], m[3], ",".join(str(o) for o in m[4]), ",".join(str(x) for x in m[5])) for m in texmeta) or "{0}"))
     H.append("const int16_t sintab[1024] = {%s};" % ",".join(str(int(round(16384 * math.sin(i * 2 * math.pi / 1024)))) for i in range(1024)))

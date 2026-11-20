@@ -73,7 +73,7 @@ try:
         if frames > 1: stats.append((segs, nodes)); cv.append((rd(g, "frame_cols", 2), rd(g, "frame_anchors", 2)))
         if frames in want:
             cb = rd(g, "cur_buf", 2)
-            fb = readbig(g, sym["fbuf"] + (cb ^ 1) * FB, FB)
+            fb = readbig(g, sym["fbuf"] + ((cb ^ 1) * FB if COLB == 1 else 0), FB)
             nt = struct.unpack(">%dH" % (VH // 8 * 32), readbig(g, sym["ntbuf"], VH // 8 * 64)) if "ntbuf" in sym else None
             from PIL import Image
             RD = 2 if COLB == 1 else 1

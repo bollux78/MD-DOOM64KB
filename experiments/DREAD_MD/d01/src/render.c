@@ -45,12 +45,12 @@ static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
 static uint16_t RCP4[1024];        /* 2^20 / z, z = 16..1023 */
 
-static uint8_t clipbuf[2 * VIEW_W];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
+static uint8_t clipbuf[2 * VW_MAX];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
 #define ceilclip clipbuf
-#define floorclip (clipbuf + VIEW_W)
+#define floorclip (clipbuf + VW_MAX)
 /* next open column at or after c (union-find with path halving); closed columns are skipped
  * in O(1) instead of being walked by every seg behind them */
-static uint8_t nxt[VIEW_W + 1];
+static uint8_t nxt[VW_MAX + 1];
 static inline int find_open(int c)
 {
     while (nxt[c] != c) { nxt[c] = nxt[nxt[c]]; c = nxt[c]; }
@@ -119,8 +119,42 @@ static inline int32_t advance(int32_t a, int32_t delta, int32_t f8)
     return a + mul32k(delta, whole) + mul32k(delta >> 8, part);
 }
 
+uint16_t r_vw, r_vh, r_colb, r_halfw, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
+uint16_t r_colofs[VW_MAX];
+#if defined(__m68k__) || defined(__mc68000__)
+/* colasm.s: per-mode entry points of the unrolled cores */
+extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
+extern const uint32_t scal_b[], scal_w[];
+const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
+uint16_t r_tmk_sz, r_tsh;
+#endif
+void R_SetMode(uint16_t colb, uint16_t tcols)
+{
+    r_colb = colb; r_tcols = tcols;
+    r_vw = colb == 2 ? tcols * 2 : tcols * 4;
+    r_vh = colb == 2 ? 144 : 72;
+    r_halfw = r_vw / 2; r_horizon = r_vh / 2;
+    /* Doom's proportions (y scale = 1.2 x the x scale on a 4:3 screen): ~180 screen lines per unit
+       in both H32 and H40, since the view always spans the full screen width */
+    r_vfocal = colb == 2 ? 179 : 90;
+    r_zppk = (uint16_t)(4194304UL / r_vfocal);
+    r_fbbytes = tcols * r_vh * 4;
+    for (int x = 0; x < r_vw; x++) r_colofs[x] = (uint16_t)(((x * colb) >> 2) * (r_vh * 4) + ((x * colb) & 3));
+#if defined(__m68k__) || defined(__mc68000__)
+    r_fill_end = colb == 2 ? fillw_end : fillb_end;
+    r_tmk_end = colb == 2 ? tmkw_end : tmkb_end;
+    r_tmk_sz = colb == 2 ? 16 : 14;
+    r_scal = colb == 2 ? scal_w : scal_b;
+    r_tsh = colb == 2 ? 1 : 0;
+#endif
+}
+
 void R_Init(void)
 {
+#ifndef COLB0
+#define COLB0 1
+#endif
+    R_SetMode(COLB0, 40);
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
     for (int i = 0; i < map_counts[4]; i++) map_sectors[i] = map_sectors_init[i];
     for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF;
@@ -199,7 +233,7 @@ static inline uint16_t u_of(uint32_t uz, int32_t iz)
 }
 
 /* texels per row (16.16) at depth z4: (z4/4) * 65536 / VFOCAL */
-#define ZPP_K ((uint16_t)(4194304UL / VFOCAL))
+#define ZPP_K r_zppk
 static inline int32_t zpp_of(uint16_t z4) { return (int32_t)(mulu16(z4, ZPP_K) >> 8); }
 static inline int ceil16(int32_t y) { return (y + 0xFFFF) >> 16; }
 static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -224,14 +258,14 @@ typedef struct {
     uint16_t cpal, ccol2, fpal, fcol2;            /* 88 90 92 94: fill spans {palette, colour} */
     uint16_t toff;                                /* 96 (scratch: tile column * TROWS) */
 } ColJob;
-static int16_t a_yc[VIEW_W], a_yf[VIEW_W], a_ybc[VIEW_W], a_ybf[VIEW_W];
-static uint16_t a_u[VIEW_W];
-static int32_t a_zpp[VIEW_W];
+static int16_t a_yc[VW_MAX], a_yf[VW_MAX], a_ybc[VW_MAX], a_ybf[VW_MAX];
+static uint16_t a_u[VW_MAX];
+static int32_t a_zpp[VW_MAX];
 static ColJob job;
 /* per 8x8 tile: the palette of the first (= nearest, front-to-back) span drawn in it; later spans of
  * another colour family are drawn through pal_remap so no pixel ever shows in the wrong palette */
 #define TROWS (VIEW_H / 8)
-#define TILES (FB_TCOLS * TROWS)
+#define TILES (40 * 18)
 uint8_t tilepal[TILES];
 uint8_t *const r_tilepal = tilepal;
 const uint8_t *const r_remap = &pal_remap[0][0];
@@ -289,7 +323,7 @@ static void seg_columns(ColJob *j)
 static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16_t yoff)
 {
     const MapTex *m = &map_tex[t];
-    p->tex = tex_blob + m->off[bucket];
+    p->tex = COLB == 2 ? (const uint8_t *)tex_blob_w + 2 * m->off[bucket] : tex_blob + m->off[bucket];
     p->wmask = (1u << m->wshift) - 1;
     p->hs2 = m->hshift + 1 + (COLB - 1);         /* columns are stored twice (and as words when COLB = 2) */
     p->hmask = (1u << m->hshift) - 1;

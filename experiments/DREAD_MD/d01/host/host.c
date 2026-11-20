@@ -5,11 +5,11 @@
 #include <string.h>
 #include <time.h>
 #include "../src/render.h"
-static uint8_t fb[FB_BYTES];
+static uint8_t fb[FB_MAX];
 static void save(const char *fn)
 {
     /* as on screen: 320 pixels wide, rows doubled in the row-duplicated variant */
-    static uint16_t nt[(VIEW_H / 8) * FB_TCOLS];
+    static uint16_t nt[18 * 40];
     R_BuildNametable(nt, 0);
     const int RD = COLB == 1 ? 2 : 1;
     FILE *f = fopen(fn, "wb");
@@ -34,7 +34,7 @@ static void shot(const char *pre, int i, int x, int y, int deg)
            rstats.segs_drawn, rstats.nodes_visited, rstats.subs_visited, rstats.cols_closed);
 }
 extern int r_pvs_off;
-static uint8_t fb2[FB_BYTES];
+static uint8_t fb2[FB_MAX];
 static void sweep(int n)
 {
     srand(7); long bad = 0; int badviews = 0;

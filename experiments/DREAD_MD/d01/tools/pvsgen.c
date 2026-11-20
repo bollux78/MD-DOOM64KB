@@ -8,7 +8,7 @@
 #include <string.h>
 #include "render.h"
 extern uint8_t pvs_seen[];
-static uint8_t fb[FB_BYTES];
+static uint8_t fb[FB_MAX];
 
 static int nsub, nnode;
 static uint8_t *vis;          /* nsub x nsub */

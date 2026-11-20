@@ -57,6 +57,7 @@ extern const MapDoor map_doors[];
 extern const uint16_t map_ndoors;
 extern const int16_t map_sector_tag[];
 extern const uint8_t tex_blob[];
+extern const uint16_t tex_blob_w[];
 extern const MapTex map_tex[];
 extern const int16_t map_start[3];
 extern const uint16_t map_counts[6];   /* verts, segs, subsectors, nodes, sectors, lines */

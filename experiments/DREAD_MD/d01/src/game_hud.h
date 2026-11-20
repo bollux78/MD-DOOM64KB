@@ -20,4 +20,5 @@ void HUD_WeaponFrame(uint16_t f);
 void HUD_VBlank(void);
 void HUD_Text(uint16_t line, const char *s);
 void HUD_WeaponBob(int16_t dx, int16_t dy);
+void HUD_SetLayout(uint16_t col0, int16_t dx);
 #endif
