@@ -392,6 +392,8 @@ tex_part:
         rts
 
 /* masked cores: entry = end - n*size, bottom-up from k = n; d1/d2 v, d3/d4 step, d5 hmask, a0 = top - 4, a1 texels */
+        .globl  tmkb_start
+tmkb_start:
         .set    k,NS_B
         .rept   NS_B
         move.w  %d1,%d6
@@ -404,6 +406,8 @@ tex_part:
         .globl  tmkb_end
 tmkb_end:
         rts
+        .globl  tmkw_start
+tmkw_start:
         .set    k,VH_MAX
         .rept   VH_MAX
         move.w  %d1,%d6

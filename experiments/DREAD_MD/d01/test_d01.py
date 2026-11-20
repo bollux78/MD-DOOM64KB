@@ -1,3 +1,4 @@
+import re
 """DREAD-MD D01 in BlastEm: run the built-in bench route, report FPS and render stats,
 save a few frames (rebuilt from the RAM framebuffer) as PNG. Numbers + shareware images only."""
 import json, os, struct, subprocess, sys
@@ -111,7 +112,9 @@ try:
         for a, l in zip(addrs, out): lines[l.split("/")[-1]] += fine[a]
     tot2 = max(sum(hist.values()), 1)
     res["hot_lines"] = [(l, round(100 * c / tot2, 1)) for l, c in lines.most_common(25)]
-    res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in hist.most_common(25)]
+    grp = collections.Counter()
+    for n, c in hist.items(): grp[re.sub(r"^s([bw])_\d+$", r"scalers_\1", n)] += c
+    res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in grp.most_common(25)]
 finally:
     g.close()
 print("D01 RESULT", json.dumps(res), flush=True)
