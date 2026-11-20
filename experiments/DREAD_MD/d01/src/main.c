@@ -13,7 +13,7 @@
 #define TILE_FB1   (TILE_FB0 + 32 * VIEW_TROWS)
 #define NT0        0xC000
 #define NT1        0x8000
-#define DMA_CHUNK  4096
+#define DMA_CHUNK  2048
 
 static uint8_t fbuf[2][FB_BYTES];
 volatile uint16_t vints;
