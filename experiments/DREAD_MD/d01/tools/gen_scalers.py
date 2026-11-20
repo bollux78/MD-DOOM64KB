@@ -7,7 +7,7 @@ as words) with o_k = round((k-1) * z).  The caller jumps to end - n*6 to draw ro
 Also emits scal_q[]: zpp*1024 (16.16 zpp >> 6, < 32 texels/row) -> level."""
 import math, sys
 
-NL = 256
+NL = 128
 Z0, Z1 = 1.0 / 64, 32.0
 R = (Z1 / Z0) ** (1.0 / (NL - 1))
 NS_B, NS_W = 72, 144

@@ -112,6 +112,11 @@ try:
         for a, l in zip(addrs, out): lines[l.split("/")[-1]] += fine[a]
     tot2 = max(sum(hist.values()), 1)
     res["hot_lines"] = [(l, round(100 * c / tot2, 1)) for l, c in lines.most_common(25)]
+    rl = collections.Counter()
+    for l, c in lines.items():
+        m = re.match(r"render\.c:(\d+)", l)
+        if m: rl[int(m.group(1))] += c
+    res["render_lines"] = sorted((k, round(100 * c / tot2, 2)) for k, c in rl.items())
     grp = collections.Counter()
     for n, c in hist.items(): grp[re.sub(r"^s([bw])_\d+$", r"scalers_\1", n)] += c
     res["profile"] = [(n, round(100 * c / tot, 1)) for n, c in grp.most_common(25)]

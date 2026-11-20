@@ -487,24 +487,30 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     if (has_lo) for (int k = xs; k < xe; k++) { a_ybf[k] = (int16_t)ceil16(Ybf); Ybf += dYbf; }
     if (need_tex) {
         /* exact u and texel step every ANCHOR columns, linear in between */
+        int haveB = 0; uint16_t uB = 0; int32_t zqB = 0;   /* the end of one anchor span is the start of the next */
         for (int k = xs; k < xe; ) {
             int n = xe - 1 - k; if (n > ANCHOR) n = ANCHOR;
             rstats.anchors++;
-            const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
-            const uint16_t uA = u_of((uint32_t)uzA << 8, izA), zA = z4_of(izA);
-            int32_t ua8 = (int32_t)uA << 8, zp = zq8_of(zA), du8 = 0, dzp = 0;
+            uint16_t uA; int32_t zp;
+            if (haveB) { uA = uB; zp = zqB; }
+            else {
+                const int32_t izA = iz > 1 ? iz : 1, uzA = uz > 0 ? uz : 0;
+                uA = u_of((uint32_t)uzA << 8, izA); zp = zq8_of(z4_of(izA));
+            }
+            int32_t ua8 = (int32_t)uA << 8, du8 = 0, dzp = 0;
+            haveB = 0;
             if (n > 0) {
                 int32_t izB, uzB;
                 if (n == ANCHOR) { izB = iz + diz8; uzB = uz + duz8; }
                 else { izB = iz + mul32k(diz, (int16_t)n); uzB = uz + mul32k(duz, (int16_t)n); }
                 if (izB < 1) izB = 1;
                 if (uzB < 0) uzB = 0;
-                const uint16_t uB = u_of((uint32_t)uzB << 8, izB), zB = z4_of(izB);
-                if (n == ANCHOR) { du8 = ((int32_t)uB - (int32_t)uA) << 5; dzp = (zq8_of(zB) - zp) >> 3; }
+                uB = u_of((uint32_t)uzB << 8, izB); zqB = zq8_of(z4_of(izB));
+                const int32_t du = (int32_t)uB - (int32_t)uA;
+                if (n == ANCHOR) { du8 = du << 5; dzp = (zqB - zp) >> 3; haveB = 1; }
                 else {
-                    const int32_t du = (int32_t)uB - (int32_t)uA, dz = (int32_t)zB - (int32_t)zA;
                     du8 = (du > -128 && du < 128) ? divs16(du << 8, (int16_t)n) : (du << 8) / n;
-                    (void)dz; dzp = (zq8_of(zB) - zp) / n;
+                    dzp = (zqB - zp) / n;
                 }
             }
             const int m = n > 0 ? n : 1;
