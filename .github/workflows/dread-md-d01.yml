@@ -51,6 +51,7 @@ jobs:
             python3 $D/tools/gen_weapon.py "$WAD" "$stage/src/weapon.c" >> "$stage/conv.log"
             python3 $D/tools/gen_title.py "$stage/src/title.c" >> "$stage/conv.log"
             python3 $D/tools/gen_scalers.py "$stage/src/scalers.s" >> "$stage/conv.log"
+            python3 $D/tools/gen_tables.py "$stage/src/tables.c" >> "$stage/conv.log"
             hdr="$(find "$gdk" -path '*boot/rom_header.c' | head -1)"
             local dst="$stage/src/rom_header.c"; cp "$hdr" "$dst"
             python3 - "$dst" "$name" <<'PY'

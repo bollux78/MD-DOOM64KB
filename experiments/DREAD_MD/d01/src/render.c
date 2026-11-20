@@ -49,8 +49,14 @@ static inline uint32_t now_lines(void) { return 0; }
 static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
 static uint16_t vstamp[MAXV];
 static uint16_t frame_id;
+#if defined(__m68k__) || defined(__mc68000__)
+extern const uint16_t rcp4_tab[1024], rcpf_tab[4][1024];   /* tables.c (generated, ROM) */
+#define RCP4 rcp4_tab
+static const uint16_t *RCPF;
+#else
 static uint16_t RCP4[1024];
-static uint16_t RCPF[1024];       /* 2^19 * FOCAL / 64 / z (per mode) */        /* 2^20 / z, z = 16..1023 */
+static uint16_t RCPF[1024];
+#endif       /* 2^19 * FOCAL / 64 / z (per mode) */        /* 2^20 / z, z = 16..1023 */
 
 static uint8_t clipbuf[2 * VW_MAX];          /* [0..W) ceiling clip (top), [W..2W) floor clip (bottom) */
 #define ceilclip clipbuf
@@ -147,7 +153,11 @@ void R_SetMode(uint16_t colb, uint16_t tcols)
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
+#if defined(__m68k__) || defined(__mc68000__)
+    RCPF = rcpf_tab[r_halfw == 80 ? 0 : r_halfw == 40 ? 1 : r_halfw == 64 ? 2 : 3];
+#else
     for (int z = 16; z < 1024; z++) RCPF[z] = (uint16_t)(((1UL << 19) / 64 * r_halfw) / (uint32_t)z);
+#endif
     for (int x = 0; x < r_vw; x++) r_colofs[x] = (uint16_t)(((x * colb) >> 2) * (r_vh * 4) + ((x * colb) & 3));
 #if defined(__m68k__) || defined(__mc68000__)
     r_fill_end = colb == 2 ? fillw_end : fillb_end;
@@ -164,7 +174,9 @@ void R_Init(void)
 #define COLB0 1
 #endif
     R_SetMode(COLB0, 40);
+#if !(defined(__m68k__) || defined(__mc68000__))
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
+#endif
     for (int i = 0; i < map_counts[4]; i++) map_sectors[i] = map_sectors_init[i];
     for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF;
 }
@@ -290,7 +302,11 @@ static ColJob job;
  * another colour family are drawn through pal_remap so no pixel ever shows in the wrong palette */
 #define TROWS (VIEW_H / 8)
 #define TILES (40 * 18)
+#if !(defined(__m68k__) || defined(__mc68000__)) || NPAL != 1
 uint8_t tilepal[TILES];
+#else
+static uint8_t tilepal[1];   /* one palette: no tile ownership */
+#endif
 uint8_t *const r_tilepal = tilepal;
 const uint8_t *const r_remap = &pal_remap[0][0];
 #if defined(__m68k__) || defined(__mc68000__)
