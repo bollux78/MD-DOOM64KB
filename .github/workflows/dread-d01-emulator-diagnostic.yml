@@ -1,0 +1,76 @@
+name: DREAD D01 emulator diagnostic
+on:
+  push:
+    branches: [exp-werk-dread-precalc-20261121]
+    paths: ['.github/workflows/dread-d01-emulator-diagnostic.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  emulator-diagnostic:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Restore existing successful ROM bundle
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 44956624202
+          name: DREAD-D01-FPS-MATRIX
+          github-token: ${{ github.token }}
+          path: _emudiag
+      - name: Diagnose BlastEm and other installed emulators without rebuilding maps
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p _emudiag/roms
+          find _emudiag -maxdepth 2 -type f -printf '%p %s bytes\n'
+          unzip -o -q _emudiag/DREAD-D01-FPS-MATRIX.zip -d _emudiag/roms || true
+          find _emudiag/roms -maxdepth 1 -type f -printf '%p %s bytes\n'
+          echo '--- binary availability ---'
+          for bin in blastem retroarch mednafen gens gens-gs picodrive bizhawk mame gdb; do command -v "$bin" || true; done
+          for x in "$HOME/Projetos/blastem64-1.0.0/blastem" /usr/bin/blastem /usr/bin/retroarch; do
+            if test -x "$x"; then echo "$x found"; file "$x"; fi
+          done
+          echo '--- preserved ELFs ---'
+          find "$RUNNER_TEMP" -maxdepth 5 -name EPISODE.elf -type f -printf '%p %s bytes\n' 2>/dev/null | tail -20 || true
+          echo '--- diagnostic run ---'
+          python3 - <<'PY'
+          import os,subprocess,sys,time,glob
+          sys.path.insert(0,'scripts/lab')
+          from r64a_rsp_capture import RSP
+          bl=os.path.expanduser('~/Projetos/blastem64-1.0.0/blastem')
+          rom=os.path.abspath('_emudiag/roms/DREAD-D01-FPS-CONTROL.bin')
+          elf_candidates=glob.glob(os.path.join(os.environ.get("RUNNER_TEMP","/tmp"),"dread-fps-44956624202/CONTROL/EPISODE.elf"))
+          elf=elf_candidates[0] if elf_candidates else None
+          mainaddr=None
+          if elf:
+              p=subprocess.run([os.path.expanduser('~/mars/m68k-elf/bin/m68k-elf-nm'),elf],capture_output=True,text=True)
+              for line in p.stdout.splitlines():
+                  parts=line.split()
+                  if len(parts)>=3 and parts[-1]=='main':mainaddr=int(parts[0],16)&0xffffff
+          print("ROM",rom,os.path.isfile(rom),"ELF",elf,"MAIN",hex(mainaddr) if mainaddr is not None else None,flush=True)
+          for envmods in [{"SDL_VIDEODRIVER":"dummy","SDL_AUDIODRIVER":"dummy"},{"SDL_VIDEODRIVER":"offscreen","SDL_AUDIODRIVER":"dummy"}]:
+              print("TEST",envmods,flush=True)
+              old={k:os.environ.get(k) for k in envmods};os.environ.update(envmods)
+              g=None
+              try:
+                  g=RSP(bl,rom,9000,30)
+                  print("supported",repr(g.req("qSupported",10)),flush=True)
+                  print("initial registers prefix",repr(g.req("g",10)[:140]),flush=True)
+                  if mainaddr is not None:
+                      print("main breakpoint",repr(g.req(f"Z0,{mainaddr:x},2",10)),flush=True)
+                      print("continue to main",repr(g.cont()),flush=True)
+                  else:
+                      print("skip breakpoint: missing ELF",flush=True)
+              except Exception as e:
+                  print("ERROR",repr(e),"process return",None if g is None else g.proc.poll(),flush=True)
+              finally:
+                  if g is not None: g.close()
+                  for k,v in old.items():
+                      if v is None:os.environ.pop(k,None)
+                      else:os.environ[k]=v
+          PY
