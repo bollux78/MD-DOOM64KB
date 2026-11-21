@@ -100,6 +100,8 @@ void HUD_Init(uint16_t row0)
 {
     hud_row0 = row0;
     SYS_disableInts();
+    /* The text title clears plane B with DMA fill, which leaves increment 1. */
+    VDP_setAutoInc(2);
     cram_set(16, weap_pal, 16);               /* PAL1: weapon */
     cram_set(32, hudw_fpal, 16);              /* PAL2: faces */
     cram_set(48, hudw_pal, 16);               /* PAL3: bar, digits, text */
