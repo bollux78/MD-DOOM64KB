@@ -395,10 +395,34 @@ static const char *const title_levels[] = {
     "E1M7  COMPUTER STATION", "E1M8  PHOBOS ANOMALY", "E1M9  MILITARY BASE"
 };
 
+/* A shadow box is made by putting the background at LOW priority only
+ * inside the box. All other art tiles are HIGH priority, so the VDP's
+ * shadow/highlight mode leaves the surrounding artwork unchanged.
+ * BG_A text has high priority and stays bright over the shadowed BG_B.
+ * The box covers both the main menu and the level-selection menu. */
+static void title_shadow_box(void)
+{
+    const uint16_t *m = title_mapb;
+    VDP_setAutoInc(2);
+    for (uint16_t y = 0; y < 28; y++) {
+        vram_cmd(0xC000 + y * 128);
+        for (uint16_t x = 0; x < 40; x++) {
+            const uint16_t v = m[y * 40 + x];
+            const uint16_t in_box = (x >= 6 && x <= 34 && y >= 7 && y <= 23);
+            *(volatile uint16_t *)0xC00000 =
+                (uint16_t)((v & 0xE000) | (112 + (v & 0x07FF)) |
+                           (in_box ? 0 : 0x8000));
+        }
+    }
+}
+
 static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
 {
     SYS_disableInts();
     VDP_clearPlane(BG_A, TRUE);
+    /* The shadow mode is enabled only after BG_B has an explicit box mask.
+     * Rewriting on menu input is inexpensive (not in the game frame loop). */
+    if (screen != TITLE_ART) title_shadow_box();
     VDP_setHilightShadow(screen != TITLE_ART);
     VDP_setTextPalette(PAL3);
     VDP_setTextPriority(TRUE);
@@ -408,6 +432,7 @@ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
         VDP_drawTextBG(BG_A, "APERTE START OU AGUARDE 15 SEGUNDOS", 3, 23);
 #else
         VDP_drawTextBG(BG_A, "PRESS START", 14, 23);
+        VDP_drawTextBG(BG_A, ROM_NAME, 11, 25);
 #endif
     } else {
         const bool levels = screen == TITLE_LEVELS;
