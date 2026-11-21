@@ -1,5 +1,13 @@
 /* Row-doubling H-interrupt (row-doubled modes).
-   hint_a:
+   hint_a: before the view; places the first row from the V counter, turns the display on, arms hint_b.
+   hint_b: minimal handler, one row per call (see below).
+   The VBlank (main.c) resets VSRAM, turns the display off above the view, re-arms hint_a.   */
+#define VTOP    16
+#define VIEW_H  72
+        .text
+        .globl  hint_a
+        .globl  hint_b
+hint_a:
         move.l  %d0,-(%sp)
         moveq   #0,%d0
         move.b  0xC00008,%d0
