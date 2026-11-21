@@ -348,10 +348,14 @@ static inline int32_t zq8_of(uint16_t z4) { const uint32_t q = mulu16(z4, ZPP_K)
 static inline int ceil16(int32_t y) { return (y + 0xFFFF) >> 16; }
 static inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-/* layout shared with colasm.s (offsets 0,4,6,8,10,12) */
+/* layout shared with colasm.s (offsets 0,4,6,8,10,12,16,18,20; 24 bytes) */
 typedef struct {
     const uint8_t *tex; uint16_t wmask, hs2, hmask, pal;   /* pal = view palette of this texture */
     int32_t vbase16;              /* (textop - viewz + yoff) << 16 */
+    int16_t vt0;                  /* v at the part's top edge (texels, & hmask) */
+    uint16_t eoff;                /* ColJob offset of the raw top-edge row array (4 = yc, 16 = ybf) */
+    uint16_t vlim;                /* last texel the scalers may reach */
+    uint16_t pad;
 } Part;
 
 /* one seg's column job, consumed by seg_columns() (offsets used by colasm.s) */
@@ -364,10 +368,13 @@ typedef struct {
     uint16_t ccol, fcol;                          /* 32 34 */
     uint16_t flags;                               /* 36: 1 solid, 2 mid, 4 upper, 8 lower */
     uint16_t closed;                              /* 38 */
-    Part mid, up, lo;                             /* 40 56 72 */
-    uint16_t cpal, ccol2, fpal, fcol2;            /* 88 90 92 94: fill spans {palette, colour} */
-    uint16_t toff;                                /* 96 (scratch: tile column * TROWS) */
+    Part mid, up, lo;                             /* 40 64 88 */
+    uint16_t cpal, ccol2, fpal, fcol2;            /* 112 114 116 118: fill spans {palette, colour} */
+    uint16_t toff;                                /* 120 (scratch: tile column * TROWS) */
 } ColJob;
+_Static_assert(sizeof(Part) == 24 && __builtin_offsetof(ColJob, mid) == 40 && __builtin_offsetof(ColJob, up) == 64
+               && __builtin_offsetof(ColJob, lo) == 88 && __builtin_offsetof(ColJob, cpal) == 112
+               && __builtin_offsetof(ColJob, fpal) == 116, "ColJob layout shared with colasm.s");
 static int16_t a_yc[VW_MAX], a_yf[VW_MAX], a_ybc[VW_MAX], a_ybf[VW_MAX];
 uint16_t a_u[VW_MAX];          /* also written by segasm.s */
 uint16_t a_zpp[VW_MAX];
@@ -489,7 +496,7 @@ static void seg_anchors(SegA *p)
 }
 #endif
 
-static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16_t yoff)
+static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16_t yoff, int16_t edge, uint16_t eoff)
 {
     const MapTex *m = &map_tex[t];
 #ifdef DREAD_EPISODE
@@ -509,6 +516,13 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
     p->hmask = (1u << m->hshift) - 1;
     p->pal = m->pal[bucket];
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;
+    p->vt0 = (int16_t)((textop + yoff - edge) & p->hmask);
+    p->eoff = eoff;
+#ifdef DREAD_EPISODE
+    p->vlim = p->hs2 - 2;
+#else
+    p->vlim = p->hmask * 2;
+#endif
 }
 
 static inline const uint8_t *texture_column(const Part *p, uint16_t u)
@@ -650,20 +664,20 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
         if (s->mid != 0xFF) {
             has_mid = 1;
             const int16_t textop = (s->flags & 2) ? fs->floor + map_tex[s->mid].realh : fceil;
-            setup_part(&job.mid, s->mid, bucket, textop, s->yoff);
+            setup_part(&job.mid, s->mid, bucket, textop, s->yoff, fceil, 4);
         }
     } else {
         if (bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) {
             has_up = 1;
             const int16_t textop = (s->flags & 1) ? fceil : bceil + map_tex[s->upper].realh;
-            setup_part(&job.up, s->upper, bucket, textop, s->yoff);
+            setup_part(&job.up, s->upper, bucket, textop, s->yoff, fceil, 4);
             const int16_t bc = bceil - view_z;
             yrows(bc, iz, diz, &Ybc, &dYbc);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
             const int16_t textop = (s->flags & 2) ? fceil : bs->floor;
-            setup_part(&job.lo, s->lower, bucket, textop, s->yoff);
+            setup_part(&job.lo, s->lower, bucket, textop, s->yoff, bs->floor, 16);
             const int16_t bf = bs->floor - view_z;
             yrows(bf, iz, diz, &Ybf, &dYbf);
         }

@@ -117,10 +117,13 @@ texnm_end:
 #define J_FLAGS 36
 #define J_CLOSED 38
 #define J_MID 40
-#define J_UP 56
-#define J_LO 72
-#define J_CPAL 88
-#define J_FPAL 92
+#define J_UP 64
+#define J_LO 88
+#define J_CPAL 112
+#define J_FPAL 116
+#define PT_VT0 16                           /* Part: v at the part's top edge row (texels, in [0,H)) */
+#define PT_EOFF 18                          /* Part: job offset of the raw top-edge row array (J_YC or J_YBF) */
+#define PT_VLIM 20                          /* Part: last texel the scalers may reach (stored - 2) */
 
 seg_columns:
         movem.l %d2-%d7/%a2-%a6,-(%sp)
@@ -332,7 +335,7 @@ fillw_end:
         movem.l %d0-%d3,-(%sp)
         .endif
         move.w  %d7,%d1
-        add.w   %d1,%d1
+        add.w   %d1,%d1                     /* c * 2 */
         move.l  J_U(%a6),%a1
         moveq   #0,%d6
         move.w  0(%a1,%d1.w),%d6            /* u */
@@ -344,64 +347,51 @@ fillw_end:
         movea.l (%a4),%a1
         movea.l 0(%a1,%d6.w),%a1            /* shared column */
 #else
-        move.w  6(%a4),%d1
-        lsl.l   %d1,%d6                     /* << hs2 */
+        move.w  6(%a4),%d0
+        lsl.l   %d0,%d6                     /* << hs2 */
         move.l  (%a4),%a1
         adda.l  %d6,%a1                     /* a1 = texture column */
 #endif
-        move.w  r_horizon,%d1               /* v top = vbase - zq * (HORIZON - y0) * 64 */
-        sub.w   %d5,%d1
-        muls.w  %d3,%d1
-        lsl.l   #6,%d1
-        move.l  12(%a4),%d2
-        sub.l   %d1,%d2                     /* d2 = v of the top row (16.16) */
-#ifdef DREAD_EPISODE
-        move.w  6(%a4),%d0                  /* episode: stored texels per column */
-        swap    %d0
-#endif
-        move.w  8(%a4),%d0                  /* hmask */
-        add.w   %d5,%d5
+        /* v of the top row without a multiply: the part's top edge row (raw, before clipping) has
+           v = vt0; rows clipped away above it add rows * zq / 1024 (the sub-row fraction is dropped) */
+        move.w  PT_EOFF(%a4),%d0
+        move.l  0(%a6,%d0.w),%a0
+        move.w  %d5,%d2
+        sub.w   0(%a0,%d1.w),%d2            /* rows between the edge and y0 (>= 0) */
+        move.w  PT_VT0(%a4),%d6
+        tst.w   %d2
+        beq.s   1f
+        mulu.w  %d3,%d2
+        lsr.l   #8,%d2
+        lsr.l   #2,%d2
+        add.w   %d2,%d6
+        and.w   8(%a4),%d6
+1:      add.w   %d5,%d5
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0           /* a0 = top - 4 */
-        move.w  %d4,%a4                     /* a4 = n (the Part is no longer needed) */
-        subq.w  #1,%d4
-        move.w  %d3,%d1
-        mulu.w  %d4,%d1                     /* d1 = span * 1024 */
+        move.w  %d4,%d5                     /* d5 = n */
+        move.w  %d5,%d1
+        subq.w  #1,%d1
+        mulu.w  %d3,%d1                     /* d1 = span * 1024 */
         cmpi.w  #32767,%d3
-        beq.s   .Ltm\@                    /* 32 texels per row or more: no scaler */
-        move.l  %d2,%d6
-        addi.l  #0x8000,%d6                 /* nearest texel: v = -0.3 must not wrap to H - 1 */
-        swap    %d6
-        and.w   %d0,%d6                     /* d6 = v top, integer, in [0, H) */
+        beq.s   .Ltm\@                      /* 32 texels per row or more: no scaler */
         move.l  %d1,%d4
         lsr.l   #8,%d4
-        lsr.l   #2,%d4                      /* d4 = span (integer texels) */
-        move.w  %d4,%d5
-        lsr.w   #5,%d4
-        add.w   %d5,%d4
-        add.w   %d6,%d4
-        addq.w  #1,%d4                      /* v + span * 33/32 + 1 (quantisation margin) */
-#ifdef DREAD_EPISODE
-        swap    %d0                         /* high word: texels stored per column (H + pad) */
-        move.w  %d0,%d5
-        swap    %d0
-        subq.w  #2,%d5
-#else
-        move.w  %d0,%d5
-        add.w   %d5,%d5
-#endif
-        cmp.w   %d5,%d4
-        bgt.s   .Ltm\@                    /* would leave the stored texels */
-        move.w  r_tsh,%d5
-        lsl.w   %d5,%d6
+        lsr.l   #2,%d4                      /* span (texels) */
+        move.w  %d4,%d2
+        lsr.w   #5,%d2
+        add.w   %d4,%d2
+        add.w   %d6,%d2
+        addq.w  #1,%d2                      /* v + span * 33/32 + 1 (quantisation margin) */
+        cmp.w   PT_VLIM(%a4),%d2
+        bgt.s   .Ltm\@                      /* would leave the stored texels */
         adda.w  %d6,%a1                     /* a1 = first texel */
-        move.w  %a4,%d5                     /* n * 6 */
-        add.w   %d5,%d5
+        add.w   %d5,%d5                     /* n * 6 */
         move.w  %d5,%d6
         add.w   %d5,%d5
         add.w   %d6,%d5
         move.w  r_ssh,%d6
-        lsl.w   %d6,%d5                     /* n * 12 in column-doubled modes (two byte moves per row) */
+        lsl.w   %d6,%d5                     /* n * 12 in column-doubled modes */
         lea     scal_q,%a4
         moveq   #0,%d4
         move.b  0(%a4,%d3.w),%d4            /* scaler level */
@@ -415,7 +405,12 @@ fillw_end:
         movem.l (%sp)+,%d0-%d3
         .endif
         rts
-.Ltm\@:
+.Ltm\@:                                     /* masked interpolating core (wraps in H) */
+        moveq   #0,%d2
+        move.w  %d6,%d2
+        swap    %d2                         /* v of the top row (16.16) */
+        move.w  8(%a4),%d0                  /* hmask */
+        move.w  %d5,%a4                     /* a4 = n */
         lsl.l   #6,%d1                      /* span 16.16 */
         add.l   %d1,%d2                     /* v of the bottom row; the core steps up by -zpp */
         moveq   #0,%d4
@@ -436,7 +431,6 @@ fillw_end:
         movem.l (%sp)+,%d0-%d3
         .endif
         rts
-
 .endm
 
 tex_part:
