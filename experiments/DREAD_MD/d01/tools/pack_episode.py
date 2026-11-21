@@ -10,6 +10,7 @@ TABLES = (
     "map_nthings map_sub_things map_bm map_bm_off map_bm_list"
 ).split()
 SCALARS = {"map_ndoors", "map_nthings"}
+PAD = 32   # EP_TEX_PAD in mapdata.h, conv --tex-pad
 SHARED = {"md_palette", "pal_rgb_all", "num_palettes", "pal_remap", "sintab"}
 
 
@@ -96,7 +97,8 @@ def main():
                 pattern = r"\{(\d+),(\d+),\d+,\d+,\{([\d,]+)\},\{[\d,]+\}\}"
                 groups = list(re.finditer(pattern, args))
                 for group in reversed(groups):
-                    width, stride = 1 << int(group[1]), 2 << int(group[2])
+                    width, h = 1 << int(group[1]), 1 << int(group[2])
+                    stride = h + min(h, PAD)
                     indices = []
                     for start in map(int, group[3].split(",")):
                         if start + width * stride > len(blob):

@@ -328,6 +328,10 @@ fillw_end:
         lsl.l   #6,%d1
         move.l  12(%a4),%d2
         sub.l   %d1,%d2                     /* d2 = v of the top row (16.16) */
+#ifdef DREAD_EPISODE
+        move.w  6(%a4),%d0                  /* episode: stored texels per column */
+        swap    %d0
+#endif
         move.w  8(%a4),%d0                  /* hmask */
         add.w   %d5,%d5
         add.w   %d5,%d5
@@ -350,10 +354,17 @@ fillw_end:
         add.w   %d5,%d4
         add.w   %d6,%d4
         addq.w  #1,%d4                      /* v + span * 33/32 + 1 (quantisation margin) */
+#ifdef DREAD_EPISODE
+        swap    %d0                         /* high word: texels stored per column (H + pad) */
+        move.w  %d0,%d5
+        swap    %d0
+        subq.w  #2,%d5
+#else
         move.w  %d0,%d5
         add.w   %d5,%d5
+#endif
         cmp.w   %d5,%d4
-        bgt.s   .Ltm\@                    /* would leave the 2H stored texels */
+        bgt.s   .Ltm\@                    /* would leave the stored texels */
         move.w  r_tsh,%d5
         lsl.w   %d5,%d6
         adda.w  %d6,%a1                     /* a1 = first texel */

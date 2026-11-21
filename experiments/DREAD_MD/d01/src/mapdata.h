@@ -8,6 +8,7 @@
 
 #define NUM_BUCKETS 4
 #define NO_MAP_SECTOR 0xFFFFu
+#define EP_TEX_PAD 32                  /* episode builds: texels repeated after each column (instead of a full second copy) */
 
 typedef struct {
     uint16_t v1, v2;

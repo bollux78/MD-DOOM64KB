@@ -49,7 +49,7 @@ Path(sys.argv[2]).write_text(json.dumps(ast.literal_eval(line.removeprefix("pale
 PALETTE
         for n in {1..9}; do
             level="$stage/E1M$n"
-            python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --palette "$palette"
+            python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
             cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
                "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
             "$level/pvsgen" "$level/pvs.c"
@@ -78,7 +78,9 @@ python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 python3 "$source_dir/tools/gen_tables.py" "$stage/src/tables.c"
 sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$stage/makefile.gen"
 if [[ "$map" == EPISODE ]]; then
-    make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java out/res/music.o
+    make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java out/res/music.o 2>/dev/null \
+      || make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java res/music.h 2>/dev/null \
+      || (cd "$stage" && java -jar "$GDK/bin/rescomp.jar" res/music.res res/music.s -dep out/res/music.o >/dev/null) || true
 fi
 make -C "$stage" -f makefile.gen -j3 release GDK="$GDK" PREFIX=m68k-elf- JAVA=java \
     EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag $title_flags $render_flags -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \

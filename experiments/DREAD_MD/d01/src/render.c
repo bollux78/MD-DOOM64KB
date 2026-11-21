@@ -485,7 +485,14 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
     p->tex = COLB == 2 ? (const uint8_t *)tex_blob_w + 2 * m->off[bucket] : tex_blob + m->off[bucket];
 #endif
     p->wmask = (1u << m->wshift) - 1;
+#ifdef DREAD_EPISODE
+    {   /* episode: column = H texels + a pad of min(H, EP_TEX_PAD) (the scalers' wrap-free reach) */
+        const uint16_t h = (uint16_t)(1u << m->hshift);
+        p->hs2 = h + (h < EP_TEX_PAD ? h : EP_TEX_PAD);
+    }
+#else
     p->hs2 = m->hshift + 1 + (COLB - 1);         /* columns are stored twice (and as words when COLB = 2) */
+#endif
     p->hmask = (1u << m->hshift) - 1;
     p->pal = m->pal[bucket];
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;

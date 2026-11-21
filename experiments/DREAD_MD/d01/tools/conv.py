@@ -94,6 +94,7 @@ def main():
     parser.add_argument("--geometry-only", action="store_true", help="Skip game-specific things")
     parser.add_argument("--row-only", action="store_true", help="Emit only byte-format textures")
     parser.add_argument("--palette", type=Path, help="JSON with 16 MD RGB triples (0–7)")
+    parser.add_argument("--tex-pad", type=int, default=0, help="store H + min(H, PAD) texels per column instead of 2H (episode builds)")
     args = parser.parse_args()
     wad = Wad(args.wad)
     mapname = args.map.upper()
@@ -410,7 +411,7 @@ def main():
                 for v in range(H2):
                     pa, pb = L[img[v % h, sx]]
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
-                col += one + one          # stored twice: the renderer skips the wrap mask
+                col += one + (one[:min(len(one), args.tex_pad)] if args.tex_pad else one)   # repeated start: the scalers skip the wrap mask
             offs.append(len(blob)); pids.append(k)
             blob += col
         for b in range(len(offs)):
