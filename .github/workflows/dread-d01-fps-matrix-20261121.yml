@@ -33,7 +33,7 @@ jobs:
           test -n "$gdk"
           tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
           test -x "${tc}gcc"
-          export GDK="$gdk" DREAD_TC="$tc" DREAD_COPY_SEGA_S=1 DREAD_EP_MAPS=1 DREAD_COMBAT=1
+          export GDK="$gdk" DREAD_TC="$tc" DREAD_EP_MAPS=1 DREAD_COMBAT=1
           export PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH" OPENBLAS_NUM_THREADS=1
           out="$RUNNER_TEMP/dread-fps-$GITHUB_RUN_ID"
           mkdir -p "$out"
