@@ -1,0 +1,738 @@
+diff --git a/experiments/DREAD_MD/d01/src/colasm.s b/experiments/DREAD_MD/d01/src/colasm.s
+index e844840..36a996d 100644
+--- a/experiments/DREAD_MD/d01/src/colasm.s
++++ b/experiments/DREAD_MD/d01/src/colasm.s
+@@ -162,7 +162,19 @@ seg_columns:
+ 1:
+         move.w  %d2,%d4                     /* ceiling: top .. yc */
+         sub.w   %d0,%d4
+-        ble.s   1f
++        ble     .Lceiling_done
++#if NPAL > 1
++        movem.l %d0-%d1,-(%sp)
++        move.l  %d7,-(%sp)
++        moveq   #0,%d6
++        move.w  J_CPAL(%a6),%d6
++        btst    #4,J_FLAGS+1(%a6)
++        beq.s   8f
++        moveq   #0,%d6
++8:      move.l  %d6,-(%sp)
++        move.l  %d4,-(%sp)
++        move.l  %d0,-(%sp)
++#endif
+         btst    #4,J_FLAGS+1(%a6)
+         beq.s   2f
+         /* sky ceiling: rows top..yc of the sky column of this screen column, through the scalers */
+@@ -200,9 +212,25 @@ seg_columns:
+         move.l  r_fill_end,%a1
+         suba.w  %d4,%a1
+         jsr     (%a1)
+-1:      move.w  %d1,%d4                     /* floor: yf .. bot */
++1:
++#if NPAL > 1
++        jsr     R_PaletteSpan
++        lea     16(%sp),%sp
++        movem.l (%sp)+,%d0-%d1
++#endif
++.Lceiling_done:
++        move.w  %d1,%d4                     /* floor: yf .. bot */
+         sub.w   %d3,%d4
+-        ble.s   1f
++        ble     .Lfloor_done
++#if NPAL > 1
++        movem.l %d0-%d1,-(%sp)
++        move.l  %d7,-(%sp)
++        moveq   #0,%d6
++        move.w  J_FPAL(%a6),%d6
++        move.l  %d6,-(%sp)
++        move.l  %d4,-(%sp)
++        move.l  %d3,-(%sp)
++#endif
+         move.w  %d3,%d5
+         add.w   %d5,%d5                     /* fill inline: a0 = column + y0*4 - 4, jump into the core */
+         add.w   %d5,%d5
+@@ -213,7 +241,12 @@ seg_columns:
+         move.l  r_fill_end,%a1
+         suba.w  %d4,%a1
+         jsr     (%a1)
+-1:
++#if NPAL > 1
++        jsr     R_PaletteSpan
++        lea     16(%sp),%sp
++        movem.l (%sp)+,%d0-%d1
++#endif
++.Lfloor_done:
+         move.w  J_FLAGS(%a6),%d4
+         btst    #0,%d4
+         beq.s   .Lportal
+@@ -224,7 +257,11 @@ seg_columns:
+         ble.s   .Lclose
+         move.w  %d2,%d5
+         lea     J_MID(%a6),%a4
++#if NPAL > 1
++        bsr     tex_palette
++#else
+         bsr     tex_fast
++#endif
+ .Lclose:
+         clr.b   CEIL_D(%a5,%d7.w)
+         clr.b   FLOOR_D(%a5,%d7.w)
+@@ -253,7 +290,11 @@ seg_columns:
+         move.w  %d2,%d5
+         lea     J_UP(%a6),%a4
+         movem.w %d0-%d1/%d3,-(%sp)
++#if NPAL > 1
++        bsr     tex_palette
++#else
+         bsr     tex_fast
++#endif
+         movem.w (%sp)+,%d0-%d1/%d3
+ .Lnoup:
+         btst    #3,J_FLAGS+1(%a6)
+@@ -271,7 +312,11 @@ seg_columns:
+         ble.s   .Lnolo
+         lea     J_LO(%a6),%a4
+         movem.w %d0-%d1,-(%sp)
++#if NPAL > 1
++        bsr     tex_palette
++#else
+         bsr     tex_fast
++#endif
+         movem.w (%sp)+,%d0-%d1
+ .Lnolo:
+         cmp.w   %d1,%d0
+@@ -339,6 +384,20 @@ fillb_end:
+ fillw_end:
+         rts
+ 
++#if NPAL > 1
++tex_palette:
++        move.l  %d7,-(%sp)
++        moveq   #0,%d0
++        move.w  10(%a4),%d0
++        move.l  %d0,-(%sp)
++        move.l  %d4,-(%sp)
++        move.l  %d5,-(%sp)
++        bsr     tex_fast
++        jsr     R_PaletteSpan
++        lea     16(%sp),%sp
++        rts
++#endif
++
+ /* Exact texture origin and wrap decision, matching d4f9f4b's framebuffer.
+  * Keep the sequential column records and return directly through the scaler.
+  * a3 is the ColRec, a4 is Part, d5 is top row, d4 is span length. */
+diff --git a/experiments/DREAD_MD/d01/src/game_hud.c b/experiments/DREAD_MD/d01/src/game_hud.c
+index 0899287..d9a5fa7 100644
+--- a/experiments/DREAD_MD/d01/src/game_hud.c
++++ b/experiments/DREAD_MD/d01/src/game_hud.c
+@@ -14,6 +14,16 @@ extern const uint32_t weap_data[];
+ extern const uint16_t title_ntiles, title_pal[64], title_mapa[1120], title_mapb[1120];
+ extern const uint32_t title_tiles[];
+ 
++#if NPAL == 2
++#define WEAPON_PAL 2
++#define FACE_PAL 3
++#elif NPAL == 3
++#define WEAPON_PAL 3
++#define FACE_PAL 3
++#else
++#define WEAPON_PAL 1
++#define FACE_PAL 2
++#endif
+ #define TILE_HUD    1024                       /* 0x8000: bar tiles, then the 16-tile face slot */
+ #define TILE_FACE   (TILE_HUD + HUDW_NTILES)
+ #define TILE_WEAP   848                        /* right after the framebuffer tiles (128 + 720); up to 176 tiles before the HUD at 1024 */
+@@ -121,8 +131,12 @@ void HUD_Init(uint16_t row0)
+     SYS_disableInts();
+     /* The text title clears plane B with DMA fill, which leaves increment 1. */
+     VDP_setAutoInc(2);
++#if NPAL == 1
+     cram_set(16, weap_pal, 16);               /* PAL1: weapon */
+     cram_set(32, hudw_fpal, 16);              /* PAL2: faces */
++#elif NPAL == 2
++    cram_set(32, weap_pal, 16);
++#endif
+     cram_set(48, hudw_pal, 16);               /* PAL3: bar, digits, text */
+ #ifdef DREAD_EPISODE
+     for (uint16_t i = 0; i < HUDW_NTILES; i++)
+@@ -140,7 +154,7 @@ void HUD_Init(uint16_t row0)
+         for (uint16_t k = 0; k < i; k++) tile += weap_piece[k][2] * weap_piece[k][3];
+         vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX));
+         vram_w((uint16_t)(((p[2] - 1) << 10) | ((p[3] - 1) << 8) | (i + 1 < weap_npieces ? i + 1 : 0)));
+-        vram_w((uint16_t)((1 << 13) | tile));     /* low priority: the high-priority status bar covers the weapon when it bobs down */
++        vram_w((uint16_t)((WEAPON_PAL << 13) | tile));     /* low priority: the high-priority status bar covers the weapon when it bobs down */
+         vram_w((uint16_t)(128 + weap_x + p[0]));
+     }
+     SYS_enableInts();
+@@ -188,7 +202,7 @@ void HUD_Draw(const HudState *st)
+     for (int r = 0; r < 4; r++)
+         for (int c = 0; c < 32; c++) {
+             const int face = r >= HUDW_FACE_R && r < HUDW_FACE_R + 4 && c >= HUDW_FACE_C && c < HUDW_FACE_C + HUDW_FACE_W;
+-            hud_nt[r][c] = face ? (uint16_t)(0x8000 | (2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
++            hud_nt[r][c] = face ? (uint16_t)(0x8000 | (FACE_PAL << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
+                                 : (uint16_t)(0x8000 | (3 << 13) | (TILE_HUD + rows[r][c]));
+         }
+     hud_dirty = 1;
+diff --git a/experiments/DREAD_MD/d01/src/main.c b/experiments/DREAD_MD/d01/src/main.c
+index 0fc527b..02f290f 100644
+--- a/experiments/DREAD_MD/d01/src/main.c
++++ b/experiments/DREAD_MD/d01/src/main.c
+@@ -52,6 +52,11 @@ static uint8_t fbuf[FB_MAX];        /* view name table rows with per-tile palett
+ volatile uint16_t vints;
+ static const uint8_t *volatile dma_src;   /* buffer being sent, 0 = idle (the POINTER is volatile) */
+ static volatile uint16_t dma_pos;
++#if NPAL > 1
++static uint16_t palette_nt[2][18 * 64];
++static const uint16_t *palette_nt_src;
++static uint16_t palette_nt_pos, palette_nt_bytes;
++#endif
+ static volatile uint8_t shown;            /* VRAM copy currently displayed */
+ 
+ /* bench: the test harness (or holding B on the title) drives a fixed input script */
+@@ -89,12 +94,23 @@ static void vint_cb(void)
+        68000 (frame time) and delays the row-doubling H-int (lines of the wrong rows, the picture jumps) */
+     const uint16_t hud_bytes = HUD_VBlank();
+     if (dma_src && hud_bytes < DMA_CHUNK) {
+-        const uint16_t budget = (DMA_CHUNK - hud_bytes) & ~1u;
++        uint16_t budget = (DMA_CHUNK - hud_bytes) & ~1u;
+         const uint16_t n = (FB_BYTES - dma_pos) > budget ? budget : (FB_BYTES - dma_pos);
+         const uint16_t dst = (shown ? TILE_FB0 : TILE_FB1) * 32 + dma_pos;
+-        DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
++        if (n) DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
++        budget -= n;
+         dma_pos += n;
+         if (dma_pos >= FB_BYTES) {
++#if NPAL > 1
++            const uint16_t left = palette_nt_bytes - palette_nt_pos;
++            const uint16_t count = left < budget ? left : budget;
++            if (count) {
++                DMA_doDma(DMA_VRAM, (void *)((const uint8_t *)palette_nt_src + palette_nt_pos),
++                    (shown ? NT0 : NT1) + VIEW_ROW0 * 128 + palette_nt_pos, count / 2, 2);
++                palette_nt_pos += count;
++            }
++            if (palette_nt_pos < palette_nt_bytes) return;
++#endif
+             shown ^= 1;
+             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
+             dma_src = 0;
+@@ -120,12 +136,15 @@ static void set_mode(uint16_t m)
+     if (h40) VDP_setScreenWidth320(); else VDP_setScreenWidth256();
+     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
+     view_trows = VIEW_H / 8;
++#if NPAL > 1
++    memset(palette_nt, 0, sizeof(palette_nt));
++#endif
+     nbuf = colb == 2 ? 1 : 2;
+     tile_fb1 = nbuf == 2 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
+     nt1 = nbuf == 2 ? 0xA000 : 0xE000;
+     /* palette 0: the view */
+     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
+-    for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[0][i];
++    for (int i = 0; i < NPAL * 16; i++) *(volatile uint16_t *)0xC00000 = (&md_palette[0][0])[i];
+     /* name tables: view rows point at the framebuffer tiles, column-major */
+     for (int b = 0; b < 2; b++) {
+         const uint16_t nt = b ? 0xA000 : NT0, base = (b && nbuf == 2) ? TILE_FB1 : TILE_FB0;
+@@ -390,9 +409,12 @@ enum TitleChoice { TITLE_NEW_GAME, TITLE_SELECT_LEVEL, TITLE_BENCHMARK };
+ 
+ static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL", "BENCHMARK" };
+ static const char *const title_levels[] = {
+-    "E1M1  HANGAR", "E1M2  NUCLEAR PLANT", "E1M3  TOXIN REFINERY",
++    "E1M1  HANGAR",
++#ifndef DREAD_SINGLE_MAP_TEST
++    "E1M2  NUCLEAR PLANT", "E1M3  TOXIN REFINERY",
+     "E1M4  COMMAND CONTROL", "E1M5  PHOBOS LAB", "E1M6  CENTRAL PROCESSING",
+     "E1M7  COMPUTER STATION", "E1M8  PHOBOS ANOMALY", "E1M9  MILITARY BASE"
++#endif
+ };
+ 
+ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
+@@ -708,6 +730,7 @@ int main(bool hard)
+                 const uint16_t t0 = vints;
+                 while ((uint16_t)(vints - t0) < 120) {}
+                 HUD_Text(1, "");
++                if (selected_map >= episode_map_count) selected_map = 0;
+                 start_level(); place_player();
+                 hud.health = 100; hud.armor = 0; hud.ammo[0] = 50; hud.ammo_cur = 50;
+                 HUD_Draw(&hud);
+@@ -735,6 +758,7 @@ int main(bool hard)
+             HUD_Text(1, "");
+             if (selected_map == 7) SYS_hardReset();     /* end of the episode: back to the title */
+             selected_map = secret ? 8 : (selected_map == 8 ? 3 : selected_map + 1);
++            if (selected_map >= episode_map_count) selected_map = 0;
+             start_level(); place_player();
+ #ifndef DREAD_NO_MUSIC
+             if (music_on) XGM2_play(MAP_MUSIC);
+@@ -752,6 +776,12 @@ int main(bool hard)
+         if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
+         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
+         while (dma_src) {}
++#if NPAL > 1
++        R_BuildNametableStrided(palette_nt[cur_buf] + crop, shown ? TILE_FB0 : TILE_FB1, 64);
++        palette_nt_src = palette_nt[cur_buf];
++        palette_nt_pos = 0;
++        palette_nt_bytes = view_trows * 128;
++#endif
+         dma_pos = 0; dma_src = fb;
+         cur_buf ^= (NBUF - 1);
+         if (bench_req && !bench_done) bench_frames++;
+diff --git a/experiments/DREAD_MD/d01/src/mapdata.h b/experiments/DREAD_MD/d01/src/mapdata.h
+index 54b217e..43f0655 100644
+--- a/experiments/DREAD_MD/d01/src/mapdata.h
++++ b/experiments/DREAD_MD/d01/src/mapdata.h
+@@ -65,7 +65,7 @@ extern const uint16_t tex_blob_w[];
+ extern const MapTex map_tex[];
+ extern const int16_t map_start[3];
+ extern const uint16_t map_counts[6];
+-typedef struct { int16_t w2, h, leftoff, topoff; uint32_t off[NUM_BUCKETS]; } MapSprite;   /* w2 = half width */
++typedef struct { int16_t w2, h, leftoff, topoff; uint32_t off[NUM_BUCKETS]; uint8_t pal[NUM_BUCKETS]; } MapSprite;   /* w2 = half width */
+ typedef struct { int16_t x, y; uint16_t sprite, sub, flags; } MapThing;   /* flags 1 = monster; sorted by sub */
+ extern const uint8_t spr_blob[];
+ extern const MapSprite map_sprites[];
+diff --git a/experiments/DREAD_MD/d01/src/render.c b/experiments/DREAD_MD/d01/src/render.c
+index 574334a..476ba3e 100644
+--- a/experiments/DREAD_MD/d01/src/render.c
++++ b/experiments/DREAD_MD/d01/src/render.c
+@@ -115,7 +115,11 @@ static int32_t frac_tz, frac_tx;   /* camera-space offset of the fractional posi
+ static int32_t view_x4, view_y4;
+ static int16_t view_z;
+ static int16_t vsin, vcos;         /* Q14 */
++#if defined(__m68k__) && NPAL > 1
++uint8_t *rfb;
++#else
+ static uint8_t *rfb;
++#endif
+ 
+ /* ---------------------------------------------------------------- 68000 arithmetic */
+ #if defined(__m68k__) || defined(__mc68000__)
+@@ -391,6 +395,12 @@ uint8_t tilepal[TILES];
+ #else
+ static uint8_t tilepal[1];   /* one palette: no tile ownership */
+ #endif
++#if defined(__m68k__) && NPAL > 1
++uint32_t pal_spans, pal_conflict_pixels;
++uint32_t palette_claimed[40], palette_owned[40 * NPAL];
++extern void memset(void *destination, uint8_t value, uint16_t size);
++extern void R_PaletteSpan(uint16_t y0, uint16_t n, uint16_t palette, uint16_t column);
++#endif
+ uint8_t *const r_tilepal = tilepal;
+ const uint8_t *const r_remap = &pal_remap[0][0];
+ #if defined(__m68k__) || defined(__mc68000__)
+@@ -734,6 +744,9 @@ typedef struct {
+     uint16_t flip;                   /* mirrored (rotations 6-8 drawn from 4-2) */
+     int32_t u0, du, iz, zpp, z4;     /* source pixel (16.16) at x0 and per column, inverse depth, texels per row */
+     const uint8_t *tab;              /* column table of the light bucket */
++#if NPAL > 1
++    uint16_t palette;
++#endif
+     uint16_t win;                    /* offset in winpool: ceil[n] then floor[n] */
+ } VisSpr;
+ static VisSpr vis[MAXVIS];
+@@ -767,6 +780,9 @@ void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t fli
+     v->u0 = (int32_t)(((int64_t)(((int32_t)xa << 16) - sxl) * v->du) >> 16);
+     v->iz = inv_z(z4); v->zpp = zpp_of((uint16_t)z4); v->z4 = z4;
+     v->tab = spr_blob + sp->off[sec->bucket];
++#if NPAL > 1
++    v->palette = sp->pal[sec->bucket];
++#endif
+     v->win = winused;
+     for (int k = 0; k < n; k++) { winpool[winused + k] = ceilclip[xa + k]; winpool[winused + n + k] = floorclip[xa + k]; }
+     winused += (uint16_t)(2 * n);
+@@ -831,6 +847,9 @@ static void draw_sprite(const VisSpr *v)
+                     if (COLB == 2) q[1] = d[idx];
+                 }
+             }
++#if defined(__m68k__) && NPAL > 1
++            if (y0 < y1) R_PaletteSpan(y0, y1 - y0, v->palette, v->x0 + k);
++#endif
+             p += 2 + len + 3;
+         }
+     }
+@@ -989,6 +1008,10 @@ void R_RenderView(const View *v, uint8_t *fb)
+     for (int c = 0; c < VIEW_W; c++) { ceilclip[c] = 0; floorclip[c] = VIEW_H; nxt[c] = (uint8_t)c; }
+ #if !defined(NPAL) || NPAL != 1
+     { uint32_t *t = (uint32_t *)tilepal; for (int i = 0; i < (int)(sizeof tilepal / 4); i++) t[i] = 0xFFFFFFFFUL; }
++#endif
++#if defined(__m68k__) && NPAL > 1
++    memset(palette_claimed, 0, sizeof(palette_claimed));
++    memset(palette_owned, 0, sizeof(palette_owned));
+ #endif
+     nxt[VIEW_W] = VIEW_W;
+     closed = 0;
+@@ -1019,13 +1042,22 @@ void R_RenderView(const View *v, uint8_t *fb)
+     rstats.cols_closed = closed;
+ }
+ 
+-/* name table entries for the view (row-major, TROWS x 32): tile index | majority palette << 13 */
+-void R_BuildNametable(uint16_t *nt, uint16_t tilebase)
++/* The compact layout remains available to the host renderer. Hardware plane
++ * uploads use the same palette decisions with a 64-entry row stride. */
++void R_BuildNametableStrided(uint16_t *nt, uint16_t tilebase, uint16_t stride)
+ {
+-    for (int tc = 0; tc < FB_TCOLS; tc++)
+-        for (int tr = 0; tr < TROWS; tr++) {
+-            const int i = tc * TROWS + tr;
+-            const uint16_t k = tilepal[i] == 0xFF ? 0 : tilepal[i];
+-            nt[tr * FB_TCOLS + tc] = (uint16_t)(tilebase + i) | (uint16_t)(k << 13);
++    const uint16_t rows = VIEW_H / 8;
++    for (uint16_t tc = 0; tc < FB_TCOLS; tc++) {
++        uint16_t index = tc * rows;
++        uint16_t *entry = nt + tc;
++        for (uint16_t tr = 0; tr < rows; tr++, index++, entry += stride) {
++            const uint16_t palette = tilepal[index] == 0xFF ? 0 : tilepal[index];
++            *entry = (uint16_t)(tilebase + index) | (uint16_t)(palette << 13);
+         }
++    }
++}
++
++void R_BuildNametable(uint16_t *nt, uint16_t tilebase)
++{
++    R_BuildNametableStrided(nt, tilebase, FB_TCOLS);
+ }
+diff --git a/experiments/DREAD_MD/d01/src/render.h b/experiments/DREAD_MD/d01/src/render.h
+index 933e6a5..0e76dd5 100644
+--- a/experiments/DREAD_MD/d01/src/render.h
++++ b/experiments/DREAD_MD/d01/src/render.h
+@@ -52,7 +52,8 @@ extern RenderStats rstats;
+ extern const int16_t sintab[1024];   /* Q14 */
+ 
+ void R_Init(void);
+-void R_BuildNametable(uint16_t *nt, uint16_t tilebase);   /* TROWS x 32 entries */
++void R_BuildNametable(uint16_t *nt, uint16_t tilebase);   /* TROWS x FB_TCOLS entries */
++void R_BuildNametableStrided(uint16_t *nt, uint16_t tilebase, uint16_t stride);
+ void R_RenderView(const View *v, uint8_t *fb);
+ int  R_PointInSub(int16_t x, int16_t y);
+ void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t flip, const MapSector *sec);
+diff --git a/experiments/DREAD_MD/d01/tools/build_map.sh b/experiments/DREAD_MD/d01/tools/build_map.sh
+index 9eecea8..35268c9 100644
+--- a/experiments/DREAD_MD/d01/tools/build_map.sh
++++ b/experiments/DREAD_MD/d01/tools/build_map.sh
+@@ -14,7 +14,9 @@ name=$4
+ stage=$(mktemp -d)
+ trap 'rm -rf "$stage"' EXIT
+ export PATH="$GDK/bin:$PATH"
+-export OPENBLAS_NUM_THREADS=1 DREAD_NPAL=1
++export OPENBLAS_NUM_THREADS=1
++export DREAD_NPAL=${DREAD_NPAL:-1}
++[[ "$DREAD_NPAL" =~ ^[123]$ ]] || { echo "DREAD_NPAL must be 1, 2 or 3" >&2; exit 2; }
+ mkdir -p "$stage/src" "$stage/res" "$out"
+ if [[ -n ${DREAD_COPY_SEGA_S:-} ]]; then mkdir -p "$stage/src/boot"; fi
+ cp "$source_dir"/src/* "$stage/src/"
+@@ -35,21 +37,35 @@ title_flags="-DDREAD_TEXT_TITLE"
+ if [[ "$map" == EPISODE ]]; then
+     [[ -z "$geometry_flag" ]] || exit 2
+     render_flags="-DDREAD_EPISODE"
++    if [[ ${DREAD_EP_MAPS:-} == 1 ]]; then render_flags+=" -DDREAD_SINGLE_MAP_TEST"; fi
+     if [[ ${DREAD_COMBAT:-0} == 1 ]]; then render_flags+=" -DDREAD_COMBAT"; fi
++    read -r -a map_numbers <<< "${DREAD_EP_MAPS:-1 2 3 4 5 6 7 8 9}"
+     levels=()
+     if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
+-        for n in {1..9}; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
++        for n in "${map_numbers[@]}"; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
++    elif [[ ${DREAD_PALETTE_TEST:-0} == 1 ]]; then
++        for n in "${map_numbers[@]}"; do
++            level="${DREAD_CACHE_MAPS:-$stage}/E1M$n"
++            python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$DREAD_FERRET_PALETTE"
++            if [[ -n ${DREAD_PVS_CACHE:-} ]]; then
++                cp "$DREAD_PVS_CACHE/E1M$n/pvs.c" "$level/pvs.c"
++            else
++                cc -O2 -DPVS_GEN -DNPAL="$DREAD_NPAL" -I"$level" -I"$stage/src" -o "$level/pvsgen" "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
++                "$level/pvsgen" "$level/pvs.c"
++            fi
++            levels+=("$level")
++        done
+     else
+         palette="$stage/palette.json"
+         mkdir -p "$stage/palette"
+         # one palette for the whole episode: colour samples of every map (walls, flats, sky, sprites), one fit
+         samples=()
+-        for n in {1..9}; do
++        for n in "${map_numbers[@]}"; do
+             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$stage/palette" --row-only --collect-items "$stage/palette/E1M$n.npz" > /dev/null
+             samples+=("$stage/palette/E1M$n.npz")
+         done
+         python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
+-        for n in {1..9}; do
++        for n in "${map_numbers[@]}"; do
+             level="$stage/E1M$n"
+             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
+             cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
+@@ -72,6 +88,9 @@ if [[ -z "$geometry_flag" ]]; then
+     python3 "$source_dir/tools/gen_hud.py" --wad "$wad" --out "$stage/src/hud_assets.h"
+     sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"
+     python3 "$source_dir/tools/gen_weapon.py" "$wad" "$stage/src/weapon.c"
++    if [[ $DREAD_NPAL -gt 1 ]]; then
++        python3 "$source_dir/tools/merge_ui_palette.py" "$stage/src/hud_assets.h" "$stage/src/weapon.c" "$DREAD_NPAL"
++    fi
+     if [[ "$map" == EPISODE ]]; then
+         python3 "$source_dir/tools/pack_tiles.py" "$stage/src/hud_assets.h" "$stage/src/weapon.c" "$stage/src/image_tiles.h"
+     fi
+@@ -89,7 +108,7 @@ if [[ "$map" == EPISODE ]]; then
+       || make -C "$stage" -f makefile.gen "${mk[@]}" out/release/res/music.o 2>/dev/null || true
+ fi
+ make -C "$stage" -f makefile.gen -j3 release "${mk[@]}" \
+-    EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 $geometry_flag $title_flags $render_flags ${DREAD_EXTRA_FLAGS:-} -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
++    EXTRA_FLAGS="-ffreestanding -g -DNPAL=$DREAD_NPAL $geometry_flag $title_flags $render_flags ${DREAD_EXTRA_FLAGS:-} -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
+     LIBGCC="$(${tc}gcc -m68000 -print-libgcc-file-name) -lgcc"
+ rom="$stage/out/rom.bin"; [[ -f "$rom" ]] || rom="$stage/out/release/rom.bin"
+ elf="$stage/out/rom.out"; [[ -f "$elf" ]] || elf="$stage/out/release/rom.out"
+diff --git a/experiments/DREAD_MD/d01/tools/conv.py b/experiments/DREAD_MD/d01/tools/conv.py
+index e31f64f..7d2331d 100644
+--- a/experiments/DREAD_MD/d01/tools/conv.py
++++ b/experiments/DREAD_MD/d01/tools/conv.py
+@@ -423,10 +423,18 @@ def main():
+         return
+     if args.palette:
+         levels = np.asarray(json.loads(args.palette.read_text()))
+-        if NPAL != 1 or levels.shape != (16, 3) or not np.issubdtype(levels.dtype, np.integer) or not ((0 <= levels) & (levels <= 7)).all():
+-            raise ValueError("A shared palette requires DREAD_NPAL=1 and 16 RGB triples in 0–7")
++        if levels.shape != (16, 3) or not np.issubdtype(levels.dtype, np.integer) or not ((0 <= levels) & (levels <= 7)).all():
++            raise ValueError("The base palette must contain 16 MD RGB triples")
+         pals = [Pal((levels @ [64, 8, 1]).tolist())]
+-        asg = np.zeros(len(items), dtype=int)
++        for family in range(1, NPAL):
++            samples = [X if len(X) <= 600 else X[rng.choice(len(X), 600, replace=False)] for _, X in items]
++            error = np.array([np.min([pl.cost(X).mean() for pl in pals]) for X in samples])
++            selected = np.argsort(-error)[:max(1, len(items) // 3)]
++            U2, w2 = summarize(np.concatenate([items[i][1] for i in selected]), 1500)
++            chosen, e = fit_palette(U2, w2)
++            pals.append(Pal(chosen))
++            print("extra palette %d: mean pair error %.1f" % (family, e))
++        asg = np.array([int(np.argmin([pl.cost(X if len(X) <= 600 else X[:600]).mean() for pl in pals])) for _, X in items])
+     else:
+         # initial grouping: k-means on the items' mean colour (chroma direction), then refine by fit error
+         means = np.array([X.mean(0) for _, X in items])
+@@ -635,12 +643,14 @@ def main():
+             for col in cols: sblob += col
+             if len(sblob) & 1: sblob.append(0xFF)
+             offs.append(base)
++        best_bucket = next((b for b, o in enumerate(offs) if o is not None), 0)
++        sprite_pals = [pal_of.get(("p", si, b), pal_of.get(("p", si, best_bucket), 0)) for b in range(len(LIGHT_ROWS))]
+         first = next((o for o in offs if o is not None), 0)
+         offs = [o if o is not None else first for o in offs]
+-        srows.append((w2, h_, lo_, to_, offs))
++        srows.append((w2, h_, lo_, to_, offs, sprite_pals))
+     H.append("const uint8_t spr_blob[%d] = {%s};" % (max(2, len(sblob)), ",".join(map(str, sblob)) or "0,0"))
+     H.append("const MapSprite map_sprites[%d] = {%s};" % (max(1, len(srows)), ",".join(
+-        "{%d,%d,%d,%d,{%s}}" % (r[0], r[1], r[2], r[3], ",".join(map(str, r[4]))) for r in srows) or "{0}"))
++        "{%d,%d,%d,%d,{%s},{%s}}" % (r[0], r[1], r[2], r[3], ",".join(map(str, r[4])), ",".join(map(str, r[5]))) for r in srows) or "{0}"))
+     thing_rows.sort(key=lambda t: t[3])
+     H.append("const MapThing map_things[%d] = {%s};" % (max(1, len(thing_rows)), ",".join(
+         "{%d,%d,%d,%d,%d}" % (t[0], t[1], t[2], t[3], t[5]) for t in thing_rows) or "{0}"))
+diff --git a/experiments/DREAD_MD/d01/tools/gen_hud.py b/experiments/DREAD_MD/d01/tools/gen_hud.py
+index 3b84b6a..220feb6 100644
+--- a/experiments/DREAD_MD/d01/tools/gen_hud.py
++++ b/experiments/DREAD_MD/d01/tools/gen_hud.py
+@@ -47,7 +47,7 @@ if __name__ == "__main__":
+ # One CRAM line for the whole bar: Manifold uses PAL0 weapon, PAL1 3D view,
+ # PAL3 object sprites + text, so the HUD only owns PAL2. Faces are remapped
+ # into the bar palette: rarely used bar entries give their slot to skin tones.
+-def single_palette(header_path, free_slots=5):
++def single_palette(header_path, free_slots=5, protect=()):
+     import re
+     s = open(header_path).read()
+     def arr(name):
+@@ -69,7 +69,7 @@ def single_palette(header_path, free_slots=5):
+     def cost(i):
+         others = [j for j in range(1, 16) if j != i]
+         return use.get(i, 0) * min(d2(rgb(pal[i]), rgb(pal[j])) for j in others) if use.get(i, 0) else -1
+-    give = sorted(range(1, 16), key=cost)[:free_slots]
++    give = sorted((i for i in range(1, 16) if i not in protect), key=cost)[:free_slots]
+     keep = [i for i in range(1, 16) if i not in give]
+     barmap = {i: i for i in range(16)}
+     for i in give:
+diff --git a/experiments/DREAD_MD/d01/tools/pack_episode.py b/experiments/DREAD_MD/d01/tools/pack_episode.py
+index 943e4c2..11eff92 100644
+--- a/experiments/DREAD_MD/d01/tools/pack_episode.py
++++ b/experiments/DREAD_MD/d01/tools/pack_episode.py
+@@ -112,7 +112,7 @@ def main():
+                         indices.append(column_tables[row])
+                     args = args[:group.start(3)] + ",".join(map(str, indices)) + args[group.end(3):]
+             else:
+-                groups = list(re.finditer(r"\{([\d,]+)\}", args))
++                groups = list(re.finditer(r"\{-?\d+,-?\d+,-?\d+,-?\d+,\{([\d,]+)\}(?:,\{[\d,]+\})?\}", args))
+                 lookup = sorted({int(v) for group in groups for v in group[1].split(",")})
+                 offsets = {start: bank.add(blob[start:end], alignment)
+                            for start, end in zip(lookup, lookup[1:]+[len(blob)])}
+diff --git a/experiments/DREAD_MD/d01/src/palette_span.s b/experiments/DREAD_MD/d01/src/palette_span.s
+new file mode 100644
+--- /dev/null
++++ b/experiments/DREAD_MD/d01/src/palette_span.s
+@@ -0,0 +1,146 @@
++#if NPAL > 1
++        .text
++        .globl R_PaletteSpan
++/* ABI arguments are 32-bit slots, with unsigned 16-bit values in their low words.
++ * Native scalers draw first. Only fragments whose tile belongs to another
++ * palette need pixel remapping. All matching fragments retain the native path. */
++R_PaletteSpan:
++        movem.l %d2-%d7/%a2-%a4,-(%sp)
++        move.w  42(%sp),%d2                 /* y0 */
++        move.w  46(%sp),%d3                 /* rows */
++        move.w  50(%sp),%d4                 /* source palette */
++        addq.l  #1,pal_spans
++        tst.w   %d3
++        beq     .Lpal_done
++        moveq   #0,%d0
++        move.w  54(%sp),%d0                 /* logical column -> tile column */
++        mulu.w  r_colb,%d0
++        lsr.w   #2,%d0
++        move.w  %d0,%d1
++        lsl.w   #2,%d1
++        lea     palette_claimed,%a0
++        adda.w  %d1,%a0
++        move.w  %d0,%d1
++        add.w   %d1,%d1
++#if NPAL == 3
++        add.w   %d0,%d1
++#endif
++        add.w   %d4,%d1
++        lsl.w   #2,%d1
++        lea     palette_owned,%a1
++        adda.w  %d1,%a1
++        move.w  %d2,%d5
++        add.w   %d3,%d5
++        addq.w  #7,%d5
++        lsr.w   #3,%d5                     /* last covered tile + 1 */
++        lsl.w   #2,%d5
++        move.w  %d2,%d6
++        lsr.w   #3,%d6
++        lsl.w   #2,%d6
++        lea     palette_prefix(%pc),%a4
++        move.l  0(%a4,%d5.w),%d7
++        move.l  0(%a4,%d6.w),%d1
++        eor.l   %d1,%d7                    /* mask of tile rows touched by this span */
++        move.l  (%a0),%d5
++        and.l   %d7,%d5
++        move.l  (%a1),%d1
++        not.l   %d1
++        and.l   %d1,%d5                    /* bits owned by another palette */
++        move.l  (%a0),%d6
++        not.l   %d6
++        and.l   %d7,%d6                    /* bits not claimed yet */
++        beq.s   .Lpal_check_conflict
++        or.l    %d6,(%a0)
++        or.l    %d6,(%a1)
++        move.w  r_vh,%d1
++        lsr.w   #3,%d1
++        mulu.w  %d1,%d0
++        lea     tilepal,%a2
++        adda.w  %d0,%a2
++.Lpal_claim_mask:
++        btst    #0,%d6
++        beq.s   1f
++        move.b  %d4,(%a2)
++1:      addq.l  #1,%a2
++        lsr.l   #1,%d6
++        bne.s   .Lpal_claim_mask
++.Lpal_check_conflict:
++        tst.l   %d5
++        beq     .Lpal_done                  /* common case: no per-tile scan */
++        moveq   #0,%d0
++        move.w  54(%sp),%d0
++        add.w   %d0,%d0
++        lea     r_colofs,%a0
++        movea.l rfb,%a2
++        adda.w  0(%a0,%d0.w),%a2
++        move.w  %d2,%d1
++        lsl.w   #2,%d1
++        adda.w  %d1,%a2
++        lsr.w   #1,%d0
++        mulu.w  r_colb,%d0
++        lsr.w   #2,%d0
++        move.w  r_vh,%d1
++        lsr.w   #3,%d1
++        mulu.w  %d1,%d0
++        move.w  %d2,%d1
++        lsr.w   #3,%d1
++        add.w   %d1,%d0
++        lea     tilepal,%a0
++        adda.w  %d0,%a0
++.Lpal_tile:
++        moveq   #8,%d5
++        move.w  %d2,%d0
++        andi.w  #7,%d0
++        sub.w   %d0,%d5
++        cmp.w   %d3,%d5
++        bls.s   1f
++        move.w  %d3,%d5
++1:      moveq   #0,%d0
++        move.b  (%a0),%d0
++        cmp.w   %d4,%d0
++        beq.s   .Lpal_next
++        move.w  %d4,%d1
++        add.w   %d1,%d1
++#if NPAL == 3
++        add.w   %d4,%d1
++#endif
++        add.w   %d0,%d1
++        lsl.w   #8,%d1
++        lea     pal_remap+128,%a1
++        adda.w  %d1,%a1
++        add.l   %d5,pal_conflict_pixels
++        movea.l %a2,%a3
++        move.w  %d5,%d1
++        subq.w  #1,%d1
++        cmpi.w  #2,r_colb
++        beq.s   .Lpal_words
++.Lpal_bytes:
++        move.b  (%a3),%d0
++        ext.w   %d0
++        move.b  0(%a1,%d0.w),(%a3)
++        addq.l  #4,%a3
++        dbra    %d1,.Lpal_bytes
++        bra.s   .Lpal_next
++.Lpal_words:
++        move.b  (%a3),%d0
++        ext.w   %d0
++        move.b  0(%a1,%d0.w),%d0
++        move.b  %d0,(%a3)
++        move.b  %d0,1(%a3)
++        addq.l  #4,%a3
++        dbra    %d1,.Lpal_words
++.Lpal_next:
++        addq.l  #1,%a0
++        move.w  %d5,%d0
++        lsl.w   #2,%d0
++        adda.w  %d0,%a2
++        add.w   %d5,%d2
++        sub.w   %d5,%d3
++        bne     .Lpal_tile
++.Lpal_done:
++        movem.l (%sp)+,%d2-%d7/%a2-%a4
++        rts
++        .even
++palette_prefix:
++        .long 0,1,3,7,15,31,63,127,255,511,1023,2047,4095,8191,16383,32767,65535,131071,262143
++#endif
+diff --git a/experiments/DREAD_MD/d01/tools/merge_ui_palette.py b/experiments/DREAD_MD/d01/tools/merge_ui_palette.py
+new file mode 100644
+--- /dev/null
++++ b/experiments/DREAD_MD/d01/tools/merge_ui_palette.py
+@@ -0,0 +1,26 @@
++#!/usr/bin/env python3
++"""Merge the HUD and face; optionally map weapon pixels into that same CRAM line."""
++import re
++import sys
++from pathlib import Path
++from gen_hud import single_palette
++
++header, weapon = map(Path, sys.argv[1:3])
++count = int(sys.argv[3])
++palette = single_palette(header, free_slots=5, protect=(15,))
++if count == 3:
++    source = weapon.read_text()
++    match = re.search(r'weap_pal\[16\] = \{([^}]*)\}', source)
++    original = [int(v, 16) for v in re.findall(r'0x([0-9a-fA-F]+)', match[1])]
++    def rgb(word):
++        return ((word >> 1) & 7, (word >> 5) & 7, (word >> 9) & 7)
++    def distance(a, b):
++        return sum(w * (x-y)**2 for w, x, y in zip((2, 4, 3), rgb(a), rgb(b)))
++    lookup = [0] + [min(range(1, 16), key=lambda j: distance(c, palette[j])) for c in original[1:]]
++    data = re.search(r'(weap_data\[\d+\] = \{)(.*?)(\};)', source, re.S)
++    def remap(match):
++        word = int(match[1], 16)
++        return '0x%08X' % sum(lookup[(word >> (4*i)) & 15] << (4*i) for i in range(8))
++    source = source[:data.start(2)] + re.sub(r'0x([0-9a-fA-F]{8})', remap, data[2]) + source[data.end(2):]
++    weapon.write_text(source)
++print('UI uses %d palette(s), world uses %d' % (4-count, count))

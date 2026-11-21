@@ -1,0 +1,217 @@
+{
+ "bench_frames": 161,
+ "bench_vints": 2123,
+ "fps": 4.55,
+ "ms_per_frame": {
+  "render_total": 207.5,
+  "seg_setup": 0.0,
+  "column_loops": 0.0,
+  "anchors": 0.0,
+  "fills": 0.0,
+  "tex": 0.0,
+  "frame": 219.8
+ },
+ "segs_avg": 24.5,
+ "segs_max": 53,
+ "nodes_avg": 46.3,
+ "nodes_max": 89,
+ "shots": [
+  1,
+  20,
+  45,
+  70,
+  95,
+  120,
+  150
+ ],
+ "col_visits_avg": 24.5,
+ "anchors_avg": 55.8,
+ "hot_lines": [
+  [
+   "render.c:76",
+   2.3
+  ],
+  [
+   "render.c:425 (discriminator 4)",
+   2.0
+  ],
+  [
+   "render.c:78",
+   1.6
+  ],
+  [
+   "render.c:200",
+   1.4
+  ],
+  [
+   "render.c:409",
+   1.2
+  ],
+  [
+   "colasm.s:138",
+   0.9
+  ],
+  [
+   "render.c:295",
+   0.9
+  ],
+  [
+   "render.c:294",
+   0.9
+  ],
+  [
+   "colasm.s:153",
+   0.8
+  ],
+  [
+   "render.c:100 (discriminator 1)",
+   0.8
+  ],
+  [
+   "render.c:100",
+   0.8
+  ],
+  [
+   "render.c:417 (discriminator 1)",
+   0.8
+  ],
+  [
+   "render.c:399 (discriminator 4)",
+   0.8
+  ],
+  [
+   "colasm.s:154",
+   0.7
+  ],
+  [
+   "render.c:434",
+   0.6
+  ],
+  [
+   "render.c:496",
+   0.6
+  ],
+  [
+   "render.c:425 (discriminator 3)",
+   0.6
+  ],
+  [
+   "render.c:485 (discriminator 3)",
+   0.6
+  ],
+  [
+   "render.c:439",
+   0.6
+  ],
+  [
+   "render.c:349",
+   0.5
+  ],
+  [
+   "render.c:113 (discriminator 2)",
+   0.5
+  ],
+  [
+   "colasm.s:171",
+   0.5
+  ],
+  [
+   "render.c:495",
+   0.5
+  ],
+  [
+   "colasm.s:238",
+   0.4
+  ],
+  [
+   "colasm.s:243",
+   0.4
+  ]
+ ],
+ "profile": [
+  [
+   "draw_seg",
+   28.0
+  ],
+  [
+   "tex_part",
+   25.6
+  ],
+  [
+   "seg_columns",
+   15.7
+  ],
+  [
+   "fill_core",
+   5.4
+  ],
+  [
+   "render_node",
+   4.8
+  ],
+  [
+   "bbox_visible",
+   4.8
+  ],
+  [
+   "proj",
+   4.0
+  ],
+  [
+   "blocked",
+   3.4
+  ],
+  [
+   "xform",
+   3.2
+  ],
+  [
+   "main",
+   1.0
+  ],
+  [
+   "tnm_end",
+   1.0
+  ],
+  [
+   "R_RenderView",
+   0.7
+  ],
+  [
+   "__udivsi3_internal",
+   0.6
+  ],
+  [
+   "__mulsi3_internal",
+   0.4
+  ],
+  [
+   "__divdi3",
+   0.4
+  ],
+  [
+   "fillc_end",
+   0.3
+  ],
+  [
+   "R_PointInSub",
+   0.1
+  ],
+  [
+   "__muldi3",
+   0.1
+  ],
+  [
+   "__umodsi3",
+   0.1
+  ],
+  [
+   "VDP_waitDMACompletion",
+   0.1
+  ],
+  [
+   "SYS_setInterruptMaskLevel",
+   0.0
+  ]
+ ]
+}
