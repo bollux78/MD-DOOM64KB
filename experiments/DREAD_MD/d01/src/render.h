@@ -45,7 +45,9 @@ typedef struct {
     uint16_t segs_drawn, nodes_visited, cols_closed, subs_visited, col_visits, anchors;
 } RenderStats;
 
-extern MapSector map_sectors[];
+/* sectors stay in ROM; only the ceiling height (doors) lives in RAM */
+#define map_sectors map_sectors_init
+extern int16_t sec_ceil[];
 extern RenderStats rstats;
 extern const int16_t sintab[1024];   /* Q14 */
 

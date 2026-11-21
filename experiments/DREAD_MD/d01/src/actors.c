@@ -111,7 +111,7 @@ static int trace(int16_t ax, int16_t ay, int16_t bx, int16_t by, int16_t z)
             if ((p < 0) == (q < 0)) continue;
             if (line->back == NO_MAP_SECTOR) return 0;
             const MapSector *f = &map_sectors[line->front], *g = &map_sectors[line->back];
-            const int16_t lo = f->floor > g->floor ? f->floor : g->floor, hi = f->ceil < g->ceil ? f->ceil : g->ceil;
+            const int16_t lo = f->floor > g->floor ? f->floor : g->floor, hi = sec_ceil[line->front] < sec_ceil[line->back] ? sec_ceil[line->front] : sec_ceil[line->back];
             if (z <= lo || z >= hi) return 0;
         }
     }
@@ -171,7 +171,6 @@ static void wake(Actor *a)
 }
 
 /* ---- movement */
-static const MapSector *sector_at(int16_t x, int16_t y) { return &map_sectors[map_subs[R_PointInSub(x, y)].sector]; }
 static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
 {
     if (dir >= 8) return 0;
@@ -184,8 +183,11 @@ static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
         if (k == i || o->state >= ST_DEATH) continue;
         if (iabs16((int16_t)(o->x >> 16) - nx) < 32 && iabs16((int16_t)(o->y >> 16) - ny) < 32) return 0;
     }
-    const MapSector *from = &map_sectors[sector_of_sub(a->sub)], *to = sector_at(nx, ny);
-    if (to->floor - from->floor > 24 || to->ceil - to->floor < 56 || to->ceil - from->floor < 56) return 0;
+    const MapSector *from = &map_sectors[sector_of_sub(a->sub)];
+    const uint16_t tos = map_subs[R_PointInSub(nx, ny)].sector;
+    const MapSector *to = &map_sectors[tos];
+    const int16_t toc = sec_ceil[tos];
+    if (to->floor - from->floor > 24 || toc - to->floor < 56 || toc - from->floor < 56) return 0;
     if (ActorBlocked(nx, ny)) return 0;
     a->x = (int32_t)nx << 16; a->y = (int32_t)ny << 16;
     const uint16_t sub = (uint16_t)R_PointInSub(nx, ny);
@@ -333,7 +335,7 @@ static void noise(uint16_t from)
             const uint16_t n = map_secadj[k];
             if (secmark[n]) continue;
             const MapSector *ns = &map_sectors[n];
-            const int16_t lo = ss->floor > ns->floor ? ss->floor : ns->floor, hi = ss->ceil < ns->ceil ? ss->ceil : ns->ceil;
+            const int16_t lo = ss->floor > ns->floor ? ss->floor : ns->floor, hi = sec_ceil[s] < sec_ceil[n] ? sec_ceil[s] : sec_ceil[n];
             if (hi <= lo) continue;                                    /* closed door */
             secmark[n] = 1; secq[tail++] = n;
         }
@@ -393,7 +395,7 @@ static void tick_proj(ActorPlayer *pl, uint16_t dt)
             const int sub = R_PointInSub(x, y);
             const MapSector *sec = &map_sectors[map_subs[sub].sector];
             p->sub = (uint16_t)sub;
-            if (p->z < sec->floor || p->z + 8 > sec->ceil || ActorBlocked(x, y)) boom = 1;
+            if (p->z < sec->floor || p->z + 8 > sec_ceil[map_subs[sub].sector] || ActorBlocked(x, y)) boom = 1;
         }
         if (boom) { p->state = 1; p->frame = 0; p->tics = 6; }
     }

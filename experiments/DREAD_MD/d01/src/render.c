@@ -23,9 +23,9 @@ uint16_t r_ash = 4;                /* log2 of the columns between perspective-co
 #endif
 
 #ifdef MAP_NSECTORS
-MapSector map_sectors[MAP_NSECTORS];
+int16_t sec_ceil[MAP_NSECTORS];
 #else
-MapSector map_sectors[256];
+int16_t sec_ceil[256];
 #endif
 RenderStats rstats;
 #ifdef PVS_GEN
@@ -229,7 +229,7 @@ void R_Init(void)
 #if !(defined(__m68k__) || defined(__mc68000__))
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
 #endif
-    for (int i = 0; i < map_counts[4]; i++) map_sectors[i] = map_sectors_init[i];
+    for (int i = 0; i < map_counts[4]; i++) sec_ceil[i] = map_sectors_init[i].ceil;
     for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF;
 }
 
@@ -596,12 +596,13 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 
     const MapSector *fs = &map_sectors[s->front];
     const MapSector *bs = (s->back != NO_MAP_SECTOR) ? &map_sectors[s->back] : 0;
+    const int16_t fceil = sec_ceil[s->front], bceil = bs ? sec_ceil[s->back] : 0;
     const uint8_t bucket = fs->bucket;
 
     /* inverse depth (2^24 / z4) and u (half texels) at both ends */
     const int32_t iz1 = inv_z(z1), iz2 = inv_z(z2);
     /* textured at all? (portals without upper/lower parts skip u entirely) */
-    const int ntex = bs ? ((bs->ceil < fs->ceil && !(fs->sky && bs->sky) && s->upper != 0xFF) || (bs->floor > fs->floor && s->lower != 0xFF))
+    const int ntex = bs ? ((bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) || (bs->floor > fs->floor && s->lower != 0xFF))
                         : (s->mid != 0xFF);
     int32_t uz1 = 0, uz2 = 0;
     if (ntex) {
@@ -625,7 +626,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     int32_t duz = 0, uz = 0;
     if (ntex) { duz = lstep(uz1, uz2, rcp); uz = advance(uz1, duz, f8); }
 
-    const int16_t fc = fs->ceil - view_z, ff = fs->floor - view_z;
+    const int16_t fc = fceil - view_z, ff = fs->floor - view_z;
     /* rows are linear in iz: Y(iz) = HORIZON - a*iz/16, so start = yrow(h, iz at xs), step = -a*diz/16 */
     int32_t Yc, Yf, dYc, dYf;
     yrows(fc, iz, diz, &Yc, &dYc); yrows(ff, iz, diz, &Yf, &dYf);
@@ -635,20 +636,20 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     if (!bs) {
         if (s->mid != 0xFF) {
             has_mid = 1;
-            const int16_t textop = (s->flags & 2) ? fs->floor + map_tex[s->mid].realh : fs->ceil;
+            const int16_t textop = (s->flags & 2) ? fs->floor + map_tex[s->mid].realh : fceil;
             setup_part(&job.mid, s->mid, bucket, textop, s->yoff);
         }
     } else {
-        if (bs->ceil < fs->ceil && !(fs->sky && bs->sky) && s->upper != 0xFF) {
+        if (bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) {
             has_up = 1;
-            const int16_t textop = (s->flags & 1) ? fs->ceil : bs->ceil + map_tex[s->upper].realh;
+            const int16_t textop = (s->flags & 1) ? fceil : bceil + map_tex[s->upper].realh;
             setup_part(&job.up, s->upper, bucket, textop, s->yoff);
-            const int16_t bc = bs->ceil - view_z;
+            const int16_t bc = bceil - view_z;
             yrows(bc, iz, diz, &Ybc, &dYbc);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
-            const int16_t textop = (s->flags & 2) ? fs->ceil : bs->floor;
+            const int16_t textop = (s->flags & 2) ? fceil : bs->floor;
             setup_part(&job.lo, s->lower, bucket, textop, s->yoff);
             const int16_t bf = bs->floor - view_z;
             yrows(bf, iz, diz, &Ybf, &dYbf);

@@ -185,7 +185,7 @@ static int blocked(int16_t x, int16_t y)
         if (!solid) {
             const MapSector *f = &map_sectors[l->front], *b = &map_sectors[l->back];
             const int16_t hi = f->floor > b->floor ? f->floor : b->floor;
-            const int16_t lo = f->ceil < b->ceil ? f->ceil : b->ceil;
+            const int16_t lo = sec_ceil[l->front] < sec_ceil[l->back] ? sec_ceil[l->front] : sec_ceil[l->back];
             if (hi - here->floor > 24 || lo - hi < 56) solid = 1;
         }
         if (!solid) continue;
@@ -247,12 +247,13 @@ static void doors_tick(uint16_t dt)
 {
     const int16_t psec = (int16_t)map_subs[R_PointInSub(view.x >> 16, view.y >> 16)].sector;
     for (int d = 0; d < map_ndoors && d < 64; d++) {
-        MapSector *s = &map_sectors[map_doors[d].sector];
+        const MapSector *s = &map_sectors[map_doors[d].sector];
+        int16_t *const sc = &sec_ceil[map_doors[d].sector];
         const int16_t tgt = door_target[d];
-        if (s->ceil < tgt) { s->ceil += 2 * dt; if (s->ceil > tgt) s->ceil = tgt; }
-        else if (s->ceil > tgt) {
+        if (*sc < tgt) { *sc += 2 * dt; if (*sc > tgt) *sc = tgt; }
+        else if (*sc > tgt) {
             if (psec == (int16_t)map_doors[d].sector) { door_target[d] = map_doors[d].open_ceil; continue; }   /* never close on the player */
-            s->ceil -= 2 * dt; if (s->ceil < tgt) s->ceil = tgt;
+            *sc -= 2 * dt; if (*sc < tgt) *sc = tgt;
         } else if (door_manual[d] && door_wait[d] != 0xFFFF) {
             if (door_wait[d] > dt) door_wait[d] -= dt;
             else { door_wait[d] = 0xFFFF; door_target[d] = s->floor; }
@@ -504,7 +505,7 @@ static void start_level(void)
 #ifdef DREAD_COMBAT
     Actors_Init();
 #endif
-    for (int d = 0; d < map_ndoors && d < 64; d++) { door_target[d] = map_sectors[map_doors[d].sector].ceil; door_wait[d] = 0xFFFF; door_manual[d] = 0; }
+    for (int d = 0; d < map_ndoors && d < 64; d++) { door_target[d] = sec_ceil[map_doors[d].sector]; door_wait[d] = 0xFFFF; door_manual[d] = 0; }
     exit_req = 0;
 }
 
