@@ -72,7 +72,7 @@ int main(int argc, char **argv)
                     View v;
                     v.x = (int32_t)(px[p] * 65536.0); v.y = (int32_t)(py[p] * 65536.0);
                     v.z = sec->floor + (h ? 41 : 20);
-                    if (v.z > sec->ceil - 4) v.z = sec->ceil - 4;
+                    if (v.z > sec_ceil[ss->sector] - 4) v.z = sec_ceil[ss->sector] - 4;
                     v.angle = (uint16_t)(a * 4096 + 2048 * h);
                     memset(pvs_seen, 0, nsub);
                     R_RenderView(&v, fb);
