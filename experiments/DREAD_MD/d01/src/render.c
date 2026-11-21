@@ -33,6 +33,7 @@ uint8_t pvs_seen[4096];                 /* generator: subsectors that drew somet
 static uint16_t cur_sub;
 #else
 #ifdef DREAD_EPISODE
+#ifndef DREAD_PVS_RAW
 static uint8_t pvs_row[EP_PVS_BYTES];
 static uint16_t cached_pvs_sub = 0xFFFF;
 
@@ -54,7 +55,8 @@ static void load_pvs_row(uint16_t sub)
         if (packet & 128) { while (n--) *dst++ = 0; }
         else { while (n--) *dst++ = *src++; }
     }
-}
+} 
+#endif /* !DREAD_PVS_RAW */
 #else
 extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets per subsector */
 extern const uint16_t pvs_nbytes, pvs_sbytes;
@@ -1006,9 +1008,15 @@ void R_RenderView(const View *v, uint8_t *fb)
     {
         const int sub = R_PointInSub(view_xi, view_yi);
     #ifdef DREAD_EPISODE
+#ifdef DREAD_PVS_RAW
+        /* PVS rows stored contiguously in ROM: skip decompression and RAM copy. */
+        pv_n = episode_pvs + dread_map->pvs_offsets[sub];
+        pv_s = pv_n + dread_map->pvs_nbytes;
+#else
         load_pvs_row(sub);
         pv_n = pvs_row;
         pv_s = pvs_row + dread_map->pvs_nbytes;
+#endif
 #else
         pv_n = pvs_nodes + (uint32_t)sub * pvs_nbytes;
         pv_s = pvs_subs + (uint32_t)sub * pvs_sbytes;
