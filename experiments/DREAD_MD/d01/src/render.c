@@ -98,7 +98,15 @@ static uint8_t clipbuf[2 * VW_MAX];          /* [0..W) ceiling clip (top), [W..2
 static uint8_t nxt[VW_MAX + 1];
 static inline int find_open(int c)
 {
+#ifdef DREAD_OPT_PATH_COMPRESS
+    /* Alternative path compression: one final write on the initial slot
+     * instead of a write per halving step. Benchmark against the default. */
+    const int first = c;
+    while (nxt[c] != c) c = nxt[c];
+    nxt[first] = (uint8_t)c;
+#else
     while (nxt[c] != c) { nxt[c] = nxt[nxt[c]]; c = nxt[c]; }
+#endif
     return c;
 }
 static inline void close_col(int c) { ceilclip[c] = floorclip[c] = 0; nxt[c] = (uint8_t)(c + 1); }
