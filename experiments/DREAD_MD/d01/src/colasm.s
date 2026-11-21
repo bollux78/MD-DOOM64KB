@@ -161,7 +161,34 @@ seg_columns:
         move.w  %d2,%d4                     /* ceiling: top .. yc */
         sub.w   %d0,%d4
         ble.s   1f
+        btst    #4,J_FLAGS+1(%a6)
+        beq.s   2f
+        /* sky ceiling: rows top..yc of the sky column of this screen column, through the scalers */
+        lea     r_skyoff,%a0
+        move.w  0(%a0,%d6.w),%d5
+        lea     sky_blob,%a1
+        adda.w  %d5,%a1
+        move.w  r_ssh,%d4
         move.w  %d0,%d5
+        lsr.w   %d4,%d5                     /* sky row of the top (column-doubled: rows are halved) */
+        adda.w  %d5,%a1
+        move.w  %d0,%d5
+        add.w   %d5,%d5
+        add.w   %d5,%d5
+        lea     -4(%a2,%d5.w),%a0
+        move.w  %d2,%d4
+        sub.w   %d0,%d4                     /* n */
+        add.w   %d4,%d4
+        move.w  %d4,%d5
+        add.w   %d4,%d4
+        add.w   %d5,%d4                     /* n * 6 */
+        move.w  r_ssh,%d5
+        lsl.w   %d5,%d4
+        move.l  r_skyend,%a4
+        suba.w  %d4,%a4
+        jsr     (%a4)
+        bra.s   1f
+2:      move.w  %d0,%d5
         add.w   %d5,%d5                     /* fill inline: a0 = column + y0*4 - 4, jump into the core */
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0

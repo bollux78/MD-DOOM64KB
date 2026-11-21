@@ -105,6 +105,11 @@ static inline void close_col(int c) { ceilclip[c] = floorclip[c] = 0; nxt[c] = (
 static int16_t closed;
 
 static int16_t view_xi, view_yi;   /* integer map position */
+#if defined(__m68k__) || defined(__mc68000__)
+static const int sky_on = 1;
+#else
+static const int sky_on = 0;      /* host: flat sky colour */
+#endif
 int16_t r_view_xi, r_view_yi;      /* the same, for actors.c */
 static int32_t frac_tz, frac_tx;   /* camera-space offset of the fractional position, * 4 */
 static int32_t view_x4, view_y4;
@@ -175,6 +180,11 @@ extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
 extern const uint32_t scal_b[], scal_w[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
 uint16_t r_tmk_sz, r_tsh, r_ssh;
+/* sky (gen_sky.py): 128 columns of 76 bytes = 90 degrees; per screen column offset, set each frame */
+#define SKY_STRIDE 76
+extern const uint8_t sky_blob[], scal_q[];
+uint16_t r_skyoff[VW_MAX];
+const void *r_skyend;
 #endif
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
@@ -203,6 +213,7 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_scal = colb == 2 ? scal_w : scal_b;
     r_tsh = 0;                                       /* texels are bytes in every mode */
     r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
+    r_skyend = (const void *)r_scal[scal_q[colb == 2 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
 #endif
 }
 
@@ -667,7 +678,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
     job.cpal = fs->ceilpal; job.ccol2 = COLB == 2 ? (uint16_t)(fs->ceilcol << 8 | fs->ceilcol) : fs->ceilcol; job.fpal = fs->floorpal; job.fcol2 = COLB == 2 ? (uint16_t)(fs->floorcol << 8 | fs->floorcol) : fs->floorcol;
-    job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0);
+    job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0) | (fs->sky && sky_on ? 16 : 0);
     job.closed = 0;
     seg_columns(&job);
     closed += job.closed;
@@ -889,6 +900,13 @@ void R_RenderView(const View *v, uint8_t *fb)
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
     view_xi = (int16_t)(v->x >> 16); view_yi = (int16_t)(v->y >> 16);
     r_view_xi = view_xi; r_view_yi = view_yi;
+#if defined(__m68k__) || defined(__mc68000__)
+    {   /* sky: 128 columns per 90 degrees, moving opposite to the turn */
+        const uint16_t step = (uint16_t)((128u * 256u) / (2u * FOCAL));       /* sky columns per screen column, 8.8 */
+        uint16_t sx = (uint16_t)((-(int16_t)(v->angle >> 7)) << 8) - (uint16_t)(HALF_W * step);
+        for (int c = 0; c < VIEW_W; c++, sx += step) r_skyoff[c] = (uint16_t)(((sx >> 8) & 127) * SKY_STRIDE);
+    }
+#endif
     const uint16_t a = v->angle >> 6;
     vsin = sintab[a]; vcos = sintab[(a + 256) & 1023];
     /* fractional part of the position (0..1 unit), in camera space * 4 */
