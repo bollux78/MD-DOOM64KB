@@ -887,7 +887,14 @@ static void render_node(uint16_t n)
     const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
     const int side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
     render_node(nd->child[side]);
-    if (bbox_visible(nd->bbox[side ^ 1])) render_node(nd->child[side ^ 1]);
+    const uint16_t far = nd->child[side ^ 1];
+#ifndef PVS_GEN
+    {   /* PVS first: the far child's box is projected only if something in it is visible from here */
+        const uint16_t k = far & 0x7FFF;
+        if (!(((far & 0x8000) ? pv_s : pv_n)[k >> 3] & (1 << (k & 7)))) return;
+    }
+#endif
+    if (closed < VIEW_W && bbox_visible(nd->bbox[side ^ 1])) render_node(far);
 }
 
 int R_PointInSub(int16_t x, int16_t y)
@@ -914,7 +921,11 @@ void R_RenderView(const View *v, uint8_t *fb)
     {   /* sky: 128 columns per 90 degrees, moving opposite to the turn */
         const uint16_t step = (uint16_t)((128u * 256u) / (2u * FOCAL));       /* sky columns per screen column, 8.8 */
         uint16_t sx = (uint16_t)((-(int16_t)(v->angle >> 7)) << 8) - (uint16_t)(HALF_W * step);
-        for (int c = 0; c < VIEW_W; c++, sx += step) r_skyoff[c] = (uint16_t)(((sx >> 8) & 127) * SKY_STRIDE);
+        static uint16_t sky_last = 1, sky_w;
+        if (sx != sky_last || VIEW_W != sky_w) {        /* only when the view turned or the mode changed */
+            sky_last = sx; sky_w = VIEW_W;
+            for (int c = 0; c < VIEW_W; c++, sx += step) r_skyoff[c] = (uint16_t)(((sx >> 8) & 127) * SKY_STRIDE);
+        }
     }
 #endif
     const uint16_t a = v->angle >> 6;
