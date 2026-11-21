@@ -339,103 +339,147 @@ fillb_end:
 fillw_end:
         rts
 
-/* tex_fast: a4 Part, d5 y0, d4 n (> 0), a3 ColRec of the column, a2 column, a6 job.
-   preserves d7, a2, a3, a5, a6; clobbers d0-d6, a0, a1, a4.
-   Part: 0 texels.l  4 wmask  6 hs2  8 hmask  10 pal  12 vbase16  16 vt0  18 eoff  20 vlim
-   ColRec: 0 yc  2 yf  4 ybc  6 ybf  8 u  10 zq.  Fast path: one unrolled scaler per quantised texel
-   step (16 cycles a row), entered by a tail jump (its rts returns to our caller). */
+/* Exact texture origin and wrap decision, matching d4f9f4b's framebuffer.
+ * Keep the sequential column records and return directly through the scaler.
+ * a3 is the ColRec, a4 is Part, d5 is top row, d4 is span length. */
 tex_fast:
-        move.w  10(%a3),%d3                 /* zq = texels per row * 1024 (32767: 32 or more) */
-#ifdef DREAD_EPISODE
-        move.w  8(%a3),%d6                  /* u */
+        moveq   #0,%d6
+        move.w  8(%a3),%d6                  /* u from this column's sequential record */
+        move.w  10(%a3),%d3                 /* zq, same 16.16 calculation as d4f9f4b */
         and.w   4(%a4),%d6                  /* & wmask */
+#ifdef DREAD_EPISODE
         lsl.w   #2,%d6
         movea.l (%a4),%a1
         movea.l 0(%a1,%d6.w),%a1            /* shared column */
 #else
-        moveq   #0,%d6
-        move.w  8(%a3),%d6
-        and.w   4(%a4),%d6
-        move.w  6(%a4),%d0
-        lsl.l   %d0,%d6                     /* << hs2 */
+        move.w  6(%a4),%d1
+        lsl.l   %d1,%d6                     /* << hs2 */
         move.l  (%a4),%a1
         adda.l  %d6,%a1                     /* a1 = texture column */
 #endif
-        /* v of the top row: the part's raw top edge has v = vt0; rows clipped above add rows * zq / 1024 */
-        move.w  PT_EOFF(%a4),%d0
-        move.w  %d5,%d2
-        sub.w   0(%a3,%d0.w),%d2
-        move.w  PT_VT0(%a4),%d6
-        tst.w   %d2
-        beq.s   1f
-        mulu.w  %d3,%d2
-        lsr.l   #8,%d2
-        lsr.l   #2,%d2
-        add.w   %d2,%d6
-        and.w   8(%a4),%d6
-1:      add.w   %d5,%d5
+        move.w  r_horizon,%d1               /* v top = vbase - zq * (HORIZON - y0) * 64 */
+        sub.w   %d5,%d1
+        muls.w  %d3,%d1
+        lsl.l   #6,%d1
+        move.l  12(%a4),%d2
+        sub.l   %d1,%d2                     /* d2 = v of the top row (16.16) */
+#ifdef DREAD_EPISODE
+        move.w  6(%a4),%d0                  /* episode: stored texels per column */
+        swap    %d0
+#endif
+        move.w  8(%a4),%d0                  /* hmask */
+        add.w   %d5,%d5
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0           /* a0 = top - 4 */
+        move.w  %d4,%a4                     /* a4 = n (the Part is no longer needed) */
+#ifdef DREAD_EXACT_SPAN_REFERENCE
+        subq.w  #1,%d4
+        move.w  %d3,%d1
+        mulu.w  %d4,%d1                     /* d1 = span * 1024 */
         cmpi.w  #32767,%d3
-        beq.s   .Ltslow                     /* 32 texels per row or more: no scaler */
-        move.w  %d4,%d1                     /* quick bound: v + n * 2^tsh (>= the span, with margin) */
-        move.w  J_TSH(%a6),%d0
-        lsl.w   %d0,%d1
+        beq     .Ltex_exact_slow                    /* 32 texels per row or more: no scaler */
+        move.l  %d2,%d6
+        addi.l  #0x8000,%d6                 /* nearest texel: v = -0.3 must not wrap to H - 1 */
+        swap    %d6
+        and.w   %d0,%d6                     /* d6 = v top, integer, in [0, H) */
+        move.l  %d1,%d4
+        lsr.l   #8,%d4
+        lsr.l   #2,%d4                      /* d4 = span (integer texels) */
+        move.w  %d4,%d5
+        lsr.w   #5,%d4
+        add.w   %d5,%d4
+        add.w   %d6,%d4
+        addq.w  #1,%d4                      /* v + span * 33/32 + 1 (quantisation margin) */
+#ifdef DREAD_EPISODE
+        swap    %d0                         /* high word: texels stored per column (H + pad) */
+        move.w  %d0,%d5
+        swap    %d0
+        subq.w  #2,%d5
+#else
+        move.w  %d0,%d5
+        add.w   %d5,%d5
+#endif
+        cmp.w   %d5,%d4
+        bgt     .Ltex_exact_slow                    /* would leave the stored texels */
+#else
+        cmpi.w  #32767,%d3
+        beq     .Ltex_exact_slow
+        move.l  %d2,%d6
+        addi.l  #0x8000,%d6                 /* identical nearest-texel rounding */
+        swap    %d6
+        and.w   %d0,%d6
+#ifdef DREAD_EPISODE
+        swap    %d0
+        move.w  %d0,%d5
+        swap    %d0
+        subq.w  #2,%d5                     /* stored texels - 2 */
+#else
+        move.w  %d0,%d5
+        add.w   %d5,%d5
+#endif
+        move.w  %a4,%d1
+        move.w  J_TSH(%a6),%d4
+        lsl.w   %d4,%d1                    /* conservative bound: n * power-of-two step */
         add.w   %d6,%d1
-        cmp.w   PT_VLIM(%a4),%d1
-        ble.s   2f
-        move.w  %d4,%d1                     /* exact: v + span * 33/32 + 1 */
+        cmp.w   %d5,%d1
+        ble.s   .Ltex_span_ready
+        move.w  %a4,%d1                    /* exact original bound when the quick one fails */
         subq.w  #1,%d1
         mulu.w  %d3,%d1
-        lsr.l   #8,%d1
-        lsr.l   #2,%d1
-        move.w  %d1,%d2
-        lsr.w   #5,%d2
-        add.w   %d1,%d2
-        add.w   %d6,%d2
-        addq.w  #1,%d2
-        cmp.w   PT_VLIM(%a4),%d2
-        bgt.s   .Ltslow                     /* would leave the stored texels */
-2:      adda.w  %d6,%a1                     /* a1 = first texel */
-        add.w   %d4,%d4                     /* n * 6 */
+        move.l  %d1,%d4
+        lsr.l   #8,%d4
+        lsr.l   #2,%d4
         move.w  %d4,%d1
-        add.w   %d4,%d4
+        lsr.w   #5,%d4
         add.w   %d1,%d4
-        move.w  r_ssh,%d1
-        lsl.w   %d1,%d4                     /* n * 12 in column-doubled modes */
+        add.w   %d6,%d4
+        addq.w  #1,%d4
+        cmp.w   %d5,%d4
+        bgt     .Ltex_exact_slow
+.Ltex_span_ready:
+#endif
+        move.w  r_tsh,%d5
+        lsl.w   %d5,%d6
+        adda.w  %d6,%a1                     /* a1 = first texel */
+        move.w  %a4,%d5                     /* n * 6 */
+        add.w   %d5,%d5
+        move.w  %d5,%d6
+        add.w   %d5,%d5
+        add.w   %d6,%d5
+        move.w  r_ssh,%d6
+        lsl.w   %d6,%d5                     /* n * 12 in column-doubled modes (two byte moves per row) */
         lea     scal_q,%a4
-        moveq   #0,%d1
-        move.b  0(%a4,%d3.w),%d1            /* scaler level */
-        add.w   %d1,%d1
-        add.w   %d1,%d1
+        moveq   #0,%d4
+        move.b  0(%a4,%d3.w),%d4            /* scaler level */
+        add.w   %d4,%d4
+        add.w   %d4,%d4
         move.l  r_scal,%a4
-        move.l  0(%a4,%d1.w),%a4            /* end of the scaler */
-        suba.w  %d4,%a4
+        move.l  0(%a4,%d4.w),%a4            /* end of the scaler */
+        suba.w  %d5,%a4
         jmp     (%a4)
-.Ltslow:                                    /* masked interpolating core (wraps in H) */
-        move.w  %d4,%d1
+.Ltex_exact_slow:
+#ifndef DREAD_EXACT_SPAN_REFERENCE
+        move.w  %a4,%d1
         subq.w  #1,%d1
-        mulu.w  %d3,%d1                     /* span * 1024 */
+        mulu.w  %d3,%d1
+#endif
         lsl.l   #6,%d1                      /* span 16.16 */
-        moveq   #0,%d2
-        move.w  %d6,%d2
-        swap    %d2                         /* v of the top row (16.16) */
-        move.w  %d4,%d6                     /* n */
         add.l   %d1,%d2                     /* v of the bottom row; the core steps up by -zpp */
-        move.w  8(%a4),%d5                  /* hmask */
-        moveq   #0,%d0
-        move.w  %d3,%d0
-        lsl.l   #6,%d0
-        neg.l   %d0                         /* step = -zpp (16.16) */
-        move.w  %d0,%d4                     /* d4.w step frac */
-        swap    %d0
-        move.w  %d0,%d3                     /* d3.w step int */
+        moveq   #0,%d4
+        move.w  %d3,%d4
+        lsl.l   #6,%d4
+        neg.l   %d4                         /* step = -zpp (16.16) */
+        move.w  %d0,%d5                     /* hmask */
+        move.l  %d4,%d3
+        swap    %d3                         /* d3.w step int, d4.w step frac */
         move.l  %d2,%d1
         swap    %d1                         /* d1.w v int, d2.w v frac */
+        move.w  %a4,%d6
         mulu.w  r_tmk_sz,%d6
         move.l  r_tmk_end,%a4
         suba.w  %d6,%a4
         jmp     (%a4)
+
 
 /* void spr_scale(uint8_t *dst_m4, const uint8_t *src, int16_t n, uint16_t zq): n rows of a sprite post
    through the byte scalers (row k at k*4(dst_m4), texel round((k-1)*z) of src) */

@@ -1,0 +1,129 @@
+{
+  "variant": "exact-fast",
+  "video_frames": 600,
+  "duration_seconds": 10,
+  "mode": "H40 lines",
+  "sram": false,
+  "flagged_frames": 39,
+  "samples": [
+    {
+      "video_frame": 8,
+      "seconds": 0.13333333333333333,
+      "different_pixels": 286,
+      "rows": [
+        71,
+        73,
+        75
+      ]
+    },
+    {
+      "video_frame": 29,
+      "seconds": 0.48333333333333334,
+      "different_pixels": 205,
+      "rows": [
+        57,
+        59,
+        61
+      ]
+    },
+    {
+      "video_frame": 42,
+      "seconds": 0.7,
+      "different_pixels": 185,
+      "rows": [
+        99,
+        101,
+        103
+      ]
+    },
+    {
+      "video_frame": 48,
+      "seconds": 0.8,
+      "different_pixels": 160,
+      "rows": [
+        115,
+        117,
+        119
+      ]
+    },
+    {
+      "video_frame": 54,
+      "seconds": 0.9,
+      "different_pixels": 177,
+      "rows": [
+        145,
+        147,
+        149
+      ]
+    },
+    {
+      "video_frame": 60,
+      "seconds": 1.0,
+      "different_pixels": 315,
+      "rows": [
+        151,
+        153,
+        155
+      ]
+    },
+    {
+      "video_frame": 73,
+      "seconds": 1.2166666666666666,
+      "different_pixels": 121,
+      "rows": [
+        49,
+        51,
+        53
+      ]
+    },
+    {
+      "video_frame": 79,
+      "seconds": 1.3166666666666667,
+      "different_pixels": 161,
+      "rows": [
+        53,
+        55,
+        57
+      ]
+    },
+    {
+      "video_frame": 85,
+      "seconds": 1.4166666666666667,
+      "different_pixels": 27,
+      "rows": [
+        69,
+        73
+      ]
+    },
+    {
+      "video_frame": 91,
+      "seconds": 1.5166666666666666,
+      "different_pixels": 20,
+      "rows": [
+        91,
+        93,
+        95
+      ]
+    },
+    {
+      "video_frame": 104,
+      "seconds": 1.7333333333333334,
+      "different_pixels": 178,
+      "rows": [
+        97,
+        99,
+        101
+      ]
+    },
+    {
+      "video_frame": 192,
+      "seconds": 3.2,
+      "different_pixels": 440,
+      "rows": [
+        101,
+        103,
+        105
+      ]
+    }
+  ]
+}

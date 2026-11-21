@@ -72,6 +72,10 @@ uint16_t hint_r1on;                 /* VDP reg 1 write with the display on (hint
 static void vint_cb(void)
 {
     vints++;
+#ifdef DREAD_JOY_VBLANK
+    /* JOY_update masks interrupts. Poll during vertical blank to preserve row timing. */
+    JOY_update();
+#endif
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;
     *(volatile uint16_t *)0xC00000 = 0;
     if (hint_on) {
@@ -145,7 +149,10 @@ static void set_mode(uint16_t m)
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
-    dma_chunk = h40 ? 6144 : 4864;                 /* whole VBlank DMA budget (HUD + framebuffer) */
+    dma_chunk = h40 ? 6144 : 4864;
+#ifdef DREAD_JOY_VBLANK
+    dma_chunk -= 512;                         /* leave time for controller polling before the view */
+#endif                 /* whole VBlank DMA budget (HUD + framebuffer) */
     SYS_enableInts();
 }
 
@@ -336,7 +343,9 @@ static void menu(void)
     menu_draw(sel);
     for (;;) {
         { const uint16_t v0 = vints; while (vints == v0) {} }
+#ifndef DREAD_JOY_VBLANK
         JOY_update();
+#endif
         const uint16_t j = JOY_readJoypad(JOY_1), e = j & ~pj;
         pj = j;
         if (e & BUTTON_START) break;
@@ -394,7 +403,12 @@ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
     VDP_setTextPalette(PAL3);
     VDP_setTextPriority(TRUE);
     if (screen == TITLE_ART) {
+#ifdef DREAD_VALIDATION_TEST
+        VDP_drawTextBG(BG_A, ROM_NAME, 5, 20);
+        VDP_drawTextBG(BG_A, "APERTE START OU AGUARDE 15 SEGUNDOS", 3, 23);
+#else
         VDP_drawTextBG(BG_A, "PRESS START", 14, 23);
+#endif
     } else {
         const bool levels = screen == TITLE_LEVELS;
         const char *const *items = levels ? title_levels : title_items;
@@ -416,14 +430,22 @@ static void title(void)
     uint16_t cursor = 0, previous = 0;
     HUD_ShowOpening();
     draw_title_menu(screen, cursor);
+#ifdef DREAD_VALIDATION_TEST
+    const uint16_t title_start = vints;
+#endif
     while (!bench_req) {
         const uint16_t frame = vints;
         while (vints == frame && !bench_req) {}
+#ifndef DREAD_JOY_VBLANK
         JOY_update();
+#endif
         const uint16_t joy = JOY_readJoypad(JOY_1);
         const uint16_t pressed = joy & ~previous;
         previous = joy;
         if (screen == TITLE_ART) {
+#ifdef DREAD_VALIDATION_TEST
+            if ((uint16_t)(vints - title_start) >= 15 * 60) break;
+#endif
             if (!(pressed & (BUTTON_START | BUTTON_A | BUTTON_B | BUTTON_C))) continue;
             screen = TITLE_MENU;
         } else if (pressed & BUTTON_B) {
@@ -450,7 +472,9 @@ static void title(void)
         draw_title_menu(screen, cursor);
     }
     while (!bench_req) {
+#ifndef DREAD_JOY_VBLANK
         JOY_update();
+#endif
         if (!(JOY_readJoypad(JOY_1) & (BUTTON_START | BUTTON_A | BUTTON_C))) break;
     }
     HUD_ClearOpening();
@@ -478,7 +502,9 @@ static void title(void)
     VDP_drawText("15 segundos", 4, 21);
     const uint16_t t0 = vints;
     while ((uint16_t)(vints - t0) < 15 * 60) {
+#ifndef DREAD_JOY_VBLANK
         JOY_update();
+#endif
         const uint16_t j = JOY_readJoypad(JOY_1);
         if (j & BUTTON_START) break;
         if (j & BUTTON_B) { bench_req = 1; break; }
@@ -544,6 +570,10 @@ static void pickups(HudState *hud, uint16_t psub)
 int main(bool hard)
 {
     (void)hard;
+#ifdef DREAD_JOY_VBLANK
+    /* The game reads JOY_1 only. Avoid polling an unused second port every VBlank. */
+    JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
+#endif
     SYS_disableInts();
     SYS_setVIntCallback(vint_cb);
     SYS_setHIntCallback(hint_a);
@@ -600,7 +630,9 @@ int main(bool hard)
         uint16_t dt = now - last; last = now;
         if (dt > 8) dt = 8;
         if (bench_req && !bench_done) dt = 4;    /* bench: same camera path at any speed (frames are comparable) */
+#ifndef DREAD_JOY_VBLANK
         JOY_update();
+#endif
         uint16_t j = JOY_readJoypad(JOY_1);
 #ifdef FREEZE_AT
         if (bench_frames >= FREEZE_AT) { dt = 0; bench_done = 3; }   /* test builds: keep rendering one fixed view */

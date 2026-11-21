@@ -1,0 +1,9 @@
+{
+  "variant": "exact-vblank",
+  "video_frames": 600,
+  "duration_seconds": 10,
+  "mode": "H40 lines",
+  "sram": false,
+  "flagged_frames": 0,
+  "samples": []
+}
