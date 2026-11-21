@@ -6,13 +6,20 @@
 #include <genesis.h>
 #include "render.h"
 #include "game_hud.h"
+#ifndef DREAD_NO_MUSIC
 #include "music.h"                             /* rescomp: bgm_intro, bgm_e1m1 (XGM2, Z80 driver) */
+#endif
 #ifndef START_MUSIC
 #define START_MUSIC 1
 #endif
 static uint16_t music_on = START_MUSIC;
 
-#define ROM_NAME   "DREAD-MD D01 SOM"
+#ifndef ROM_NAME
+#define ROM_NAME "DREAD-MD D01 SOM"
+#endif
+#ifndef DREAD_MAP_LABEL
+#define DREAD_MAP_LABEL "E1M1 DOOM"
+#endif
 #ifndef START_MODE
 #define START_MODE 0                           /* 0 H40 linhas, 1 H40 colunas, 2 H32 linhas, 3 H32 colunas */
 #endif
@@ -79,6 +86,9 @@ static void set_mode(uint16_t m)
 {
     while (dma_src) {}
     SYS_disableInts();
+#ifdef DREAD_ROW_ONLY
+    m &= ~1u;
+#endif
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
     R_SetMode(colb, h40 ? 40 : 32, crop);
@@ -149,7 +159,7 @@ static int blocked(int16_t x, int16_t y)
         const int16_t bx = map_verts[l->v2][0], by = map_verts[l->v2][1];
         if ((ax < bx ? ax : bx) > x + R || (ax > bx ? ax : bx) < x - R) continue;
         if ((ay < by ? ay : by) > y + R || (ay > by ? ay : by) < y - R) continue;
-        int solid = (l->back == 0xFF) || (l->flags & 1);
+        int solid = (l->back == NO_MAP_SECTOR) || (l->flags & 1);
         if (!solid) {
             const MapSector *f = &map_sectors[l->front], *b = &map_sectors[l->back];
             const int16_t hi = f->floor > b->floor ? f->floor : b->floor;
@@ -195,7 +205,7 @@ static void use_line(void)
     if (best < 0) return;
     const MapLine *l = &map_lines[best];
     const uint16_t sp = l->special;
-    if ((sp == 1 || (sp >= 26 && sp <= 28) || (sp >= 31 && sp <= 34) || sp == 117 || sp == 118) && l->back != 0xFF) {
+    if ((sp == 1 || (sp >= 26 && sp <= 28) || (sp >= 31 && sp <= 34) || sp == 117 || sp == 118) && l->back != NO_MAP_SECTOR) {
         const int d = door_index(l->back);
         if (d >= 0) door_open(d, sp == 1 || (sp >= 26 && sp <= 28) || sp == 117);
     } else if (l->tag) {
@@ -242,7 +252,12 @@ static void menu_draw(uint16_t sel)
     static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
     char l[5][36];
     sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
+#ifdef DREAD_ROW_ONLY
+    (void)det;
+    sprintf(l[1], "%c DETALHE: LINHAS", sel == 1 ? '>' : ' ');
+#else
     sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[mode & 1]);
+#endif
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
     sprintf(l[4], "%c VOLTAR", sel == 4 ? '>' : ' ');
@@ -273,8 +288,10 @@ static void menu(void)
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
             if (sel == 4) break;
             if (sel == 3) {
+#ifndef DREAD_NO_MUSIC
                 music_on ^= 1;
                 if (music_on) XGM2_play(bgm_e1m1); else XGM2_stop();
+#endif
                 menu_draw(sel);
                 continue;
             }
@@ -297,8 +314,8 @@ static void title(void)
     VDP_drawText(ROM_NAME, 4, 6);
     VDP_drawText("Renderer estilo Dread:", 4, 9);
     VDP_drawText("paredes por coluna, chao/teto", 4, 10);
-    VDP_drawText("em cor solida, E1M1 do Doom,", 4, 11);
-    VDP_drawText("objetos, inimigos e musica.", 4, 12);
+    VDP_drawText("MAPA: " DREAD_MAP_LABEL, 4, 11);
+    VDP_drawText("Objetos e monstros estaticos.", 4, 12);
     VDP_drawText("Mede FPS. START no jogo: menu", 4, 13);
     VDP_drawText("de modos (H40/H32, linhas ou", 4, 14);
     VDP_drawText("colunas duplicadas).", 4, 15);
@@ -327,11 +344,17 @@ int main(bool hard)
     SYS_enableInts();
     R_Init();
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
+#ifndef DREAD_NO_MUSIC
     XGM2_loadDriver(TRUE);
     if (music_on) XGM2_play(bgm_intro);
+#endif
     title();
+#ifndef DREAD_TEXT_TITLE
     HUD_Opening();
+#endif
+#ifndef DREAD_NO_MUSIC
     if (music_on) XGM2_play(bgm_e1m1);
+#endif
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);
     set_mode(START_MODE);

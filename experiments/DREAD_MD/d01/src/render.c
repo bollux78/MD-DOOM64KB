@@ -46,8 +46,14 @@ static inline uint32_t now_lines(void) { for (;;) { const uint16_t a = vints; co
 static inline uint32_t now_lines(void) { return 0; }
 #endif   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
 
-static int16_t vtz[MAXV], vtx[MAXV];   /* camera space, map units * 4 (clamped) */
-static uint16_t vstamp[MAXV];
+#if MAXV > 2730
+#define VCACHE_SIZE 2048
+static uint16_t vkey[VCACHE_SIZE];
+#else
+#define VCACHE_SIZE MAXV
+#endif
+static int16_t vtz[VCACHE_SIZE], vtx[VCACHE_SIZE]; /* camera-space coordinates */
+static uint16_t vstamp[VCACHE_SIZE];
 static uint16_t frame_id;
 #if defined(__m68k__) || defined(__mc68000__)
 extern const uint16_t rcp4_tab[1024], rcpf_tab[4][1024];   /* tables.c (generated, ROM) */
@@ -182,7 +188,7 @@ void R_Init(void)
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
 #endif
     for (int i = 0; i < map_counts[4]; i++) map_sectors[i] = map_sectors_init[i];
-    for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF;
+    for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF;
 }
 
 static inline int16_t clamp16(int32_t v) { return v > 32767 ? 32767 : (v < -32767 ? -32767 : (int16_t)v); }
@@ -195,13 +201,22 @@ static inline void cam(int16_t px, int16_t py, int32_t *x4, int32_t *z4)
     *x4 = ((muls16(dx, vsin) - muls16(dy, vcos)) >> 12) - frac_tx;
 }
 
-static void xform(uint16_t v)
+static inline uint16_t xform(uint16_t v)
 {
-    if (vstamp[v] == frame_id) return;
-    vstamp[v] = frame_id;
+#if MAXV > 2730
+    const uint16_t slot = v & (VCACHE_SIZE - 1);
+    if (vstamp[slot] == frame_id && vkey[slot] == v) return slot;
+    vkey[slot] = v;
+#else
+    const uint16_t slot = v;
+    if (vstamp[slot] == frame_id) return slot;
+#endif
+    vstamp[slot] = frame_id;
     int32_t x, z;
     cam(map_verts[v][0], map_verts[v][1], &x, &z);
-    vtz[v] = clamp16(z); vtx[v] = clamp16(x);
+    vtz[slot] = clamp16(z);
+    vtx[slot] = clamp16(x);
+    return slot;
 }
 
 /* screen x in 16.16 for a camera-space point (x4, z4), z4 >= NEAR4 */
@@ -484,8 +499,10 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp)
 
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
-    xform(s->v1); xform(s->v2);
-    int16_t x1 = vtx[s->v1], z1 = vtz[s->v1], x2 = vtx[s->v2], z2 = vtz[s->v2];
+    const uint16_t slot1 = xform(s->v1);
+    int16_t x1 = vtx[slot1], z1 = vtz[slot1];
+    const uint16_t slot2 = xform(s->v2);
+    int16_t x2 = vtx[slot2], z2 = vtz[slot2];
     if (z1 < NEAR4 && z2 < NEAR4) return;
     /* back face: the seg's front side faces the viewer when x1*z2 - x2*z1 < 0 */
     if (muls16(x1, z2) - muls16(x2, z1) >= 0) return;
@@ -516,7 +533,7 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 #endif
 
     const MapSector *fs = &map_sectors[s->front];
-    const MapSector *bs = (s->back != 0xFF) ? &map_sectors[s->back] : 0;
+    const MapSector *bs = (s->back != NO_MAP_SECTOR) ? &map_sectors[s->back] : 0;
     const uint8_t bucket = fs->bucket;
 
     /* inverse depth (2^24 / z4) and u (half texels) at both ends */
@@ -799,7 +816,7 @@ void R_RenderView(const View *v, uint8_t *fb)
     rfb = fb;
     job.yc = a_yc; job.yf = a_yf; job.ybc = a_ybc; job.ybf = a_ybf; job.u = a_u; job.zpp = a_zpp;
     frame_id++;
-    if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < MAXV; i++) vstamp[i] = 0xFFFF; }
+    if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
     view_xi = (int16_t)(v->x >> 16); view_yi = (int16_t)(v->y >> 16);
     const uint16_t a = v->angle >> 6;

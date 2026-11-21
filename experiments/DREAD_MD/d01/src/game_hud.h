@@ -13,6 +13,16 @@ typedef struct {
     int16_t face;
 } HudState;
 
+#ifdef DREAD_GEOMETRY_ONLY
+static inline void HUD_Opening(void) {}
+static inline void HUD_Init(uint16_t row0) { (void)row0; }
+static inline void HUD_Draw(const HudState *st) { (void)st; }
+static inline void HUD_WeaponFrame(uint16_t f) { (void)f; }
+static inline void HUD_VBlank(void) {}
+static inline void HUD_Text(uint16_t line, const char *s) { (void)line; (void)s; }
+static inline void HUD_WeaponBob(int16_t dx, int16_t dy) { (void)dx; (void)dy; }
+static inline void HUD_SetLayout(uint16_t col0, int16_t dx) { (void)col0; (void)dx; }
+#else
 void HUD_Opening(void);
 void HUD_Init(uint16_t row0);
 void HUD_Draw(const HudState *st);
@@ -21,4 +31,5 @@ void HUD_VBlank(void);
 void HUD_Text(uint16_t line, const char *s);
 void HUD_WeaponBob(int16_t dx, int16_t dy);
 void HUD_SetLayout(uint16_t col0, int16_t dx);
+#endif
 #endif

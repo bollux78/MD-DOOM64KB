@@ -44,7 +44,7 @@ jobs:
             rm -rf "$stage"; mkdir -p "$stage/src" "$stage/res" "$stage/inc"
             cp $D/src/*.c $D/src/*.h $D/src/*.s "$stage/src/"
             DREAD_NPAL=1 python3 $D/tools/conv.py "$WAD" E1M1 "$stage/src" > "$stage/conv.log"
-            gcc -O2 -DCOLB0=1 -DPVS_GEN -DMAXV=4096 -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
+            gcc -O2 -DCOLB0=1 -DPVS_GEN -I"$stage/src" -I$D/src -o "$stage/pvsgen" $D/tools/pvsgen.c $D/src/render.c "$stage/src/mapdata.c"
             "$stage/pvsgen" "$stage/src/pvs.c" >> "$stage/conv.log"
             python3 $D/tools/gen_hud.py --wad "$WAD" --out "$stage/src/hud_assets.h" >> "$stage/conv.log"
             sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"

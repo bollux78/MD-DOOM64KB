@@ -7,10 +7,11 @@
 #endif
 
 #define NUM_BUCKETS 4
+#define NO_MAP_SECTOR 0xFFFFu
 
 typedef struct {
     uint16_t v1, v2;
-    uint8_t  front, back;          /* sector indices, back = 0xFF if one-sided */
+    uint16_t front, back;          /* NO_MAP_SECTOR for a missing side */
     uint8_t  mid, upper, lower;    /* texture index, 0xFF none */
     uint8_t  flags;                /* 1 upper unpegged, 2 lower unpegged, 4 two-sided */
     int16_t  xoff, yoff;           /* texture offsets (seg offset + sidedef x offset) */
