@@ -559,6 +559,10 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp)
     return d < 0 ? -(int32_t)udiv32_16((uint32_t)-d, n) : (int32_t)udiv32_16((uint32_t)d, n);
 }
 
+static int32_t ds_t1, ds_t2;
+__attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1, int16_t z1, int16_t x2, int16_t z2,
+                                                    int32_t sx1, int32_t sx2, int xs, int xe, int c);
+/* full path (segs crossing the near plane) */
 __attribute__((noinline)) static void draw_seg(const MapSeg *s)
 {
     const uint16_t slot1 = xform(s->v1);
@@ -589,6 +593,15 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
     if (xs >= xe) return;
     int c = find_open(xs);
     if (c >= xe) return;                    /* fully hidden behind closed columns */
+    ds_t1 = t1; ds_t2 = t2;
+    draw_seg_body(s, x1, z1, x2, z2, sx1, sx2, xs, xe, c);
+}
+
+/* the rest of a visible seg (both ends in front of the near plane, t1/t2 in ds_t1/ds_t2) */
+__attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1, int16_t z1, int16_t x2, int16_t z2,
+                                                    int32_t sx1, int32_t sx2, int xs, int xe, int c)
+{
+    const int32_t t1 = ds_t1, t2 = ds_t2;
     rstats.segs_drawn++;
 #ifdef PVS_GEN
     pvs_seen[cur_sub] = 1;
@@ -875,7 +888,21 @@ static void render_node(uint16_t n)
                 const int16_t dx = (int16_t)((vb[0] - va[0]) >> 1), dy = (int16_t)((vb[1] - va[1]) >> 1);
                 const int16_t px = (int16_t)((view_xi - va[0]) >> 1), py = (int16_t)((view_yi - va[1]) >> 1);
                 if (muls16(dx, py) - muls16(dy, px) > 256) continue;
-                draw_seg(sg);
+                /* inline front: transform, back face, projection and occlusion before any call */
+                const uint16_t slot1 = xform(sg->v1), slot2 = xform(sg->v2);
+                const int16_t x1 = vtx[slot1], z1 = vtz[slot1], x2 = vtx[slot2], z2 = vtz[slot2];
+                if (z1 < NEAR4 || z2 < NEAR4) { draw_seg(sg); continue; }
+                if (muls16(x1, z2) - muls16(x2, z1) >= 0) continue;
+                const int32_t sx1 = proj(x1, z1), sx2 = proj(x2, z2);
+                if (sx1 >= sx2) continue;
+                int xs = ceil16(sx1), xe = ceil16(sx2);
+                if (xs < 0) xs = 0;
+                if (xe > VIEW_W) xe = VIEW_W;
+                if (xs >= xe) continue;
+                const int c = find_open(xs);
+                if (c >= xe) continue;
+                ds_t1 = 0; ds_t2 = 65536;
+                draw_seg_body(sg, x1, z1, x2, z2, sx1, sx2, xs, xe, c);
             }
         }
         return;
