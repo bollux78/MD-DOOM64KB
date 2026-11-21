@@ -95,3 +95,8 @@ jobs:
               except Exception as e:print(label,'CONT ERROR',repr(e),'elapsed=',round(time.monotonic()-t,2),'returncode=',g.proc.poll(),flush=True)
             finally:g.close()
           PY
+          echo '--- MAME headless fallback smoke test ---'
+          mame -listfull megadriv 2>&1 | head -10 || true
+          timeout 40 mame megadriv -cart "$PWD/_emudiag/roms/DREAD-D01-FPS-CONTROL.bin" -video none -sound none -seconds_to_run 3 -nothrottle -skip_gameinfo -window 2>&1 | tail -45
+          code=${PIPESTATUS[0]}
+          echo "MAME_EXIT=$code"
