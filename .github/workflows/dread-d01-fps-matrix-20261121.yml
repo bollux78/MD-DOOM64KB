@@ -1,0 +1,100 @@
+name: DREAD D01 FPS variants (2026-11-21)
+on:
+  push:
+    branches: [exp-werk-dread-fps-matrix-20261121]
+    paths:
+      - 'experiments/DREAD_MD/d01/**'
+      - '.github/workflows/dread-d01-fps-matrix-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  matrix:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile control, O3, PATH and ALL episodes
+        shell: bash
+        env:
+          WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+        run: |
+          set -euo pipefail
+          test -f "$WAD"
+          gdk=""
+          for d in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" /opt/sgdk; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          if test -z "$gdk"; then
+            while IFS= read -r f; do gdk="${f%/makefile.gen}"; break; done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -5)
+          fi
+          test -n "$gdk"
+          tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          test -x "${tc}gcc"
+          export GDK="$gdk" DREAD_TC="$tc" DREAD_COPY_SEGA_S=1 DREAD_EP_MAPS=1 DREAD_COMBAT=1
+          export PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH" OPENBLAS_NUM_THREADS=1
+          out="$RUNNER_TEMP/dread-fps-$GITHUB_RUN_ID"
+          mkdir -p "$out"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          build() {
+            local tag="$1" flags="$2" romname="DREAD D01 FPS $1"
+            mkdir -p "$out/$tag"
+            echo "::group::Build $tag"
+            DREAD_EXTRA_FLAGS="$flags" bash experiments/DREAD_MD/d01/tools/build_map.sh \
+              "$WAD" EPISODE "$out/$tag" "$romname" > "$out/$tag/build.log" 2>&1 \
+              || { tail -80 "$out/$tag/build.log"; return 1; }
+            cp "$out/$tag/EPISODE.bin" "$out/DREAD-D01-FPS-$tag.bin"
+            sha256sum "$out/DREAD-D01-FPS-$tag.bin" >> "$out/SHA256SUMS.txt"
+            grep -Ei 'palette|textures|sprites|PVS|geometry|things:' "$out/$tag/build.log" | tail -12 || true
+            echo "::endgroup::"
+          }
+          build CONTROL ""
+          build O3 "-O3"
+          build PATH "-DDREAD_OPT_PATH_COMPRESS"
+          build ALL "-O3 -DDREAD_OPT_PATH_COMPRESS"
+          printf '%s\n' "CONTROL = unchanged renderer, menu shadow box corrected" \
+            "O3 = compiler -O3" \
+            "PATH = alternate union-find path compression" \
+            "ALL = O3 + PATH" \
+            "Each name is included in filename, ROM header and opening screen." \
+            "All four ROMs use the same graphics, map conversion, video and menu settings." \
+            "Only compare FPS from identical benchmark routes." > "$out/README.txt"
+      - name: Run matching benchmark on every ROM
+        shell: bash
+        run: |
+          set -u
+          export ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line"
+          export NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          for tag in CONTROL O3 PATH ALL; do
+            echo "::group::Benchmark $tag"
+            COLB=1 timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py \
+              "$OUT/DREAD-D01-FPS-$tag.bin" "$OUT/$tag/EPISODE.elf" "$OUT/bench-$tag" \
+              > "$OUT/bench-$tag.log" 2>&1
+            code=$?
+            echo "$tag benchmark exit=$code"
+            tail -25 "$OUT/bench-$tag.log" || true
+            echo "::endgroup::"
+          done
+          exit 0
+      - name: Package ROMs and performance evidence
+        if: always()
+        shell: bash
+        run: |
+          if test -n "${OUT:-}" && test -d "$OUT"; then
+            python3 - "$OUT" <<'PY'
+          import sys,zipfile,pathlib
+          p=pathlib.Path(sys.argv[1])
+          with zipfile.ZipFile(p/"DREAD-D01-FPS-MATRIX.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for pattern in ("DREAD-D01-FPS-*.bin","README.txt","SHA256SUMS.txt","bench-*.log","bench-*/*.json"):
+                  for f in sorted(p.glob(pattern)):
+                      if f.is_file(): z.write(f,f.relative_to(p))
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DREAD-D01-FPS-MATRIX
+          path: ${{ env.OUT }}/DREAD-D01-FPS-MATRIX.zip
+          if-no-files-found: warn
