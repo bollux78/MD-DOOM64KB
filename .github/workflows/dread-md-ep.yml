@@ -1,0 +1,49 @@
+name: DREAD-MD episode (Doom shareware E1, combat)
+on:
+  push:
+    branches: [exp-dread-md-d01-claudio]
+    paths:
+      - 'experiments/DREAD_MD/**'
+      - '.github/workflows/dread-md-ep.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+  BLASTEM: /home/dan/Projetos/blastem64-1.0.0/blastem
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the episode ROM (9 maps, combat)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$WAD"
+          gdk=""
+          for d in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "/opt/sgdk"; do
+            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
+          done
+          test -n "$gdk"
+          export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
+          out="$HOME/Projetos/Personal/dread-md/ep-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"; echo "OUT=$out" >> "$GITHUB_ENV"
+          DREAD_COMBAT=1 bash experiments/DREAD_MD/d01/tools/build_map.sh "$WAD" EPISODE "$out" 'DREAD MD COMBATE CLAUDIO' 2>&1 | grep -vE "^(m68k|java|  CC|gcc)" | grep -iE "palette|textures|sprites|PVS|geometry|things|music|map E|excede|error|Error|ROM" | head -60
+          ls -l "$out"
+          python3 -c "import zipfile,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+'/dread-md-episodio.zip','w',zipfile.ZIP_DEFLATED); z.write(o+'/EPISODE.bin','dread-md-episodio.bin'); z.close()" "$out"
+      - name: BlastEm bench (E1M1 route)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
+          COLB=1 ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/EPISODE.bin" "$OUT/EPISODE.elf" "$OUT/bench" | sed "s/^/[ep] /" || echo "::warning::bench failed"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dread-md-episode
+          path: |
+            ${{ env.OUT }}/*.zip
+            ${{ env.OUT }}/bench/*
