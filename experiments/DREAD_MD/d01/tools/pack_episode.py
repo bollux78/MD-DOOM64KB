@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Link one set of converted maps into an episode with shared graphics and packed PVS."""
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -127,7 +128,11 @@ def main():
         if len(nodes) != nsub*nw or len(subs) != nsub*sw:
             raise ValueError(f"{path}: PVS size mismatch")
         sizes["visibility"] += len(nodes)+len(subs)
-        offsets = [pvs.add(pvs_encode(nodes[j*nw:(j+1)*nw] + subs[j*sw:(j+1)*sw])) for j in range(nsub)]
+        # Optional direct ROM table: raw per-subsector bitsets eliminate
+        # decoding/copying at render time. Keep this selectable by build variant.
+        raw_pvs = os.environ.get("DREAD_PVS_RAW") == "1"
+        offsets = [pvs.add((lambda row: row if raw_pvs else pvs_encode(row))(
+            nodes[j*nw:(j+1)*nw] + subs[j*sw:(j+1)*sw])) for j in range(nsub)]
         out.append(array(f"ep{i}_pvs", offsets, "uint32_t"))
         # The renderer uses the segment length, but never reads its linedef ID.
         data["map_segs"] = re.sub(r"\{((?:-?\d+,){10})-?\d+,(-?\d+)\}",
