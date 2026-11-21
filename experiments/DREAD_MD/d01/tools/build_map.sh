@@ -36,21 +36,31 @@ if [[ "$map" == EPISODE ]]; then
     [[ -z "$geometry_flag" ]] || exit 2
     render_flags="-DDREAD_EPISODE"
     if [[ ${DREAD_COMBAT:-0} == 1 ]]; then render_flags+=" -DDREAD_COMBAT"; fi
+    read -r -a episode_numbers <<< "${DREAD_EP_MAPS:-1 2 3 4 5 6 7 8 9}"
+    [[ "${#episode_numbers[@]}" -gt 0 ]] || exit 2
+    declare -A selected_numbers=()
+    for n in "${episode_numbers[@]}"; do
+        [[ "$n" =~ ^[1-9]$ && -z ${selected_numbers[$n]:-} ]] || exit 2
+        selected_numbers[$n]=1
+    done
+    if [[ ${DREAD_SRAM_TEST:-0} == 1 ]]; then
+        render_flags+=" -DDREAD_SRAM_TEST -DDREAD_NO_MUSIC -DSTART_MUSIC=0"
+    fi
     levels=()
     if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
-        for n in {1..9}; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
+        for n in "${episode_numbers[@]}"; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
     else
         palette="$stage/palette.json"
         mkdir -p "$stage/palette"
         # one palette for the whole episode: colour samples of every map (walls, flats, sky, sprites), one fit
         samples=()
-        for n in {1..9}; do
+        for n in "${episode_numbers[@]}"; do
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$stage/palette" --row-only --collect-items "$stage/palette/E1M$n.npz" > /dev/null
             samples+=("$stage/palette/E1M$n.npz")
         done
         python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
-        for n in {1..9}; do
-            level="$stage/E1M$n"
+        for n in "${episode_numbers[@]}"; do
+            level="${DREAD_CACHE_MAPS:-$stage}/E1M$n"
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
             cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
                "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
@@ -59,9 +69,11 @@ if [[ "$map" == EPISODE ]]; then
         done
     fi
     python3 "$source_dir/tools/pack_episode.py" "$stage/src" "${levels[@]}"
-    python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
-    python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
-    title_flags=
+    if [[ ${DREAD_SRAM_TEST:-0} != 1 ]]; then
+        python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
+        python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
+        title_flags=
+    fi
 else
     python3 "$source_dir/tools/conv.py" "$wad" "$map" "$stage/src" "${convert_flags[@]}"
     cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$stage/src" -o "$stage/pvsgen" \
@@ -84,7 +96,7 @@ sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$st
 # toolchain: PREFIX=m68k-elf- from PATH, or DREAD_TC=/path/m68k-elf- (e.g. the CI runner's marsdev toolchain)
 tc=${DREAD_TC:-m68k-elf-}
 mk=(GDK="$GDK" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" JAVA=java)
-if [[ "$map" == EPISODE ]]; then
+if [[ "$map" == EPISODE && ${DREAD_SRAM_TEST:-0} != 1 ]]; then
     make -C "$stage" -f makefile.gen "${mk[@]}" out/res/music.o 2>/dev/null \
       || make -C "$stage" -f makefile.gen "${mk[@]}" out/release/res/music.o 2>/dev/null || true
 fi
@@ -97,6 +109,21 @@ size=$(stat -c %s "$rom")
 if (( size > 4194304 )); then
     echo "$map excede 4 MiB: $size bytes" >&2
     exit 1
+fi
+if [[ ${DREAD_SRAM_TEST:-0} == 1 ]]; then
+    if (( size > 2097152 )); then
+        echo "SRAM test exceeds 2 MiB: $size bytes" >&2
+        exit 1
+    fi
+    python3 - "$rom" <<'HEADER'
+import struct, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = bytearray(p.read_bytes())
+data[0x1B0:0x1BC] = b"RA" + struct.pack(">HII", 0xF820, 0x200000, 0x20FFFF)
+struct.pack_into(">H", data, 0x18E, sum(struct.unpack(">%dH" % ((len(data)-512)//2), data[512:])) & 0xFFFF)
+p.write_bytes(data)
+HEADER
 fi
 cp "$rom" "$out/$map.bin"
 cp "$elf" "$out/$map.elf"

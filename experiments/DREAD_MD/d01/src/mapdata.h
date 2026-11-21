@@ -114,7 +114,7 @@ typedef struct {
 } DreadMap;
 extern const DreadMap *dread_map;
 extern const DreadMap episode_maps[];
-extern const uint16_t episode_map_count;
+extern const uint16_t episode_map_count, episode_map_numbers[];
 extern const uint8_t episode_pvs[];
 extern const uint8_t *const tex_columns[];
 #ifndef DREAD_EPISODE_DATA

@@ -48,7 +48,32 @@ static uint16_t nbuf, tile_fb1, nt1, view_trows, mode;
 #define TILE_FB1   tile_fb1
 #define NT1        nt1
 
-static uint8_t fbuf[FB_MAX];        /* view name table rows with per-tile palettes */
+static uint8_t fbuf_ram[FB_MAX];
+static uint8_t *fb_base = fbuf_ram;        /* view name table rows with per-tile palettes */
+#ifdef DREAD_SRAM_TEST
+/* One probe word is restored so a previously used cartridge keeps its contents. */
+volatile uint16_t sram_kind, sram_active;
+static void detect_sram(void)
+{
+    volatile uint16_t *const probe = (volatile uint16_t *)0x200000;
+    SYS_disableInts();
+    /* SGDK disables cartridge SRAM at startup. This ROM ends below its window. */
+    SRAM_enable();
+    const uint16_t saved = *probe;
+    *probe = 0x55AA;
+    const uint16_t a = *probe;
+    *probe = 0xA55A;
+    const uint16_t b = *probe;
+    *probe = saved;
+    sram_kind = a == 0x55AA && b == 0xA55A ? 16
+              : (a & 255) == 0xAA && (b & 255) == 0x5A ? 8 : 0;
+#ifndef DREAD_SRAM_CONTROL
+    sram_active = sram_kind == 16;
+#endif
+    fb_base = sram_active ? (uint8_t *)0x200000 : fbuf_ram;
+    SYS_enableInts();
+}
+#endif
 volatile uint16_t vints;
 static const uint8_t *volatile dma_src;   /* buffer being sent, 0 = idle (the POINTER is volatile) */
 static volatile uint16_t dma_pos;
@@ -117,14 +142,17 @@ static void set_mode(uint16_t m)
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     view_trows = VIEW_H / 8;
     nbuf = colb == 2 ? 1 : 2;
-    tile_fb1 = nbuf == 2 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
-    nt1 = nbuf == 2 ? 0xA000 : 0xE000;
+#ifdef DREAD_SRAM_TEST
+    if (sram_active) nbuf = 2;
+#endif
+    tile_fb1 = colb == 1 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
+    nt1 = colb == 1 ? 0xA000 : 0xE000;
     /* palette 0: the view */
     *(volatile uint32_t *)0xC00004 = 0xC0000000UL;
     for (int i = 0; i < 16; i++) *(volatile uint16_t *)0xC00000 = md_palette[0][i];
     /* name tables: view rows point at the framebuffer tiles, column-major */
     for (int b = 0; b < 2; b++) {
-        const uint16_t nt = b ? 0xA000 : NT0, base = (b && nbuf == 2) ? TILE_FB1 : TILE_FB0;
+        const uint16_t nt = b ? 0xA000 : NT0, base = (b && colb == 1) ? TILE_FB1 : TILE_FB0;
         for (int ty = 0; ty < 32; ty++) {
             vram_cmd(nt + ty * 128);
             for (int tx = 0; tx < 64; tx++) {
@@ -140,6 +168,8 @@ static void set_mode(uint16_t m)
     *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
     shown = 0; cur_buf = 0;
     hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
+    /* A mode switch can happen while the line-mode VBlank has blanked the display. */
+    *(volatile uint16_t *)0xC00004 = hint_r1on;
     hint_on = colb == 1;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
@@ -389,7 +419,12 @@ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
 {
     SYS_disableInts();
     VDP_clearPlane(BG_A, TRUE);
+    #ifndef DREAD_TEXT_TITLE
     VDP_setHilightShadow(screen != TITLE_ART);
+#else
+    VDP_setHilightShadow(FALSE);
+    PAL_setColor(63, 0x0EEE);
+#endif
     VDP_setTextPalette(PAL3);
     VDP_setTextPriority(TRUE);
     if (screen == TITLE_ART) {
@@ -397,12 +432,12 @@ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
     } else {
         const bool levels = screen == TITLE_LEVELS;
         const char *const *items = levels ? title_levels : title_items;
-        const uint16_t count = levels ? sizeof(title_levels) / sizeof(*title_levels)
+        const uint16_t count = levels ? episode_map_count
                                       : sizeof(title_items) / sizeof(*title_items);
         const uint16_t x = levels ? 8 : 14, y = levels ? 10 : 13;
         if (levels) VDP_drawTextBG(BG_A, "SELECT LEVEL", 14, 8);
         for (uint16_t i = 0; i < count; i++)
-            VDP_drawTextBG(BG_A, items[i], x, y + i);
+            VDP_drawTextBG(BG_A, (levels ? title_levels[episode_map_numbers[i] - 1] : items[i]), x, y + i);
         VDP_drawTextBG(BG_A, ">", x - 2, y + cursor);
         VDP_drawTextBG(BG_A, "A / START: OK    B: BACK", 8, 22);
     }
@@ -411,9 +446,36 @@ static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
 
 static void title(void)
 {
+#ifdef DREAD_SRAM_TEST
+    VDP_setTextPalette(PAL0);
+    VDP_drawText(ROM_NAME, 1, 4);
+    VDP_drawText("TESTE A: FRAMEBUFFER RAM / SRAM", 1, 7);
+#ifdef DREAD_SRAM_CONTROL
+    VDP_drawText("CONTROLE: SEMPRE USA WRAM", 1, 9);
+#else
+    VDP_drawText("AUTO: USA SRAM SO SE FOR 16 BITS", 1, 9);
+#endif
+    VDP_drawText("E1M1 / E1M2 / E1M8", 1, 11);
+    VDP_drawText("START: MENU  B: BENCHMARK E1M1", 1, 15);
+    VDP_drawText("aperte START ou aguarde 15 segundos", 1, 18);
+    const uint16_t t0 = vints;
+    while ((uint16_t)(vints - t0) < 15 * 60 && !bench_req) {
+        JOY_update();
+        const uint16_t joy = JOY_readJoypad(JOY_1);
+        if (joy & BUTTON_B) { bench_req = 1; break; }
+        if (joy & BUTTON_START) break;
+    }
+    while (!bench_req) {
+        JOY_update();
+        if (!(JOY_readJoypad(JOY_1) & (BUTTON_START | BUTTON_B))) break;
+    }
+    VDP_clearPlane(BG_A, TRUE);
+    enum TitleScreen screen = TITLE_MENU;
+#else
     enum TitleScreen screen = TITLE_ART;
-    uint16_t cursor = 0, previous = 0;
     HUD_ShowOpening();
+#endif
+    uint16_t cursor = 0, previous = 0;
     draw_title_menu(screen, cursor);
     while (!bench_req) {
         const uint16_t frame = vints;
@@ -442,7 +504,7 @@ static void title(void)
             cursor = 0;
         } else if (pressed & (BUTTON_UP | BUTTON_DOWN)) {
             const uint16_t count = screen == TITLE_LEVELS
-                ? sizeof(title_levels) / sizeof(*title_levels)
+                ? episode_map_count
                 : sizeof(title_items) / sizeof(*title_items);
             cursor = (cursor + ((pressed & BUTTON_UP) ? count - 1 : 1)) % count;
         } else continue;
@@ -452,7 +514,12 @@ static void title(void)
         JOY_update();
         if (!(JOY_readJoypad(JOY_1) & (BUTTON_START | BUTTON_A | BUTTON_C))) break;
     }
+#ifdef DREAD_TEXT_TITLE
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_setAutoInc(2);
+#else
     HUD_ClearOpening();
+#endif
 }
 #else
 static void title(void)
@@ -550,6 +617,9 @@ int main(bool hard)
 #ifndef DREAD_NO_MUSIC
     XGM2_loadDriver(TRUE);
     if (music_on) XGM2_play(bgm_intro);
+#endif
+#ifdef DREAD_SRAM_TEST
+    detect_sram();
 #endif
     title();
     start_level();
@@ -695,13 +765,18 @@ int main(bool hard)
 #ifdef DREAD_EPISODE
             const uint16_t secret = exit_req == 2;
             char msg[32];
-            sprintf(msg, "E1M%u CONCLUIDA", selected_map + 1);
+            sprintf(msg, "E1M%u CONCLUIDA", episode_map_numbers[selected_map]);
             HUD_Text(1, msg);
             const uint16_t t0 = vints;
             while ((uint16_t)(vints - t0) < 120) {}
             HUD_Text(1, "");
-            if (selected_map == 7) SYS_hardReset();     /* end of the episode: back to the title */
-            selected_map = secret ? 8 : (selected_map == 8 ? 3 : selected_map + 1);
+            const uint16_t current_map = episode_map_numbers[selected_map];
+            if (current_map == 8) SYS_hardReset();
+            const uint16_t next_map = secret ? 9 : (current_map == 9 ? 4 : current_map + 1);
+            uint16_t next = 0;
+            while (next < episode_map_count && episode_map_numbers[next] != next_map) next++;
+            if (next == episode_map_count) SYS_hardReset();
+            selected_map = next;
             start_level(); place_player();
 #ifndef DREAD_NO_MUSIC
             if (music_on) XGM2_play(MAP_MUSIC);
@@ -714,7 +789,7 @@ int main(bool hard)
         }
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
         if (NBUF == 1) while (dma_src) {}   /* one buffer: the previous frame must be out first */
-        uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);
+        uint8_t *const fb = fb_base + (cur_buf ? FB_BYTES : 0);
         R_RenderView(&view, fb);
         if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
@@ -726,7 +801,13 @@ int main(bool hard)
         if (++fps_n == 16) {
             const uint16_t dv = vints - fps_v0; fps_v0 = vints; fps_n = 0;
             const uint16_t f10 = dv ? (uint16_t)(16UL * 600 / dv) : 0;
+#ifdef DREAD_SRAM_TEST
+            sprintf(txt, "%s %uB N%u FPS %2u.%u SEG %3u",
+                    sram_active ? "SRAM" : "WRAM", sram_kind, NBUF,
+                    f10 / 10, f10 % 10, frame_segs);
+#else
             sprintf(txt, "FPS %2u.%u  SEGS %3u ", f10 / 10, f10 % 10, frame_segs);
+#endif
             HUD_Text(0, txt);
         }
         if (bench_done == 1) {

@@ -50,3 +50,32 @@ arte do D01, com fundo escurecido e texto branco enquanto o menu está aberto.
 `DREAD_PREPARED_MAPS` permite reaproveitar uma conversão offline. Os nove
 subdiretórios devem vir do mesmo WAD e da mesma paleta, cada um contendo
 `mapdata.c` e `pvs.c`.
+
+## Teste A de SRAM
+
+`DREAD_EP_MAPS="1 2 8"` seleciona as fases, na ordem do menu.
+`DREAD_SRAM_TEST=1` gera o diagnóstico inicial, remove a arte de abertura
+e a música e exige que o binário final caiba em 2 MiB.
+`DREAD_CACHE_MAPS` guarda as conversões para as builds seguintes.
+
+```sh
+GDK=/caminho/sgdk bash experiments/DREAD_MD/d01/tools/build_sram_tests.sh \
+    /caminho/doom1.wad /home/dan/Projetos/Personal/dread-md/sram
+```
+
+São quatro ROMs jogáveis com E1M1, E1M2 e E1M8. Cada uma inicia em linhas ou
+colunas, em modo AUTO ou CONTROL. AUTO usa o framebuffer em SRAM quando as
+duas palavras da sondagem confirmam 16 bits. CONTROL força o framebuffer em
+WRAM. Ausência de SRAM ou SRAM de 8 bits selecionam WRAM em ambas.
+
+O SGDK desabilita SRAM na inicialização, portanto o teste faz uma habilitação
+única antes da sondagem. A ROM inteira termina abaixo de 0x200000.
+A janela fica habilitada durante o teste. O endereço da palavra de sondagem
+é restaurado, e AUTO passa a usar a janela como memória temporária quando
+detecta 16 bits. O controlador do cartucho precisa suportar essa largura.
+
+O modo colunas ganha dois buffers de CPU na SRAM, mantendo um único buffer
+na VRAM. Duas cópias de 23.040 bytes na VRAM ultrapassariam a área dos tiles
+do HUD. O comportamento de upload do modo colunas é o mesmo do D01.
+O número N1/N2 na linha de diagnóstico identifica os buffers de CPU.
+As entradas de mapa ausentes voltam à abertura após uma saída de fase.

@@ -1,0 +1,107 @@
+diff --git a/core/cart_hw/sram.c b/core/cart_hw/sram.c
+index b4d7d06..a7c6d9b 100644
+--- a/core/cart_hw/sram.c
++++ b/core/cart_hw/sram.c
+@@ -257,22 +257,38 @@ void sram_init(void)
+   }
+ }
+ 
++unsigned int retro_sram_block;
++unsigned long long retro_sram_counts[4];
+ unsigned int sram_read_byte(unsigned int address)
+ {
++  retro_sram_counts[0]++;
++  if (retro_sram_block == 1 || (retro_sram_block == 2 && !(address & 1))) return 0xff;
++
+   return sram.sram[address & 0xffff];
+ }
+ 
+ unsigned int sram_read_word(unsigned int address)
+ {
++  retro_sram_counts[1]++;
++  if (retro_sram_block == 1) return 0xffff;
++  if (retro_sram_block == 2) return 0xff00 | sram.sram[(address | 1) & 0xffff];
++
+   return READ_WORD(sram.sram, address & 0xfffe);
+ }
+ 
+ void sram_write_byte(unsigned int address, unsigned int data)
+ {
++  retro_sram_counts[2]++;
++  if (retro_sram_block == 1 || (retro_sram_block == 2 && !(address & 1))) return;
++
+   sram.sram[address & 0xffff] = data;
+ }
+ 
+ void sram_write_word(unsigned int address, unsigned int data)
+ {
++  retro_sram_counts[3]++;
++  if (retro_sram_block == 1) return;
++  if (retro_sram_block == 2) { sram.sram[(address | 1) & 0xffff] = data; return; }
++
+   WRITE_WORD(sram.sram, address & 0xfffe, data);
+ }
+diff --git a/core/vdp_ctrl.c b/core/vdp_ctrl.c
+index b321afc..53815df 100644
+--- a/core/vdp_ctrl.c
++++ b/core/vdp_ctrl.c
+@@ -124,6 +124,9 @@ static void vdp_z80_data_w_gg(unsigned int data);
+ static void vdp_z80_data_w_sg(unsigned int data);
+ static void vdp_bus_w(unsigned int data);
+ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles);
++extern unsigned int retro_trace_frame;
++unsigned int retro_trace_active, retro_trace_dmas, retro_trace_regs;
++unsigned int retro_trace_dma[32768][6], retro_trace_reg[16384][4];
+ static void vdp_dma_68k_ext(unsigned int length);
+ static void vdp_dma_68k_ram(unsigned int length);
+ static void vdp_dma_68k_io(unsigned int length);
+@@ -885,6 +888,13 @@ void vdp_68k_ctrl_w(unsigned int data)
+             /* DMA source address */
+             dma_src = (reg[22] << 8) | reg[21];
+ 
++            if (retro_trace_active && retro_trace_dmas < 32768)
++            {
++              unsigned int *event = retro_trace_dma[retro_trace_dmas++];
++              event[0] = retro_trace_frame; event[1] = m68k.cycles;
++              event[2] = (reg[23] << 17) | (dma_src << 1);
++              event[3] = addr; event[4] = dma_length; event[5] = code;
++            }
+             /* Transfer from SVP ROM/RAM ($000000-$3fffff) or CD Word-RAM ($200000-$3fffff/$600000-$7fffff) */
+             if (((system_hw == SYSTEM_MCD) && ((reg[23] & 0x70) == ((scd.cartridge.boot >> 1) + 0x10))) || (svp && !(reg[23] & 0x60)))
+             {
+@@ -1546,6 +1556,12 @@ int vdp_68k_irq_ack(int int_level)
+ 
+ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
+ {
++  if (retro_trace_active && r == 2 && retro_trace_regs < 16384)
++  {
++    unsigned int *event = retro_trace_reg[retro_trace_regs++];
++    event[0] = retro_trace_frame; event[1] = cycles; event[2] = r; event[3] = d;
++  }
++
+ #ifdef LOGVDP
+   error("[%d(%d)][%d(%d)] VDP register %d write -> 0x%x (%x)\n", v_counter, (v_counter + (cycles - mcycles_vdp)/MCYCLES_PER_LINE)%lines_per_frame, cycles, cycles%MCYCLES_PER_LINE, r, d, m68k_get_reg(M68K_REG_PC));
+ #endif
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 3e63862..5f86690 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -3742,8 +3742,18 @@ void retro_reset(void)
+    gen_reset(0);
+ }
+ 
++unsigned int retro_trace_frame;
++unsigned int retro_trace_hardware(void) { return system_hw; }
++unsigned int retro_trace_sraminfo(unsigned int i) {
++ switch(i) {
++ case 0: return sram.type; case 1: return sram.on; case 2: return sram.start; case 3: return sram.end;
++ case 4: return (m68k.memory_map[0x20].read16 == sram_read_word);
++ default: return sram.detected;
++ }
++}
+ void retro_run(void) 
+ {
++  retro_trace_frame++;
+    int do_skip = 0;
+    bool updated = false;
+    int vwoffset = 0;

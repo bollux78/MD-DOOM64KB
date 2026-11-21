@@ -146,6 +146,7 @@ def main():
                 "const uint8_t *const tex_columns[] = {" + ",".join(f"tex_blob+{o}" for o in columns) + "};",
                 "const DreadMap episode_maps[] = {" + ",\n".join(definitions) + "};",
                 f"const uint16_t episode_map_count = {len(maps)};",
+                array("episode_map_numbers", [int(path.name.removeprefix("E1M")) for path in maps], "uint16_t", storage=""),
                 "const DreadMap *dread_map = episode_maps;"))
     target.mkdir(parents=True, exist_ok=True)
     (target/"episode.c").write_text("\n".join(out)+"\n")
