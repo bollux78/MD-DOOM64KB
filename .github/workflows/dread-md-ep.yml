@@ -37,6 +37,7 @@ jobs:
           ls -l "$out"
           "$HOME/mars/m68k-elf/bin/m68k-elf-size" -A "$out/EPISODE.elf" | grep -E "^\.(data|bss)"
           "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -S --size-sort "$out/EPISODE.elf" | grep -iE " [bBdD] " | tail -25
+          DREAD_EXTRA_FLAGS="-DCOMBAT_TEST" DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" DREAD_COMBAT=1 bash experiments/DREAD_MD/d01/tools/build_map.sh "$WAD" EPISODE "$out/test" 'DREAD MD TESTE COMBATE' > "$out/build-test.log" 2>&1 || { tail -30 "$out/build-test.log"; exit 1; }
           python3 -c "import zipfile,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+'/dread-md-episodio.zip','w',zipfile.ZIP_DEFLATED); z.write(o+'/EPISODE.bin','dread-md-episodio.bin'); z.close()" "$out"
       - name: BlastEm bench (E1M1 route)
         shell: bash
@@ -49,4 +50,6 @@ jobs:
           name: dread-md-episode
           path: |
             ${{ env.OUT }}/*.zip
+            ${{ env.OUT }}/EPISODE.elf
+            ${{ env.OUT }}/test/EPISODE.bin
             ${{ env.OUT }}/bench/*

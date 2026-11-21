@@ -544,6 +544,23 @@ int main(bool hard)
     static const uint8_t weap_seq[4][2] = { {1, 10}, {2, 7}, {3, 8}, {0, 0} };   /* frame, vblanks (Doom 6/4/5 tics) */
 
     place_player();
+#ifdef COMBAT_TEST
+    {   /* test builds: start 160 units in front of the first monster, facing it */
+        for (uint16_t i = 0; i < map_nthings; i++) if (map_things[i].flags & THING_MONSTER) {
+            const MapThing *t = &map_things[i];
+            static const int16_t ox[4] = {160, 0, -160, 0}, oy[4] = {0, 160, 0, -160};
+            for (int k = 0; k < 4; k++) {
+                const int16_t x = t->x + ox[k], y = t->y + oy[k];
+                if (blocked(x, y)) continue;
+                view.x = (int32_t)x << 16; view.y = (int32_t)y << 16;
+                view.angle = (uint16_t)(((k + 2) & 3) * 16384);
+                view.z = map_sectors[map_subs[R_PointInSub(x, y)].sector].floor + 41;
+                break;
+            }
+            break;
+        }
+    }
+#endif
 
     uint16_t last = vints, fps_v0 = vints, fps_n = 0;
     uint16_t script_i = 0, script_t = 0;
@@ -635,6 +652,13 @@ int main(bool hard)
                 continue;
             }
             if (health != hud.health || armor != hud.armor) HUD_Draw(&hud);
+#ifdef COMBAT_TEST
+            if ((vints & 31) == 0) {
+                char t[40];
+                sprintf(t, "W%u H%u K%u A%u HP%u", combat_wakes, combat_hits, combat_kills, combat_attacks, hud.health);
+                HUD_Text(1, t);
+            }
+#endif
         }
 #endif
         if (exit_req) {                                 /* level done: next map (E1M8 ends the episode) */
