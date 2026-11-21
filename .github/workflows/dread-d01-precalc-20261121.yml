@@ -5,6 +5,7 @@ on:
     paths:
       - 'experiments/DREAD_MD/d01/**'
       - '.github/workflows/dread-d01-precalc-20261121.yml'
+      - 'scripts/lab/bootstrap_marsdev.sh'
   workflow_dispatch:
 permissions:
   contents: read
