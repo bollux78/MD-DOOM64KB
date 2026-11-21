@@ -229,7 +229,7 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 
 void R_Init(void)
 {
-#if defined(DREAD_EPISODE) && !defined(PVS_GEN)
+#if defined(DREAD_EPISODE) && !defined(PVS_GEN) && !defined(DREAD_PVS_RAW)
     cached_pvs_sub = 0xFFFF;
 #endif
 #ifndef COLB0
