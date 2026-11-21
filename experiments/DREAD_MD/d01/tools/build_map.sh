@@ -77,14 +77,16 @@ fi
 python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 python3 "$source_dir/tools/gen_tables.py" "$stage/src/tables.c"
 sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$stage/makefile.gen"
+# toolchain: PREFIX=m68k-elf- from PATH, or DREAD_TC=/path/m68k-elf- (e.g. the CI runner's marsdev toolchain)
+tc=${DREAD_TC:-m68k-elf-}
+mk=(GDK="$GDK" OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" JAVA=java)
 if [[ "$map" == EPISODE ]]; then
-    make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java out/res/music.o 2>/dev/null \
-      || make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java res/music.h 2>/dev/null \
-      || (cd "$stage" && java -jar "$GDK/bin/rescomp.jar" res/music.res res/music.s -dep out/res/music.o >/dev/null) || true
+    make -C "$stage" -f makefile.gen "${mk[@]}" out/res/music.o 2>/dev/null \
+      || make -C "$stage" -f makefile.gen "${mk[@]}" out/release/res/music.o 2>/dev/null || true
 fi
-make -C "$stage" -f makefile.gen -j3 release GDK="$GDK" PREFIX=m68k-elf- JAVA=java \
+make -C "$stage" -f makefile.gen -j3 release "${mk[@]}" \
     EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag $title_flags $render_flags -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
-    LIBGCC="$(m68k-elf-gcc -m68000 -print-libgcc-file-name) -lgcc"
+    LIBGCC="$(${tc}gcc -m68000 -print-libgcc-file-name) -lgcc"
 size=$(stat -c %s "$stage/out/rom.bin")
 if (( size > 4194304 )); then
     echo "$map excede 4 MiB: $size bytes" >&2
