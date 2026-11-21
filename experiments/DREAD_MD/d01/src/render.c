@@ -134,9 +134,9 @@ static void col_fill(uint8_t *p, uint16_t n, uint16_t c)
 { for (; n; n--) { p[0] = (uint8_t)c; if (COLB == 2) p[1] = (uint8_t)c; p += 4; } }
 /* draws bottom-up like the 68000 version: vbot = v of the last row, negstep = -vstep */
 static void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep, uint16_t hmask)
-{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[((uint16_t)(v >> 16) & hmask) * COLB]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
+{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[((uint16_t)(v >> 16) & hmask)]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 static void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep)
-{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[(uint16_t)(v >> 16) * COLB]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
+{ p += (n - 1) * 4; for (; n; n--) { p[0] = tc[(uint16_t)(v >> 16)]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 #endif
 
 /* signed 32 x small signed 16 (|k| <= 255) */
@@ -174,7 +174,7 @@ uint16_t r_colofs[VW_MAX];
 extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
 extern const uint32_t scal_b[], scal_w[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
-uint16_t r_tmk_sz, r_tsh;
+uint16_t r_tmk_sz, r_tsh, r_ssh;
 #endif
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
@@ -199,9 +199,10 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 #if defined(__m68k__) || defined(__mc68000__)
     r_fill_end = colb == 2 ? fillw_end : fillb_end;
     r_tmk_end = colb == 2 ? tmkw_end : tmkb_end;
-    r_tmk_sz = colb == 2 ? 16 : 14;
+    r_tmk_sz = colb == 2 ? 20 : 14;                  /* masked cores: bytes of code per row */
     r_scal = colb == 2 ? scal_w : scal_b;
-    r_tsh = colb == 2 ? 1 : 0;
+    r_tsh = 0;                                       /* texels are bytes in every mode */
+    r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
 #endif
 }
 
@@ -483,7 +484,7 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
 #ifdef DREAD_EPISODE
     p->tex = (const uint8_t *)(tex_columns + m->off[bucket]);
 #else
-    p->tex = COLB == 2 ? (const uint8_t *)tex_blob_w + 2 * m->off[bucket] : tex_blob + m->off[bucket];
+    p->tex = tex_blob + m->off[bucket];
 #endif
     p->wmask = (1u << m->wshift) - 1;
 #ifdef DREAD_EPISODE
@@ -492,7 +493,7 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
         p->hs2 = h + (h < EP_TEX_PAD ? h : EP_TEX_PAD);
     }
 #else
-    p->hs2 = m->hshift + 1 + (COLB - 1);         /* columns are stored twice (and as words when COLB = 2) */
+    p->hs2 = m->hshift + 1;                      /* columns are stored twice (bytes in every mode) */
 #endif
     p->hmask = (1u << m->hshift) - 1;
     p->pal = m->pal[bucket];
@@ -518,7 +519,7 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
         const int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
         for (int y = y1 - 1, k = 0; y >= y0; y--, k++) {
             const int32_t v = vbot - zpp * k;
-            const uint8_t b = tc[((uint16_t)(v >> 16) & p->hmask) * COLB];
+            const uint8_t b = tc[((uint16_t)(v >> 16) & p->hmask)];
             col[y << 2] = remap((uint8_t)p->pal, claim(c, y, (uint8_t)p->pal), b);
             if (COLB == 2) col[(y << 2) + 1] = col[y << 2];
         }
@@ -767,7 +768,7 @@ static void draw_sprite(const VisSpr *v)
             if (y0 < top) y0 = top;
             if (y1 > bot) y1 = bot;
 #if defined(__m68k__) || defined(__mc68000__)
-            if (y0 < y1 && COLB == 1 && v->zpp < (32 << 16)) {   /* byte modes: the wall scalers, one move per row */
+            if (y0 < y1 && v->zpp < (32 << 16)) {   /* the wall scalers (column-doubled: two byte moves per row) */
                 const int32_t tv = (int32_t)mulu16((uint16_t)((((int32_t)y0 << 16) - ya) >> 8), (uint16_t)(v->zpp >> 8));
                 int i0 = tv >> 16; if (i0 >= len) i0 = len - 1;
                 spr_scale(col + (y0 << 2) - 4, d + i0, (int16_t)(y1 - y0), (uint16_t)(v->zpp >> 6));

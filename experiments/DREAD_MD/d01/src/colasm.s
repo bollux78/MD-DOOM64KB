@@ -373,6 +373,8 @@ fillw_end:
         move.w  %d5,%d6
         add.w   %d5,%d5
         add.w   %d6,%d5
+        move.w  r_ssh,%d6
+        lsl.w   %d6,%d5                     /* n * 12 in column-doubled modes (two byte moves per row) */
         lea     scal_q,%a4
         moveq   #0,%d4
         move.b  0(%a4,%d3.w),%d4            /* scaler level */
@@ -429,12 +431,14 @@ spr_scale:
         andi.w  #0xFF,%d1
         add.w   %d1,%d1
         add.w   %d1,%d1
-        lea     scal_b,%a2
+        move.l  r_scal,%a2
         move.l  0(%a2,%d1.w),%a2
         add.w   %d0,%d0
         move.w  %d0,%d1
         add.w   %d0,%d0
         add.w   %d1,%d0                     /* n * 6 */
+        move.w  r_ssh,%d1
+        lsl.w   %d1,%d0                     /* n * 12 in column-doubled modes */
         suba.w  %d0,%a2
         jsr     (%a2)
         move.l  (%sp)+,%a2
@@ -461,8 +465,8 @@ tmkw_start:
         .rept   VH_MAX
         move.w  %d1,%d6
         and.w   %d5,%d6
-        add.w   %d6,%d6
-        move.w  0(%a1,%d6.w),k*4(%a0)
+        move.b  0(%a1,%d6.w),k*4(%a0)
+        move.b  0(%a1,%d6.w),k*4+1(%a0)
         add.w   %d4,%d2
         addx.w  %d3,%d1
         .set    k,k-1

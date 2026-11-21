@@ -87,7 +87,7 @@ if [[ "$map" == EPISODE ]]; then
       || make -C "$stage" -f makefile.gen "${mk[@]}" out/release/res/music.o 2>/dev/null || true
 fi
 make -C "$stage" -f makefile.gen -j3 release "${mk[@]}" \
-    EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag $title_flags $render_flags ${DREAD_EXTRA_FLAGS:-} -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
+    EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 $geometry_flag $title_flags $render_flags ${DREAD_EXTRA_FLAGS:-} -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
     LIBGCC="$(${tc}gcc -m68000 -print-libgcc-file-name) -lgcc"
 rom="$stage/out/rom.bin"; [[ -f "$rom" ]] || rom="$stage/out/release/rom.bin"
 elf="$stage/out/rom.out"; [[ -f "$elf" ]] || elf="$stage/out/release/rom.out"

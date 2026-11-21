@@ -548,16 +548,19 @@ int main(bool hard)
     {   /* test builds: start 160 units in front of the first monster, facing it */
         for (uint16_t i = 0; i < map_nthings; i++) if (map_things[i].flags & THING_MONSTER) {
             const MapThing *t = &map_things[i];
-            static const int16_t ox[4] = {160, 0, -160, 0}, oy[4] = {0, 160, 0, -160};
-            for (int k = 0; k < 4; k++) {
-                const int16_t x = t->x + ox[k], y = t->y + oy[k];
-                if (blocked(x, y)) continue;
+            static const int16_t ox[4] = {1, 0, -1, 0}, oy[4] = {0, 1, 0, -1};
+            const uint16_t msec = map_subs[t->sub].sector;
+            int found = 0;
+            for (int16_t dist = 192; dist >= 64 && !found; dist -= 32)
+            for (int k = 0; k < 4 && !found; k++) {
+                const int16_t x = t->x + ox[k] * dist, y = t->y + oy[k] * dist;
+                if (blocked(x, y) || map_subs[R_PointInSub(x, y)].sector != msec) continue;
+                found = 1;
                 view.x = (int32_t)x << 16; view.y = (int32_t)y << 16;
                 view.angle = (uint16_t)(((k + 2) & 3) * 16384);
                 view.z = map_sectors[map_subs[R_PointInSub(x, y)].sector].floor + 41;
-                break;
             }
-            break;
+            if (found) break;
         }
     }
 #endif
