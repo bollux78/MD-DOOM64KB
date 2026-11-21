@@ -17,7 +17,7 @@ extern const uint32_t title_tiles[];
 #define TILE_HUD    1024                       /* 0x8000: bar tiles, then the 16-tile face slot */
 #define TILE_FACE   (TILE_HUD + HUDW_NTILES)
 #define TILE_WEAP   848                        /* right after the framebuffer tiles (128 + 720); up to 176 tiles before the HUD at 1024 */
-#define TILE_TITLE  112                        /* after the SGDK font; 1412 tiles end below 0xC000 */
+#define TILE_TITLE  112                        /* the opening tiles end below the SGDK font at the top of tile VRAM */
 #define BGB         0xC000                     /* SGDK 2.x plane B */
 #define BGA         0xE000
 #define SLIST       0xF400
@@ -38,12 +38,14 @@ static void vram_copy32(uint16_t dst_tile, const uint32_t *src, uint16_t ntiles)
     }
 }
 
-/* ---- opening image (H40, 2 palettes). START (or 8 s) continues. */
-void HUD_Opening(void)
+void HUD_ShowOpening(void)
 {
     SYS_disableInts();
+    VDP_setEnable(FALSE);
     VDP_setScreenWidth320();
-    *(volatile uint16_t *)0xC00004 = 0x8F02;
+    VDP_setHorizontalScroll(BG_A, 0);
+    VDP_setHorizontalScroll(BG_B, 0);
+    VDP_setAutoInc(2);
     cram_set(0, title_pal, 64);
     vram_copy32(TILE_TITLE, title_tiles, title_ntiles);
     for (int plane = 0; plane < 2; plane++) {
@@ -57,7 +59,30 @@ void HUD_Opening(void)
             }
         }
     }
+    VDP_setEnable(TRUE);
     SYS_enableInts();
+}
+
+void HUD_ClearOpening(void)
+{
+    SYS_disableInts();
+    VDP_setEnable(FALSE);
+    VDP_setHilightShadow(FALSE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+#ifdef DREAD_EPISODE
+    /* The opening and gameplay reuse the same pattern memory. */
+    VDP_fillTileData(0, TILE_TITLE, TILE_WEAP - TILE_TITLE, TRUE);
+    VDP_setTextPalette(PAL0);
+#endif
+    VDP_setEnable(TRUE);
+    SYS_enableInts();
+}
+
+/* Standalone demo opening. START (or 8 s) continues. */
+void HUD_Opening(void)
+{
+    HUD_ShowOpening();
     extern volatile uint16_t vints, bench_req;
     const uint16_t t0 = vints;
     while ((uint16_t)(vints - t0) < 8 * 60 && !bench_req) {
@@ -65,12 +90,7 @@ void HUD_Opening(void)
         if (JOY_readJoypad(JOY_1) & BUTTON_START) break;
     }
     while (!bench_req) { JOY_update(); if (!(JOY_readJoypad(JOY_1) & BUTTON_START)) break; }   /* wait release */
-    SYS_disableInts();
-    vram_addr(BGA);
-    for (uint16_t i = 0; i < 64 * 32; i++) vram_w(0);
-    vram_addr(BGB);
-    for (uint16_t i = 0; i < 64 * 32; i++) vram_w(0);
-    SYS_enableInts();
+    HUD_ClearOpening();
 }
 
 /* ---- status bar on plane B rows [row0, row0+4) */

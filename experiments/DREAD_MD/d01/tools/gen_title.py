@@ -21,6 +21,11 @@ for g in groups:
     while len(cols) < 16: cols.append((0, 0, 0))
     pr.append(cols)
     cram += [(lv(c[2]) << 9) | (lv(c[1]) << 5) | (lv(c[0]) << 1) for c in cols]
+menu = "--menu" in sys.argv[2:]
+if menu:
+    # SGDK's font uses ink 15. Palette 3 shares its last entry with the menu.
+    pr[3][15] = (255, 255, 255)
+    cram[63] = 0x0EEE
 mapb, words = [], []
 for ty in range(28):
     for tx in range(40):

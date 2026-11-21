@@ -327,27 +327,94 @@ static void menu(void)
 #ifdef DREAD_NO_MUSIC
 static uint16_t selected_map;
 #endif
-static void show_selected(void)
-{
-    char line[32];
-    sprintf(line, "MAPA: E1M%u", selected_map + 1);
-    VDP_drawText(line, 4, 11);
-}
-#endif
 
+enum TitleScreen { TITLE_ART, TITLE_MENU, TITLE_LEVELS };
+enum TitleChoice { TITLE_NEW_GAME, TITLE_SELECT_LEVEL, TITLE_BENCHMARK };
+
+static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL", "BENCHMARK" };
+static const char *const title_levels[] = {
+    "E1M1  HANGAR", "E1M2  NUCLEAR PLANT", "E1M3  TOXIN REFINERY",
+    "E1M4  COMMAND CONTROL", "E1M5  PHOBOS LAB", "E1M6  CENTRAL PROCESSING",
+    "E1M7  COMPUTER STATION", "E1M8  PHOBOS ANOMALY", "E1M9  MILITARY BASE"
+};
+
+static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
+{
+    SYS_disableInts();
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_setHilightShadow(screen != TITLE_ART);
+    VDP_setTextPalette(PAL3);
+    VDP_setTextPriority(TRUE);
+    if (screen == TITLE_ART) {
+        VDP_drawTextBG(BG_A, "PRESS START", 14, 23);
+    } else {
+        const bool levels = screen == TITLE_LEVELS;
+        const char *const *items = levels ? title_levels : title_items;
+        const uint16_t count = levels ? sizeof(title_levels) / sizeof(*title_levels)
+                                      : sizeof(title_items) / sizeof(*title_items);
+        const uint16_t x = levels ? 8 : 14, y = levels ? 10 : 13;
+        if (levels) VDP_drawTextBG(BG_A, "SELECT LEVEL", 14, 8);
+        for (uint16_t i = 0; i < count; i++)
+            VDP_drawTextBG(BG_A, items[i], x, y + i);
+        VDP_drawTextBG(BG_A, ">", x - 2, y + cursor);
+        VDP_drawTextBG(BG_A, "A / START: OK    B: BACK", 8, 22);
+    }
+    SYS_enableInts();
+}
+
+static void title(void)
+{
+    enum TitleScreen screen = TITLE_ART;
+    uint16_t cursor = 0, previous = 0;
+    HUD_ShowOpening();
+    draw_title_menu(screen, cursor);
+    while (!bench_req) {
+        const uint16_t frame = vints;
+        while (vints == frame && !bench_req) {}
+        JOY_update();
+        const uint16_t joy = JOY_readJoypad(JOY_1);
+        const uint16_t pressed = joy & ~previous;
+        previous = joy;
+        if (screen == TITLE_ART) {
+            if (!(pressed & (BUTTON_START | BUTTON_A | BUTTON_B | BUTTON_C))) continue;
+            screen = TITLE_MENU;
+        } else if (pressed & BUTTON_B) {
+            cursor = screen == TITLE_LEVELS ? TITLE_SELECT_LEVEL : 0;
+            screen = screen == TITLE_LEVELS ? TITLE_MENU : TITLE_ART;
+        } else if (pressed & (BUTTON_START | BUTTON_A | BUTTON_C)) {
+            if (screen == TITLE_LEVELS) {
+                selected_map = cursor;
+                break;
+            }
+            if (cursor != TITLE_SELECT_LEVEL) {
+                selected_map = 0;
+                bench_req = cursor == TITLE_BENCHMARK;
+                break;
+            }
+            screen = TITLE_LEVELS;
+            cursor = 0;
+        } else if (pressed & (BUTTON_UP | BUTTON_DOWN)) {
+            const uint16_t count = screen == TITLE_LEVELS
+                ? sizeof(title_levels) / sizeof(*title_levels)
+                : sizeof(title_items) / sizeof(*title_items);
+            cursor = (cursor + ((pressed & BUTTON_UP) ? count - 1 : 1)) % count;
+        } else continue;
+        draw_title_menu(screen, cursor);
+    }
+    while (!bench_req) {
+        JOY_update();
+        if (!(JOY_readJoypad(JOY_1) & (BUTTON_START | BUTTON_A | BUTTON_C))) break;
+    }
+    HUD_ClearOpening();
+}
+#else
 static void title(void)
 {
     VDP_clearPlane(BG_B, TRUE);
     VDP_drawText(ROM_NAME, 4, 6);
     VDP_drawText("Renderer estilo Dread:", 4, 9);
     VDP_drawText("paredes por coluna, chao/teto", 4, 10);
-#ifdef DREAD_EPISODE
-    show_selected();
-    VDP_drawText("ESQ/DIR selecionam o mapa.", 4, 8);
-    uint16_t previous = 0;
-#else
     VDP_drawText("MAPA: " DREAD_MAP_LABEL, 4, 11);
-#endif
 #ifdef DREAD_COMBAT
     VDP_drawText("Teste de IA e tiros da pistola.", 4, 12);
 #else
@@ -365,20 +432,13 @@ static void title(void)
     while ((uint16_t)(vints - t0) < 15 * 60) {
         JOY_update();
         const uint16_t j = JOY_readJoypad(JOY_1);
-#ifdef DREAD_EPISODE
-        const uint16_t pressed = j & ~previous;
-        previous = j;
-        if (pressed & (BUTTON_LEFT | BUTTON_RIGHT)) {
-            selected_map = (selected_map + ((pressed & BUTTON_RIGHT) ? 1 : episode_map_count - 1)) % episode_map_count;
-            show_selected();
-        }
-#endif
         if (j & BUTTON_START) break;
         if (j & BUTTON_B) { bench_req = 1; break; }
         if (bench_req) break;
     }
     VDP_clearPlane(BG_B, TRUE);
 }
+#endif
 
 int main(bool hard)
 {
@@ -400,7 +460,7 @@ int main(bool hard)
     Actors_Init();
 #endif
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
-#ifndef DREAD_TEXT_TITLE
+#if !defined(DREAD_EPISODE) && !defined(DREAD_TEXT_TITLE)
     HUD_Opening();
 #endif
 #ifndef DREAD_NO_MUSIC

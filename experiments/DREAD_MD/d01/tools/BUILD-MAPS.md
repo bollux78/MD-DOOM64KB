@@ -31,8 +31,11 @@ GDK=/caminho/sgdk bash experiments/DREAD_MD/d01/tools/build_map.sh \
     /caminho/doom1.wad EPISODE /caminho/saida 'DREAD MD DOOM SHAREWARE'
 ```
 
-Gera `EPISODE.bin` com E1M1 a E1M9. No título, esquerda e direita escolhem
-a fase. START entra. Para escolher outra fase, reinicie a ROM.
+Gera `EPISODE.bin` com E1M1 a E1M9. Na abertura, START, A, B ou C
+mostram o menu. Cima e baixo movem o cursor. A ou START confirmam e B
+volta. NEW GAME entra em E1M1, SELECT LEVEL lista as nove fases e
+BENCHMARK roda o percurso fixo de E1M1. Para escolher outra fase,
+reinicie a ROM. Durante o jogo, START abre a pausa do D01.
 
 A paleta ajustada para E1M1 é compartilhada pelo episódio. O empacotador
 deduplica colunas de paredes, tabelas de colunas e blocos de sprites. As
@@ -41,7 +44,8 @@ do PVS é comprimida separadamente e a ROM só descomprime ao entrar em outro
 subsetor. Geometria de uso direto permanece na ROM, com o ID de linedef
 redundante de cada seg removido. HUD, rostos e arma usam um dicionário
 compartilhado, com quadros de DMA preparados fora do VBlank. O build também
-embute a introdução e as nove faixas no formato XGM2. A abertura é em texto.
+embute a introdução e as nove faixas no formato XGM2. A abertura usa a
+arte do D01, com fundo escurecido e texto branco enquanto o menu está aberto.
 
 `DREAD_PREPARED_MAPS` permite reaproveitar uma conversão offline. Os nove
 subdiretórios devem vir do mesmo WAD e da mesma paleta, cada um contendo

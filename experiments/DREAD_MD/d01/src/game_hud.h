@@ -24,6 +24,8 @@ static inline void HUD_WeaponBob(int16_t dx, int16_t dy) { (void)dx; (void)dy; }
 static inline void HUD_SetLayout(uint16_t col0, int16_t dx) { (void)col0; (void)dx; }
 #else
 void HUD_Opening(void);
+void HUD_ShowOpening(void);
+void HUD_ClearOpening(void);
 void HUD_Init(uint16_t row0);
 void HUD_Draw(const HudState *st);
 void HUD_WeaponFrame(uint16_t f);

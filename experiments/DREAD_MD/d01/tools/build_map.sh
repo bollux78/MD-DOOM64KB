@@ -29,6 +29,7 @@ if [[ ${5:-} == --geometry-only ]]; then
     rm "$stage/src/game_hud.c"
 fi
 render_flags="-DDREAD_NO_MUSIC -DSTART_MUSIC=0"
+title_flags="-DDREAD_TEXT_TITLE"
 if [[ "$map" == EPISODE ]]; then
     [[ -z "$geometry_flag" ]] || exit 2
     render_flags="-DDREAD_EPISODE"
@@ -57,6 +58,8 @@ PALETTE
     fi
     python3 "$source_dir/tools/pack_episode.py" "$stage/src" "${levels[@]}"
     python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
+    python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
+    title_flags=
 else
     python3 "$source_dir/tools/conv.py" "$wad" "$map" "$stage/src" "${convert_flags[@]}"
     cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$stage/src" -o "$stage/pvsgen" \
@@ -78,7 +81,7 @@ if [[ "$map" == EPISODE ]]; then
     make -C "$stage" -f makefile.gen GDK="$GDK" PREFIX=m68k-elf- JAVA=java out/res/music.o
 fi
 make -C "$stage" -f makefile.gen -j3 release GDK="$GDK" PREFIX=m68k-elf- JAVA=java \
-    EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag -DDREAD_TEXT_TITLE $render_flags -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
+    EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag $title_flags $render_flags -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
     LIBGCC="$(m68k-elf-gcc -m68000 -print-libgcc-file-name) -lgcc"
 size=$(stat -c %s "$stage/out/rom.bin")
 if (( size > 4194304 )); then
