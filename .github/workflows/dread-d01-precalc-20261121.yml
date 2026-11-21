@@ -10,27 +10,50 @@ permissions:
   contents: read
 jobs:
   matrix:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Install hosted build dependencies and shareware data
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential git make bison flex texinfo wget curl xz-utils unzip \
+            python3 python3-numpy python3-pil python3-scipy python3-yaml \
+            default-jre-headless libpng-dev zlib1g-dev libncurses-dev mame \
+            doom-wad-shareware
+          find /usr/share -iname 'doom1.wad' -type f -print
+      - name: Cache Marsdev / SGDK from existing hosted lab
+        id: mars-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/mars
+          key: doom-md-marsdev-ubuntu2404-v1
+      - name: Bootstrap m68k GCC and SGDK on cache miss
+        if: steps.mars-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/lab/bootstrap_marsdev.sh
+      - name: Inspect hosted SGDK and WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -f "$HOME/mars/m68k-elf/makefile.gen"
+          find "$HOME/mars" -maxdepth 7 \\( -name rom_header.c -o -name rom_head.c -o -name makefile.gen \\) -print | head -40
+          find /usr/share -iname doom1.wad -type f -print
       - name: Compile cached episode CONTROL, PATH, RAW and ALL
         shell: bash
         env:
-          WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+          WAD: /usr/share/games/doom/doom1.wad
         run: |
           set -euo pipefail
           test -f "$WAD"
-          gdk=""
-          for d in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" /opt/sgdk; do
-            if test -f "$d/makefile.gen"; then gdk="$d"; break; fi
-          done
-          if test -z "$gdk"; then
-            while IFS= read -r f; do gdk="${f%/makefile.gen}"; break; done < <(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -5)
-          fi
-          test -n "$gdk"
+          gdk="$HOME/mars/m68k-elf"
+          test -f "$gdk/makefile.gen"
           tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
           test -x "${tc}gcc"
           export GDK="$gdk" DREAD_TC="$tc" DREAD_EP_MAPS=1 DREAD_COMBAT=1 DREAD_NPAL=1
@@ -64,35 +87,23 @@ jobs:
             "Each name is included in filename, ROM header and opening screen." \
             "All four ROMs use the same graphics, map conversion, video and menu settings." \
             "Generated map resources shared across all four ROMs. Only compare FPS from identical benchmark routes." > "$out/README.txt"
-      - name: Run matching benchmark on every ROM (diagnostic only)
+      - name: MAME smoke test of ROMs (diagnostic, not FPS)
         continue-on-error: true
         shell: bash
         run: |
           set -u
-          export ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line"
-          export NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"
-          export BLASTEM="/home/dan/Projetos/blastem64-1.0.0/blastem"
-          if ! test -x "$BLASTEM"; then
-            echo "::warning::BlastEm unavailable at $BLASTEM; ROM binaries remain valid build outputs"
-            exit 0
-          fi
-          failed=0
           for tag in CONTROL PATH RAW ALL; do
-            echo "::group::Benchmark $tag"
-            if COLB=1 timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py \
-              "$OUT/DREAD-D01-FPS-$tag.bin" "$OUT/$tag/EPISODE.elf" "$OUT/bench-$tag" \
-              > "$OUT/bench-$tag.log" 2>&1; then
-              echo "$tag benchmark success"
+            echo "::group::MAME $tag"
+            if timeout 45 mame megadriv -cart "$OUT/DREAD-D01-FPS-$tag.bin" \
+                -video none -sound none -plugins 0 -seconds_to_run 4 \
+                -nothrottle -skip_gameinfo > "$OUT/bench-$tag.log" 2>&1; then
+              echo "MAME $tag executed (no FPS assertion)"
             else
-              code=$?
-              echo "::warning::Benchmark $tag unavailable (exit $code); ROM compilation and delivery unaffected"
-              failed=1
+              echo "::warning::MAME $tag failed; ROMs remain available"
             fi
-            tail -25 "$OUT/bench-$tag.log" || true
+            tail -12 "$OUT/bench-$tag.log" || true
             echo "::endgroup::"
           done
-          if (( failed )); then echo "::warning::One or more benchmarks failed; see attached logs"; fi
-          exit 0
       - name: Package ROMs and performance evidence
         if: always()
         shell: bash
