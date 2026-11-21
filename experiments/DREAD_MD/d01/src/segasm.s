@@ -20,11 +20,13 @@ seg_rows2:
         addi.l  #0xFFFF,%d2
         subq.w  #1,%d4
 1:      swap    %d0
-        move.w  %d0,(%a0)+
+        move.w  %d0,(%a0)
+        lea     12(%a0),%a0                 /* ColRec stride */
         swap    %d0
         add.l   %d1,%d0
         swap    %d2
-        move.w  %d2,(%a1)+
+        move.w  %d2,(%a1)
+        lea     12(%a1),%a1
         swap    %d2
         add.l   %d3,%d2
         dbra    %d4,1b
@@ -39,7 +41,8 @@ seg_rows1:
         addi.l  #0xFFFF,%d0
         subq.w  #1,%d2
 1:      swap    %d0
-        move.w  %d0,(%a0)+
+        move.w  %d0,(%a0)
+        lea     12(%a0),%a0
         swap    %d0
         add.l   %d1,%d0
         dbra    %d2,1b
@@ -135,11 +138,14 @@ seg_anchors:
         lsl.w   %d0,%d1
         move.w  %d1,%a4
         move.w  XS(%a2),%d7
-        move.w  %d7,%d0
+        move.w  %d7,%d0                     /* xs * 12 */
         add.w   %d0,%d0
-        lea     a_u,%a0
+        add.w   %d7,%d0
+        add.w   %d0,%d0
+        add.w   %d0,%d0
+        lea     rec+8,%a0                   /* &rec[xs].u */
         adda.w  %d0,%a0
-        lea     a_zpp,%a1
+        lea     rec+10,%a1                  /* &rec[xs].zq */
         adda.w  %d0,%a1
         clr.w   HAVEB(%a2)
 .Lan:
@@ -238,11 +244,13 @@ seg_anchors:
         clr.w   %d2                         /* U = uA << 16 */
         subq.w  #1,%d0
 3:      swap    %d2
-        move.w  %d2,(%a0)+
+        move.w  %d2,(%a0)
+        lea     12(%a0),%a0
         swap    %d2
         add.l   %d4,%d2
         swap    %d3
-        move.w  %d3,(%a1)+
+        move.w  %d3,(%a1)
+        lea     12(%a1),%a1
         swap    %d3
         add.l   %d5,%d3
         dbra    %d0,3b

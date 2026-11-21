@@ -353,7 +353,7 @@ typedef struct {
     const uint8_t *tex; uint16_t wmask, hs2, hmask, pal;   /* pal = view palette of this texture */
     int32_t vbase16;              /* (textop - viewz + yoff) << 16 */
     int16_t vt0;                  /* v at the part's top edge (texels, & hmask) */
-    uint16_t eoff;                /* ColJob offset of the raw top-edge row array (4 = yc, 16 = ybf) */
+    uint16_t eoff;                /* ColRec offset of the raw top-edge row (0 = yc, 6 = ybf) */
     uint16_t vlim;                /* last texel the scalers may reach */
     uint16_t pad;
 } Part;
@@ -371,15 +371,16 @@ typedef struct {
     Part mid, up, lo;                             /* 40 64 88 */
     uint16_t cpal, ccol2, fpal, fcol2;            /* 112 114 116 118: fill spans {palette, colour} */
     uint16_t toff;                                /* 120 (scratch: tile column * TROWS) */
+    uint16_t tsh;                                 /* 122: log2 of an upper bound of texels per row (with margin) */
 } ColJob;
 #if defined(__m68k__) || defined(__mc68000__)
 _Static_assert(sizeof(Part) == 24 && __builtin_offsetof(ColJob, mid) == 40 && __builtin_offsetof(ColJob, up) == 64
                && __builtin_offsetof(ColJob, lo) == 88 && __builtin_offsetof(ColJob, cpal) == 112
-               && __builtin_offsetof(ColJob, fpal) == 116, "ColJob layout shared with colasm.s");
+               && __builtin_offsetof(ColJob, fpal) == 116 && __builtin_offsetof(ColJob, tsh) == 122, "ColJob layout shared with colasm.s");
 #endif
-static int16_t a_yc[VW_MAX], a_yf[VW_MAX], a_ybc[VW_MAX], a_ybf[VW_MAX];
-uint16_t a_u[VW_MAX];          /* also written by segasm.s */
-uint16_t a_zpp[VW_MAX];
+/* per-column values of the current seg, one 12-byte record per column (read sequentially by colasm.s) */
+typedef struct { int16_t yc, yf, ybc, ybf; uint16_t u, zq; } ColRec;
+ColRec rec[VW_MAX];            /* also written by segasm.s */
 static ColJob job;
 /* per 8x8 tile: the palette of the first (= nearest, front-to-back) span drawn in it; later spans of
  * another colour family are drawn through pal_remap so no pixel ever shows in the wrong palette */
@@ -416,23 +417,23 @@ static void seg_columns(ColJob *j)
     while (c < j->xe) {
         const int top = ceilclip[c], bot = floorclip[c];
         uint8_t *col = FB_COL(j->fb, c);
-        int yc = j->yc[c]; if (yc < top) yc = top; if (yc > bot) yc = bot;
-        int yf = j->yf[c]; if (yf < yc) yf = yc; if (yf > bot) yf = bot;
+        int yc = rec[c].yc; if (yc < top) yc = top; if (yc > bot) yc = bot;
+        int yf = rec[c].yf; if (yf < yc) yf = yc; if (yf > bot) yf = bot;
         if (yc > top) span_fill(c, top, yc - top, (uint8_t)j->cpal, (uint8_t)j->ccol);
         if (bot > yf) span_fill(c, yf, bot - yf, (uint8_t)j->fpal, (uint8_t)j->fcol);
         if (j->flags & 1) {
-            if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, j->u[c], ((int32_t)j->zpp[c] << 6));
+            if ((j->flags & 2) && yf > yc) draw_part(col, yc, yf, &j->mid, rec[c].u, ((int32_t)rec[c].zq << 6));
             close_col(c); j->closed++;
         } else {
             int ntop = yc, nbot = yf;
             if (j->flags & 4) {
-                int y = j->ybc[c]; if (y < yc) y = yc; if (y > yf) y = yf;
-                if (y > yc) draw_part(col, yc, y, &j->up, j->u[c], ((int32_t)j->zpp[c] << 6));
+                int y = rec[c].ybc; if (y < yc) y = yc; if (y > yf) y = yf;
+                if (y > yc) draw_part(col, yc, y, &j->up, rec[c].u, ((int32_t)rec[c].zq << 6));
                 ntop = y;
             }
             if (j->flags & 8) {
-                int y = j->ybf[c]; if (y < ntop) y = ntop; if (y > yf) y = yf;
-                if (yf > y) draw_part(col, y, yf, &j->lo, j->u[c], ((int32_t)j->zpp[c] << 6));
+                int y = rec[c].ybf; if (y < ntop) y = ntop; if (y > yf) y = yf;
+                if (yf > y) draw_part(col, y, yf, &j->lo, rec[c].u, ((int32_t)rec[c].zq << 6));
                 nbot = y;
             }
             if (ntop >= nbot) { close_col(c); j->closed++; }
@@ -457,9 +458,9 @@ extern void seg_rows1(int16_t *a, int32_t Ya, int32_t dYa, int16_t n);
 extern void seg_anchors(SegA *p);
 #else
 static void seg_rows2(int16_t *a, int16_t *b, int32_t Ya, int32_t dYa, int32_t Yb, int32_t dYb, int16_t n)
-{ for (; n; n--) { *a++ = (int16_t)ceil16(Ya); *b++ = (int16_t)ceil16(Yb); Ya += dYa; Yb += dYb; } }
+{ for (; n; n--) { *a = (int16_t)ceil16(Ya); *b = (int16_t)ceil16(Yb); a += 6; b += 6; Ya += dYa; Yb += dYb; } }   /* ColRec stride */
 static void seg_rows1(int16_t *a, int32_t Ya, int32_t dYa, int16_t n)
-{ for (; n; n--) { *a++ = (int16_t)ceil16(Ya); Ya += dYa; } }
+{ for (; n; n--) { *a = (int16_t)ceil16(Ya); a += 6; Ya += dYa; } }
 /* reference of segasm.s seg_anchors (same arithmetic) */
 static void seg_anchors(SegA *p)
 {
@@ -491,7 +492,7 @@ static void seg_anchors(SegA *p)
         }
         int cnt = n > 0 ? n : 1; if (cnt > p->xe - k) cnt = p->xe - k;
         uint32_t U = (uint32_t)uA << 16, Z = (uint32_t)ZA;
-        for (int q = 0; q < cnt; q++, k++) { a_u[k] = (uint16_t)(U >> 16); a_zpp[k] = (uint16_t)(Z >> 16); U += (uint32_t)dU; Z += (uint32_t)dZ; }
+        for (int q = 0; q < cnt; q++, k++) { rec[k].u = (uint16_t)(U >> 16); rec[k].zq = (uint16_t)(Z >> 16); U += (uint32_t)dU; Z += (uint32_t)dZ; }
         const int m = n > 0 ? n : 1;
         if (n == A) { p->iz += p->diz8; p->uz += p->duz8; } else { p->iz += p->diz * m; p->uz += p->duz * m; }
     }
@@ -666,20 +667,20 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
         if (s->mid != 0xFF) {
             has_mid = 1;
             const int16_t textop = (s->flags & 2) ? fs->floor + map_tex[s->mid].realh : fceil;
-            setup_part(&job.mid, s->mid, bucket, textop, s->yoff, fceil, 4);
+            setup_part(&job.mid, s->mid, bucket, textop, s->yoff, fceil, 0);
         }
     } else {
         if (bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) {
             has_up = 1;
             const int16_t textop = (s->flags & 1) ? fceil : bceil + map_tex[s->upper].realh;
-            setup_part(&job.up, s->upper, bucket, textop, s->yoff, fceil, 4);
+            setup_part(&job.up, s->upper, bucket, textop, s->yoff, fceil, 0);
             const int16_t bc = bceil - view_z;
             yrows(bc, iz, diz, &Ybc, &dYbc);
         }
         if (bs->floor > fs->floor && s->lower != 0xFF) {
             has_lo = 1;
             const int16_t textop = (s->flags & 2) ? fceil : bs->floor;
-            setup_part(&job.lo, s->lower, bucket, textop, s->yoff, bs->floor, 16);
+            setup_part(&job.lo, s->lower, bucket, textop, s->yoff, bs->floor, 6);
             const int16_t bf = bs->floor - view_z;
             yrows(bf, iz, diz, &Ybf, &dYbf);
         }
@@ -695,9 +696,9 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
 
     /* phase A: per-column values in plain arrays (68000: segasm.s) */
     const int16_t ncols = (int16_t)(xe - xs);
-    seg_rows2(&a_yc[xs], &a_yf[xs], Yc, dYc, Yf, dYf, ncols);
-    if (has_up) seg_rows1(&a_ybc[xs], Ybc, dYbc, ncols);
-    if (has_lo) seg_rows1(&a_ybf[xs], Ybf, dYbf, ncols);
+    seg_rows2(&rec[xs].yc, &rec[xs].yf, Yc, dYc, Yf, dYf, ncols);
+    if (has_up) seg_rows1(&rec[xs].ybc, Ybc, dYbc, ncols);
+    if (has_lo) seg_rows1(&rec[xs].ybf, Ybf, dYbf, ncols);
     if (need_tex) {
         static SegA sa;
         sa.iz = iz; sa.uz = uz; sa.diz = diz; sa.duz = duz; sa.diz8 = diz8; sa.duz8 = duz8; sa.xs = (int16_t)xs; sa.xe = (int16_t)xe;
@@ -710,6 +711,12 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
     job.cpal = fs->ceilpal; job.ccol2 = COLB == 2 ? (uint16_t)(fs->ceilcol << 8 | fs->ceilcol) : fs->ceilcol; job.fpal = fs->floorpal; job.fcol2 = COLB == 2 ? (uint16_t)(fs->floorcol << 8 | fs->floorcol) : fs->floorcol;
     job.flags = (bs ? 0 : 1) | (has_mid ? 2 : 0) | (has_up ? 4 : 0) | (has_lo ? 8 : 0) | (fs->sky && sky_on ? 16 : 0);
     job.closed = 0;
+    {   /* texels per row at the far end, * 33/32 margin, rounded up to a power of two */
+        const uint16_t zf = zq_of(z4_of(iz1 < iz2 ? (iz1 > 1 ? iz1 : 1) : (iz2 > 1 ? iz2 : 1)));
+        const uint16_t t = (uint16_t)((((uint32_t)zf * 33 >> 5) + 1023) >> 10);
+        uint16_t sh = 0; while ((1u << sh) < t) sh++;
+        job.tsh = sh;
+    }
     seg_columns(&job);
     closed += job.closed;
     rstats.col_visits++;
@@ -955,7 +962,7 @@ int R_PointInSub(int16_t x, int16_t y)
 void R_RenderView(const View *v, uint8_t *fb)
 {
     rfb = fb;
-    job.yc = a_yc; job.yf = a_yf; job.ybc = a_ybc; job.ybf = a_ybf; job.u = a_u; job.zpp = a_zpp;
+    job.yc = &rec[0].yc; job.yf = 0; job.ybc = 0; job.ybf = 0; job.u = 0; job.zpp = 0;
     frame_id++;
     if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
