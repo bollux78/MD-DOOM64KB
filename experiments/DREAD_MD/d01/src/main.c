@@ -74,9 +74,12 @@ static void vint_cb(void)
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;
     *(volatile uint16_t *)0xC00000 = 0;
     if (hint_on) { SYS_setHIntCallback(hint_a); *(volatile uint16_t *)0xC00004 = 0x8014; }   /* H-int back on for the next frame */
-    HUD_VBlank();
-    if (dma_src) {
-        const uint16_t n = (FB_BYTES - dma_pos) > DMA_CHUNK ? DMA_CHUNK : (FB_BYTES - dma_pos);
+    /* all VRAM traffic must end inside the VBlank: a DMA that runs into the active display halts the
+       68000 (frame time) and delays the row-doubling H-int (lines of the wrong rows, the picture jumps) */
+    const uint16_t hud_bytes = HUD_VBlank();
+    if (dma_src && hud_bytes < DMA_CHUNK) {
+        const uint16_t budget = (DMA_CHUNK - hud_bytes) & ~1u;
+        const uint16_t n = (FB_BYTES - dma_pos) > budget ? budget : (FB_BYTES - dma_pos);
         const uint16_t dst = (shown ? TILE_FB0 : TILE_FB1) * 32 + dma_pos;
         DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
         dma_pos += n;
@@ -133,7 +136,7 @@ static void set_mode(uint16_t m)
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
-    dma_chunk = h40 ? 5632 : 4608;
+    dma_chunk = h40 ? 6144 : 4864;                 /* whole VBlank DMA budget (HUD + framebuffer) */
     SYS_enableInts();
 }
 

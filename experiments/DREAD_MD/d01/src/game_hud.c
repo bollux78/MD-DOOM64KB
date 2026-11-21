@@ -214,14 +214,17 @@ void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26
 }
 
 /* called from the VBlank interrupt: every VRAM update of the HUD, face, weapon and text */
-void HUD_VBlank(void)
+uint16_t HUD_VBlank(void)    /* returns the bytes sent by DMA (the caller keeps the VBlank DMA budget) */
 {
+    uint16_t bytes = 0;
     if (weap_req >= 0) {
         const uint16_t f = (uint16_t)weap_req; weap_req = -1;
         DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
+        bytes += weap_tiles * 32;
     }
     if (face_dirty) {
         face_dirty = 0;
+        bytes += 512;
 #ifdef DREAD_EPISODE
         DMA_doDma(DMA_VRAM, face_frame, TILE_FACE * 32, 16 * 16, 2);
 #else
@@ -231,9 +234,10 @@ void HUD_VBlank(void)
     if (hud_dirty) {
         hud_dirty = 0;
         for (int r = 0; r < 4; r++) DMA_doDma(DMA_VRAM, hud_nt[r], BGB + (hud_row0 + r) * 128 + hud_col0 * 2, 32, 2);
+        bytes += 256;
     }
     for (int l = 0; l < 2; l++)
-        if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); }
+        if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); bytes += 80; }
     if (sat_dirty) {
         sat_dirty = 0;
         for (uint16_t i = 0; i < weap_npieces; i++) {
@@ -244,6 +248,7 @@ void HUD_VBlank(void)
             vram_w((uint16_t)(128 + weap_x + p[0] + bob_x + weap_dx));
         }
     }
+    return bytes;
 }
 
 /* screen mode change (ints disabled by the caller): bar column, weapon x offset */
