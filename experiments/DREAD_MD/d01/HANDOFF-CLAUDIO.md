@@ -23,6 +23,43 @@ Na abertura, START, A, B ou C mostram o menu. **New Game** entra em E1M1, **Sele
 - **Benchmark de E1M1 no Genesis Plus GX (NTSC).** Foram 312 quadros no mesmo percurso. Combate 02 e Combate 03 ficaram em 3,80 FPS. A build da Combate 03 com a IA desativada ficou em 3,79 FPS.
 - **Cadência no encontro controlado.** Dois atores moveram-se a cada 48 e 53 VBlanks, respectivamente, cerca de 0,8–0,9 s. A IA roda em quatro grupos e limita o deslocamento por atualização. O percurso fixo de benchmark mede o FPS naquela rota e não caracteriza todas as cenas de combate.
 
+## Engenharia reversa de Bermuda e E1M1 Alpha 2
+
+Rastreamento das ROMs fornecidas pelo Bollux no Genesis Plus GX instrumentado, em NTSC, com hardware em modo Mega Drive sem Sega CD (`system_hw = 0x80`). O início de um quadro exibido foi identificado pela troca da tabela de tiles do viewport, depois da transferência gráfica. Esse marcador deixa as animações do HUD e os flashes de paleta fora da contagem. O FPS foi calculado pelo total de intervalos completos dividido pelo tempo em VBlanks.
+
+| ROM e trecho | VBlanks por quadro 3D | FPS observado |
+| --- | --- | ---: |
+| `Bermuda.bin`, *Hello Bermuda*, em movimento e com inimigos ativos | 6–15, com moda de 10, em 25 intervalos | 6,27 |
+| `Bermuda.bin`, após a morte, com a câmera parada | 5 consecutivos no trecho estável | ~12 |
+| `E1M1-alpha2.bin`, caminhada e giros em E1M1 | 5–18, com mediana de 7, em 136 intervalos | 7,64 |
+
+Os ~7 FPS observados jogando são compatíveis com as médias. A duração de cada quadro varia em jogo. Na Bermuda, o trecho de renderização medido antes do empacotamento levou **74,7–135,3 ms** em 26 amostras, com mediana de **122,1 ms**. O empacotamento levou **20,5–20,9 ms** em 29 amostras. Essas durações são tempo decorrido no emulador, incluindo interrupções e eventuais paradas de barramento durante cada trecho.
+
+### Pipeline 68000 → SRAM → VDP
+
+1. As duas ROMs desenham **72 linhas distintas**. O empacotador em assembly duplica as linhas para formar o viewport de **320 × 144 pixels**. Ele está em `$07EEDE` na Bermuda e em `$07E3EA` na Alpha 2. Os bytes dessa rotina coincidem nas duas ROMs.
+2. Sem Sega CD, o buffer empacotado usa a **SRAM do cartucho**. Os cabeçalhos declaram `$200000–$20FFFF` e o DMA lê o viewport a partir de `$20A600`.
+3. São **11.520 palavras / 23.040 bytes** por viewport. A Bermuda envia os quatro lotes em VBlanks sucessivos, **um lote por VBlank** durante a transferência, e alterna o destino na VRAM entre `$0200` e `$5C00`. O tamanho normal foi 3.144 + 3.200 + 3.200 + 1.976 palavras. O primeiro e o último lotes variaram quando o primeiro VBlank também enviava dados da interface.
+4. Depois dos lotes gráficos, o engine copia a tabela correspondente para `$E100` com um DMA de **1.152 palavras**. Esse foi o marcador de apresentação usado no perfil.
+
+| Endereço na Bermuda | Ponto de verificação |
+| --- | --- |
+| `$08D8C6 → $08D902` | Janela medida do trecho de renderização, do preparo imediato da chamada até o retorno |
+| `$08D940`, `$08DFA8` | Verificação e espera pela fila gráfica antes de empacotar o próximo quadro |
+| `$07EEDE → $08E0D4` | Entrada e retorno do empacotador na chamada do loop principal |
+| `$088362` | Callback de VBlank que avança a fila de DMA |
+| `$088700`, `$0887BE` | Seleção do próximo lote e sinalização de término do envio do viewport |
+| `$08E2A6` | Caminho alternativo associado ao Sega CD, fora das execuções deste teste |
+
+### Comparação com a D01 Combate 03
+
+Os **3,80 FPS** da D01 vieram do percurso fixo do benchmark. Os **7,64 FPS** da Alpha 2 vieram de outra sequência de poses no E1M1. Para quantificar a diferença, use as mesmas posições e ângulos nas duas ROMs, com as portas e os atores em estados equivalentes. Registre separadamente **visibilidade e preparação de paredes**, **rasterização de colunas e sprites**, **empacotamento** e **apresentação por VBlank**. A prioridade sugerida é medir os dois primeiros estágios. A Alpha 2 já demonstra que a cadência observada é possível mesmo com o custo do empacotador e quatro lotes DMA.
+
+Os offsets acima correspondem às ROMs com estes SHA-256:
+
+- `Bermuda.bin` — `9b9e61f63c18a2934d42081ca31eeb5e2200d56dc6d03bd1c541c0a69b322cc6`
+- `E1M1-alpha2.bin` — `47eb717552cd1ed7d5bd11c060582ffd3a50b7753efc5dd3aedbf8e2245ca267`
+
 ## Estado da build
 
 A seleção de fases funciona na abertura. Ainda faltam transições pelas saídas, projéteis, outras armas e animações direcionais dos monstros. O episódio usa o modo de linhas duplicadas e mantém o recorte de sprites do D01. O modo de colunas está disponível nas builds antigas da base. A ROM pública deste handoff é a do Doom shareware.
