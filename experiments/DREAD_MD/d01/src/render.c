@@ -372,9 +372,11 @@ typedef struct {
     uint16_t cpal, ccol2, fpal, fcol2;            /* 112 114 116 118: fill spans {palette, colour} */
     uint16_t toff;                                /* 120 (scratch: tile column * TROWS) */
 } ColJob;
+#if defined(__m68k__) || defined(__mc68000__)
 _Static_assert(sizeof(Part) == 24 && __builtin_offsetof(ColJob, mid) == 40 && __builtin_offsetof(ColJob, up) == 64
                && __builtin_offsetof(ColJob, lo) == 88 && __builtin_offsetof(ColJob, cpal) == 112
                && __builtin_offsetof(ColJob, fpal) == 116, "ColJob layout shared with colasm.s");
+#endif
 static int16_t a_yc[VW_MAX], a_yf[VW_MAX], a_ybc[VW_MAX], a_ybf[VW_MAX];
 uint16_t a_u[VW_MAX];          /* also written by segasm.s */
 uint16_t a_zpp[VW_MAX];
