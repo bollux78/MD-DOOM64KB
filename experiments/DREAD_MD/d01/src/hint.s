@@ -37,18 +37,40 @@ hint_a:
 9:      move.l  (%sp)+,%d0
         rte
 
-/* hint_b: one H-int every 2 lines (counter 1), each one row further down: no registers, no V counter
-   (hint_a placed the first row from the V counter; nothing delays the H-int inside the view since the
-   VBlank DMA ends above it).  After the last row the H-int is turned off until the VBlank. */
+/* hint_b: one H-int every 2 lines. The V counter indexes a table of scroll values (one read, no
+   branch on the normal path), so a late or lost H-int cannot shift the rest of the view.
+   After the last row the H-int is turned off until the VBlank. */
 hint_b:
+        move.l  %d0,-(%sp)
+        moveq   #0,%d0
+        move.b  0xC00008,%d0                /* current line */
+        add.w   %d0,%d0
         move.l  #0x40000010,0xC00004
-        subq.w  #1,hint_v
-        move.w  hint_v,0xC00000
-        cmpi.w  #-VIEW_H,hint_v
+        move.w  hint_tab(%pc,%d0.w),%d0     /* -row of the next line */
+        move.w  %d0,0xC00000
+        cmpi.w  #-VIEW_H,%d0
         beq.s   1f
+        move.l  (%sp)+,%d0
         rte
 1:      move.w  #0x8004,0xC00004
+        move.l  (%sp)+,%d0
         rte
+hint_tab:                                   /* line L -> -min(max((L + 1 - (VTOP - 1)) >> 1, 0), VIEW_H) */
+        .set    L,0
+        .rept   256
+        .set    r,(L + 1 - (VTOP - 1)) >> 1
+        .if     L + 1 - (VTOP - 1) < 0
+        .set    r,0
+        .endif
+        .if     r > VIEW_H
+        .set    r,VIEW_H
+        .endif
+        .if     L >= 224
+        .set    r,0
+        .endif
+        .word   -r
+        .set    L,L+1
+        .endr
 
         .bss
         .even

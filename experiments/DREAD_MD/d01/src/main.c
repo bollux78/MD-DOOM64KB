@@ -140,6 +140,7 @@ static void set_mode(uint16_t m)
     *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
     shown = 0; cur_buf = 0;
     hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
+    *(volatile uint16_t *)0xC00004 = hint_r1on;      /* display on (column mode never runs hint_a) */
     hint_on = colb == 1;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
