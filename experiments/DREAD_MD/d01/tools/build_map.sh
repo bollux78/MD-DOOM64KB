@@ -89,10 +89,12 @@ fi
 make -C "$stage" -f makefile.gen -j3 release "${mk[@]}" \
     EXTRA_FLAGS="-ffreestanding -g -DNPAL=1 -DDREAD_ROW_ONLY $geometry_flag $title_flags $render_flags -DROM_NAME='\"$name\"' -DDREAD_MAP_LABEL='\"$map\"'" \
     LIBGCC="$(${tc}gcc -m68000 -print-libgcc-file-name) -lgcc"
-size=$(stat -c %s "$stage/out/rom.bin")
+rom="$stage/out/rom.bin"; [[ -f "$rom" ]] || rom="$stage/out/release/rom.bin"
+elf="$stage/out/rom.out"; [[ -f "$elf" ]] || elf="$stage/out/release/rom.out"
+size=$(stat -c %s "$rom")
 if (( size > 4194304 )); then
     echo "$map excede 4 MiB: $size bytes" >&2
     exit 1
 fi
-cp "$stage/out/rom.bin" "$out/$map.bin"
-cp "$stage/out/rom.out" "$out/$map.elf"
+cp "$rom" "$out/$map.bin"
+cp "$elf" "$out/$map.elf"
