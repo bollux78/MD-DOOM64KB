@@ -179,7 +179,7 @@ uint16_t r_colofs[VW_MAX];
 extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
 extern const uint32_t scal_b[], scal_w[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
-uint16_t r_tmk_sz, r_tsh, r_ssh;
+uint16_t r_tmk_sz, r_tsh, r_ssh, r_skyshift;
 /* sky (gen_sky.py): 128 columns of 76 bytes = 90 degrees; per screen column offset, set each frame */
 #define SKY_STRIDE 76
 extern const uint8_t sky_blob[], scal_q[];
@@ -188,15 +188,17 @@ const void *r_skyend;
 #endif
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
+    const uint16_t full = colb == 0;
+    if (full) colb = 1;
     r_focal = colb == 2 ? tcols : tcols * 2;          /* half of the full-screen width in columns */
     tcols -= 2 * crop;
     r_colb = colb; r_tcols = tcols;
     r_vw = colb == 2 ? tcols * 2 : tcols * 4;
-    r_vh = colb == 2 ? 144 : 72;
+    r_vh = colb == 2 || full ? 144 : 72;
     r_halfw = r_vw / 2; r_horizon = r_vh / 2;
     /* Doom's proportions (y scale = 1.2 x the x scale on a 4:3 screen): ~180 screen lines per unit
        in both H32 and H40, since the view always spans the full screen width */
-    r_vfocal = colb == 2 ? 179 : 90;
+    r_vfocal = r_vh == 144 ? 179 : 90;
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
@@ -212,8 +214,9 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_tmk_sz = colb == 2 ? 20 : 14;                  /* masked cores: bytes of code per row */
     r_scal = colb == 2 ? scal_w : scal_b;
     r_tsh = 0;                                       /* texels are bytes in every mode */
-    r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
-    r_skyend = (const void *)r_scal[scal_q[colb == 2 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
+    r_ssh = colb == 2 ? 1 : 0;                      /* scaler code: 6 or 12 bytes per row */
+    r_skyshift = r_vh == 144 ? 1 : 0;               /* 72 sky samples across 144 display rows */
+    r_skyend = (const void *)r_scal[scal_q[r_vh == 144 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
 #endif
 }
 

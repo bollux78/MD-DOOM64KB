@@ -1,0 +1,38 @@
+[
+  {
+    "map": "E1M1",
+    "nonblack_components": 77288
+  },
+  {
+    "map": "E1M2",
+    "nonblack_components": 86442
+  },
+  {
+    "map": "E1M3",
+    "nonblack_components": 96067
+  },
+  {
+    "map": "E1M4",
+    "nonblack_components": 118246
+  },
+  {
+    "map": "E1M5",
+    "nonblack_components": 61616
+  },
+  {
+    "map": "E1M6",
+    "nonblack_components": 105224
+  },
+  {
+    "map": "E1M7",
+    "nonblack_components": 100857
+  },
+  {
+    "map": "E1M8",
+    "nonblack_components": 63993
+  },
+  {
+    "map": "E1M9",
+    "nonblack_components": 89938
+  }
+]

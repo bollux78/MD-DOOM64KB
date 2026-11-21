@@ -1,0 +1,44 @@
+[
+  {
+    "variant": "minimal",
+    "frames": 312,
+    "vblanks": 5156,
+    "fps": 3.6307214895267648,
+    "framebuffer_sha256": "d5ac4512e3d7f23db7fa7ced52072ddd461abc1e9b78b7d3316354d6a8e1e52c"
+  },
+  {
+    "variant": "robust",
+    "frames": 312,
+    "vblanks": 5331,
+    "fps": 3.5115362971299944,
+    "framebuffer_sha256": "d5ac4512e3d7f23db7fa7ced52072ddd461abc1e9b78b7d3316354d6a8e1e52c"
+  },
+  {
+    "variant": "table",
+    "frames": 312,
+    "vblanks": 5211,
+    "fps": 3.592400690846287,
+    "framebuffer_sha256": "d5ac4512e3d7f23db7fa7ced52072ddd461abc1e9b78b7d3316354d6a8e1e52c"
+  },
+  {
+    "variant": "packed",
+    "frames": 312,
+    "vblanks": 4921,
+    "fps": 3.8041048567364357,
+    "framebuffer_sha256": "d5ac4512e3d7f23db7fa7ced52072ddd461abc1e9b78b7d3316354d6a8e1e52c"
+  },
+  {
+    "variant": "full",
+    "frames": 312,
+    "vblanks": 6036,
+    "fps": 3.1013916500994037,
+    "framebuffer_sha256": "10e7b830f07353553d1a5c5c1e5bde5ff79961d72033307e748badba23c99730"
+  },
+  {
+    "variant": "columns",
+    "frames": 312,
+    "vblanks": 4841,
+    "fps": 3.8669696343730635,
+    "framebuffer_sha256": "07d1a44d5862a10ffca5a4861b9e9f17aa5a12826b20df31dcac17da08bf7f40"
+  }
+]

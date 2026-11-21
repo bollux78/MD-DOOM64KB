@@ -9,7 +9,8 @@ typedef long long dread_i64;   /* SGDK 2.x has no int64_t, newer ones typedef it
 #endif
 #include "mapdata.h"
 
-/* screen modes, switchable at run time (detail levels; 320x144 in H40, 256x144 in H32):
+/* Screen modes, switchable at run time (320x144 in H40, 256x144 in H32):
+ *   full detail (colb argument 0): W x 144 colour-pair samples, no row duplication
  *   row-doubled  (COLB 1): W x 72 logical pixels of 2 screen pixels, each row shown twice by per-line vscroll
  *   column-doubled (COLB 2): W/2 x 144 logical pixels of 4 screen pixels                                   */
 #define VW_MAX   160
@@ -33,7 +34,7 @@ extern uint16_t r_colofs[VW_MAX];               /* byte offset of each logical c
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
  * a byte is a pair of 4bpp pixels; logical column x starts at byte x*COLB of the 4-byte tile rows. */
 #define FB_COL(fb, x) ((fb) + r_colofs[x])
-void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop);  /* tcols = 40 (H40) or 32 (H32), crop = tiles removed per side */
+void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop);  /* colb: 0 full, 1 half vertical, 2 half horizontal; tcols: 40 H40 or 32 H32 */
 
 typedef struct {
     int32_t x, y;                  /* 16.16 map units */

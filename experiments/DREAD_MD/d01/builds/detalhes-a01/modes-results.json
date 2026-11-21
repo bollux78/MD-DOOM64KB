@@ -1,0 +1,60 @@
+[
+  {
+    "variant": "table",
+    "modes": [
+      {
+        "mode": 1,
+        "nonblack_components": 76064
+      },
+      {
+        "mode": 4,
+        "nonblack_components": 76437
+      },
+      {
+        "mode": 0,
+        "nonblack_components": 77288
+      },
+      {
+        "mode": 3,
+        "nonblack_components": 60830
+      },
+      {
+        "mode": 6,
+        "nonblack_components": 61081
+      },
+      {
+        "mode": 2,
+        "nonblack_components": 61706
+      }
+    ]
+  },
+  {
+    "variant": "packed",
+    "modes": [
+      {
+        "mode": 1,
+        "nonblack_components": 76064
+      },
+      {
+        "mode": 4,
+        "nonblack_components": 76437
+      },
+      {
+        "mode": 0,
+        "nonblack_components": 77290
+      },
+      {
+        "mode": 3,
+        "nonblack_components": 60830
+      },
+      {
+        "mode": 6,
+        "nonblack_components": 61081
+      },
+      {
+        "mode": 2,
+        "nonblack_components": 61708
+      }
+    ]
+  }
+]

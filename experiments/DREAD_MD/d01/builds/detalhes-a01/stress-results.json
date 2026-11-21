@@ -1,0 +1,50 @@
+[
+  {
+    "variant": "minimal",
+    "video_frames": 2000,
+    "frames_with_unpaired_lines": [
+      2000,
+      72
+    ],
+    "unpaired_rows": [
+      130240,
+      153
+    ]
+  },
+  {
+    "variant": "robust",
+    "video_frames": 2000,
+    "frames_with_unpaired_lines": [
+      2000,
+      73
+    ],
+    "unpaired_rows": [
+      132097,
+      203
+    ]
+  },
+  {
+    "variant": "table",
+    "video_frames": 2000,
+    "frames_with_unpaired_lines": [
+      2000,
+      54
+    ],
+    "unpaired_rows": [
+      128896,
+      154
+    ]
+  },
+  {
+    "variant": "packed",
+    "video_frames": 2000,
+    "frames_with_unpaired_lines": [
+      82,
+      2000
+    ],
+    "unpaired_rows": [
+      94,
+      126776
+    ]
+  }
+]

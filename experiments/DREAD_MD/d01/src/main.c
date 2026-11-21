@@ -32,7 +32,7 @@ static uint16_t music_on = START_MUSIC;
 #define DREAD_MAP_LABEL "E1M1 DOOM"
 #endif
 #ifndef START_MODE
-#define START_MODE 0                           /* 0 H40 linhas, 1 H40 colunas, 2 H32 linhas, 3 H32 colunas */
+#define START_MODE 0                           /* 0/1/4 H40 vertical/horizontal/full; bit 1 selects H32 */
 #endif
 /* SGDK 2.x VRAM: plane A name table at 0xE000 (flipped with 0xA000 when double-buffered), plane B 0xC000,
  * window 0xD000, font after the system tiles. Framebuffer tiles from 128 (up to 720 tiles in every mode):
@@ -43,12 +43,20 @@ static uint16_t music_on = START_MUSIC;
 static uint16_t dma_chunk = 5632;              /* bytes per VBlank (H40 ~7.7 KB of VBlank DMA, H32 ~6.3 KB, minus the HUD) */
 #define DMA_CHUNK  dma_chunk
 static uint16_t nbuf, tile_fb1, nt1, view_trows, mode;
+static uint16_t upload_bytes;
 #define NBUF       nbuf
 #define TCOLS      FB_TCOLS
 #define TILE_FB1   tile_fb1
 #define NT1        nt1
 
-static uint8_t fbuf[FB_MAX];        /* view name table rows with per-tile palettes */
+#ifdef DREAD_PACKED_ROWS
+static uint8_t fbuf[FB_MAX + FB_MAX / 2] __attribute__((aligned(2)));
+static uint16_t packed_rows;
+extern void DreadPackRows(const void *src, void *dst, uint32_t tiles);
+#else
+static uint8_t fbuf[FB_MAX];
+#endif
+/* view name table rows with per-tile palettes */
 volatile uint16_t vints;
 static const uint8_t *volatile dma_src;   /* buffer being sent, 0 = idle (the POINTER is volatile) */
 static volatile uint16_t dma_pos;
@@ -85,12 +93,18 @@ static void vint_cb(void)
        68000 (frame time) and delays the row-doubling H-int (lines of the wrong rows, the picture jumps) */
     const uint16_t hud_bytes = HUD_VBlank();
     if (dma_src && hud_bytes < DMA_CHUNK) {
+#ifdef DREAD_PACKED_ROWS
+        /* End transfers between expanded source tiles, preserving complete row pairs. */
+        const uint16_t mask = packed_rows ? 63 : 1;
+        const uint16_t budget = (DMA_CHUNK - hud_bytes) & ~mask;
+#else
         const uint16_t budget = (DMA_CHUNK - hud_bytes) & ~1u;
-        const uint16_t n = (FB_BYTES - dma_pos) > budget ? budget : (FB_BYTES - dma_pos);
+#endif
+        const uint16_t n = (upload_bytes - dma_pos) > budget ? budget : (upload_bytes - dma_pos);
         const uint16_t dst = (shown ? TILE_FB0 : TILE_FB1) * 32 + dma_pos;
         DMA_doDma(DMA_VRAM, (void *)(dma_src + dma_pos), dst, n / 2, 2);
         dma_pos += n;
-        if (dma_pos >= FB_BYTES) {
+        if (dma_pos >= upload_bytes) {
             shown ^= 1;
             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
             dma_src = 0;
@@ -112,11 +126,22 @@ static void set_mode(uint16_t m)
 #endif
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
-    R_SetMode(colb, h40 ? 40 : 32, crop);
+    R_SetMode((m & 4) ? 0 : colb, h40 ? 40 : 32, crop);
     if (h40) VDP_setScreenWidth320(); else VDP_setScreenWidth256();
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     view_trows = VIEW_H / 8;
-    nbuf = colb == 2 ? 1 : 2;
+    nbuf = colb == 2 || (m & 4) ? 1 : 2;
+    upload_bytes = FB_BYTES;
+    uint16_t row_interrupts = colb == 1 && !(m & 4);
+#ifdef DREAD_PACKED_ROWS
+    packed_rows = row_interrupts;
+    if (packed_rows) {
+        nbuf = 1;
+        view_trows *= 2;
+        upload_bytes *= 2;
+        row_interrupts = 0;
+    }
+#endif
     tile_fb1 = nbuf == 2 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
     nt1 = nbuf == 2 ? 0xA000 : 0xE000;
     /* palette 0: the view */
@@ -140,7 +165,8 @@ static void set_mode(uint16_t m)
     *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
     shown = 0; cur_buf = 0;
     hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
-    hint_on = colb == 1;
+    *(volatile uint16_t *)0xC00004 = hint_r1on;
+    hint_on = row_interrupts;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
@@ -303,7 +329,7 @@ static const char *const fcap_s[4] = { "LIVRE   ", "12 FPS  ", "10 FPS  ", "7.5 
 static uint16_t fcap_i = 2;
 static void menu_draw(uint16_t sel)
 {
-    static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[2] = { "LINHAS DUPLICADAS ", "COLUNAS DUPLICADAS" };
+    static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[3] = { "MEIA VERTICAL    ", "MEIA HORIZONTAL  ", "COMPLETO        " };
     static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
     char l[6][36];
     sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
@@ -311,7 +337,7 @@ static void menu_draw(uint16_t sel)
     (void)det;
     sprintf(l[1], "%c DETALHE: LINHAS", sel == 1 ? '>' : ' ');
 #else
-    sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[mode & 1]);
+    sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[(mode & 4) ? 2 : (mode & 1)]);
 #endif
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
@@ -358,7 +384,12 @@ static void menu(void)
                 continue;
             }
             if (sel == 2) { crop = (uint16_t)((crop + ((e & BUTTON_LEFT) ? 4 : 2)) % 6); set_mode(mode); }
-            else set_mode(mode ^ (sel == 0 ? 2 : 1));
+            else if (sel == 0) set_mode(mode ^ 2);
+            else {
+                const uint16_t detail = (mode & 4) ? 2 : (mode & 1);
+                const uint16_t next = (detail + ((e & BUTTON_LEFT) ? 2 : 1)) % 3;
+                set_mode((mode & 2) | (next == 2 ? 4 : next));
+            }
             SYS_disableInts(); VDP_setWindowVPos(FALSE, 13); SYS_enableInts();
             menu_draw(sel);
         }
@@ -713,13 +744,26 @@ int main(bool hard)
 #endif
         }
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
-        if (NBUF == 1) while (dma_src) {}   /* one buffer: the previous frame must be out first */
+#ifdef DREAD_PACKED_ROWS
+        if (NBUF == 1 && !packed_rows) while (dma_src) {}
+#else
+        if (NBUF == 1) while (dma_src) {}
+#endif
+        /* Packed rows render into compact storage while the previous expanded frame uploads. */
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);
         R_RenderView(&view, fb);
         if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
-        dma_pos = 0; dma_src = fb;
+        dma_pos = 0;
+#ifdef DREAD_PACKED_ROWS
+        if (packed_rows) {
+            uint8_t *const expanded = fbuf + FB_MAX / 2;
+            DreadPackRows(fb, expanded, FB_BYTES / 32);
+            dma_src = expanded;
+        } else
+#endif
+        dma_src = fb;
         cur_buf ^= (NBUF - 1);
         if (bench_req && !bench_done) bench_frames++;
 

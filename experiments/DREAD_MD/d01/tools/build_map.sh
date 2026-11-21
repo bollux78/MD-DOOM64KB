@@ -50,7 +50,7 @@ if [[ "$map" == EPISODE ]]; then
         done
         python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
         for n in {1..9}; do
-            level="$stage/E1M$n"
+            level="${DREAD_CACHE_MAPS:-$stage}/E1M$n"
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
             cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
                "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"

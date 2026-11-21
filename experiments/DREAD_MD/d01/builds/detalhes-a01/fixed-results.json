@@ -1,0 +1,38 @@
+[
+  {
+    "variant": "minimal",
+    "framebuffer_sha256": "6b5fd998b68b8c1cb1d053b6d0da7b83ffec17ec435f870f20ae0aeb6c9128ee",
+    "hint_calls": 48568,
+    "hint_cycles": 47432994
+  },
+  {
+    "variant": "robust",
+    "framebuffer_sha256": "6b5fd998b68b8c1cb1d053b6d0da7b83ffec17ec435f870f20ae0aeb6c9128ee",
+    "hint_calls": 48546,
+    "hint_cycles": 63070252
+  },
+  {
+    "variant": "table",
+    "framebuffer_sha256": "6b5fd998b68b8c1cb1d053b6d0da7b83ffec17ec435f870f20ae0aeb6c9128ee",
+    "hint_calls": 48547,
+    "hint_cycles": 52693578
+  },
+  {
+    "variant": "packed",
+    "framebuffer_sha256": "6b5fd998b68b8c1cb1d053b6d0da7b83ffec17ec435f870f20ae0aeb6c9128ee",
+    "hint_calls": 0,
+    "hint_cycles": 0
+  },
+  {
+    "variant": "full",
+    "framebuffer_sha256": "eb7b716c59f6491c1ecd9f5bd734c2a6c92ad3d671e8efb5107997541b42a54d",
+    "hint_calls": 0,
+    "hint_cycles": 0
+  },
+  {
+    "variant": "columns",
+    "framebuffer_sha256": "05c19bf621b8f0792691277778248effb6ab29a75fd976973c1b44d1329ed4b9",
+    "hint_calls": 0,
+    "hint_cycles": 0
+  }
+]

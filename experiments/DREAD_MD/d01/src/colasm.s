@@ -21,8 +21,8 @@ col_fill:
         lea     fill_end(%pc),%a1
         suba.w  %d1,%a1
         jmp     (%a1)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.b  %d0,k*4(%a0)
         .set    k,k-1
         .endr
@@ -50,8 +50,8 @@ col_tex:
         lea     tex_end(%pc),%a2
         suba.w  %d0,%a2
         jmp     (%a2)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.w  %d1,%d6
         and.w   %d5,%d6
         move.b  0(%a1,%d6.w),k*4(%a0)
@@ -81,8 +81,8 @@ col_tex_nm:
         lea     texnm_end(%pc),%a2
         suba.w  %d0,%a2
         jmp     (%a2)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.b  0(%a1,%d1.w),k*4(%a0)
         add.w   %d4,%d2
         addx.w  %d3,%d1
@@ -100,7 +100,7 @@ texnm_end:
    ====================================================================================== */
 #define VW_MAX 160
 #define VH_MAX 144
-#define NS_B 72                             /* row-doubled modes: 72 rows */
+#define NS_B 144                             /* byte scalers support full-height detail too */
 #define CEIL_D (-128)
 #define FLOOR_D (VW_MAX - 128)
 #define J_FB 0
@@ -168,7 +168,7 @@ seg_columns:
         move.w  0(%a0,%d6.w),%d5
         lea     sky_blob,%a1
         adda.w  %d5,%a1
-        move.w  r_ssh,%d4
+        move.w  r_skyshift,%d4
         move.w  %d0,%d5
         lsr.w   %d4,%d5                     /* sky row of the top (column-doubled: rows are halved) */
         adda.w  %d5,%a1
