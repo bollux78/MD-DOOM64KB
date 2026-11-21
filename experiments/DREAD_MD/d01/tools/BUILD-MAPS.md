@@ -23,3 +23,26 @@ o cache de transformações usa 2.048 posições com chave, para limitar RAM.
 Cada build contém um único mapa. Portas existentes e recorte de sprites vêm
 do D01, com objetos e monstros estáticos. Ainda faltam transições de fase,
 recursos compartilhados e compressão do PVS para um episódio na mesma ROM.
+
+## Doom shareware em uma ROM
+
+```sh
+GDK=/caminho/sgdk bash experiments/DREAD_MD/d01/tools/build_map.sh \
+    /caminho/doom1.wad EPISODE /caminho/saida 'DREAD MD DOOM SHAREWARE'
+```
+
+Gera `EPISODE.bin` com E1M1 a E1M9. No título, esquerda e direita escolhem
+a fase. START entra. Para escolher outra fase, reinicie a ROM.
+
+A paleta ajustada para E1M1 é compartilhada pelo episódio. O empacotador
+deduplica colunas de paredes, tabelas de colunas e blocos de sprites. As
+colunas mantêm o formato consumido pelos escaladores 68000. Cada linha
+do PVS é comprimida separadamente e a ROM só descomprime ao entrar em outro
+subsetor. Geometria de uso direto permanece na ROM, com o ID de linedef
+redundante de cada seg removido. HUD, rostos e arma usam um dicionário
+compartilhado, com quadros de DMA preparados fora do VBlank. O build também
+embute a introdução e as nove faixas no formato XGM2. A abertura é em texto.
+
+`DREAD_PREPARED_MAPS` permite reaproveitar uma conversão offline. Os nove
+subdiretórios devem vir do mesmo WAD e da mesma paleta, cada um contendo
+`mapdata.c` e `pvs.c`.

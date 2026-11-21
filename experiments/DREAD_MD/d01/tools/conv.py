@@ -12,7 +12,7 @@ Output (one C file + header):
 
 usage: conv.py WAD MAP OUTDIR
 """
-import argparse, struct, math
+import argparse, json, struct, math
 from pathlib import Path
 import numpy as np
 
@@ -93,6 +93,7 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--geometry-only", action="store_true", help="Skip game-specific things")
     parser.add_argument("--row-only", action="store_true", help="Emit only byte-format textures")
+    parser.add_argument("--palette", type=Path, help="JSON with 16 MD RGB triples (0–7)")
     args = parser.parse_args()
     wad = Wad(args.wad)
     mapname = args.map.upper()
@@ -344,28 +345,35 @@ def main():
         def byte(self, rgb):
             x, y = self.pair(rgb); return (x << 4) | y
 
-    # initial grouping: k-means on the items' mean colour (chroma direction), then refine by fit error
-    means = np.array([X.mean(0) for _, X in items])
-    sizes = np.array([len(X) for _, X in items], float)
-    feat = means / (means.sum(1, keepdims=True) + 1)      # chromaticity
-    C = feat[rng.choice(len(feat), NPAL, replace=False)]
-    for _ in range(20):
-        asg = ((feat[:, None] - C[None]) ** 2).sum(-1).argmin(1)
-        for k in range(NPAL):
-            if (asg == k).any(): C[k] = (feat[asg == k] * sizes[asg == k, None]).sum(0) / sizes[asg == k].sum()
-    pals = []
-    for rnd in range(int(os.environ.get("DREAD_PAL_ROUNDS", "2"))):
+    if args.palette:
+        levels = np.asarray(json.loads(args.palette.read_text()))
+        if NPAL != 1 or levels.shape != (16, 3) or not np.issubdtype(levels.dtype, np.integer) or not ((0 <= levels) & (levels <= 7)).all():
+            raise ValueError("A shared palette requires DREAD_NPAL=1 and 16 RGB triples in 0–7")
+        pals = [Pal((levels @ [64, 8, 1]).tolist())]
+        asg = np.zeros(len(items), dtype=int)
+    else:
+        # initial grouping: k-means on the items' mean colour (chroma direction), then refine by fit error
+        means = np.array([X.mean(0) for _, X in items])
+        sizes = np.array([len(X) for _, X in items], float)
+        feat = means / (means.sum(1, keepdims=True) + 1)      # chromaticity
+        C = feat[rng.choice(len(feat), NPAL, replace=False)]
+        for _ in range(20):
+            asg = ((feat[:, None] - C[None]) ** 2).sum(-1).argmin(1)
+            for k in range(NPAL):
+                if (asg == k).any(): C[k] = (feat[asg == k] * sizes[asg == k, None]).sum(0) / sizes[asg == k].sum()
         pals = []
-        for k in range(NPAL):
-            sel = [X for (it, X), g in zip(items, asg) if g == k]
-            if not sel: sel = [items[0][1]]
-            U2, w2 = summarize(np.concatenate(sel), 1500)
-            ch, e = fit_palette(U2, w2)
-            pals.append(Pal(ch))
-            print("palette %d: %d items, mean pair error %.1f" % (k, len(sel), e))
-        # reassign every item to the palette that renders it best
-        sub = [X if len(X) <= 600 else X[rng.choice(len(X), 600, replace=False)] for _, X in items]
-        asg = np.array([int(np.argmin([pl.cost(Xs).mean() for pl in pals])) for Xs in sub])
+        for rnd in range(int(os.environ.get("DREAD_PAL_ROUNDS", "2"))):
+            pals = []
+            for k in range(NPAL):
+                sel = [X for (it, X), g in zip(items, asg) if g == k]
+                if not sel: sel = [items[0][1]]
+                U2, w2 = summarize(np.concatenate(sel), 1500)
+                ch, e = fit_palette(U2, w2)
+                pals.append(Pal(ch))
+                print("palette %d: %d items, mean pair error %.1f" % (k, len(sel), e))
+            # reassign every item to the palette that renders it best
+            sub = [X if len(X) <= 600 else X[rng.choice(len(X), 600, replace=False)] for _, X in items]
+            asg = np.array([int(np.argmin([pl.cost(Xs).mean() for pl in pals])) for Xs in sub])
     pal_of = {it: int(g) for (it, _), g in zip(items, asg)}
 
     lut = {}

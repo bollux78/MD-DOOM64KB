@@ -7,7 +7,17 @@
 #include "render.h"
 #include "game_hud.h"
 #ifndef DREAD_NO_MUSIC
-#include "music.h"                             /* rescomp: bgm_intro, bgm_e1m1 (XGM2, Z80 driver) */
+#include "music.h"
+#ifdef DREAD_EPISODE
+static uint16_t selected_map;
+static const uint8_t *const episode_music[] = {
+    bgm_e1m1, bgm_e1m2, bgm_e1m3, bgm_e1m4, bgm_e1m5,
+    bgm_e1m6, bgm_e1m7, bgm_e1m8, bgm_e1m9
+};
+#define MAP_MUSIC episode_music[selected_map]
+#else
+#define MAP_MUSIC bgm_e1m1
+#endif
 #endif
 #ifndef START_MUSIC
 #define START_MUSIC 1
@@ -290,7 +300,7 @@ static void menu(void)
             if (sel == 3) {
 #ifndef DREAD_NO_MUSIC
                 music_on ^= 1;
-                if (music_on) XGM2_play(bgm_e1m1); else XGM2_stop();
+                if (music_on) XGM2_play(MAP_MUSIC); else XGM2_stop();
 #endif
                 menu_draw(sel);
                 continue;
@@ -308,13 +318,31 @@ static void menu(void)
     prev_joy = BUTTON_START;
 }
 
+#ifdef DREAD_EPISODE
+#ifdef DREAD_NO_MUSIC
+static uint16_t selected_map;
+#endif
+static void show_selected(void)
+{
+    char line[32];
+    sprintf(line, "MAPA: E1M%u", selected_map + 1);
+    VDP_drawText(line, 4, 11);
+}
+#endif
+
 static void title(void)
 {
     VDP_clearPlane(BG_B, TRUE);
     VDP_drawText(ROM_NAME, 4, 6);
     VDP_drawText("Renderer estilo Dread:", 4, 9);
     VDP_drawText("paredes por coluna, chao/teto", 4, 10);
+#ifdef DREAD_EPISODE
+    show_selected();
+    VDP_drawText("ESQ/DIR selecionam o mapa.", 4, 8);
+    uint16_t previous = 0;
+#else
     VDP_drawText("MAPA: " DREAD_MAP_LABEL, 4, 11);
+#endif
     VDP_drawText("Objetos e monstros estaticos.", 4, 12);
     VDP_drawText("Mede FPS. START no jogo: menu", 4, 13);
     VDP_drawText("de modos (H40/H32, linhas ou", 4, 14);
@@ -328,6 +356,14 @@ static void title(void)
     while ((uint16_t)(vints - t0) < 15 * 60) {
         JOY_update();
         const uint16_t j = JOY_readJoypad(JOY_1);
+#ifdef DREAD_EPISODE
+        const uint16_t pressed = j & ~previous;
+        previous = j;
+        if (pressed & (BUTTON_LEFT | BUTTON_RIGHT)) {
+            selected_map = (selected_map + ((pressed & BUTTON_RIGHT) ? 1 : episode_map_count - 1)) % episode_map_count;
+            show_selected();
+        }
+#endif
         if (j & BUTTON_START) break;
         if (j & BUTTON_B) { bench_req = 1; break; }
         if (bench_req) break;
@@ -342,18 +378,21 @@ int main(bool hard)
     SYS_setVIntCallback(vint_cb);
     SYS_setHIntCallback(hint_a);
     SYS_enableInts();
-    R_Init();
-    for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
 #ifndef DREAD_NO_MUSIC
     XGM2_loadDriver(TRUE);
     if (music_on) XGM2_play(bgm_intro);
 #endif
     title();
+#ifdef DREAD_EPISODE
+    dread_map = &episode_maps[selected_map];
+#endif
+    R_Init();
+    for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
 #ifndef DREAD_TEXT_TITLE
     HUD_Opening();
 #endif
 #ifndef DREAD_NO_MUSIC
-    if (music_on) XGM2_play(bgm_e1m1);
+    if (music_on) XGM2_play(MAP_MUSIC);
 #endif
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);

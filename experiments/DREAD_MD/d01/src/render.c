@@ -31,8 +31,33 @@ RenderStats rstats;
 uint8_t pvs_seen[4096];                 /* generator: subsectors that drew something */
 static uint16_t cur_sub;
 #else
+#ifdef DREAD_EPISODE
+static uint8_t pvs_row[EP_PVS_BYTES];
+static uint16_t cached_pvs_sub = 0xFFFF;
+
+static void load_pvs_row(uint16_t sub)
+{
+    if (cached_pvs_sub == sub) return;
+    cached_pvs_sub = sub;
+    const uint8_t *src = episode_pvs + dread_map->pvs_offsets[sub];
+    uint16_t left = dread_map->pvs_nbytes + dread_map->pvs_sbytes;
+    uint8_t *dst = pvs_row;
+    if (*src++ == 0) {
+        while (left--) *dst++ = *src++;
+        return;
+    }
+    while (left) {
+        const uint8_t packet = *src++;
+        uint16_t n = (packet & 127) + 1;
+        left -= n;
+        if (packet & 128) { while (n--) *dst++ = 0; }
+        else { while (n--) *dst++ = *src++; }
+    }
+}
+#else
 extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets per subsector */
 extern const uint16_t pvs_nbytes, pvs_sbytes;
+#endif
 static const uint8_t *pv_n, *pv_s;
 int r_pvs_off;   /* host checks only */
 static const uint8_t pv_all[1024] = {[0 ... 1023] = 0xFF};
@@ -180,6 +205,9 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 
 void R_Init(void)
 {
+#if defined(DREAD_EPISODE) && !defined(PVS_GEN)
+    cached_pvs_sub = 0xFFFF;
+#endif
 #ifndef COLB0
 #define COLB0 1
 #endif
@@ -450,12 +478,25 @@ static void seg_anchors(SegA *p)
 static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16_t yoff)
 {
     const MapTex *m = &map_tex[t];
+#ifdef DREAD_EPISODE
+    p->tex = (const uint8_t *)(tex_columns + m->off[bucket]);
+#else
     p->tex = COLB == 2 ? (const uint8_t *)tex_blob_w + 2 * m->off[bucket] : tex_blob + m->off[bucket];
+#endif
     p->wmask = (1u << m->wshift) - 1;
     p->hs2 = m->hshift + 1 + (COLB - 1);         /* columns are stored twice (and as words when COLB = 2) */
     p->hmask = (1u << m->hshift) - 1;
     p->pal = m->pal[bucket];
     p->vbase16 = ((int32_t)(textop - view_z + yoff)) << 16;
+}
+
+static inline const uint8_t *texture_column(const Part *p, uint16_t u)
+{
+#ifdef DREAD_EPISODE
+    return ((const uint8_t *const *)p->tex)[u & p->wmask];
+#else
+    return p->tex + ((u & p->wmask) << p->hs2);
+#endif
 }
 
 static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16_t u, int32_t zpp)
@@ -464,7 +505,7 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
 #if !(defined(__m68k__) || defined(__mc68000__))
     {   /* host reference of the 68000 path: draw, then remap rows whose tile belongs to another palette */
         const int c = (int)((((col - rfb) / (VIEW_H * 4)) * 4 + ((col - rfb) % (VIEW_H * 4))) / COLB);
-        const uint8_t *tc = p->tex + ((u & p->wmask) << p->hs2);
+        const uint8_t *tc = texture_column(p, u);
         const int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
         for (int y = y1 - 1, k = 0; y >= y0; y--, k++) {
             const int32_t v = vbot - zpp * k;
@@ -476,7 +517,7 @@ static inline void draw_part(uint8_t *col, int y0, int y1, const Part *p, uint16
     }
 #endif
     /* texture columns are stored twice (2H texels): no wrap mask needed while the span fits in H */
-    const uint8_t *tc = p->tex + ((u & p->wmask) << p->hs2);
+    const uint8_t *tc = texture_column(p, u);
     const uint16_t n = (uint16_t)(y1 - y0);
     int32_t vbot = p->vbase16 - mul32k(zpp, (int16_t)(HORIZON - (y1 - 1)));
     const int32_t span = mul32k(zpp, (int16_t)(n - 1));
@@ -837,8 +878,14 @@ void R_RenderView(const View *v, uint8_t *fb)
 #ifndef PVS_GEN
     {
         const int sub = R_PointInSub(view_xi, view_yi);
+    #ifdef DREAD_EPISODE
+        load_pvs_row(sub);
+        pv_n = pvs_row;
+        pv_s = pvs_row + dread_map->pvs_nbytes;
+#else
         pv_n = pvs_nodes + (uint32_t)sub * pvs_nbytes;
         pv_s = pvs_subs + (uint32_t)sub * pvs_sbytes;
+#endif
         if (r_pvs_off) pv_n = pv_s = pv_all;
     }
 #endif

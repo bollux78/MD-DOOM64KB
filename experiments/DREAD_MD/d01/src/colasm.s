@@ -312,10 +312,16 @@ fillw_end:
         move.l  J_ZPP(%a6),%a1
         move.w  0(%a1,%d1.w),%d3            /* zq = texels per row * 1024 (32767: 32 or more) */
         and.w   4(%a4),%d6                  /* & wmask */
+#ifdef DREAD_EPISODE
+        lsl.w   #2,%d6
+        movea.l (%a4),%a1
+        movea.l 0(%a1,%d6.w),%a1            /* shared column */
+#else
         move.w  6(%a4),%d1
         lsl.l   %d1,%d6                     /* << hs2 */
         move.l  (%a4),%a1
         adda.l  %d6,%a1                     /* a1 = texture column */
+#endif
         move.w  r_horizon,%d1               /* v top = vbase - zq * (HORIZON - y0) * 64 */
         sub.w   %d5,%d1
         muls.w  %d3,%d1

@@ -15,7 +15,9 @@ typedef struct {
     uint8_t  mid, upper, lower;    /* texture index, 0xFF none */
     uint8_t  flags;                /* 1 upper unpegged, 2 lower unpegged, 4 two-sided */
     int16_t  xoff, yoff;           /* texture offsets (seg offset + sidedef x offset) */
+#ifndef DREAD_EPISODE
     uint16_t line;
+#endif
     int16_t  len;                  /* seg length, map units */
 } MapSeg;
 
@@ -71,4 +73,56 @@ extern const uint16_t map_nthings;
 extern const uint16_t map_sub_things[];   /* things of subsector s: [map_sub_things[s], map_sub_things[s+1]) */
 extern const int16_t map_bm[4];          /* collision grid: x0, y0, width, height (128-unit cells) */
 extern const uint16_t map_bm_off[], map_bm_list[];   /* verts, segs, subsectors, nodes, sectors, lines */
+
+#ifdef DREAD_EPISODE
+typedef struct {
+    const int16_t (*map_verts)[2];
+    const MapSeg *map_segs;
+    const MapSub *map_subs;
+    const MapNode *map_nodes;
+    const MapSector *map_sectors_init;
+    const MapLine *map_lines;
+    const MapDoor *map_doors;
+    uint16_t map_ndoors;
+    const int16_t *map_sector_tag;
+    const MapTex *map_tex;
+    const int16_t *map_start;
+    const uint16_t *map_counts;
+    const MapSprite *map_sprites;
+    const MapThing *map_things;
+    uint16_t map_nthings;
+    const uint16_t *map_sub_things;
+    const int16_t *map_bm;
+    const uint16_t *map_bm_off;
+    const uint16_t *map_bm_list;
+    const uint32_t *pvs_offsets;
+    uint16_t pvs_nbytes, pvs_sbytes;
+} DreadMap;
+extern const DreadMap *dread_map;
+extern const DreadMap episode_maps[];
+extern const uint16_t episode_map_count;
+extern const uint8_t episode_pvs[];
+extern const uint8_t *const tex_columns[];
+#ifndef DREAD_EPISODE_DATA
+#define map_verts (dread_map->map_verts)
+#define map_segs (dread_map->map_segs)
+#define map_subs (dread_map->map_subs)
+#define map_nodes (dread_map->map_nodes)
+#define map_sectors_init (dread_map->map_sectors_init)
+#define map_lines (dread_map->map_lines)
+#define map_doors (dread_map->map_doors)
+#define map_ndoors (dread_map->map_ndoors)
+#define map_sector_tag (dread_map->map_sector_tag)
+#define map_tex (dread_map->map_tex)
+#define map_start (dread_map->map_start)
+#define map_counts (dread_map->map_counts)
+#define map_sprites (dread_map->map_sprites)
+#define map_things (dread_map->map_things)
+#define map_nthings (dread_map->map_nthings)
+#define map_sub_things (dread_map->map_sub_things)
+#define map_bm (dread_map->map_bm)
+#define map_bm_off (dread_map->map_bm_off)
+#define map_bm_list (dread_map->map_bm_list)
+#endif
+#endif
 #endif

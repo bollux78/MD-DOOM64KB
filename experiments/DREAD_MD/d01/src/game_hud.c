@@ -4,6 +4,9 @@
 #include "render.h"
 #include "game_hud.h"
 #include "hud_assets.h"
+#ifdef DREAD_EPISODE
+#include "image_tiles.h"
+#endif
 
 extern const uint16_t weap_pal[16], weap_x, weap_y, weap_tiles, weap_nframes, weap_npieces;
 extern const uint8_t weap_piece[][4];
@@ -71,6 +74,19 @@ void HUD_Opening(void)
 }
 
 /* ---- status bar on plane B rows [row0, row0+4) */
+#ifdef DREAD_EPISODE
+static uint32_t face_frame[16*8];
+static uint32_t weapon_frame[EP_WEAPON_TILES*8];
+
+static void unpack_tiles(uint32_t *dst, const uint16_t *refs, uint16_t count)
+{
+    while (count--) {
+        memcpy(dst, image_tiles + (uint32_t)*refs++ * 8, 32);
+        dst += 8;
+    }
+}
+#endif
+
 static uint16_t hud_row0, hud_col0 = HUD_COL0;
 static int16_t weap_dx;
 static int16_t cur_face = -1;
@@ -87,8 +103,15 @@ void HUD_Init(uint16_t row0)
     cram_set(16, weap_pal, 16);               /* PAL1: weapon */
     cram_set(32, hudw_fpal, 16);              /* PAL2: faces */
     cram_set(48, hudw_pal, 16);               /* PAL3: bar, digits, text */
+#ifdef DREAD_EPISODE
+    for (uint16_t i = 0; i < HUDW_NTILES; i++)
+        vram_copy32(TILE_HUD + i, image_tiles + (uint32_t)hudw_tiles_refs[i] * 8, 1);
+    unpack_tiles(weapon_frame, weap_data_refs, weap_tiles);
+    vram_copy32(TILE_WEAP, weapon_frame, weap_tiles);
+#else
     vram_copy32(TILE_HUD, &hudw_tiles[0][0], HUDW_NTILES);
     vram_copy32(TILE_WEAP, weap_data, weap_tiles);
+#endif
     /* weapon sprites: one entry per piece, linked */
     vram_addr(SLIST);
     for (uint16_t i = 0; i < weap_npieces; i++) {
@@ -132,7 +155,16 @@ void HUD_Draw(const HudState *st)
         }
     /* VRAM writes happen in the VBlank (HUD_VBlank): no interrupt masking during the frame,
        so the per-line scroll interrupt (row-doubled view) never misses a line */
-    if (st->face != cur_face) { cur_face = st->face; face_dirty = 1; }
+    if (st->face != cur_face) {
+#ifdef DREAD_EPISODE
+        face_dirty = 0;
+        __asm__ volatile ("" ::: "memory");
+        unpack_tiles(face_frame, hudw_faces_refs + (uint16_t)st->face * 16, 16);
+        __asm__ volatile ("" ::: "memory");
+#endif
+        cur_face = st->face;
+        face_dirty = 1;
+    }
     for (int r = 0; r < 4; r++)
         for (int c = 0; c < 32; c++) {
             const int face = r >= HUDW_FACE_R && r < HUDW_FACE_R + 4 && c >= HUDW_FACE_C && c < HUDW_FACE_C + HUDW_FACE_W;
@@ -144,7 +176,16 @@ void HUD_Draw(const HudState *st)
 
 /* ---- weapon: frame upload is requested here and done by the caller's VBlank (WEAP_VBlank) */
 static volatile int16_t weap_req = -1;
-void HUD_WeaponFrame(uint16_t f) { weap_req = (int16_t)f; }
+void HUD_WeaponFrame(uint16_t f)
+{
+#ifdef DREAD_EPISODE
+    weap_req = -1;
+    __asm__ volatile ("" ::: "memory");
+    unpack_tiles(weapon_frame, weap_data_refs + f * weap_tiles, weap_tiles);
+    __asm__ volatile ("" ::: "memory");
+#endif
+    weap_req = (int16_t)f;
+}
 void HUD_WeaponBob(int16_t dx, int16_t dy) { bob_x = dx; bob_y = dy; sat_dirty = 1; }
 
 void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26 */
@@ -161,9 +202,21 @@ void HUD_VBlank(void)
 {
     if (weap_req >= 0) {
         const uint16_t f = (uint16_t)weap_req; weap_req = -1;
+#ifdef DREAD_EPISODE
+        (void)f;
+        DMA_doDma(DMA_VRAM, weapon_frame, TILE_WEAP * 32, weap_tiles * 16, 2);
+#else
         DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
+#endif
     }
-    if (face_dirty) { face_dirty = 0; DMA_doDma(DMA_VRAM, (void *)&hudw_faces[cur_face][0][0], TILE_FACE * 32, 16 * 16, 2); }
+    if (face_dirty) {
+        face_dirty = 0;
+#ifdef DREAD_EPISODE
+        DMA_doDma(DMA_VRAM, face_frame, TILE_FACE * 32, 16 * 16, 2);
+#else
+        DMA_doDma(DMA_VRAM, (void *)&hudw_faces[cur_face][0][0], TILE_FACE * 32, 16 * 16, 2);
+#endif
+    }
     if (hud_dirty) {
         hud_dirty = 0;
         for (int r = 0; r < 4; r++) DMA_doDma(DMA_VRAM, hud_nt[r], BGB + (hud_row0 + r) * 128 + hud_col0 * 2, 32, 2);

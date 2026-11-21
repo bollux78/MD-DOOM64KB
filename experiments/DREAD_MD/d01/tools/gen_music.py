@@ -11,6 +11,8 @@ from prepare_r25_music import decode, validate
 out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 payload = json.loads((ROOT / "assets/r25-music.json").read_text())
 want = {"E1M1": "bgm_e1m1", "Intro": "bgm_intro"}
+if sys.argv[2:] == ["--episode"]:
+    want.update({f"E1M{i}": f"bgm_e1m{i}" for i in range(2, 10)})
 res = []
 for t in payload["tracks"]:
     if t["name"] not in want: continue
