@@ -25,7 +25,7 @@ Na abertura, START, A, B ou C mostram o menu. **New Game** entra em E1M1, **Sele
 
 ## Engenharia reversa de Bermuda e E1M1 Alpha 2
 
-Rastreamento das ROMs fornecidas pelo Bollux no Genesis Plus GX instrumentado, em NTSC, com hardware em modo Mega Drive sem Sega CD (`system_hw = 0x80`). O início de um quadro exibido foi identificado pela troca da tabela de tiles do viewport, depois da transferência gráfica. Esse marcador deixa as animações do HUD e os flashes de paleta fora da contagem. O FPS foi calculado pelo total de intervalos completos dividido pelo tempo em VBlanks.
+Rastreamento das ROMs fornecidas pelo Bollux no Genesis Plus GX instrumentado, em NTSC, com hardware em modo Mega Drive sem Sega CD (`system_hw = 0x80`). O emulador disponibilizava SRAM de 16 bits nesta primeira rodada, e as duas ROMs selecionaram esse caminho. O início de um quadro exibido foi identificado pela troca da tabela de tiles do viewport, depois da transferência gráfica. Esse marcador deixa as animações do HUD e os flashes de paleta fora da contagem. O FPS foi calculado pelo total de intervalos completos dividido pelo tempo em VBlanks.
 
 | ROM e trecho | VBlanks por quadro 3D | FPS observado |
 | --- | --- | ---: |
@@ -35,10 +35,10 @@ Rastreamento das ROMs fornecidas pelo Bollux no Genesis Plus GX instrumentado, e
 
 Os ~7 FPS observados jogando são compatíveis com as médias. A duração de cada quadro varia em jogo. Na Bermuda, o trecho de renderização medido antes do empacotamento levou **74,7–135,3 ms** em 26 amostras, com mediana de **122,1 ms**. O empacotamento levou **20,5–20,9 ms** em 29 amostras. Essas durações são tempo decorrido no emulador, incluindo interrupções e eventuais paradas de barramento durante cada trecho.
 
-### Pipeline 68000 → SRAM → VDP
+### Pipeline com SRAM de 16 bits
 
 1. As duas ROMs desenham **72 linhas distintas**. O empacotador em assembly duplica as linhas para formar o viewport de **320 × 144 pixels**. Ele está em `$07EEDE` na Bermuda e em `$07E3EA` na Alpha 2. Os bytes dessa rotina coincidem nas duas ROMs.
-2. Sem Sega CD, o buffer empacotado usa a **SRAM do cartucho**. Os cabeçalhos declaram `$200000–$20FFFF` e o DMA lê o viewport a partir de `$20A600`.
+2. Sem Sega CD e com SRAM de 16 bits detectada, o buffer empacotado usa a **SRAM do cartucho**. Os cabeçalhos declaram `$200000–$20FFFF` e o DMA lê o viewport a partir de `$20A600`.
 3. São **11.520 palavras / 23.040 bytes** por viewport. A Bermuda envia os quatro lotes em VBlanks sucessivos, **um lote por VBlank** durante a transferência, e alterna o destino na VRAM entre `$0200` e `$5C00`. O tamanho normal foi 3.144 + 3.200 + 3.200 + 1.976 palavras. O primeiro e o último lotes variaram quando o primeiro VBlank também enviava dados da interface.
 4. Depois dos lotes gráficos, o engine copia a tabela correspondente para `$E100` com um DMA de **1.152 palavras**. Esse foi o marcador de apresentação usado no perfil.
 
@@ -51,9 +51,31 @@ Os ~7 FPS observados jogando são compatíveis com as médias. A duração de ca
 | `$088700`, `$0887BE` | Seleção do próximo lote e sinalização de término do envio do viewport |
 | `$08E2A6` | Caminho alternativo associado ao Sega CD, fora das execuções deste teste |
 
+### Verificação com SRAM ausente e de 8 bits
+
+No devlog da Alpha 2, o Happy-Ferret relata que separou campos imutáveis para mantê-los em ROM, permitindo executar E1M1 sem exigir SRAM. O cabeçalho das ROMs ainda declara a janela de SRAM. Instrumentei os callbacks de leitura e escrita do Genesis Plus GX e alternei entre disponibilidade de 16 bits, ausência de SRAM (leituras retornam todos os bits em 1 e escritas são descartadas) e SRAM de 8 bits simulada apenas no byte ímpar.
+
+| ROM | SRAM de 16 bits | SRAM ausente | SRAM de 8 bits simulada |
+| --- | ---: | ---: | ---: |
+| `Bermuda.bin` | 6,08 FPS | 4,86 FPS | 4,86 FPS |
+| `E1M1-alpha2.bin` | 6,09 FPS | 4,70 FPS | 4,70 FPS |
+
+Segunda rota, com 300 VBlanks por condição após entrar no mapa. Mantive a sequência de comandos para cada ROM. A câmera e os inimigos podem seguir trajetórias diferentes quando a cadência muda, então os números comparam percursos de entrada iguais em condições diferentes. Ainda falta medir com pose e estado de jogo travados e repetir em console físico.
+
+- **16 bits.** Em 300 VBlanks, o DMA do viewport leu 345.600 palavras da SRAM na Bermuda e 357.120 na Alpha 2. O empacotamento em SRAM rodou em `$07EEDE` e `$07E3EA`, respectivamente.
+- **Sem SRAM ou com 8 bits.** Ambas entraram no mapa e exibiram a cena. Após a sondagem de inicialização, o trace registrou zero leituras, zero escritas e zero DMA da SRAM em jogo. O 68000 escreveu o viewport diretamente na porta de dados do VDP (`$C00000`) pelas rotinas `$07EE5C` na Bermuda e `$07E368` na Alpha 2. A troca da tabela de tiles continuou a ocorrer por DMA. Na simulação, as capturas amostradas e os timestamps de apresentação foram idênticos entre 8 bits e SRAM ausente.
+
+A Alpha 2 dispensa SRAM para funcionar. Seu caminho opcional de 16 bits explica a atividade medida no emulador e contextualiza os 7,64 FPS da primeira rodada.
+
+### Memória para mapas maiores na D01
+
+Na build Combate 03, E1M6 tem 1.207 vértices, 1.862 segmentos, 606 subsetores e 250 setores. A geometria estática já fica em ROM. O ELF reserva 23.040 bytes para os buffers do framebuffer, 7.242 para o cache de vértices e 2.500 para a cópia dos setores em WRAM. Entre o fim dos dados estáticos e o topo da WRAM há cerca de 14,3 KiB brutos, compartilhados com a pilha e eventuais alocações dinâmicas.
+
+O código atual só altera o teto de setores de porta. Manter o restante em ROM e guardar um teto de 16 bits por setor reduziria a cópia de 2.500 para 500 bytes no mapa maior, uma economia bruta de 2.000 bytes antes de índices auxiliares. É um primeiro teste de capacidade que pode ser medido com o mapa atual. Para um perfil voltado a flashcarts de 8 bits, a SRAM é candidata a dados frios. Um buffer de vídeo via SRAM de 16 bits merece um teste opcional com detecção e fallback. O ganho medido acima pertence ao pipeline da Bermuda e da Alpha 2.
+
 ### Comparação com a D01 Combate 03
 
-Os **3,80 FPS** da D01 vieram do percurso fixo do benchmark. Os **7,64 FPS** da Alpha 2 vieram de outra sequência de poses no E1M1. Para quantificar a diferença, use as mesmas posições e ângulos nas duas ROMs, com as portas e os atores em estados equivalentes. Registre separadamente **visibilidade e preparação de paredes**, **rasterização de colunas e sprites**, **empacotamento** e **apresentação por VBlank**. A prioridade sugerida é medir os dois primeiros estágios. A Alpha 2 já demonstra que a cadência observada é possível mesmo com o custo do empacotador e quatro lotes DMA.
+Os **3,80 FPS** da D01 vieram do percurso fixo do benchmark. Os **7,64 FPS** da Alpha 2 vieram de outra sequência de poses no E1M1. Para quantificar a diferença, use as mesmas posições e ângulos nas duas ROMs, com as portas e os atores em estados equivalentes. Registre separadamente **visibilidade e preparação de paredes**, **rasterização de colunas e sprites**, **empacotamento** e **apresentação por VBlank**. A prioridade sugerida é medir os dois primeiros estágios. A medição de 7,64 FPS da Alpha 2 é do caminho com SRAM de 16 bits. Para comparação com a D01 sem SRAM, use também o caminho direto ao VDP.
 
 Os offsets acima correspondem às ROMs com estes SHA-256:
 
