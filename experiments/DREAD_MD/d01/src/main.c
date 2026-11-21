@@ -67,13 +67,20 @@ static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x4000000
 /* rows shown twice: hint.s scrolls plane A up by one row every 2 lines inside the view */
 extern void hint_a(void), hint_b(void);
 static volatile uint8_t hint_on;
+uint16_t hint_r1on;                 /* VDP reg 1 write with the display on (hint_a turns the display back on at the view) */
 
 static void vint_cb(void)
 {
     vints++;
     *(volatile uint32_t *)0xC00004 = 0x40000010UL;
     *(volatile uint16_t *)0xC00000 = 0;
-    if (hint_on) { SYS_setHIntCallback(hint_a); *(volatile uint16_t *)0xC00004 = 0x8014; }   /* H-int back on for the next frame */
+    if (hint_on) {
+        /* lines 0..15 above the view are black: display off there, so the VBlank DMA keeps the full
+           blank-time speed until hint_a turns the display on before the first view line (a DMA that
+           ran into the visible area halted the 68000 and the row-doubling H-int: squashed picture band) */
+        *(volatile uint16_t *)0xC00004 = hint_r1on & ~0x40;
+        SYS_setHIntCallback(hint_a); *(volatile uint16_t *)0xC00004 = 0x8014;
+    }
     /* all VRAM traffic must end inside the VBlank: a DMA that runs into the active display halts the
        68000 (frame time) and delays the row-doubling H-int (lines of the wrong rows, the picture jumps) */
     const uint16_t hud_bytes = HUD_VBlank();
@@ -132,6 +139,7 @@ static void set_mode(uint16_t m)
     *(volatile uint16_t *)0xC00000 = 0;
     *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
     shown = 0; cur_buf = 0;
+    hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
     hint_on = colb == 1;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;

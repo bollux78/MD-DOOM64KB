@@ -19,6 +19,7 @@ hint_a:
         bmi.s   9f                          /* above the view */
         lsr.w   #1,%d0
         neg.w   %d0                         /* v = -((L - VTOP + 1) >> 1) */
+        move.w  hint_r1on,0xC00004          /* display on (the VBlank turned it off for lines 0..15) */
         move.l  #0x40000010,0xC00004
         move.w  %d0,0xC00000
         movem.l %d1/%a0-%a1,-(%sp)
