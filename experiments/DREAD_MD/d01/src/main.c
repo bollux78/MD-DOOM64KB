@@ -295,11 +295,16 @@ static const uint16_t bench_script[][2] = {
 };
 
 /* in-game menu (START): detail levels switch at once, the renderer adapts */
+/* frame cap: minimum VBlanks per rendered frame (steady pacing, the spare time goes to the game) */
+static uint16_t fcap = 6;
+static const uint8_t fcap_v[4] = { 0, 5, 6, 8 };
+static const char *const fcap_s[4] = { "LIVRE   ", "12 FPS  ", "10 FPS  ", "7.5 FPS " };
+static uint16_t fcap_i = 2;
 static void menu_draw(uint16_t sel)
 {
     static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[2] = { "LINHAS DUPLICADAS ", "COLUNAS DUPLICADAS" };
     static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
-    char l[5][36];
+    char l[6][36];
     sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
 #ifdef DREAD_ROW_ONLY
     (void)det;
@@ -309,12 +314,13 @@ static void menu_draw(uint16_t sel)
 #endif
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
-    sprintf(l[4], "%c VOLTAR", sel == 4 ? '>' : ' ');
+    sprintf(l[4], "%c LIMITE:  %s", sel == 4 ? '>' : ' ', fcap_s[fcap_i]);
+    sprintf(l[5], "%c VOLTAR", sel == 5 ? '>' : ' ');
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
     VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 3);
-    for (int i = 0; i < 5; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
-    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 11);
+    for (int i = 0; i < 6; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
+    VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 12);
     SYS_enableInts();
 }
 static void menu(void)
@@ -332,10 +338,16 @@ static void menu(void)
         const uint16_t j = JOY_readJoypad(JOY_1), e = j & ~pj;
         pj = j;
         if (e & BUTTON_START) break;
-        if (e & BUTTON_UP) { sel = (sel + 4) % 5; menu_draw(sel); }
-        if (e & BUTTON_DOWN) { sel = (sel + 1) % 5; menu_draw(sel); }
+        if (e & BUTTON_UP) { sel = (sel + 5) % 6; menu_draw(sel); }
+        if (e & BUTTON_DOWN) { sel = (sel + 1) % 6; menu_draw(sel); }
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
-            if (sel == 4) break;
+            if (sel == 5) break;
+            if (sel == 4) {
+                fcap_i = (uint16_t)((fcap_i + ((e & BUTTON_LEFT) ? 3 : 1)) & 3);
+                fcap = fcap_v[fcap_i];
+                menu_draw(sel);
+                continue;
+            }
             if (sel == 3) {
 #ifndef DREAD_NO_MUSIC
                 music_on ^= 1;
@@ -703,6 +715,7 @@ int main(bool hard)
         if (NBUF == 1) while (dma_src) {}   /* one buffer: the previous frame must be out first */
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);
         R_RenderView(&view, fb);
+        if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
         while (dma_src) {}
         dma_pos = 0; dma_src = fb;
