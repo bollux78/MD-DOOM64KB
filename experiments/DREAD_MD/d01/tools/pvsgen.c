@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     nsub = map_counts[2]; nnode = map_counts[3];
     R_Init();
     /* doors open: everything behind a door must be in the visible sets */
-    for (int d = 0; d < map_ndoors; d++) map_sectors[map_doors[d].sector].ceil = map_doors[d].open_ceil;
+    for (int d = 0; d < map_ndoors; d++) sec_ceil[map_doors[d].sector] = map_doors[d].open_ceil;
     vis = calloc((size_t)nsub * nsub, 1);
     for (int i = 0; i < nsub; i++) {
         const MapSub *ss = &map_subs[i];
