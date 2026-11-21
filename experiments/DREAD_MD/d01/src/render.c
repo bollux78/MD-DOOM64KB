@@ -913,6 +913,13 @@ static void render_node(uint16_t n)
         Actors_Draw(n & 0x7FFF);
 #endif
 #endif
+#ifdef DREAD_LEGACY_SEG_DISPATCH
+        /* Controlled ablation: original D01 dispatched every subsector seg to
+         * draw_seg(), which performs clipping and backface rejection itself.
+         * Keep all current textures, sky, sprites, combat and gameplay intact. */
+        for (uint16_t i = 0; i < ss->count; i++)
+            draw_seg(&map_segs[ss->first + i]);
+#else
         {   /* back faces rejected in map space before the call (no vertex transform, no prologue):
                the viewer is behind seg v1->v2 when dx*(vy-v1y) - dy*(vx-v1x) > 0 (halved: fits 16 bits) */
             const MapSeg *sg = &map_segs[ss->first];
@@ -938,6 +945,7 @@ static void render_node(uint16_t n)
                 draw_seg_body(sg, x1, z1, x2, z2, sx1, sx2, xs, xe, c);
             }
         }
+#endif /* DREAD_LEGACY_SEG_DISPATCH */
         return;
     }
 #ifndef PVS_GEN
