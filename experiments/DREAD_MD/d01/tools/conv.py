@@ -94,6 +94,9 @@ def main():
     parser.add_argument("--geometry-only", action="store_true", help="Skip game-specific things")
     parser.add_argument("--row-only", action="store_true", help="Emit only byte-format textures")
     parser.add_argument("--palette", type=Path, help="JSON with 16 MD RGB triples (0–7)")
+    parser.add_argument("--collect-items", type=Path, help="only save this map's colour samples (npz) for an episode palette")
+    parser.add_argument("--fit-from", type=Path, nargs="+", help="fit one palette to these npz samples, write it to --palette-out and stop")
+    parser.add_argument("--palette-out", type=Path)
     parser.add_argument("--tex-pad", type=int, default=0, help="store H + min(H, PAD) texels per column instead of 2H (episode builds)")
     args = parser.parse_args()
     wad = Wad(args.wad)
@@ -401,6 +404,23 @@ def main():
         def byte(self, rgb):
             x, y = self.pair(rgb); return (x << 4) | y
 
+    if args.collect_items:
+        U2, w2 = summarize(np.concatenate([X for _, X in items]), 3000)
+        np.savez(args.collect_items, U=U2, w=w2)
+        print("colour samples: %d" % len(U2))
+        return
+    if args.fit_from:
+        Us, ws = [], []
+        for f in args.fit_from:
+            z = np.load(f); Us.append(z["U"]); ws.append(z["w"])
+        U2, w2 = np.concatenate(Us), np.concatenate(ws)
+        if len(U2) > 1500:
+            k = np.argsort(-w2)[:1500]; U2, w2 = U2[k], w2[k]
+        ch, e = fit_palette(U2, w2)
+        lv = [[int(v) for v in cand_lv[c]] for c in ch]
+        args.palette_out.write_text(json.dumps(lv))
+        print("episode palette: %d maps, mean pair error %.1f, %s" % (len(args.fit_from), e, lv))
+        return
     if args.palette:
         levels = np.asarray(json.loads(args.palette.read_text()))
         if NPAL != 1 or levels.shape != (16, 3) or not np.issubdtype(levels.dtype, np.integer) or not ((0 <= levels) & (levels <= 7)).all():

@@ -42,13 +42,13 @@ if [[ "$map" == EPISODE ]]; then
     else
         palette="$stage/palette.json"
         mkdir -p "$stage/palette"
-        python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only > "$stage/palette.log"
-        python3 - "$stage/palette.log" "$palette" <<'PALETTE'
-import ast, json, sys
-from pathlib import Path
-line = next(x for x in Path(sys.argv[1]).read_text().splitlines() if x.startswith("palette 0 ["))
-Path(sys.argv[2]).write_text(json.dumps(ast.literal_eval(line.removeprefix("palette 0 "))))
-PALETTE
+        # one palette for the whole episode: colour samples of every map (walls, flats, sky, sprites), one fit
+        samples=()
+        for n in {1..9}; do
+            python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$stage/palette" --row-only --collect-items "$stage/palette/E1M$n.npz" > /dev/null
+            samples+=("$stage/palette/E1M$n.npz")
+        done
+        python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
         for n in {1..9}; do
             level="$stage/E1M$n"
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"

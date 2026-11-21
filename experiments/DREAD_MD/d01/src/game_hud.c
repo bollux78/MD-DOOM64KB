@@ -140,7 +140,7 @@ void HUD_Init(uint16_t row0)
         for (uint16_t k = 0; k < i; k++) tile += weap_piece[k][2] * weap_piece[k][3];
         vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX));
         vram_w((uint16_t)(((p[2] - 1) << 10) | ((p[3] - 1) << 8) | (i + 1 < weap_npieces ? i + 1 : 0)));
-        vram_w((uint16_t)(0x8000 | (1 << 13) | tile));
+        vram_w((uint16_t)((1 << 13) | tile));     /* low priority: the high-priority status bar covers the weapon when it bobs down */
         vram_w((uint16_t)(128 + weap_x + p[0]));
     }
     SYS_enableInts();
@@ -188,8 +188,8 @@ void HUD_Draw(const HudState *st)
     for (int r = 0; r < 4; r++)
         for (int c = 0; c < 32; c++) {
             const int face = r >= HUDW_FACE_R && r < HUDW_FACE_R + 4 && c >= HUDW_FACE_C && c < HUDW_FACE_C + HUDW_FACE_W;
-            hud_nt[r][c] = face ? (uint16_t)((2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
-                                : (uint16_t)((3 << 13) | (TILE_HUD + rows[r][c]));
+            hud_nt[r][c] = face ? (uint16_t)(0x8000 | (2 << 13) | (TILE_FACE + (r - HUDW_FACE_R) * HUDW_FACE_W + (c - HUDW_FACE_C)))
+                                : (uint16_t)(0x8000 | (3 << 13) | (TILE_HUD + rows[r][c]));
         }
     hud_dirty = 1;
 }
