@@ -337,7 +337,11 @@ static void menu(void)
     uint16_t sel = 0, pj = BUTTON_START;
     while (dma_src) {}
     SYS_disableInts();
+    /* The title uses shadow/highlight for its backdrop; menus during gameplay
+     * must always use normal brightness and high-priority text. */
+    VDP_setHilightShadow(FALSE);
     VDP_setTextPalette(PAL3);
+    VDP_setTextPriority(TRUE);
     VDP_setWindowVPos(FALSE, 13);
     SYS_enableInts();
     menu_draw(sel);
@@ -503,6 +507,9 @@ static void title(void)
 #endif
         if (!(JOY_readJoypad(JOY_1) & (BUTTON_START | BUTTON_A | BUTTON_C))) break;
     }
+    /* The opening menu enables VDP shadow mode for the text backdrop.
+     * Never carry that mode into gameplay or the START options window. */
+    VDP_setHilightShadow(FALSE);
     HUD_ClearOpening();
 }
 #else
