@@ -44,7 +44,8 @@ jobs:
           set -euo pipefail
           test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
           test -f "$HOME/mars/m68k-elf/makefile.gen"
-          find "$HOME/mars" -maxdepth 7 \\( -name rom_header.c -o -name rom_head.c -o -name makefile.gen \\) -print | head -40
+          find "$HOME/mars" -maxdepth 7 -name 'makefile.gen' -print
+          find "$HOME/mars" -maxdepth 7 -name 'rom_header.c' -print
           find /usr/share -iname doom1.wad -type f -print
       - name: Compile cached episode CONTROL, PATH, RAW and ALL
         shell: bash
