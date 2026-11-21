@@ -4,6 +4,9 @@ set -euo pipefail
 # Marsdev upstream documents MARS_BUILD_DIR, make sgdk, and local (non-sudo) builds.
 mkdir -p "$HOME/mars"
 git clone --depth=1 https://github.com/andwn/marsdev.git "$RUNNER_TEMP/marsdev-src"
+# Marsdev keeps the cross-GCC sources in git submodules; otherwise the
+# Makefile directory exists but has no without-newlib target.
+git -C "$RUNNER_TEMP/marsdev-src" submodule update --init --recursive
 cd "$RUNNER_TEMP/marsdev-src"
 export MARS_BUILD_DIR="$HOME/mars"
 echo "Building m68k GCC and SGDK; cold cache may take a long time."
