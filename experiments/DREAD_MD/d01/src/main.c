@@ -6,6 +6,7 @@
 #include <genesis.h>
 #include "render.h"
 #include "game_hud.h"
+#include "actors.h"
 #ifndef DREAD_NO_MUSIC
 #include "music.h"
 #ifdef DREAD_EPISODE
@@ -192,6 +193,10 @@ static int blocked(int16_t x, int16_t y)
     return 0;
 }
 
+#ifdef DREAD_COMBAT
+int ActorBlocked(int16_t x, int16_t y) { return blocked(x, y); }
+#endif
+
 static void use_line(void)
 {
     /* a point 40 units ahead; activate the closest special line within 40 units of it */
@@ -343,7 +348,11 @@ static void title(void)
 #else
     VDP_drawText("MAPA: " DREAD_MAP_LABEL, 4, 11);
 #endif
+#ifdef DREAD_COMBAT
+    VDP_drawText("Teste de IA e tiros da pistola.", 4, 12);
+#else
     VDP_drawText("Objetos e monstros estaticos.", 4, 12);
+#endif
     VDP_drawText("Mede FPS. START no jogo: menu", 4, 13);
     VDP_drawText("de modos (H40/H32, linhas ou", 4, 14);
     VDP_drawText("colunas duplicadas).", 4, 15);
@@ -387,6 +396,9 @@ int main(bool hard)
     dread_map = &episode_maps[selected_map];
 #endif
     R_Init();
+#ifdef DREAD_COMBAT
+    Actors_Init();
+#endif
     for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
 #ifndef DREAD_TEXT_TITLE
     HUD_Opening();
@@ -440,6 +452,9 @@ int main(bool hard)
         /* pistol: A fires (Doom timing), the status bar counts the bullets */
         if (weap_step == 0 && (j & BUTTON_A) && hud.ammo[0]) {
             weap_step = 1; weap_t = weap_seq[0][1]; HUD_WeaponFrame(weap_seq[0][0]);
+#ifdef DREAD_COMBAT
+            Actors_Fire(&view);
+#endif
             hud.ammo[0]--; hud.ammo_cur = hud.ammo[0]; HUD_Draw(&hud);
         } else if (weap_step) {
             if (weap_t > dt) weap_t -= dt;
@@ -472,6 +487,18 @@ int main(bool hard)
         cur_floor = map_sectors[map_subs[R_PointInSub(view.x >> 16, view.y >> 16)].sector].floor;
         view.z = cur_floor + 41;
 
+#ifdef DREAD_COMBAT
+        uint16_t health = hud.health;
+        Actors_Tick(&view, dt, &hud.health);
+        if (!hud.health) {
+            view.x = (int32_t)map_start[0] * 65536;
+            view.y = (int32_t)map_start[1] * 65536;
+            view.angle = (uint16_t)((int32_t)map_start[2] * 65536 / 360);
+            view.z = map_sectors[map_subs[R_PointInSub(map_start[0], map_start[1])].sector].floor + 41;
+            hud.health = 100;
+        }
+        if (health != hud.health) HUD_Draw(&hud);
+#endif
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
         if (NBUF == 1) while (dma_src) {}   /* one buffer: the previous frame must be out first */
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);

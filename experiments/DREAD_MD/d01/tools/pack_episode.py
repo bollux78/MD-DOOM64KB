@@ -67,6 +67,7 @@ def main():
     column_tables = {}
     columns = []
     counts, widths, definitions = [], [], []
+    max_actors = 1
     out = ['#define DREAD_EPISODE_DATA', '#include "mapdata.h"']
     sizes = dict(textures=0, sprites=0, visibility=0)
     common = None
@@ -80,6 +81,8 @@ def main():
             raise ValueError(f"{path}: palette or sine tables differ")
         counts.append(numbers(data["map_counts"]))
         nsub = counts[-1][2]
+        things = numbers(data["map_things"])
+        max_actors = max(max_actors, sum(bool(flag & 1) for flag in things[4::5]))
         for field, blob_name, bank, alignment, size_name in [
             ("map_tex", "tex_blob", tex, 1, "textures"),
             ("map_sprites", "spr_blob", spr, 2, "sprites"),
@@ -146,6 +149,8 @@ def main():
     (target/"mapcounts.h").write_text(
         f"#define MAP_NVERTS {max(c[0] for c in counts)}\n"
         f"#define MAP_NSECTORS {max(c[4] for c in counts)}\n"
+        f"#define MAP_NSUBS {max(c[2] for c in counts)}\n"
+        f"#define MAP_NACTORS {max_actors}\n"
         f"#define EP_PVS_BYTES {max(widths)}\n")
     print(f"textures {sizes['textures']} -> {len(tex.data)+4*len(columns)} B (inclui ponteiros)")
     print(f"geometry: {2*sum(c[1] for c in counts)} B removed (unused segment linedef IDs)")

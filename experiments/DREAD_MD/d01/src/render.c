@@ -12,6 +12,7 @@
  *    so the hot path only uses 16x16 multiplies and 32/16 divides.
  * Portable C: the same file builds for the Mega Drive and for the host test harness. */
 #include "render.h"
+#include "actors.h"
 
 #define NEAR4 16                   /* near plane, map units * 4 (= 4 units) */
 uint16_t r_ash = 4;                /* log2 of the columns between perspective-correct samples (per mode) */
@@ -825,7 +826,16 @@ static void render_node(uint16_t n)
         const MapSub *ss = &map_subs[n & 0x7FFF];
         rstats.subs_visited++;
 #ifndef PVS_GEN
-        for (uint16_t ti = map_sub_things[n & 0x7FFF]; ti < map_sub_things[(n & 0x7FFF) + 1]; ti++) project_thing(&map_things[ti]);
+        for (uint16_t ti = map_sub_things[n & 0x7FFF]; ti < map_sub_things[(n & 0x7FFF) + 1]; ti++) {
+#ifdef DREAD_COMBAT
+            if (map_things[ti].flags & 1) continue;
+#endif
+            project_thing(&map_things[ti]);
+        }
+#ifdef DREAD_COMBAT
+        for (uint16_t id = actor_heads[n & 0x7FFF]; id != ACTOR_NONE; id = actors[id].next)
+            if (actors[id].hp) project_thing(&actors[id].thing);
+#endif
 #endif
         for (uint16_t i = 0; i < ss->count; i++) draw_seg(&map_segs[ss->first + i]);
         return;

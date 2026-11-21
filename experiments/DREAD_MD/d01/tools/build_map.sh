@@ -32,6 +32,7 @@ render_flags="-DDREAD_NO_MUSIC -DSTART_MUSIC=0"
 if [[ "$map" == EPISODE ]]; then
     [[ -z "$geometry_flag" ]] || exit 2
     render_flags="-DDREAD_EPISODE"
+    if [[ ${DREAD_COMBAT:-0} == 1 ]]; then render_flags+=" -DDREAD_COMBAT"; fi
     levels=()
     if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
         for n in {1..9}; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
