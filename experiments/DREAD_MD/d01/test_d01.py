@@ -35,7 +35,7 @@ try:
     assert g.req(f"Z0,{sym['main']:x},2") == "OK"
     g.cont()
     assert g.req(f"z0,{sym['main']:x},2") == "OK"
-    assert g.req("M%x,2:0001" % sym["bench_req"]) == "OK"
+    assert g.req("M%x,2:%04x" % (sym["bench_req"], int(os.environ.get("BENCHREQ", "1")))) == "OK"
     if os.environ.get("DBG"): assert g.req("M%x,2:%04x" % (sym["dbg_flags"], int(os.environ["DBG"]))) == "OK"
     assert g.req(f"Z0,{sym['R_RenderView']:x},2") == "OK"
     npal = rd(g, "num_palettes", 2) if "num_palettes" in sym else 1

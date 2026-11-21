@@ -45,6 +45,7 @@ jobs:
           set -euo pipefail
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --user --break-system-packages -q pillow
           COLB=1 ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/EPISODE.bin" "$OUT/EPISODE.elf" "$OUT/bench" | sed "s/^/[ep] /" || echo "::warning::bench failed"
+          BENCHREQ=2 COLB=1 ADDR2LINE="$HOME/mars/m68k-elf/bin/m68k-elf-addr2line" NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm" timeout 900 python3 experiments/DREAD_MD/d01/test_d01.py "$OUT/EPISODE.bin" "$OUT/EPISODE.elf" "$OUT/bench-combate" | sed "s/^/[combate] /" || echo "::warning::combat bench failed"
       - uses: actions/upload-artifact@v4
         with:
           name: dread-md-episode

@@ -597,6 +597,8 @@ int main(bool hard)
         const int strafe = (j & BUTTON_C) != 0;
         const int32_t speed = 0x30000;     /* map units per vblank, 16.16 */
         /* pistol: A fires (Doom timing), the status bar counts the bullets */
+        if (bench_req == 2 && !bench_done && (bench_frames & 3) == 0) j |= BUTTON_A;   /* combat bench: keeps shooting */
+        if (bench_req == 2 && hud.ammo[0] < 5) hud.ammo[0] = 50;
         if (weap_step == 0 && (j & BUTTON_A) && hud.ammo[0]) {
             weap_step = 1; weap_t = weap_seq[0][1]; HUD_WeaponFrame(weap_seq[0][0]);
 #ifdef DREAD_COMBAT
@@ -641,7 +643,8 @@ int main(bool hard)
             pl.x = (int16_t)(view.x >> 16); pl.y = (int16_t)(view.y >> 16); pl.z = view.z;
             pl.sub = (uint16_t)R_PointInSub(pl.x, pl.y);
             pl.health = &hud.health; pl.armor = &hud.armor;
-            if (!bench_req) Actors_Tick(&pl, dt);
+            if (!bench_req || bench_req == 2) Actors_Tick(&pl, dt);   /* bench 2: same route with live monsters */
+            if (bench_req == 2 && hud.health < 30) hud.health = 100;   /* the combat bench never dies */
             pickups(&hud, pl.sub);
             if (!hud.health) {                          /* dead: message, then the map starts again */
                 HUD_Text(1, "VOCE MORREU");
