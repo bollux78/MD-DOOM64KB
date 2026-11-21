@@ -15,9 +15,11 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 export PATH="$GDK/bin:$PATH"
 export OPENBLAS_NUM_THREADS=1 DREAD_NPAL=1
-mkdir -p "$stage/src/boot" "$stage/res" "$out"
+mkdir -p "$stage/src" "$stage/res" "$out"
+[[ -n ${DREAD_COPY_SEGA_S:-} ]] && mkdir -p "$stage/src/boot"
 cp "$source_dir"/src/* "$stage/src/"
-cp "$GDK/src/boot/sega.s" "$stage/src/boot/"
+# the custom header goes in src/ (as in the D01 CI); SGDK keeps its own boot/sega.s
+[[ -n ${DREAD_COPY_SEGA_S:-} ]] && cp "$GDK/src/boot/sega.s" "$stage/src/boot/"
 header="$GDK/src/boot/rom_header.c"
 if [[ ! -f "$header" ]]; then header="$GDK/src/boot/rom_head.c"; fi
 sed -E "s/\"[^\"]{48}\"/\"$(printf '%-48.48s' "$name")\"/g" "$header" > "$stage/src/rom_header.c"
