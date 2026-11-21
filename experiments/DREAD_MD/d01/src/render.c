@@ -866,7 +866,17 @@ static void render_node(uint16_t n)
         Actors_Draw(n & 0x7FFF);
 #endif
 #endif
-        for (uint16_t i = 0; i < ss->count; i++) draw_seg(&map_segs[ss->first + i]);
+        {   /* back faces rejected in map space before the call (no vertex transform, no prologue):
+               the viewer is behind seg v1->v2 when dx*(vy-v1y) - dy*(vx-v1x) > 0 (halved: fits 16 bits) */
+            const MapSeg *sg = &map_segs[ss->first];
+            for (uint16_t i = ss->count; i; i--, sg++) {
+                const int16_t *va = map_verts[sg->v1], *vb = map_verts[sg->v2];
+                const int16_t dx = (int16_t)((vb[0] - va[0]) >> 1), dy = (int16_t)((vb[1] - va[1]) >> 1);
+                const int16_t px = (int16_t)((view_xi - va[0]) >> 1), py = (int16_t)((view_yi - va[1]) >> 1);
+                if (muls16(dx, py) - muls16(dy, px) > 256) continue;
+                draw_seg(sg);
+            }
+        }
         return;
     }
 #ifndef PVS_GEN
