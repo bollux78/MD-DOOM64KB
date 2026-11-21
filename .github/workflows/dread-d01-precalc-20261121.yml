@@ -47,7 +47,7 @@ jobs:
           find "$HOME/mars" -maxdepth 7 -name 'makefile.gen' -print
           find "$HOME/mars" -maxdepth 7 -name 'rom_header.c' -print
           find /usr/share -iname doom1.wad -type f -print
-      - name: Compile cached episode CONTROL, PATH, RAW and ALL
+      - name: Compile cached episode CONTROL, PATH, RAW, ALL and LEGACYSEG
         shell: bash
         env:
           WAD: /usr/share/games/doom/doom1.wad
@@ -82,19 +82,21 @@ jobs:
           build PATH "-DDREAD_OPT_PATH_COMPRESS"
           build RAW "-DDREAD_PVS_RAW"
           build ALL "-DDREAD_OPT_PATH_COMPRESS -DDREAD_PVS_RAW"
+          build LEGACYSEG "-DDREAD_LEGACY_SEG_DISPATCH"
           printf '%s\n' "CONTROL = unchanged renderer, menu shadow box corrected" \
             "PATH = alternate union-find path compression" \
             "RAW = read precomputed PVS directly from ROM, no decompress" \
             "ALL = PATH + RAW" \
+            "LEGACYSEG = original D01 segment dispatch, with present graphics and gameplay" \
             "Each name is included in filename, ROM header and opening screen." \
-            "All four ROMs use the same graphics, map conversion, video and menu settings." \
+            "All five ROMs use the same graphics, map conversion, video and menu settings." \
             "Generated map resources shared across all four ROMs. Only compare FPS from identical benchmark routes." > "$out/README.txt"
       - name: MAME smoke test of ROMs (diagnostic, not FPS)
         continue-on-error: true
         shell: bash
         run: |
           set -u
-          for tag in CONTROL PATH RAW ALL; do
+          for tag in CONTROL PATH RAW ALL LEGACYSEG; do
             echo "::group::MAME $tag"
             if timeout 45 mame megadriv -cart "$OUT/DREAD-D01-FPS-$tag.bin" \
                 -video none -sound none -plugins 0 -seconds_to_run 4 \
