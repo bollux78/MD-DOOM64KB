@@ -400,6 +400,7 @@ static const char *const title_levels[] = {
  * shadow/highlight mode leaves the surrounding artwork unchanged.
  * BG_A text has high priority and stays bright over the shadowed BG_B.
  * The box covers both the main menu and the level-selection menu. */
+extern const uint16_t title_mapb[1120];
 static void title_shadow_box(void)
 {
     const uint16_t *m = title_mapb;
