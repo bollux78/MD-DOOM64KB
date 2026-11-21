@@ -275,7 +275,7 @@ seg_columns:
         movem.w (%sp)+,%d0-%d1
 .Lnolo:
         cmp.w   %d1,%d0
-        bge.s   .Lclose
+        bge     .Lclose
         move.b  %d0,CEIL_D(%a5,%d7.w)
         move.b  %d1,FLOOR_D(%a5,%d7.w)
 .Lnext:
