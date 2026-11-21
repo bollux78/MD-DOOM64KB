@@ -1,141 +1,470 @@
+/* DREAD-MD: monsters, monster projectiles and item pickups (Doom-like rules, cheap on a 68000).
+ *  - states: idle (look) -> chase (8-direction P_NewChaseDir walk) -> attack -> pain -> death -> corpse
+ *  - wake by sight (REJECT table first, then a 16-bit grid trace, budgeted per frame) or by the noise of the
+ *    player's shots (flood through sectors whose openings are not closed and lines without "block sound")
+ *  - per-kind hit points, speed, pain chance and attacks (hitscan, shotgun, claws/bites, fireballs)
+ *  - sprites: walk/attack/pain in rotations 1-5 (6-8 mirrored), death frames, corpse stays           */
 #include "actors.h"
 #ifdef DREAD_COMBAT
 #include "mapcounts.h"
 
+#if defined(__m68k__) || defined(__mc68000__)
+static inline int32_t m16(int16_t a, int16_t b) { int32_t r = a; __asm__("muls.w %1,%0" : "+d"(r) : "dm"(b) : "cc"); return r; }
+static inline int16_t d16(int32_t n, int16_t d) { __asm__("divs.w %1,%0" : "+d"(n) : "dm"(d) : "cc"); return (int16_t)n; }
+#else
+static inline int32_t m16(int16_t a, int16_t b) { return (int32_t)a * b; }
+static inline int16_t d16(int32_t n, int16_t d) { return (int16_t)(n / d); }
+#endif
+
+enum { ST_IDLE, ST_CHASE, ST_ATK, ST_PAIN, ST_DEATH, ST_DEAD, ST_GONE };
+enum { A_HITSCAN, A_SHOTGUN, A_IMP, A_BITE, A_SOUL, A_BARON, A_CACO };
+#define DIR_NONE 8
+#define MELEE 84                         /* melee range + radius, map units */
+
+typedef struct {
+    int16_t hp; uint8_t speed, chase, pain, attack;
+    uint8_t walk0, walkn, atk0, atkn, painf, death0, deathn, corpse;
+} KindInfo;
+/* frames are sprite letters (A = 0); chase = VBlanks per walk step (Doom chase tics * 60/35) */
+static const KindInfo kinds[8] = {
+    {  20,  8, 7, 200, A_HITSCAN, 0, 4, 4, 2, 6,  7, 5, 1 },   /* zombieman   POSS */
+    {  30,  8, 6, 170, A_SHOTGUN, 0, 4, 4, 2, 6,  7, 5, 1 },   /* sergeant    SPOS */
+    {  60,  8, 5, 200, A_IMP,     0, 4, 4, 3, 7,  8, 5, 1 },   /* imp         TROO */
+    { 150, 10, 4, 180, A_BITE,    0, 4, 4, 3, 7,  8, 6, 1 },   /* demon       SARG */
+    { 150, 10, 4, 180, A_BITE,    0, 4, 4, 3, 7,  8, 6, 1 },   /* spectre     SARG */
+    { 100,  8, 8, 255, A_SOUL,    0, 2, 2, 2, 4,  5, 6, 0 },   /* lost soul   SKUL */
+    {1000,  8, 5,  50, A_BARON,   0, 4, 4, 3, 7,  8, 7, 1 },   /* baron       BOSS */
+    { 400,  8, 5, 128, A_CACO,    0, 1, 1, 3, 4,  6, 6, 1 },   /* cacodemon   HEAD */
+};
+static const int16_t dirx[8] = { 256, 181, 0, -181, -256, -181, 0, 181 }, diry[8] = { 0, 181, 256, 181, 0, -181, -256, -181 };
+
 Actor actors[MAP_NACTORS];
-uint16_t actor_heads[MAP_NSUBS];
-static uint16_t actor_count, group, elapsed[4];
-/* Also read by emulator diagnostics. */
+uint8_t actor_heads[MAP_NSUBS];
+static uint16_t nactors, tick_no;
+static uint8_t sight_budget;
 volatile uint16_t combat_wakes, combat_hits, combat_kills, combat_attacks;
 
-static int32_t magnitude(int32_t n) { return n < 0 ? -n : n; }
+/* ---- random (Doom-style 0..255) */
+static uint16_t rnd_s = 0x1234;
+static uint8_t rnd(void) { rnd_s ^= rnd_s << 7; rnd_s ^= rnd_s >> 9; rnd_s ^= rnd_s << 8; return (uint8_t)rnd_s; }
 
-static const MapSector *sector_at(int16_t x, int16_t y)
+/* ---- item pickups: taken bits for the map's static things */
+static uint8_t taken[64];
+int Thing_Taken(uint16_t i) { return i < 512 && (taken[i >> 3] & (1 << (i & 7))); }
+void Thing_Take(uint16_t i) { if (i < 512) taken[i >> 3] |= (uint8_t)(1 << (i & 7)); }
+
+/* ---- projectiles */
+#define MAXPROJ 8
+typedef struct { int32_t x, y, vx, vy; int16_t z; uint16_t sub; uint8_t kind, state, tics, frame; } Proj;
+static Proj proj[MAXPROJ];
+
+static inline int16_t iabs16(int16_t v) { return v < 0 ? -v : v; }
+static inline uint16_t sector_of_sub(uint16_t sub) { return map_subs[sub].sector; }
+static inline int16_t approx_dist(int16_t dx, int16_t dy)
 {
-    return &map_sectors[map_subs[R_PointInSub(x, y)].sector];
+    dx = iabs16(dx); dy = iabs16(dy);
+    return dx > dy ? dx + (dy >> 1) : dy + (dx >> 1);
+}
+/* 8-way direction of (dx, dy): 0 = east, counter-clockwise; buckets centred on the axes and diagonals */
+static uint8_t octant(int16_t dx, int16_t dy)
+{
+    const int16_t ax = iabs16(dx), ay = iabs16(dy);
+    uint8_t o;
+    if (m16(ay, 5) < m16(ax, 2)) o = 0;          /* |angle| < 22.5 (tan 22.5 ~ 0.4) */
+    else if (m16(ax, 5) < m16(ay, 2)) o = 2;
+    else o = 1;
+    /* o is the octant in the first quadrant (0 east, 1 diagonal, 2 north): mirror to the quadrant */
+    if (dx >= 0) return dy >= 0 ? o : (uint8_t)((8 - o) & 7);
+    return dy >= 0 ? (uint8_t)(4 - o) : (uint8_t)(4 + o);
 }
 
-/* As in the Manifold collision test, walk only grid cells along the ray.
-   The converter expands each line's cell coverage, so a 32-unit step
-   also covers crossings close to grid boundaries. */
-static int visible(int16_t ax, int16_t ay, int16_t bx, int16_t by, int16_t z)
+/* ---- sight: REJECT, then the line grid along the ray (16-bit products), openings at height z */
+static int rejected(uint16_t s1, uint16_t s2)
 {
-    int32_t dx = (int32_t)bx - ax, dy = (int32_t)by - ay;
-    int32_t length = magnitude(dx) + magnitude(dy);
-    if (length > 1024) return 0;
-    uint16_t steps = (uint16_t)(length / 32 + 1), last = ACTOR_NONE;
-    for (uint16_t i = 0; i <= steps; i++) {
-        int32_t x = ax + dx * i / steps, y = ay + dy * i / steps;
-        int32_t gx = (x - map_bm[0]) >> 7, gy = (y - map_bm[1]) >> 7;
+    const uint32_t i = (uint32_t)s1 * map_counts[4] + s2;
+    return (map_reject[i >> 3] >> (i & 7)) & 1;
+}
+static int trace(int16_t ax, int16_t ay, int16_t bx, int16_t by, int16_t z)
+{
+    const int16_t dx = bx - ax, dy = by - ay;
+    const int16_t len = iabs16(dx) + iabs16(dy);
+    if (len > 2400) return 0;
+    const int16_t steps = (int16_t)((len >> 5) + 1);
+    const int16_t sx = d16((int32_t)dx << 6, steps), sy = d16((int32_t)dy << 6, steps);   /* 1/64 units per step */
+    int32_t x = (int32_t)ax << 6, y = (int32_t)ay << 6;
+    uint16_t last = 0xFFFF;
+    for (int16_t i = 0; i <= steps; i++, x += sx, y += sy) {
+        const int16_t gx = (int16_t)(((x >> 6) - map_bm[0]) >> 7), gy = (int16_t)(((y >> 6) - map_bm[1]) >> 7);
         if (gx < 0 || gy < 0 || gx >= map_bm[2] || gy >= map_bm[3]) return 0;
-        uint16_t cell = (uint16_t)(gy * map_bm[2] + gx);
+        const uint16_t cell = (uint16_t)(gy * map_bm[2] + gx);
         if (cell == last) continue;
         last = cell;
         for (uint16_t k = map_bm_off[cell]; k < map_bm_off[cell + 1]; k++) {
             const MapLine *line = &map_lines[map_bm_list[k]];
             const int16_t *a = map_verts[line->v1], *b = map_verts[line->v2];
-            int32_t u = dx * (a[1] - ay) - dy * (a[0] - ax);
-            int32_t v = dx * (b[1] - ay) - dy * (b[0] - ax);
+            const int32_t u = m16(dx, a[1] - ay) - m16(dy, a[0] - ax);
+            const int32_t v = m16(dx, b[1] - ay) - m16(dy, b[0] - ax);
             if ((u < 0) == (v < 0)) continue;
-            int32_t lx = b[0] - a[0], ly = b[1] - a[1];
-            u = lx * (ay - a[1]) - ly * (ax - a[0]);
-            v = lx * (by - a[1]) - ly * (bx - a[0]);
-            if ((u < 0) == (v < 0)) continue;
+            const int16_t lx = b[0] - a[0], ly = b[1] - a[1];
+            const int32_t p = m16(lx, ay - a[1]) - m16(ly, ax - a[0]);
+            const int32_t q = m16(lx, by - a[1]) - m16(ly, bx - a[0]);
+            if ((p < 0) == (q < 0)) continue;
             if (line->back == NO_MAP_SECTOR) return 0;
-            const MapSector *f = &map_sectors[line->front], *bsec = &map_sectors[line->back];
-            if (z <= f->floor || z <= bsec->floor || z >= f->ceil || z >= bsec->ceil) return 0;
+            const MapSector *f = &map_sectors[line->front], *g = &map_sectors[line->back];
+            const int16_t lo = f->floor > g->floor ? f->floor : g->floor, hi = f->ceil < g->ceil ? f->ceil : g->ceil;
+            if (z <= lo || z >= hi) return 0;
         }
     }
     return 1;
 }
+/* 1 visible, 0 not, 2 not checked this frame (budget) */
+static int can_see(const Actor *a, const ActorPlayer *pl, int force)
+{
+    if (rejected(sector_of_sub(a->sub), sector_of_sub(pl->sub))) return 0;
+    if (!force) { if (!sight_budget) return 2; sight_budget--; }
+    const int16_t ax = (int16_t)(a->x >> 16), ay = (int16_t)(a->y >> 16);
+    const int16_t az = map_sectors[sector_of_sub(a->sub)].floor + 40;
+    return trace(ax, ay, pl->x, pl->y, (int16_t)((az + pl->z) >> 1));
+}
+
+/* ---- subsector lists */
+static void unlink_actor(uint8_t i)
+{
+    uint8_t *link = &actor_heads[actors[i].sub];
+    while (*link != i && *link != ACTOR_NONE) link = &actors[*link].next;
+    if (*link == i) *link = actors[i].next;
+}
+static void link_actor(uint8_t i)
+{
+    actors[i].next = actor_heads[actors[i].sub];
+    actor_heads[actors[i].sub] = i;
+}
 
 void Actors_Init(void)
 {
-    actor_count = group = 0;
+    nactors = 0; tick_no = 0;
     combat_wakes = combat_hits = combat_kills = combat_attacks = 0;
-    for (uint16_t i = 0; i < 4; i++) elapsed[i] = 0;
+    for (uint16_t i = 0; i < sizeof taken; i++) taken[i] = 0;
+    for (uint16_t i = 0; i < MAXPROJ; i++) proj[i].kind = 0xFF;
     for (uint16_t i = 0; i < map_counts[2]; i++) actor_heads[i] = ACTOR_NONE;
-    for (uint16_t i = 0; i < map_nthings; i++) {
-        const MapThing *thing = &map_things[i];
-        if (!(thing->flags & 1)) continue;
-        const uint16_t id = actor_count++;
-        actors[id] = (Actor){*thing, actor_heads[thing->sub], 30, 0, 0};
-        actor_heads[thing->sub] = id;
+    for (uint16_t i = 0; i < map_nthings && nactors < MAP_NACTORS && nactors < 255; i++) {
+        const MapThing *t = &map_things[i];
+        if (!(t->flags & THING_MONSTER)) continue;
+        Actor *a = &actors[nactors];
+        a->x = (int32_t)t->x << 16; a->y = (int32_t)t->y << 16; a->sub = t->sub;
+        a->kind = (uint8_t)THING_KIND(t->flags);
+        a->hp = kinds[a->kind].hp;
+        a->state = ST_IDLE; a->frame = 0; a->tics = (uint8_t)(i & 15); a->step = 0;
+        a->dir = (uint8_t)THING_DIR(t->flags);
+        a->flags = (t->flags & THING_AMBUSH) ? 1 : 0;
+        a->movecount = 0; a->reaction = 2;
+        link_actor((uint8_t)nactors);
+        nactors++;
     }
 }
 
-static void wake(Actor *actor)
+static void wake(Actor *a)
 {
-    if (!actor->awake) { actor->awake = 1; combat_wakes++; }
+    if (a->state != ST_IDLE) return;
+    a->state = ST_CHASE; a->tics = 1; a->step = 0; a->reaction = 2;
+    combat_wakes++;
 }
 
-void Actors_Fire(const View *view)
+/* ---- movement */
+static const MapSector *sector_at(int16_t x, int16_t y) { return &map_sectors[map_subs[R_PointInSub(x, y)].sector]; }
+static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
 {
-    int16_t x = view->x >> 16, y = view->y >> 16;
-    uint16_t angle = view->angle >> 6;
-    int32_t c = sintab[(angle + 256) & 1023], s = sintab[angle];
-    uint16_t target = ACTOR_NONE;
-    int32_t nearest = 641;
-    for (uint16_t i = 0; i < actor_count; i++) {
-        Actor *a = &actors[i];
-        if (!a->hp) continue;
-        int32_t dx = a->thing.x - x, dy = a->thing.y - y;
-        if (magnitude(dx) + magnitude(dy) > 768) continue;
-        int32_t depth = (dx*c + dy*s) >> 14;
-        if (depth <= 0 || depth >= nearest || magnitude((dx*s - dy*c) >> 14) > 16) continue;
-        if (!visible(x, y, a->thing.x, a->thing.y, view->z)) continue;
-        target = i;
-        nearest = depth;
+    if (dir >= 8) return 0;
+    const int16_t sp = kinds[a->kind].speed;
+    const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
+    const int16_t nx = x + (int16_t)((sp * dirx[dir]) >> 8), ny = y + (int16_t)((sp * diry[dir]) >> 8);
+    if (iabs16(nx - pl->x) < 32 && iabs16(ny - pl->y) < 32) return 0;
+    for (uint16_t k = 0; k < nactors; k++) {
+        const Actor *o = &actors[k];
+        if (k == i || o->state >= ST_DEATH) continue;
+        if (iabs16((int16_t)(o->x >> 16) - nx) < 32 && iabs16((int16_t)(o->y >> 16) - ny) < 32) return 0;
     }
-    if (target == ACTOR_NONE) return;
-    Actor *a = &actors[target];
-    wake(a);
+    const MapSector *from = &map_sectors[sector_of_sub(a->sub)], *to = sector_at(nx, ny);
+    if (to->floor - from->floor > 24 || to->ceil - to->floor < 56 || to->ceil - from->floor < 56) return 0;
+    if (ActorBlocked(nx, ny)) return 0;
+    a->x = (int32_t)nx << 16; a->y = (int32_t)ny << 16;
+    const uint16_t sub = (uint16_t)R_PointInSub(nx, ny);
+    if (sub != a->sub) { unlink_actor(i); a->sub = sub; link_actor(i); }
+    return 1;
+}
+/* Doom's P_NewChaseDir */
+static void new_chase_dir(Actor *a, uint8_t i, const ActorPlayer *pl)
+{
+    const int16_t dx = pl->x - (int16_t)(a->x >> 16), dy = pl->y - (int16_t)(a->y >> 16);
+    const uint8_t old = a->dir, turn = old < 8 ? (uint8_t)((old + 4) & 7) : DIR_NONE;
+    uint8_t d1 = dx > 10 ? 0 : dx < -10 ? 4 : DIR_NONE, d2 = dy < -10 ? 6 : dy > 10 ? 2 : DIR_NONE;
+    if (d1 != DIR_NONE && d2 != DIR_NONE) {
+        const uint8_t diag = d1 == 0 ? (d2 == 2 ? 1 : 7) : (d2 == 2 ? 3 : 5);
+        if (diag != turn && try_move(a, i, diag, pl)) { a->dir = diag; a->movecount = rnd() & 15; return; }
+    }
+    if (rnd() > 200 || iabs16(dy) > iabs16(dx)) { const uint8_t t = d1; d1 = d2; d2 = t; }
+    if (d1 == turn) d1 = DIR_NONE;
+    if (d2 == turn) d2 = DIR_NONE;
+    if (d1 != DIR_NONE && try_move(a, i, d1, pl)) { a->dir = d1; a->movecount = rnd() & 15; return; }
+    if (d2 != DIR_NONE && try_move(a, i, d2, pl)) { a->dir = d2; a->movecount = rnd() & 15; return; }
+    if (old < 8 && try_move(a, i, old, pl)) { a->movecount = rnd() & 15; return; }
+    const int8_t s = (rnd() & 1) ? 1 : -1;
+    for (int8_t k = 0, t = s > 0 ? 0 : 7; k < 8; k++, t = (int8_t)((t + s) & 7))
+        if ((uint8_t)t != turn && try_move(a, i, (uint8_t)t, pl)) { a->dir = (uint8_t)t; a->movecount = rnd() & 15; return; }
+    if (turn != DIR_NONE && try_move(a, i, turn, pl)) { a->dir = turn; a->movecount = rnd() & 15; return; }
+    a->dir = DIR_NONE;
+}
+
+/* ---- damage */
+static void hurt_player(ActorPlayer *pl, int16_t dmg)
+{
+    if (*pl->armor) {                    /* green armor rule: 1/3 absorbed */
+        int16_t save = dmg / 3;
+        if (save > (int16_t)*pl->armor) save = (int16_t)*pl->armor;
+        *pl->armor -= (uint16_t)save; dmg -= save;
+    }
+    *pl->health = (uint16_t)(*pl->health > (uint16_t)dmg ? *pl->health - dmg : 0);
+    pl->hurt = 1;
+    combat_attacks++;
+}
+static void damage_actor(Actor *a, int16_t dmg)
+{
+    if (a->state >= ST_DEATH) return;
     combat_hits++;
-    a->hp -= 10;
-    if (!a->hp) combat_kills++;
+    a->hp -= dmg;
+    if (a->hp <= 0) {
+        a->state = ST_DEATH; a->step = 0; a->frame = kinds[a->kind].death0; a->tics = 8;
+        combat_kills++;
+        return;
+    }
+    if (a->state == ST_IDLE) { a->state = ST_CHASE; combat_wakes++; }
+    if (rnd() < kinds[a->kind].pain) { a->state = ST_PAIN; a->frame = kinds[a->kind].painf; a->tics = 6; }
 }
 
-void Actors_Tick(const View *view, uint16_t dt, uint16_t *health)
+static void spawn_ball(const Actor *a, const ActorPlayer *pl, uint8_t kind)
 {
-    for (uint16_t i = 0; i < 4; i++) elapsed[i] += dt;
-    uint16_t step_time = elapsed[group];
-    elapsed[group] = 0;
-    int16_t x = view->x >> 16, y = view->y >> 16;
-    for (uint16_t i = group; i < actor_count; i += 4) {
-        Actor *a = &actors[i];
-        if (!a->hp) continue;
-        int32_t dx = x - a->thing.x, dy = y - a->thing.y;
-        int32_t distance = magnitude(dx) + magnitude(dy);
-        if (distance > 512) continue;
-        if (!a->awake) {
-            if (!visible(a->thing.x, a->thing.y, x, y, view->z)) continue;
-            wake(a);
-        }
-        a->cooldown = a->cooldown > step_time ? a->cooldown - step_time : 0;
-        if (distance < 176 && !a->cooldown && visible(a->thing.x, a->thing.y, x, y, view->z)) {
-            a->cooldown = 60;
-            combat_attacks++;
-            *health = *health > 5 ? *health - 5 : 0;
-        }
-        if (distance <= 32) continue;
-        int32_t step = step_time > 16 ? 16 : step_time;
-        int16_t nx = a->thing.x + dx * step / distance;
-        int16_t ny = a->thing.y + dy * step / distance;
-        const MapSector *from = &map_sectors[map_subs[a->thing.sub].sector];
-        const MapSector *to = sector_at(nx, ny);
-        if (to->floor - from->floor > 24 || to->ceil - to->floor < 56 || ActorBlocked(nx, ny)) continue;
-        a->thing.x = nx;
-        a->thing.y = ny;
-        uint16_t sub = (uint16_t)R_PointInSub(nx, ny);
-        if (sub != a->thing.sub) {
-            uint16_t *link = &actor_heads[a->thing.sub];
-            while (*link != i) link = &actors[*link].next;
-            *link = a->next;
-            a->next = actor_heads[sub];
-            actor_heads[sub] = i;
-            a->thing.sub = sub;
+    for (uint16_t k = 0; k < MAXPROJ; k++) {
+        Proj *p = &proj[k];
+        if (p->kind != 0xFF) continue;
+        const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
+        const int16_t dx = pl->x - x, dy = pl->y - y, d = approx_dist(dx, dy);
+        const int32_t speed = kind == 1 ? 0x8C000 : 0x5D000;              /* 8.75 / 5.8 units per VBlank */
+        p->x = a->x; p->y = a->y;
+        p->vx = d ? (int32_t)(((int64_t)dx * speed) / d) : 0;
+        p->vy = d ? (int32_t)(((int64_t)dy * speed) / d) : 0;
+        p->z = map_sectors[sector_of_sub(a->sub)].floor + 32;
+        p->sub = a->sub; p->kind = kind; p->state = 0; p->tics = 0; p->frame = 0;
+        return;
+    }
+}
+
+static void attack(Actor *a, ActorPlayer *pl, int16_t dist)
+{
+    const KindInfo *k = &kinds[a->kind];
+    const int seen = can_see(a, pl, 1);
+    if (!seen) return;
+    switch (k->attack) {
+    case A_HITSCAN:
+    case A_SHOTGUN: {
+        const uint8_t chance = dist < 128 ? 224 : dist < 512 ? 160 : 96;
+        for (uint16_t n = k->attack == A_SHOTGUN ? 3 : 1; n; n--)
+            if (rnd() < chance) hurt_player(pl, (int16_t)(((rnd() % 5) + 1) * 3));
+        break;
+    }
+    case A_IMP:   if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * 3)); else spawn_ball(a, pl, 0); break;
+    case A_BITE:  if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() % 10) + 1) * 4)); break;
+    case A_SOUL:  if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * 3)); break;
+    case A_BARON: if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * 10)); else spawn_ball(a, pl, 1); break;
+    case A_CACO:  if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() % 6) + 1) * 10)); else spawn_ball(a, pl, 2); break;
+    }
+}
+
+/* one walk step of an awake monster (Doom's A_Chase, simplified) */
+static void chase(Actor *a, uint8_t i, ActorPlayer *pl)
+{
+    const KindInfo *k = &kinds[a->kind];
+    const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
+    const int16_t dist = approx_dist(pl->x - x, pl->y - y);
+    if (a->reaction) a->reaction--;
+    /* melee */
+    if (dist < MELEE && (k->attack == A_IMP || k->attack == A_BITE || k->attack == A_SOUL || k->attack == A_BARON || k->attack == A_CACO)) {
+        if (can_see(a, pl, 0) == 1) goto start_attack;
+    }
+    /* missile / hitscan: Doom's P_CheckMissileRange odds */
+    if (!a->reaction && k->attack != A_BITE && k->attack != A_SOUL) {
+        int16_t d = dist - 64;
+        if (d > 200) d = 200;
+        if (d < 0) d = 0;
+        if (rnd() >= d && can_see(a, pl, 0) == 1) goto start_attack;
+    }
+    if (a->movecount) a->movecount--;
+    if (!a->movecount || a->dir >= 8 || !try_move(a, i, a->dir, pl)) new_chase_dir(a, i, pl);
+    a->step = (uint8_t)((a->step + 1) % k->walkn);
+    a->frame = (uint8_t)(k->walk0 + a->step);
+    a->tics = k->chase;
+    return;
+start_attack:
+    a->state = ST_ATK; a->step = 0; a->frame = k->atk0; a->tics = 10;
+    a->dir = octant(pl->x - x, pl->y - y);
+    a->reaction = 3;
+}
+
+static void look(Actor *a, const ActorPlayer *pl)
+{
+    const int16_t dx = pl->x - (int16_t)(a->x >> 16), dy = pl->y - (int16_t)(a->y >> 16);
+    if (approx_dist(dx, dy) > 2048) return;
+    if (approx_dist(dx, dy) > 64 && a->dir < 8 && m16(dx, dirx[a->dir]) + m16(dy, diry[a->dir]) < 0) return;   /* behind it */
+    if (can_see(a, pl, 0) == 1) wake(a);
+}
+
+/* player's shots wake every non-ambush monster that can hear: flood through open two-sided lines */
+static uint8_t secmark[MAP_NSECTORS];
+static uint16_t secq[MAP_NSECTORS];
+static void noise(uint16_t from)
+{
+    const uint16_t nsec = map_counts[4];
+    for (uint16_t i = 0; i < nsec; i++) secmark[i] = 0;
+    uint16_t head = 0, tail = 0;
+    secq[tail++] = from; secmark[from] = 1;
+    while (head < tail) {
+        const uint16_t s = secq[head++];
+        const MapSector *ss = &map_sectors[s];
+        for (uint16_t k = map_secadj_off[s]; k < map_secadj_off[s + 1]; k++) {
+            const uint16_t n = map_secadj[k];
+            if (secmark[n]) continue;
+            const MapSector *ns = &map_sectors[n];
+            const int16_t lo = ss->floor > ns->floor ? ss->floor : ns->floor, hi = ss->ceil < ns->ceil ? ss->ceil : ns->ceil;
+            if (hi <= lo) continue;                                    /* closed door */
+            secmark[n] = 1; secq[tail++] = n;
         }
     }
-    group = (group + 1) & 3;
+    for (uint16_t i = 0; i < nactors; i++) {
+        Actor *a = &actors[i];
+        if (a->state == ST_IDLE && !(a->flags & 1) && secmark[sector_of_sub(a->sub)]) wake(a);
+    }
+}
+
+void Actors_Fire(const View *view, uint16_t pellets, uint16_t damage_mul)
+{
+    const int16_t x = (int16_t)(view->x >> 16), y = (int16_t)(view->y >> 16);
+    const uint16_t ang = view->angle >> 6;
+    const int16_t c = sintab[(ang + 256) & 1023], s = sintab[ang];
+    const uint16_t psub = (uint16_t)R_PointInSub(x, y);
+    noise(sector_of_sub(psub));
+    ActorPlayer pl = { x, y, view->z, psub, 0, 0, 0 };
+    for (; pellets; pellets--) {
+        uint16_t target = 0xFFFF;
+        int32_t nearest = 2048;
+        for (uint16_t i = 0; i < nactors; i++) {
+            const Actor *a = &actors[i];
+            if (a->state >= ST_DEATH) continue;
+            const int16_t dx = (int16_t)(a->x >> 16) - x, dy = (int16_t)(a->y >> 16) - y;
+            if (iabs16(dx) > 2000 || iabs16(dy) > 2000) continue;
+            const int32_t depth = (m16(dx, c) + m16(dy, s)) >> 14;
+            if (depth <= 0 || depth >= nearest) continue;
+            const int32_t lat = (m16(dx, s) - m16(dy, c)) >> 14;
+            const int32_t tol = depth > 160 ? depth >> 3 : 20;      /* autoaim ~7 degrees, at least the body */
+            if ((lat < 0 ? -lat : lat) > tol) continue;
+            if (!can_see(a, &pl, 1)) continue;
+            target = i; nearest = depth;
+        }
+        if (target != 0xFFFF) damage_actor(&actors[target], (int16_t)(damage_mul * ((rnd() % 3) + 1)));
+    }
+}
+
+static void tick_proj(ActorPlayer *pl, uint16_t dt)
+{
+    for (uint16_t k = 0; k < MAXPROJ; k++) {
+        Proj *p = &proj[k];
+        if (p->kind == 0xFF) continue;
+        if (p->state) {                                   /* exploding: C D E */
+            if (p->tics > dt) { p->tics -= (uint8_t)dt; continue; }
+            if (++p->frame >= 3) { p->kind = 0xFF; continue; }
+            p->tics = 6; continue;
+        }
+        p->x += p->vx * dt; p->y += p->vy * dt;
+        const int16_t x = (int16_t)(p->x >> 16), y = (int16_t)(p->y >> 16);
+        p->tics += (uint8_t)dt; if (p->tics > 7) { p->tics = 0; p->frame ^= 1; }
+        int boom = 0;
+        if (iabs16(x - pl->x) < 20 && iabs16(y - pl->y) < 20 && p->z >= pl->z - 48 && p->z <= pl->z + 16) {
+            hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * (p->kind == 1 ? 8 : p->kind == 2 ? 5 : 3)));
+            boom = 1;
+        } else {
+            const int sub = R_PointInSub(x, y);
+            const MapSector *sec = &map_sectors[map_subs[sub].sector];
+            p->sub = (uint16_t)sub;
+            if (p->z < sec->floor || p->z + 8 > sec->ceil || ActorBlocked(x, y)) boom = 1;
+        }
+        if (boom) { p->state = 1; p->frame = 0; p->tics = 6; }
+    }
+}
+
+void Actors_Tick(ActorPlayer *pl, uint16_t dt)
+{
+    tick_no++;
+    sight_budget = 3;
+    pl->hurt = 0;
+    for (uint16_t i = 0; i < nactors; i++) {
+        Actor *a = &actors[i];
+        if (a->state >= ST_DEAD) continue;
+        if (a->tics > dt) { a->tics -= (uint8_t)dt; continue; }
+        const KindInfo *k = &kinds[a->kind];
+        switch (a->state) {
+        case ST_IDLE:
+            a->tics = 16;
+            look(a, pl);
+            break;
+        case ST_CHASE:
+            chase(a, (uint8_t)i, pl);
+            break;
+        case ST_ATK:
+            if (++a->step < k->atkn) {
+                a->frame = (uint8_t)(k->atk0 + a->step); a->tics = 10;
+                if (a->step == k->atkn - 1) {
+                    const int16_t dist = approx_dist(pl->x - (int16_t)(a->x >> 16), pl->y - (int16_t)(a->y >> 16));
+                    attack(a, pl, dist);
+                }
+            } else { a->state = ST_CHASE; a->step = 0; a->tics = k->chase; a->frame = k->walk0; }
+            break;
+        case ST_PAIN:
+            a->state = ST_CHASE; a->tics = k->chase; a->frame = k->walk0;
+            break;
+        case ST_DEATH:
+            if (++a->step < k->deathn) { a->frame = (uint8_t)(k->death0 + a->step); a->tics = 8; }
+            else a->state = k->corpse ? ST_DEAD : ST_GONE;
+            break;
+        }
+    }
+    tick_proj(pl, dt);
+}
+
+/* sprite of a monster seen from the camera: rotation from the camera's direction relative to its facing */
+void Actors_Draw(uint16_t sub)
+{
+    extern int16_t r_view_xi, r_view_yi;
+    for (uint8_t id = actor_heads[sub]; id != ACTOR_NONE; id = actors[id].next) {
+        const Actor *a = &actors[id];
+        if (a->state == ST_GONE) continue;
+        const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
+        uint8_t r = 0, flip = 0;
+        if (a->state < ST_DEATH && a->dir < 8) {
+            r = (uint8_t)((octant(r_view_xi - x, r_view_yi - y) - a->dir) & 7);
+            if (r > 4) { r = (uint8_t)(8 - r); flip = 1; }
+        }
+        uint16_t spr = map_mframes[((uint16_t)a->kind * 16 + a->frame) * 5 + r];
+        if (spr == 0xFFFF) spr = map_mframes[((uint16_t)a->kind * 16 + a->frame) * 5];
+        if (spr == 0xFFFF) spr = map_mframes[((uint16_t)a->kind * 16) * 5];
+        const MapSector *sec = &map_sectors[sector_of_sub(a->sub)];
+        R_AddSprite(x, y, sec->floor, spr, flip, sec);
+    }
+    for (uint16_t k = 0; k < MAXPROJ; k++) {
+        const Proj *p = &proj[k];
+        if (p->kind == 0xFF || p->sub != sub) continue;
+        uint16_t spr;
+        if (p->state) spr = map_fx[2 + p->frame];
+        else spr = p->kind == 1 ? map_fx[5 + p->frame] : p->kind == 2 ? map_fx[7] : map_fx[p->frame];
+        if (spr == 0xFFFF) spr = map_fx[p->frame & 1];
+        R_AddSprite((int16_t)(p->x >> 16), (int16_t)(p->y >> 16), p->z, spr, 0, &map_sectors[sector_of_sub(p->sub)]);
+    }
 }
 #endif

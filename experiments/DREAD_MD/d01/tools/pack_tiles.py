@@ -15,7 +15,7 @@ def main():
     frame_tiles = int(re.search(r"\bweap_tiles = (\d+)", weapon_source)[1])
     out = ["/* Generated tile dictionary. */", f"#define EP_WEAPON_TILES {frame_tiles}"]
     source = hud.read_text() + weapon_source
-    for symbol in ("hudw_tiles", "hudw_faces", "weap_data"):
+    for symbol in ("hudw_tiles", "hudw_faces"):   # the weapon stays raw in ROM: frames DMA straight from ROM (no RAM frame buffer)
         body = re.search(r"\b" + symbol + r"(?:\[\d+\])+\s*=\s*\{([^;]+);", source)[1]
         words = [int(x, 16) for x in re.findall(r"0x[0-9a-fA-F]+", body)]
         if not words or len(words) % 8:

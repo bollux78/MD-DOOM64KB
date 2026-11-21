@@ -96,7 +96,6 @@ void HUD_Opening(void)
 /* ---- status bar on plane B rows [row0, row0+4) */
 #ifdef DREAD_EPISODE
 static uint32_t face_frame[16*8];
-static uint32_t weapon_frame[EP_WEAPON_TILES*8];
 
 static void unpack_tiles(uint32_t *dst, const uint16_t *refs, uint16_t count)
 {
@@ -128,8 +127,7 @@ void HUD_Init(uint16_t row0)
 #ifdef DREAD_EPISODE
     for (uint16_t i = 0; i < HUDW_NTILES; i++)
         vram_copy32(TILE_HUD + i, image_tiles + (uint32_t)hudw_tiles_refs[i] * 8, 1);
-    unpack_tiles(weapon_frame, weap_data_refs, weap_tiles);
-    vram_copy32(TILE_WEAP, weapon_frame, weap_tiles);
+    vram_copy32(TILE_WEAP, weap_data, weap_tiles);
 #else
     vram_copy32(TILE_HUD, &hudw_tiles[0][0], HUDW_NTILES);
     vram_copy32(TILE_WEAP, weap_data, weap_tiles);
@@ -201,10 +199,6 @@ static volatile int16_t weap_req = -1;
 void HUD_WeaponFrame(uint16_t f)
 {
 #ifdef DREAD_EPISODE
-    weap_req = -1;
-    __asm__ volatile ("" ::: "memory");
-    unpack_tiles(weapon_frame, weap_data_refs + f * weap_tiles, weap_tiles);
-    __asm__ volatile ("" ::: "memory");
 #endif
     weap_req = (int16_t)f;
 }
@@ -224,12 +218,7 @@ void HUD_VBlank(void)
 {
     if (weap_req >= 0) {
         const uint16_t f = (uint16_t)weap_req; weap_req = -1;
-#ifdef DREAD_EPISODE
-        (void)f;
-        DMA_doDma(DMA_VRAM, weapon_frame, TILE_WEAP * 32, weap_tiles * 16, 2);
-#else
         DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
-#endif
     }
     if (face_dirty) {
         face_dirty = 0;

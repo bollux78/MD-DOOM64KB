@@ -72,8 +72,8 @@ static inline uint32_t now_lines(void) { for (;;) { const uint16_t a = vints; co
 static inline uint32_t now_lines(void) { return 0; }
 #endif   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
 
-#if MAXV > 2730
-#define VCACHE_SIZE 2048
+#if MAXV > 768
+#define VCACHE_SIZE 512                  /* hashed: a frame touches a few hundred vertices; collisions only recompute */
 static uint16_t vkey[VCACHE_SIZE];
 #else
 #define VCACHE_SIZE MAXV
@@ -105,6 +105,7 @@ static inline void close_col(int c) { ceilclip[c] = floorclip[c] = 0; nxt[c] = (
 static int16_t closed;
 
 static int16_t view_xi, view_yi;   /* integer map position */
+int16_t r_view_xi, r_view_yi;      /* the same, for actors.c */
 static int32_t frac_tz, frac_tx;   /* camera-space offset of the fractional position, * 4 */
 static int32_t view_x4, view_y4;
 static int16_t view_z;
@@ -232,7 +233,7 @@ static inline void cam(int16_t px, int16_t py, int32_t *x4, int32_t *z4)
 
 static inline uint16_t xform(uint16_t v)
 {
-#if MAXV > 2730
+#if MAXV > 768
     const uint16_t slot = v & (VCACHE_SIZE - 1);
     if (vstamp[slot] == frame_id && vkey[slot] == v) return slot;
     vkey[slot] = v;
@@ -678,9 +679,10 @@ __attribute__((noinline)) static void draw_seg(const MapSeg *s)
  * nearer walls. After the walls, sprites are drawn far to near inside their saved windows.        */
 #ifndef PVS_GEN
 #define MAXVIS 32
-#define WINPOOL 3072
+#define WINPOOL 2048
 typedef struct {
     int16_t x0, x1, w2, htop;        /* columns [x0, x1), half width, world height of the top */
+    uint16_t flip;                   /* mirrored (rotations 6-8 drawn from 4-2) */
     int32_t u0, du, iz, zpp, z4;     /* source pixel (16.16) at x0 and per column, inverse depth, texels per row */
     const uint8_t *tab;              /* column table of the light bucket */
     uint16_t win;                    /* offset in winpool: ceil[n] then floor[n] */
@@ -693,14 +695,16 @@ static uint8_t vorder[MAXVIS];
 static uint16_t nvis, winused;
 static uint8_t winpool[WINPOOL];
 
-static void project_thing(const MapThing *t)
+/* x, y map position, zb world height of the sprite's bottom, light from sector sec */
+void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t flip, const MapSector *sec)
 {
-    if (nvis >= MAXVIS) return;
+    if (nvis >= MAXVIS || sprite == 0xFFFF) return;
     int32_t x4, z4;
-    cam(t->x, t->y, &x4, &z4);
+    cam(x, y, &x4, &z4);
     if (z4 < 64 || z4 > 32767) return;
-    const MapSprite *sp = &map_sprites[t->sprite];
-    const int32_t sxl = proj(x4 - (int32_t)sp->leftoff * 4, z4), sxr = proj(x4 + (int32_t)(sp->w2 * 2 - sp->leftoff) * 4, z4);
+    const MapSprite *sp = &map_sprites[sprite];
+    const int16_t lo = flip ? (int16_t)(sp->w2 * 2 - sp->leftoff) : sp->leftoff;
+    const int32_t sxl = proj(x4 - (int32_t)lo * 4, z4), sxr = proj(x4 + (int32_t)(sp->w2 * 2 - lo) * 4, z4);
     int xa = ceil16(sxl), xb = ceil16(sxr);
     if (xa < 0) xa = 0;
     if (xb > VIEW_W) xb = VIEW_W;
@@ -708,9 +712,8 @@ static void project_thing(const MapThing *t)
     const int n = xb - xa;
     if (winused + 2 * n > WINPOOL) return;
     VisSpr *v = &vis[nvis];
-    v->x0 = (int16_t)xa; v->x1 = (int16_t)xb; v->w2 = sp->w2;
-    const MapSector *sec = &map_sectors[map_subs[t->sub].sector];
-    v->htop = sec->floor + sp->topoff;
+    v->x0 = (int16_t)xa; v->x1 = (int16_t)xb; v->w2 = sp->w2; v->flip = flip;
+    v->htop = zb + sp->topoff;
     v->du = (int32_t)(((uint32_t)z4 << 14) / (uint32_t)FOCAL);           /* source pixels per column */
     v->u0 = (int32_t)(((int64_t)(((int32_t)xa << 16) - sxl) * v->du) >> 16);
     v->iz = inv_z(z4); v->zpp = zpp_of((uint16_t)z4); v->z4 = z4;
@@ -719,6 +722,12 @@ static void project_thing(const MapThing *t)
     for (int k = 0; k < n; k++) { winpool[winused + k] = ceilclip[xa + k]; winpool[winused + n + k] = floorclip[xa + k]; }
     winused += (uint16_t)(2 * n);
     nvis++;
+}
+
+static void project_thing(const MapThing *t)
+{
+    const MapSector *sec = &map_sectors[map_subs[t->sub].sector];
+    R_AddSprite(t->x, t->y, sec->floor, t->sprite, 0, sec);
 }
 
 static inline int32_t yrow_iz(int16_t dh, int32_t iz)
@@ -742,8 +751,9 @@ static void draw_sprite(const VisSpr *v)
     const uint32_t K = (uint32_t)muls16((int16_t)VFOCAL, (int16_t)b) >> 1;
     const uint16_t Klo = (uint16_t)K, Khi = (uint16_t)(K >> 16);
     for (int k = 0; k < n; k++, u += v->du) {
-        const int j = (u >> 16) >> 1;
+        int j = (u >> 16) >> 1;
         if (j < 0 || j >= v->w2) continue;
+        if (v->flip) j = v->w2 - 1 - j;
         const int top = wc[k], bot = wf[k];
         if (top >= bot) continue;
         uint8_t *col = FB_COL(rfb, v->x0 + k);
@@ -835,13 +845,13 @@ static void render_node(uint16_t n)
 #ifndef PVS_GEN
         for (uint16_t ti = map_sub_things[n & 0x7FFF]; ti < map_sub_things[(n & 0x7FFF) + 1]; ti++) {
 #ifdef DREAD_COMBAT
-            if (map_things[ti].flags & 1) continue;
+            if (map_things[ti].flags & THING_MONSTER) continue;    /* monsters live in RAM (actors.c) */
+            if (Thing_Taken(ti)) continue;                          /* picked up */
 #endif
             project_thing(&map_things[ti]);
         }
 #ifdef DREAD_COMBAT
-        for (uint16_t id = actor_heads[n & 0x7FFF]; id != ACTOR_NONE; id = actors[id].next)
-            if (actors[id].hp) project_thing(&actors[id].thing);
+        Actors_Draw(n & 0x7FFF);
 #endif
 #endif
         for (uint16_t i = 0; i < ss->count; i++) draw_seg(&map_segs[ss->first + i]);
@@ -877,6 +887,7 @@ void R_RenderView(const View *v, uint8_t *fb)
     if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;
     view_xi = (int16_t)(v->x >> 16); view_yi = (int16_t)(v->y >> 16);
+    r_view_xi = view_xi; r_view_yi = view_yi;
     const uint16_t a = v->angle >> 6;
     vsin = sintab[a]; vcos = sintab[(a + 256) & 1023];
     /* fractional part of the position (0..1 unit), in camera space * 4 */

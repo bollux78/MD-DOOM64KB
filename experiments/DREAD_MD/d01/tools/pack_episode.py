@@ -7,7 +7,8 @@ from pathlib import Path
 TABLES = (
     "map_verts map_segs map_subs map_nodes map_sectors_init map_lines map_doors "
     "map_ndoors map_sector_tag map_tex map_start map_counts map_sprites map_things "
-    "map_nthings map_sub_things map_bm map_bm_off map_bm_list"
+    "map_nthings map_sub_things map_bm map_bm_off map_bm_list "
+    "map_mframes map_fx map_reject map_secadj_off map_secadj"
 ).split()
 SCALARS = {"map_ndoors", "map_nthings"}
 PAD = 32   # EP_TEX_PAD in mapdata.h, conv --tex-pad

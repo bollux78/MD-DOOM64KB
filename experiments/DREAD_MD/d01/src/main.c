@@ -197,6 +197,7 @@ static int blocked(int16_t x, int16_t y)
 int ActorBlocked(int16_t x, int16_t y) { return blocked(x, y); }
 #endif
 
+static volatile uint16_t exit_req;              /* 1 = exit, 2 = secret exit */
 static void use_line(void)
 {
     /* a point 40 units ahead; activate the closest special line within 40 units of it */
@@ -220,6 +221,8 @@ static void use_line(void)
     if (best < 0) return;
     const MapLine *l = &map_lines[best];
     const uint16_t sp = l->special;
+    if (sp == 11) { exit_req = 1; return; }          /* exit switch */
+    if (sp == 51) { exit_req = 2; return; }          /* secret exit switch */
     if ((sp == 1 || (sp >= 26 && sp <= 28) || (sp >= 31 && sp <= 34) || sp == 117 || sp == 118) && l->back != NO_MAP_SECTOR) {
         const int d = door_index(l->back);
         if (d >= 0) door_open(d, sp == 1 || (sp >= 26 && sp <= 28) || sp == 117);
@@ -246,12 +249,32 @@ static void doors_tick(uint16_t dt)
     }
 }
 
+/* walk-over exit lines (52 exit, 124 secret exit) crossed by the move (x0,y0) -> (x1,y1) */
+static void check_walk_exits(int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    const int16_t gx = (int16_t)((x1 - map_bm[0]) >> 7), gy = (int16_t)((y1 - map_bm[1]) >> 7);
+    if (gx < 0 || gy < 0 || gx >= map_bm[2] || gy >= map_bm[3]) return;
+    const uint16_t cell = (uint16_t)(gy * map_bm[2] + gx);
+    for (uint16_t k = map_bm_off[cell]; k < map_bm_off[cell + 1]; k++) {
+        const MapLine *l = &map_lines[map_bm_list[k]];
+        if (l->special != 52 && l->special != 124) continue;
+        const int32_t ax = map_verts[l->v1][0], ay = map_verts[l->v1][1], bx = map_verts[l->v2][0], by = map_verts[l->v2][1];
+        const int32_t s0 = (bx - ax) * (y0 - ay) - (by - ay) * (x0 - ax), s1 = (bx - ax) * (y1 - ay) - (by - ay) * (x1 - ax);
+        if ((s0 < 0) == (s1 < 0)) continue;
+        const int32_t t0 = (x1 - x0) * (ay - y0) - (y1 - y0) * (ax - x0), t1 = (x1 - x0) * (by - y0) - (y1 - y0) * (bx - x0);
+        if ((t0 < 0) == (t1 < 0)) continue;
+        exit_req = l->special == 124 ? 2 : 1;
+    }
+}
+
 static void try_move(int32_t mx, int32_t my)
 {
+    const int32_t ox = view.x, oy = view.y;
     const int32_t nx = view.x + mx, ny = view.y + my;
-    if (!blocked(nx >> 16, ny >> 16)) { view.x = nx; view.y = ny; return; }
-    if (!blocked(nx >> 16, view.y >> 16)) { view.x = nx; return; }
-    if (!blocked(view.x >> 16, ny >> 16)) { view.y = ny; }
+    if (!blocked(nx >> 16, ny >> 16)) { view.x = nx; view.y = ny; }
+    else if (!blocked(nx >> 16, view.y >> 16)) { view.x = nx; }
+    else if (!blocked(view.x >> 16, ny >> 16)) { view.y = ny; }
+    if (view.x != ox || view.y != oy) check_walk_exits((int16_t)(ox >> 16), (int16_t)(oy >> 16), (int16_t)(view.x >> 16), (int16_t)(view.y >> 16));
 }
 
 /* bench route: (vblanks, buttons) */
@@ -440,6 +463,59 @@ static void title(void)
 }
 #endif
 
+static void place_player(void)
+{
+    view.x = (int32_t)map_start[0] << 16; view.y = (int32_t)map_start[1] << 16;
+    view.angle = (uint16_t)((int32_t)map_start[2] * 65536 / 360);
+    cur_floor = map_sectors[map_subs[R_PointInSub(map_start[0], map_start[1])].sector].floor;
+    view.z = cur_floor + 41;
+}
+
+/* (re)load the selected map: geometry state, doors, monsters, items */
+static void start_level(void)
+{
+#ifdef DREAD_EPISODE
+    dread_map = &episode_maps[selected_map];
+#endif
+    R_Init();
+#ifdef DREAD_COMBAT
+    Actors_Init();
+#endif
+    for (int d = 0; d < map_ndoors && d < 64; d++) { door_target[d] = map_sectors[map_doors[d].sector].ceil; door_wait[d] = 0xFFFF; door_manual[d] = 0; }
+    exit_req = 0;
+}
+
+#ifdef DREAD_COMBAT
+/* item pickups in the player's subsector (flags bits 8-15 = item code from conv.py) */
+static void pickups(HudState *hud, uint16_t psub)
+{
+    const int16_t px = (int16_t)(view.x >> 16), py = (int16_t)(view.y >> 16);
+    for (uint16_t ti = map_sub_things[psub]; ti < map_sub_things[psub + 1]; ti++) {
+        const MapThing *t = &map_things[ti];
+        const uint16_t code = t->flags >> 8;
+        if ((t->flags & THING_MONSTER) || !code || Thing_Taken(ti)) continue;
+        if ((px - t->x) * (px - t->x) + (py - t->y) * (py - t->y) > 24 * 24) continue;
+        uint16_t *hp = &hud->health, *ar = &hud->armor, *am = &hud->ammo[0];
+        switch (code) {
+        case 1: if (*am >= 200) continue; *am = *am + 10 > 200 ? 200 : *am + 10; break;          /* clip */
+        case 2: if (*am >= 200) continue; *am = *am + 50 > 200 ? 200 : *am + 50; break;          /* box of bullets */
+        case 3: if (*hp >= 100) continue; *hp = *hp + 10 > 100 ? 100 : *hp + 10; break;          /* stimpack */
+        case 4: if (*hp >= 100) continue; *hp = *hp + 25 > 100 ? 100 : *hp + 25; break;          /* medikit */
+        case 5: *hp = *hp + 1 > 200 ? 200 : *hp + 1; break;                                      /* health bonus */
+        case 6: *ar = *ar + 1 > 200 ? 200 : *ar + 1; break;                                      /* armor bonus */
+        case 7: if (*ar >= 100) continue; *ar = 100; break;                                      /* green armor */
+        case 8: if (*ar >= 200) continue; *ar = 200; break;                                      /* blue armor */
+        case 9: *hp = *hp + 100 > 200 ? 200 : *hp + 100; break;                                  /* soulsphere */
+        case 10: *am = *am + 10 > 200 ? 200 : *am + 10; break;                                   /* backpack */
+        default: continue;                                                                       /* keys, weapons: later */
+        }
+        hud->ammo_cur = hud->ammo[0];
+        Thing_Take(ti);
+        HUD_Draw(hud);
+    }
+}
+#endif
+
 int main(bool hard)
 {
     (void)hard;
@@ -452,14 +528,7 @@ int main(bool hard)
     if (music_on) XGM2_play(bgm_intro);
 #endif
     title();
-#ifdef DREAD_EPISODE
-    dread_map = &episode_maps[selected_map];
-#endif
-    R_Init();
-#ifdef DREAD_COMBAT
-    Actors_Init();
-#endif
-    for (int d = 0; d < map_ndoors && d < 64; d++) door_target[d] = map_sectors[map_doors[d].sector].ceil;
+    start_level();
 #if !defined(DREAD_EPISODE) && !defined(DREAD_TEXT_TITLE)
     HUD_Opening();
 #endif
@@ -474,9 +543,7 @@ int main(bool hard)
     uint16_t face_t = 0, weap_t = 0, weap_step = 0, bob = 0;
     static const uint8_t weap_seq[4][2] = { {1, 10}, {2, 7}, {3, 8}, {0, 0} };   /* frame, vblanks (Doom 6/4/5 tics) */
 
-    view.x = (int32_t)map_start[0] << 16; view.y = (int32_t)map_start[1] << 16;
-    view.angle = (uint16_t)((int32_t)map_start[2] * 65536 / 360);
-    cur_floor = map_sectors[map_subs[R_PointInSub(map_start[0], map_start[1])].sector].floor;
+    place_player();
 
     uint16_t last = vints, fps_v0 = vints, fps_n = 0;
     uint16_t script_i = 0, script_t = 0;
@@ -513,7 +580,7 @@ int main(bool hard)
         if (weap_step == 0 && (j & BUTTON_A) && hud.ammo[0]) {
             weap_step = 1; weap_t = weap_seq[0][1]; HUD_WeaponFrame(weap_seq[0][0]);
 #ifdef DREAD_COMBAT
-            Actors_Fire(&view);
+            Actors_Fire(&view, 1, 5);              /* pistol: 5 x (1..3) */
 #endif
             hud.ammo[0]--; hud.ammo_cur = hud.ammo[0]; HUD_Draw(&hud);
         } else if (weap_step) {
@@ -548,17 +615,49 @@ int main(bool hard)
         view.z = cur_floor + 41;
 
 #ifdef DREAD_COMBAT
-        uint16_t health = hud.health;
-        Actors_Tick(&view, dt, &hud.health);
-        if (!hud.health) {
-            view.x = (int32_t)map_start[0] * 65536;
-            view.y = (int32_t)map_start[1] * 65536;
-            view.angle = (uint16_t)((int32_t)map_start[2] * 65536 / 360);
-            view.z = map_sectors[map_subs[R_PointInSub(map_start[0], map_start[1])].sector].floor + 41;
-            hud.health = 100;
+        {
+            static ActorPlayer pl;
+            const uint16_t health = hud.health, armor = hud.armor;
+            pl.x = (int16_t)(view.x >> 16); pl.y = (int16_t)(view.y >> 16); pl.z = view.z;
+            pl.sub = (uint16_t)R_PointInSub(pl.x, pl.y);
+            pl.health = &hud.health; pl.armor = &hud.armor;
+            if (!bench_req) Actors_Tick(&pl, dt);
+            pickups(&hud, pl.sub);
+            if (!hud.health) {                          /* dead: message, then the map starts again */
+                HUD_Text(1, "VOCE MORREU");
+                const uint16_t t0 = vints;
+                while ((uint16_t)(vints - t0) < 120) {}
+                HUD_Text(1, "");
+                start_level(); place_player();
+                hud.health = 100; hud.armor = 0; hud.ammo[0] = 50; hud.ammo_cur = 50;
+                HUD_Draw(&hud);
+                last = vints;
+                continue;
+            }
+            if (health != hud.health || armor != hud.armor) HUD_Draw(&hud);
         }
-        if (health != hud.health) HUD_Draw(&hud);
 #endif
+        if (exit_req) {                                 /* level done: next map (E1M8 ends the episode) */
+#ifdef DREAD_EPISODE
+            const uint16_t secret = exit_req == 2;
+            char msg[32];
+            sprintf(msg, "E1M%u CONCLUIDA", selected_map + 1);
+            HUD_Text(1, msg);
+            const uint16_t t0 = vints;
+            while ((uint16_t)(vints - t0) < 120) {}
+            HUD_Text(1, "");
+            if (selected_map == 7) SYS_hardReset();     /* end of the episode: back to the title */
+            selected_map = secret ? 8 : (selected_map == 8 ? 3 : selected_map + 1);
+            start_level(); place_player();
+#ifndef DREAD_NO_MUSIC
+            if (music_on) XGM2_play(MAP_MUSIC);
+#endif
+            last = vints;
+            continue;
+#else
+            exit_req = 0;
+#endif
+        }
         /* render into the free RAM buffer, then hand it to the VBlank DMA */
         if (NBUF == 1) while (dma_src) {}   /* one buffer: the previous frame must be out first */
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);

@@ -230,9 +230,59 @@ def main():
             side = 0 if ndy * (x - nx) > ndx * (y - ny) else 1
             n = nodes[n][12 + side]
         return n & 0x7FFF
+    # ---- monsters: walk / attack / pain frames in rotations 1-5 (6-8 are drawn mirrored), death frames
+    KINDS = [   # (Doom type, sprite, walk, attack, pain, death); index = kind in MapThing.flags bits 8-11
+        (3004, "POSS", "ABCD", "EF", "G", "HIJKL"), (9, "SPOS", "ABCD", "EF", "G", "HIJKL"),
+        (3001, "TROO", "ABCD", "EFG", "H", "IJKLM"), (3002, "SARG", "ABCD", "EFG", "H", "IJKLMN"),
+        (58, "SARG", "ABCD", "EFG", "H", "IJKLMN"), (3006, "SKUL", "AB", "CD", "E", "FGHIJK"),
+        (3003, "BOSS", "ABCD", "EFG", "H", "IJKLMNO"), (3005, "HEAD", "A", "BCD", "E", "GHIJKL"),
+    ]
+    KIND_OF = {k[0]: i for i, k in enumerate(KINDS)}
+    MONSTER_BUCKET = 1                  # one light level for moving monsters (they change sectors)
+    def frame_lump(prefix, letter, rot):
+        """(patch, mirrored) for rotation rot (0..8) of a frame, from plain or combined lump names"""
+        for nm, d in sprlumps.items():
+            if not nm.startswith(prefix) or len(nm) < 6: continue
+            if nm[4:6] == letter + str(rot): return d, False
+            if len(nm) >= 8 and nm[6:8] == letter + str(rot): return d, True
+        if rot:
+            return frame_lump(prefix, letter, 0)
+        return None, False
+    def load_frame(key, prefix, letter, rot):
+        if key in sprimg: return True
+        d, mirror = frame_lump(prefix, letter, rot)
+        if d is None: return False
+        w_, h_, lo_, to_ = struct.unpack_from("<HHhh", d, 0)
+        img = read_patch(d)
+        if mirror: img = img[:, ::-1]; lo_ = w_ - lo_
+        sprimg[key] = (img, lo_, to_); sprnames.append(key)
+        return True
     thing_rows, sprnames, sprimg = [], [], {}
+    mframes = [0xFFFF] * (len(KINDS) * 16 * 5)
+    fx = [0xFFFF] * 8                   # imp ball A B, explosion C D E, baron ball A B, caco ball A
+    kinds_present = sorted({KIND_OF[t[3]] for t in things if t[3] in KIND_OF and (t[4] & 2) and not (t[4] & 16)})
+    if not args.geometry_only:
+        for k in kinds_present:
+            _, prefix, walk, atk, pain, death = KINDS[k]
+            for letter in walk + atk + pain + death:
+                for r in range(5):
+                    rot = 0 if letter in death else r + 1
+                    key = (prefix, letter, rot)
+                    if load_frame(key, prefix, letter, rot):
+                        mframes[(k * 16 + ord(letter) - 65) * 5 + r] = sprnames.index(key)
+        for slot, (prefix, letter, rot) in enumerate([("BAL1", "A", 0), ("BAL1", "B", 0), ("BAL1", "C", 0), ("BAL1", "D", 0),
+                                                      ("BAL1", "E", 0), ("BAL7", "A", 1), ("BAL7", "B", 1), ("BAL2", "A", 0)]):
+            if load_frame((prefix, letter, rot), prefix, letter, rot): fx[slot] = sprnames.index((prefix, letter, rot))
+    monster_sprites = {i for i in mframes if i != 0xFFFF} | {i for i in fx if i != 0xFFFF}
     for (tx, ty, ta, tt, tf) in (() if args.geometry_only else things):
         if tt not in THING_SPR or not (tf & 2) or (tf & 16): continue
+        if tt in KIND_OF:
+            k = KIND_OF[tt]; si = mframes[(k * 16) * 5]
+            if si == 0xFFFF: continue
+            sub = sub_of(tx, ty)
+            # flags: 1 monster, 2 ambush (wakes by sight only), bits 2-4 facing (0 = east, CCW), bits 8-11 kind
+            thing_rows.append([tx, ty, si, sub, tt, 1 | (2 if tf & 8 else 0) | ((((ta + 22) // 45) & 7) << 2) | (k << 8)])
+            continue
         key = (THING_SPR[tt], THING_FRAME.get(tt, "A"))
         if key not in sprimg:
             d = sprite_lump(*key)
@@ -241,7 +291,9 @@ def main():
             sprimg[key] = (read_patch(d), lo_, to_)
             sprnames.append(key)
         sub = sub_of(tx, ty)
-        thing_rows.append([tx, ty, sprnames.index(key), sub, tt])
+        ITEM = {2007: 1, 2048: 2, 2011: 3, 2012: 4, 2014: 5, 2015: 6, 2018: 7, 2019: 8, 2013: 9, 8: 10,
+                5: 20, 6: 21, 13: 22, 38: 23, 39: 24, 40: 25, 2001: 30, 2002: 31, 2003: 32, 2005: 33, 2008: 40, 2049: 41, 2010: 42, 2046: 43}
+        thing_rows.append([tx, ty, sprnames.index(key), sub, tt, ITEM.get(tt, 0) << 8])
     # light bucket of each thing: its sector's
     spr_used = {}   # sprite index -> set(buckets)
 
@@ -271,9 +323,12 @@ def main():
                 items.append((("f", nm, b), np.repeat(c[None, :], 400, axis=0)))
     sky_rgb = pal[compose("SKY1").ravel()].mean(0) if "SKY1" in texdefs else np.array([80., 80., 120.])
     items.append((("s",), np.repeat(sky_rgb[None, :], 400, axis=0)))
-    for (tx, ty, si, sub, tt) in thing_rows:
+    for (tx, ty, si, sub, tt, _f) in thing_rows:
+        if si in monster_sprites: continue
         secn = sides[lines[segs[ssecs[sub][1]][3]][5 if segs[ssecs[sub][1]][4] == 0 else 6]][5]
         spr_used.setdefault(si, set()).add(bucket_of(secs[secn][4]))
+    for si in monster_sprites:
+        spr_used[si] = {0} if si in fx else {MONSTER_BUCKET}
     for si, bs_ in spr_used.items():
         img = sprimg[sprnames[si]][0]
         px = img[img >= 0].astype(np.int64)
@@ -568,13 +623,29 @@ def main():
         "{%d,%d,%d,%d,{%s}}" % (r[0], r[1], r[2], r[3], ",".join(map(str, r[4]))) for r in srows) or "{0}"))
     thing_rows.sort(key=lambda t: t[3])
     H.append("const MapThing map_things[%d] = {%s};" % (max(1, len(thing_rows)), ",".join(
-        "{%d,%d,%d,%d,%d}" % (t[0], t[1], t[2], t[3], 1 if t[4] in MONSTERS else 0) for t in thing_rows) or "{0}"))
+        "{%d,%d,%d,%d,%d}" % (t[0], t[1], t[2], t[3], t[5]) for t in thing_rows) or "{0}"))
+    H.append("const uint16_t map_mframes[%d] = {%s};" % (len(mframes), ",".join(map(str, mframes))))
+    H.append("const uint16_t map_fx[8] = {%s};" % ",".join(map(str, fx)))
+    # REJECT (sector x sector, bit set = cannot see) and sound adjacency (two-sided lines without "block sound")
+    rj = bytearray(lump.get("REJECT", b"")); need = (len(secs) * len(secs) + 7) // 8
+    rj = (rj + bytes(need))[:need]
+    H.append("const uint8_t map_reject[%d] = {%s};" % (max(1, need), ",".join(map(str, rj)) or "0"))
+    adj = [set() for _ in secs]
+    for (v1, v2, fl, sp, tg, r, l) in lines:
+        if r != 0xFFFF and l != 0xFFFF and not (fl & 64):
+            a_, b_ = sides[r][5], sides[l][5]
+            if a_ != b_: adj[a_].add(b_); adj[b_].add(a_)
+    aoff, alist = [], []
+    for n_ in adj: aoff.append(len(alist)); alist += sorted(n_)
+    aoff.append(len(alist))
+    H.append("const uint16_t map_secadj_off[%d] = {%s};" % (len(aoff), ",".join(map(str, aoff))))
+    H.append("const uint16_t map_secadj[%d] = {%s};" % (max(1, len(alist)), ",".join(map(str, alist)) or "0"))
     H.append("const uint16_t map_nthings = %d;" % len(thing_rows))
     soff = [0] * (len(ssecs) + 1)
-    for t in thing_rows: soff[t[3] + 1] += 1
+    for t in thing_rows: soff[t[3] + 1] += 1   # (monsters too: their spawn list; the game moves them to RAM)
     for i in range(len(ssecs)): soff[i + 1] += soff[i]
     H.append("const uint16_t map_sub_things[%d] = {%s};" % (len(soff), ",".join(map(str, soff))))
-    print("things: %d drawn (%d monsters), %d sprites %s, sprite blob %d bytes" % (len(thing_rows), sum(t[4] in MONSTERS for t in thing_rows), len(srows), "".join(k[0] + k[1] + " " for k in sprnames), len(sblob)))
+    print("things: %d drawn (%d monsters), %d sprites %s, sprite blob %d bytes" % (len(thing_rows), sum(t[5] & 1 for t in thing_rows), len(srows), "".join(k[0] + k[1] + (str(k[2]) if len(k) > 2 else "") + " " for k in sprnames if len(k) == 2 or k[2] <= 1), len(sblob)))
     H.append("const uint8_t tex_blob[%d] = {%s};" % (len(blob), ",".join(str(x) for x in blob)))
     # same texels as words (b, b): column-doubled modes write 4 pixels per texel with one move.w
     if not args.row_only:

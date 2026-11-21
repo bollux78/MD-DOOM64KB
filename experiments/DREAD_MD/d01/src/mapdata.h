@@ -73,7 +73,15 @@ extern const MapThing map_things[];
 extern const uint16_t map_nthings;
 extern const uint16_t map_sub_things[];   /* things of subsector s: [map_sub_things[s], map_sub_things[s+1]) */
 extern const int16_t map_bm[4];          /* collision grid: x0, y0, width, height (128-unit cells) */
-extern const uint16_t map_bm_off[], map_bm_list[];   /* verts, segs, subsectors, nodes, sectors, lines */
+extern const uint16_t map_bm_off[], map_bm_list[];
+extern const uint16_t map_mframes[];   /* monster sprite per (kind, frame letter, rotation 1-5): [(k*16+f)*5+r], 0xFFFF none */
+extern const uint16_t map_fx[8];       /* imp ball A B, explosion C D E, baron ball A B, caco ball */
+extern const uint8_t map_reject[];     /* REJECT: bit (s1*nsec+s2) set = s1 cannot see s2 */
+extern const uint16_t map_secadj_off[], map_secadj[];   /* sound: sector neighbours through two-sided lines */
+#define THING_MONSTER 1
+#define THING_AMBUSH 2
+#define THING_DIR(f) (((f) >> 2) & 7)
+#define THING_KIND(f) (((f) >> 8) & 15)   /* verts, segs, subsectors, nodes, sectors, lines */
 
 #ifdef DREAD_EPISODE
 typedef struct {
@@ -96,6 +104,11 @@ typedef struct {
     const int16_t *map_bm;
     const uint16_t *map_bm_off;
     const uint16_t *map_bm_list;
+    const uint16_t *map_mframes;
+    const uint16_t *map_fx;
+    const uint8_t *map_reject;
+    const uint16_t *map_secadj_off;
+    const uint16_t *map_secadj;
     const uint32_t *pvs_offsets;
     uint16_t pvs_nbytes, pvs_sbytes;
 } DreadMap;
@@ -124,6 +137,11 @@ extern const uint8_t *const tex_columns[];
 #define map_bm (dread_map->map_bm)
 #define map_bm_off (dread_map->map_bm_off)
 #define map_bm_list (dread_map->map_bm_list)
+#define map_mframes (dread_map->map_mframes)
+#define map_fx (dread_map->map_fx)
+#define map_reject (dread_map->map_reject)
+#define map_secadj_off (dread_map->map_secadj_off)
+#define map_secadj (dread_map->map_secadj)
 #endif
 #endif
 #endif
