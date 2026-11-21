@@ -74,3 +74,24 @@ jobs:
                       if v is None:os.environ.pop(k,None)
                       else:os.environ[k]=v
           PY
+          echo '--- ROM vector and breakpoint diagnostic ---'
+          python3 - <<'PY'
+          import os,sys,time,struct
+          sys.path.insert(0,'scripts/lab')
+          from r64a_rsp_capture import RSP
+          bl=os.path.expanduser('~/Projetos/blastem64-1.0.0/blastem')
+          rom=os.path.abspath('_emudiag/roms/DREAD-D01-FPS-CONTROL.bin')
+          raw=open(rom,'rb').read(256)
+          reset=struct.unpack_from('>I',raw,4)[0]&0xffffff
+          vblank=struct.unpack_from('>I',raw,0x78)[0]&0xffffff
+          print('VECTORS reset=',hex(reset),'vblank=',hex(vblank),'initial stack=',hex(struct.unpack_from('>I',raw,0)[0]),flush=True)
+          for label,address in [('reset',reset),('vblank',vblank)]:
+            g=RSP(bl,rom,9000,20)
+            try:
+              print(label,'supported=',g.req('qSupported',5),flush=True)
+              print(label,'Z0=',g.req(f'Z0,{address:x},2',5),flush=True)
+              t=time.monotonic()
+              try:print(label,'CONT=',g.cont(),'elapsed=',round(time.monotonic()-t,2),flush=True)
+              except Exception as e:print(label,'CONT ERROR',repr(e),'elapsed=',round(time.monotonic()-t,2),'returncode=',g.proc.poll(),flush=True)
+            finally:g.close()
+          PY
