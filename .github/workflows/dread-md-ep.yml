@@ -32,7 +32,8 @@ jobs:
           export GDK="$gdk" PATH="$HOME/mars/m68k-elf/bin:$gdk/bin:$PATH"
           out="$HOME/Projetos/Personal/dread-md/ep-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"; echo "OUT=$out" >> "$GITHUB_ENV"
-          DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" DREAD_COMBAT=1 bash experiments/DREAD_MD/d01/tools/build_map.sh "$WAD" EPISODE "$out" 'DREAD MD COMBATE CLAUDIO' 2>&1 | grep -vE "^(m68k|java|  CC|gcc)" | grep -iE "palette|textures|sprites|PVS|geometry|things|music|map E|excede|error|Error|ROM" | head -60
+          DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" DREAD_COMBAT=1 bash experiments/DREAD_MD/d01/tools/build_map.sh "$WAD" EPISODE "$out" 'DREAD MD COMBATE CLAUDIO' > "$out/build.log" 2>&1 || { tail -60 "$out/build.log"; exit 1; }
+          grep -iE "^palette 0|textures|sprites|PVS|geometry|things:|music" "$out/build.log" | cut -c1-200 || true
           ls -l "$out"
           python3 -c "import zipfile,sys; o=sys.argv[1]; z=zipfile.ZipFile(o+'/dread-md-episodio.zip','w',zipfile.ZIP_DEFLATED); z.write(o+'/EPISODE.bin','dread-md-episodio.bin'); z.close()" "$out"
       - name: BlastEm bench (E1M1 route)
