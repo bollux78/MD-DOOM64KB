@@ -1,0 +1,645 @@
+{
+  "visibility": [
+    [
+      {
+        "scene": 0,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 1,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 2,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 3,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 4,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 5,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 6,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 7,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 8,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 9,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 10,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 11,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 12,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 13,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 14,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 15,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      }
+    ],
+    [
+      {
+        "scene": 0,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 1,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 2,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 3,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 4,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 5,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 6,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 7,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 8,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 9,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 10,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 11,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 12,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 13,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 14,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      },
+      {
+        "scene": 15,
+        "records": 126,
+        "tokens": 249,
+        "actors": 0,
+        "list_equal": true,
+        "actors_end_equal": true
+      }
+    ]
+  ],
+  "projection": [
+    {
+      "stats": {
+        "wall_inputs": 2016,
+        "transforms": 2016,
+        "jobs": 288
+      },
+      "errors": []
+    },
+    {
+      "stats": {
+        "wall_inputs": 2016,
+        "transforms": 2016,
+        "jobs": 367
+      },
+      "errors": []
+    }
+  ],
+  "raster": [
+    {
+      "capture": "geometry-still",
+      "scene": 0,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 116,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 1,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 2,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 3,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 4,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 5,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 6,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 117,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 7,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 118,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 8,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 118,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 9,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 116,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 10,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 127,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 11,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 128,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 12,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 132,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 13,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 132,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 14,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 140,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-still",
+      "scene": 15,
+      "compared_written_bytes": 10163,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 147,
+      "unsupported": {},
+      "uncovered_bytes": 1357,
+      "open_columns": 47
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 0,
+      "compared_written_bytes": 10323,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 1100,
+      "unsupported": {},
+      "uncovered_bytes": 1197,
+      "open_columns": 52,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 1,
+      "compared_written_bytes": 6840,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 4648,
+      "unsupported": {},
+      "uncovered_bytes": 4680,
+      "open_columns": 65,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 2,
+      "compared_written_bytes": 4752,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 6674,
+      "unsupported": {},
+      "uncovered_bytes": 6768,
+      "open_columns": 94,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 3,
+      "compared_written_bytes": 720,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 10638,
+      "unsupported": {},
+      "uncovered_bytes": 10800,
+      "open_columns": 150,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 4,
+      "compared_written_bytes": 0,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 11318,
+      "unsupported": {},
+      "uncovered_bytes": 11520,
+      "open_columns": 160,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 5,
+      "compared_written_bytes": 0,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 11318,
+      "unsupported": {},
+      "uncovered_bytes": 11520,
+      "open_columns": 160,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 6,
+      "compared_written_bytes": 0,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 11318,
+      "unsupported": {},
+      "uncovered_bytes": 11520,
+      "open_columns": 160,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 7,
+      "compared_written_bytes": 1787,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 9544,
+      "unsupported": {},
+      "uncovered_bytes": 9733,
+      "open_columns": 155,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 8,
+      "compared_written_bytes": 5487,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 5920,
+      "unsupported": {},
+      "uncovered_bytes": 6033,
+      "open_columns": 98,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 9,
+      "compared_written_bytes": 8714,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 2762,
+      "unsupported": {},
+      "uncovered_bytes": 2806,
+      "open_columns": 73,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 10,
+      "compared_written_bytes": 11147,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 373,
+      "unsupported": {},
+      "uncovered_bytes": 373,
+      "open_columns": 35,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 11,
+      "compared_written_bytes": 10270,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 1248,
+      "unsupported": {},
+      "uncovered_bytes": 1250,
+      "open_columns": 56,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 12,
+      "compared_written_bytes": 8568,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 2935,
+      "unsupported": {},
+      "uncovered_bytes": 2952,
+      "open_columns": 41,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 13,
+      "compared_written_bytes": 5904,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 5533,
+      "unsupported": {},
+      "uncovered_bytes": 5616,
+      "open_columns": 78,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 14,
+      "compared_written_bytes": 2448,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 8942,
+      "unsupported": {},
+      "uncovered_bytes": 9072,
+      "open_columns": 126,
+      "host_C_different_bytes": 0
+    },
+    {
+      "capture": "geometry-turn",
+      "scene": 15,
+      "compared_written_bytes": 0,
+      "different_written_bytes": 0,
+      "unwritten_different_bytes": 11303,
+      "unsupported": {},
+      "uncovered_bytes": 11520,
+      "open_columns": 160
+    }
+  ],
+  "m68k_spawn": {
+    "frames": 1,
+    "pose": 0,
+    "source_equals_host_C": true,
+    "different_bytes": 0
+  },
+  "m68k_perspective_pose3": {
+    "frames": 1,
+    "pose": 3,
+    "source_equals_host_C": true,
+    "different_bytes": 0
+  },
+  "benchmark": {
+    "presentations": 71,
+    "video_frames": 1500,
+    "fps_nominal_60hz": 2.857142857142857,
+    "interval_video_frames_histogram": {
+      "21": 70
+    },
+    "camera": 0,
+    "actors": false,
+    "hud": "static captured overlay",
+    "sky": "fixed first view",
+    "method": "phase3_frames increments after full CPU pixel and name-table publication; no SRAM/SegaCD"
+  }
+}

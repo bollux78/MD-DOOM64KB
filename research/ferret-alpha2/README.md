@@ -1,5 +1,7 @@
 # Ferret Alpha 2 — engenharia reversa e reconstrução
 
+**Continuação:** [Marco 2: geometria e paredes calculadas no 68000](PHASE2.md). O texto abaixo descreve o primeiro checkpoint.
+
 Primeiro checkpoint reproduzível. ROM de referência fornecida pelo usuário; não está incluída. Não altera o motor D01 existente. Código experimental em `reconstruction/`; modelo independente em `tools/repack.py`.
 
 ## Resultado principal
