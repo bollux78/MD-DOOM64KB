@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/dread-c7-normal-green-20261122.yml'
       - 'experiments/DREAD_MD/d01/src/main.c'
+      - 'experiments/DREAD_MD/d01/src/game_hud.c'
+      - 'experiments/DREAD_MD/d01/tools/gen_ending.py'
   workflow_dispatch:
 concurrency:
   group: dread-c7-normal-green-${{ github.ref }}
