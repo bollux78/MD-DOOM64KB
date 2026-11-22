@@ -12,7 +12,7 @@ Output (one C file + header):
 
 usage: conv.py WAD MAP OUTDIR
 """
-import argparse, json, struct, math
+import argparse, json, struct, math, os
 from pathlib import Path
 import numpy as np
 
@@ -92,6 +92,9 @@ def main():
     parser.add_argument("map")
     parser.add_argument("output", type=Path)
     parser.add_argument("--geometry-only", action="store_true", help="Skip game-specific things")
+    parser.add_argument("--skill", choices=("easy", "medium", "hard"),
+                        default=os.environ.get("DREAD_SKILL", "medium"),
+                        help="Doom THINGS skill flags: easy=1, medium=2, hard=4 (default: medium)")
     parser.add_argument("--row-only", action="store_true", help="Emit only byte-format textures")
     parser.add_argument("--palette", type=Path, help="JSON with 16 MD RGB triples (0–7)")
     parser.add_argument("--collect-items", type=Path, help="only save this map's colour samples (npz) for an episode palette")
@@ -99,6 +102,7 @@ def main():
     parser.add_argument("--palette-out", type=Path)
     parser.add_argument("--tex-pad", type=int, default=0, help="store H + min(H, PAD) texels per column instead of 2H (episode builds)")
     args = parser.parse_args()
+    skill_mask = {"easy": 1, "medium": 2, "hard": 4}[args.skill]
     wad = Wad(args.wad)
     mapname = args.map.upper()
     out = args.output
@@ -202,7 +206,7 @@ def main():
                 f = np.frombuffer(flats[nm][:4096], np.uint8)
                 flatcol[nm] = f
 
-    # ---- things (objects and monsters, skill "medium", no multiplayer-only things) and their sprites
+    # ---- things: select the requested original Doom skill flag, exclude multiplayer-only
     THING_SPR = {   # Doom type -> sprite prefix (frame A, front view)
         3004: "POSS", 9: "SPOS", 3001: "TROO", 3002: "SARG", 58: "SARG", 3006: "SKUL", 3005: "HEAD", 3003: "BOSS",
         2035: "BAR1", 2028: "COLU", 2018: "ARM1", 2019: "ARM2", 2014: "BON1", 2015: "BON2", 2011: "STIM", 2012: "MEDI",
@@ -263,7 +267,7 @@ def main():
     thing_rows, sprnames, sprimg = [], [], {}
     mframes = [0xFFFF] * (len(KINDS) * 16 * 5)
     fx = [0xFFFF] * 19                   # imp ball A B, explosion C D E, baron ball A B, caco ball A
-    kinds_present = sorted({KIND_OF[t[3]] for t in things if t[3] in KIND_OF and (t[4] & 2) and not (t[4] & 16)})
+    kinds_present = sorted({KIND_OF[t[3]] for t in things if t[3] in KIND_OF and (t[4] & skill_mask) and not (t[4] & 16)})
     if not args.geometry_only:
         for k in kinds_present:
             _, prefix, walk, atk, pain, death = KINDS[k]
@@ -278,7 +282,7 @@ def main():
             if load_frame((prefix, letter, rot), prefix, letter, rot): fx[slot] = sprnames.index((prefix, letter, rot))
     monster_sprites = {i for i in mframes if i != 0xFFFF} | {i for i in fx if i != 0xFFFF}
     for (tx, ty, ta, tt, tf) in (() if args.geometry_only else things):
-        if tt not in THING_SPR or not (tf & 2) or (tf & 16): continue
+        if tt not in THING_SPR or not (tf & skill_mask) or (tf & 16): continue
         if tt in KIND_OF:
             k = KIND_OF[tt]; si = mframes[(k * 16) * 5]
             if si == 0xFFFF: continue
