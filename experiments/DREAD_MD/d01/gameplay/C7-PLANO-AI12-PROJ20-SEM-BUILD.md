@@ -11,6 +11,19 @@ Após feedback do usuário, a folha personalizada `tools/weapon_src/guns_optimiz
 - **Dithering opcional nas seis armas originais:** `gen_gameplay_assets.py` aceita `DREAD_WEAPON_DITHER=1` (Floyd–Steinberg em RGB nas 15 cores da PAL1 Mega Drive, máscara de transparência preservada). A futura build C7 usa **1 por padrão**; definir `DREAD_WEAPON_DITHER=0` reproduz a quantização sem dithering da C5. A escolha **não** afeta as texturas/paletas do cenário.
 - **Limitação:** nenhuma imagem comparativa nem ROM foi gerada; o dithering pode aumentar tiles únicos e o tamanho da ROM, especialmente no layout NORMAL 4 MiB. Validar a aparência em ambas as versões e voltar à opção sem dithering caso apareçam ruídos, paletas inadequadas ou limite de espaço.
 
+## Atualização gráfica C7: grades transparentes em meia resolução
+
+As **grades/vazados** são duas-sided midtextures com máscara de opacidade, desenhadas no renderer pela rotina `draw_mask_column` em `src/render.c`. Na C6 esse código avaliava textura e transparência para **cada coluna e linha lógica** e ordenava grades/sprites por coluna para preservar a oclusão correta.
+
+- A macro de compilação `DREAD_GRATE_HALF_RES` ativa **amostragem em blocos lógicos 2×2** somente onde há máscara de transparência (`m->mask != NULL`): usa uma coluna de textura para cada duas colunas lógicas e um texel vertical por par de linhas, replicando a cor somente nos pixels dentro do recorte original.
+- Reaproveita entre duas colunas consecutivas o resultado de projeção U e o ponteiro de textura num cache **por parede**, reinicializado a cada trecho colocado na fila.
+- Projeção das bordas, limites `ceilclip/floorclip`, cálculo de profundidade e **ordenação de cada coluna contra os sprites permanecem intactos**. As paredes opacas e sprites não são reduzidos.
+- `gameplay/build.sh` ativa a macro por padrão. **Para comparação A/B**, configurar `DREAD_GRATE_HALF_RES=0` durante uma futura compilação autorizada; isso retorna o caminho original de alta resolução sem mudar as demais configurações da C7.
+- Essa redução tem **metade da resolução linear horizontal e vertical nas grades** (até um quarto das consultas verticais por área mascarada), mas não garante ganho equivalente de FPS: a classificação por coluna, as colisões e o DMA do framebuffer ainda custam CPU.
+- A textura mais grosseira pode fechar vazados estreitos, causar moiré e padrões de transparência diferentes. Testar grade próxima/longe, em diagonal, com inimigos na frente/atrás, portas, modos 80×72, 160×72, 80×144 e 160×144 e ambas as ROMs NORMAL/SSF. Se comprometer a visibilidade ou a jogabilidade, desativar a macro.
+
+**Status:** código atualizado; sem ROM compilada, sem teste de emulador, sem medição de desempenho ou garantia de fidelidade visual. A C6 estável permanece intacta.
+
 ## Alterações realizadas
 
 - `src/actors.c`: `DREAD_COMBAT_12_20` habilita dois acumuladores independentes de tempo lógico, ambos em VBlanks: **IA a 12 Hz** (5 VBlanks por passo) e **projéteis a 20 Hz** (3 VBlanks por passo). Acumuladores preservam os restos entre quadros renderizados; são zerados por `Actors_Init` em cada fase. Nenhum relógio depende da velocidade de emulação.
