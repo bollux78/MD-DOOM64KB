@@ -70,8 +70,15 @@ jobs:
           IA 12Hz, projetil 20Hz, armas originais dithered, grades 2x2.
           Esta ROM exige validacao automatizada no MAME e depois no hardware.
           EOF
-          (cd "$OUT/release" && zip -9 -q "$OUT/DREAD-C7-NORMAL-VERDE.zip" ./*)
-          unzip -t "$OUT/DREAD-C7-NORMAL-VERDE.zip"
+          python3 - <<'PY'
+          import os, pathlib, zipfile
+          out = pathlib.Path(os.environ["OUT"])
+          with zipfile.ZipFile(out / "DREAD-C7-NORMAL-VERDE.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for p in sorted((out / "release").iterdir()):
+                  if p.is_file(): z.write(p, p.name)
+          with zipfile.ZipFile(out / "DREAD-C7-NORMAL-VERDE.zip") as z:
+              assert z.testzip() is None
+          PY
           echo "NORMAL_BUILD_SUCCESS: $bytes bytes"
       - name: Upload single ROM for boot QA and download
         if: always()
