@@ -137,17 +137,27 @@ seg_columns:
 .Lcol:
         cmp.w   J_XE(%a6),%d7
         bge     .Ldone
+#ifndef DREAD_OPT_COLPTR_INCREMENTAL
         moveq   #0,%d0
         move.b  CEIL_D(%a5,%d7.w),%d0       /* top */
         moveq   #0,%d1
         move.b  FLOOR_D(%a5,%d7.w),%d1      /* bot */
+#endif
         move.w  %d7,%d6
         add.w   %d6,%d6
         lea     r_colofs,%a0
         move.l  J_FB(%a6),%a2
         adda.w  0(%a0,%d6.w),%a2            /* column pointer */
 #ifdef DREAD_OPT_COLPTR_INCREMENTAL
-.Lcol_ptrready:                              /* adjacent H40 row columns reuse a2 */
+.Lcol_ptrready:                              /* adjacent row columns reuse a2 only */
+        /* Every column MUST refresh clipping and d6 (sky offset index).
+         * Previous A1 skipped these and displayed corrupt/black tiles. */
+        moveq   #0,%d0
+        move.b  CEIL_D(%a5,%d7.w),%d0
+        moveq   #0,%d1
+        move.b  FLOOR_D(%a5,%d7.w),%d1
+        move.w  %d7,%d6
+        add.w   %d6,%d6
 #endif
         movem.w (%a3),%d2-%d3               /* raw yc, yf of this column (ColRec) */
         cmp.w   %d0,%d2                     /* yc = clamp(yc, top, bot) */
