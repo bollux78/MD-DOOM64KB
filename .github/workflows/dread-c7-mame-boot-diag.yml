@@ -23,7 +23,7 @@ jobs:
       - name: Install MAME and image parser
         run: |
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-pil
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-pil python3-numpy
       - name: Extract reference ROMs
         run: |
           mkdir -p "$RUNNER_TEMP/diag"
@@ -49,8 +49,14 @@ jobs:
           emu.register_frame_done(function()
             frames=frames+1
             if frames==60 or frames==240 or frames==600 then
-              local pcreg=cpu.state["PC"]
+              local pcreg=cpu.state["CURPC"] or cpu.state["PC"]
               local pc=pcreg and pcreg.value or -1
+              if frames==60 then
+                local keys={}
+                for k,_ in pairs(cpu.state) do keys[#keys+1]=k end
+                table.sort(keys)
+                print("CPU_STATE_KEYS="..table.concat(keys,","))
+              end
               local kinds={}
               for y=20,180,20 do
                 for x=20,300,20 do
@@ -60,8 +66,8 @@ jobs:
               end
               local n=0 for _,_ in pairs(kinds) do n=n+1 end
               print(string.format("BOOT_FRAME=%d PC=%08X SAMPLE_DISTINCT=%d",frames,pc,n))
-              local ok,err=pcall(function()screen:snapshot(os.getenv("DIAG_VARIANT").."-"..frames..".png")end)
-              if not ok then print("SNAP_ERROR "..tostring(err)) end
+              local ok,err=pcall(function()return screen:snapshot(os.getenv("DIAG_VARIANT").."-"..frames..".png")end)
+              print("SNAP_RESULT "..tostring(ok).." "..tostring(err))
             end
           end)
           LUA
@@ -69,9 +75,9 @@ jobs:
             echo "::group::$variant"
             DIAG_VARIANT="$variant" timeout 100 mame megadriv -cart "$PWD/$variant.bin" \
               -video none -sound none -autoboot_script "$PWD/diag.lua" \
-              -seconds_to_run 11 -nothrottle -skip_gameinfo \
+              -seconds_to_run 11 -nothrottle -skip_gameinfo -snappath "$PWD" \
               > "$variant.log" 2>&1 || true
-            grep -E 'BOOT_FRAME=|SNAP_ERROR|Error|Fatal' "$variant.log" || true
+            grep -E 'BOOT_FRAME=|CPU_STATE_KEYS|SNAP_RESULT|Error|Fatal' "$variant.log" || true
             echo "::endgroup::"
           done
           python3 - <<'PY'
