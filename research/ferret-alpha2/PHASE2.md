@@ -1,5 +1,7 @@
 # Marco 2 — visibilidade, projeção e paredes calculadas no 68000
 
+**Atualização:** a [v03 navegável](PHASE3-NAVEGAVEL.md) substitui as poses pela consulta espacial e por movimento com colisão.
+
 Esta etapa substitui o uso de uma cena pronta para o viewport por código novo que calcula paredes a partir da geometria. Não altera o D01 nem a main. Ainda é uma reconstrução parcial e não alcançou equivalência visual completa ou de desempenho.
 
 ## O que mudou

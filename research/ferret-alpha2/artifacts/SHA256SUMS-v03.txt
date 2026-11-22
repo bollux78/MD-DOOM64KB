@@ -1,0 +1,4 @@
+6fdcc8a007083a8f7e608d7c09c77279850dd55f2bf2ae4ebda629bcf6b7fa5c  Ferret-Reconstrucao-Navegavel-v03.bin
+a7c6636df0dfd650e85998b57e1a74ace6b83923cd9fccfd474ce5f4f5f539ad  Ferret-Navegavel-v03.zip
+cf4724a8977a3ce8a76ce3446f6c90d833a943bf9862c976ff0aa839c8df34f0  navigation-v03-spawn.png
+9a4f6a2e022f287079604a0c68c854999f1decc1a4284833d61bd714aae92ea8  navigation-v03-walk.png

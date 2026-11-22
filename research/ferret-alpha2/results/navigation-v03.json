@@ -1,0 +1,519 @@
+{
+  "build.json": {
+    "size": 786432,
+    "sha256": "6fdcc8a007083a8f7e608d7c09c77279850dd55f2bf2ae4ebda629bcf6b7fa5c",
+    "controls": "up/down move; left/right turn; A runs; Start resets spawn",
+    "limitations": "Experimental E1M1 geometry navigation; static HUD/weapon; no actors or game logic; visibility conditions enabled; original door logic not reconstructed."
+  },
+  "navigation-input-test.json": [
+    {
+      "camera": [
+        8448,
+        -1280,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 131,
+      "angle": 0,
+      "frames": 5,
+      "vblanks": 170,
+      "buttons": 0,
+      "label": "spawn"
+    },
+    {
+      "camera": [
+        8448,
+        3392,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 114,
+      "angle": 0,
+      "frames": 15,
+      "vblanks": 470,
+      "buttons": 1,
+      "label": "forward"
+    },
+    {
+      "camera": [
+        8448,
+        3392,
+        -40,
+        -12657,
+        -10266,
+        71
+      ],
+      "cell": 114,
+      "angle": 164,
+      "frames": 19,
+      "vblanks": 560,
+      "buttons": 4,
+      "label": "left"
+    },
+    {
+      "camera": [
+        6593,
+        1887,
+        -40,
+        -12657,
+        -10266,
+        71
+      ],
+      "cell": 113,
+      "angle": 164,
+      "frames": 24,
+      "vblanks": 740,
+      "buttons": 1,
+      "label": "forward-turned"
+    },
+    {
+      "camera": [
+        6593,
+        1887,
+        -40,
+        -1851,
+        16261,
+        117
+      ],
+      "cell": 113,
+      "angle": 251,
+      "frames": 27,
+      "vblanks": 830,
+      "buttons": 8,
+      "label": "right"
+    },
+    {
+      "camera": [
+        6810,
+        -52,
+        -40,
+        -1851,
+        16261,
+        117
+      ],
+      "cell": 127,
+      "angle": 251,
+      "frames": 32,
+      "vblanks": 950,
+      "buttons": 2,
+      "label": "back"
+    },
+    {
+      "camera": [
+        8448,
+        -1280,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 131,
+      "angle": 0,
+      "frames": 34,
+      "vblanks": 1010,
+      "buttons": 128,
+      "label": "reset"
+    }
+  ],
+  "model-validation.json": {
+    "rotation": [
+      {
+        "angle": 0,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 8,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 16,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 24,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 32,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 40,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 48,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 56,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 64,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 72,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 80,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 88,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 96,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 104,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 112,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 120,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 128,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 136,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 144,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 152,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 160,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 168,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 176,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 184,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 192,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 200,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 208,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 216,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 224,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 232,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 240,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      },
+      {
+        "angle": 248,
+        "cell": 131,
+        "different_bytes": 0,
+        "unsupported": {},
+        "uncovered_bytes": 0,
+        "open_columns": 0
+      }
+    ],
+    "forward_cells": [
+      111,
+      114,
+      115,
+      121,
+      124,
+      125,
+      131
+    ],
+    "back_collision_y_internal": -1664,
+    "back_collision_wall_y": -224,
+    "radius_world_units": 16
+  },
+  "rom-validation.json": [
+    {
+      "label": "spawn-audit",
+      "camera": [
+        8448,
+        -1280,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 131,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 6
+    },
+    {
+      "label": "walk-audit",
+      "camera": [
+        8448,
+        2080,
+        -24,
+        0,
+        16384,
+        127
+      ],
+      "cell": 111,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 14
+    },
+    {
+      "label": "rotate-audit",
+      "camera": [
+        8448,
+        2080,
+        -24,
+        -16288,
+        1604,
+        7
+      ],
+      "cell": 111,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 17
+    },
+    {
+      "label": "reverse-audit",
+      "camera": [
+        9879,
+        1939,
+        -24,
+        -16288,
+        1604,
+        7
+      ],
+      "cell": 84,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 21
+    },
+    {
+      "label": "reset-audit",
+      "camera": [
+        8448,
+        -1280,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 131,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 23
+    },
+    {
+      "label": "back-wall-audit",
+      "camera": [
+        8448,
+        -1640,
+        -40,
+        0,
+        16384,
+        127
+      ],
+      "cell": 134,
+      "framebuffer_equals_host": true,
+      "different_bytes": 0,
+      "frame_count": 41
+    }
+  ],
+  "benchmark.json": {
+    "video_frames": 1500,
+    "presentations": 52,
+    "fps_60hz": 2.0689655172413794,
+    "interval_histogram": {
+      "29": 51
+    },
+    "scene": "actual BSP-selected spawn cell 131; no input; no actors; static overlay",
+    "sram": false,
+    "sega_cd": false
+  },
+  "map": {
+    "nodes": 430,
+    "cells": 431,
+    "walls": 642,
+    "visibility_references": 32460,
+    "texture_bytes": 180788,
+    "collision_grid": [
+      36,
+      23
+    ],
+    "collision_references": 1474,
+    "spawn": [
+      8448,
+      -1280,
+      -40,
+      0,
+      16384,
+      127
+    ],
+    "source": "ROM geometry and metadata; no framebuffer pixels",
+    "all_visibility_conditions_enabled": true
+  }
+}
