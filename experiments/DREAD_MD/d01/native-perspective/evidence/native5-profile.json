@@ -1,0 +1,487 @@
+{
+  "variant": "native5",
+  "condition": "spawn fixed, NTSC 300 video frames, no SRAM, AI paused",
+  "total_recorded_cycles": 253850131,
+  "functions": [
+    {
+      "symbol": "seg_columns",
+      "address": "0x146c8",
+      "cycles": 41088432
+    },
+    {
+      "symbol": "render_node",
+      "address": "0x94b4",
+      "cycles": 33305832
+    },
+    {
+      "symbol": "draw_seg_body.isra.0",
+      "address": "0x7880",
+      "cycles": 27496378
+    },
+    {
+      "symbol": "hint_b",
+      "address": "0x162dc",
+      "cycles": 21516600
+    },
+    {
+      "symbol": "tex_native",
+      "address": "0x161e2",
+      "cycles": 16800420
+    },
+    {
+      "symbol": "proj",
+      "address": "0x748a",
+      "cycles": 14229600
+    },
+    {
+      "symbol": "native_anchors",
+      "address": "0x104862",
+      "cycles": 13344800
+    },
+    {
+      "symbol": "span_fill",
+      "address": "0x148ae",
+      "cycles": 11436600
+    },
+    {
+      "symbol": "bbox_visible",
+      "address": "0x7532",
+      "cycles": 10193582
+    },
+    {
+      "symbol": "R_RenderView",
+      "address": "0x9bbe",
+      "cycles": 8297268
+    },
+    {
+      "symbol": "seg_rows2",
+      "address": "0x1045d4",
+      "cycles": 5693870
+    },
+    {
+      "symbol": "tex_fast",
+      "address": "0x14d4a",
+      "cycles": 3949050
+    },
+    {
+      "symbol": "Actors_Draw",
+      "address": "0x2a12",
+      "cycles": 3624810
+    },
+    {
+      "symbol": "R_AddSprite",
+      "address": "0x90e8",
+      "cycles": 3600926
+    },
+    {
+      "symbol": "tmkb_start",
+      "address": "0x14ebe",
+      "cycles": 3552430
+    },
+    {
+      "symbol": "DMA_doDmaFast",
+      "address": "0xab06",
+      "cycles": 3533225
+    },
+    {
+      "symbol": "native_b_106",
+      "address": "0x97848",
+      "cycles": 2753660
+    },
+    {
+      "symbol": "hint_a",
+      "address": "0x16270",
+      "cycles": 2403996
+    },
+    {
+      "symbol": "native_b_123",
+      "address": "0x9bb5a",
+      "cycles": 2166080
+    },
+    {
+      "symbol": "tex_legacy",
+      "address": "0x14d84",
+      "cycles": 2079238
+    },
+    {
+      "symbol": "native_b_124",
+      "address": "0x9bf4c",
+      "cycles": 1961120
+    },
+    {
+      "symbol": "seg_rows1",
+      "address": "0x104618",
+      "cycles": 1569372
+    },
+    {
+      "symbol": "JOY_update",
+      "address": "0xd1ac",
+      "cycles": 1344000
+    },
+    {
+      "symbol": "draw_seg",
+      "address": "0x87e6",
+      "cycles": 1275778
+    },
+    {
+      "symbol": "native_b_131",
+      "address": "0x9daea",
+      "cycles": 1241030
+    },
+    {
+      "symbol": "read6Btn",
+      "address": "0xb2e4",
+      "cycles": 1201200
+    },
+    {
+      "symbol": "fillb_end",
+      "address": "0x14b06",
+      "cycles": 1123920
+    },
+    {
+      "symbol": "__udivsi3_internal",
+      "address": "0x105ba4",
+      "cycles": 1096816
+    },
+    {
+      "symbol": "vint_cb",
+      "address": "0x492e",
+      "cycles": 1039556
+    },
+    {
+      "symbol": "__mulsi3_internal",
+      "address": "0x105b80",
+      "cycles": 970186
+    },
+    {
+      "symbol": "spr_scale",
+      "address": "0x14e7a",
+      "cycles": 882980
+    },
+    {
+      "symbol": "R_PointInSub",
+      "address": "0x9b5a",
+      "cycles": 752556
+    },
+    {
+      "symbol": "__muldi3",
+      "address": "0x105c90",
+      "cycles": 746004
+    },
+    {
+      "symbol": "HUD_VBlank",
+      "address": "0x428c",
+      "cycles": 724402
+    },
+    {
+      "symbol": "native_b_129",
+      "address": "0x9d306",
+      "cycles": 678720
+    },
+    {
+      "symbol": "__divdi3",
+      "address": "0x105cf8",
+      "cycles": 630056
+    },
+    {
+      "symbol": "main",
+      "address": "0x53b8",
+      "cycles": 384734
+    },
+    {
+      "symbol": "no_bmp_task",
+      "address": "0x2e2",
+      "cycles": 370328
+    },
+    {
+      "symbol": "Z80_getAndRequestBus",
+      "address": "0x107f8",
+      "cycles": 357896
+    },
+    {
+      "symbol": "Thing_Taken",
+      "address": "0xde6",
+      "cycles": 339360
+    },
+    {
+      "symbol": "no_user_task",
+      "address": "0x2b0",
+      "cycles": 256200
+    },
+    {
+      "symbol": "SYS_setHIntCallback",
+      "address": "0xed7c",
+      "cycles": 252000
+    },
+    {
+      "symbol": "native_b_107",
+      "address": "0x97c3a",
+      "cycles": 211820
+    },
+    {
+      "symbol": "native_b_108",
+      "address": "0x9802c",
+      "cycles": 211820
+    },
+    {
+      "symbol": "__umodsi3",
+      "address": "0x105c30",
+      "cycles": 203056
+    },
+    {
+      "symbol": "sb_91",
+      "address": "0x2010a",
+      "cycles": 188020
+    },
+    {
+      "symbol": "native_b_122",
+      "address": "0x9b768",
+      "cycles": 165270
+    },
+    {
+      "symbol": "HUD_Draw",
+      "address": "0x3380",
+      "cycles": 160356
+    },
+    {
+      "symbol": "native_b_115",
+      "address": "0x99bca",
+      "cycles": 153510
+    },
+    {
+      "symbol": "DMA_doDma",
+      "address": "0xac82",
+      "cycles": 151032
+    },
+    {
+      "symbol": "native_b_114",
+      "address": "0x997d8",
+      "cycles": 143990
+    },
+    {
+      "symbol": "native_b_130",
+      "address": "0x9d6f8",
+      "cycles": 138040
+    },
+    {
+      "symbol": "native_b_113",
+      "address": "0x993e6",
+      "cycles": 120190
+    },
+    {
+      "symbol": "native_b_112",
+      "address": "0x98ff4",
+      "cycles": 101150
+    },
+    {
+      "symbol": "Z80_releaseBus",
+      "address": "0x1082e",
+      "cycles": 90216
+    },
+    {
+      "symbol": "SYS_disableInts",
+      "address": "0xed00",
+      "cycles": 88200
+    },
+    {
+      "symbol": "SYS_enableInts",
+      "address": "0xed32",
+      "cycles": 88200
+    },
+    {
+      "symbol": "native_b_118",
+      "address": "0x9a7a0",
+      "cycles": 85680
+    },
+    {
+      "symbol": "L6",
+      "address": "0x105bfc",
+      "cycles": 81536
+    },
+    {
+      "symbol": "native_b_121",
+      "address": "0x9b376",
+      "cycles": 76160
+    },
+    {
+      "symbol": "native_b_127",
+      "address": "0x9cb22",
+      "cycles": 76160
+    },
+    {
+      "symbol": "vsprintf",
+      "address": "0xd8c0",
+      "cycles": 75992
+    },
+    {
+      "symbol": "native_b_117",
+      "address": "0x9a3ae",
+      "cycles": 69020
+    },
+    {
+      "symbol": "tmkb_end",
+      "address": "0x1569e",
+      "cycles": 64400
+    },
+    {
+      "symbol": "no_xgm_task",
+      "address": "0x2d2",
+      "cycles": 63000
+    },
+    {
+      "symbol": "_VINT",
+      "address": "0x26c",
+      "cycles": 46200
+    },
+    {
+      "symbol": "sb_103",
+      "address": "0x21562",
+      "cycles": 46144
+    },
+    {
+      "symbol": "memcpy_",
+      "address": "0x11b62",
+      "cycles": 45920
+    },
+    {
+      "symbol": "native_b_119",
+      "address": "0x9ab92",
+      "cycles": 42840
+    },
+    {
+      "symbol": "native_b_126",
+      "address": "0x9c730",
+      "cycles": 41650
+    },
+    {
+      "symbol": "native_b_116",
+      "address": "0x99fbc",
+      "cycles": 39270
+    },
+    {
+      "symbol": "native_b_120",
+      "address": "0x9af84",
+      "cycles": 39270
+    },
+    {
+      "symbol": "native_b_128",
+      "address": "0x9cf14",
+      "cycles": 38080
+    },
+    {
+      "symbol": "HUD_Text",
+      "address": "0x4208",
+      "cycles": 37156
+    },
+    {
+      "symbol": "sb_92",
+      "address": "0x202bc",
+      "cycles": 36176
+    },
+    {
+      "symbol": "native_b_132",
+      "address": "0x9dedc",
+      "cycles": 32760
+    },
+    {
+      "symbol": "native_b_133",
+      "address": "0x9e2ce",
+      "cycles": 32760
+    },
+    {
+      "symbol": "native_b_134",
+      "address": "0x9e6c0",
+      "cycles": 32760
+    },
+    {
+      "symbol": "VDP_setAutoInc",
+      "address": "0xfa16",
+      "cycles": 32480
+    },
+    {
+      "symbol": "sb_102",
+      "address": "0x213b0",
+      "cycles": 29988
+    },
+    {
+      "symbol": "native_b_136",
+      "address": "0x9eea4",
+      "cycles": 28980
+    },
+    {
+      "symbol": "native_b_137",
+      "address": "0x9f296",
+      "cycles": 28980
+    },
+    {
+      "symbol": "native_b_140",
+      "address": "0x9fe6c",
+      "cycles": 28980
+    },
+    {
+      "symbol": "native_b_141",
+      "address": "0xa025e",
+      "cycles": 28980
+    },
+    {
+      "symbol": "native_b_111",
+      "address": "0x98c02",
+      "cycles": 28560
+    },
+    {
+      "symbol": "JOY_readJoypad",
+      "address": "0xd130",
+      "cycles": 27608
+    },
+    {
+      "symbol": "sb_101",
+      "address": "0x211fe",
+      "cycles": 9520
+    },
+    {
+      "symbol": "sb_104",
+      "address": "0x21714",
+      "cycles": 7952
+    },
+    {
+      "symbol": "native_b_110",
+      "address": "0x98810",
+      "cycles": 5950
+    },
+    {
+      "symbol": "memcpy",
+      "address": "0xd7a6",
+      "cycles": 4928
+    },
+    {
+      "symbol": "sprintf",
+      "address": "0xe89c",
+      "cycles": 1904
+    },
+    {
+      "symbol": "__modsi3",
+      "address": "0x105c60",
+      "cycles": 1372
+    },
+    {
+      "symbol": "L2",
+      "address": "0x105c18",
+      "cycles": 462
+    },
+    {
+      "symbol": "__divsi3_internal",
+      "address": "0x105c00",
+      "cycles": 294
+    },
+    {
+      "symbol": "L3",
+      "address": "0x105c2a",
+      "cycles": 196
+    },
+    {
+      "symbol": "L1",
+      "address": "0x105c0e",
+      "cycles": 182
+    }
+  ]
+}

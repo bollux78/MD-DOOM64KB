@@ -1,0 +1,70 @@
+[
+  {
+    "variant": "final-control",
+    "mode": 3,
+    "height": 144,
+    "width": 64,
+    "hint_on": 0,
+    "framebuffer_bytes": 18432
+  },
+  {
+    "variant": "final-control",
+    "mode": 6,
+    "height": 144,
+    "width": 128,
+    "hint_on": 0,
+    "framebuffer_bytes": 18432
+  },
+  {
+    "variant": "final-control",
+    "mode": 2,
+    "height": 72,
+    "width": 128,
+    "hint_on": 1,
+    "framebuffer_bytes": 9216
+  },
+  {
+    "variant": "final-control",
+    "map": "E1M2",
+    "player_view": "ffe00000ffb8000000414000"
+  },
+  {
+    "variant": "final-control",
+    "map": "E1M8",
+    "player_view": "ffa40000ff20000000790000"
+  },
+  {
+    "variant": "final-native",
+    "mode": 3,
+    "height": 144,
+    "width": 64,
+    "hint_on": 0,
+    "framebuffer_bytes": 18432
+  },
+  {
+    "variant": "final-native",
+    "mode": 6,
+    "height": 144,
+    "width": 128,
+    "hint_on": 0,
+    "framebuffer_bytes": 18432
+  },
+  {
+    "variant": "final-native",
+    "mode": 2,
+    "height": 72,
+    "width": 128,
+    "hint_on": 1,
+    "framebuffer_bytes": 9216
+  },
+  {
+    "variant": "final-native",
+    "map": "E1M2",
+    "player_view": "ffe00000ffb8000000414000"
+  },
+  {
+    "variant": "final-native",
+    "map": "E1M8",
+    "player_view": "ffaa0000ff20000000790000"
+  }
+]

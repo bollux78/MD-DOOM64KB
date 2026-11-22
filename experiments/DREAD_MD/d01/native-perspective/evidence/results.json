@@ -1,0 +1,55 @@
+{
+  "emulator": "Genesis Plus GX, instrumented, upstream 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0",
+  "core_sha256": "de364e80e588da74361589b95645aa125deb3d419b6ac02f757b6323c3a90418",
+  "video": "NTSC; FPS normalised to 60 Hz as in game",
+  "conditions": "E1M1, 312 frames, dt=4, H40 lines 160x72, AI paused, music enabled, SRAM blocked, no Sega CD",
+  "repetitions": [
+    {
+      "variant": "final-control",
+      "frames": 312,
+      "vblanks": 5244,
+      "fps_at_60hz": 3.5697940503432495
+    },
+    {
+      "variant": "final-native",
+      "frames": 312,
+      "vblanks": 5279,
+      "fps_at_60hz": 3.5461261602576246
+    },
+    {
+      "variant": "final-control",
+      "frames": 312,
+      "vblanks": 5244,
+      "fps_at_60hz": 3.5697940503432495
+    },
+    {
+      "variant": "final-native",
+      "frames": 312,
+      "vblanks": 5279,
+      "fps_at_60hz": 3.5461261602576246
+    },
+    {
+      "variant": "final-control",
+      "frames": 312,
+      "vblanks": 5244,
+      "fps_at_60hz": 3.5697940503432495
+    },
+    {
+      "variant": "final-native",
+      "frames": 312,
+      "vblanks": 5279,
+      "fps_at_60hz": 3.5461261602576246
+    }
+  ],
+  "artifacts": {
+    "00-CONTROLE.bin": {
+      "bytes": 3538944,
+      "sha256": "513387c437666782d98f33459cc010234d52c6d793b0e4b240ac3d94ba3b6822"
+    },
+    "01-NATIVE-PERSPECTIVE.bin": {
+      "bytes": 4194304,
+      "sha256": "abcfc6ddd9bfa9f872dec314a43ebc42778db41183ab4db47fba7af6121c5f1a"
+    }
+  },
+  "scope": "New perspective/scaler kernels and full-height mode; existing geometry/BSP/column clipper retained. NOT a full Ferret reconstruction or proven visual match."
+}

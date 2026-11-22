@@ -274,3 +274,98 @@ seg_anchors:
 .Landone:
         movem.l (%sp)+,%d2-%d7/%a2-%a4
         rts
+
+#ifdef DREAD_NATIVE_PERSPECTIVE
+        .globl native_anchors
+/* Fused perspective U / scaler selector. Unlike seg_anchors, never reconstruct
+ * depth with a second DIVU, multiply by focal, then quantise it back to scale.
+ * The scale selects a ROM scaler directly from linear inverse depth. */
+native_anchors:
+        movem.l %d2-%d7/%a2-%a3,-(%sp)
+        move.l  36(%sp),%a2
+        move.w  XS(%a2),%d0
+        move.w  %d0,%d6
+        add.w   %d0,%d0
+        add.w   %d6,%d0
+        lsl.w   #2,%d0
+        lea     rec+8,%a0
+        adda.w  %d0,%a0
+        lea     native_zq72,%a1
+        cmpi.w  #72,r_vh
+        beq.s   1f
+        lea     native_zq144,%a1
+1:      move.w  XE(%a2),%d6
+        sub.w   XS(%a2),%d6
+        add.w   %d6,rstats+10
+        subq.w  #1,%d6
+        move.l  IZ(%a2),%d2              /* D */
+        move.l  UZ(%a2),%d3
+        lsl.l   #8,%d3                    /* N */
+        move.l  DIZ(%a2),%d4              /* dD */
+        move.l  DUZ(%a2),%d5
+        lsl.l   #8,%d5                    /* dN */
+        move.l  %d2,%d0
+        move.l  %d3,%d1
+        cmpi.l  #65536,%d0
+        bcs.s   2f
+        lsr.l   #5,%d0
+        lsr.l   #5,%d1
+2:      divu.w  %d0,%d1
+        moveq   #0,%d7
+        move.w  %d1,%d7                    /* initial quotient estimate */
+        /* r=N-u*D; A=dN-u*dD. Two 16-bit multiplies per 32x16
+         * product, only in wall setup. Inner columns use ADD/SUB/CMP. */
+        move.l  %d2,%d0
+        swap    %d0
+        mulu.w  %d7,%d0
+        swap    %d0
+        clr.w   %d0
+        move.w  %d2,%d1
+        mulu.w  %d7,%d1
+        add.l   %d1,%d0
+        sub.l   %d0,%d3
+        move.l  %d4,%d0
+        swap    %d0
+        muls.w  %d7,%d0
+        swap    %d0
+        clr.w   %d0
+        move.w  %d4,%d1
+        mulu.w  %d7,%d1
+        add.l   %d1,%d0
+        sub.l   %d0,%d5
+.Lna_loop:
+        tst.l   %d3
+        bpl.s   .Lna_positive
+.Lna_negative:
+        subq.w  #1,%d7
+        add.l   %d2,%d3
+        add.l   %d4,%d5
+        tst.l   %d3
+        bmi.s   .Lna_negative
+.Lna_positive:
+        cmp.l   %d2,%d3
+        bcs.s   .Lna_store
+.Lna_reduce:
+        sub.l   %d2,%d3
+        addq.w  #1,%d7
+        sub.l   %d4,%d5
+        cmp.l   %d2,%d3
+        bcc.s   .Lna_reduce
+.Lna_store:
+        move.w  %d7,(%a0)
+        move.l  %d2,%d0
+        lsr.l   #5,%d0
+        cmpi.l  #32767,%d0
+        bls.s   6f
+        move.w  #32767,%d0
+6:      moveq   #0,%d1
+        move.b  0(%a1,%d0.w),%d1
+        ori.w   #0x8000,%d1
+        move.w  %d1,2(%a0)
+        lea     12(%a0),%a0
+        add.l   %d4,%d2
+        add.l   %d5,%d3
+        dbra    %d6,.Lna_loop
+        movem.l (%sp)+,%d2-%d7/%a2-%a3
+        rts
+#endif

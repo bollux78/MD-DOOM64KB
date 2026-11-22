@@ -60,7 +60,7 @@ volatile uint16_t bench_joy;
 volatile uint32_t bench_frames, bench_vints;
 volatile uint16_t bench_done;
 volatile uint16_t cur_buf;
-volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
+volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors, frame_subs;
 
 static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(addr & 0x3FFF) << 16) | (addr >> 14); }
 
@@ -116,11 +116,12 @@ static void set_mode(uint16_t m)
 #endif
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
+    r_fullheight = (m & 4) != 0;
     R_SetMode(colb, h40 ? 40 : 32, crop);
     if (h40) VDP_setScreenWidth320(); else VDP_setScreenWidth256();
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     view_trows = VIEW_H / 8;
-    nbuf = colb == 2 ? 1 : 2;
+    nbuf = (colb == 2 || r_fullheight) ? 1 : 2;
     tile_fb1 = nbuf == 2 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
     nt1 = nbuf == 2 ? 0xA000 : 0xE000;
     /* palette 0: the view */
@@ -145,7 +146,7 @@ static void set_mode(uint16_t m)
     shown = 0; cur_buf = 0;
     hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
     *(volatile uint16_t *)0xC00004 = hint_r1on;      /* display on (column mode never runs hint_a) */
-    hint_on = colb == 1;
+    hint_on = colb == 1 && !r_fullheight;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
@@ -319,7 +320,7 @@ static void menu_draw(uint16_t sel)
     (void)det;
     sprintf(l[1], "%c DETALHE: LINHAS", sel == 1 ? '>' : ' ');
 #else
-    sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', det[mode & 1]);
+    sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', (mode & 4) ? "ALTURA COMPLETA" : det[mode & 1]);
 #endif
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
@@ -368,7 +369,13 @@ static void menu(void)
                 continue;
             }
             if (sel == 2) { crop = (uint16_t)((crop + ((e & BUTTON_LEFT) ? 4 : 2)) % 6); set_mode(mode); }
-            else set_mode(mode ^ (sel == 0 ? 2 : 1));
+            else if (sel == 0) set_mode(mode ^ 2);
+            else {
+                /* Three detail choices, while preserving the H40/H32 choice. */
+                const uint16_t detail = (mode & 4) ? 2 : (mode & 1);
+                const uint16_t next = (detail + ((e & BUTTON_LEFT) ? 2 : 1)) % 3;
+                set_mode((mode & 2) | (next == 2 ? 4 : next));
+            }
             SYS_disableInts(); VDP_setWindowVPos(FALSE, 13); SYS_enableInts();
             menu_draw(sel);
         }
@@ -567,6 +574,91 @@ static void pickups(HudState *hud, uint16_t psub)
 }
 #endif
 
+#ifdef DREAD_CELLSTREAM_REPORT
+/* Dedicated fullscreen summary at the end of the 312-frame route.
+ * Kept behind an experimental flag; normal gameplay/menu are unchanged. */
+#ifdef DREAD_CELL_STREAM
+extern volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
+extern volatile uint16_t cell_stream_last_len;
+#endif
+static void benchmark_report_screen(uint16_t f100)
+{
+    char line[40];
+    while (dma_src) {}                 /* do not cut a pending framebuffer DMA */
+    SYS_disableInts();
+    hint_on = 0;
+    VDP_setHInterrupt(FALSE);
+    SYS_setHIntCallback(NULL);
+    SYS_setVIntCallback(NULL);         /* do not let HUD VBlank repaint the report */
+    /* Gameplay writes reg 1/2 and VSRAM directly, bypassing SGDK's cache.
+     * The last VBlank may have disabled display pending hint_a; that callback
+     * no longer runs here. Explicitly restore a static, unscrolled text screen.
+     * Also select the SDK's BG_A table, not the last double-buffered table. */
+    VDP_setEnable(FALSE);
+    *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
+    VDP_setWindowHPos(FALSE, 0);
+    VDP_setWindowVPos(FALSE, 0);
+    VDP_setHorizontalScroll(BG_A, 0);
+    VDP_setHorizontalScroll(BG_B, 0);
+    VDP_setVerticalScroll(BG_A, 0);
+    VDP_setVerticalScroll(BG_B, 0);
+    /* Hide the weapon's hardware sprite chain on the report. */
+    VDP_setAutoInc(2);
+    vram_cmd(0xF400);
+    for (uint16_t i = 0; i < 4; i++)
+        *(volatile uint16_t *)0xC00000 = 0;
+    VDP_setHilightShadow(FALSE);
+    VDP_setTextPalette(PAL3);
+    VDP_setTextPriority(TRUE);
+    VDP_clearPlane(WINDOW, TRUE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_drawTextBG(BG_A, "DOOM MD  RENDER BENCHMARK", 2, 1);
+    VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
+#ifdef DREAD_NATIVE_PERSPECTIVE
+    VDP_drawTextBG(BG_A, "MODO: NATIVE PERSPECTIVE", 2, 5);
+#elif defined(DREAD_CELL_STREAM)
+    VDP_drawTextBG(BG_A, "MODO: CELLSTREAM B1", 2, 5);
+#else
+    VDP_drawTextBG(BG_A, "MODO: CONTROL BSP", 2, 5);
+#endif
+    sprintf(line, "FPS DA ROTA: %u.%02u", f100 / 100, f100 % 100);
+    VDP_drawTextBG(BG_A, line, 2, 7);
+    sprintf(line, "QUADROS: %lu", (unsigned long)bench_frames);
+    VDP_drawTextBG(BG_A, line, 2, 9);
+    sprintf(line, "VBLANKS: %lu", (unsigned long)bench_vints);
+    VDP_drawTextBG(BG_A, line, 2, 10);
+    sprintf(line, "SEGS: %u  NODES: %u", frame_segs, frame_nodes);
+    VDP_drawTextBG(BG_A, line, 2, 12);
+    sprintf(line, "SUBS: %u  SEG VISITS: %u", frame_subs, frame_cols);
+    VDP_drawTextBG(BG_A, line, 2, 13);
+    sprintf(line, "ANCORAS: %u", frame_anchors);
+    VDP_drawTextBG(BG_A, line, 2, 14);
+#ifdef DREAD_CELL_STREAM
+    sprintf(line, "REBUILDS: %lu", (unsigned long)cell_stream_rebuilds);
+    VDP_drawTextBG(BG_A, line, 2, 16);
+    sprintf(line, "CACHE HITS: %lu", (unsigned long)cell_stream_hits);
+    VDP_drawTextBG(BG_A, line, 2, 17);
+    sprintf(line, "FALLBACKS: %lu", (unsigned long)cell_stream_fallbacks);
+    VDP_drawTextBG(BG_A, line, 2, 18);
+    sprintf(line, "LEAVES: %u", cell_stream_last_len);
+    VDP_drawTextBG(BG_A, line, 2, 19);
+#endif
+    VDP_drawTextBG(BG_A, "PIXELS: NAO VALIDADOS", 2, 22);
+    VDP_drawTextBG(BG_A, "CENAS: TESTAR NO HARDWARE", 2, 23);
+    VDP_drawTextBG(BG_A, "START: REINICIAR", 2, 26);
+    /* Never rely on hint_a to turn the report on. */
+    VDP_setEnable(TRUE);
+    SYS_enableInts();
+    for (;;) {
+        JOY_update();
+        if (JOY_readJoypad(JOY_1) & BUTTON_START) SYS_hardReset();
+        SYS_doVBlankProcess();
+    }
+}
+#endif
+
+
 int main(bool hard)
 {
     (void)hard;
@@ -750,7 +842,7 @@ int main(bool hard)
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);
         R_RenderView(&view, fb);
         if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
-        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
+        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors; frame_subs = rstats.subs_visited;
         while (dma_src) {}
         dma_pos = 0; dma_src = fb;
         cur_buf ^= (NBUF - 1);
@@ -767,6 +859,9 @@ int main(bool hard)
             sprintf(txt, "BENCH %u quadros %u.%u%u FPS", (uint16_t)bench_frames, f100 / 100, (f100 / 10) % 10, f100 % 10);
             HUD_Text(1, txt);
             bench_done = 2;
+#ifdef DREAD_CELLSTREAM_REPORT
+            benchmark_report_screen(f100);
+#endif
         }
     }
     return 0;

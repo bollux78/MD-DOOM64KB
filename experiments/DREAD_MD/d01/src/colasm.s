@@ -21,8 +21,8 @@ col_fill:
         lea     fill_end(%pc),%a1
         suba.w  %d1,%a1
         jmp     (%a1)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.b  %d0,k*4(%a0)
         .set    k,k-1
         .endr
@@ -50,8 +50,8 @@ col_tex:
         lea     tex_end(%pc),%a2
         suba.w  %d0,%a2
         jmp     (%a2)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.w  %d1,%d6
         and.w   %d5,%d6
         move.b  0(%a1,%d6.w),k*4(%a0)
@@ -81,8 +81,8 @@ col_tex_nm:
         lea     texnm_end(%pc),%a2
         suba.w  %d0,%a2
         jmp     (%a2)
-        .set    k,128
-        .rept   128
+        .set    k,144
+        .rept   144
         move.b  0(%a1,%d1.w),k*4(%a0)
         add.w   %d4,%d2
         addx.w  %d3,%d1
@@ -100,7 +100,7 @@ texnm_end:
    ====================================================================================== */
 #define VW_MAX 160
 #define VH_MAX 144
-#define NS_B 72                             /* row-doubled modes: 72 rows */
+#define NS_B 144                             /* row-doubled modes: 72 rows */
 #define CEIL_D (-128)
 #define FLOOR_D (VW_MAX - 128)
 #define J_FB 0
@@ -343,6 +343,27 @@ fillw_end:
  * Keep the sequential column records and return directly through the scaler.
  * a3 is the ColRec, a4 is Part, d5 is top row, d4 is span length. */
 tex_fast:
+#ifdef DREAD_NATIVE_PERSPECTIVE
+        cmpi.w  #1,r_colb
+        bne     tex_legacy
+        /* Guard only clobbers scratch registers; span/part inputs remain live. */
+        bsr     tex_native
+        tst.w   %d0
+        bne.s   1f
+        /* A wrapping span still uses the selected native scale in the generic
+         * mask kernel. Restore its tagged record afterwards for lower parts. */
+        move.w  10(%a3),-(%sp)
+        move.w  10(%a3),%d3
+        andi.w  #0x7fff,%d3
+        add.w   %d3,%d3
+        lea     native_steps,%a0
+        move.w  0(%a0,%d3.w),10(%a3)
+        bsr     tex_legacy
+        move.w  (%sp)+,10(%a3)
+        rts
+1:      rts
+#endif
+tex_legacy:
         moveq   #0,%d6
         move.w  8(%a3),%d6                  /* u from this column's sequential record */
         move.w  10(%a3),%d3                 /* zq, same 16.16 calculation as d4f9f4b */
@@ -372,6 +393,12 @@ tex_fast:
         add.w   %d5,%d5
         lea     -4(%a2,%d5.w),%a0           /* a0 = top - 4 */
         move.w  %d4,%a4                     /* a4 = n (the Part is no longer needed) */
+#ifdef DREAD_NATIVE_PERSPECTIVE
+#ifndef DREAD_EXACT_SPAN_REFERENCE
+        cmpi.w  #1,r_colb
+        beq     .Ltex_exact_slow            /* wrapping native span: keep the selected scale */
+#endif
+#endif
 #ifdef DREAD_EXACT_SPAN_REFERENCE
         subq.w  #1,%d4
         move.w  %d3,%d1
@@ -537,3 +564,74 @@ tmkw_start:
         .globl  tmkw_end
 tmkw_end:
         rts
+
+#ifdef DREAD_NATIVE_PERSPECTIVE
+/* Independent ROM-resident counterpart of Dread's horizon-anchored scaler.
+ * Inputs match tex_fast; returns d0=1 on draw, 0 for legacy wrapping fallback.
+ * The generated rows contain MOVE/DBRA/RTS; no self-modifying ROM or SRAM.
+ * All source bounds are checked using actual emitted scaler offsets. */
+tex_native:
+        move.w  %d4,%d0
+        add.w   %d5,%d0                    /* y1 */
+        move.w  10(%a3),%d2
+        andi.w  #0x7fff,%d2                /* native scaler selected from inverse depth */
+        lsl.w   #2,%d2
+        lea     native_b,%a0
+        lea     native_offsets_b,%a1
+        cmpi.w  #72,r_vh
+        beq.s   1f
+        lea     native_f,%a0
+        lea     native_offsets_f,%a1
+1:      move.l  0(%a0,%d2.w),%a0           /* first instruction (row zero) */
+        move.l  0(%a1,%d2.w),%a1
+        move.w  %d5,%d2
+        add.w   %d2,%d2
+        move.w  0(%a1,%d2.w),%d3           /* exact displacement at y0 */
+        subq.w  #1,%d0
+        add.w   %d0,%d0
+        move.w  0(%a1,%d0.w),%d1           /* exact displacement at y1-1 */
+        sub.w   %d3,%d1                    /* source span */
+        move.l  12(%a4),%d0
+        swap    %d0                       /* vbase integer, no per-column MULS */
+        add.w   %d3,%d0
+        and.w   8(%a4),%d0                 /* first source index */
+        add.w   %d0,%d1
+#ifdef DREAD_EPISODE
+        cmp.w   6(%a4),%d1
+#else
+        move.w  8(%a4),%d6
+        add.w   %d6,%d6
+        addq.w  #2,%d6
+        cmp.w   %d6,%d1
+#endif
+        bcc.s   .Lnative_fail
+        sub.w   %d3,%d0                    /* base cancelling signed scaler origin */
+        move.w  8(%a3),%d6
+        and.w   4(%a4),%d6
+#ifdef DREAD_EPISODE
+        lsl.w   #2,%d6
+        move.l  (%a4),%a1
+        move.l  0(%a1,%d6.w),%a1
+#else
+        move.w  6(%a4),%d1
+        lsl.l   %d1,%d6
+        move.l  (%a4),%a1
+        adda.l  %d6,%a1
+#endif
+        adda.w  %d0,%a1
+        move.w  %d5,%d0                    /* entry = row0 + y0*12 */
+        add.w   %d0,%d0
+        add.w   %d5,%d0
+        lsl.w   #2,%d0
+        adda.w  %d0,%a0
+        move.l  %a0,%a4
+        move.l  %a2,%a0                    /* column base, absolute row destinations */
+        move.w  %d4,%d6
+        subq.w  #1,%d6
+        jsr     (%a4)
+        moveq   #1,%d0
+        rts
+.Lnative_fail:
+        moveq   #0,%d0
+        rts
+#endif

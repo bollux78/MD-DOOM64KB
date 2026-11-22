@@ -15,6 +15,7 @@
 #include "actors.h"
 
 #define NEAR4 16                   /* near plane, map units * 4 (= 4 units) */
+uint16_t r_fullheight;
 uint16_t r_ash = 4;                /* log2 of the columns between perspective-correct samples (per mode) */
 #define ANCHOR (1 << r_ash)
 #ifndef MAXV
@@ -177,7 +178,7 @@ uint16_t r_colofs[VW_MAX];
 #if defined(__m68k__) || defined(__mc68000__)
 /* colasm.s: per-mode entry points of the unrolled cores */
 extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
-extern const uint32_t scal_b[], scal_w[];
+extern const uint32_t scal_b[], scal_w[], scal_f[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
 uint16_t r_tmk_sz, r_tsh, r_ssh;
 /* sky (gen_sky.py): 128 columns of 76 bytes = 90 degrees; per screen column offset, set each frame */
@@ -192,11 +193,11 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     tcols -= 2 * crop;
     r_colb = colb; r_tcols = tcols;
     r_vw = colb == 2 ? tcols * 2 : tcols * 4;
-    r_vh = colb == 2 ? 144 : 72;
+    r_vh = (colb == 2 || r_fullheight) ? 144 : 72;
     r_halfw = r_vw / 2; r_horizon = r_vh / 2;
     /* Doom's proportions (y scale = 1.2 x the x scale on a 4:3 screen): ~180 screen lines per unit
        in both H32 and H40, since the view always spans the full screen width */
-    r_vfocal = colb == 2 ? 179 : 90;
+    r_vfocal = r_vh == 144 ? 179 : 90;
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
@@ -210,10 +211,10 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_fill_end = colb == 2 ? fillw_end : fillb_end;
     r_tmk_end = colb == 2 ? tmkw_end : tmkb_end;
     r_tmk_sz = colb == 2 ? 20 : 14;                  /* masked cores: bytes of code per row */
-    r_scal = colb == 2 ? scal_w : scal_b;
+    r_scal = colb == 2 ? scal_w : (r_fullheight ? scal_f : scal_b);
     r_tsh = 0;                                       /* texels are bytes in every mode */
     r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
-    r_skyend = (const void *)r_scal[scal_q[colb == 2 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
+    r_skyend = (const void *)r_scal[scal_q[r_vh == 144 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
 #endif
 }
 
@@ -456,6 +457,9 @@ static inline uint16_t zq_of(uint16_t z4) { const uint32_t q = mulu16(z4, ZPP_K)
 extern void seg_rows2(int16_t *a, int16_t *b, int32_t Ya, int32_t dYa, int32_t Yb, int32_t dYb, int16_t n);
 extern void seg_rows1(int16_t *a, int32_t Ya, int32_t dYa, int16_t n);
 extern void seg_anchors(SegA *p);
+#ifdef DREAD_NATIVE_PERSPECTIVE
+extern void native_anchors(SegA *p);
+#endif
 #else
 static void seg_rows2(int16_t *a, int16_t *b, int32_t Ya, int32_t dYa, int32_t Yb, int32_t dYb, int16_t n)
 { for (; n; n--) { *a = (int16_t)ceil16(Ya); *b = (int16_t)ceil16(Yb); a += 6; b += 6; Ya += dYa; Yb += dYb; } }   /* ColRec stride */
@@ -686,6 +690,9 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
         }
     }
     const int need_tex = has_mid | has_up | has_lo;
+#ifdef DREAD_NATIVE_PERSPECTIVE
+    r_ash = COLB == 1 ? 0 : 3;  /* native rational U; retain old column-doubled path */
+#endif
     const int32_t diz8 = diz << r_ash, duz8 = duz << r_ash;
     if (dbg_flags & 4) { for (int k = xs; k < xe; k++) if (ceilclip[k] < floorclip[k]) { close_col(k); closed++; } return; }
 
@@ -702,7 +709,11 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
     if (need_tex) {
         static SegA sa;
         sa.iz = iz; sa.uz = uz; sa.diz = diz; sa.duz = duz; sa.diz8 = diz8; sa.duz8 = duz8; sa.xs = (int16_t)xs; sa.xe = (int16_t)xe;
+#ifdef DREAD_NATIVE_PERSPECTIVE
+        if (COLB == 1) native_anchors(&sa); else seg_anchors(&sa);
+#else
         seg_anchors(&sa);
+#endif
     }
 
     /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */

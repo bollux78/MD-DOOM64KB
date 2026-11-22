@@ -1,0 +1,447 @@
+{
+  "variant": "control",
+  "condition": "spawn fixed, NTSC 300 video frames, no SRAM, AI paused",
+  "total_recorded_cycles": 253914230,
+  "functions": [
+    {
+      "symbol": "seg_columns",
+      "address": "0x14670",
+      "cycles": 41155772
+    },
+    {
+      "symbol": "render_node",
+      "address": "0x945a",
+      "cycles": 32400732
+    },
+    {
+      "symbol": "draw_seg_body.isra.0",
+      "address": "0x7880",
+      "cycles": 27383370
+    },
+    {
+      "symbol": "tex_legacy",
+      "address": "0x14cf2",
+      "cycles": 25025854
+    },
+    {
+      "symbol": "hint_b",
+      "address": "0x161b0",
+      "cycles": 21516600
+    },
+    {
+      "symbol": "proj",
+      "address": "0x748a",
+      "cycles": 13890394
+    },
+    {
+      "symbol": "span_fill",
+      "address": "0x14856",
+      "cycles": 11447352
+    },
+    {
+      "symbol": "bbox_visible",
+      "address": "0x7532",
+      "cycles": 9882026
+    },
+    {
+      "symbol": "seg_anchors",
+      "address": "0x7d5f2",
+      "cycles": 9730322
+    },
+    {
+      "symbol": "R_RenderView",
+      "address": "0x9b64",
+      "cycles": 8233610
+    },
+    {
+      "symbol": "seg_rows2",
+      "address": "0x7d4e8",
+      "cycles": 5695480
+    },
+    {
+      "symbol": "calc_uq",
+      "address": "0x7d558",
+      "cycles": 5176738
+    },
+    {
+      "symbol": "R_AddSprite",
+      "address": "0x908e",
+      "cycles": 3628128
+    },
+    {
+      "symbol": "Actors_Draw",
+      "address": "0x2a12",
+      "cycles": 3536400
+    },
+    {
+      "symbol": "DMA_doDmaFast",
+      "address": "0xaaac",
+      "cycles": 3535563
+    },
+    {
+      "symbol": "tmkb_start",
+      "address": "0x14e20",
+      "cycles": 3346280
+    },
+    {
+      "symbol": "hint_a",
+      "address": "0x16144",
+      "cycles": 2404822
+    },
+    {
+      "symbol": "sdiv16",
+      "address": "0x7d5d6",
+      "cycles": 1696086
+    },
+    {
+      "symbol": "sb_83",
+      "address": "0x1f24e",
+      "cycles": 1656480
+    },
+    {
+      "symbol": "seg_rows1",
+      "address": "0x7d52c",
+      "cycles": 1579760
+    },
+    {
+      "symbol": "sb_98",
+      "address": "0x20bbc",
+      "cycles": 1431696
+    },
+    {
+      "symbol": "JOY_update",
+      "address": "0xd152",
+      "cycles": 1344000
+    },
+    {
+      "symbol": "sb_97",
+      "address": "0x20a0a",
+      "cycles": 1287104
+    },
+    {
+      "symbol": "draw_seg",
+      "address": "0x878c",
+      "cycles": 1234982
+    },
+    {
+      "symbol": "read6Btn",
+      "address": "0xb28a",
+      "cycles": 1201200
+    },
+    {
+      "symbol": "fillb_end",
+      "address": "0x14aae",
+      "cycles": 1126720
+    },
+    {
+      "symbol": "__udivsi3_internal",
+      "address": "0x7e9a4",
+      "cycles": 1086064
+    },
+    {
+      "symbol": "vint_cb",
+      "address": "0x492e",
+      "cycles": 1039556
+    },
+    {
+      "symbol": "__mulsi3_internal",
+      "address": "0x7e980",
+      "cycles": 964418
+    },
+    {
+      "symbol": "spr_scale",
+      "address": "0x14ddc",
+      "cycles": 877982
+    },
+    {
+      "symbol": "sb_103",
+      "address": "0x21436",
+      "cycles": 867776
+    },
+    {
+      "symbol": "__muldi3",
+      "address": "0x7ea90",
+      "cycles": 753536
+    },
+    {
+      "symbol": "R_PointInSub",
+      "address": "0x9b00",
+      "cycles": 752556
+    },
+    {
+      "symbol": "HUD_VBlank",
+      "address": "0x428c",
+      "cycles": 724402
+    },
+    {
+      "symbol": "__divdi3",
+      "address": "0x7eaf8",
+      "cycles": 612374
+    },
+    {
+      "symbol": "sb_102",
+      "address": "0x21284",
+      "cycles": 462420
+    },
+    {
+      "symbol": "main",
+      "address": "0x53b8",
+      "cycles": 384734
+    },
+    {
+      "symbol": "no_bmp_task",
+      "address": "0x2e2",
+      "cycles": 370097
+    },
+    {
+      "symbol": "Z80_getAndRequestBus",
+      "address": "0x1079e",
+      "cycles": 357896
+    },
+    {
+      "symbol": "Thing_Taken",
+      "address": "0xde6",
+      "cycles": 336714
+    },
+    {
+      "symbol": "sb_84",
+      "address": "0x1f400",
+      "cycles": 321776
+    },
+    {
+      "symbol": "sb_91",
+      "address": "0x1ffde",
+      "cycles": 291312
+    },
+    {
+      "symbol": "no_user_task",
+      "address": "0x2b0",
+      "cycles": 256200
+    },
+    {
+      "symbol": "SYS_setHIntCallback",
+      "address": "0xed22",
+      "cycles": 252000
+    },
+    {
+      "symbol": "sb_85",
+      "address": "0x1f5b2",
+      "cycles": 214676
+    },
+    {
+      "symbol": "sb_99",
+      "address": "0x20d6e",
+      "cycles": 212128
+    },
+    {
+      "symbol": "__umodsi3",
+      "address": "0x7ea30",
+      "cycles": 197568
+    },
+    {
+      "symbol": "HUD_Draw",
+      "address": "0x3380",
+      "cycles": 160356
+    },
+    {
+      "symbol": "sb_104",
+      "address": "0x215e8",
+      "cycles": 157696
+    },
+    {
+      "symbol": "DMA_doDma",
+      "address": "0xac28",
+      "cycles": 151032
+    },
+    {
+      "symbol": "sb_90",
+      "address": "0x1fe2c",
+      "cycles": 103292
+    },
+    {
+      "symbol": "sb_92",
+      "address": "0x20190",
+      "cycles": 96152
+    },
+    {
+      "symbol": "Z80_releaseBus",
+      "address": "0x107d4",
+      "cycles": 90216
+    },
+    {
+      "symbol": "SYS_disableInts",
+      "address": "0xeca6",
+      "cycles": 88200
+    },
+    {
+      "symbol": "SYS_enableInts",
+      "address": "0xecd8",
+      "cycles": 88200
+    },
+    {
+      "symbol": "sb_89",
+      "address": "0x1fc7a",
+      "cycles": 88060
+    },
+    {
+      "symbol": "L6",
+      "address": "0x7e9fc",
+      "cycles": 80752
+    },
+    {
+      "symbol": "vsprintf",
+      "address": "0xd866",
+      "cycles": 75992
+    },
+    {
+      "symbol": "sb_101",
+      "address": "0x210d2",
+      "cycles": 63952
+    },
+    {
+      "symbol": "no_xgm_task",
+      "address": "0x2d2",
+      "cycles": 63000
+    },
+    {
+      "symbol": "tmkb_end",
+      "address": "0x15600",
+      "cycles": 60928
+    },
+    {
+      "symbol": "sb_94",
+      "address": "0x204f4",
+      "cycles": 59024
+    },
+    {
+      "symbol": "sb_96",
+      "address": "0x20858",
+      "cycles": 54740
+    },
+    {
+      "symbol": "sb_93",
+      "address": "0x20342",
+      "cycles": 54264
+    },
+    {
+      "symbol": "sb_100",
+      "address": "0x20f20",
+      "cycles": 52920
+    },
+    {
+      "symbol": "sb_95",
+      "address": "0x206a6",
+      "cycles": 51884
+    },
+    {
+      "symbol": "_VINT",
+      "address": "0x26c",
+      "cycles": 46200
+    },
+    {
+      "symbol": "memcpy_",
+      "address": "0x11b08",
+      "cycles": 45920
+    },
+    {
+      "symbol": "sb_88",
+      "address": "0x1fac8",
+      "cycles": 40460
+    },
+    {
+      "symbol": "HUD_Text",
+      "address": "0x4208",
+      "cycles": 37156
+    },
+    {
+      "symbol": "sb_108",
+      "address": "0x21cb0",
+      "cycles": 35224
+    },
+    {
+      "symbol": "VDP_setAutoInc",
+      "address": "0xf9bc",
+      "cycles": 32480
+    },
+    {
+      "symbol": "JOY_readJoypad",
+      "address": "0xd0d6",
+      "cycles": 27608
+    },
+    {
+      "symbol": "sb_105",
+      "address": "0x2179a",
+      "cycles": 26992
+    },
+    {
+      "symbol": "sb_106",
+      "address": "0x2194c",
+      "cycles": 20944
+    },
+    {
+      "symbol": "sb_107",
+      "address": "0x21afe",
+      "cycles": 20944
+    },
+    {
+      "symbol": "sb_112",
+      "address": "0x22378",
+      "cycles": 18564
+    },
+    {
+      "symbol": "sb_111",
+      "address": "0x221c6",
+      "cycles": 16660
+    },
+    {
+      "symbol": "sb_86",
+      "address": "0x1f764",
+      "cycles": 5712
+    },
+    {
+      "symbol": "memcpy",
+      "address": "0xd74c",
+      "cycles": 4928
+    },
+    {
+      "symbol": "sb_109",
+      "address": "0x21e62",
+      "cycles": 3808
+    },
+    {
+      "symbol": "sprintf",
+      "address": "0xe842",
+      "cycles": 1904
+    },
+    {
+      "symbol": "sb_113",
+      "address": "0x2252a",
+      "cycles": 1904
+    },
+    {
+      "symbol": "__modsi3",
+      "address": "0x7ea60",
+      "cycles": 1372
+    },
+    {
+      "symbol": "L2",
+      "address": "0x7ea18",
+      "cycles": 462
+    },
+    {
+      "symbol": "__divsi3_internal",
+      "address": "0x7ea00",
+      "cycles": 294
+    },
+    {
+      "symbol": "L3",
+      "address": "0x7ea2a",
+      "cycles": 196
+    },
+    {
+      "symbol": "L1",
+      "address": "0x7ea0e",
+      "cycles": 182
+    }
+  ]
+}
