@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Shareware weapon frames, signed 6.65 kHz XGM2 samples, level specials."""
 from pathlib import Path
-import sys,struct,math
+import sys,struct,math,os
 import numpy as np
 from conv import Wad,read_patch
+from md_dither import DAC, dither
 w=Wad(sys.argv[1]);out=Path(sys.argv[2]);pal=np.frombuffer(w.get('PLAYPAL')[:768],np.uint8).reshape(256,3).astype(float)
 sets=[('PUNG','ABCD',None),('PISG','ABCB','PISF'),('SHTG','AABC','SHTF'),('CHGG','ABAB','CHGF'),('MISG','ABAB','MISF'),('SAWG','ABAB',None)]
 frames=[]
@@ -35,16 +36,32 @@ for _ in range(40):
   if np.any(ids==i):C[i]=X[ids==i].mean(0)
 levels=np.clip(np.rint(C/36.43),0,7).astype(int);rgb=levels*36.43
 lut=np.r_[1+((pal[:,None]-rgb[None])**2).sum(2).argmin(1),0]
+# C7 preserves the *original Doom WAD weapon frames and positions from C5*.
+# Optional diffusion dithering uses the actual Genesis DAC values for each of
+# the 15 PAL1 colours, and never diffuses error into transparent pixels.
+# DREAD_WEAPON_DITHER=0 gives the exact nearest-colour quantization of C5.
+weapon_dither = os.environ.get("DREAD_WEAPON_DITHER", "0") == "1"
+indexed=[]
+if weapon_dither:
+ md_rgb = DAC[levels].astype(float)
+ for frame in frames:
+  mask=frame>=0
+  rgb_frame=pal[np.maximum(frame,0)]
+  indices=dither(rgb_frame,md_rgb,mask).astype(np.uint8)+1
+  indices[~mask]=0
+  indexed.append(indices)
+else:
+ indexed=[lut[frame] for frame in frames]
 pieces=[(x,y,4,min(32,80-y)//8) for y in range(0,80,32) for x in range(0,128,32)]
 unique=[];lookup={};refs=[]
-for a in frames:
+for a in indexed:
  for px,py,cw,ch in pieces:
   for cx in range(cw):
    for cy in range(ch):
     words=[]
     for y in range(8):
      v=0
-     for x in range(8):v=(v<<4)|int(lut[a[py+cy*8+y,px+cx*8+x]])
+     for x in range(8):v=(v<<4)|int(a[py+cy*8+y,px+cx*8+x])
      words.append(v)
     key=tuple(words)
     if key not in lookup:lookup[key]=len(unique);unique.append(key)
@@ -112,4 +129,4 @@ for m in range(1,10):
  s.append('static const int16_t tele%d[%d][3]={%s};'%(m,max(1,len(tele)),','.join('{%d,%d,%d}'%t for t in tele) or '{0,0,0}'))
  maps.append('{sp%d,flats%d,tele%d,%d,masks%d}'%(m,m,m,len(tele),m))
 s.append('const LevelMeta level_meta[9]={'+','.join(maps)+'};');(out/'levelmeta.c').write_text('\n'.join(s)+'\n')
-print('weapon tiles:',len(unique),'frames:',len(frames),'PCM bytes:',sum(lens))
+print('WAD-original weapon tiles:',len(unique),'frames:',len(frames),'dither:',int(weapon_dither),'PCM bytes:',sum(lens))
