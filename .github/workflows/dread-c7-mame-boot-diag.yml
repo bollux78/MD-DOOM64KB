@@ -66,7 +66,7 @@ jobs:
               end
               local n=0 for _,_ in pairs(kinds) do n=n+1 end
               print(string.format("BOOT_FRAME=%d PC=%08X SAMPLE_DISTINCT=%d",frames,pc,n))
-              local ok,err=pcall(function()return screen:snapshot(os.getenv("DIAG_VARIANT").."-"..frames..".png")end)
+              local ok,err=pcall(function()return screen:snapshot(os.getenv("PWD").."/"..os.getenv("DIAG_VARIANT").."-"..frames..".png")end)
               print("SNAP_RESULT "..tostring(ok).." "..tostring(err))
             end
           end)
@@ -75,7 +75,7 @@ jobs:
             echo "::group::$variant"
             DIAG_VARIANT="$variant" timeout 100 mame megadriv -cart "$PWD/$variant.bin" \
               -video none -sound none -autoboot_script "$PWD/diag.lua" \
-              -seconds_to_run 11 -nothrottle -skip_gameinfo -snapdir "$PWD" \
+              -seconds_to_run 11 -nothrottle -skip_gameinfo \
               > "$variant.log" 2>&1 || true
             grep -E 'BOOT_FRAME=|CPU_STATE_KEYS|SNAP_RESULT|Error|Fatal' "$variant.log" || true
             echo "::endgroup::"
