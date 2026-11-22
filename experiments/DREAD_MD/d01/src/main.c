@@ -63,7 +63,7 @@ volatile uint32_t spawn_published_frames; /* increment only when VDP displays a 
 #endif
 volatile uint16_t bench_done;
 volatile uint16_t cur_buf;
-volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
+volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors, frame_subs;
 
 static void vram_cmd(uint16_t addr) { *(volatile uint32_t *)0xC00004 = 0x40000000UL | ((uint32_t)(addr & 0x3FFF) << 16) | (addr >> 14); }
 
@@ -643,7 +643,7 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_drawTextBG(BG_A, line, 2, 10);
     sprintf(line, "SEGS: %u  NODES: %u", frame_segs, frame_nodes);
     VDP_drawTextBG(BG_A, line, 2, 12);
-    sprintf(line, "COLUNAS: %u", frame_cols);
+    sprintf(line, "SUBS: %u  COLS: %u", frame_subs, frame_cols);
     VDP_drawTextBG(BG_A, line, 2, 13);
     sprintf(line, "ANCORAS: %u", frame_anchors);
     VDP_drawTextBG(BG_A, line, 2, 14);
@@ -855,7 +855,7 @@ int main(bool hard)
         uint8_t *const fb = fbuf + (cur_buf ? FB_BYTES : 0);
         R_RenderView(&view, fb);
         if (!bench_req) while ((uint16_t)(vints - now) < fcap) {}   /* frame cap (off in the benches) */
-        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors;
+        frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors; frame_subs = rstats.subs_visited;
         while (dma_src) {}
         dma_pos = 0; dma_src = fb;
         cur_buf ^= (NBUF - 1);
