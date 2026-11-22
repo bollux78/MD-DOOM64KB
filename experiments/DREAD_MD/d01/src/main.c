@@ -606,6 +606,69 @@ static void pickups(HudState *hud, uint16_t psub)
 }
 #endif
 
+#ifdef DREAD_CELLSTREAM_REPORT
+/* Dedicated fullscreen summary at the end of the 312-frame route.
+ * Kept behind an experimental flag; normal gameplay/menu are unchanged. */
+#ifdef DREAD_CELL_STREAM
+extern volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
+extern volatile uint16_t cell_stream_last_len;
+#endif
+static void benchmark_report_screen(uint16_t f100)
+{
+    char line[40];
+    while (dma_src) {}                 /* do not cut a pending framebuffer DMA */
+    SYS_disableInts();
+    hint_on = 0;
+    VDP_setHInterrupt(FALSE);
+    SYS_setHIntCallback(NULL);
+    SYS_setVIntCallback(NULL);         /* do not let HUD VBlank repaint the report */
+    VDP_setHilightShadow(FALSE);
+    VDP_setTextPalette(PAL3);
+    VDP_setTextPriority(TRUE);
+    VDP_clearPlane(WINDOW, TRUE);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_drawTextBG(BG_A, "DOOM MD  RENDER BENCHMARK", 2, 1);
+    VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
+#ifdef DREAD_CELL_STREAM
+    VDP_drawTextBG(BG_A, "MODO: CELLSTREAM B1", 2, 5);
+#else
+    VDP_drawTextBG(BG_A, "MODO: CONTROL BSP", 2, 5);
+#endif
+    sprintf(line, "FPS DA ROTA: %u.%02u", f100 / 100, f100 % 100);
+    VDP_drawTextBG(BG_A, line, 2, 7);
+    sprintf(line, "QUADROS: %lu", (unsigned long)bench_frames);
+    VDP_drawTextBG(BG_A, line, 2, 9);
+    sprintf(line, "VBLANKS: %lu", (unsigned long)bench_vints);
+    VDP_drawTextBG(BG_A, line, 2, 10);
+    sprintf(line, "SEGS: %u  NODES: %u", frame_segs, frame_nodes);
+    VDP_drawTextBG(BG_A, line, 2, 12);
+    sprintf(line, "COLUNAS: %u", frame_cols);
+    VDP_drawTextBG(BG_A, line, 2, 13);
+    sprintf(line, "ANCORAS: %u", frame_anchors);
+    VDP_drawTextBG(BG_A, line, 2, 14);
+#ifdef DREAD_CELL_STREAM
+    sprintf(line, "REBUILDS: %lu", (unsigned long)cell_stream_rebuilds);
+    VDP_drawTextBG(BG_A, line, 2, 16);
+    sprintf(line, "CACHE HITS: %lu", (unsigned long)cell_stream_hits);
+    VDP_drawTextBG(BG_A, line, 2, 17);
+    sprintf(line, "FALLBACKS: %lu", (unsigned long)cell_stream_fallbacks);
+    VDP_drawTextBG(BG_A, line, 2, 18);
+    sprintf(line, "LEAVES: %u", cell_stream_last_len);
+    VDP_drawTextBG(BG_A, line, 2, 19);
+#endif
+    VDP_drawTextBG(BG_A, "PIXELS: NAO VALIDADOS", 2, 22);
+    VDP_drawTextBG(BG_A, "CENAS: TESTAR NO HARDWARE", 2, 23);
+    VDP_drawTextBG(BG_A, "START: REINICIAR", 2, 26);
+    SYS_enableInts();
+    for (;;) {
+        JOY_update();
+        if (JOY_readJoypad(JOY_1) & BUTTON_START) SYS_hardReset();
+        SYS_doVBlankProcess();
+    }
+}
+#endif
+
 int main(bool hard)
 {
     (void)hard;
@@ -809,6 +872,9 @@ int main(bool hard)
             sprintf(txt, "BENCH %u quadros %u.%u%u FPS", (uint16_t)bench_frames, f100 / 100, (f100 / 10) % 10, f100 % 10);
             HUD_Text(1, txt);
             bench_done = 2;
+#ifdef DREAD_CELLSTREAM_REPORT
+            benchmark_report_screen(f100);
+#endif
         }
     }
     return 0;
