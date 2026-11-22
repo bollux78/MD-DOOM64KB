@@ -58,6 +58,9 @@ static volatile uint8_t shown;            /* VRAM copy currently displayed */
 volatile uint16_t bench_req;
 volatile uint16_t bench_joy;
 volatile uint32_t bench_frames, bench_vints;
+#ifdef DREAD_SPAWN_PROFILE
+volatile uint32_t spawn_published_frames; /* increment only when VDP displays a complete frame */
+#endif
 volatile uint16_t bench_done;
 volatile uint16_t cur_buf;
 volatile uint16_t frame_segs, frame_nodes, frame_cols, frame_anchors;
@@ -96,6 +99,9 @@ static void vint_cb(void)
         dma_pos += n;
         if (dma_pos >= FB_BYTES) {
             shown ^= 1;
+#ifdef DREAD_SPAWN_PROFILE
+            spawn_published_frames++;
+#endif
             *(volatile uint16_t *)0xC00004 = 0x8200 | ((shown ? NT1 : NT0) >> 10);
             dma_src = 0;
         }
@@ -626,6 +632,9 @@ int main(bool hard)
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);
     set_mode(START_MODE);
+#ifdef DREAD_SPAWN_PROFILE
+    fcap = 0; /* uncapped fixed spawn; normal builds preserve user options */
+#endif
     HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };
     HUD_Draw(&hud);
     uint16_t face_t = 0, weap_t = 0, weap_step = 0, bob = 0;
