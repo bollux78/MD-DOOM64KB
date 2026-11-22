@@ -1104,7 +1104,14 @@ int main(bool hard)
             if (bench_req == 2 && hud.health < 30) hud.health = 100;   /* the combat bench never dies */
             pickups(&hud, pl.sub);
 #ifdef DREAD_GAMEPLAY
-            if(!hud.health)continue;
+            if(!hud.health){
+                /* E1M8: death in the final damaging room completes the episode,
+                 * including damage from monsters before the next sector tick. */
+                if(selected_map==7 && level_meta[map_id].specials[map_subs[pl.sub].sector]==11){
+                    hud.health=10;
+                    exit_req=1;
+                }else continue;
+            }
 #else
             if (!hud.health) {                          /* dead: message, then the map starts again */
                 HUD_Text(1, "VOCE MORREU");
