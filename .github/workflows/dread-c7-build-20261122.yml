@@ -4,6 +4,7 @@ on:
     branches: [exp-dread-c7-easy-ai12-proj20-20261122]
     paths:
       - 'experiments/DREAD_MD/d01/**'
+      - 'scripts/lab/bootstrap_marsdev.sh'
       - '.github/workflows/dread-c7-build-20261122.yml'
   workflow_dispatch:
 permissions:
