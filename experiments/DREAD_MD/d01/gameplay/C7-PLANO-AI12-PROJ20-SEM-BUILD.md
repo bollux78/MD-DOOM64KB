@@ -48,3 +48,12 @@ As **grades/vazados** são duas-sided midtextures com máscara de opacidade, des
 ## Resultado esperado (hipótese, não resultado medido)
 
 Menor quantidade de monstros provenientes da flag easy do WAD, menos passagens globais de IA por quadro, frequência conhecida dos projéteis sem depender da taxa de renderização. O FPS pode melhorar mais em salas com vários monstros ativos; porém gargalos em renderização de sprites, `try_move` (O(natores)) e detecção de colisão ainda permanecem.
+
+
+## Verde 0x4C4 compartilhado (C7 NORMAL, 22/11/2026)
+
+O usuário identificou mais elementos originalmente verdes na arte do Doom: tiro do Baron, bordas de ácido, barril de líquido verde, cabelo do zumbi, cadáver do Doomguy e armadura. A SSF por fase foi descartada. A ROM NORMAL mantém uma única paleta, agora com 0x4C4 (RGB MD 2,6,2) no índice 12, anteriormente cinza médio; substituições dos cinzas usam pares de cores no conversor offline, sem CPU extra.
+
+A regra inclui **somente pixels já verdes no WAD original**, filtrados por dominância cromática e limitados às classes de assets: paredes `NUKEDGE*`; projéteis `BAL7`; barril `BAR1`; parte superior de zumbis `POSS` (frames vivos A–G); cadáver do Doomguy `PLAYN/PLAYW`; armadura verde `ARM1` (não `ARM2` azul); bônus de armadura `BON1`; traje `SUIT`; tochas verdes `TGRN/SMGT`. Sem efeito em metais, cinzas, rostos, armas, céu e objetos sem verde original. A comparação final da aparência depende do MAME/BlastEm. Nenhum ganho de performance é alegado; conversão ocorre fora da ROM.
+
+Novo workflow: `.github/workflows/dread-c7-normal-green-20261122.yml`: **somente NORMAL**, usa runner self-hosted, publica ZIP e valida boot frente à C6 no MAME. Builds anteriores continuam obsoletos. Verificar status no Actions; não aprovar se tela preta.

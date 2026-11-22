@@ -310,9 +310,12 @@ def main():
     MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
     # Shared C7 palette: index 12 used to be medium gray (3,3,3).
     # Replace it with the *actual* SSF green 0x4C4 = MD RGB (2,6,2).
-    # Only NUKEDGE* wall texels, BAL7 ball, BAR1 toxic barrel and the
-    # green hair in living POSS zombieman sprite frames may use it.
-    # All other colours are remapped OFFLINE to two existing colours.
+    # Apply the reserved SSF green only to originally green WAD pixels:
+    # acid rim (NUKEDGE), Baron plasma BAL7, toxic BAR1, zombie hair POSS,
+    # dead Doomguy PLAYN/PLAYW, ARM1 green armor, BON1 armor bonus,
+    # SUIT radiation suit and the green torches TGRN/SMGT.
+    # The blue armor ARM2, flesh/metal, and unrelated colors stay unchanged.
+    # All other colours are remapped OFFLINE to remaining two-color pairs.
     accent_green = os.environ.get("DREAD_GREEN_ACCENT", "0") == "1"
     accent_slot = 12
     if accent_green and args.palette:
@@ -323,6 +326,9 @@ def main():
     accent_baronglow_count = 0
     accent_barrel_count = 0
     accent_zombie_hair_count = 0
+    accent_doomguy_count = 0
+    accent_armor_count = 0
+    accent_misc_count = 0
     DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
     cand_lv = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
     cand = DAC[cand_lv]
@@ -660,15 +666,20 @@ def main():
             if b not in spr_used.get(si, ()):
                 offs.append(None); continue
             k = pal_of.get(("p", si, b), 0)
-            # BAR1 is the poison/liquid barrel, BAL7 is the Baron shot.
-            # Living POSS frames (A-G) have green hair; limit that accent
-            # to the head region and *originally green* source pixels.
-            # Do not tint faces, skin, clothing, metal, or corpse frames.
+            # Explicit WAD sprite whitelist. All sprite types are still
+            # filtered per SOURCE PIXEL by green dominance in lut_for().
+            # PLAYN/PLAYW are dead Doomguy; ARM1 is green (ARM2 is BLUE).
+            # BON1 is green armor bonus; SUIT, TGRN, SMGT are green items.
             is_baron_ball = accent_green and key[0] == "BAL7"
             is_poison_barrel = accent_green and key[0] == "BAR1"
             is_zombie = accent_green and key[0] == "POSS" and key[1] in "ABCDEFG"
-            green_asset = is_baron_ball or is_poison_barrel
-            L = lut_for(b, k, green_asset)
+            is_doomguy = accent_green and key[0] == "PLAY" and key[1] in "NW"
+            is_green_armor = accent_green and key[0] in ("ARM1", "BON1")
+            is_green_other = accent_green and key[0] in ("SUIT", "TGRN", "SMGT")
+            green_asset = is_baron_ball or is_poison_barrel or is_doomguy or is_green_armor or is_green_other
+            # Weaker green shades in the original armor and Doomguy suit
+            # still qualify; do not allow green on gray, blue or flesh.
+            L = lut_for(b, k, green_asset, soft_green=(is_doomguy or is_green_armor or is_green_other or is_poison_barrel))
             hair_L = lut_for(b, k, True, True) if is_zombie else L
             base = len(sblob)
             cols = []
@@ -691,6 +702,12 @@ def main():
                             accent_barrel_count += (aa == accent_slot) + (bb == accent_slot)
                         if is_hair_pixel:
                             accent_zombie_hair_count += (aa == accent_slot) + (bb == accent_slot)
+                        if is_doomguy:
+                            accent_doomguy_count += (aa == accent_slot) + (bb == accent_slot)
+                        if is_green_armor:
+                            accent_armor_count += (aa == accent_slot) + (bb == accent_slot)
+                        if is_green_other:
+                            accent_misc_count += (aa == accent_slot) + (bb == accent_slot)
                         run.append((aa << 4) | bb)
                     col += bytes([y, y1 - y]) + run + run[-1:] * 3   # scaler padding
                     y = y1
@@ -756,6 +773,9 @@ def main():
               "BAL7 sprite texels", accent_baronglow_count,
               "BAR1 barrel texels", accent_barrel_count,
               "POSS hair texels", accent_zombie_hair_count,
+              "PLAYN/PLAYW Doomguy texels", accent_doomguy_count,
+              "ARM1/BON1 armor texels", accent_armor_count,
+              "SUIT/TGRN/SMGT texels", accent_misc_count,
               "other assets: reserved slot excluded")
         if accent_baronglow_count == 0 and not args.geometry_only:
             raise ValueError("C7 accent produced no green texels in BAL7 sprites")
