@@ -158,11 +158,12 @@ static void set_mode(uint16_t m)
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
     r_fullheight = (m & 4) != 0;
+    r_rowdup=(m&8)!=0;
     R_SetMode(colb, h40 ? 40 : 32, crop);
     if (h40) VDP_setScreenWidth320(); else VDP_setScreenWidth256();
     *(volatile uint16_t *)0xC00004 = 0x8F02;      /* auto-increment 2 */
     view_trows = VIEW_H / 8;
-    nbuf = (colb == 2 || r_fullheight) ? 1 : 2;
+    nbuf = r_vh==72?2:1;
     tile_fb1 = nbuf == 2 ? TILE_FB0 + TCOLS * view_trows : TILE_FB0;
     nt1 = nbuf == 2 ? 0xA000 : 0xE000;
 #ifdef DREAD_GAMEPLAY
@@ -194,7 +195,7 @@ static void set_mode(uint16_t m)
     shown = 0; cur_buf = 0;
     hint_r1on = 0x8100 | VDP_getReg(1) | 0x40;
     *(volatile uint16_t *)0xC00004 = hint_r1on;      /* display on (column mode never runs hint_a) */
-    hint_on = colb == 1 && !r_fullheight;
+    hint_on = r_vh==72;
     VDP_setHIntCounter(1);
     *(volatile uint16_t *)0xC00004 = hint_on ? 0x8014 : 0x8004;
     HUD_SetLayout(h40 ? 4 : 0, h40 ? 0 : -32);
@@ -433,16 +434,11 @@ static const char *const fcap_s[4] = { "LIVRE   ", "12 FPS  ", "10 FPS  ", "7.5 
 static uint16_t fcap_i = 2;
 static void menu_draw(uint16_t sel)
 {
-    static const char *const res[2] = { "H40 (320)", "H32 (256)" }, *const det[2] = { "LINHAS DUPLICADAS ", "COLUNAS DUPLICADAS" };
-    static const char *const crp[3] = { "LARGURA TOTAL ", "-2 TILES/LADO ", "-4 TILES/LADO " };
+    static const char *const res[2]={"H40 (320)","H32 (256)"};
+    static const char *const crp[3]={"LARGURA TOTAL ","-2 TILES/LADO ","-4 TILES/LADO "};
     char l[7][36];
-    sprintf(l[0], "%c TELA:    %s", sel == 0 ? '>' : ' ', res[(mode >> 1) & 1]);
-#ifdef DREAD_ROW_ONLY
-    (void)det;
-    sprintf(l[1], "%c DETALHE: LINHAS", sel == 1 ? '>' : ' ');
-#else
-    sprintf(l[1], "%c DETALHE: %s", sel == 1 ? '>' : ' ', (mode & 4) ? "ALTURA COMPLETA" : det[mode & 1]);
-#endif
+    sprintf(l[0],"%c TELA: %s",sel==0?'>':' ',res[(mode>>1)&1]);
+    sprintf(l[1],"%c RESOLUCAO: %uX%u",sel==1?'>':' ',r_vw,r_vh);
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
     sprintf(l[4], "%c LIMITE:  %s", sel == 4 ? '>' : ' ', fcap_s[fcap_i]);
@@ -507,10 +503,10 @@ static void menu(void)
             if (sel == 2) { crop = (uint16_t)((crop + ((e & BUTTON_LEFT) ? 4 : 2)) % 6); set_mode(mode); }
             else if (sel == 0) set_mode(mode ^ 2);
             else {
-                /* Three detail choices, while preserving the H40/H32 choice. */
-                const uint16_t detail = (mode & 4) ? 2 : (mode & 1);
-                const uint16_t next = (detail + ((e & BUTTON_LEFT) ? 2 : 1)) % 3;
-                set_mode((mode & 2) | (next == 2 ? 4 : next));
+                static const uint16_t choices[4]={0,1,9,4};
+                uint16_t index=0;for(uint16_t i=0;i<4;i++)if((mode&~2u)==choices[i])index=i;
+                index=(index+((e&BUTTON_LEFT)?3:1))&3;
+                set_mode((mode&2)|choices[index]);
             }
             SYS_disableInts(); VDP_setWindowVPos(FALSE, 15); SYS_enableInts();
             menu_draw(sel);
@@ -707,6 +703,13 @@ static void place_player(void)
 static void start_level(void)
 {
 #ifdef DREAD_EPISODE
+#ifdef DREAD_SSF
+    extern const uint8_t ssf_map_banks[9];
+    /* Fixed code/music stay below2MiB. The four upper512KiB slots hold one map. */
+    SYS_disableInts();
+    for(uint16_t slot=4;slot<8;slot++)*(volatile uint8_t*)(0xa130f1UL+slot*2)=ssf_map_banks[selected_map]+slot-4;
+    SYS_enableInts();
+#endif
     dread_map = &episode_maps[selected_map];
 #endif
     R_Init();
@@ -719,6 +722,10 @@ static void start_level(void)
     extern const uint8_t *const *r_mask_table;
     r_mask_table=level_meta[selected_map].masks;
     World_Init(selected_map);joy_edges=0;
+    if(game_video_active)set_mode(mode);
+#ifdef DREAD_SSF
+    if(game_video_active){SYS_disableInts();scene_palettes();displayed_tint=255;SYS_enableInts();}
+#endif
 #endif
 }
 
@@ -870,7 +877,11 @@ static void episode_end(void)
 {
     while(dma_src){} SYS_disableInts();hint_on=0;
     VDP_setHInterrupt(FALSE);SYS_setHIntCallback(NULL);SYS_setVIntCallback(NULL);
-    SYS_enableInts();HUD_ShowFinaleText();wait_any_button();
+    SYS_enableInts();
+#ifndef DREAD_NO_MUSIC
+    if(music_on)XGM2_play(bgm_end);
+#endif
+    HUD_ShowFinaleText();wait_any_button();
     credits_sequence();
     for(;;){JOY_update();if(!JOY_readJoypad(JOY_1))break;SYS_doVBlankProcess();}
     SYS_hardReset();
@@ -1022,9 +1033,10 @@ int main(bool hard)
         if(weap_t>dt)weap_t-=dt;else weap_t=0;
         if(weap_step && !weap_t){weap_step=0;HUD_WeaponFrame(current_weapon*4);}
         if(!weap_t && (j&BUTTON_A) && !(j&BUTTON_C) && (ammo==255 || hud.ammo[ammo])) {
-            if(ammo!=255)hud.ammo[ammo]--;
+            if(ammo!=255 && !cheat_kfa)hud.ammo[ammo]--;
             weap_step=1;weap_t=weapon_delay[current_weapon];
             HUD_WeaponFire(current_weapon);Game_Sound(weapon_sound[current_weapon]);
+            if(current_weapon>=1 && current_weapon<=4)Game_Flash();
             Actors_FireWeapon(&view,current_weapon);
         }
         prev_weapon_joy=j;
@@ -1057,9 +1069,10 @@ int main(bool hard)
         if (strafe && (j & BUTTON_RIGHT)) side = speed * dt;
         if (fwd || side) {
             bob += dt;
-            const int16_t sx = sintab[(bob * 12) & 1023] >> 11, sy = sintab[(bob * 24) & 1023] >> 11;
+            const int16_t sx = sintab[(bob * 12) & 1023] >> 11, sy = sintab[(bob * 24) & 1023] >> 12;
             HUD_WeaponBob(sx, sy < 0 ? sy : -sy);
         }
+        else HUD_WeaponBob(0,0);
         if (fwd || side) {
             const int32_t mx = ((fwd >> 8) * cs + (side >> 8) * sn) >> 6;
             const int32_t my = ((fwd >> 8) * sn - (side >> 8) * cs) >> 6;

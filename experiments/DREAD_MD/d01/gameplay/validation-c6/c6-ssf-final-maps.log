@@ -1,0 +1,92 @@
+[
+  {
+    "map": 1,
+    "view": [
+      69206016,
+      -236978176,
+      41,
+      16384
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 2,
+    "view": [
+      -2097152,
+      -15728640,
+      65,
+      16384
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 3,
+    "view": [
+      -96468992,
+      -219152384,
+      105,
+      16384
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 4,
+    "view": [
+      133169152,
+      73400320,
+      41,
+      32768
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 5,
+    "view": [
+      -14680064,
+      -40894464,
+      41,
+      16384
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 6,
+    "view": [
+      2097152,
+      -90177536,
+      89,
+      16384
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 7,
+    "view": [
+      6291456,
+      34603008,
+      41,
+      49152
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 8,
+    "view": [
+      -8388608,
+      -14680064,
+      121,
+      0
+    ],
+    "palette_matches": true
+  },
+  {
+    "map": 9,
+    "view": [
+      6291456,
+      -17825792,
+      241,
+      0
+    ],
+    "palette_matches": true
+  }
+]

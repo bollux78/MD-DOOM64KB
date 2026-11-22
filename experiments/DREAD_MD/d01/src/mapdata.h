@@ -111,6 +111,12 @@ typedef struct {
     const uint16_t *map_secadj;
     const uint32_t *pvs_offsets;
     uint16_t pvs_nbytes, pvs_sbytes;
+#ifdef DREAD_SSF
+    const uint8_t *tex_data,*sprite_data,*pvs_data;
+    const uint8_t *const *columns;
+    const uint8_t *sky_data;
+    const uint16_t *palette;
+#endif
 } DreadMap;
 extern const DreadMap *dread_map;
 extern const DreadMap episode_maps[];
@@ -118,6 +124,13 @@ extern const uint16_t episode_map_count;
 extern const uint8_t episode_pvs[];
 extern const uint8_t *const tex_columns[];
 #ifndef DREAD_EPISODE_DATA
+#ifdef DREAD_SSF
+#define tex_blob (dread_map->tex_data)
+#define spr_blob (dread_map->sprite_data)
+#define episode_pvs (dread_map->pvs_data)
+#define tex_columns (dread_map->columns)
+#define md_palette ((const uint16_t (*)[16])dread_map->palette)
+#endif
 #define map_verts (dread_map->map_verts)
 #define map_segs (dread_map->map_segs)
 #define map_subs (dread_map->map_subs)

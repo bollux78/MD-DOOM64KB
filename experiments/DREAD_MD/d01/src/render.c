@@ -20,6 +20,7 @@ uint16_t r_fullbright,r_scroll;
 #endif
 
 #define NEAR4 16                   /* near plane, map units * 4 (= 4 units) */
+uint16_t r_rowdup;
 uint16_t r_fullheight;
 uint16_t r_ash = 4;                /* log2 of the columns between perspective-correct samples (per mode) */
 #define ANCHOR (1 << r_ash)
@@ -195,6 +196,7 @@ extern const uint8_t sky_blob[], scal_q[];
 uint16_t r_skyoff[VW_MAX];
 uint16_t r_skyshift;
 const void *r_skyend;
+const uint8_t *r_sky_blob;
 #endif
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
@@ -202,7 +204,7 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     tcols -= 2 * crop;
     r_colb = colb; r_tcols = tcols;
     r_vw = colb == 2 ? tcols * 2 : tcols * 4;
-    r_vh = (colb == 2 || r_fullheight) ? 144 : 72;
+    r_vh = ((colb == 2 && !r_rowdup) || r_fullheight) ? 144 : 72;
     r_halfw = r_vw / 2; r_horizon = r_vh / 2;
     /* Doom's proportions (y scale = 1.2 x the x scale on a 4:3 screen): ~180 screen lines per unit
        in both H32 and H40, since the view always spans the full screen width */
@@ -232,6 +234,9 @@ void R_Init(void)
 {
 #if defined(DREAD_EPISODE) && !defined(PVS_GEN)
     cached_pvs_sub = 0xFFFF;
+#ifdef DREAD_SSF
+    r_sky_blob=dread_map->sky_data;
+#endif
 #endif
 #ifndef COLB0
 #define COLB0 1

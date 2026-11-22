@@ -41,7 +41,9 @@ text=''.join(ast.literal_eval(x) for x in re.findall(r'"(?:[^"\\]|\\.)*"',text))
 lines=text.split('\n');s.append('const char *const finale_lines['+str(len(lines))+']={'+','.join('"'+l.replace('\\','\\\\').replace('"','\\"')+'"' for l in lines)+'};');s.append('const u16 finale_nlines='+str(len(lines))+';')
 # Palette 0 for FLOOR4_8, white UI on palette 3.
 pal=np.frombuffer(w.get('PLAYPAL')[:768],np.uint8).reshape(256,3);im=Image.fromarray(pal[np.frombuffer(w.get('FLOOR4_8'),np.uint8).reshape(64,64)],'RGB');q=im.quantize(colors=15,dither=Image.Dither.NONE);pp=q.getpalette()[:45];lv=lambda a:max(0,min(7,round(a/36.43)));cram=[0]+[(lv(pp[i+2])<<9)|(lv(pp[i+1])<<5)|(lv(pp[i])<<1) for i in range(0,45,3)]
-a=np.asarray(q)+1;words=[]
+from md_dither import dither,DAC
+colors=np.array([[(c>>1)&7,(c>>5)&7,(c>>9)&7] for c in cram[1:]])
+a=dither(np.asarray(im),DAC[colors])+1;words=[]
 for ty in range(8):
  for tx in range(8):
   for y in range(8):

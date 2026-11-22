@@ -65,14 +65,23 @@ if [[ "$map" == EPISODE ]]; then
         fi
         for n in {1..9}; do
             level="$stage/E1M$n"
-            python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
+            if [[ ${DREAD_SSF:-0} == 1 ]]; then
+                DREAD_PAL_ROUNDS=1 python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32
+            else
+                python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
+            fi
             cc -O2 -DPVS_GEN $pvs_flags -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
                "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
             "$level/pvsgen" "$level/pvs.c"
             levels+=("$level")
         done
     fi
-    python3 "$source_dir/tools/pack_episode.py" "$stage/src" "${levels[@]}"
+    if [[ ${DREAD_SSF:-0} == 1 ]]; then
+        python3 "$source_dir/tools/pack_ssf.py" "$stage/src" "${levels[@]}"
+        render_flags+=" -DDREAD_SSF"
+    else
+        python3 "$source_dir/tools/pack_episode.py" "$stage/src" "${levels[@]}"
+    fi
     python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
     python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
     title_flags=
@@ -93,12 +102,13 @@ if [[ -z "$geometry_flag" ]]; then
 fi
 if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
     python3 "$source_dir/tools/gen_gameplay_assets.py" "$wad" "$stage/src"
+    python3 "$source_dir/tools/gen_user_weapons.py" "$stage/src"
     python3 "$source_dir/tools/gen_ending.py" "$wad" "$stage/src"
     render_flags+=" -DDREAD_GAMEPLAY"
 fi
 python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 gen_c="$stage/src/episode.c"; [[ -f "$gen_c" ]] || gen_c="$stage/src/mapdata.c"
-python3 "$source_dir/tools/gen_sky.py" "$source_dir/tools/sky_e1doom_256x72_pal.png" "$gen_c" "$stage/src/sky.c"
+if [[ ${DREAD_SSF:-0} != 1 ]]; then python3 "$source_dir/tools/gen_sky.py" "$source_dir/tools/sky_e1doom_256x72_pal.png" "$gen_c" "$stage/src/sky.c"; fi
 python3 "$source_dir/tools/gen_tables.py" "$stage/src/tables.c"
 sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$stage/makefile.gen"
 # toolchain: PREFIX=m68k-elf- from PATH, or DREAD_TC=/path/m68k-elf- (e.g. the CI runner's marsdev toolchain)
@@ -113,8 +123,12 @@ make -C "$stage" -f makefile.gen -j3 release "${mk[@]}" \
     LIBGCC="$(${tc}gcc -m68000 -print-libgcc-file-name) -lgcc"
 rom="$stage/out/rom.bin"; [[ -f "$rom" ]] || rom="$stage/out/release/rom.bin"
 elf="$stage/out/rom.out"; [[ -f "$elf" ]] || elf="$stage/out/release/rom.out"
+if [[ ${DREAD_SSF:-0} == 1 ]]; then
+    python3 "$source_dir/tools/finish_ssf.py" "$rom" "$stage/src/ssf-layout.json"
+    cp "$stage/src/ssf-layout.json" "$out/ssf-layout.json"
+fi
 size=$(stat -c %s "$rom")
-if (( size > 4194304 )); then
+if [[ ${DREAD_SSF:-0} != 1 ]] && (( size > 4194304 )); then
     echo "$map excede 4 MiB: $size bytes" >&2
     exit 1
 fi

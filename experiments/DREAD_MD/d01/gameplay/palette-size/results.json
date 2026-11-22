@@ -1,0 +1,130 @@
+{
+  "baseline": {
+    "textures": 1589616,
+    "sprites": 243808,
+    "column_count": 12532,
+    "rows": [
+      {
+        "map": "E1M1",
+        "texture_bank_growth": 372480,
+        "sprite_bank_growth": 85478
+      },
+      {
+        "map": "E1M2",
+        "texture_bank_growth": 493888,
+        "sprite_bank_growth": 6358
+      },
+      {
+        "map": "E1M3",
+        "texture_bank_growth": 338272,
+        "sprite_bank_growth": 82580
+      },
+      {
+        "map": "E1M4",
+        "texture_bank_growth": 124032,
+        "sprite_bank_growth": 3514
+      },
+      {
+        "map": "E1M5",
+        "texture_bank_growth": 51296,
+        "sprite_bank_growth": 2862
+      },
+      {
+        "map": "E1M6",
+        "texture_bank_growth": 126656,
+        "sprite_bank_growth": 1908
+      },
+      {
+        "map": "E1M7",
+        "texture_bank_growth": 56976,
+        "sprite_bank_growth": 3296
+      },
+      {
+        "map": "E1M8",
+        "texture_bank_growth": 24320,
+        "sprite_bank_growth": 56998
+      },
+      {
+        "map": "E1M9",
+        "texture_bank_growth": 1696,
+        "sprite_bank_growth": 814
+      }
+    ]
+  },
+  "per_level": {
+    "textures": 3273184,
+    "sprites": 989542,
+    "column_count": 27200,
+    "rows": [
+      {
+        "map": "E1M1",
+        "texture_bank_growth": 372480,
+        "sprite_bank_growth": 85478
+      },
+      {
+        "map": "E1M2",
+        "texture_bank_growth": 663744,
+        "sprite_bank_growth": 87992
+      },
+      {
+        "map": "E1M3",
+        "texture_bank_growth": 639376,
+        "sprite_bank_growth": 157924
+      },
+      {
+        "map": "E1M4",
+        "texture_bank_growth": 281904,
+        "sprite_bank_growth": 4416
+      },
+      {
+        "map": "E1M5",
+        "texture_bank_growth": 328992,
+        "sprite_bank_growth": 157280
+      },
+      {
+        "map": "E1M6",
+        "texture_bank_growth": 505008,
+        "sprite_bank_growth": 156720
+      },
+      {
+        "map": "E1M7",
+        "texture_bank_growth": 219872,
+        "sprite_bank_growth": 9288
+      },
+      {
+        "map": "E1M8",
+        "texture_bank_growth": 128416,
+        "sprite_bank_growth": 180620
+      },
+      {
+        "map": "E1M9",
+        "texture_bank_growth": 133392,
+        "sprite_bank_growth": 149824
+      }
+    ]
+  },
+  "delta_textures": 1683568,
+  "delta_sprites": 745734,
+  "sky_baseline": 9728,
+  "sky_per_level": 58368,
+  "delta_sky": 48640,
+  "palettes_baseline": 32,
+  "palettes_per_level": 288,
+  "delta_palette": 256,
+  "total_palette_assets_delta": 2478198,
+  "ending_music_xgm2_bytes": 32344,
+  "current_rom_payload_bytes": 4166794,
+  "current_rom_file_bytes": 4194304,
+  "palette_only_payload_estimate": 6644992,
+  "palette_plus_music_payload_estimate": 6677336,
+  "estimated_padded_file_bytes": 6684672,
+  "c5_rom_sha256": "67ea12fdf8950ac6e1eaea462eaf19706f6d49d399734f2f19bce4d57efb6489",
+  "notes": [
+    "No ROM compilation or linking was performed.",
+    "Per-level conversion: DREAD_NPAL=1, DREAD_PAL_ROUNDS=1 (second round repeats same single-palette assignment).",
+    "Encoded texture and sprite deduplication matches pack_episode.py; baseline bank sizes reproduced exactly.",
+    "HUD and weapon palette remain independent from the scenario palettes.",
+    "Final ELF/ROM sizes cannot be exact until linking; mapper, pointers, alignment and code are not included in measured asset delta.",
+    "User-provided weapons supersede the WAD weapon dithering trial; final weapon-size delta is pending their frame layout."
+  ]
+}

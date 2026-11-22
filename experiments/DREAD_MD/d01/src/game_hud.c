@@ -260,6 +260,7 @@ void HUD_WeaponFrame(uint16_t f)
     uint16_t saved_sr;
     __asm__ volatile("move.w %%sr,%0\n\tor.w #0x700,%%sr" : "=d"(saved_sr) :: "cc","memory");
     if(weapon_pending>=0 || weapon_building){weapon_next=f;__asm__ volatile("move.w %0,%%sr" :: "d"(saved_sr) : "cc","memory");return;}
+    if((saved_sr&0x700)>=0x400){weapon_next=f;__asm__ volatile("move.w %0,%%sr" :: "d"(saved_sr) : "cc","memory");return;}
     weapon_building=1;
     __asm__ volatile("move.w %0,%%sr" :: "d"(saved_sr) : "cc","memory");
     if(weapon_fuzz!=weapon_fuzz_request){weapon_fuzz=weapon_fuzz_request;weapon_last=-1;for(uint16_t i=0;i<160;i++)weapon_refs[i]=0xffff;}
@@ -286,30 +287,24 @@ void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26
 /* called from the VBlank interrupt: every VRAM update of the HUD, face, weapon and text */
 uint16_t HUD_VBlank(uint16_t max_bytes)    /* returns the bytes sent by DMA (the caller keeps the VBlank DMA budget) */
 {
-    uint16_t bytes = 0;
+    uint16_t bytes = 0,weapon_dma=0;
 #ifdef DREAD_GAMEPLAY
     if(weapon_anim>=0 && !weapon_paused){
         if(weapon_anim_ticks)weapon_anim_ticks--;
         if(!weapon_anim_ticks && !weapon_building && weapon_pending<0){
             const uint16_t w=weapon_anim,k=++weapon_anim_step;
-            HUD_WeaponFrame(w*4+anim_frames[w][k]);weapon_anim_ticks=anim_ticks[w][k];
+            weapon_next=w*4+anim_frames[w][k];weapon_anim_ticks=anim_ticks[w][k];
             if(!weapon_anim_ticks)weapon_anim=-1;
         }
     }
     if (weapon_pending >= 0) {
         const uint16_t *refs=weap_frame_refs+(uint16_t)weapon_pending*160;
-        const uint16_t reserved=(face_dirty?512:0)+(hud_dirty?256:0)+((txt_dirty&1)?80:0)+((txt_dirty&2)?80:0)+192;
-        uint16_t budget=max_bytes>reserved?(max_bytes-reserved)/32:0;
-        if(budget>160)budget=160;
-        while (weapon_pos<160 && budget) {
-            if (weapon_refs[weapon_pos]==refs[weapon_pos]) { weapon_pos++; continue; }
-            const uint16_t start=weapon_pos;
-            while (weapon_pos<160 && budget && weapon_refs[weapon_pos]!=refs[weapon_pos]) {
-                weapon_refs[weapon_pos]=refs[weapon_pos]; weapon_pos++; budget--;
-            }
-            const uint16_t n=weapon_pos-start;
-            DMA_doDma(DMA_VRAM,weapon_frame+start*8,(TILE_WEAP+start)*32,n*16,2);
-            bytes+=n*32;
+        while(weapon_pos<160){
+            const uint16_t start=weapon_pos,n=(160-start)>32?32:160-start;
+            uint16_t changed=0;for(uint16_t i=0;i<n;i++)if(weapon_refs[start+i]!=refs[start+i])changed=1;
+            if(changed){DMA_doDma(DMA_VRAM,weapon_frame+start*8,(TILE_WEAP+start)*32,n*16,2);bytes+=n*32;weapon_dma=1;}
+            for(uint16_t i=0;i<n;i++)weapon_refs[start+i]=refs[start+i];
+            weapon_pos+=n;if(changed)break;
         }
         if (weapon_pos==160){weapon_pending=-1;sat_dirty=1;}
     }
@@ -336,17 +331,17 @@ uint16_t HUD_VBlank(uint16_t max_bytes)    /* returns the bytes sent by DMA (the
     }
     for (int l = 0; l < 2; l++)
         if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); bytes += 80; }
-    if (sat_dirty || weapon_pending>=0 || weapon_anim>=0) {
+    if (sat_dirty) {
         sat_dirty = 0;
         for (uint16_t i = 0; i < weap_npieces; i++) {
             const uint8_t *p = weap_piece[i];
             vram_addr(SLIST + i * 8);
-            vram_w((uint16_t)((weapon_pending>=0?0:128 + weap_y + p[1] + VIEW_TOP_PX + bob_y)));
+            vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + bob_y));
             vram_addr(SLIST + i * 8 + 6);
             vram_w((uint16_t)(128 + weap_x + p[0] + bob_x + weap_dx));
         }
     }
-    return bytes;
+    return weapon_dma?max_bytes:bytes; /* defer scene DMA while a weapon burst uses this blank */
 }
 
 /* screen mode change (ints disabled by the caller): bar column, weapon x offset */

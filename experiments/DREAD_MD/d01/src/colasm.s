@@ -168,7 +168,11 @@ seg_columns:
         /* sky ceiling: rows top..yc of the sky column of this screen column, through the scalers */
         lea     r_skyoff,%a0
         move.w  0(%a0,%d6.w),%d5
+#ifdef DREAD_SSF
+        move.l  r_sky_blob,%a1
+#else
         lea     sky_blob,%a1
+#endif
         adda.w  %d5,%a1
         move.w  r_skyshift,%d4
         move.w  %d0,%d5

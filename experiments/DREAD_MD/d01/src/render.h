@@ -15,6 +15,7 @@ typedef long long dread_i64;   /* SGDK 2.x has no int64_t, newer ones typedef it
 #define VW_MAX   160
 #define VH_MAX   144
 #define FB_MAX   (40 * 144 * 4)                 /* bytes: the largest mode (H40 column-doubled) */
+extern uint16_t r_rowdup;
 extern uint16_t r_fullheight;
 extern uint16_t r_vw, r_vh, r_colb, r_halfw, r_focal, r_horizon, r_vfocal, r_zppk, r_tcols, r_fbbytes;
 extern uint16_t r_colofs[VW_MAX];               /* byte offset of each logical column in the framebuffer */
