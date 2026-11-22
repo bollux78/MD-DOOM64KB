@@ -19,7 +19,7 @@ jobs:
         variant: [NORMAL, SSF]
     env:
       WAD: /usr/share/games/doom/doom1.wad
-      C7_OUT: ${{ runner.temp }}/dread-c7-${{ matrix.variant }}-${{ github.run_id }}
+      C7_OUT: ${{ github.workspace }}/dread-c7-${{ matrix.variant }}-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
