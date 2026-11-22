@@ -1,0 +1,113 @@
+name: DREAD C7 - build NORMAL and SSF
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths:
+      - 'experiments/DREAD_MD/d01/**'
+      - '.github/workflows/dread-c7-build-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dread-c7-${{ github.ref }}-${{ matrix.variant }}
+  cancel-in-progress: false
+jobs:
+  compile:
+    name: Compile C7 ${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [NORMAL, SSF]
+    env:
+      WAD: /usr/share/games/doom/doom1.wad
+      C7_OUT: ${{ runner.temp }}/dread-c7-${{ matrix.variant }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install shareware WAD and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git make bison flex texinfo wget curl xz-utils unzip zip \
+            python3 python3-numpy python3-pil python3-scipy python3-yaml \
+            default-jre-headless libpng-dev zlib1g-dev libncurses-dev doom-wad-shareware
+          test -s "$WAD"
+      - name: Cache SGDK and 68000 cross toolchain
+        id: mars-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/mars
+          key: doom-md-marsdev-ubuntu2404-v1
+      - name: Bootstrap Marsdev on cache miss
+        if: steps.mars-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/lab/bootstrap_marsdev.sh
+      - name: Build C7 ${{ matrix.variant }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$C7_OUT/release" "$C7_OUT/build"
+          export GDK="$HOME/mars/m68k-elf" DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$GDK/bin:$PATH" OPENBLAS_NUM_THREADS=1 DREAD_COPY_SEGA_S=1
+          export DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
+          unset DREAD_PREPARED_MAPS
+          if [[ "${{ matrix.variant }}" == SSF ]]; then
+            export DREAD_SSF=1 DREAD_PAL_ROUNDS=1
+            filename="DREAD-C7-PALETAS-SSF.bin"
+          else
+            unset DREAD_SSF
+            filename="DREAD-C7-NORMAL-4MiB.bin"
+          fi
+          echo "Source commit: $GITHUB_SHA"
+          echo "Variant: ${{ matrix.variant }}"
+          echo "GDK: $GDK"
+          echo "Skill easy; AI 12 Hz; projectiles 20 Hz; original WAD guns dithered; 2x2 grates."
+          bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$C7_OUT/build" \
+            > "$C7_OUT/build/build.log" 2>&1 || {
+              echo "::error::C7 build failed"
+              tail -140 "$C7_OUT/build/build.log"
+              exit 1
+            }
+          test -s "$C7_OUT/build/EPISODE.bin"
+          cp "$C7_OUT/build/EPISODE.bin" "$C7_OUT/release/$filename"
+          if [[ -f "$C7_OUT/build/ssf-layout.json" ]]; then
+            cp "$C7_OUT/build/ssf-layout.json" "$C7_OUT/release/ssf-layout.json"
+          fi
+          bytes=$(stat -c %s "$C7_OUT/release/$filename")
+          echo "ROM_SIZE_BYTES=$bytes"
+          if [[ "${{ matrix.variant }}" == SSF ]] && (( bytes > 15728640 )); then
+            echo "::error::SSF ROM exceeds 15MiB Everdrive X7 target ($bytes bytes)"
+            exit 1
+          fi
+          sha256sum "$C7_OUT/release/$filename" | tee "$C7_OUT/release/SHA256SUMS.txt"
+          cat > "$C7_OUT/release/README.txt" <<EOF
+          DOOM MD / DREAD C7 - ${{ matrix.variant }}
+          Commit: $GITHUB_SHA
+          Source: https://github.com/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME
+          WAD input: Debian doom-wad-shareware package; WAD itself is not distributed.
+          Features: E1M1-E1M9, Easy population, half incoming damage, AI 12Hz,
+          projectiles 20Hz, original C5 WAD weapon art with optional dithering
+          (enabled here), C6 bob and black-flash fix, masked grates sampled 2x2.
+          Four game resolutions and both original C6 presentation features retained.
+          This artifact is a compiler output, not a verified gameplay or console test.
+          EOF
+          (cd "$C7_OUT/release" && zip -q -9 "../DREAD-C7-${{ matrix.variant }}.zip" ./*)
+          unzip -t "$C7_OUT/DREAD-C7-${{ matrix.variant }}.zip" | tail -3
+          ls -lh "$C7_OUT/release/" "$C7_OUT/DREAD-C7-${{ matrix.variant }}.zip"
+          tail -60 "$C7_OUT/build/build.log"
+      - name: Upload ROM and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DREAD-C7-${{ matrix.variant }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            ${{ env.C7_OUT }}/DREAD-C7-*.zip
+            ${{ env.C7_OUT }}/release/*
+            ${{ env.C7_OUT }}/build/build.log
