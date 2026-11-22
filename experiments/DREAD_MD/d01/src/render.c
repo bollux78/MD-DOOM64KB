@@ -158,20 +158,19 @@ static void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int
 { p += (n - 1) * 4; for (; n; n--) { p[0] = tc[(uint16_t)(v >> 16)]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 #endif
 #if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
-/* Conservative Ferret-inspired stream: PVS-filtered BSP leaf order.
- * Only cached for the EXACT integer camera position and subsector from
- * which it was generated. Move -> regenerate; overflow -> original BSP.
- * Never reuse a stream from a different point in the same subsector:
- * front/back ordering can change at BSP partition boundaries. */
+/* Ferret-inspired, PVS-filtered BSP stream. Tokens are pre-ordered by
+ * the integer camera position, but CONDITIONAL far-side bbox tests are kept
+ * at replay time; these depend on camera angle and closed screen columns.
+ * 0x8000|sub = leaf; 0x4000|(node<<1)|far_side = bbox guard.
+ * A guard's jump skips the far subtree on rejection. Overflow -> BSP.
+ * Cache key includes exact integer x/y AND subsector, not cell alone. */
 #define CELL_STREAM_MAX 1024
-static uint16_t cell_stream[CELL_STREAM_MAX];
+static uint16_t cell_stream[CELL_STREAM_MAX], cell_stream_jump[CELL_STREAM_MAX];
 static uint16_t cell_stream_len, cell_stream_sub = 0xffff;
 static int16_t cell_stream_x, cell_stream_y;
 static uint16_t cell_stream_overflow;
 volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
 volatile uint16_t cell_stream_last_len;
-/* No bounding-box/angle culling at stream creation: a camera turn at
- * unchanged position must not omit new visible walls or sprites. */
 static void cell_stream_collect(uint16_t n)
 {
     if (cell_stream_overflow) return;
@@ -179,15 +178,23 @@ static void cell_stream_collect(uint16_t n)
     if (n & 0x8000) {
         if (!(pv_s[k >> 3] & (1 << (k & 7)))) return;
         if (cell_stream_len == CELL_STREAM_MAX) { cell_stream_overflow = 1; return; }
-        cell_stream[cell_stream_len++] = k;
+        cell_stream[cell_stream_len++] = n;
         return;
     }
     if (!(pv_n[k >> 3] & (1 << (k & 7)))) return;
     const MapNode *nd = &map_nodes[k];
     const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
-    const int side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
+    const uint16_t side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
     cell_stream_collect(nd->child[side]);
-    cell_stream_collect(nd->child[side ^ 1]);
+    const uint16_t far = nd->child[side ^ 1];
+    const uint16_t fk = far & 0x7fff;
+    if (!(((far & 0x8000) ? pv_s : pv_n)[fk >> 3] & (1 << (fk & 7)))) return;
+    if (cell_stream_overflow) return;
+    if (cell_stream_len == CELL_STREAM_MAX || k >= 8192) { cell_stream_overflow = 1; return; }
+    const uint16_t guard = cell_stream_len++;
+    cell_stream[guard] = (uint16_t)(0x4000u | (k << 1) | (side ^ 1));
+    cell_stream_collect(far);
+    cell_stream_jump[guard] = cell_stream_len;
 }
 #endif
 
@@ -1100,8 +1107,17 @@ void R_RenderView(const View *v, uint8_t *fb)
             cell_stream_fallbacks++;
             render_node(map_counts[3] - 1);
         } else {
-            for (uint16_t si = 0; si < cell_stream_len && closed < VIEW_W; si++)
-                render_node((uint16_t)(0x8000u | cell_stream[si]));
+            for (uint16_t si = 0; si < cell_stream_len && closed < VIEW_W;) {
+                const uint16_t token = cell_stream[si];
+                if (token & 0x8000) {
+                    render_node(token); /* same leaf processing, sprites and texture kernels */
+                    si++;
+                } else { /* far subtree: do the exact original projected bbox check */
+                    const MapNode *nd = &map_nodes[(token & 0x3fff) >> 1];
+                    const uint16_t side = token & 1;
+                    si = bbox_visible(nd->bbox[side]) ? (uint16_t)(si + 1) : cell_stream_jump[si];
+                }
+            }
         }
     }
 #else
