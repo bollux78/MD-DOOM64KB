@@ -81,7 +81,12 @@ jobs:
             symbol() { "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk -v k="$1" '$3 == k {print $1; exit}'; }
             rseg=$(symbol frame_segs)
             rnode=$(symbol frame_nodes)
-            rsub=$(symbol frame_cols)
+            rsub=$(symbol frame_subs)
+            rcol=$(symbol frame_cols)
+            rvis=$(symbol tm_visibility)
+            rgeo=$(symbol tm_geometry)
+            rspr=$(symbol tm_sprites)
+            rtot=$(symbol tm_total)
             ranc=$(symbol frame_anchors)
             rhit=$(symbol cell_stream_hits)
             rreb=$(symbol cell_stream_rebuilds)
@@ -89,7 +94,8 @@ jobs:
             rlen=$(symbol cell_stream_last_len)
             if [[ -z "$rseg" || -z "$rnode" ]]; then echo "::warning::Missing render stats symbols"; fi
             # CONTROL intentionally does not contain the experimental counters.
-            rseg=${rseg:-0}; rnode=${rnode:-0}; rsub=${rsub:-0}; ranc=${ranc:-0}
+            rseg=${rseg:-0}; rnode=${rnode:-0}; rsub=${rsub:-0}; rcol=${rcol:-0}; ranc=${ranc:-0}
+            rvis=${rvis:-0}; rgeo=${rgeo:-0}; rspr=${rspr:-0}; rtot=${rtot:-0}
             rhit=${rhit:-0}; rreb=${rreb:-0}; rfb=${rfb:-0}; rlen=${rlen:-0}
             cat > "$OUT/$variant/spawn.lua" <<EOF
           local space = manager.machine.devices[":maincpu"].spaces["program"]
@@ -98,13 +104,14 @@ jobs:
           local function address(s) return tonumber(s,16) % 0x1000000 end
           local function u16(s) if s=="0" then return 0 end return space:read_u16(address(s)) end
           local function u32(s) if s=="0" then return 0 end return space:read_u32(address(s)) end
-          local first_published, first_vblank, finished = nil, nil, false
+          local first_published, first_vblank, finished, times0 = nil, nil, false, nil
           emu.register_frame_done(function()
             if finished then return end
             local vblank = space:read_u16(vaddr)
             if not first_published and vblank >= 1200 then
               first_vblank = vblank
               first_published = space:read_u32(addr)
+              times0 = {u32("$rvis"), u32("$rgeo"), u32("$rspr"), u32("$rtot")}
               print(string.format("SPAWN_BEGIN variant=$variant published=%d vblanks=%d", first_published, first_vblank))
             elseif first_published and vblank >= 2400 then
               local last = space:read_u32(addr)
@@ -113,7 +120,9 @@ jobs:
               print(string.format("SPAWN_RESULT variant=$variant published=%d vblanks=%d fps=%.4f",delta,dv,delta*59.922743/dv))
               print(string.format("STREAM_RESULT variant=$variant rebuilds=%d hits=%d fallbacks=%d entries=%d segs=%d nodes=%d subs=%d cols=%d anchors=%d",
                 u32("$rreb"), u32("$rhit"), u32("$rfb"), u16("$rlen"),
-                u16("$rseg"), u16("$rnode"), 0, u16("$rsub"), u16("$ranc")))
+                u16("$rseg"), u16("$rnode"), u16("$rsub"), u16("$rcol"), u16("$ranc")))
+              print(string.format("PROFILE_RESULT variant=$variant visibility_lines=%d geometry_lines=%d sprite_lines=%d total_lines=%d",
+                u32("$rvis")-times0[1],u32("$rgeo")-times0[2],u32("$rspr")-times0[3],u32("$rtot")-times0[4]))
               finished = true
             end
           end)
@@ -129,7 +138,7 @@ jobs:
             echo "MAME_LOG_BEGIN variant=$variant"
             tail -35 "$OUT/$variant/mame.log" || true
             echo "MAME_LOG_END variant=$variant"
-            grep -E 'SPAWN_|Error|error|Average speed' "$OUT/$variant/mame.log" | tail -25 || true
+            grep -E 'SPAWN_|PROFILE_|STREAM_|Error|error|Average speed' "$OUT/$variant/mame.log" | tail -25 || true
             echo "$variant MAME_EXIT=$rc"
             if ! grep -q "SPAWN_RESULT variant=$variant" "$OUT/$variant/mame.log"; then
               echo "::warning::Missing validated spawn measurement for $variant (MAME exit $rc)"
