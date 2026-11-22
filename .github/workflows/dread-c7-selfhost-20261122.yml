@@ -3,7 +3,6 @@ on:
   push:
     branches: [exp-dread-c7-easy-ai12-proj20-20261122]
     paths:
-      - '.github/workflows/dread-c7-selfhost-20261122.yml'
       - 'experiments/DREAD_MD/d01/**'
   workflow_dispatch:
 permissions:
@@ -48,9 +47,9 @@ jobs:
           unset DREAD_COPY_SEGA_S
           export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
           unset DREAD_PREPARED_MAPS
-          # The listener itself prints only job start/finish. Mirror a concise
-          # selection of task output to its existing interactive terminal, if
-          # stdout is an actual /dev/pts device. No new local log file.
+          # The listener itself prints only job start/finish. Mirror only
+          # a handful of concise build-status lines to its interactive terminal.
+          # No per-file, compiler or map trace, and no new local log file.
           LISTENER_TTY=""
           for pid in $(pgrep -f 'Runner.Listener' || true); do
             [[ -r "/proc/$pid/comm" ]] || continue
@@ -62,9 +61,9 @@ jobs:
             fi
           done
           console() {
-            printf '[DREAD C7 %s] %s\\n' "$(date +'%H:%M:%S')" "$*"
+            printf '[DREAD C7 %s] %s\n' "$(date +'%H:%M:%S')" "$*"
             if [[ -n "$LISTENER_TTY" ]]; then
-              printf '[DREAD C7 %s] %s\\n' "$(date +'%H:%M:%S')" "$*" > "$LISTENER_TTY" || true
+              printf '[DREAD C7 %s] %s\n' "$(date +'%H:%M:%S')" "$*" > "$LISTENER_TTY" || true
             fi
           }
           if [[ -n "$LISTENER_TTY" ]]; then
@@ -83,26 +82,15 @@ jobs:
               filename=DREAD-C7-NORMAL-4MiB.bin
             fi
             echo "::group::Compile $variant"
-            console "Compilando $variant: 9 mapas, PVS, texturas, sprites, armas, musica, 68000, link"
-            # Forward the complete build output to GitHub Actions, but only
-            # the informative lines to the existing runner console. Bash
-            # pipefail preserves the build's return code through awk.
-            if bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/$variant" 2>&1 |
-               stdbuf -oL awk -v tty="$LISTENER_TTY" '
-                 {
-                   print; fflush()
-                   if (tty != "" && (/E1M[1-9]/ || /weapon tiles:/ ||
-                       /palette|sprite|pvsgen|pack_ssf|pack_episode|render.c:.*warning|error:|Error:/ ||
-                       /ROM_SIZE|bytes|undefined reference/)) {
-                     msg=substr($0,1,190)
-                     print "[DREAD C7] " msg >> tty
-                     fflush(tty)
-                   }
-                 }'; then
-              console "$variant compilacao concluida"
+            console "Iniciando $variant: preparando mapas e assets; compilando ROM"
+            # Keep verbose compiler output ONLY in GitHub Actions.
+            # The runner's interactive terminal receives concise status lines
+            # from console(): start, success or failure for each variant.
+            if PYTHONUNBUFFERED=1 bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/$variant" 2>&1; then
+              console "$variant: compilacao concluida com sucesso"
             else
-              console "ERRO ao compilar $variant - detalhes acima no terminal e no GitHub Actions"
-              echo "::error::C7 $variant failed; see the streamed Actions log"
+              console "$variant: FALHOU (detalhes no GitHub Actions)"
+              echo "::error::C7 $variant failed; see the Actions log"
               exit 1
             fi
             cp "$OUT/$variant/EPISODE.bin" "$OUT/$filename"
@@ -112,6 +100,7 @@ jobs:
             console "$filename pronto - $(stat -c %s "$OUT/$filename") bytes"
             echo "::endgroup::"
           done
+          console "NORMAL e SSF: compilacoes concluidas; criando ZIP"
           python3 - "$OUT" <<'PY'
           from pathlib import Path
           import sys,zipfile
@@ -125,6 +114,7 @@ jobs:
           with zipfile.ZipFile(archive) as z: assert z.testzip() is None
           print("C7 ZIP",archive,archive.stat().st_size)
           PY
+          console "SUCESSO: ZIP das duas ROMs criado; publicacao no GitHub Actions"
       - name: Upload ROMs (GitHub Actions keeps the console log)
         uses: actions/upload-artifact@v4
         if: always()
