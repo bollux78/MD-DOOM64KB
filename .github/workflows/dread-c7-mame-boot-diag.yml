@@ -16,8 +16,8 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/download-artifact@v4
         with:
-          name: DREAD-C7-DUAS-VERSOES-SELFHOST-45046419149
-          run-id: 45046419149
+          name: DREAD-C7-DUAS-VERSOES-SELFHOST-45047998609
+          run-id: 45047998609
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/c7
       - name: Install MAME and image parser
