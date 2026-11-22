@@ -62,6 +62,39 @@ extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets pe
 extern const uint16_t pvs_nbytes, pvs_sbytes;
 #endif
 static const uint8_t *pv_n, *pv_s;
+#if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
+/* Conservative Ferret-inspired stream: PVS-filtered BSP leaf order.
+ * Only cached for the EXACT integer camera position and subsector from
+ * which it was generated. Move -> regenerate; overflow -> original BSP.
+ * Never reuse a stream from a different point in the same subsector:
+ * front/back ordering can change at BSP partition boundaries. */
+#define CELL_STREAM_MAX 1024
+static uint16_t cell_stream[CELL_STREAM_MAX];
+static uint16_t cell_stream_len, cell_stream_sub = 0xffff;
+static int16_t cell_stream_x, cell_stream_y;
+static uint16_t cell_stream_overflow;
+volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
+volatile uint16_t cell_stream_last_len;
+/* No bounding-box/angle culling at stream creation: a camera turn at
+ * unchanged position must not omit new visible walls or sprites. */
+static void cell_stream_collect(uint16_t n)
+{
+    if (cell_stream_overflow) return;
+    const uint16_t k = n & 0x7fff;
+    if (n & 0x8000) {
+        if (!(pv_s[k >> 3] & (1 << (k & 7)))) return;
+        if (cell_stream_len == CELL_STREAM_MAX) { cell_stream_overflow = 1; return; }
+        cell_stream[cell_stream_len++] = k;
+        return;
+    }
+    if (!(pv_n[k >> 3] & (1 << (k & 7)))) return;
+    const MapNode *nd = &map_nodes[k];
+    const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
+    const int side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
+    cell_stream_collect(nd->child[side]);
+    cell_stream_collect(nd->child[side ^ 1]);
+}
+#endif
 int r_pvs_off;   /* host checks only */
 static const uint8_t pv_all[1024] = {[0 ... 1023] = 0xFF};
 #endif
@@ -229,6 +262,10 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 
 void R_Init(void)
 {
+#if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
+    cell_stream_sub = 0xffff;
+    cell_stream_rebuilds = cell_stream_hits = cell_stream_fallbacks = 0;
+#endif
 #if defined(DREAD_EPISODE) && !defined(PVS_GEN) && !defined(DREAD_PVS_RAW)
     cached_pvs_sub = 0xFFFF;
 #endif
@@ -1035,7 +1072,32 @@ void R_RenderView(const View *v, uint8_t *fb)
 #ifndef PVS_GEN
     nvis = 0; winused = 0;
 #endif
+#if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
+    /* PVS selection is already loaded for this camera's subsector.
+     * Replay the front-to-back leaf stream when the integer position is
+     * unchanged. Safe to turn; no stale bbox or view-angle filtering. */
+    {
+        const uint16_t cs = (uint16_t)R_PointInSub(view_xi, view_yi);
+        if (cell_stream_sub != cs || cell_stream_x != view_xi || cell_stream_y != view_yi) {
+            cell_stream_sub = cs;
+            cell_stream_x = view_xi;
+            cell_stream_y = view_yi;
+            cell_stream_len = cell_stream_overflow = 0;
+            cell_stream_collect(map_counts[3] - 1);
+            cell_stream_rebuilds++;
+        } else cell_stream_hits++;
+        cell_stream_last_len = cell_stream_len;
+        if (cell_stream_overflow) {
+            cell_stream_fallbacks++;
+            render_node(map_counts[3] - 1);
+        } else {
+            for (uint16_t si = 0; si < cell_stream_len && closed < VIEW_W; si++)
+                render_node((uint16_t)(0x8000u | cell_stream[si]));
+        }
+    }
+#else
     render_node(map_counts[3] - 1);
+#endif
 #ifndef PVS_GEN
     draw_things();
 #endif
