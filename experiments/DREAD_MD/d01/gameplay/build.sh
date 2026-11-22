@@ -14,5 +14,11 @@ export DREAD_COMBAT=1 DREAD_GAMEPLAY=1 DREAD_SKILL=easy
 # C7 original WAD weapons (C5), with optional colour diffusion in PAL1.
 # DREAD_WEAPON_DITHER=0 restores exactly the C5 nearest-colour palette mapping.
 export DREAD_WEAPON_DITHER="${DREAD_WEAPON_DITHER:-1}"
-DREAD_EXTRA_FLAGS='-DDREAD_JOY_VBLANK -DDREAD_NATIVE_PERSPECTIVE -DDREAD_CELLSTREAM_REPORT -DDREAD_COMBAT_12_20 -DDREAD_EASY_MODE' \
+# Draw transparent two-sided grates at 2x2 logical-pixel resolution.
+# Set DREAD_GRATE_HALF_RES=0 for an A/B test with C6-resolution grates.
+grate_flags=""
+if [[ ${DREAD_GRATE_HALF_RES:-1} == 1 ]]; then
+    grate_flags="-DDREAD_GRATE_HALF_RES"
+fi
+DREAD_EXTRA_FLAGS="-DDREAD_JOY_VBLANK -DDREAD_NATIVE_PERSPECTIVE -DDREAD_CELLSTREAM_REPORT -DDREAD_COMBAT_12_20 -DDREAD_EASY_MODE $grate_flags" \
     bash "$root/tools/build_map.sh" "$wad" EPISODE "$out" 'DREAD GAMEPLAY C7 EASY'
