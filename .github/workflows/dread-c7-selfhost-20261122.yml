@@ -4,6 +4,7 @@ on:
     branches: [exp-dread-c7-easy-ai12-proj20-20261122]
     paths:
       - '.github/workflows/dread-c7-selfhost-20261122.yml'
+      - 'experiments/DREAD_MD/d01/**'
   workflow_dispatch:
 permissions:
   contents: read
