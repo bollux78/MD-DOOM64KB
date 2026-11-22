@@ -15,11 +15,14 @@ for name in variants:
     log=(root/name/"mame.log").read_text(errors="replace") if (root/name/"mame.log").exists() else ""
     match=re.search(r"SPAWN_RESULT variant="+name+r" published=(\d+) vblanks=(\d+) fps=([0-9.]+)",log)
     counters=re.search(r"STREAM_RESULT variant="+name+r" rebuilds=(\d+) hits=(\d+) fallbacks=(\d+) entries=(\d+) segs=(\d+) nodes=(\d+) subs=(\d+) cols=(\d+) anchors=(\d+)",log)
+    profile=re.search(r"PROFILE_RESULT variant="+name+r" visibility_lines=(\d+) geometry_lines=(\d+) sprite_lines=(\d+) total_lines=(\d+)",log)
+    stage=dict(zip(("visibility","geometry","sprites","total"),map(int,profile.groups()))) if profile else {}
     metrics[name]=dict(
         measured=bool(match),
         published=int(match[1]) if match else None,
         vblanks=int(match[2]) if match else None,
         fps=float(match[3]) if match else None,
+        stage_lines=stage,
         counters=dict(zip(("rebuilds","hits","fallbacks","entries","segs","nodes","subs","cols","anchors"),map(int,counters.groups()))) if counters else {},
         errors=[x.strip()[:240] for x in log.splitlines() if re.search(r"error|fatal|warning|SPAWN_BEGIN",x,re.I)][:18],
     )
@@ -37,7 +40,16 @@ def card(name,title):
 def row(label,key):
     a,b=metrics["CONTROL"]["counters"],metrics["CELLSTREAM"]["counters"]
     return f"<tr><th>{html.escape(label)}</th><td>{a.get(key,'—')}</td><td>{b.get(key,'—')}</td></tr>"
-notes="As taxas são publicações completas no VDP, não FPS do emulador. As métricas da cena são amostras do último quadro, não médias. O framebuffer NÃO foi comparado pixel a pixel. O stream não implementa diretamente o formato binário da Ferret: aproveita o princípio de lista de visibilidade ordenada, derivada do BSP/PVS da D01, com cache por posição. A condição por posição é necessária para preservar a ordem de oclusão. A mudança de câmera invalida o cache. Portas, inimigos, HUD, música, START, nove mapas e quatro modos gráficos exigem teste de regressão no hardware."
+def stage_row(label,key):
+    def val(name):
+        m=metrics[name]
+        lines=m["stage_lines"].get(key)
+        if lines is None or not m["published"]: return "—"
+        # approximate: 262 scanlines per 59.922743Hz NTSC frame
+        ms=lines*1000/(59.922743*262)
+        return f"{ms:.1f} ms total / {ms/m['published']:.2f} ms por quadro"
+    return f"<tr><th>{html.escape(label)}</th><td>{val('CONTROL')}</td><td>{val('CELLSTREAM')}</td></tr>"
+notes="As taxas são publicações completas no VDP, não FPS do emulador. As métricas da cena são amostras do último quadro, não médias. O framebuffer NÃO foi comparado pixel a pixel. Tempos de render em linhas são estimativas, não ciclos de 68000. O stream não implementa diretamente o formato binário da Ferret: aproveita o princípio de lista de visibilidade ordenada, derivada do BSP/PVS da D01, com cache por posição. A condição por posição é necessária para preservar a ordem de oclusão. A mudança de câmera invalida o cache. Portas, inimigos, HUD, música, START, nove mapas e quatro modos gráficos exigem teste de regressão no hardware."
 diag=""
 for name in variants:
     lines=metrics[name]["errors"]
@@ -72,6 +84,12 @@ summary{{cursor:pointer}}a{{color:#b9d4ff}}code{{font-size:12px}}.bar{{height:18
 <div class="eyebrow">FPS do jogo · Não confundir com velocidade da emulação</div>
 <p>CONTROL {fmt(c['fps'])} FPS</p><div class="bar"><span style="width:{min(100,(c['fps'] or 0)/12*100):.1f}%"></span></div>
 <p>CELLSTREAM {fmt(b['fps'])} FPS</p><div class="bar green"><span style="width:{min(100,(b['fps'] or 0)/12*100):.1f}%"></span></div>
+<h2>Tempo por etapa (aproximado)</h2><table><thead><tr><th>Etapa</th><th>CONTROL</th><th>CELLSTREAM</th></tr></thead><tbody>
+{stage_row("PVS / consulta de visibilidade","visibility")}
+{stage_row("Percurso + geometria + rasterização","geometry")}
+{stage_row("Sprites / atores","sprites")}
+{stage_row("Total de renderer","total")}</tbody></table>
+<p class="muted">Leituras de HV/VBlank em equivalentes de scanline; resolução grosseira e inclusive interrupções. Não somar linhas como se fossem tempos independentes de todo o jogo. DMA de apresentação não está isolado nesta versão.</p>
 <h2>Estatísticas de execução</h2><table><thead><tr><th>Indicador</th><th>CONTROL</th><th>CELLSTREAM</th></tr></thead><tbody>
 {row("Streams reconstruídos","rebuilds")}{row("Reutilizações do stream","hits")}{row("Fallback ao BSP","fallbacks")}
 {row("Subsectors no stream","entries")}{row("Segmentos desenhados (último quadro)","segs")}
