@@ -378,22 +378,28 @@ void HUD_ShowArt(uint16_t page)
     VDP_setEnable(TRUE);SYS_enableInts();
 }
 extern const uint16_t inter_pal[];
-extern const uint8_t inter_data[];
+extern const uint8_t inter_tilepal[],inter_data[];
 void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds)
 {
     SYS_disableInts();static_screen();
-    uint16_t dark[16];for(uint16_t i=0;i<16;i++)dark[i]=(inter_pal[i]>>1)&0x0666;
-    cram_set(0,dark,16);const uint16_t white=0xeee;cram_set(63,&white,1);
+    cram_set(0,inter_pal,64);
+    const uint16_t white=0xeee;cram_set(63,&white,1);
+    /* Upload real 8x8 H40 tiles, without the old 160x112 stretch. */
     for(uint16_t y=0;y<28;y++)for(uint16_t x=0;x<40;x++){
         uint32_t tile[8];
-        for(uint16_t row=0;row<4;row++){
-            const uint8_t *p=inter_data+(y*4+row)*80+x*2;uint32_t value=0;
-            for(uint16_t c=0;c<4;c++){uint16_t pixel=(p[c>>1]>>((c&1)?0:4))&15;value=(value<<8)|(pixel*17);}
-            tile[row*2]=tile[row*2+1]=value;
+        const uint8_t *p=inter_data+((uint32_t)y*40+x)*32;
+        for(uint16_t row=0;row<8;row++){
+            uint32_t word=0;
+            for(uint16_t c=0;c<4;c++)word=(word<<8)|p[row*4+c];
+            tile[row]=word;
         }
         vram_copy32(TILE_TITLE+y*40+x,tile,1);
     }
-    for(uint16_t y=0;y<28;y++){vram_addr(BGB+y*128);for(uint16_t x=0;x<40;x++)vram_w(TILE_TITLE+y*40+x);}
+    for(uint16_t y=0;y<28;y++){
+        vram_addr(BGB+y*128);
+        for(uint16_t x=0;x<40;x++)
+            vram_w((inter_tilepal[y*40+x]<<13)|(TILE_TITLE+y*40+x));
+    }
     VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
     VDP_drawTextBG(BG_A,name,(40-strlen(name))/2,4);VDP_drawTextBG(BG_A,"CONCLUIDO",15,6);
     char text[40];sprintf(text,"MORTES    %3u / %3u",kills,total);VDP_drawTextBG(BG_A,text,9,11);
