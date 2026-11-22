@@ -101,8 +101,9 @@ if [[ -z "$geometry_flag" ]]; then
     fi
 fi
 if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
+    # C7: gen_gameplay_assets.py restores the original Doom WAD weapon frames
+    # used in C5. Do NOT overwrite weapon.c with the C6 custom sheet.
     python3 "$source_dir/tools/gen_gameplay_assets.py" "$wad" "$stage/src"
-    python3 "$source_dir/tools/gen_user_weapons.py" "$stage/src"
     python3 "$source_dir/tools/gen_ending.py" "$wad" "$stage/src"
     render_flags+=" -DDREAD_GAMEPLAY"
 fi
