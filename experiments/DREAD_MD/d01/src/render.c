@@ -68,6 +68,9 @@ static const uint8_t pv_all[1024] = {[0 ... 1023] = 0xFF};
 #endif
 volatile uint16_t dbg_flags;
 uint32_t tm_setup, tm_loop, tm_total, tm_anchor, tm_fill, tm_tex;   /* test only: scanline-resolution timers */
+#ifdef DREAD_CELLSTREAM_REPORT
+volatile uint32_t tm_visibility, tm_geometry, tm_sprites; /* cumulative scanline equivalents, approximate */
+#endif
 #if defined(__m68k__) || defined(__mc68000__)
 extern volatile uint16_t vints;
 static inline uint32_t now_lines(void) { for (;;) { const uint16_t a = vints; const uint8_t v = *(volatile uint8_t *)0xC00008; if (a == vints) return (uint32_t)a * 262 + v; } }
@@ -1071,6 +1074,10 @@ void R_RenderView(const View *v, uint8_t *fb)
         if (r_pvs_off) pv_n = pv_s = pv_all;
     }
 #endif
+#ifdef DREAD_CELLSTREAM_REPORT
+    const uint32_t tvis_end = now_lines();
+    tm_visibility += tvis_end - t0;
+#endif
 #ifndef PVS_GEN
     nvis = 0; winused = 0;
 #endif
@@ -1100,10 +1107,20 @@ void R_RenderView(const View *v, uint8_t *fb)
 #else
     render_node(map_counts[3] - 1);
 #endif
+#ifdef DREAD_CELLSTREAM_REPORT
+    const uint32_t tgeometry_end = now_lines();
+    tm_geometry += tgeometry_end - tvis_end;
+#endif
 #ifndef PVS_GEN
     draw_things();
 #endif
+#ifdef DREAD_CELLSTREAM_REPORT
+    const uint32_t tsprites_end = now_lines();
+    tm_sprites += tsprites_end - tgeometry_end;
+    tm_total += tsprites_end - t0;
+#else
     tm_total += now_lines() - t0;
+#endif
     rstats.cols_closed = closed;
 }
 
