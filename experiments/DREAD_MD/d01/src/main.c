@@ -1107,7 +1107,7 @@ int main(bool hard)
             if(!hud.health){
                 /* E1M8: death in the final damaging room completes the episode,
                  * including damage from monsters before the next sector tick. */
-                if(selected_map==7 && level_meta[map_id].specials[map_subs[pl.sub].sector]==11){
+                if(selected_map==7 && level_meta[selected_map].specials[map_subs[pl.sub].sector]==11){
                     hud.health=10;
                     exit_req=1;
                 }else continue;
