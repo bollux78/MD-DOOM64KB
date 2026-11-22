@@ -2,6 +2,15 @@
 
 **Status: código-fonte alterado, SEM COMPILAÇÃO, SEM ROM, SEM benchmark.** Criado em 22/11/2026 a partir do commit C6 `1c99d6a5862f2b886a90356ff2c12f23206931a1`. Nunca substituir a C6 estável sem verificação em console.
 
+## Atualização visual: armas originais do WAD (C5)
+
+Após feedback do usuário, a folha personalizada `tools/weapon_src/guns_optimized_pal.png` da C6 **deixou de ser utilizada** na futura C7. O `tools/build_map.sh` não executa mais `gen_user_weapons.py`; os seis conjuntos de sprites voltam a ser extraídos do WAD pela rotina original `gen_gameplay_assets.py`, como na **C5 (`691c711360`)**. Esse gerador já produz 24 quadros de arma (6 armas × 4 fases), atlas 128×80, paleta PAL1 com 15 cores e transparência, compatível com o HUD atual.
+
+- **Bob da C6 preservado:** `main.c` continua com `sy = sintab[...] >> 12`, deslocamento para cima durante movimento e `HUD_WeaponBob(0,0)` ao parar. Não recuperar o bob maior da C5.
+- **Correção dos flashes pretos preservada:** não reverter o carregamento seguro de tiles na C6, nem a lógica de transferência no VBlank.
+- **Dithering opcional nas seis armas originais:** `gen_gameplay_assets.py` aceita `DREAD_WEAPON_DITHER=1` (Floyd–Steinberg em RGB nas 15 cores da PAL1 Mega Drive, máscara de transparência preservada). A futura build C7 usa **1 por padrão**; definir `DREAD_WEAPON_DITHER=0` reproduz a quantização sem dithering da C5. A escolha **não** afeta as texturas/paletas do cenário.
+- **Limitação:** nenhuma imagem comparativa nem ROM foi gerada; o dithering pode aumentar tiles únicos e o tamanho da ROM, especialmente no layout NORMAL 4 MiB. Validar a aparência em ambas as versões e voltar à opção sem dithering caso apareçam ruídos, paletas inadequadas ou limite de espaço.
+
 ## Alterações realizadas
 
 - `src/actors.c`: `DREAD_COMBAT_12_20` habilita dois acumuladores independentes de tempo lógico, ambos em VBlanks: **IA a 12 Hz** (5 VBlanks por passo) e **projéteis a 20 Hz** (3 VBlanks por passo). Acumuladores preservam os restos entre quadros renderizados; são zerados por `Actors_Init` em cada fase. Nenhum relógio depende da velocidade de emulação.
