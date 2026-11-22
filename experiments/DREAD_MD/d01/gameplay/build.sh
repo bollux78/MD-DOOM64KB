@@ -11,5 +11,8 @@ if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
     exit 2
 fi
 export DREAD_COMBAT=1 DREAD_GAMEPLAY=1 DREAD_SKILL=easy
+# C7 original WAD weapons (C5), with optional colour diffusion in PAL1.
+# DREAD_WEAPON_DITHER=0 restores exactly the C5 nearest-colour palette mapping.
+export DREAD_WEAPON_DITHER="${DREAD_WEAPON_DITHER:-1}"
 DREAD_EXTRA_FLAGS='-DDREAD_JOY_VBLANK -DDREAD_NATIVE_PERSPECTIVE -DDREAD_CELLSTREAM_REPORT -DDREAD_COMBAT_12_20 -DDREAD_EASY_MODE' \
     bash "$root/tools/build_map.sh" "$wad" EPISODE "$out" 'DREAD GAMEPLAY C7 EASY'
