@@ -583,6 +583,8 @@ tex_native:
         lea     native_f,%a0
         lea     native_offsets_f,%a1
 1:      move.l  0(%a0,%d2.w),%a0           /* first instruction (row zero) */
+        move.l  %a0,%d1
+        beq     .Lnative_table
         move.l  0(%a1,%d2.w),%a1
         move.w  %d5,%d2
         add.w   %d2,%d2
@@ -604,7 +606,7 @@ tex_native:
         addq.w  #2,%d6
         cmp.w   %d6,%d1
 #endif
-        bcc.s   .Lnative_fail
+        bcc     .Lnative_table
         sub.w   %d3,%d0                    /* base cancelling signed scaler origin */
         move.w  8(%a3),%d6
         and.w   4(%a4),%d6
@@ -629,6 +631,47 @@ tex_native:
         move.w  %d4,%d6
         subq.w  #1,%d6
         jsr     (%a4)
+        moveq   #1,%d0
+        rts
+.Lnative_table:
+        /* Exact masked fallback: same absolute row offsets as the ROM scaler.
+         * Also used by full-height gameplay to reclaim duplicate code in ROM. */
+        move.w  10(%a3),%d0
+        andi.w  #0x7fff,%d0
+        lsl.w   #2,%d0
+        lea     native_offsets_b,%a0
+        cmpi.w  #72,r_vh
+        beq.s   1f
+        lea     native_offsets_f,%a0
+1:      move.l  0(%a0,%d0.w),%a0
+        move.w  %d5,%d0
+        add.w   %d0,%d0
+        adda.w  %d0,%a0
+        move.l  12(%a4),%d1
+        swap    %d1
+        move.w  8(%a4),%d2
+        move.w  8(%a3),%d6
+        and.w   4(%a4),%d6
+#ifdef DREAD_EPISODE
+        lsl.w   #2,%d6
+        move.l  (%a4),%a1
+        move.l  0(%a1,%d6.w),%a1
+#else
+        move.w  6(%a4),%d3
+        lsl.l   %d3,%d6
+        move.l  (%a4),%a1
+        adda.l  %d6,%a1
+#endif
+        lsl.w   #2,%d5
+        move.l  %a2,%a4
+        adda.w  %d5,%a4
+        subq.w  #1,%d4
+2:      move.w  (%a0)+,%d3
+        add.w   %d1,%d3
+        and.w   %d2,%d3
+        move.b  0(%a1,%d3.w),(%a4)
+        addq.l  #4,%a4
+        dbra    %d4,2b
         moveq   #1,%d0
         rts
 .Lnative_fail:

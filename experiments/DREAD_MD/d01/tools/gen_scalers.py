@@ -47,16 +47,20 @@ for name, ns in (("b", 72), ("f", 144)):
     for q in range(NATIVE_LEVELS):
         step = Z0 * native_ratio ** q
         offsets = [int(math.floor((y - ns/2) * step + .5)) for y in range(ns)]
+        if name=="f":out.append("#ifndef DREAD_GAMEPLAY")
         out.append("native_%s_%d:" % (name, q))
         for y, off in enumerate(offsets):
             # MOVE.B disp(a1),disp(a0); DBRA d6,+4 (skip RTS); RTS.
             out.append(" .word 0x1169,%d,%d,0x51ce,4,0x4e75" % (off, y*4))
         out.append(" .word 0x4e75")
+        if name=="f":out.append("#endif")
         out.append("native_off_%s_%d:" % (name, q))
         for i in range(0, ns, 16):
             out.append(" .word " + ",".join(map(str, offsets[i:i+16])))
     out.append("native_%s:" % name)
+    if name=="f":out.extend(["#ifdef DREAD_GAMEPLAY", " .rept %d" % NATIVE_LEVELS, " .long 0", " .endr", "#else"])
     out.append(" .long " + ",".join("native_%s_%d" % (name,q) for q in range(NATIVE_LEVELS)))
+    if name=="f":out.append("#endif")
     out.append("native_offsets_%s:" % name)
     out.append(" .long " + ",".join("native_off_%s_%d" % (name,q) for q in range(NATIVE_LEVELS)))
 out.append(" .globl native_zq72, native_zq144, native_steps")

@@ -75,7 +75,7 @@ extern const uint16_t map_sub_things[];   /* things of subsector s: [map_sub_thi
 extern const int16_t map_bm[4];          /* collision grid: x0, y0, width, height (128-unit cells) */
 extern const uint16_t map_bm_off[], map_bm_list[];
 extern const uint16_t map_mframes[];   /* monster sprite per (kind, frame letter, rotation 1-5): [(k*16+f)*5+r], 0xFFFF none */
-extern const uint16_t map_fx[8];       /* imp ball A B, explosion C D E, baron ball A B, caco ball */
+extern const uint16_t map_fx[19];       /* imp ball A B, explosion C D E, baron ball A B, caco ball */
 extern const uint8_t map_reject[];     /* REJECT: bit (s1*nsec+s2) set = s1 cannot see s2 */
 extern const uint16_t map_secadj_off[], map_secadj[];   /* sound: sector neighbours through two-sided lines */
 #define THING_MONSTER 1

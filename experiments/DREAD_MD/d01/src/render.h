@@ -47,7 +47,12 @@ typedef struct {
 } RenderStats;
 
 /* sectors stay in ROM; only the ceiling height (doors) lives in RAM */
+#if defined(DREAD_GAMEPLAY) || defined(DREAD_OPEN_PVS)
+extern MapSector runtime_sectors[];
+#define map_sectors runtime_sectors
+#else
 #define map_sectors map_sectors_init
+#endif
 extern int16_t sec_ceil[];
 extern RenderStats rstats;
 extern const int16_t sintab[1024];   /* Q14 */

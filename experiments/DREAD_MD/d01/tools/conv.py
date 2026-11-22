@@ -262,7 +262,7 @@ def main():
         return True
     thing_rows, sprnames, sprimg = [], [], {}
     mframes = [0xFFFF] * (len(KINDS) * 16 * 5)
-    fx = [0xFFFF] * 8                   # imp ball A B, explosion C D E, baron ball A B, caco ball A
+    fx = [0xFFFF] * 19                   # imp ball A B, explosion C D E, baron ball A B, caco ball A
     kinds_present = sorted({KIND_OF[t[3]] for t in things if t[3] in KIND_OF and (t[4] & 2) and not (t[4] & 16)})
     if not args.geometry_only:
         for k in kinds_present:
@@ -274,7 +274,7 @@ def main():
                     if load_frame(key, prefix, letter, rot):
                         mframes[(k * 16 + ord(letter) - 65) * 5 + r] = sprnames.index(key)
         for slot, (prefix, letter, rot) in enumerate([("BAL1", "A", 0), ("BAL1", "B", 0), ("BAL1", "C", 0), ("BAL1", "D", 0),
-                                                      ("BAL1", "E", 0), ("BAL7", "A", 1), ("BAL7", "B", 1), ("BAL2", "A", 0)]):
+                                                      ("BAL1", "E", 0), ("BAL7", "A", 1), ("BAL7", "B", 1), ("BAL2", "A", 0), ("MISL","A",1), ("MISL","B",0), ("MISL","C",0), ("MISL","D",0), ("SHOT","A",0), ("CLIP","A",0), ("BEXP","A",0), ("BEXP","B",0), ("BEXP","C",0), ("BEXP","D",0), ("BEXP","E",0)]):
             if load_frame((prefix, letter, rot), prefix, letter, rot): fx[slot] = sprnames.index((prefix, letter, rot))
     monster_sprites = {i for i in mframes if i != 0xFFFF} | {i for i in fx if i != 0xFFFF}
     for (tx, ty, ta, tt, tf) in (() if args.geometry_only else things):
@@ -295,8 +295,8 @@ def main():
             sprnames.append(key)
         sub = sub_of(tx, ty)
         ITEM = {2007: 1, 2048: 2, 2011: 3, 2012: 4, 2014: 5, 2015: 6, 2018: 7, 2019: 8, 2013: 9, 8: 10,
-                5: 20, 6: 21, 13: 22, 38: 23, 39: 24, 40: 25, 2001: 30, 2002: 31, 2003: 32, 2005: 33, 2008: 40, 2049: 41, 2010: 42, 2046: 43}
-        thing_rows.append([tx, ty, sprnames.index(key), sub, tt, ITEM.get(tt, 0) << 8])
+                5: 20, 6: 21, 13: 22, 38: 23, 39: 24, 40: 25, 2001: 30, 2002: 31, 2003: 32, 2005: 33, 2008: 40, 2049: 41, 2010: 42, 2046: 43, 2022:70,2023:71,2024:72,2025:73,2026:74,2045:75,2035:80}
+        thing_rows.append([tx, ty, sprnames.index(key), sub, tt, ITEM.get(tt, 81 if tt in [-1, 3004, 9, 3001, 3002, 58, 3003, 2035, 2028, 46, 48, 35] else 0) << 8])
     # light bucket of each thing: its sector's
     spr_used = {}   # sprite index -> set(buckets)
 
@@ -507,7 +507,7 @@ def main():
         xo, yo, up, lo, mid, fs = sides[fsd]
         bs = sec_of_side(bsd) if (fl & 4) else NO_SECTOR
         t = lambda nm: tid.get(nm, 255)
-        flags = (1 if fl & 8 else 0) | (2 if fl & 16 else 0) | (4 if bs != NO_SECTOR else 0)
+        flags = (1 if fl & 8 else 0) | (2 if fl & 16 else 0) | (4 if bs != NO_SECTOR else 0) | (8 if sp==48 else 0)
         ln = int(round(math.hypot(verts[v2][0] - verts[v1][0], verts[v2][1] - verts[v1][1])))
         seg_rows.append((v1, v2, fs, bs, t(mid), t(up), t(lo), flags, off + xo, yo, ld, ln))
 
@@ -645,7 +645,7 @@ def main():
     H.append("const MapThing map_things[%d] = {%s};" % (max(1, len(thing_rows)), ",".join(
         "{%d,%d,%d,%d,%d}" % (t[0], t[1], t[2], t[3], t[5]) for t in thing_rows) or "{0}"))
     H.append("const uint16_t map_mframes[%d] = {%s};" % (len(mframes), ",".join(map(str, mframes))))
-    H.append("const uint16_t map_fx[8] = {%s};" % ",".join(map(str, fx)))
+    H.append("const uint16_t map_fx[19] = {%s};" % ",".join(map(str, fx)))
     # REJECT (sector x sector, bit set = cannot see) and sound adjacency (two-sided lines without "block sound")
     rj = bytearray(lump.get("REJECT", b"")); need = (len(secs) * len(secs) + 7) // 8
     rj = (rj + bytes(need))[:need]

@@ -5,6 +5,8 @@
  *  - per-kind hit points, speed, pain chance and attacks (hitscan, shotgun, claws/bites, fireballs)
  *  - sprites: walk/attack/pain in rotations 1-5 (6-8 mirrored), death frames, corpse stays           */
 #include "actors.h"
+#include "game_sfx.h"
+#include "world.h"
 #ifdef DREAD_COMBAT
 #include "mapcounts.h"
 
@@ -41,7 +43,28 @@ static const int16_t dirx[8] = { 256, 181, 0, -181, -256, -181, 0, 181 }, diry[8
 Actor actors[MAP_NACTORS];
 uint8_t actor_heads[MAP_NSUBS];
 static uint16_t nactors, tick_no;
+#ifdef DREAD_GAMEPLAY
+#define MAXBARRELS 64
+typedef struct {uint16_t thing;int16_t hp;uint8_t frame,tics,state,pad;} Barrel;
+static Barrel barrels[MAXBARRELS];static uint16_t nbarrels;
+static int scenery_blocked(int16_t x,int16_t y,int16_t z){
+    for(uint16_t i=0;i<map_nthings;i++){
+        const MapThing *t=&map_things[i];if((t->flags&THING_MONSTER) || (t->flags>>8)!=81)continue;
+        const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
+        if(z-41>=f+56 || z+15<=f)continue;
+        const int32_t dx=x-t->x,dy=y-t->y;if(dx*dx+dy*dy<32*32)return 1;
+    }
+    for(uint16_t i=0;i<nbarrels;i++)if(!barrels[i].state){
+        const MapThing *t=&map_things[barrels[i].thing];const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
+        if(z-41>=f+42 || z+15<=f)continue;
+        const int32_t dx=x-t->x,dy=y-t->y;if(dx*dx+dy*dy<26*26)return 1;
+    }return 0;
+}
+#endif
 static uint8_t sight_budget;
+volatile uint16_t combat_drop_ammo,combat_drop_shotgun;
+typedef struct {int16_t x,y;uint16_t sub;uint8_t type,active;} Drop;
+static Drop drops[32];static uint16_t drop_next;
 volatile uint16_t combat_wakes, combat_hits, combat_kills, combat_attacks;
 
 /* ---- random (Doom-style 0..255) */
@@ -49,13 +72,13 @@ static uint16_t rnd_s = 0x1234;
 static uint8_t rnd(void) { rnd_s ^= rnd_s << 7; rnd_s ^= rnd_s >> 9; rnd_s ^= rnd_s << 8; return (uint8_t)rnd_s; }
 
 /* ---- item pickups: taken bits for the map's static things */
-static uint8_t taken[64];
-int Thing_Taken(uint16_t i) { return i < 512 && (taken[i >> 3] & (1 << (i & 7))); }
-void Thing_Take(uint16_t i) { if (i < 512) taken[i >> 3] |= (uint8_t)(1 << (i & 7)); }
+static uint8_t taken[512];
+int Thing_Taken(uint16_t i) { return i < 4096 && (taken[i >> 3] & (1 << (i & 7))); }
+void Thing_Take(uint16_t i) { if (i < 4096) taken[i >> 3] |= (uint8_t)(1 << (i & 7)); }
 
 /* ---- projectiles */
 #define MAXPROJ 8
-typedef struct { int32_t x, y, vx, vy; int16_t z; uint16_t sub; uint8_t kind, state, tics, frame; } Proj;
+typedef struct { int32_t x, y, vx, vy; int16_t z,vz,zfrac; uint16_t sub; uint8_t kind, state, tics, frame; } Proj;
 static Proj proj[MAXPROJ];
 
 static inline int16_t iabs16(int16_t v) { return v < 0 ? -v : v; }
@@ -84,7 +107,7 @@ static int rejected(uint16_t s1, uint16_t s2)
     const uint32_t i = (uint32_t)s1 * map_counts[4] + s2;
     return (map_reject[i >> 3] >> (i & 7)) & 1;
 }
-static int trace(int16_t ax, int16_t ay, int16_t bx, int16_t by, int16_t z)
+static int trace3(int16_t ax,int16_t ay,int16_t az,int16_t bx,int16_t by,int16_t bz)
 {
     const int16_t dx = bx - ax, dy = by - ay;
     const int16_t len = iabs16(dx) + iabs16(dy);
@@ -112,11 +135,16 @@ static int trace(int16_t ax, int16_t ay, int16_t bx, int16_t by, int16_t z)
             if (line->back == NO_MAP_SECTOR) return 0;
             const MapSector *f = &map_sectors[line->front], *g = &map_sectors[line->back];
             const int16_t lo = f->floor > g->floor ? f->floor : g->floor, hi = sec_ceil[line->front] < sec_ceil[line->back] ? sec_ceil[line->front] : sec_ceil[line->back];
+            /* Height at this actual intercept, rather than one midpoint Z
+             * used for the whole ray. Grates are transparent to projectiles. */
+            const int32_t den=p-q;
+            const int16_t z=az+(den?(int32_t)((int64_t)(bz-az)*p/den):0);
             if (z <= lo || z >= hi) return 0;
         }
     }
     return 1;
 }
+static int trace(int16_t ax,int16_t ay,int16_t bx,int16_t by,int16_t z){return trace3(ax,ay,z,bx,by,z);}
 /* 1 visible, 0 not, 2 not checked this frame (budget) */
 static int can_see(const Actor *a, const ActorPlayer *pl, int force)
 {
@@ -124,7 +152,7 @@ static int can_see(const Actor *a, const ActorPlayer *pl, int force)
     if (!force) { if (!sight_budget) return 2; sight_budget--; }
     const int16_t ax = (int16_t)(a->x >> 16), ay = (int16_t)(a->y >> 16);
     const int16_t az = map_sectors[sector_of_sub(a->sub)].floor + 40;
-    return trace(ax, ay, pl->x, pl->y, (int16_t)((az + pl->z) >> 1));
+    return trace3(pl->x,pl->y,pl->z,ax,ay,az);
 }
 
 /* ---- subsector lists */
@@ -142,7 +170,12 @@ static void link_actor(uint8_t i)
 
 void Actors_Init(void)
 {
-    nactors = 0; tick_no = 0;
+#ifdef DREAD_GAMEPLAY
+    nbarrels=0;for(uint16_t i=0;i<map_nthings && nbarrels<MAXBARRELS;i++)if(!(map_things[i].flags&THING_MONSTER) && (map_things[i].flags>>8)==80){
+        Barrel *b=&barrels[nbarrels++];b->thing=i;b->hp=20;b->state=b->frame=b->tics=0;
+    }
+#endif
+    nactors = 0; tick_no = 0;drop_next=0;combat_drop_ammo=combat_drop_shotgun=0;for(uint16_t i=0;i<32;i++)drops[i].active=0;
     combat_wakes = combat_hits = combat_kills = combat_attacks = 0;
     for (uint16_t i = 0; i < sizeof taken; i++) taken[i] = 0;
     for (uint16_t i = 0; i < MAXPROJ; i++) proj[i].kind = 0xFF;
@@ -167,7 +200,7 @@ static void wake(Actor *a)
 {
     if (a->state != ST_IDLE) return;
     a->state = ST_CHASE; a->tics = 1; a->step = 0; a->reaction = 2;
-    combat_wakes++;
+    combat_wakes++;Game_Sound(a->kind<2?12:a->kind==6?16:14);
 }
 
 /* ---- movement */
@@ -188,7 +221,10 @@ static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
     const MapSector *to = &map_sectors[tos];
     const int16_t toc = sec_ceil[tos];
     if (to->floor - from->floor > 24 || toc - to->floor < 56 || toc - from->floor < 56) return 0;
-    if (ActorBlocked(nx, ny)) return 0;
+#ifdef DREAD_GAMEPLAY
+    if(scenery_blocked(nx,ny,from->floor+41))return 0;
+#endif
+    if (ActorBlockedFrom(nx, ny,a->x>>16,a->y>>16)) return 0;
     a->x = (int32_t)nx << 16; a->y = (int32_t)ny << 16;
     const uint16_t sub = (uint16_t)R_PointInSub(nx, ny);
     if (sub != a->sub) { unlink_actor(i); a->sub = sub; link_actor(i); }
@@ -220,13 +256,16 @@ static void new_chase_dir(Actor *a, uint8_t i, const ActorPlayer *pl)
 /* ---- damage */
 static void hurt_player(ActorPlayer *pl, int16_t dmg)
 {
+#ifdef DREAD_GAMEPLAY
+    if(World_Invulnerable())return;
+#endif
     if (*pl->armor) {                    /* green armor rule: 1/3 absorbed */
         int16_t save = dmg / 3;
         if (save > (int16_t)*pl->armor) save = (int16_t)*pl->armor;
         *pl->armor -= (uint16_t)save; dmg -= save;
     }
     *pl->health = (uint16_t)(*pl->health > (uint16_t)dmg ? *pl->health - dmg : 0);
-    pl->hurt = 1;
+    pl->hurt = 1;Game_Sound(11);
     combat_attacks++;
 }
 static void damage_actor(Actor *a, int16_t dmg)
@@ -236,7 +275,8 @@ static void damage_actor(Actor *a, int16_t dmg)
     a->hp -= dmg;
     if (a->hp <= 0) {
         a->state = ST_DEATH; a->step = 0; a->frame = kinds[a->kind].death0; a->tics = 8;
-        combat_kills++;
+        if(a->kind<2){Drop *d=&drops[drop_next++&31];d->x=a->x>>16;d->y=a->y>>16;d->sub=a->sub;d->type=a->kind;d->active=1;}
+        combat_kills++;Game_Sound(a->kind<2?13:a->kind==6?17:15);
         return;
     }
     if (a->state == ST_IDLE) { a->state = ST_CHASE; combat_wakes++; }
@@ -249,12 +289,17 @@ static void spawn_ball(const Actor *a, const ActorPlayer *pl, uint8_t kind)
         Proj *p = &proj[k];
         if (p->kind != 0xFF) continue;
         const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
-        const int16_t dx = pl->x - x, dy = pl->y - y, d = approx_dist(dx, dy);
+        int16_t dx = pl->x - x, dy = pl->y - y;
+#ifdef DREAD_GAMEPLAY
+        if(World_Invisible()){dx+=(int16_t)((int16_t)rnd()-128);dy+=(int16_t)((int16_t)rnd()-128);}
+#endif
+        const int16_t d=approx_dist(dx,dy);
         const int32_t speed = kind == 1 ? 0x8C000 : 0x5D000;              /* 8.75 / 5.8 units per VBlank */
         p->x = a->x; p->y = a->y;
         p->vx = d ? (int32_t)(((int64_t)dx * speed) / d) : 0;
         p->vy = d ? (int32_t)(((int64_t)dy * speed) / d) : 0;
         p->z = map_sectors[sector_of_sub(a->sub)].floor + 32;
+        p->zfrac=0;int16_t ticks=d/(kind==1?9:6);if(ticks<1)ticks=1;p->vz=((int32_t)(pl->z-8-p->z)*256)/ticks;
         p->sub = a->sub; p->kind = kind; p->state = 0; p->tics = 0; p->frame = 0;
         return;
     }
@@ -262,6 +307,7 @@ static void spawn_ball(const Actor *a, const ActorPlayer *pl, uint8_t kind)
 
 static void attack(Actor *a, ActorPlayer *pl, int16_t dist)
 {
+    Game_Sound(a->kind<2?0:12);
     const KindInfo *k = &kinds[a->kind];
     const int seen = can_see(a, pl, 1);
     if (!seen) return;
@@ -270,7 +316,13 @@ static void attack(Actor *a, ActorPlayer *pl, int16_t dist)
     case A_SHOTGUN: {
         const uint8_t chance = dist < 128 ? 224 : dist < 512 ? 160 : 96;
         for (uint16_t n = k->attack == A_SHOTGUN ? 3 : 1; n; n--)
-            if (rnd() < chance) hurt_player(pl, (int16_t)(((rnd() % 5) + 1) * 3));
+            if (rnd() <
+#ifdef DREAD_GAMEPLAY
+                (World_Invisible()?chance/3:chance)
+#else
+                chance
+#endif
+                ) hurt_player(pl, (int16_t)(((rnd() % 5) + 1) * 3));
         break;
     }
     case A_IMP:   if (dist < MELEE) hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * 3)); else spawn_ball(a, pl, 0); break;
@@ -346,7 +398,24 @@ static void noise(uint16_t from)
     }
 }
 
-void Actors_Fire(const View *view, uint16_t pellets, uint16_t damage_mul)
+#ifdef DREAD_GAMEPLAY
+static void damage_barrel(uint16_t i,int16_t damage){Barrel *b=&barrels[i];if(b->state)return;b->hp-=damage;if(b->hp<=0){b->state=1;b->tics=6;b->frame=0;}}
+static void tick_barrels(ActorPlayer *pl){
+    for(uint16_t i=0;i<nbarrels;i++){
+        Barrel *b=&barrels[i];if(b->state!=1)continue;
+        if(b->tics && --b->tics)continue;
+        if(++b->frame==2){
+            const MapThing *t=&map_things[b->thing];int16_t z=map_sectors[map_subs[t->sub].sector].floor+24;Game_Sound(5);
+            for(uint16_t j=0;j<nactors;j++)if(actors[j].state<ST_DEATH){int16_t d=approx_dist((actors[j].x>>16)-t->x,(actors[j].y>>16)-t->y);if(d<128 && trace(t->x,t->y,actors[j].x>>16,actors[j].y>>16,z))damage_actor(&actors[j],128-d);}
+            for(uint16_t j=0;j<nbarrels;j++)if(!barrels[j].state){const MapThing *o=&map_things[barrels[j].thing];int16_t d=approx_dist(o->x-t->x,o->y-t->y);if(d<128 && trace(t->x,t->y,o->x,o->y,z))damage_barrel(j,128-d);}
+            int16_t d=approx_dist(pl->x-t->x,pl->y-t->y);if(d<128 && trace(t->x,t->y,pl->x,pl->y,z))hurt_player(pl,128-d);
+        }
+        if(b->frame>=5)b->state=2;else b->tics=6;
+    }
+}
+#endif
+
+static void fire_range(const View *view, uint16_t pellets, uint16_t damage_mul, uint16_t range)
 {
     const int16_t x = (int16_t)(view->x >> 16), y = (int16_t)(view->y >> 16);
     const uint16_t ang = view->angle >> 6;
@@ -356,7 +425,7 @@ void Actors_Fire(const View *view, uint16_t pellets, uint16_t damage_mul)
     ActorPlayer pl = { x, y, view->z, psub, 0, 0, 0 };
     for (; pellets; pellets--) {
         uint16_t target = 0xFFFF;
-        int32_t nearest = 2048;
+        int32_t nearest = range;
         for (uint16_t i = 0; i < nactors; i++) {
             const Actor *a = &actors[i];
             if (a->state >= ST_DEATH) continue;
@@ -370,8 +439,53 @@ void Actors_Fire(const View *view, uint16_t pellets, uint16_t damage_mul)
             if (!can_see(a, &pl, 1)) continue;
             target = i; nearest = depth;
         }
-        if (target != 0xFFFF) damage_actor(&actors[target], (int16_t)(damage_mul * ((rnd() % 3) + 1)));
+#ifdef DREAD_GAMEPLAY
+        uint16_t barrel=0xffff;
+        for(uint16_t i=0;i<nbarrels;i++)if(!barrels[i].state){
+            const MapThing *t=&map_things[barrels[i].thing];const int16_t dx=t->x-x,dy=t->y-y;
+            const int32_t depth=(m16(dx,c)+m16(dy,s))>>14,lat=(m16(dx,s)-m16(dy,c))>>14;
+            const int16_t z=map_sectors[map_subs[t->sub].sector].floor;
+            if(depth>0 && depth<nearest && iabs16(lat)<16 && view->z>=z && view->z<=z+64 && trace(x,y,t->x,t->y,z+24)){nearest=depth;barrel=i;}
+        }
+        if(barrel!=0xffff){damage_barrel(barrel,(damage_mul&0x8000)?(damage_mul&0x7fff):damage_mul*((rnd()%3)+1));continue;}
+#endif
+        if (target != 0xFFFF) damage_actor(&actors[target], (int16_t)((damage_mul&0x8000)?(damage_mul&0x7fff):damage_mul * ((rnd() % 3) + 1)));
     }
+}
+
+void Actors_Fire(const View *view,uint16_t pellets,uint16_t damage_mul){fire_range(view,pellets,damage_mul,2048);}
+void Actors_FireWeapon(const View *v,uint16_t weapon)
+{
+    if(weapon==0 || weapon==5){uint16_t damage=2*((rnd()%10)+1);
+#ifdef DREAD_GAMEPLAY
+        if(weapon==0 && World_Berserk())damage*=10;
+#endif
+        fire_range(v,1,0x8000|damage,84);return;}
+#ifdef DREAD_GAMEPLAY
+    if(weapon!=4)World_Shoot(v);
+#endif
+    if(weapon==2){
+        for(uint16_t i=0;i<7;i++){View shot=*v;shot.angle+=(int16_t)((int16_t)(rnd()&255)-128)*5;fire_range(&shot,1,5,2048);}return;
+    }
+    /* Rocket travel and splash use a player-owned projectile slot. */
+    if(weapon==4){
+        for(uint16_t i=0;i<MAXPROJ;i++)if(proj[i].kind==0xff){
+            Proj *p=&proj[i];const uint16_t a=v->angle>>6;
+            p->x=v->x;p->y=v->y;p->vx=(int32_t)sintab[(a+256)&1023]*80;p->vy=(int32_t)sintab[a]*80;
+            p->z=v->z-8;p->vz=p->zfrac=0;
+            int32_t nearest=2048;
+            for(uint16_t id=0;id<nactors;id++)if(actors[id].state<ST_DEATH){
+                Actor *o=&actors[id];int16_t dx=(o->x-v->x)>>16,dy=(o->y-v->y)>>16;
+                int32_t depth=(m16(dx,sintab[(a+256)&1023])+m16(dy,sintab[a]))>>14,lat=(m16(dx,sintab[a])-m16(dy,sintab[(a+256)&1023]))>>14;
+                int16_t z=map_sectors[sector_of_sub(o->sub)].floor+28;
+                if(depth>0 && depth<nearest && iabs16(lat)<(depth>160?depth>>3:20) && trace3(v->x>>16,v->y>>16,p->z,o->x>>16,o->y>>16,z)){
+                    nearest=depth;int16_t ticks=depth/20;if(ticks<1)ticks=1;p->vz=((int32_t)(z-p->z)*256)/ticks;
+                }
+            }
+            p->kind=3;p->state=0;p->tics=0;p->frame=0;p->sub=R_PointInSub(v->x>>16,v->y>>16);break;
+        }return;
+    }
+    fire_range(v,1,5,2048);
 }
 
 static void tick_proj(ActorPlayer *pl, uint16_t dt)
@@ -384,27 +498,54 @@ static void tick_proj(ActorPlayer *pl, uint16_t dt)
             if (++p->frame >= 3) { p->kind = 0xFF; continue; }
             p->tics = 6; continue;
         }
-        p->x += p->vx * dt; p->y += p->vy * dt;
+        /* Substeps prevent a fast projectile crossing a thin wall at low FPS. */
+        int wallhit=0;
+        for(uint16_t step=0;step<dt;step++) {
+            const int16_t ox=p->x>>16,oy=p->y>>16;
+            const int16_t oz=p->z;
+            p->x+=p->vx;p->y+=p->vy;p->zfrac+=p->vz;p->z+=p->zfrac>>8;p->zfrac&=255;
+            if(!trace3(ox,oy,oz,p->x>>16,p->y>>16,p->z)){wallhit=1;break;}
+            if(p->kind==3){
+                for(uint16_t id=0;id<nactors;id++)if(actors[id].state<ST_DEATH && approx_dist((actors[id].x-p->x)>>16,(actors[id].y-p->y)>>16)<24){
+                    damage_actor(&actors[id],20*((rnd()&7)+1));wallhit=1;break;
+                }
+                if(wallhit)break;
+            }
+        }
         const int16_t x = (int16_t)(p->x >> 16), y = (int16_t)(p->y >> 16);
         p->tics += (uint8_t)dt; if (p->tics > 7) { p->tics = 0; p->frame ^= 1; }
-        int boom = 0;
-        if (iabs16(x - pl->x) < 20 && iabs16(y - pl->y) < 20 && p->z >= pl->z - 48 && p->z <= pl->z + 16) {
+        int boom = wallhit;
+        if (p->kind!=3 && iabs16(x - pl->x) < 20 && iabs16(y - pl->y) < 20 && p->z >= pl->z - 48 && p->z <= pl->z + 16) {
             hurt_player(pl, (int16_t)(((rnd() & 7) + 1) * (p->kind == 1 ? 8 : p->kind == 2 ? 5 : 3)));
             boom = 1;
         } else {
             const int sub = R_PointInSub(x, y);
             const MapSector *sec = &map_sectors[map_subs[sub].sector];
             p->sub = (uint16_t)sub;
-            if (p->z < sec->floor || p->z + 8 > sec_ceil[map_subs[sub].sector] || ActorBlocked(x, y)) boom = 1;
+            if (p->z < sec->floor || p->z + 8 > sec_ceil[map_subs[sub].sector]) boom = 1;
+        }
+#ifdef DREAD_GAMEPLAY
+        for(uint16_t bi=0;bi<nbarrels;bi++)if(!barrels[bi].state){const MapThing *t=&map_things[barrels[bi].thing];if(approx_dist(x-t->x,y-t->y)<16){damage_barrel(bi,20);boom=1;}}
+#endif
+        if (boom && p->kind==3) {
+            for(uint16_t id=0;id<nactors;id++)if(actors[id].state<ST_DEATH){
+                const int16_t d=approx_dist((actors[id].x-p->x)>>16,(actors[id].y-p->y)>>16);
+                if(d<128 && trace(x,y,actors[id].x>>16,actors[id].y>>16,p->z))damage_actor(&actors[id],128-d);
+            }
+            const int16_t d=approx_dist(x-pl->x,y-pl->y);if(d<128)hurt_player(pl,128-d);
+            Game_Sound(5);
         }
         if (boom) { p->state = 1; p->frame = 0; p->tics = 6; }
     }
 }
 
-void Actors_Tick(ActorPlayer *pl, uint16_t dt)
+static void actors_step(ActorPlayer *pl, uint16_t dt)
 {
     tick_no++;
-    sight_budget = 3;
+#ifdef DREAD_GAMEPLAY
+    tick_barrels(pl);
+#endif
+
     pl->hurt = 0;
     for (uint16_t i = 0; i < nactors; i++) {
         Actor *a = &actors[i];
@@ -438,9 +579,36 @@ void Actors_Tick(ActorPlayer *pl, uint16_t dt)
         }
     }
     tick_proj(pl, dt);
+    for(uint16_t i=0;i<32;i++)if(drops[i].active && approx_dist(drops[i].x-pl->x,drops[i].y-pl->y)<24 && iabs16(map_sectors[map_subs[drops[i].sub].sector].floor-(pl->z-41))<24){
+        if(drops[i].type)combat_drop_shotgun++;else combat_drop_ammo+=5;drops[i].active=0;Game_Sound(6);
+    }
+}
+
+void Actors_Tick(ActorPlayer *pl,uint16_t dt)
+{
+    sight_budget=3;
+    for(uint16_t tick=0;tick<dt;tick++)actors_step(pl,1);
 }
 
 /* sprite of a monster seen from the camera: rotation from the camera's direction relative to its facing */
+int Actors_PlayerBlocked(int16_t x,int16_t y,int16_t z)
+{
+#ifdef DREAD_GAMEPLAY
+    if(scenery_blocked(x,y,z))return 1;
+#endif
+    for(uint16_t i=0;i<nactors;i++){
+        const Actor *a=&actors[i];if(a->state>=ST_DEATH)continue;
+        const int16_t floor=map_sectors[map_subs[a->sub].sector].floor;
+        if(z-41>=floor+56 || z+15<=floor)continue;
+        const int32_t dx=(a->x>>16)-x,dy=(a->y>>16)-y;
+        const int16_t radius=a->kind==3 || a->kind==4?44:36;
+        if(dx*dx+dy*dy<(int32_t)radius*radius)return 1;
+    }return 0;
+}
+uint16_t Actors_BossDone(void)
+{
+    uint16_t found=0;for(uint16_t i=0;i<nactors;i++)if(actors[i].kind==6){found=1;if(actors[i].state<ST_DEATH)return 0;}return found;
+}
 void Actors_Draw(uint16_t sub)
 {
     extern int16_t r_view_xi, r_view_yi;
@@ -459,11 +627,22 @@ void Actors_Draw(uint16_t sub)
         const MapSector *sec = &map_sectors[sector_of_sub(a->sub)];
         R_AddSprite(x, y, sec->floor, spr, flip, sec);
     }
+#ifdef DREAD_GAMEPLAY
+    for(uint16_t i=0;i<nbarrels;i++){
+        const Barrel *b=&barrels[i];const MapThing *t=&map_things[b->thing];if(t->sub!=sub || b->state==2)continue;
+        const MapSector *sec=&map_sectors[map_subs[sub].sector];
+        R_AddSprite(t->x,t->y,sec->floor,b->state?map_fx[14+b->frame]:t->sprite,0,sec);
+    }
+#endif
+    for(uint16_t i=0;i<32;i++)if(drops[i].active && drops[i].sub==sub){
+        R_AddSprite(drops[i].x,drops[i].y,map_sectors[map_subs[sub].sector].floor,map_fx[drops[i].type?12:13],0,&map_sectors[map_subs[sub].sector]);
+    }
     for (uint16_t k = 0; k < MAXPROJ; k++) {
         const Proj *p = &proj[k];
         if (p->kind == 0xFF || p->sub != sub) continue;
         uint16_t spr;
-        if (p->state) spr = map_fx[2 + p->frame];
+        if (p->kind==3) spr=map_fx[p->state?9+p->frame:8];
+        else if (p->state) spr = map_fx[2 + p->frame];
         else spr = p->kind == 1 ? map_fx[5 + p->frame] : p->kind == 2 ? map_fx[7] : map_fx[p->frame];
         if (spr == 0xFFFF) spr = map_fx[p->frame & 1];
         R_AddSprite((int16_t)(p->x >> 16), (int16_t)(p->y >> 16), p->z, spr, 0, &map_sectors[sector_of_sub(p->sub)]);

@@ -25,6 +25,11 @@ static inline void HUD_SetLayout(uint16_t col0, int16_t dx) { (void)col0; (void)
 #else
 void HUD_Opening(void);
 void HUD_ShowOpening(void);
+#ifdef DREAD_GAMEPLAY
+void HUD_WeaponInvisible(uint16_t on);
+void HUD_ShowArt(uint16_t page);
+void HUD_ShowFinaleText(void);
+#endif
 void HUD_ClearOpening(void);
 void HUD_Init(uint16_t row0);
 void HUD_Draw(const HudState *st);

@@ -1,0 +1,2 @@
+from qa_support import *
+g=fixture(7);warp(g,-128,-224,0);g.e.step(40);g.e.step(40,0);g.e.step(180);print('floor targets',g.raw('floor_target')[:24].hex(),flush=True);g.e.step(90,4,capture=True);print('down',struct.unpack('>iihH',g.raw('view',12)),flush=True);g.shot('E1M8-descended');warp(g,150,-224,180);g.e.step(40);g.e.step(60,4,capture=True);print('up',struct.unpack('>iihH',g.raw('view',12)),flush=True);g.shot('E1M8-up-stairs');g.e.close()

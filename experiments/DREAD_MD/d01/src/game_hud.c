@@ -115,6 +115,26 @@ static int16_t bob_x, bob_y;
 static uint16_t txt_nt[2][40];
 static volatile uint8_t txt_dirty;
 
+#ifdef DREAD_GAMEPLAY
+extern const uint16_t weap_frame_refs[];
+static uint32_t weapon_frame[160*8];
+static uint16_t weapon_refs[160];
+static volatile int16_t weapon_pending = -1;
+static int16_t weapon_next=-1,weapon_last=4;
+static uint16_t weapon_pos,weapon_fuzz,weapon_fuzz_request;
+void HUD_WeaponInvisible(uint16_t on){
+    weapon_fuzz_request=on;
+    if(weapon_pending<0 && weapon_fuzz!=on)HUD_WeaponFrame(weapon_last<0?4:weapon_last);
+}
+static void weapon_unpack(uint16_t f)
+{
+    const uint16_t *refs = weap_frame_refs + f * 160;
+    for (uint16_t i=0;i<160;i++){
+        memcpy(weapon_frame+i*8,weap_data+(uint32_t)refs[i]*8,32);
+        if(weapon_fuzz)for(uint16_t row=0;row<8;row++)weapon_frame[i*8+row]&=(row&1)?0x0f0f0f0fUL:0xf0f0f0f0UL;
+    }
+}
+#endif
 void HUD_Init(uint16_t row0)
 {
     hud_row0 = row0;
@@ -127,10 +147,22 @@ void HUD_Init(uint16_t row0)
 #ifdef DREAD_EPISODE
     for (uint16_t i = 0; i < HUDW_NTILES; i++)
         vram_copy32(TILE_HUD + i, image_tiles + (uint32_t)hudw_tiles_refs[i] * 8, 1);
+#ifdef DREAD_GAMEPLAY
+    weapon_unpack(4);
+    vram_copy32(TILE_WEAP, weapon_frame, weap_tiles);
+    memcpy(weapon_refs, weap_frame_refs+160*4, sizeof(weapon_refs));
+#else
     vram_copy32(TILE_WEAP, weap_data, weap_tiles);
+#endif
 #else
     vram_copy32(TILE_HUD, &hudw_tiles[0][0], HUDW_NTILES);
+#ifdef DREAD_GAMEPLAY
+    weapon_unpack(4);
+    vram_copy32(TILE_WEAP, weapon_frame, weap_tiles);
+    memcpy(weapon_refs, weap_frame_refs+160*4, sizeof(weapon_refs));
+#else
     vram_copy32(TILE_WEAP, weap_data, weap_tiles);
+#endif
 #endif
     /* weapon sprites: one entry per piece, linked */
     vram_addr(SLIST);
@@ -148,6 +180,9 @@ void HUD_Init(uint16_t row0)
 
 void HUD_Draw(const HudState *st)
 {
+#ifdef DREAD_GAMEPLAY
+    if(weapon_pending<0 && weapon_next>=0){uint16_t f=weapon_next;weapon_next=-1;HUD_WeaponFrame(f);}
+#endif
     uint16_t rows[4][32];
     for (int r = 0; r < 4; r++) for (int c = 0; c < 32; c++) rows[r][c] = hudw_bgmap[r][c];
     const uint16_t vals[3] = { st->ammo_cur, st->health, st->armor };
@@ -200,7 +235,17 @@ void HUD_WeaponFrame(uint16_t f)
 {
 #ifdef DREAD_EPISODE
 #endif
+#ifdef DREAD_GAMEPLAY
+    if(f>=24)return;
+    if(weapon_pending>=0){weapon_next=f;return;}
+    if(weapon_fuzz!=weapon_fuzz_request){weapon_fuzz=weapon_fuzz_request;weapon_last=-1;for(uint16_t i=0;i<160;i++)weapon_refs[i]=0xffff;}
+    if(weapon_last==(int16_t)f)return;
+    weapon_unpack(f);weapon_last=f;
+    weapon_pos = 0;
+    weapon_pending = (int16_t)f;
+#else
     weap_req = (int16_t)f;
+#endif
 }
 void HUD_WeaponBob(int16_t dx, int16_t dy) { bob_x = dx; bob_y = dy; sat_dirty = 1; }
 
@@ -217,11 +262,29 @@ void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26
 uint16_t HUD_VBlank(void)    /* returns the bytes sent by DMA (the caller keeps the VBlank DMA budget) */
 {
     uint16_t bytes = 0;
+#ifdef DREAD_GAMEPLAY
+    if (weapon_pending >= 0) {
+        const uint16_t *refs=weap_frame_refs+(uint16_t)weapon_pending*160;
+        uint16_t budget=64; /* at most 2 KiB before HUD/face/framebuffer */
+        while (weapon_pos<160 && budget) {
+            if (weapon_refs[weapon_pos]==refs[weapon_pos]) { weapon_pos++; continue; }
+            const uint16_t start=weapon_pos;
+            while (weapon_pos<160 && budget && weapon_refs[weapon_pos]!=refs[weapon_pos]) {
+                weapon_refs[weapon_pos]=refs[weapon_pos]; weapon_pos++; budget--;
+            }
+            const uint16_t n=weapon_pos-start;
+            DMA_doDma(DMA_VRAM,weapon_frame+start*8,(TILE_WEAP+start)*32,n*16,2);
+            bytes+=n*32;
+        }
+        if (weapon_pos==160) weapon_pending=-1;
+    }
+#else
     if (weap_req >= 0) {
         const uint16_t f = (uint16_t)weap_req; weap_req = -1;
         DMA_doDma(DMA_VRAM, (void *)(weap_data + (uint32_t)f * weap_tiles * 8), TILE_WEAP * 32, weap_tiles * 16, 2);
         bytes += weap_tiles * 32;
     }
+#endif
     if (face_dirty) {
         face_dirty = 0;
         bytes += 512;
@@ -258,3 +321,41 @@ void HUD_SetLayout(uint16_t col0, int16_t dx)
     for (int r = 0; r < 4; r++) { vram_addr(BGB + (hud_row0 + r) * 128); for (int i = 0; i < 64; i++) vram_w(0); }
     hud_dirty = 1; sat_dirty = 1;
 }
+
+#ifdef DREAD_GAMEPLAY
+extern const uint16_t ending_refs[],ending_attrs[],ending_pal[],finale_pal[],finale_nlines;
+extern const uint32_t ending_tiles[],finale_tiles[];
+extern const char *const finale_lines[];
+static void static_screen(void)
+{
+    VDP_setEnable(FALSE);VDP_setScreenWidth320();VDP_setHilightShadow(FALSE);
+    *(volatile uint16_t *)0xC00004=0x8200|(BGA>>10);
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
+    VDP_setHorizontalScroll(BG_A,0);VDP_setHorizontalScroll(BG_B,0);
+    VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,0);
+    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
+    VDP_setAutoInc(2);vram_addr(SLIST);for(uint16_t i=0;i<4;i++)vram_w(0);
+}
+void HUD_ShowArt(uint16_t page)
+{
+    if(page>=3)return;SYS_disableInts();static_screen();
+    cram_set(0,ending_pal+page*64,64);
+    for(uint16_t i=0;i<1120;i++)vram_copy32(TILE_TITLE+i,ending_tiles+(uint32_t)ending_refs[page*1120+i]*8,1);
+    for(uint16_t y=0;y<28;y++){
+        vram_addr(BGB+y*128);
+        for(uint16_t x=0;x<40;x++)vram_w(ending_attrs[page*1120+y*40+x]|(TILE_TITLE+y*40+x));
+    }
+    VDP_setEnable(TRUE);SYS_enableInts();
+}
+void HUD_ShowFinaleText(void)
+{
+    SYS_disableInts();static_screen();cram_set(0,finale_pal,16);
+    const uint16_t white=0xeee;cram_set(63,&white,1);
+    vram_copy32(TILE_TITLE,finale_tiles,64);
+    for(uint16_t y=0;y<28;y++){vram_addr(BGB+y*128);for(uint16_t x=0;x<40;x++)vram_w(TILE_TITLE+(y&7)*8+(x&7));}
+    VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
+    for(uint16_t i=0;i<finale_nlines;i++)VDP_drawTextBG(BG_A,finale_lines[i],2,3+i);
+    VDP_drawTextBG(BG_A,"APERTE QUALQUER BOTAO",8,25);
+    VDP_setEnable(TRUE);SYS_enableInts();
+}
+#endif

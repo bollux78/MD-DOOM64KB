@@ -13,6 +13,11 @@
  * Portable C: the same file builds for the Mega Drive and for the host test harness. */
 #include "render.h"
 #include "actors.h"
+#ifdef DREAD_GAMEPLAY
+#include "levelmeta.h"
+const uint8_t *const *r_mask_table;
+uint16_t r_fullbright,r_scroll;
+#endif
 
 #define NEAR4 16                   /* near plane, map units * 4 (= 4 units) */
 uint16_t r_fullheight;
@@ -27,6 +32,9 @@ uint16_t r_ash = 4;                /* log2 of the columns between perspective-co
 int16_t sec_ceil[MAP_NSECTORS];
 #else
 int16_t sec_ceil[256];
+#endif
+#if defined(DREAD_GAMEPLAY) || defined(DREAD_OPEN_PVS)
+MapSector runtime_sectors[MAP_NSECTORS];
 #endif
 RenderStats rstats;
 #ifdef PVS_GEN
@@ -230,7 +238,15 @@ void R_Init(void)
 #if !(defined(__m68k__) || defined(__mc68000__))
     for (int z = 16; z < 1024; z++) { const uint32_t r = (1UL << 20) / (uint32_t)z; RCP4[z] = r > 65535 ? 65535 : (uint16_t)r; }
 #endif
-    for (int i = 0; i < map_counts[4]; i++) sec_ceil[i] = map_sectors_init[i].ceil;
+    for (int i = 0; i < map_counts[4]; i++) {
+        sec_ceil[i] = map_sectors_init[i].ceil;
+#if defined(DREAD_GAMEPLAY) || defined(DREAD_OPEN_PVS)
+        runtime_sectors[i]=map_sectors_init[i];
+#endif
+#ifdef DREAD_OPEN_PVS
+        runtime_sectors[i].floor=0;sec_ceil[i]=512;
+#endif
+    }
     for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF;
 }
 
@@ -580,6 +596,9 @@ static inline int32_t lstep(int32_t a, int32_t b, int16_t rcp)
     return d < 0 ? -(int32_t)udiv32_16((uint32_t)-d, n) : (int32_t)udiv32_16((uint32_t)d, n);
 }
 
+#if defined(DREAD_GAMEPLAY) && !defined(PVS_GEN)
+static void queue_mask(const MapSeg *s,int xs,int xe,int32_t iz,int32_t diz,int32_t uz,int32_t duz);
+#endif
 static int32_t ds_t1, ds_t2;
 __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1, int16_t z1, int16_t x2, int16_t z2,
                                                     int32_t sx1, int32_t sx2, int xs, int xe, int c);
@@ -631,16 +650,27 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
     const MapSector *fs = &map_sectors[s->front];
     const MapSector *bs = (s->back != NO_MAP_SECTOR) ? &map_sectors[s->back] : 0;
     const int16_t fceil = sec_ceil[s->front], bceil = bs ? sec_ceil[s->back] : 0;
-    const uint8_t bucket = fs->bucket;
+    const uint8_t bucket =
+#ifdef DREAD_GAMEPLAY
+        r_fullbright?0:
+#endif
+        fs->bucket;
 
     /* inverse depth (2^24 / z4) and u (half texels) at both ends */
     const int32_t iz1 = inv_z(z1), iz2 = inv_z(z2);
     /* textured at all? (portals without upper/lower parts skip u entirely) */
-    const int ntex = bs ? ((bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) || (bs->floor > fs->floor && s->lower != 0xFF))
+    const int ntex = bs ? ((bceil < fceil && !(fs->sky && bs->sky) && s->upper != 0xFF) || (bs->floor > fs->floor && s->lower != 0xFF)
+#ifdef DREAD_GAMEPLAY
+                         || s->mid != 0xFF
+#endif
+                         )
                         : (s->mid != 0xFF);
     int32_t uz1 = 0, uz2 = 0;
     if (ntex) {
         int32_t u1 = s->xoff, u2 = s->xoff + s->len;
+#ifdef DREAD_GAMEPLAY
+        if(s->flags&8){u1+=r_scroll;u2+=r_scroll;}
+#endif
         if (t1) u1 += (int32_t)(((int64_t)s->len * t1) >> 16);
         if (t2 != 65536) u2 = s->xoff + (int32_t)(((int64_t)s->len * t2) >> 16);
         u1 >>= 1; u2 >>= 1;
@@ -689,7 +719,11 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
             yrows(bf, iz, diz, &Ybf, &dYbf);
         }
     }
-    const int need_tex = has_mid | has_up | has_lo;
+    const int need_tex = has_mid | has_up | has_lo
+#ifdef DREAD_GAMEPLAY
+        | (bs && s->mid!=0xff)
+#endif
+        ;
 #ifdef DREAD_NATIVE_PERSPECTIVE
     r_ash = COLB == 1 ? 0 : 3;  /* native rational U; retain old column-doubled path */
 #endif
@@ -716,6 +750,9 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
 #endif
     }
 
+#if defined(DREAD_GAMEPLAY) && !defined(PVS_GEN)
+    if(bs && s->mid!=0xff)queue_mask(s,xs,xe,iz,diz,uz,duz);
+#endif
     /* phase B: clip, fill, texture and close, column by column (68000: colasm.s) */
     job.fb = rfb; job.c0 = (int16_t)c; job.xe = (int16_t)xe;
     job.ccol = fs->ceilcol; job.fcol = fs->floorcol;
@@ -739,12 +776,19 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
  * nearer walls. After the walls, sprites are drawn far to near inside their saved windows.        */
 #ifndef PVS_GEN
 #define MAXVIS 32
+#ifdef DREAD_GAMEPLAY
+#define WINPOOL 6144
+#else
 #define WINPOOL 2048
+#endif
 typedef struct {
     int16_t x0, x1, w2, htop;        /* columns [x0, x1), half width, world height of the top */
     uint16_t flip;                   /* mirrored (rotations 6-8 drawn from 4-2) */
     int32_t u0, du, iz, zpp, z4;     /* source pixel (16.16) at x0 and per column, inverse depth, texels per row */
     const uint8_t *tab;              /* column table of the light bucket */
+#ifdef DREAD_GAMEPLAY
+    int16_t maskid;
+#endif
     uint16_t win;                    /* offset in winpool: ceil[n] then floor[n] */
 } VisSpr;
 static VisSpr vis[MAXVIS];
@@ -754,6 +798,59 @@ extern void spr_scale(uint8_t *dst_m4, const uint8_t *src, int16_t n, uint16_t z
 static uint8_t vorder[MAXVIS];
 static uint16_t nvis, winused;
 static uint8_t winpool[WINPOOL];
+#ifdef DREAD_GAMEPLAY
+#define MAXMASK 8
+typedef struct { Part part; int32_t iz,diz,uz,duz; int16_t xs,realh; const uint8_t *mask; } MaskWall;
+static MaskWall masked[MAXMASK];
+static uint16_t nmasked;
+static int16_t sprite_column=-1;
+volatile uint16_t r_mask_dropped;
+static void queue_mask(const MapSeg *s,int xs,int xe,int32_t iz,int32_t diz,int32_t uz,int32_t duz)
+{
+    if(nmasked>=MAXMASK || nvis>=MAXVIS || winused+2*(xe-xs)>WINPOOL){r_mask_dropped++;return;}
+    MaskWall *m=&masked[nmasked];const MapSector *f=&map_sectors[s->front],*b=&map_sectors[s->back];
+    const int16_t floor=f->floor>b->floor?f->floor:b->floor;
+    const int16_t ceil=sec_ceil[s->front]<sec_ceil[s->back]?sec_ceil[s->front]:sec_ceil[s->back];
+    const int16_t top=(s->flags&2)?floor+map_tex[s->mid].realh:ceil;
+    setup_part(&m->part,s->mid,f->bucket,top,s->yoff,top,0);
+    m->iz=iz;m->diz=diz;m->uz=uz;m->duz=duz;m->xs=xs;m->realh=map_tex[s->mid].realh;
+    m->mask=r_mask_table?r_mask_table[s->mid]:0;
+    VisSpr *v=&vis[nvis++];v->maskid=nmasked++;v->x0=xs;v->x1=xe;v->win=winused;
+    v->z4=z4_of(iz);const int n=xe-xs;
+    for(int k=0;k<n;k++){
+        const int32_t q=iz+mul32k(diz,k);int t=ceil16(yrow(ceil-view_z,q)),bot=ceil16(yrow(floor-view_z,q));
+        if(t<ceilclip[xs+k])t=ceilclip[xs+k];if(bot>floorclip[xs+k])bot=floorclip[xs+k];
+        if(t<0)t=0;if(t>VIEW_H)t=VIEW_H;if(bot<0)bot=0;if(bot>VIEW_H)bot=VIEW_H;
+        winpool[winused+k]=t;winpool[winused+n+k]=bot;
+    }
+    winused+=2*n;
+}
+static void draw_mask_column(const VisSpr *v,int x)
+{
+    const MaskWall *m=&masked[v->maskid];const int k=x-v->x0,n=v->x1-v->x0;
+    const int top=winpool[v->win+k],bot=winpool[v->win+n+k];if(top>=bot)return;
+    const int32_t iz=m->iz+mul32k(m->diz,k),uz=m->uz+mul32k(m->duz,k);
+    const uint16_t u=u_of((uint32_t)(uz>0?uz:0)<<8,iz>0?iz:1)&m->part.wmask;
+    const uint8_t *tc=texture_column(&m->part,u);uint8_t *col=FB_COL(rfb,x);
+    const uint16_t H=m->part.hmask+1;
+#if defined(__m68k__) && defined(DREAD_NATIVE_PERSPECTIVE)
+    extern const uint8_t native_zq72[],native_zq144[];
+    extern const int16_t *const native_offsets_b[],*const native_offsets_f[];
+    const int16_t *offset=0;
+    if(COLB==1){uint32_t idx=(uint32_t)iz>>5;if(idx>32767)idx=32767;uint16_t q=(VIEW_H==72?native_zq72:native_zq144)[idx];offset=(VIEW_H==72?native_offsets_b:native_offsets_f)[q];}
+#else
+    const int16_t *offset=0;
+#endif
+    const int32_t step=zpp_of(z4_of(iz));
+    for(int y=top;y<bot;y++){
+        const int32_t tex=offset?(m->part.vbase16>>16)+offset[y]:(m->part.vbase16-mul32k(step,HORIZON-y))>>16;
+        if(tex<0 || tex>=m->realh)continue;
+        const uint32_t bit=(uint32_t)u*H+(uint16_t)tex;
+        if(m->mask && !(m->mask[bit>>3]&(1u<<(bit&7))))continue;
+        col[y*4]=tc[tex];if(COLB==2)col[y*4+1]=tc[tex];
+    }
+}
+#endif
 
 /* x, y map position, zb world height of the sprite's bottom, light from sector sec */
 void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t flip, const MapSector *sec)
@@ -772,12 +869,19 @@ void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t fli
     const int n = xb - xa;
     if (winused + 2 * n > WINPOOL) return;
     VisSpr *v = &vis[nvis];
+#ifdef DREAD_GAMEPLAY
+    v->maskid=-1;
+#endif
     v->x0 = (int16_t)xa; v->x1 = (int16_t)xb; v->w2 = sp->w2; v->flip = flip;
     v->htop = zb + sp->topoff;
     v->du = (int32_t)(((uint32_t)z4 << 14) / (uint32_t)FOCAL);           /* source pixels per column */
     v->u0 = (int32_t)(((int64_t)(((int32_t)xa << 16) - sxl) * v->du) >> 16);
     v->iz = inv_z(z4); v->zpp = zpp_of((uint16_t)z4); v->z4 = z4;
-    v->tab = spr_blob + sp->off[sec->bucket];
+    v->tab = spr_blob + sp->off[
+#ifdef DREAD_GAMEPLAY
+        r_fullbright?0:
+#endif
+        sec->bucket];
     v->win = winused;
     for (int k = 0; k < n; k++) { winpool[winused + k] = ceilclip[xa + k]; winpool[winused + n + k] = floorclip[xa + k]; }
     winused += (uint16_t)(2 * n);
@@ -786,6 +890,9 @@ void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t fli
 
 static void project_thing(const MapThing *t)
 {
+#ifdef DREAD_GAMEPLAY
+    if((t->flags>>8)==80)return; /* barrels have mutable animation in Actors_Draw */
+#endif
     const MapSector *sec = &map_sectors[map_subs[t->sub].sector];
     R_AddSprite(t->x, t->y, sec->floor, t->sprite, 0, sec);
 }
@@ -810,7 +917,11 @@ static void draw_sprite(const VisSpr *v)
     int32_t b = v->iz >> 5; if (b > 32767) b = 32767;
     const uint32_t K = (uint32_t)muls16((int16_t)VFOCAL, (int16_t)b) >> 1;
     const uint16_t Klo = (uint16_t)K, Khi = (uint16_t)(K >> 16);
-    for (int k = 0; k < n; k++, u += v->du) {
+    int k0=0,k1=n;
+#ifdef DREAD_GAMEPLAY
+    if(sprite_column>=0){k0=sprite_column-v->x0;k1=k0+1;u+=mul32k(v->du,k0);}
+#endif
+    for (int k = k0; k < k1; k++, u += v->du) {
         int j = (u >> 16) >> 1;
         if (j < 0 || j >= v->w2) continue;
         if (v->flip) j = v->w2 - 1 - j;
@@ -849,6 +960,25 @@ static void draw_sprite(const VisSpr *v)
 
 static void draw_things(void)
 {
+#ifdef DREAD_GAMEPLAY
+    if(nmasked){
+        /* Per-column ordering: an oblique grate can be in front of a sprite on
+         * one side and behind it on the other. Centre-depth sorting is insufficient. */
+        for(int x=0;x<VIEW_W;x++){
+            uint8_t order[MAXVIS];uint16_t depth[MAXVIS],count=0;
+            for(uint16_t i=0;i<nvis;i++){
+                const VisSpr *v=&vis[i];if(x<v->x0 || x>=v->x1)continue;
+                uint16_t z=v->z4;
+                if(v->maskid>=0){const MaskWall *m=&masked[v->maskid];z=z4_of(m->iz+mul32k(m->diz,x-m->xs));}
+                int pos=count;while(pos>0 && depth[pos-1]<z){depth[pos]=depth[pos-1];order[pos]=order[pos-1];pos--;}
+                depth[pos]=z;order[pos]=i;count++;
+            }
+            sprite_column=x;
+            for(uint16_t i=0;i<count;i++){const VisSpr *v=&vis[order[i]];if(v->maskid>=0)draw_mask_column(v,x);else draw_sprite(v);}
+        }
+        sprite_column=-1;return;
+    }
+#endif
     for (int i = 0; i < nvis; i++) {           /* far to near (insertion sort on depth) */
         int k = i;
         while (k > 0 && vis[vorder[k - 1]].z4 < vis[i].z4) { vorder[k] = vorder[k - 1]; k--; }
@@ -1021,6 +1151,9 @@ void R_RenderView(const View *v, uint8_t *fb)
 #endif
 #ifndef PVS_GEN
     nvis = 0; winused = 0;
+#ifdef DREAD_GAMEPLAY
+    nmasked=0;sprite_column=-1;
+#endif
 #endif
     render_node(map_counts[3] - 1);
 #ifndef PVS_GEN

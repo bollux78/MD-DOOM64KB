@@ -30,6 +30,8 @@ if [[ ${5:-} == --geometry-only ]]; then
     geometry_flag=-DDREAD_GEOMETRY_ONLY
     rm "$stage/src/game_hud.c"
 fi
+pvs_flags=
+if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then pvs_flags=-DDREAD_OPEN_PVS; fi
 render_flags="-DDREAD_NO_MUSIC -DSTART_MUSIC=0"
 title_flags="-DDREAD_TEXT_TITLE"
 if [[ "$map" == EPISODE ]]; then
@@ -38,10 +40,21 @@ if [[ "$map" == EPISODE ]]; then
     if [[ ${DREAD_COMBAT:-0} == 1 ]]; then render_flags+=" -DDREAD_COMBAT"; fi
     levels=()
     if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
-        for n in {1..9}; do levels+=("$DREAD_PREPARED_MAPS/E1M$n"); done
+        for n in {1..9}; do
+            if [[ ${DREAD_GAMEPLAY:-0} == 1 ]] && ! grep -q 'map_fx\[19\]' "$DREAD_PREPARED_MAPS/E1M$n/mapdata.c"; then
+                echo "Prepared map E1M$n predates gameplay schema; regenerate with current conv.py" >&2; exit 1
+            fi
+            if [[ ${DREAD_GAMEPLAY:-0} == 1 ]] && ! grep -q DREAD_OPEN_PVS "$DREAD_PREPARED_MAPS/E1M$n/pvs.c"; then
+                echo "Prepared PVS E1M$n lacks open-world visibility; regenerate with -DDREAD_OPEN_PVS" >&2; exit 1
+            fi
+            levels+=("$DREAD_PREPARED_MAPS/E1M$n")
+        done
     else
         palette="$stage/palette.json"
         mkdir -p "$stage/palette"
+        if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
+            cp "$source_dir/tools/gameplay_palette.json" "$palette"
+        else
         # one palette for the whole episode: colour samples of every map (walls, flats, sky, sprites), one fit
         samples=()
         for n in {1..9}; do
@@ -49,10 +62,11 @@ if [[ "$map" == EPISODE ]]; then
             samples+=("$stage/palette/E1M$n.npz")
         done
         python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
+        fi
         for n in {1..9}; do
             level="$stage/E1M$n"
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
-            cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
+            cc -O2 -DPVS_GEN $pvs_flags -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
                "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
             "$level/pvsgen" "$level/pvs.c"
             levels+=("$level")
@@ -64,7 +78,7 @@ if [[ "$map" == EPISODE ]]; then
     title_flags=
 else
     python3 "$source_dir/tools/conv.py" "$wad" "$map" "$stage/src" "${convert_flags[@]}"
-    cc -O2 -DPVS_GEN -DDREAD_ROW_ONLY -I"$stage/src" -o "$stage/pvsgen" \
+    cc -O2 -DPVS_GEN $pvs_flags -DDREAD_ROW_ONLY -I"$stage/src" -o "$stage/pvsgen" \
        "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$stage/src/mapdata.c"
     "$stage/pvsgen" "$stage/src/pvs.c"
 fi
@@ -75,6 +89,11 @@ if [[ -z "$geometry_flag" ]]; then
     if [[ "$map" == EPISODE ]]; then
         python3 "$source_dir/tools/pack_tiles.py" "$stage/src/hud_assets.h" "$stage/src/weapon.c" "$stage/src/image_tiles.h"
     fi
+fi
+if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
+    python3 "$source_dir/tools/gen_gameplay_assets.py" "$wad" "$stage/src"
+    python3 "$source_dir/tools/gen_ending.py" "$wad" "$stage/src"
+    render_flags+=" -DDREAD_GAMEPLAY"
 fi
 python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 gen_c="$stage/src/episode.c"; [[ -f "$gen_c" ]] || gen_c="$stage/src/mapdata.c"
