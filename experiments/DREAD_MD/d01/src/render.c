@@ -62,39 +62,7 @@ extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets pe
 extern const uint16_t pvs_nbytes, pvs_sbytes;
 #endif
 static const uint8_t *pv_n, *pv_s;
-#if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
-/* Conservative Ferret-inspired stream: PVS-filtered BSP leaf order.
- * Only cached for the EXACT integer camera position and subsector from
- * which it was generated. Move -> regenerate; overflow -> original BSP.
- * Never reuse a stream from a different point in the same subsector:
- * front/back ordering can change at BSP partition boundaries. */
-#define CELL_STREAM_MAX 1024
-static uint16_t cell_stream[CELL_STREAM_MAX];
-static uint16_t cell_stream_len, cell_stream_sub = 0xffff;
-static int16_t cell_stream_x, cell_stream_y;
-static uint16_t cell_stream_overflow;
-volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
-volatile uint16_t cell_stream_last_len;
-/* No bounding-box/angle culling at stream creation: a camera turn at
- * unchanged position must not omit new visible walls or sprites. */
-static void cell_stream_collect(uint16_t n)
-{
-    if (cell_stream_overflow) return;
-    const uint16_t k = n & 0x7fff;
-    if (n & 0x8000) {
-        if (!(pv_s[k >> 3] & (1 << (k & 7)))) return;
-        if (cell_stream_len == CELL_STREAM_MAX) { cell_stream_overflow = 1; return; }
-        cell_stream[cell_stream_len++] = k;
-        return;
-    }
-    if (!(pv_n[k >> 3] & (1 << (k & 7)))) return;
-    const MapNode *nd = &map_nodes[k];
-    const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
-    const int side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
-    cell_stream_collect(nd->child[side]);
-    cell_stream_collect(nd->child[side ^ 1]);
-}
-#endif
+
 int r_pvs_off;   /* host checks only */
 static const uint8_t pv_all[1024] = {[0 ... 1023] = 0xFF};
 #endif
@@ -186,6 +154,40 @@ static void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_
 static void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t v, int32_t negstep)
 { p += (n - 1) * 4; for (; n; n--) { p[0] = tc[(uint16_t)(v >> 16)]; if (COLB == 2) p[1] = p[0]; p -= 4; v += negstep; } }
 #endif
+#if defined(DREAD_CELL_STREAM) && !defined(PVS_GEN)
+/* Conservative Ferret-inspired stream: PVS-filtered BSP leaf order.
+ * Only cached for the EXACT integer camera position and subsector from
+ * which it was generated. Move -> regenerate; overflow -> original BSP.
+ * Never reuse a stream from a different point in the same subsector:
+ * front/back ordering can change at BSP partition boundaries. */
+#define CELL_STREAM_MAX 1024
+static uint16_t cell_stream[CELL_STREAM_MAX];
+static uint16_t cell_stream_len, cell_stream_sub = 0xffff;
+static int16_t cell_stream_x, cell_stream_y;
+static uint16_t cell_stream_overflow;
+volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
+volatile uint16_t cell_stream_last_len;
+/* No bounding-box/angle culling at stream creation: a camera turn at
+ * unchanged position must not omit new visible walls or sprites. */
+static void cell_stream_collect(uint16_t n)
+{
+    if (cell_stream_overflow) return;
+    const uint16_t k = n & 0x7fff;
+    if (n & 0x8000) {
+        if (!(pv_s[k >> 3] & (1 << (k & 7)))) return;
+        if (cell_stream_len == CELL_STREAM_MAX) { cell_stream_overflow = 1; return; }
+        cell_stream[cell_stream_len++] = k;
+        return;
+    }
+    if (!(pv_n[k >> 3] & (1 << (k & 7)))) return;
+    const MapNode *nd = &map_nodes[k];
+    const int16_t dx = view_xi - nd->x, dy = view_yi - nd->y;
+    const int side = (muls16(nd->dy, dx) > muls16(nd->dx, dy)) ? 0 : 1;
+    cell_stream_collect(nd->child[side]);
+    cell_stream_collect(nd->child[side ^ 1]);
+}
+#endif
+
 
 /* signed 32 x small signed 16 (|k| <= 255) */
 static inline int32_t mul32k(int32_t a, int16_t k)
