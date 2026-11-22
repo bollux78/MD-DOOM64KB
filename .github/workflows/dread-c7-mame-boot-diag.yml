@@ -75,7 +75,7 @@ jobs:
             echo "::group::$variant"
             DIAG_VARIANT="$variant" timeout 100 mame megadriv -cart "$PWD/$variant.bin" \
               -video none -sound none -autoboot_script "$PWD/diag.lua" \
-              -seconds_to_run 11 -nothrottle -skip_gameinfo -snappath "$PWD" \
+              -seconds_to_run 11 -nothrottle -skip_gameinfo -snapdir "$PWD" \
               > "$variant.log" 2>&1 || true
             grep -E 'BOOT_FRAME=|CPU_STATE_KEYS|SNAP_RESULT|Error|Fatal' "$variant.log" || true
             echo "::endgroup::"
