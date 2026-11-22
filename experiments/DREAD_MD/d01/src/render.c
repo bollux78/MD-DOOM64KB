@@ -784,7 +784,17 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
 #ifndef PVS_GEN
 #define MAXVIS 32
 #ifdef DREAD_GAMEPLAY
+#ifdef DREAD_COMBAT_12_20
+/* C7: free a full 1 KiB of 68000 RAM for the SGDK default-font/VDP
+ * initialization and runtime. The original 6144-byte sprite clipping
+ * window pool left insufficient heap, making both ROMs boot black.
+ * Overflow is already guarded in R_AddSprite / queue_mask; NEVER write
+ * past the pool. Normal gameplay build remains at 6144 unless the C7
+ * 12/20 profile is enabled. Measure dropped distant sprites during QA. */
+#define WINPOOL 5120
+#else
 #define WINPOOL 6144
+#endif
 #else
 #define WINPOOL 2048
 #endif
