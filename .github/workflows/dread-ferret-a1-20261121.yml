@@ -76,22 +76,26 @@ jobs:
             echo "::group::Spawn $variant"
             address=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk '$3 == "spawn_published_frames" {print $1; exit}')
             if [[ -z "$address" ]]; then echo "::error::No counter symbol"; continue; fi
+            vaddress=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk '$3 == "vints" {print $1; exit}')
+            if [[ -z "$vaddress" ]]; then echo "::error::No VBlank symbol"; continue; fi
             cat > "$OUT/$variant/spawn.lua" <<EOF
-          local frames = 0
           local space = manager.machine.devices[":maincpu"].spaces["program"]
-          -- ELF symbols may be reported with a high linker region (e.g. E0FF160C).
-          -- Normalize to the 24-bit 68000 bus address before reading Mega Drive RAM.
           local addr = tonumber("$address", 16) % 0x1000000
-          local first = nil
+          local vaddr = tonumber("$vaddress", 16) % 0x1000000
+          local first_published, first_vblank, finished = nil, nil, false
           emu.register_frame_done(function()
-            frames = frames + 1
-            if frames == 1800 then
-              first = space:read_u32(addr)
-              print("SPAWN_BEGIN published=" .. tostring(first) .. " video_frames=" .. tostring(frames))
-            elseif frames == 3000 then
+            if finished then return end
+            local vblank = space:read_u16(vaddr)
+            if not first_published and vblank >= 1200 then
+              first_vblank = vblank
+              first_published = space:read_u32(addr)
+              print(string.format("SPAWN_BEGIN variant=$variant published=%d vblanks=%d", first_published, first_vblank))
+            elseif first_published and vblank >= 2400 then
               local last = space:read_u32(addr)
-              local delta = last - (first or last)
-              print(string.format("SPAWN_RESULT variant=$variant published=%d video_frames=1200 fps=%.4f", delta, delta*59.922743/1200))
+              local dv = vblank-first_vblank
+              local delta = last-first_published
+              print(string.format("SPAWN_RESULT variant=$variant published=%d vblanks=%d fps=%.4f",delta,dv,delta*59.922743/dv))
+              finished = true
             end
           end)
           EOF
@@ -99,7 +103,7 @@ jobs:
             set +e
             timeout 120 mame megadriv -cart "$OUT/DREAD-FERRET-$variant.bin" -video none -sound none \
               -autoboot_script "$OUT/$variant/spawn.lua" \
-              -seconds_to_run 55 -nothrottle -skip_gameinfo \
+              -seconds_to_run 90 -nothrottle -skip_gameinfo \
               > "$OUT/$variant/mame.log" 2>&1
             rc=$?
             set -e
