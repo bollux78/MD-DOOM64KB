@@ -43,6 +43,12 @@ static const int16_t dirx[8] = { 256, 181, 0, -181, -256, -181, 0, 181 }, diry[8
 Actor actors[MAP_NACTORS];
 uint8_t actor_heads[MAP_NSUBS];
 static uint16_t nactors, tick_no;
+#ifdef DREAD_COMBAT_12_20
+/* VBlank-time fixed-step clocks, independent of rendered FPS.
+ * 60 NTSC VBlanks/s -> AI at 12 Hz (5 VBlanks), projectiles at 20 Hz (3).
+ * Remainders are carried across rendered frames so time does not drift. */
+static uint8_t ai_vblank_accum, projectile_vblank_accum;
+#endif
 #ifdef DREAD_GAMEPLAY
 #define MAXBARRELS 64
 typedef struct {uint16_t thing;int16_t hp;uint8_t frame,tics,state,pad;} Barrel;
@@ -176,6 +182,9 @@ void Actors_Init(void)
     }
 #endif
     nactors = 0; tick_no = 0;drop_next=0;combat_drop_ammo=combat_drop_shotgun=0;for(uint16_t i=0;i<32;i++)drops[i].active=0;
+#ifdef DREAD_COMBAT_12_20
+    ai_vblank_accum = projectile_vblank_accum = 0; /* reset on every level load */
+#endif
     combat_wakes = combat_hits = combat_kills = combat_attacks = 0;
     for (uint16_t i = 0; i < sizeof taken; i++) taken[i] = 0;
     for (uint16_t i = 0; i < MAXPROJ; i++) proj[i].kind = 0xFF;
@@ -258,6 +267,10 @@ static void hurt_player(ActorPlayer *pl, int16_t dmg)
 {
 #ifdef DREAD_GAMEPLAY
     if(World_Invulnerable())return;
+#endif
+#ifdef DREAD_EASY_MODE
+    /* Doom easy skill: halve incoming damage before armor; keep minimum 1. */
+    if (dmg > 0) dmg = (int16_t)((dmg + 1) / 2);
 #endif
     if (*pl->armor) {                    /* green armor rule: 1/3 absorbed */
         int16_t save = dmg / 3;
@@ -539,14 +552,30 @@ static void tick_proj(ActorPlayer *pl, uint16_t dt)
     }
 }
 
+/* Picking up drops requires only one test per rendered update. In the
+ * original scheduler it was repeated once for each elapsed VBlank. */
+static void tick_drops(ActorPlayer *pl)
+{
+    for (uint16_t i = 0; i < 32; i++)
+        if (drops[i].active &&
+            approx_dist(drops[i].x - pl->x, drops[i].y - pl->y) < 24 &&
+            iabs16(map_sectors[map_subs[drops[i].sub].sector].floor - (pl->z - 41)) < 24) {
+            if (drops[i].type) combat_drop_shotgun++;
+            else combat_drop_ammo += 5;
+            drops[i].active = 0;
+            Game_Sound(6);
+        }
+}
+
 static void actors_step(ActorPlayer *pl, uint16_t dt)
 {
     tick_no++;
+#ifndef DREAD_COMBAT_12_20
 #ifdef DREAD_GAMEPLAY
     tick_barrels(pl);
 #endif
-
     pl->hurt = 0;
+#endif
     for (uint16_t i = 0; i < nactors; i++) {
         Actor *a = &actors[i];
         if (a->state >= ST_DEAD) continue;
@@ -578,16 +607,43 @@ static void actors_step(ActorPlayer *pl, uint16_t dt)
             break;
         }
     }
+#ifndef DREAD_COMBAT_12_20
     tick_proj(pl, dt);
-    for(uint16_t i=0;i<32;i++)if(drops[i].active && approx_dist(drops[i].x-pl->x,drops[i].y-pl->y)<24 && iabs16(map_sectors[map_subs[drops[i].sub].sector].floor-(pl->z-41))<24){
-        if(drops[i].type)combat_drop_shotgun++;else combat_drop_ammo+=5;drops[i].active=0;Game_Sound(6);
-    }
+    tick_drops(pl);
+#endif
 }
 
 void Actors_Tick(ActorPlayer *pl,uint16_t dt)
 {
-    sight_budget=3;
+    sight_budget = 3;
+#ifdef DREAD_COMBAT_12_20
+    /* Reaction/hit animations, wake/chase/attack states: maximum 12 updates
+     * per simulated second. This avoids traversing all actors per VBlank. */
+    pl->hurt = 0;
+#ifdef DREAD_GAMEPLAY
+    /* Barrel explosion timing stays in original 60 Hz VBlank units. */
+    for (uint16_t tick = 0; tick < dt; tick++) tick_barrels(pl);
+#endif
+    uint16_t acc = (uint16_t)ai_vblank_accum + dt;
+    while (acc >= 5) {
+        acc -= 5;
+        actors_step(pl, 5);
+    }
+    ai_vblank_accum = (uint8_t)acc;
+
+    /* Physics is stepped at 20 Hz but each step still checks its three
+     * one-VBlank movement substeps (tick_proj), preventing tunneling through
+     * narrow walls at the expense of some retained collision work. */
+    acc = (uint16_t)projectile_vblank_accum + dt;
+    while (acc >= 3) {
+        acc -= 3;
+        tick_proj(pl, 3);
+    }
+    projectile_vblank_accum = (uint8_t)acc;
+    tick_drops(pl);  /* once per rendered update, even if no AI step was due */
+#else
     for(uint16_t tick=0;tick<dt;tick++)actors_step(pl,1);
+#endif
 }
 
 /* sprite of a monster seen from the camera: rotation from the camera's direction relative to its facing */
