@@ -2,7 +2,9 @@ name: DREAD C7 NORMAL - shared SSF green in original green assets + boot gate
 on:
   push:
     branches: [exp-dread-c7-easy-ai12-proj20-20261122]
-    paths: ['.github/workflows/dread-c7-normal-green-20261122.yml']
+    paths:
+      - '.github/workflows/dread-c7-normal-green-20261122.yml'
+      - 'experiments/DREAD_MD/d01/src/main.c'
   workflow_dispatch:
 concurrency:
   group: dread-c7-normal-green-${{ github.ref }}
