@@ -98,7 +98,7 @@ jobs:
             # Do not let an emulator failure abort testing the second variant.
             set +e
             timeout 120 mame megadriv -cart "$OUT/DREAD-FERRET-$variant.bin" -video none -sound none \
-              -plugins 0 -autoboot_script "$OUT/$variant/spawn.lua" \
+              -autoboot_script "$OUT/$variant/spawn.lua" \
               -seconds_to_run 55 -nothrottle -skip_gameinfo \
               > "$OUT/$variant/mame.log" 2>&1
             rc=$?
