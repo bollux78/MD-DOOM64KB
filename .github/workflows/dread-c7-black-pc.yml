@@ -1,0 +1,73 @@
+name: DREAD C7 - locate black-screen stop PC
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths: ['.github/workflows/dread-c7-black-pc.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  symbols:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Obtain exact C7 ELF and map frozen PC
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/c7-black-pc-$GITHUB_RUN_ID"
+          mkdir -p "$OUT"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          SRC="$RUNNER_TEMP/dread-c7-selfhost-45044466617/NORMAL"
+          if [[ -s "$SRC/EPISODE.elf" ]]; then
+            echo "Using original exact ELF from C7 build 45044466617"
+            cp "$SRC/EPISODE.elf" "$OUT/EPISODE.elf"
+            cp "$SRC/EPISODE.bin" "$OUT/EPISODE.bin"
+          else
+            echo "Previous ELF unavailable, recreating same source/flags on existing runner"
+            export GDK="$HOME/Projetos/marsdev/sgdk/SGDK"
+            export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+            export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+            export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
+            export DREAD_COMBAT=1 DREAD_GAMEPLAY=1 DREAD_SKILL=easy
+            unset DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS DREAD_SSF
+            # Keep full compiler output on GitHub Actions, not runner listener console.
+            bash experiments/DREAD_MD/d01/gameplay/build.sh \
+              "$HOME/Projetos/doom-md/assets/wads/doom1.wad" "$OUT/build" 2>&1
+            cp "$OUT/build/EPISODE.elf" "$OUT/EPISODE.elf"
+            cp "$OUT/build/EPISODE.bin" "$OUT/EPISODE.bin"
+          fi
+          sha256sum "$OUT/EPISODE.bin"
+          "$HOME/mars/m68k-elf/bin/m68k-elf-nm" -n "$OUT/EPISODE.elf" > "$OUT/symbols.txt"
+          python3 - "$OUT/symbols.txt" <<'PY'
+          from pathlib import Path
+          import sys
+          target=0x169f4
+          ss=[]
+          for row in Path(sys.argv[1]).read_text().splitlines():
+              parts=row.split()
+              if len(parts)<3:continue
+              try: addr=int(parts[0],16)
+              except ValueError:continue
+              ss.append((addr,parts[1],parts[2]))
+          ss.sort()
+          ix=max(i for i,(addr,_,__) in enumerate(ss) if addr<=target)
+          print("PC_DREAD_C7=",hex(target))
+          for addr,typ,name in ss[max(0,ix-20):ix+13]:
+              print(f"PC_SYMBOL {addr:08x} {typ} {name}")
+          for term in ('main','_start_entry','exit','abort','SYS_die','__bss_end','__stack'):
+              for addr,typ,name in ss:
+                  if term in name:
+                      print(f"KEY_SYMBOL {addr:08x} {typ} {name}")
+          PY
+          "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" -d --start-address=0x16990 --stop-address=0x16a50 "$OUT/EPISODE.elf" | tail -100
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: C7-BLACK-PC-SYMBOLS-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ env.OUT }}/EPISODE.elf
+            ${{ env.OUT }}/symbols.txt
