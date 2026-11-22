@@ -306,7 +306,6 @@ def main():
 
     # ---- colour: NPAL palettes (one per 8x8 screen tile), each fitted FOR colour pairs.
     # Items = (texture, light bucket) and (flat, light bucket); every item gets one palette.
-    import os
     NPAL = int(os.environ.get("DREAD_NPAL", "3"))
     MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
     DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
