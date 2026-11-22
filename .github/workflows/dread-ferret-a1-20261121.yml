@@ -1,0 +1,124 @@
+name: DREAD Ferret A1 - hosted spawn comparison
+on:
+  push:
+    branches: [exp-werk-ferret-a1-20261121]
+    paths:
+      - 'experiments/DREAD_MD/d01/**'
+      - '.github/workflows/dread-ferret-a1-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install WAD, emulator, and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git make bison flex texinfo wget curl xz-utils unzip \
+            python3 python3-numpy python3-pil python3-scipy python3-yaml \
+            default-jre-headless libpng-dev zlib1g-dev libncurses-dev mame doom-wad-shareware
+      - name: Cache SGDK and cross compiler
+        id: mars-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/mars
+          key: doom-md-marsdev-ubuntu2404-v1
+      - name: Bootstrap Marsdev on cache miss
+        if: steps.mars-cache.outputs.cache-hit != 'true'
+        run: bash scripts/lab/bootstrap_marsdev.sh
+      - name: Compile same-image CONTROL and A1
+        shell: bash
+        env:
+          WAD: /usr/share/games/doom/doom1.wad
+        run: |
+          set -euo pipefail
+          export GDK="$HOME/mars/m68k-elf" DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$GDK/bin:$PATH" DREAD_COMBAT=1 DREAD_NPAL=1 DREAD_EP_MAPS=1 OPENBLAS_NUM_THREADS=1
+          test -s "$WAD"
+          OUT="$RUNNER_TEMP/dread-ferret-a1-$GITHUB_RUN_ID"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          mkdir -p "$OUT"
+          bash experiments/DREAD_MD/d01/tools/prepare_episode.sh "$WAD" "$OUT/prepared"
+          export DREAD_PREPARED_MAPS="$OUT/prepared"
+          for variant in CONTROL A1; do
+            mkdir -p "$OUT/$variant"
+            flags="-DDREAD_VALIDATION_TEST -DDREAD_JOY_VBLANK -DDREAD_SPAWN_PROFILE"
+            if [[ "$variant" == A1 ]]; then flags="$flags -DDREAD_OPT_COLPTR_INCREMENTAL"; fi
+            echo "::group::Build $variant"
+            DREAD_EXTRA_FLAGS="$flags" bash experiments/DREAD_MD/d01/tools/build_map.sh \
+              "$WAD" EPISODE "$OUT/$variant" "DREAD FERRET A1 $variant" > "$OUT/$variant/build.log" 2>&1 \
+              || { tail -100 "$OUT/$variant/build.log"; exit 1; }
+            cp "$OUT/$variant/EPISODE.bin" "$OUT/DREAD-FERRET-$variant.bin"
+            sha256sum "$OUT/DREAD-FERRET-$variant.bin" >> "$OUT/SHA256SUMS.txt"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | grep ' spawn_published_frames' || true
+            echo "::endgroup::"
+          done
+          cat > "$OUT/README.txt" <<EOF
+          CONTROL: complete D01 as at this branch, with fixed spawn profiler flags.
+          A1: CONTROL + -DDREAD_OPT_COLPTR_INCREMENTAL, using incremental framebuffer column pointers.
+          Both: E1M1-E1M9, music, combat, same palette, same screen mode, VBlank input, title auto-start after 15s, uncapped spawn.
+          Framebuffer and real hardware visual equality not yet verified; FPS must be measured before claiming a gain.
+          EOF
+      - name: Spawn FPS in MAME (non-blocking if emulator interface is unavailable)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          for variant in CONTROL A1; do
+            echo "::group::Spawn $variant"
+            address=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk '$3 == "spawn_published_frames" {print $1; exit}')
+            if [[ -z "$address" ]]; then echo "::error::No counter symbol"; continue; fi
+            cat > "$OUT/$variant/spawn.lua" <<EOF
+          local frames = 0
+          local space = manager.machine.devices[":maincpu"].spaces["program"]
+          local addr = tonumber("$address", 16)
+          local first = nil
+          emu.register_frame_done(function()
+            frames = frames + 1
+            if frames == 1800 then
+              first = space:read_u32(addr)
+              print("SPAWN_BEGIN published=" .. tostring(first) .. " video_frames=" .. tostring(frames))
+            elseif frames == 3000 then
+              local last = space:read_u32(addr)
+              local delta = last - (first or last)
+              print(string.format("SPAWN_RESULT variant=$variant published=%d video_frames=1200 fps=%.4f", delta, delta*59.922743/1200))
+            end
+          end)
+          EOF
+            timeout 120 mame megadriv -cart "$OUT/DREAD-FERRET-$variant.bin" -video none -sound none \
+              -plugins 0 -autoboot_script "$OUT/$variant/spawn.lua" \
+              -seconds_to_run 55 -nothrottle -skip_gameinfo \
+              > "$OUT/$variant/mame.log" 2>&1
+            rc=$?
+            grep -E 'SPAWN_|Error|error|Average speed' "$OUT/$variant/mame.log" | tail -25 || true
+            echo "$variant MAME_EXIT=$rc"
+            echo "::endgroup::"
+          done
+      - name: Package binaries and evidence
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${OUT:-}" && -d "$OUT" ]]; then
+            python3 - "$OUT" <<'PY'
+          import pathlib,sys,zipfile
+          out=pathlib.Path(sys.argv[1])
+          with zipfile.ZipFile(out/"DREAD-FERRET-A1.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for pat in ("DREAD-FERRET-*.bin","SHA256SUMS.txt","README.txt","*/mame.log","*/build.log"):
+                  for f in sorted(out.glob(pat)):
+                      if f.is_file():z.write(f,f.relative_to(out))
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DREAD-FERRET-A1-SPAWN
+          path: ${{ env.OUT }}/DREAD-FERRET-A1.zip
+          if-no-files-found: warn
