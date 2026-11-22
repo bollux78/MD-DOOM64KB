@@ -1,0 +1,159 @@
+name: DREAD Ferret B1 - cell-stream spawn and fullscreen report
+on:
+  push:
+    branches: [exp-werk-ferret-cellstream-b1-20261122]
+    paths:
+      - 'experiments/DREAD_MD/d01/**'
+      - '.github/workflows/dread-ferret-cellstream-b1-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install WAD, emulator, and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git make bison flex texinfo wget curl xz-utils unzip \
+            python3 python3-numpy python3-pil python3-scipy python3-yaml \
+            default-jre-headless libpng-dev zlib1g-dev libncurses-dev mame doom-wad-shareware
+      - name: Cache SGDK and cross compiler
+        id: mars-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/mars
+          key: doom-md-marsdev-ubuntu2404-v1
+      - name: Bootstrap Marsdev on cache miss
+        if: steps.mars-cache.outputs.cache-hit != 'true'
+        run: bash scripts/lab/bootstrap_marsdev.sh
+      - name: Compile same-image CONTROL and CELLSTREAM
+        shell: bash
+        env:
+          WAD: /usr/share/games/doom/doom1.wad
+        run: |
+          set -euo pipefail
+          export GDK="$HOME/mars/m68k-elf" DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$GDK/bin:$PATH" DREAD_COMBAT=1 DREAD_NPAL=1 DREAD_EP_MAPS=1 OPENBLAS_NUM_THREADS=1
+          test -s "$WAD"
+          OUT="$RUNNER_TEMP/dread-ferret-cellstream-b1-$GITHUB_RUN_ID"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          mkdir -p "$OUT"
+          bash experiments/DREAD_MD/d01/tools/prepare_episode.sh "$WAD" "$OUT/prepared"
+          export DREAD_PREPARED_MAPS="$OUT/prepared"
+          for variant in CONTROL CELLSTREAM; do
+            mkdir -p "$OUT/$variant"
+            flags="-DDREAD_VALIDATION_TEST -DDREAD_JOY_VBLANK -DDREAD_SPAWN_PROFILE"
+            if [[ "$variant" == CELLSTREAM ]]; then flags="$flags -DDREAD_CELL_STREAM"; fi
+            echo "::group::Build $variant"
+            DREAD_EXTRA_FLAGS="$flags" bash experiments/DREAD_MD/d01/tools/build_map.sh \
+              "$WAD" EPISODE "$OUT/$variant" "DREAD CELLSTREAM B1 $variant" > "$OUT/$variant/build.log" 2>&1 \
+              || { tail -100 "$OUT/$variant/build.log"; exit 1; }
+            cp "$OUT/$variant/EPISODE.bin" "$OUT/DREAD-CELLSTREAM-$variant.bin"
+            sha256sum "$OUT/DREAD-CELLSTREAM-$variant.bin" >> "$OUT/SHA256SUMS.txt"
+            "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | grep ' spawn_published_frames' || true
+            echo "::endgroup::"
+          done
+          cat > "$OUT/README.txt" <<EOF
+          CONTROL: complete D01 as at this branch, with fixed spawn profiler flags.
+          CELLSTREAM: CONTROL + -DDREAD_CELL_STREAM; cached PVS-filtered ordered leaf stream by exact integer camera position, safe BSP fallback.
+          Both: E1M1-E1M9, music, combat, same palette, same screen mode, VBlank input, title auto-start after 15s, uncapped spawn.
+          Framebuffer and real hardware visual equality not yet verified; FPS must be measured before claiming a gain.
+          EOF
+      - name: Spawn FPS in MAME (non-blocking if emulator interface is unavailable)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          for variant in CONTROL CELLSTREAM; do
+            echo "::group::Spawn $variant"
+            address=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk '$3 == "spawn_published_frames" {print $1; exit}')
+            if [[ -z "$address" ]]; then echo "::error::No counter symbol"; continue; fi
+            vaddress=$("$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk '$3 == "vints" {print $1; exit}')
+            if [[ -z "$vaddress" ]]; then echo "::error::No VBlank symbol"; continue; fi
+            symbol() { "$HOME/mars/m68k-elf/bin/m68k-elf-nm" "$OUT/$variant/EPISODE.elf" | awk -v k="$1" '$3 == k {print $1; exit}'; }
+            rseg=$(symbol frame_segs)
+            rnode=$(symbol frame_nodes)
+            rsub=$(symbol frame_cols)
+            ranc=$(symbol frame_anchors)
+            rhit=$(symbol cell_stream_hits)
+            rreb=$(symbol cell_stream_rebuilds)
+            rfb=$(symbol cell_stream_fallbacks)
+            rlen=$(symbol cell_stream_last_len)
+            if [[ -z "$rseg" || -z "$rnode" ]]; then echo "::warning::Missing render stats symbols"; fi
+            # CONTROL intentionally does not contain the experimental counters.
+            rseg=${rseg:-0}; rnode=${rnode:-0}; rsub=${rsub:-0}; ranc=${ranc:-0}
+            rhit=${rhit:-0}; rreb=${rreb:-0}; rfb=${rfb:-0}; rlen=${rlen:-0}
+            cat > "$OUT/$variant/spawn.lua" <<EOF
+          local space = manager.machine.devices[":maincpu"].spaces["program"]
+          local addr = tonumber("$address", 16) % 0x1000000
+          local vaddr = tonumber("$vaddress", 16) % 0x1000000
+          local function address(s) return tonumber(s,16) % 0x1000000 end
+          local function u16(s) if s=="0" then return 0 end return space:read_u16(address(s)) end
+          local function u32(s) if s=="0" then return 0 end return space:read_u32(address(s)) end
+          local first_published, first_vblank, finished = nil, nil, false
+          emu.register_frame_done(function()
+            if finished then return end
+            local vblank = space:read_u16(vaddr)
+            if not first_published and vblank >= 1200 then
+              first_vblank = vblank
+              first_published = space:read_u32(addr)
+              print(string.format("SPAWN_BEGIN variant=$variant published=%d vblanks=%d", first_published, first_vblank))
+            elseif first_published and vblank >= 2400 then
+              local last = space:read_u32(addr)
+              local dv = vblank-first_vblank
+              local delta = last-first_published
+              print(string.format("SPAWN_RESULT variant=$variant published=%d vblanks=%d fps=%.4f",delta,dv,delta*59.922743/dv))
+              print(string.format("STREAM_RESULT variant=$variant rebuilds=%d hits=%d fallbacks=%d entries=%d segs=%d nodes=%d subs=%d cols=%d anchors=%d",
+                u32("$rreb"), u32("$rhit"), u32("$rfb"), u16("$rlen"),
+                u16("$rseg"), u16("$rnode"), 0, u16("$rsub"), u16("$ranc")))
+              finished = true
+            end
+          end)
+          EOF
+            # Do not let an emulator failure abort testing the second variant.
+            set +e
+            timeout 120 mame megadriv -cart "$OUT/DREAD-CELLSTREAM-$variant.bin" -video none -sound none \
+              -autoboot_script "$OUT/$variant/spawn.lua" \
+              -seconds_to_run 90 -nothrottle -skip_gameinfo \
+              > "$OUT/$variant/mame.log" 2>&1
+            rc=$?
+            set -e
+            echo "MAME_LOG_BEGIN variant=$variant"
+            tail -35 "$OUT/$variant/mame.log" || true
+            echo "MAME_LOG_END variant=$variant"
+            grep -E 'SPAWN_|Error|error|Average speed' "$OUT/$variant/mame.log" | tail -25 || true
+            echo "$variant MAME_EXIT=$rc"
+            if ! grep -q "SPAWN_RESULT variant=$variant" "$OUT/$variant/mame.log"; then
+              echo "::warning::Missing validated spawn measurement for $variant (MAME exit $rc)"
+            fi
+            echo "::endgroup::"
+          done
+      - name: Package binaries and evidence
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${OUT:-}" && -d "$OUT" ]]; then
+            python3 - "$OUT" <<'PY'
+          import pathlib,sys,zipfile,subprocess
+          out=pathlib.Path(sys.argv[1])
+          subprocess.run(["python3","experiments/DREAD_MD/d01/tools/cellstream_report.py",str(out)],check=True)
+          with zipfile.ZipFile(out/"DREAD-CELLSTREAM-A1.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for pat in ("DREAD-CELLSTREAM-*.bin","SHA256SUMS.txt","README.txt","benchmark.html","benchmark.json","*/mame.log","*/build.log"):
+                  for f in sorted(out.glob(pat)):
+                      if f.is_file():z.write(f,f.relative_to(out))
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DREAD-CELLSTREAM-A1-SPAWN
+          path: ${{ env.OUT }}/DREAD-CELLSTREAM-A1.zip
+          if-no-files-found: warn
