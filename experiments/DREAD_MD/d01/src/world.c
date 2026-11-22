@@ -7,7 +7,9 @@
 static int16_t floor_target[MAP_NSECTORS],floor_return[MAP_NSECTORS],ceil_target[MAP_NSECTORS];
 static uint16_t floor_wait[MAP_NSECTORS],ceil_wait[MAP_NSECTORS];
 static uint8_t floor_active[MAP_NSECTORS],ceil_active[MAP_NSECTORS];
-static uint8_t used_lines[2048];
+/* E1M1-E1M9 has at most 1352 linedefs (E1M6); 1536 entries
+ * preserve all line-trigger state while freeing 512 bytes of RAM. */
+static uint8_t used_lines[1536];
 static uint16_t map_id,hazard_clock,boss_done;
 uint32_t level_time;
 uint16_t level_secrets,level_total_secrets;
