@@ -42,9 +42,37 @@ jobs:
           mkdir -p "$OUT"
           echo "OUT=$OUT" >> "$GITHUB_ENV"
           export GDK="$GDK" PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
-          export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" DREAD_COPY_SEGA_S=1
+          export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          # Leave the SGDK boot assembly to the SDK's original build rules.
+          # Copying sega.s manually caused a missing out/rom_header.bin failure.
+          unset DREAD_COPY_SEGA_S
           export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
           unset DREAD_PREPARED_MAPS
+          # The listener itself prints only job start/finish. Mirror a concise
+          # selection of task output to its existing interactive terminal, if
+          # stdout is an actual /dev/pts device. No new local log file.
+          LISTENER_TTY=""
+          for pid in $(pgrep -f 'Runner.Listener' || true); do
+            [[ -r "/proc/$pid/comm" ]] || continue
+            [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == Runner.Listener ]] || continue
+            candidate="$(readlink "/proc/$pid/fd/1" 2>/dev/null || true)"
+            if [[ "$candidate" == /dev/pts/* && -w "$candidate" ]]; then
+              LISTENER_TTY="$candidate"
+              break
+            fi
+          done
+          console() {
+            printf '[DREAD C7 %s] %s\\n' "$(date +'%H:%M:%S')" "$*"
+            if [[ -n "$LISTENER_TTY" ]]; then
+              printf '[DREAD C7 %s] %s\\n' "$(date +'%H:%M:%S')" "$*" > "$LISTENER_TTY" || true
+            fi
+          }
+          if [[ -n "$LISTENER_TTY" ]]; then
+            echo "Interactive runner terminal found: $LISTENER_TTY (progress mirrored; no local log files)"
+          else
+            echo "Listener is not attached to a writable interactive terminal; all details remain in Actions job output."
+          fi
+          console "Iniciando build C7 $GITHUB_RUN_ID / commit $GITHUB_SHA"
           for variant in NORMAL SSF; do
             mkdir -p "$OUT/$variant"
             if [[ "$variant" == SSF ]]; then
@@ -55,16 +83,33 @@ jobs:
               filename=DREAD-C7-NORMAL-4MiB.bin
             fi
             echo "::group::Compile $variant"
-            if ! bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/$variant" > "$OUT/$variant/build.log" 2>&1; then
-              tail -100 "$OUT/$variant/build.log"
-              echo "::error::C7 $variant failed, log attached"
+            console "Compilando $variant: 9 mapas, PVS, texturas, sprites, armas, musica, 68000, link"
+            # Forward the complete build output to GitHub Actions, but only
+            # the informative lines to the existing runner console. Bash
+            # pipefail preserves the build's return code through awk.
+            if bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/$variant" 2>&1 |
+               stdbuf -oL awk -v tty="$LISTENER_TTY" '
+                 {
+                   print; fflush()
+                   if (tty != "" && (/E1M[1-9]/ || /weapon tiles:/ ||
+                       /palette|sprite|pvsgen|pack_ssf|pack_episode|render.c:.*warning|error:|Error:/ ||
+                       /ROM_SIZE|bytes|undefined reference/)) {
+                     msg=substr($0,1,190)
+                     print "[DREAD C7] " msg >> tty
+                     fflush(tty)
+                   }
+                 }'; then
+              console "$variant compilacao concluida"
+            else
+              console "ERRO ao compilar $variant - detalhes acima no terminal e no GitHub Actions"
+              echo "::error::C7 $variant failed; see the streamed Actions log"
               exit 1
             fi
             cp "$OUT/$variant/EPISODE.bin" "$OUT/$filename"
             if [[ -f "$OUT/$variant/ssf-layout.json" ]]; then cp "$OUT/$variant/ssf-layout.json" "$OUT/ssf-layout.json"; fi
             stat -c "$filename = %s bytes" "$OUT/$filename"
             sha256sum "$OUT/$filename" >> "$OUT/SHA256SUMS.txt"
-            tail -25 "$OUT/$variant/build.log"
+            console "$filename pronto - $(stat -c %s "$OUT/$filename") bytes"
             echo "::endgroup::"
           done
           python3 - "$OUT" <<'PY'
@@ -76,11 +121,11 @@ jobs:
               for fn in ("SHA256SUMS.txt","ssf-layout.json"):
                   p=root/fn
                   if p.is_file():z.write(p,p.name)
-              for p in sorted(root.glob("*/build.log")):z.write(p,p.relative_to(root))
+              # No extra local build logs: GitHub Actions stores streamed output.
           with zipfile.ZipFile(archive) as z: assert z.testzip() is None
           print("C7 ZIP",archive,archive.stat().st_size)
           PY
-      - name: Upload ROMs and logs
+      - name: Upload ROMs (GitHub Actions keeps the console log)
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,4 +137,3 @@ jobs:
             ${{ env.OUT }}/DREAD-C7-DUAS-VERSOES.zip
             ${{ env.OUT }}/SHA256SUMS.txt
             ${{ env.OUT }}/ssf-layout.json
-            ${{ env.OUT }}/*/build.log
