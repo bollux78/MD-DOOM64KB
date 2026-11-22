@@ -807,18 +807,16 @@ static uint16_t nvis, winused;
 static uint8_t winpool[WINPOOL];
 #ifdef DREAD_GAMEPLAY
 #define MAXMASK 8
+/* Keep MaskWall RAM footprint identical to C6. The previous
+ * DREAD_GRATE_HALF_RES column cache added 8 bytes per wall (64 bytes),
+ * exhausting the tiny SGDK heap during VDP_loadDefaultFont at boot.
+ * Half-res samples are now recomputed for each x; vertical mask tests
+ * remain 2x cheaper and X pairs still use identical source texels. */
 typedef struct {
     Part part;
     int32_t iz,diz,uz,duz;
     int16_t xs,realh;
     const uint8_t *mask;
-#ifdef DREAD_GRATE_HALF_RES
-    /* Two adjacent screen columns use the same masked texture column.
-     * Cache is per wall: masks/sprites may be interleaved by depth. */
-    int16_t last_sample_k;
-    uint16_t last_sample_u;
-    const uint8_t *last_sample_tc;
-#endif
 } MaskWall;
 static MaskWall masked[MAXMASK];
 static uint16_t nmasked;
@@ -834,9 +832,6 @@ static void queue_mask(const MapSeg *s,int xs,int xe,int32_t iz,int32_t diz,int3
     setup_part(&m->part,s->mid,f->bucket,top,s->yoff,top,0);
     m->iz=iz;m->diz=diz;m->uz=uz;m->duz=duz;m->xs=xs;m->realh=map_tex[s->mid].realh;
     m->mask=r_mask_table?r_mask_table[s->mid]:0;
-#ifdef DREAD_GRATE_HALF_RES
-    m->last_sample_k=-1;  /* invalidate per-wall 2-column cache */
-#endif
     VisSpr *v=&vis[nvis++];v->maskid=nmasked++;v->x0=xs;v->x1=xe;v->win=winused;
     v->z4=z4_of(iz);const int n=xe-xs;
     for(int k=0;k<n;k++){
@@ -856,29 +851,19 @@ static void draw_mask_column(const VisSpr *v,int x)
     const uint16_t H=m->part.hmask+1;
     const uint8_t *tc;
     uint16_t u;
+    /* Compute the texture source at half X resolution for masked walls,
+     * without storing a per-wall cache in scarce 64KB work RAM. Geometry
+     * projection, clipping and per-column depth ordering are untouched. */
 #ifdef DREAD_GRATE_HALF_RES
-    if(m->mask) {
-        /* Render a grate at half the native logical resolution on BOTH
-         * axes (2x2 samples). Geometry, depth-sort and clipping remain at
-         * the true per-column resolution; only masked texture sampling
-         * is coarser. No frame-to-frame cache, no stale texture phase. */
-        const int16_t sample_k=(int16_t)(k&~1);
-        if(m->last_sample_k!=sample_k){
-            const int32_t sample_iz=m->iz+mul32k(m->diz,sample_k);
-            const int32_t sample_uz=m->uz+mul32k(m->duz,sample_k);
-            m->last_sample_u=u_of((uint32_t)(sample_uz>0?sample_uz:0)<<8,
-                                  sample_iz>0?sample_iz:1)&m->part.wmask;
-            m->last_sample_tc=texture_column(&m->part,m->last_sample_u);
-            m->last_sample_k=sample_k;
-        }
-        u=m->last_sample_u;tc=m->last_sample_tc;
-    }else
+    const int16_t sample_k=m->mask?(int16_t)(k&~1):k;
+#else
+    const int16_t sample_k=k;
 #endif
-    {
-        const int32_t uz=m->uz+mul32k(m->duz,k);
-        u=u_of((uint32_t)(uz>0?uz:0)<<8,iz>0?iz:1)&m->part.wmask;
-        tc=texture_column(&m->part,u);
-    }
+    const int32_t sample_iz=m->iz+mul32k(m->diz,sample_k);
+    const int32_t sample_uz=m->uz+mul32k(m->duz,sample_k);
+    u=u_of((uint32_t)(sample_uz>0?sample_uz:0)<<8,
+           sample_iz>0?sample_iz:1)&m->part.wmask;
+    tc=texture_column(&m->part,u);
 #if defined(__m68k__) && defined(DREAD_NATIVE_PERSPECTIVE)
     extern const uint8_t native_zq72[],native_zq144[];
     extern const int16_t *const native_offsets_b[],*const native_offsets_f[];
