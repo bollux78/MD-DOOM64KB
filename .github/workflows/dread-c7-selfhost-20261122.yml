@@ -1,0 +1,94 @@
+name: DREAD C7 - self-hosted build NORMAL and SSF
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths:
+      - '.github/workflows/dread-c7-selfhost-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    name: Build C7 ROMs on configured self-hosted runner
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    env:
+      WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify toolchain and WAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$WAD"
+          command -v python3
+          command -v java
+          python3 -c 'import numpy,PIL'
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          gdk=""
+          for d in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/mars/m68k-elf" "/opt/sgdk"; do
+            if [[ -f "$d/makefile.gen" ]]; then gdk="$d"; break; fi
+          done
+          test -n "$gdk"
+          echo "GDK=$gdk" >> "$GITHUB_ENV"
+      - name: Compile both C7 variants from the same checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/dread-c7-selfhost-$GITHUB_RUN_ID"
+          mkdir -p "$OUT"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          export GDK="$GDK" PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" DREAD_COPY_SEGA_S=1
+          export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
+          unset DREAD_PREPARED_MAPS
+          for variant in NORMAL SSF; do
+            mkdir -p "$OUT/$variant"
+            if [[ "$variant" == SSF ]]; then
+              export DREAD_SSF=1 DREAD_PAL_ROUNDS=1
+              filename=DREAD-C7-PALETAS-SSF.bin
+            else
+              unset DREAD_SSF
+              filename=DREAD-C7-NORMAL-4MiB.bin
+            fi
+            echo "::group::Compile $variant"
+            if ! bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/$variant" > "$OUT/$variant/build.log" 2>&1; then
+              tail -100 "$OUT/$variant/build.log"
+              echo "::error::C7 $variant failed, log attached"
+              exit 1
+            fi
+            cp "$OUT/$variant/EPISODE.bin" "$OUT/$filename"
+            if [[ -f "$OUT/$variant/ssf-layout.json" ]]; then cp "$OUT/$variant/ssf-layout.json" "$OUT/ssf-layout.json"; fi
+            stat -c "$filename = %s bytes" "$OUT/$filename"
+            sha256sum "$OUT/$filename" >> "$OUT/SHA256SUMS.txt"
+            tail -25 "$OUT/$variant/build.log"
+            echo "::endgroup::"
+          done
+          python3 - "$OUT" <<'PY'
+          from pathlib import Path
+          import sys,zipfile
+          root=Path(sys.argv[1]); archive=root/"DREAD-C7-DUAS-VERSOES.zip"
+          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(root.glob("DREAD-C7-*.bin")): z.write(p,p.name)
+              for fn in ("SHA256SUMS.txt","ssf-layout.json"):
+                  p=root/fn
+                  if p.is_file():z.write(p,p.name)
+              for p in sorted(root.glob("*/build.log")):z.write(p,p.relative_to(root))
+          with zipfile.ZipFile(archive) as z: assert z.testzip() is None
+          print("C7 ZIP",archive,archive.stat().st_size)
+          PY
+      - name: Upload ROMs and logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DREAD-C7-DUAS-VERSOES-SELFHOST-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            ${{ env.OUT }}/DREAD-C7-*.bin
+            ${{ env.OUT }}/DREAD-C7-DUAS-VERSOES.zip
+            ${{ env.OUT }}/SHA256SUMS.txt
+            ${{ env.OUT }}/ssf-layout.json
+            ${{ env.OUT }}/*/build.log
