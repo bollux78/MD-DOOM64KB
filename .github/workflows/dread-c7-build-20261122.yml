@@ -8,9 +8,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: dread-c7-${{ github.ref }}-${{ matrix.variant }}
-  cancel-in-progress: false
 jobs:
   compile:
     name: Compile C7 ${{ matrix.variant }}
