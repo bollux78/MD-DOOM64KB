@@ -1,0 +1,106 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+00081cc0 <.data+0x81cc0>:
+   81cc0:	207c 0020 0000 	moveal #2097152,%a0
+   81cc6:	1010           	moveb %a0@,%d0
+   81cc8:	227c 0020 fffe 	moveal #2162686,%a1
+   81cce:	1211           	moveb %a1@,%d1
+   81cd0:	10bc 005a      	moveb #90,%a0@
+   81cd4:	12bc ffa5      	moveb #-91,%a1@
+   81cd8:	1410           	moveb %a0@,%d2
+   81cda:	0c02 005a      	cmpib #90,%d2
+   81cde:	672a           	beqs 0x81d0a
+   81ce0:	10bc ffc3      	moveb #-61,%a0@
+   81ce4:	12bc 003c      	moveb #60,%a1@
+   81ce8:	13c1 0020 fffe 	moveb %d1,0x20fffe
+   81cee:	13c0 0020 0000 	moveb %d0,0x200000
+   81cf4:	3439 e0ff 2c76 	movew 0xe0ff2c76,%d2
+   81cfa:	203c 0000 0800 	movel #2048,%d0
+   81d00:	4a42           	tstw %d2
+   81d02:	6700 fc02      	beqw 0x81906
+   81d06:	6000 fdd0      	braw 0x81ad8
+   81d0a:	1411           	moveb %a1@,%d2
+   81d0c:	10bc ffc3      	moveb #-61,%a0@
+   81d10:	12bc 003c      	moveb #60,%a1@
+   81d14:	0c02 ffa5      	cmpib #-91,%d2
+   81d18:	66ce           	bnes 0x81ce8
+   81d1a:	1410           	moveb %a0@,%d2
+   81d1c:	0c02 ffc3      	cmpib #-61,%d2
+   81d20:	66c6           	bnes 0x81ce8
+   81d22:	1411           	moveb %a1@,%d2
+   81d24:	1281           	moveb %d1,%a1@
+   81d26:	1080           	moveb %d0,%a0@
+   81d28:	0c02 003c      	cmpib #60,%d2
+   81d2c:	6600 fbc6      	bnew 0x818f4
+   81d30:	1010           	moveb %a0@,%d0
+   81d32:	227c 0020 0001 	moveal #2097153,%a1
+   81d38:	1211           	moveb %a1@,%d1
+   81d3a:	10bc 005a      	moveb #90,%a0@
+   81d3e:	12bc ffa5      	moveb #-91,%a1@
+   81d42:	1410           	moveb %a0@,%d2
+   81d44:	0c02 005a      	cmpib #90,%d2
+   81d48:	672a           	beqs 0x81d74
+   81d4a:	10bc ffc3      	moveb #-61,%a0@
+   81d4e:	12bc 003c      	moveb #60,%a1@
+   81d52:	13c1 0020 0001 	moveb %d1,0x200001
+   81d58:	13c0 0020 0000 	moveb %d0,0x200000
+   81d5e:	3439 e0ff 2c76 	movew 0xe0ff2c76,%d2
+   81d64:	203c 0000 0800 	movel #2048,%d0
+   81d6a:	4a42           	tstw %d2
+   81d6c:	6700 fb98      	beqw 0x81906
+   81d70:	6000 fd66      	braw 0x81ad8
+   81d74:	1411           	moveb %a1@,%d2
+   81d76:	10bc ffc3      	moveb #-61,%a0@
+   81d7a:	12bc 003c      	moveb #60,%a1@
+   81d7e:	0c02 ffa5      	cmpib #-91,%d2
+   81d82:	66ce           	bnes 0x81d52
+   81d84:	1410           	moveb %a0@,%d2
+   81d86:	0c02 ffc3      	cmpib #-61,%d2
+   81d8a:	66c6           	bnes 0x81d52
+   81d8c:	1411           	moveb %a1@,%d2
+   81d8e:	1281           	moveb %d1,%a1@
+   81d90:	1080           	moveb %d0,%a0@
+   81d92:	0c02 003c      	cmpib #60,%d2
+   81d96:	6600 fb5c      	bnew 0x818f4
+   81d9a:	207c 0020 fffe 	moveal #2162686,%a0
+   81da0:	1210           	moveb %a0@,%d1
+   81da2:	227c 0020 ffff 	moveal #2162687,%a1
+   81da8:	1411           	moveb %a1@,%d2
+   81daa:	10bc 005a      	moveb #90,%a0@
+   81dae:	12bc ffa5      	moveb #-91,%a1@
+   81db2:	1010           	moveb %a0@,%d0
+   81db4:	0c00 005a      	cmpib #90,%d0
+   81db8:	672a           	beqs 0x81de4
+   81dba:	10bc ffc3      	moveb #-61,%a0@
+   81dbe:	12bc 003c      	moveb #60,%a1@
+   81dc2:	13c2 0020 ffff 	moveb %d2,0x20ffff
+   81dc8:	13c1 0020 fffe 	moveb %d1,0x20fffe
+   81dce:	3439 e0ff 2c76 	movew 0xe0ff2c76,%d2
+   81dd4:	203c 0000 0800 	movel #2048,%d0
+   81dda:	4a42           	tstw %d2
+   81ddc:	6700 fb28      	beqw 0x81906
+   81de0:	6000 fcf6      	braw 0x81ad8
+   81de4:	1011           	moveb %a1@,%d0
+   81de6:	10bc ffc3      	moveb #-61,%a0@
+   81dea:	12bc 003c      	moveb #60,%a1@
+   81dee:	0c00 ffa5      	cmpib #-91,%d0
+   81df2:	66ce           	bnes 0x81dc2
+   81df4:	1010           	moveb %a0@,%d0
+   81df6:	0c00 ffc3      	cmpib #-61,%d0
+   81dfa:	66c6           	bnes 0x81dc2
+   81dfc:	1011           	moveb %a1@,%d0
+   81dfe:	1282           	moveb %d2,%a1@
+   81e00:	1081           	moveb %d1,%a0@
+   81e02:	0c00 003c      	cmpib #60,%d0
+   81e06:	6600 faec      	bnew 0x818f4
+   81e0a:	33fc 0002 e0ff 	movew #2,0xe0ff2c3a
+   81e10:	2c3a 
+   81e12:	33fc 0001 e0ff 	movew #1,0xe0ff2c76
+   81e18:	2c76 
+   81e1a:	7401           	moveq #1,%d2
+   81e1c:	203c 0000 1000 	movel #4096,%d0
+   81e22:	6000 fae2      	braw 0x81906

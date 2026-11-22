@@ -1,0 +1,325 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+000770b6 <.data+0x770b6>:
+   770b6:	2079 e0ff 1018 	moveal 0xe0ff1018,%a0
+   770bc:	d0ed 0008      	addaw %a5@(8),%a0
+   770c0:	3428 0004      	movew %a0@(4),%d2
+   770c4:	6648           	bnes 0x7710e
+   770c6:	3010           	movew %a0@,%d0
+   770c8:	e748           	lslw #3,%d0
+   770ca:	9079 e0ff 1a32 	subw 0xe0ff1a32,%d0
+   770d0:	3628 0002      	movew %a0@(2),%d3
+   770d4:	e74b           	lslw #3,%d3
+   770d6:	9679 e0ff 1a30 	subw 0xe0ff1a30,%d3
+   770dc:	3400           	movew %d0,%d2
+   770de:	c5f9 e0ff 1a2c 	mulsw 0xe0ff1a2c,%d2
+   770e4:	3203           	movew %d3,%d1
+   770e6:	c3f9 e0ff 1a2a 	mulsw 0xe0ff1a2a,%d1
+   770ec:	9481           	subl %d1,%d2
+   770ee:	e58a           	lsll #2,%d2
+   770f0:	4842           	swap %d2
+   770f2:	c1f9 e0ff 1a2a 	mulsw 0xe0ff1a2a,%d0
+   770f8:	c7f9 e0ff 1a2c 	mulsw 0xe0ff1a2c,%d3
+   770fe:	d680           	addl %d0,%d3
+   77100:	e58b           	lsll #2,%d3
+   77102:	4843           	swap %d3
+   77104:	3142 0004      	movew %d2,%a0@(4)
+   77108:	3143 0006      	movew %d3,%a0@(6)
+   7710c:	6004           	bras 0x77112
+   7710e:	3628 0006      	movew %a0@(6),%d3
+   77112:	2079 e0ff 1018 	moveal 0xe0ff1018,%a0
+   77118:	d0ed 000a      	addaw %a5@(10),%a0
+   7711c:	3828 0004      	movew %a0@(4),%d4
+   77120:	6648           	bnes 0x7716a
+   77122:	3010           	movew %a0@,%d0
+   77124:	e748           	lslw #3,%d0
+   77126:	9079 e0ff 1a32 	subw 0xe0ff1a32,%d0
+   7712c:	3a28 0002      	movew %a0@(2),%d5
+   77130:	e74d           	lslw #3,%d5
+   77132:	9a79 e0ff 1a30 	subw 0xe0ff1a30,%d5
+   77138:	3800           	movew %d0,%d4
+   7713a:	c9f9 e0ff 1a2c 	mulsw 0xe0ff1a2c,%d4
+   77140:	3205           	movew %d5,%d1
+   77142:	c3f9 e0ff 1a2a 	mulsw 0xe0ff1a2a,%d1
+   77148:	9881           	subl %d1,%d4
+   7714a:	e58c           	lsll #2,%d4
+   7714c:	4844           	swap %d4
+   7714e:	c1f9 e0ff 1a2a 	mulsw 0xe0ff1a2a,%d0
+   77154:	cbf9 e0ff 1a2c 	mulsw 0xe0ff1a2c,%d5
+   7715a:	da80           	addl %d0,%d5
+   7715c:	e58d           	lsll #2,%d5
+   7715e:	4845           	swap %d5
+   77160:	3144 0004      	movew %d4,%a0@(4)
+   77164:	3145 0006      	movew %d5,%a0@(6)
+   77168:	6004           	bras 0x7716e
+   7716a:	3a28 0006      	movew %a0@(6),%d5
+   7716e:	e94f           	lslw #4,%d7
+   77170:	41fa fd50      	lea %pc@(0x76ec2),%a0
+   77174:	41f0 7000      	lea %a0@(0,%d7:w),%a0
+   77178:	3028 0008      	movew %a0@(8),%d0
+   7717c:	b640           	cmpw %d0,%d3
+   7717e:	6c08           	bges 0x77188
+   77180:	ba40           	cmpw %d0,%d5
+   77182:	6c04           	bges 0x77188
+   77184:	6000 019c      	braw 0x77322
+   77188:	0240 0001      	andiw #1,%d0
+   7718c:	6700 0196      	beqw 0x77324
+   77190:	302d 0018      	movew %a5@(24),%d0
+   77194:	2279 e0ff 101c 	moveal 0xe0ff101c,%a1
+   7719a:	3c31 0004      	movew %a1@(4,%d0:w),%d6
+   7719e:	3e31 0006      	movew %a1@(6,%d0:w),%d7
+   771a2:	3002           	movew %d2,%d0
+   771a4:	d043           	addw %d3,%d0
+   771a6:	6a22           	bpls 0x771ca
+   771a8:	3204           	movew %d4,%d1
+   771aa:	d245           	addw %d5,%d1
+   771ac:	6b00 0174      	bmiw 0x77322
+   771b0:	9240           	subw %d0,%d1
+   771b2:	3607           	movew %d7,%d3
+   771b4:	9646           	subw %d6,%d3
+   771b6:	c7c0           	mulsw %d0,%d3
+   771b8:	87c1           	divsw %d1,%d3
+   771ba:	9c43           	subw %d3,%d6
+   771bc:	3604           	movew %d4,%d3
+   771be:	9642           	subw %d2,%d3
+   771c0:	c7c0           	mulsw %d0,%d3
+   771c2:	87c1           	divsw %d1,%d3
+   771c4:	9443           	subw %d3,%d2
+   771c6:	3602           	movew %d2,%d3
+   771c8:	4443           	negw %d3
+   771ca:	3205           	movew %d5,%d1
+   771cc:	9244           	subw %d4,%d1
+   771ce:	6a20           	bpls 0x771f0
+   771d0:	3003           	movew %d3,%d0
+   771d2:	9042           	subw %d2,%d0
+   771d4:	6b00 014c      	bmiw 0x77322
+   771d8:	9041           	subw %d1,%d0
+   771da:	3a02           	movew %d2,%d5
+   771dc:	9a44           	subw %d4,%d5
+   771de:	cbc1           	mulsw %d1,%d5
+   771e0:	8bc0           	divsw %d0,%d5
+   771e2:	9845           	subw %d5,%d4
+   771e4:	3a06           	movew %d6,%d5
+   771e6:	9a47           	subw %d7,%d5
+   771e8:	cbc1           	mulsw %d1,%d5
+   771ea:	8bc0           	divsw %d0,%d5
+   771ec:	9e45           	subw %d5,%d7
+   771ee:	3a04           	movew %d4,%d5
+   771f0:	9668 0008      	subw %a0@(8),%d3
+   771f4:	6a24           	bpls 0x7721a
+   771f6:	9a68 0008      	subw %a0@(8),%d5
+   771fa:	6b00 0126      	bmiw 0x77322
+   771fe:	3203           	movew %d3,%d1
+   77200:	9245           	subw %d5,%d1
+   77202:	3006           	movew %d6,%d0
+   77204:	9047           	subw %d7,%d0
+   77206:	c1c3           	mulsw %d3,%d0
+   77208:	81c1           	divsw %d1,%d0
+   7720a:	9c40           	subw %d0,%d6
+   7720c:	3002           	movew %d2,%d0
+   7720e:	9044           	subw %d4,%d0
+   77210:	c1c3           	mulsw %d3,%d0
+   77212:	81c1           	divsw %d1,%d0
+   77214:	9440           	subw %d0,%d2
+   77216:	7600           	moveq #0,%d3
+   77218:	6020           	bras 0x7723a
+   7721a:	9a68 0008      	subw %a0@(8),%d5
+   7721e:	6a1a           	bpls 0x7723a
+   77220:	3203           	movew %d3,%d1
+   77222:	9245           	subw %d5,%d1
+   77224:	3006           	movew %d6,%d0
+   77226:	9047           	subw %d7,%d0
+   77228:	c1c5           	mulsw %d5,%d0
+   7722a:	81c1           	divsw %d1,%d0
+   7722c:	9e40           	subw %d0,%d7
+   7722e:	3002           	movew %d2,%d0
+   77230:	9044           	subw %d4,%d0
+   77232:	c1c5           	mulsw %d5,%d0
+   77234:	81c1           	divsw %d1,%d0
+   77236:	9840           	subw %d0,%d4
+   77238:	7a00           	moveq #0,%d5
+   7723a:	d668 0008      	addw %a0@(8),%d3
+   7723e:	da68 0008      	addw %a0@(8),%d5
+   77242:	ef4e           	lslw #7,%d6
+   77244:	ef4f           	lslw #7,%d7
+   77246:	c5fc 0050      	mulsw #80,%d2
+   7724a:	85c3           	divsw %d3,%d2
+   7724c:	0642 0050      	addiw #80,%d2
+   77250:	6a00 0004      	bplw 0x77256
+   77254:	7400           	moveq #0,%d2
+   77256:	c9fc 0050      	mulsw #80,%d4
+   7725a:	89c5           	divsw %d5,%d4
+   7725c:	0644 0050      	addiw #80,%d4
+   77260:	0c44 00a0      	cmpiw #160,%d4
+   77264:	6f00 0006      	blew 0x7726c
+   77268:	383c 00a0      	movew #160,%d4
+   7726c:	9842           	subw %d2,%d4
+   7726e:	6f00 00b2      	blew 0x77322
+   77272:	203c 0050 0000 	movel #5242880,%d0
+   77278:	2200           	movel %d0,%d1
+   7727a:	80c3           	divuw %d3,%d0
+   7727c:	82c5           	divuw %d5,%d1
+   7727e:	33c1 e0ff 0016 	movew %d1,0xe0ff0016
+   77284:	33c4 e0ff 0018 	movew %d4,0xe0ff0018
+   7728a:	7600           	moveq #0,%d3
+   7728c:	3600           	movew %d0,%d3
+   7728e:	7a00           	moveq #0,%d5
+   77290:	3a01           	movew %d1,%d5
+   77292:	9a83           	subl %d3,%d5
+   77294:	8bc4           	divsw %d4,%d5
+   77296:	33c5 e0ff 0000 	movew %d5,0xe0ff0000
+   7729c:	3606           	movew %d6,%d3
+   7729e:	c6c0           	muluw %d0,%d3
+   772a0:	3a07           	movew %d7,%d5
+   772a2:	cac1           	muluw %d1,%d5
+   772a4:	4842           	swap %d2
+   772a6:	4844           	swap %d4
+   772a8:	3400           	movew %d0,%d2
+   772aa:	d441           	addw %d1,%d2
+   772ac:	e252           	roxrw #1,%d2
+   772ae:	2203           	movel %d3,%d1
+   772b0:	d285           	addl %d5,%d1
+   772b2:	e291           	roxrl #1,%d1
+   772b4:	3806           	movew %d6,%d4
+   772b6:	d847           	addw %d7,%d4
+   772b8:	e254           	roxrw #1,%d4
+   772ba:	82c2           	divuw %d2,%d1
+   772bc:	9841           	subw %d1,%d4
+   772be:	6c02           	bges 0x772c2
+   772c0:	4444           	negw %d4
+   772c2:	0444 0200      	subiw #512,%d4
+   772c6:	650c           	bcss 0x772d4
+   772c8:	223c 0098 9680 	movel #10000000,%d1
+   772ce:	82c2           	divuw %d2,%d1
+   772d0:	9841           	subw %d1,%d4
+   772d2:	640a           	bccs 0x772de
+   772d4:	5888           	addql #4,%a0
+   772d6:	7600           	moveq #0,%d3
+   772d8:	3606           	movew %d6,%d3
+   772da:	7a00           	moveq #0,%d5
+   772dc:	3a07           	movew %d7,%d5
+   772de:	4842           	swap %d2
+   772e0:	4844           	swap %d4
+   772e2:	9a83           	subl %d3,%d5
+   772e4:	6514           	bcss 0x772fa
+   772e6:	4845           	swap %d5
+   772e8:	7e00           	moveq #0,%d7
+   772ea:	3e05           	movew %d5,%d7
+   772ec:	8ec4           	divuw %d4,%d7
+   772ee:	4847           	swap %d7
+   772f0:	3a07           	movew %d7,%d5
+   772f2:	4845           	swap %d5
+   772f4:	8ac4           	divuw %d4,%d5
+   772f6:	3e05           	movew %d5,%d7
+   772f8:	6016           	bras 0x77310
+   772fa:	4485           	negl %d5
+   772fc:	4845           	swap %d5
+   772fe:	7e00           	moveq #0,%d7
+   77300:	3e05           	movew %d5,%d7
+   77302:	8ec4           	divuw %d4,%d7
+   77304:	4847           	swap %d7
+   77306:	3a07           	movew %d7,%d5
+   77308:	4845           	swap %d5
+   7730a:	8ac4           	divuw %d4,%d5
+   7730c:	3e05           	movew %d5,%d7
+   7730e:	4487           	negl %d7
+   77310:	2255           	moveal %a5@,%a1
+   77312:	e74a           	lslw #3,%d2
+   77314:	2c03           	movel %d3,%d6
+   77316:	3604           	movew %d4,%d3
+   77318:	5343           	subqw #1,%d3
+   7731a:	3800           	movew %d0,%d4
+   7731c:	2050           	moveal %a0@,%a0
+   7731e:	4e90           	jsr %a0@
+   77320:	4e75           	rts
+   77322:	4e75           	rts
+   77324:	3002           	movew %d2,%d0
+   77326:	d043           	addw %d3,%d0
+   77328:	6a18           	bpls 0x77342
+   7732a:	3204           	movew %d4,%d1
+   7732c:	d245           	addw %d5,%d1
+   7732e:	6b00 00d0      	bmiw 0x77400
+   77332:	9240           	subw %d0,%d1
+   77334:	3604           	movew %d4,%d3
+   77336:	9642           	subw %d2,%d3
+   77338:	c7c0           	mulsw %d0,%d3
+   7733a:	87c1           	divsw %d1,%d3
+   7733c:	9443           	subw %d3,%d2
+   7733e:	3602           	movew %d2,%d3
+   77340:	4443           	negw %d3
+   77342:	3205           	movew %d5,%d1
+   77344:	9244           	subw %d4,%d1
+   77346:	6a16           	bpls 0x7735e
+   77348:	3003           	movew %d3,%d0
+   7734a:	9042           	subw %d2,%d0
+   7734c:	6b00 00b2      	bmiw 0x77400
+   77350:	9041           	subw %d1,%d0
+   77352:	3a02           	movew %d2,%d5
+   77354:	9a44           	subw %d4,%d5
+   77356:	cbc1           	mulsw %d1,%d5
+   77358:	8bc0           	divsw %d0,%d5
+   7735a:	9845           	subw %d5,%d4
+   7735c:	3a04           	movew %d4,%d5
+   7735e:	9668 0008      	subw %a0@(8),%d3
+   77362:	6a1a           	bpls 0x7737e
+   77364:	9a68 0008      	subw %a0@(8),%d5
+   77368:	6b00 0096      	bmiw 0x77400
+   7736c:	3203           	movew %d3,%d1
+   7736e:	9245           	subw %d5,%d1
+   77370:	3002           	movew %d2,%d0
+   77372:	9044           	subw %d4,%d0
+   77374:	c1c3           	mulsw %d3,%d0
+   77376:	81c1           	divsw %d1,%d0
+   77378:	9440           	subw %d0,%d2
+   7737a:	7600           	moveq #0,%d3
+   7737c:	6016           	bras 0x77394
+   7737e:	9a68 0008      	subw %a0@(8),%d5
+   77382:	6a10           	bpls 0x77394
+   77384:	3203           	movew %d3,%d1
+   77386:	9245           	subw %d5,%d1
+   77388:	3002           	movew %d2,%d0
+   7738a:	9044           	subw %d4,%d0
+   7738c:	c1c5           	mulsw %d5,%d0
+   7738e:	81c1           	divsw %d1,%d0
+   77390:	9840           	subw %d0,%d4
+   77392:	7a00           	moveq #0,%d5
+   77394:	d668 0008      	addw %a0@(8),%d3
+   77398:	da68 0008      	addw %a0@(8),%d5
+   7739c:	c5fc 0050      	mulsw #80,%d2
+   773a0:	85c3           	divsw %d3,%d2
+   773a2:	0642 0050      	addiw #80,%d2
+   773a6:	6a00 0004      	bplw 0x773ac
+   773aa:	7400           	moveq #0,%d2
+   773ac:	c9fc 0050      	mulsw #80,%d4
+   773b0:	89c5           	divsw %d5,%d4
+   773b2:	0644 0050      	addiw #80,%d4
+   773b6:	0c44 00a0      	cmpiw #160,%d4
+   773ba:	6f00 0006      	blew 0x773c2
+   773be:	383c 00a0      	movew #160,%d4
+   773c2:	9842           	subw %d2,%d4
+   773c4:	6f00 003a      	blew 0x77400
+   773c8:	203c 0050 0000 	movel #5242880,%d0
+   773ce:	2200           	movel %d0,%d1
+   773d0:	80c3           	divuw %d3,%d0
+   773d2:	82c5           	divuw %d5,%d1
+   773d4:	33c1 e0ff 0016 	movew %d1,0xe0ff0016
+   773da:	33c4 e0ff 0018 	movew %d4,0xe0ff0018
+   773e0:	7600           	moveq #0,%d3
+   773e2:	3600           	movew %d0,%d3
+   773e4:	7a00           	moveq #0,%d5
+   773e6:	3a01           	movew %d1,%d5
+   773e8:	9a83           	subl %d3,%d5
+   773ea:	8bc4           	divsw %d4,%d5
+   773ec:	33c5 e0ff 0000 	movew %d5,0xe0ff0000
+   773f2:	e74a           	lslw #3,%d2
+   773f4:	3604           	movew %d4,%d3
+   773f6:	5343           	subqw #1,%d3
+   773f8:	3800           	movew %d0,%d4
+   773fa:	2050           	moveal %a0@,%a0
+   773fc:	4e90           	jsr %a0@
+   773fe:	4e75           	rts
+   77400:	4e75           	rts

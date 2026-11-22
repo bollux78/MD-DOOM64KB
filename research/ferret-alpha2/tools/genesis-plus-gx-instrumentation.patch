@@ -1,0 +1,255 @@
+diff --git a/core/cart_hw/sram.c b/core/cart_hw/sram.c
+index b4d7d06..a7c6d9b 100644
+--- a/core/cart_hw/sram.c
++++ b/core/cart_hw/sram.c
+@@ -257,22 +257,38 @@ void sram_init(void)
+   }
+ }
+ 
++unsigned int retro_sram_block;
++unsigned long long retro_sram_counts[4];
+ unsigned int sram_read_byte(unsigned int address)
+ {
++  retro_sram_counts[0]++;
++  if (retro_sram_block == 1 || (retro_sram_block == 2 && !(address & 1))) return 0xff;
++
+   return sram.sram[address & 0xffff];
+ }
+ 
+ unsigned int sram_read_word(unsigned int address)
+ {
++  retro_sram_counts[1]++;
++  if (retro_sram_block == 1) return 0xffff;
++  if (retro_sram_block == 2) return 0xff00 | sram.sram[(address | 1) & 0xffff];
++
+   return READ_WORD(sram.sram, address & 0xfffe);
+ }
+ 
+ void sram_write_byte(unsigned int address, unsigned int data)
+ {
++  retro_sram_counts[2]++;
++  if (retro_sram_block == 1 || (retro_sram_block == 2 && !(address & 1))) return;
++
+   sram.sram[address & 0xffff] = data;
+ }
+ 
+ void sram_write_word(unsigned int address, unsigned int data)
+ {
++  retro_sram_counts[3]++;
++  if (retro_sram_block == 1) return;
++  if (retro_sram_block == 2) { sram.sram[(address | 1) & 0xffff] = data; return; }
++
+   WRITE_WORD(sram.sram, address & 0xfffe, data);
+ }
+diff --git a/core/m68k/m68kcpu.c b/core/m68k/m68kcpu.c
+index 07d2514..d5fbc03 100644
+--- a/core/m68k/m68kcpu.c
++++ b/core/m68k/m68kcpu.c
+@@ -18,6 +18,7 @@ extern int vdp_68k_irq_ack(int int_level);
+ #include "m68kconf.h"
+ #include "m68kcpu.h"
+ #include "m68kops.h"
++#include <string.h>
+ 
+ /* ======================================================================== */
+ /* ================================= DATA ================================= */
+@@ -232,6 +233,7 @@ void m68k_set_irq_delay(unsigned int int_level)
+       /* Finish executing current instruction */
+       USE_CYCLES(CYC_INSTRUCTION[REG_IR]);
+ 
++
+       /* One instruction delay before interrupt */
+       irq_latency = 1;
+       m68ki_trace_t1() /* auto-disable (see m68kcpu.h) */
+@@ -254,6 +256,23 @@ void m68k_set_irq_delay(unsigned int int_level)
+   m68ki_check_interrupts(); /* Level triggered (IRQ) */
+ }
+ 
++extern unsigned int retro_trace_active;
++unsigned int retro_hint_pc, retro_hint_hits, retro_pack_pc, retro_pack_end, retro_pack_hits;
++unsigned long long retro_hint_cycles, retro_pack_cycles;
++static unsigned int hint_start, pack_start, inside_hint, inside_pack;
++
++unsigned int retro_research_active;
++unsigned long long retro_research_cycles[1048576];
++unsigned int retro_research_hits[1048576];
++extern unsigned int retro_trace_frame;
++extern unsigned short v_counter;
++unsigned int retro_research_probes, retro_research_probe[32768][22];
++unsigned char retro_research_buffer[11520], retro_research_completed_source[11520], retro_research_completed_tiles[23040];
++unsigned int retro_research_vdp_lines[313], retro_research_tilebase, retro_research_captured, retro_research_entry_seen;
++extern unsigned int retro_dread_vram_word(unsigned int address);
++
++unsigned int retro_research_peek(unsigned int a) { return m68ki_read_8(a); }
++unsigned int retro_research_cpu(unsigned int r) { return m68k_get_reg((m68k_register_t)r); }
+ void m68k_run(unsigned int cycles) 
+ {
+   /* Make sure CPU is not already ahead */
+@@ -296,6 +315,18 @@ void m68k_run(unsigned int cycles)
+       cpu_hook(HOOK_M68K_E, 0, REG_PC, 0);
+ #endif
+ 
++    if (retro_trace_active)
++    {
++      const unsigned int pc = REG_PC & 0xffffff;
++      if (pc == retro_hint_pc) { hint_start = m68k.cycles; inside_hint = 1; }
++      if (pc == retro_pack_pc) { pack_start = m68k.cycles; inside_pack = 1; }
++      if (pc == retro_pack_end && inside_pack)
++      {
++        retro_pack_cycles += (m68k.cycles + 896040u - pack_start) % 896040u;
++        retro_pack_hits++;
++        inside_pack = 0;
++      }
++    }
+     /* Decode next instruction */
+     REG_IR = m68ki_read_imm_16();
+ 
+@@ -306,10 +337,55 @@ void m68k_run(unsigned int cycles)
+       m68k.cycles += (2*7);
+     }
+ 
++    if (retro_research_active && retro_research_probes < 32768) {
++      unsigned int pc = (REG_PC - 2) & 0xffffff;
++      if (pc == 0x7e150 || pc == 0x7e160 || pc == 0x7e132 || pc == 0x7e13e || pc == 0x7e140 || pc == 0x7e14e || pc == 0x86c70 || pc == 0x7e45a || pc == 0x7e368 || pc == 0x7e3e8 || pc == 0x7e17a || pc == 0x7e1ee || pc == 0x8b630 || pc == 0x8b70e || pc == 0x7e3ea || pc == 0x7e444) {
++        unsigned int *p = retro_research_probe[retro_research_probes++];
++        p[0]=retro_trace_frame;p[1]=m68k.cycles;p[2]=pc;p[3]=v_counter;
++        for (unsigned int r=0;r<16;r++) p[4+r]=m68k_get_reg((m68k_register_t)r);
++        unsigned int sp = m68k_get_reg(M68K_REG_SP);
++        p[20]=m68ki_read_32(sp+4);p[21]=m68ki_read_32(sp+8);
++        if(pc==0x7e368 || pc==0x7e3ea) {
++          retro_research_entry_seen=1;
++          for(unsigned int i=0;i<11520;i++) retro_research_buffer[i]=m68ki_read_8(p[20]+i);
++          retro_research_tilebase=p[21];
++        }
++        if((pc==0x7e3e8 || pc==0x7e444) && !retro_research_captured && retro_research_entry_seen) {
++          retro_research_captured=1;
++          memcpy(retro_research_completed_source,retro_research_buffer,11520);
++          for(unsigned int i=0;i<23040;i+=2) {
++            unsigned int word;
++            if(pc==0x7e3e8) {
++              word=retro_dread_vram_word(retro_research_tilebase*32+i);
++              retro_research_completed_tiles[i]=word&255;retro_research_completed_tiles[i+1]=word>>8;
++            } else {
++              retro_research_completed_tiles[i]=m68ki_read_8(retro_research_tilebase+i);
++              retro_research_completed_tiles[i+1]=m68ki_read_8(retro_research_tilebase+i+1);
++            }
++          }
++        }
++      }
++    }
++    if (retro_research_active && v_counter < 313) {
++      unsigned int pc=(REG_PC-2)&0xffffff;
++      if(pc==0x7e3b6 || pc==0x7e3b8 || pc==0x7e3c0 || pc==0x7e3c2 || pc==0x7e3ca || pc==0x7e3cc || pc==0x7e3d4 || pc==0x7e3d6) retro_research_vdp_lines[v_counter]++;
++    }
++    unsigned int research_pc = REG_PC - 2;
++    unsigned int research_start = m68k.cycles;
+     /* Execute instruction */
+     m68ki_instruction_jump_table[REG_IR]();
+     USE_CYCLES(CYC_INSTRUCTION[REG_IR]);
++    if (retro_research_active && research_pc < 0x200000) {
++      retro_research_cycles[research_pc >> 1] += m68k.cycles - research_start;
++      retro_research_hits[research_pc >> 1]++;
++    }
+ 
++    if (retro_trace_active && inside_hint && REG_IR == 0x4e73)
++    {
++      retro_hint_cycles += (m68k.cycles + 896040u - hint_start) % 896040u;
++      retro_hint_hits++;
++      inside_hint = 0;
++    }
+     /* Trace m68k_exception, if necessary */
+     m68ki_exception_if_trace(); /* auto-disable (see m68kcpu.h) */
+   }
+diff --git a/core/vdp_ctrl.c b/core/vdp_ctrl.c
+index b321afc..31de490 100644
+--- a/core/vdp_ctrl.c
++++ b/core/vdp_ctrl.c
+@@ -124,6 +124,10 @@ static void vdp_z80_data_w_gg(unsigned int data);
+ static void vdp_z80_data_w_sg(unsigned int data);
+ static void vdp_bus_w(unsigned int data);
+ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles);
++extern unsigned int retro_trace_frame;
++unsigned int retro_trace_active, retro_trace_dmas, retro_trace_regs;
++unsigned int retro_research_dma_lines[32768];
++unsigned int retro_trace_dma[32768][6], retro_trace_reg[16384][4];
+ static void vdp_dma_68k_ext(unsigned int length);
+ static void vdp_dma_68k_ram(unsigned int length);
+ static void vdp_dma_68k_io(unsigned int length);
+@@ -885,6 +889,14 @@ void vdp_68k_ctrl_w(unsigned int data)
+             /* DMA source address */
+             dma_src = (reg[22] << 8) | reg[21];
+ 
++            if (retro_trace_active && retro_trace_dmas < 32768)
++            {
++              retro_research_dma_lines[retro_trace_dmas] = v_counter;
++              unsigned int *event = retro_trace_dma[retro_trace_dmas++];
++              event[0] = retro_trace_frame; event[1] = m68k.cycles;
++              event[2] = (reg[23] << 17) | (dma_src << 1);
++              event[3] = addr; event[4] = dma_length; event[5] = code;
++            }
+             /* Transfer from SVP ROM/RAM ($000000-$3fffff) or CD Word-RAM ($200000-$3fffff/$600000-$7fffff) */
+             if (((system_hw == SYSTEM_MCD) && ((reg[23] & 0x70) == ((scd.cartridge.boot >> 1) + 0x10))) || (svp && !(reg[23] & 0x60)))
+             {
+@@ -1546,6 +1558,12 @@ int vdp_68k_irq_ack(int int_level)
+ 
+ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
+ {
++  if (retro_trace_active && r == 2 && retro_trace_regs < 16384)
++  {
++    unsigned int *event = retro_trace_reg[retro_trace_regs++];
++    event[0] = retro_trace_frame; event[1] = cycles; event[2] = r; event[3] = d;
++  }
++
+ #ifdef LOGVDP
+   error("[%d(%d)][%d(%d)] VDP register %d write -> 0x%x (%x)\n", v_counter, (v_counter + (cycles - mcycles_vdp)/MCYCLES_PER_LINE)%lines_per_frame, cycles, cycles%MCYCLES_PER_LINE, r, d, m68k_get_reg(M68K_REG_PC));
+ #endif
+@@ -3310,3 +3328,9 @@ static void vdp_dma_fill(unsigned int length)
+     }
+   }
+ }
++
++unsigned int retro_dread_vram_word(unsigned int address) { return READ_WORD(vram, address & 0xfffe); }
++unsigned int retro_dread_cram_word(unsigned int address) { return READ_WORD(cram, address & 0x7e); }
++unsigned int retro_dread_vdp_reg(unsigned int index) { return reg[index & 31]; }
++
++unsigned int retro_research_vsram_word(unsigned int a) { return READ_WORD(vsram, a & 0x7e); }
+diff --git a/core/vdp_render.c b/core/vdp_render.c
+index ae75fd9..888db36 100644
+--- a/core/vdp_render.c
++++ b/core/vdp_render.c
+@@ -1120,8 +1120,12 @@ void color_update_m4(int index, unsigned int data)
+   }
+ }
+ 
++unsigned int retro_palette_trace;
++unsigned int retro_palette_updates[4][262];
++
+ void color_update_m5(int index, unsigned int data)
+ {
++  if (retro_palette_trace && v_counter < 262) retro_palette_updates[(index >> 4) & 3][v_counter]++;
+   /* Palette Mode */
+   if (!(reg[0] & 0x04))
+   {
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 3e63862..5f86690 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -3742,8 +3742,18 @@ void retro_reset(void)
+    gen_reset(0);
+ }
+ 
++unsigned int retro_trace_frame;
++unsigned int retro_trace_hardware(void) { return system_hw; }
++unsigned int retro_trace_sraminfo(unsigned int i) {
++ switch(i) {
++ case 0: return sram.type; case 1: return sram.on; case 2: return sram.start; case 3: return sram.end;
++ case 4: return (m68k.memory_map[0x20].read16 == sram_read_word);
++ default: return sram.detected;
++ }
++}
+ void retro_run(void) 
+ {
++  retro_trace_frame++;
+    int do_skip = 0;
+    bool updated = false;
+    int vwoffset = 0;

@@ -1,0 +1,54 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0007e368 <.data+0x7e368>:
+   7e368:	48e7 3f3e      	moveml %d2-%d7/%a2-%fp,%sp@-
+   7e36c:	286f 0030      	moveal %sp@(48),%a4
+   7e370:	202f 0034      	movel %sp@(52),%d0
+   7e374:	4df9 00c0 0000 	lea 0xc00000,%fp
+   7e37a:	4bf9 00c0 0004 	lea 0xc00004,%a5
+   7e380:	eb88           	lsll #5,%d0
+   7e382:	2200           	movel %d0,%d1
+   7e384:	0281 0000 3fff 	andil #16383,%d1
+   7e38a:	4841           	swap %d1
+   7e38c:	ee88           	lsrl #7,%d0
+   7e38e:	ee88           	lsrl #7,%d0
+   7e390:	8081           	orl %d1,%d0
+   7e392:	0080 4000 0000 	oril #1073741824,%d0
+   7e398:	2a80           	movel %d0,%a5@
+   7e39a:	3e3c 0011      	movew #17,%d7
+   7e39e:	3c3c 0090      	movew #144,%d6
+   7e3a2:	383c 0120      	movew #288,%d4
+   7e3a6:	244c           	moveal %a4,%a2
+   7e3a8:	7a27           	moveq #39,%d5
+   7e3aa:	204a           	moveal %a2,%a0
+   7e3ac:	43f2 6000      	lea %a2@(0,%d6:w),%a1
+   7e3b0:	3018           	movew %a0@+,%d0
+   7e3b2:	4840           	swap %d0
+   7e3b4:	3019           	movew %a1@+,%d0
+   7e3b6:	2c80           	movel %d0,%fp@
+   7e3b8:	2c80           	movel %d0,%fp@
+   7e3ba:	3018           	movew %a0@+,%d0
+   7e3bc:	4840           	swap %d0
+   7e3be:	3019           	movew %a1@+,%d0
+   7e3c0:	2c80           	movel %d0,%fp@
+   7e3c2:	2c80           	movel %d0,%fp@
+   7e3c4:	3018           	movew %a0@+,%d0
+   7e3c6:	4840           	swap %d0
+   7e3c8:	3019           	movew %a1@+,%d0
+   7e3ca:	2c80           	movel %d0,%fp@
+   7e3cc:	2c80           	movel %d0,%fp@
+   7e3ce:	3010           	movew %a0@,%d0
+   7e3d0:	4840           	swap %d0
+   7e3d2:	3011           	movew %a1@,%d0
+   7e3d4:	2c80           	movel %d0,%fp@
+   7e3d6:	2c80           	movel %d0,%fp@
+   7e3d8:	d4c4           	addaw %d4,%a2
+   7e3da:	51cd ffce      	dbf %d5,0x7e3aa
+   7e3de:	508c           	addql #8,%a4
+   7e3e0:	51cf ffc4      	dbf %d7,0x7e3a6
+   7e3e4:	4cdf 7cfc      	moveml %sp@+,%d2-%d7/%a2-%fp
+   7e3e8:	4e75           	rts

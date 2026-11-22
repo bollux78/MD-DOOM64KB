@@ -1,0 +1,21 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0007e0c6 <.data+0x7e0c6>:
+   7e0c6:	48e7 2020      	moveml %d2/%a2,%sp@-
+   7e0ca:	323c 009f      	movew #159,%d1
+   7e0ce:	41f9 e0ff 1024 	lea 0xe0ff1024,%a0
+   7e0d4:	43f9 e0ff 0e96 	lea 0xe0ff0e96,%a1
+   7e0da:	7048           	moveq #72,%d0
+   7e0dc:	7400           	moveq #0,%d2
+   7e0de:	3142 0502      	movew %d2,%a0@(1282)
+   7e0e2:	d4d9           	addaw %a1@+,%a2
+   7e0e4:	214a 0504      	movel %a2,%a0@(1284)
+   7e0e8:	20ca           	movel %a2,%a0@+
+   7e0ea:	20c0           	movel %d0,%a0@+
+   7e0ec:	51c9 fff0      	dbf %d1,0x7e0de
+   7e0f0:	4cdf 0404      	moveml %sp@+,%d2/%a2
+   7e0f4:	4e75           	rts

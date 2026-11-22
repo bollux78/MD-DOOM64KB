@@ -1,0 +1,9 @@
+{
+  "initial_sp": "0xe1000000",
+  "entry_pc": "0x200",
+  "console": "SEGA MEGA DRIVE ",
+  "copyright": "(C)SGDK 2024    ",
+  "title": "SAMPLE PROGRAM                                  ",
+  "vblank_vector": "0x26c",
+  "hint_vector": "0xe0ff0fdc"
+}

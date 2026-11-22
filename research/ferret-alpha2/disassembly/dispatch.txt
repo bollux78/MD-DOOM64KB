@@ -1,0 +1,13 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+00086c70 <.data+0x86c70>:
+   86c70:	2079 e0ff 31c6 	moveal 0xe0ff31c6,%a0
+   86c76:	2f10           	movel %a0@,%sp@-
+   86c78:	4eb9 0007 e150 	jsr 0x7e150
+   86c7e:	4eb9 0007 e132 	jsr 0x7e132
+   86c84:	588f           	addql #4,%sp
+   86c86:	4ef9 0007 e140 	jmp 0x7e140

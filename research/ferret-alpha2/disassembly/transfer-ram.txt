@@ -1,0 +1,43 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0007e3ea <.data+0x7e3ea>:
+   7e3ea:	48e7 3f3e      	moveml %d2-%d7/%a2-%fp,%sp@-
+   7e3ee:	286f 0030      	moveal %sp@(48),%a4
+   7e3f2:	2c6f 0034      	moveal %sp@(52),%fp
+   7e3f6:	3e3c 0011      	movew #17,%d7
+   7e3fa:	3c3c 0090      	movew #144,%d6
+   7e3fe:	383c 0120      	movew #288,%d4
+   7e402:	244c           	moveal %a4,%a2
+   7e404:	7a27           	moveq #39,%d5
+   7e406:	204a           	moveal %a2,%a0
+   7e408:	43f2 6000      	lea %a2@(0,%d6:w),%a1
+   7e40c:	3018           	movew %a0@+,%d0
+   7e40e:	4840           	swap %d0
+   7e410:	3019           	movew %a1@+,%d0
+   7e412:	2cc0           	movel %d0,%fp@+
+   7e414:	2cc0           	movel %d0,%fp@+
+   7e416:	3018           	movew %a0@+,%d0
+   7e418:	4840           	swap %d0
+   7e41a:	3019           	movew %a1@+,%d0
+   7e41c:	2cc0           	movel %d0,%fp@+
+   7e41e:	2cc0           	movel %d0,%fp@+
+   7e420:	3018           	movew %a0@+,%d0
+   7e422:	4840           	swap %d0
+   7e424:	3019           	movew %a1@+,%d0
+   7e426:	2cc0           	movel %d0,%fp@+
+   7e428:	2cc0           	movel %d0,%fp@+
+   7e42a:	3010           	movew %a0@,%d0
+   7e42c:	4840           	swap %d0
+   7e42e:	3011           	movew %a1@,%d0
+   7e430:	2cc0           	movel %d0,%fp@+
+   7e432:	2cc0           	movel %d0,%fp@+
+   7e434:	d4c4           	addaw %d4,%a2
+   7e436:	51cd ffce      	dbf %d5,0x7e406
+   7e43a:	508c           	addql #8,%a4
+   7e43c:	51cf ffc4      	dbf %d7,0x7e402
+   7e440:	4cdf 7cfc      	moveml %sp@+,%d2-%d7/%a2-%fp
+   7e444:	4e75           	rts

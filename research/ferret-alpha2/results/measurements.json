@@ -1,0 +1,401 @@
+[
+  {
+    "variant": "spawn-nosram",
+    "video_frames": 300,
+    "sram_mode": 1,
+    "publication_intervals": 29,
+    "publication_fps": 5.910745856024536,
+    "frame_ms": 169.18338638781916,
+    "frame_ms_min": 150.18895790759254,
+    "frame_ms_max": 283.6999674539641,
+    "conversion_entry_fps": 6.03571395192186,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 30,
+        "mean_ms": 7.706310904505088,
+        "min_ms": 7.594075038401063,
+        "max_ms": 7.968629160037565
+      },
+      "walls": {
+        "count": 29,
+        "mean_ms": 64.28093097236417,
+        "min_ms": 63.95723478822029,
+        "max_ms": 64.33478742875607
+      },
+      "sprites": {
+        "count": 29,
+        "mean_ms": 3.4125752481577036,
+        "min_ms": 2.8777959209899584,
+        "max_ms": 3.8931204943645072
+      },
+      "scene_total": {
+        "count": 29,
+        "mean_ms": 75.42326086746753,
+        "min_ms": 74.9213843286414,
+        "max_ms": 75.83997407491734
+      },
+      "cpu_vdp_convert": {
+        "count": 29,
+        "mean_ms": 59.74762444523747,
+        "min_ms": 58.46022329653629,
+        "max_ms": 64.66021053886271
+      },
+      "ram_convert": null
+    },
+    "dma_words_total": 36304,
+    "world_dma_count": 0,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 34.71797367530084,
+      "convert_ram": 0.0,
+      "vblank_wait": 5.475817891476002,
+      "dma_trigger_instruction_7f420": 0.0
+    },
+    "cpu_vdp_long_writes": 171347,
+    "cpu_vdp_long_writes_active_lines_0_223": 105959
+  },
+  {
+    "variant": "spawn-nosram-long",
+    "video_frames": 1500,
+    "sram_mode": 1,
+    "publication_intervals": 144,
+    "publication_fps": 5.795080616041708,
+    "frame_ms": 172.560153388003,
+    "frame_ms_min": 150.1892186483664,
+    "frame_ms_max": 283.70145740124326,
+    "conversion_entry_fps": 5.79974084284977,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 145,
+        "mean_ms": 7.656116057773541,
+        "min_ms": 7.594075038401063,
+        "max_ms": 7.969281011972192
+      },
+      "walls": {
+        "count": 145,
+        "mean_ms": 64.5037627350153,
+        "min_ms": 63.95723478822029,
+        "max_ms": 66.96305442917094
+      },
+      "sprites": {
+        "count": 146,
+        "mean_ms": 6.114068437475386,
+        "min_ms": 1.8181454160607935,
+        "max_ms": 10.295740566654887
+      },
+      "scene_total": {
+        "count": 145,
+        "mean_ms": 78.29099309369298,
+        "min_ms": 73.76317381119668,
+        "max_ms": 84.19762846954012
+      },
+      "cpu_vdp_convert": {
+        "count": 145,
+        "mean_ms": 61.47647038489754,
+        "min_ms": 58.579642570959905,
+        "max_ms": 64.72113075823883
+      },
+      "ram_convert": null
+    },
+    "dma_words_total": 175464,
+    "world_dma_count": 0,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 34.942234079673405,
+      "convert_ram": 0.0,
+      "vblank_wait": 6.1845246507237785,
+      "dma_trigger_instruction_7f420": 0.0
+    },
+    "cpu_vdp_long_writes": 836135,
+    "cpu_vdp_long_writes_active_lines_0_223": 541903
+  },
+  {
+    "variant": "spawn-sram16",
+    "video_frames": 300,
+    "sram_mode": 0,
+    "publication_intervals": 39,
+    "publication_fps": 8.255389236241506,
+    "frame_ms": 121.13299220465076,
+    "frame_ms_min": 100.12684107430786,
+    "frame_ms_max": 248.8835685354796,
+    "conversion_entry_fps": 8.231532398397045,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 40,
+        "mean_ms": 9.030631919233683,
+        "min_ms": 7.594075038401063,
+        "max_ms": 12.491233755500582
+      },
+      "walls": {
+        "count": 40,
+        "mean_ms": 71.90602669706159,
+        "min_ms": 69.11911988814221,
+        "max_ms": 74.05172072614442
+      },
+      "sprites": {
+        "count": 40,
+        "mean_ms": 3.5717053424387744,
+        "min_ms": 2.9659263025514884,
+        "max_ms": 4.4850020510055515
+      },
+      "scene_total": {
+        "count": 40,
+        "mean_ms": 84.52795210936958,
+        "min_ms": 82.30874780640184,
+        "max_ms": 88.1807231552241
+      },
+      "cpu_vdp_convert": null,
+      "ram_convert": {
+        "count": 40,
+        "mean_ms": 20.603944542299836,
+        "min_ms": 20.498266306658156,
+        "max_ms": 20.881294503444806
+      }
+    },
+    "dma_words_total": 511264,
+    "world_dma_count": 160,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 0.0,
+      "convert_ram": 16.471333330091586,
+      "vblank_wait": 0.0,
+      "dma_trigger_instruction_7f420": 6.4067730199703306
+    },
+    "cpu_vdp_long_writes": 0,
+    "cpu_vdp_long_writes_active_lines_0_223": 0
+  },
+  {
+    "variant": "spawn-sram16-long",
+    "video_frames": 1500,
+    "sram_mode": 0,
+    "publication_intervals": 193,
+    "publication_fps": 7.741024712028423,
+    "frame_ms": 129.18186379719805,
+    "frame_ms_min": 84.87877649254305,
+    "frame_ms_max": 282.2725793362006,
+    "conversion_entry_fps": 7.739312006207698,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 194,
+        "mean_ms": 9.22767070757745,
+        "min_ms": 7.594075038401063,
+        "max_ms": 17.169053608768714
+      },
+      "walls": {
+        "count": 193,
+        "mean_ms": 75.14475917401444,
+        "min_ms": 69.10550549487901,
+        "max_ms": 84.87687680976214
+      },
+      "sprites": {
+        "count": 194,
+        "mean_ms": 5.8525927859508,
+        "min_ms": 1.882287646428061,
+        "max_ms": 10.057553869742291
+      },
+      "scene_total": {
+        "count": 193,
+        "mean_ms": 90.24083996588455,
+        "min_ms": 81.21756629217774,
+        "max_ms": 99.44628903021659
+      },
+      "cpu_vdp_convert": null,
+      "ram_convert": {
+        "count": 194,
+        "mean_ms": 20.59933426909127,
+        "min_ms": 20.49787519549738,
+        "max_ms": 20.88142487383173
+      }
+    },
+    "dma_words_total": 2478048,
+    "world_dma_count": 775,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 0.0,
+      "convert_ram": 15.653562303156113,
+      "vblank_wait": 0.0,
+      "dma_trigger_instruction_7f420": 6.2031606642327946
+    },
+    "cpu_vdp_long_writes": 0,
+    "cpu_vdp_long_writes_active_lines_0_223": 0
+  },
+  {
+    "variant": "spawn-sram8",
+    "video_frames": 300,
+    "sram_mode": 2,
+    "publication_intervals": 29,
+    "publication_fps": 5.910745856024536,
+    "frame_ms": 169.18338638781916,
+    "frame_ms_min": 150.18895790759254,
+    "frame_ms_max": 283.6999674539641,
+    "conversion_entry_fps": 6.03571395192186,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 30,
+        "mean_ms": 7.706310904505088,
+        "min_ms": 7.594075038401063,
+        "max_ms": 7.968629160037565
+      },
+      "walls": {
+        "count": 29,
+        "mean_ms": 64.28093097236417,
+        "min_ms": 63.95723478822029,
+        "max_ms": 64.33478742875607
+      },
+      "sprites": {
+        "count": 29,
+        "mean_ms": 3.4125752481577036,
+        "min_ms": 2.8777959209899584,
+        "max_ms": 3.8931204943645072
+      },
+      "scene_total": {
+        "count": 29,
+        "mean_ms": 75.42326086746753,
+        "min_ms": 74.9213843286414,
+        "max_ms": 75.83997407491734
+      },
+      "cpu_vdp_convert": {
+        "count": 29,
+        "mean_ms": 59.74762444523747,
+        "min_ms": 58.46022329653629,
+        "max_ms": 64.66021053886271
+      },
+      "ram_convert": null
+    },
+    "dma_words_total": 36304,
+    "world_dma_count": 0,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 34.71797367530084,
+      "convert_ram": 0.0,
+      "vblank_wait": 5.475817891476002,
+      "dma_trigger_instruction_7f420": 0.0
+    },
+    "cpu_vdp_long_writes": 171347,
+    "cpu_vdp_long_writes_active_lines_0_223": 105959
+  },
+  {
+    "variant": "spawn-sram8-long",
+    "video_frames": 1500,
+    "sram_mode": 2,
+    "publication_intervals": 144,
+    "publication_fps": 5.795080616041708,
+    "frame_ms": 172.560153388003,
+    "frame_ms_min": 150.1892186483664,
+    "frame_ms_max": 283.70145740124326,
+    "conversion_entry_fps": 5.79974084284977,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 145,
+        "mean_ms": 7.656116057773541,
+        "min_ms": 7.594075038401063,
+        "max_ms": 7.969281011972192
+      },
+      "walls": {
+        "count": 145,
+        "mean_ms": 64.5037627350153,
+        "min_ms": 63.95723478822029,
+        "max_ms": 66.96305442917094
+      },
+      "sprites": {
+        "count": 146,
+        "mean_ms": 6.114068437475386,
+        "min_ms": 1.8181454160607935,
+        "max_ms": 10.295740566654887
+      },
+      "scene_total": {
+        "count": 145,
+        "mean_ms": 78.29099309369298,
+        "min_ms": 73.76317381119668,
+        "max_ms": 84.19762846954012
+      },
+      "cpu_vdp_convert": {
+        "count": 145,
+        "mean_ms": 61.47647038489754,
+        "min_ms": 58.579642570959905,
+        "max_ms": 64.72113075823883
+      },
+      "ram_convert": null
+    },
+    "dma_words_total": 175464,
+    "world_dma_count": 0,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 34.942234079673405,
+      "convert_ram": 0.0,
+      "vblank_wait": 6.1845246507237785,
+      "dma_trigger_instruction_7f420": 0.0
+    },
+    "cpu_vdp_long_writes": 836135,
+    "cpu_vdp_long_writes_active_lines_0_223": 541903
+  },
+  {
+    "variant": "turn-sram16",
+    "video_frames": 300,
+    "sram_mode": 0,
+    "publication_intervals": 46,
+    "publication_fps": 9.63502097237084,
+    "frame_ms": 103.78804601127247,
+    "frame_ms_min": 83.43898456368058,
+    "frame_ms_max": 248.88232070463332,
+    "conversion_entry_fps": 9.664480212566394,
+    "phases_inclusive": {
+      "visible_list": {
+        "count": 47,
+        "mean_ms": 9.829342290611065,
+        "min_ms": 7.594075038401063,
+        "max_ms": 14.955476184822373
+      },
+      "walls": {
+        "count": 46,
+        "mean_ms": 44.15947164849974,
+        "min_ms": 16.140989986157457,
+        "max_ms": 87.46325766729198
+      },
+      "sprites": {
+        "count": 46,
+        "mean_ms": 2.700711233216609,
+        "min_ms": 1.9039291306576673,
+        "max_ms": 5.493491491237015
+      },
+      "scene_total": {
+        "count": 46,
+        "mean_ms": 56.69902504206622,
+        "min_ms": 25.913293449307105,
+        "max_ms": 102.0430436456775
+      },
+      "cpu_vdp_convert": null,
+      "ram_convert": {
+        "count": 46,
+        "mean_ms": 20.532369499394516,
+        "min_ms": 20.49787519549738,
+        "max_ms": 20.88064265151018
+      }
+    },
+    "dma_words_total": 600360,
+    "world_dma_count": 188,
+    "palette0_viewport": {
+      "0": 720
+    },
+    "profile_charged_percent": {
+      "convert_direct": 0.0,
+      "convert_ram": 18.884178620993488,
+      "vblank_wait": 0.0,
+      "dma_trigger_instruction_7f420": 7.533167107705638
+    },
+    "cpu_vdp_long_writes": 0,
+    "cpu_vdp_long_writes_active_lines_0_223": 0
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "vram": {
+    "0x200": {
+      "equal": true,
+      "different_bytes": 0
+    },
+    "0x5c00": {
+      "equal": true,
+      "different_bytes": 0
+    }
+  },
+  "image": {
+    "screen_size": [
+      320,
+      224
+    ],
+    "different_pixels": 16,
+    "different_viewport_pixels": 0,
+    "note": "Partial static pipeline proof, not reconstructed 3D engine."
+  },
+  "rom": {
+    "size": 131072,
+    "sha256": "e796ff0cc16248c1c451f4d9df00346e10e80fcb4d2ae18b5c18069e4f49c733",
+    "kind": "static captured-scene pipeline proof; no reconstructed 3D"
+  }
+}

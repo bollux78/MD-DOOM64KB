@@ -1,0 +1,66 @@
+
+upload/E1M1-alpha2.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0006f6e6 <.data+0x6f6e6>:
+   6f6e6:	23cf e0ff 000a 	movel %sp,0xe0ff000a
+   6f6ec:	4bf9 e0ff 1024 	lea 0xe0ff1024,%a5
+   6f6f2:	dac2           	addaw %d2,%a5
+   6f6f4:	d6fc 000a      	addaw #10,%a3
+   6f6f8:	2004           	movel %d4,%d0
+   6f6fa:	e648           	lsrw #3,%d0
+   6f6fc:	0240 fffc      	andiw #-4,%d0
+   6f700:	49f9 0002 5e76 	lea 0x25e76,%a4
+   6f706:	2874 0000      	moveal %a4@(0,%d0:w),%a4
+   6f70a:	6004           	bras 0x6f710
+   6f70c:	dc87           	addl %d7,%d6
+   6f70e:	504d           	addqw #8,%a5
+   6f710:	b86d 0500      	cmpw %a5@(1280),%d4
+   6f714:	6500 008a      	bcsw 0x6f7a0
+   6f718:	2006           	movel %d6,%d0
+   6f71a:	4840           	swap %d0
+   6f71c:	0240 fffe      	andiw #-2,%d0
+   6f720:	224b           	moveal %a3,%a1
+   6f722:	d2f3 0000      	addaw %a3@(0,%d0:w),%a1
+   6f726:	3419           	movew %a1@+,%d2
+   6f728:	6776           	beqs 0x6f7a0
+   6f72a:	2479 e0ff 0002 	moveal 0xe0ff0002,%a2
+   6f730:	d4c2           	addaw %d2,%a2
+   6f732:	3019           	movew %a1@+,%d0
+   6f734:	9079 e0ff 001e 	subw 0xe0ff001e,%d0
+   6f73a:	c1ec 001c      	mulsw %a4@(28),%d0
+   6f73e:	4840           	swap %d0
+   6f740:	0240 fffc      	andiw #-4,%d0
+   6f744:	3219           	movew %a1@+,%d1
+   6f746:	9279 e0ff 001e 	subw 0xe0ff001e,%d1
+   6f74c:	c3ec 001c      	mulsw %a4@(28),%d1
+   6f750:	4841           	swap %d1
+   6f752:	0241 fffc      	andiw #-4,%d1
+   6f756:	0c40 ff70      	cmpiw #-144,%d0
+   6f75a:	6c00 0006      	bgew 0x6f762
+   6f75e:	303c ff70      	movew #-144,%d0
+   6f762:	0c41 0090      	cmpiw #144,%d1
+   6f766:	6f00 0006      	blew 0x6f76e
+   6f76a:	323c 0090      	movew #144,%d1
+   6f76e:	b041           	cmpw %d1,%d0
+   6f770:	6c00 ffb4      	bgew 0x6f726
+   6f774:	2e6d 0504      	moveal %a5@(1284),%sp
+   6f778:	defc 0048      	addaw #72,%sp
+   6f77c:	3400           	movew %d0,%d2
+   6f77e:	e242           	asrw #1,%d2
+   6f780:	dec2           	addaw %d2,%sp
+   6f782:	206c 001e      	moveal %a4@(30),%a0
+   6f786:	4dfa 0016      	lea %pc@(0x6f79e),%fp
+   6f78a:	9240           	subw %d0,%d1
+   6f78c:	e449           	lsrw #2,%d1
+   6f78e:	41f0 0000      	lea %a0@(0,%d0:w),%a0
+   6f792:	41f0 0000      	lea %a0@(0,%d0:w),%a0
+   6f796:	41f0 0000      	lea %a0@(0,%d0:w),%a0
+   6f79a:	3001           	movew %d1,%d0
+   6f79c:	4ed0           	jmp %a0@
+   6f79e:	6086           	bras 0x6f726
+   6f7a0:	51cb ff6a      	dbf %d3,0x6f70c
+   6f7a4:	2e79 e0ff 000a 	moveal 0xe0ff000a,%sp
+   6f7aa:	4e75           	rts
