@@ -145,7 +145,7 @@ jobs:
           import pathlib,sys,zipfile,subprocess
           out=pathlib.Path(sys.argv[1])
           subprocess.run(["python3","experiments/DREAD_MD/d01/tools/cellstream_report.py",str(out)],check=True)
-          with zipfile.ZipFile(out/"DREAD-CELLSTREAM-A1.zip","w",zipfile.ZIP_DEFLATED) as z:
+          with zipfile.ZipFile(out/"DREAD-CELLSTREAM-B1.zip","w",zipfile.ZIP_DEFLATED) as z:
               for pat in ("DREAD-CELLSTREAM-*.bin","SHA256SUMS.txt","README.txt","benchmark.html","benchmark.json","*/mame.log","*/build.log"):
                   for f in sorted(out.glob(pat)):
                       if f.is_file():z.write(f,f.relative_to(out))
@@ -154,6 +154,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: DREAD-CELLSTREAM-A1-SPAWN
-          path: ${{ env.OUT }}/DREAD-CELLSTREAM-A1.zip
+          name: DREAD-CELLSTREAM-B1-REPORT
+          path: |
+            ${{ env.OUT }}/DREAD-CELLSTREAM-B1.zip
+            ${{ env.OUT }}/benchmark.html
+            ${{ env.OUT }}/benchmark.json
           if-no-files-found: warn
