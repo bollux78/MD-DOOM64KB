@@ -91,9 +91,7 @@ jobs:
           name: DREAD-C7-NORMAL-VERDE-${{ github.run_id }}
           if-no-files-found: warn
           retention-days: 30
-          path: |
-            ${{ env.OUT }}/release/*
-            ${{ env.OUT }}/DREAD-C7-NORMAL-VERDE.zip
+          path: ${{ env.OUT }}/release/*
   boot-gate:
     name: C7 vs C6 normal - MAME actual frame test
     needs: build-normal
