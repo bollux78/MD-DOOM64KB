@@ -83,7 +83,15 @@ static inline uint32_t now_lines(void) { return 0; }
 #endif   /* test only: 1 = skip textured spans, 2 = skip fills, 4 = skip column work entirely */
 
 #if MAXV > 768
-#define VCACHE_SIZE 512                  /* hashed: a frame touches a few hundred vertices; collisions only recompute */
+/* C7 uses a 256-slot collision-tolerant transform cache to return 2 KiB
+ * of scarce work RAM to SGDK startup. Hash misses always recompute the
+ * correct transformed vertex; this trades some CPU for boot reliability
+ * without changing geometry, clipping or texture data. */
+#ifdef DREAD_COMBAT_12_20
+#define VCACHE_SIZE 256
+#else
+#define VCACHE_SIZE 512
+#endif
 static uint16_t vkey[VCACHE_SIZE];
 #else
 #define VCACHE_SIZE MAXV
