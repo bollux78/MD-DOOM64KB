@@ -42,6 +42,12 @@ void HUD_ShowOpening(void)
 {
     SYS_disableInts();
     VDP_setEnable(FALSE);
+    VDP_setHInterrupt(FALSE);SYS_setHIntCallback(0);
+    VDP_setReg(2,0x38);VDP_setReg(3,0x34);VDP_setReg(4,6);
+    VDP_setScrollingMode(HSCROLL_PLANE,VSCROLL_PLANE);
+    VDP_setWindowHPos(FALSE,0);VDP_setWindowVPos(FALSE,0);
+    VDP_setVerticalScroll(BG_A,0);VDP_setVerticalScroll(BG_B,0);
+    VDP_setHilightShadow(FALSE);
     VDP_setScreenWidth320();
     VDP_setHorizontalScroll(BG_A, 0);
     VDP_setHorizontalScroll(BG_B, 0);
@@ -122,6 +128,17 @@ static uint16_t weapon_refs[160];
 static volatile int16_t weapon_pending = -1;
 static int16_t weapon_next=-1,weapon_last=4;
 static uint16_t weapon_pos,weapon_fuzz,weapon_fuzz_request;
+static volatile uint16_t weapon_building,weapon_paused;
+static volatile int16_t weapon_anim=-1;
+static volatile uint16_t weapon_anim_step,weapon_anim_ticks;
+static const uint8_t anim_frames[6][5]={{1,2,3,0,0},{1,2,3,0,0},{1,2,3,2,0},{1,2,0,0,0},{1,2,0,0,0},{1,2,0,0,0}};
+static const uint8_t anim_ticks[6][5]={{8,8,8,0,0},{6,6,5,0,0},{5,10,10,10,0},{4,3,0,0,0},{8,6,0,0,0},{4,3,0,0,0}};
+void HUD_WeaponPause(uint16_t on){weapon_paused=on;}
+void HUD_RestoreTextColor(void){cram_set(63,hudw_pal+15,1);}
+void HUD_WeaponFire(uint16_t weapon){
+    weapon_anim=-1;weapon_anim_step=0;weapon_anim_ticks=anim_ticks[weapon][0];
+    HUD_WeaponFrame(weapon*4+1);weapon_anim=weapon;
+}
 void HUD_WeaponInvisible(uint16_t on){
     weapon_fuzz_request=on;
     if(weapon_pending<0 && weapon_fuzz!=on)HUD_WeaponFrame(weapon_last<0?4:weapon_last);
@@ -137,7 +154,10 @@ static void weapon_unpack(uint16_t f)
 #endif
 void HUD_Init(uint16_t row0)
 {
-    hud_row0 = row0;
+    hud_row0 = row0;cur_face=-1;hud_dirty=face_dirty=sat_dirty=txt_dirty=0;
+#ifdef DREAD_GAMEPLAY
+    weapon_anim=-1;weapon_building=weapon_paused=0;weapon_next=weapon_pending=-1;weapon_fuzz=weapon_fuzz_request=0;weapon_last=4;bob_x=bob_y=0;
+#endif
     SYS_disableInts();
     /* The text title clears plane B with DMA fill, which leaves increment 1. */
     VDP_setAutoInc(2);
@@ -237,12 +257,17 @@ void HUD_WeaponFrame(uint16_t f)
 #endif
 #ifdef DREAD_GAMEPLAY
     if(f>=24)return;
-    if(weapon_pending>=0){weapon_next=f;return;}
+    uint16_t saved_sr;
+    __asm__ volatile("move.w %%sr,%0\n\tor.w #0x700,%%sr" : "=d"(saved_sr) :: "cc","memory");
+    if(weapon_pending>=0 || weapon_building){weapon_next=f;__asm__ volatile("move.w %0,%%sr" :: "d"(saved_sr) : "cc","memory");return;}
+    weapon_building=1;
+    __asm__ volatile("move.w %0,%%sr" :: "d"(saved_sr) : "cc","memory");
     if(weapon_fuzz!=weapon_fuzz_request){weapon_fuzz=weapon_fuzz_request;weapon_last=-1;for(uint16_t i=0;i<160;i++)weapon_refs[i]=0xffff;}
-    if(weapon_last==(int16_t)f)return;
+    if(weapon_last==(int16_t)f){weapon_building=0;return;}
     weapon_unpack(f);weapon_last=f;
     weapon_pos = 0;
     weapon_pending = (int16_t)f;
+    weapon_building=0;
 #else
     weap_req = (int16_t)f;
 #endif
@@ -259,13 +284,23 @@ void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26
 }
 
 /* called from the VBlank interrupt: every VRAM update of the HUD, face, weapon and text */
-uint16_t HUD_VBlank(void)    /* returns the bytes sent by DMA (the caller keeps the VBlank DMA budget) */
+uint16_t HUD_VBlank(uint16_t max_bytes)    /* returns the bytes sent by DMA (the caller keeps the VBlank DMA budget) */
 {
     uint16_t bytes = 0;
 #ifdef DREAD_GAMEPLAY
+    if(weapon_anim>=0 && !weapon_paused){
+        if(weapon_anim_ticks)weapon_anim_ticks--;
+        if(!weapon_anim_ticks && !weapon_building && weapon_pending<0){
+            const uint16_t w=weapon_anim,k=++weapon_anim_step;
+            HUD_WeaponFrame(w*4+anim_frames[w][k]);weapon_anim_ticks=anim_ticks[w][k];
+            if(!weapon_anim_ticks)weapon_anim=-1;
+        }
+    }
     if (weapon_pending >= 0) {
         const uint16_t *refs=weap_frame_refs+(uint16_t)weapon_pending*160;
-        uint16_t budget=64; /* at most 2 KiB before HUD/face/framebuffer */
+        const uint16_t reserved=(face_dirty?512:0)+(hud_dirty?256:0)+((txt_dirty&1)?80:0)+((txt_dirty&2)?80:0)+192;
+        uint16_t budget=max_bytes>reserved?(max_bytes-reserved)/32:0;
+        if(budget>160)budget=160;
         while (weapon_pos<160 && budget) {
             if (weapon_refs[weapon_pos]==refs[weapon_pos]) { weapon_pos++; continue; }
             const uint16_t start=weapon_pos;
@@ -276,7 +311,7 @@ uint16_t HUD_VBlank(void)    /* returns the bytes sent by DMA (the caller keeps 
             DMA_doDma(DMA_VRAM,weapon_frame+start*8,(TILE_WEAP+start)*32,n*16,2);
             bytes+=n*32;
         }
-        if (weapon_pos==160) weapon_pending=-1;
+        if (weapon_pos==160){weapon_pending=-1;sat_dirty=1;}
     }
 #else
     if (weap_req >= 0) {
@@ -301,12 +336,12 @@ uint16_t HUD_VBlank(void)    /* returns the bytes sent by DMA (the caller keeps 
     }
     for (int l = 0; l < 2; l++)
         if (txt_dirty & (1 << l)) { txt_dirty &= (uint8_t)~(1 << l); DMA_doDma(DMA_VRAM, txt_nt[l], BGB + (25 + l) * 128, 40, 2); bytes += 80; }
-    if (sat_dirty) {
+    if (sat_dirty || weapon_pending>=0 || weapon_anim>=0) {
         sat_dirty = 0;
         for (uint16_t i = 0; i < weap_npieces; i++) {
             const uint8_t *p = weap_piece[i];
             vram_addr(SLIST + i * 8);
-            vram_w((uint16_t)(128 + weap_y + p[1] + VIEW_TOP_PX + bob_y));
+            vram_w((uint16_t)((weapon_pending>=0?0:128 + weap_y + p[1] + VIEW_TOP_PX + bob_y)));
             vram_addr(SLIST + i * 8 + 6);
             vram_w((uint16_t)(128 + weap_x + p[0] + bob_x + weap_dx));
         }
@@ -345,6 +380,32 @@ void HUD_ShowArt(uint16_t page)
         vram_addr(BGB+y*128);
         for(uint16_t x=0;x<40;x++)vram_w(ending_attrs[page*1120+y*40+x]|(TILE_TITLE+y*40+x));
     }
+    VDP_setEnable(TRUE);SYS_enableInts();
+}
+extern const uint16_t inter_pal[];
+extern const uint8_t inter_data[];
+void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds)
+{
+    SYS_disableInts();static_screen();
+    uint16_t dark[16];for(uint16_t i=0;i<16;i++)dark[i]=(inter_pal[i]>>1)&0x0666;
+    cram_set(0,dark,16);const uint16_t white=0xeee;cram_set(63,&white,1);
+    for(uint16_t y=0;y<28;y++)for(uint16_t x=0;x<40;x++){
+        uint32_t tile[8];
+        for(uint16_t row=0;row<4;row++){
+            const uint8_t *p=inter_data+(y*4+row)*80+x*2;uint32_t value=0;
+            for(uint16_t c=0;c<4;c++){uint16_t pixel=(p[c>>1]>>((c&1)?0:4))&15;value=(value<<8)|(pixel*17);}
+            tile[row*2]=tile[row*2+1]=value;
+        }
+        vram_copy32(TILE_TITLE+y*40+x,tile,1);
+    }
+    for(uint16_t y=0;y<28;y++){vram_addr(BGB+y*128);for(uint16_t x=0;x<40;x++)vram_w(TILE_TITLE+y*40+x);}
+    VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
+    VDP_drawTextBG(BG_A,name,(40-strlen(name))/2,4);VDP_drawTextBG(BG_A,"CONCLUIDO",15,6);
+    char text[40];sprintf(text,"MORTES    %3u / %3u",kills,total);VDP_drawTextBG(BG_A,text,9,11);
+    sprintf(text,"ITENS     %3u / %3u",items,totalitems);VDP_drawTextBG(BG_A,text,9,14);
+    sprintf(text,"SEGREDOS  %3u / %3u",secrets,totalsecrets);VDP_drawTextBG(BG_A,text,9,17);
+    sprintf(text,"TEMPO       %u:%02u",(uint16_t)(seconds/60),(uint16_t)(seconds%60));VDP_drawTextBG(BG_A,text,9,20);
+    VDP_drawTextBG(BG_A,"APERTE UM BOTAO",12,25);
     VDP_setEnable(TRUE);SYS_enableInts();
 }
 void HUD_ShowFinaleText(void)

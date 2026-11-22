@@ -18,6 +18,7 @@ for mapid,sp in [(0,11),(1,11),(2,11),(2,51),(3,11),(4,11),(5,11),(6,11),(8,11)]
   for side in [1,-1]:
    x=(ax+bx)/2+side*dy/length*24;y=(ay+by)/2-side*dx/length*24;angle=math.degrees(math.atan2((ay+by)/2-y,(ax+bx)/2-x))
    warp(g,x,y,angle);g.e.step(40);g.e.step(40,0);g.e.step(240,capture=True)
+   if 'intermission_active' in g.syms and g.rd('intermission_active'):g.press(1,240)
    if g.rd('selected_map')!=mapid:success=True;break
   if success:break
  target=8 if sp==51 else 3 if mapid==8 else mapid+1

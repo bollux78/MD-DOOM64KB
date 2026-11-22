@@ -193,6 +193,7 @@ uint16_t r_tmk_sz, r_tsh, r_ssh;
 #define SKY_STRIDE 76
 extern const uint8_t sky_blob[], scal_q[];
 uint16_t r_skyoff[VW_MAX];
+uint16_t r_skyshift;
 const void *r_skyend;
 #endif
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
@@ -222,6 +223,7 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_scal = colb == 2 ? scal_w : (r_fullheight ? scal_f : scal_b);
     r_tsh = 0;                                       /* texels are bytes in every mode */
     r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
+    r_skyshift = r_vh==144?1:0;
     r_skyend = (const void *)r_scal[scal_q[r_vh == 144 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
 #endif
 }

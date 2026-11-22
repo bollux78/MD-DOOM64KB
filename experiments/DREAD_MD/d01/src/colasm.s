@@ -170,7 +170,7 @@ seg_columns:
         move.w  0(%a0,%d6.w),%d5
         lea     sky_blob,%a1
         adda.w  %d5,%a1
-        move.w  r_ssh,%d4
+        move.w  r_skyshift,%d4
         move.w  %d0,%d5
         lsr.w   %d4,%d5                     /* sky row of the top (column-doubled: rows are halved) */
         adda.w  %d5,%a1

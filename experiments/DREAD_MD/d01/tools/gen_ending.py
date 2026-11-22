@@ -4,7 +4,7 @@ from pathlib import Path
 import sys,struct,csv,re,ast
 import numpy as np
 from PIL import Image
-from conv import Wad
+from conv import Wad,read_patch
 root=Path(__file__).resolve().parent;src=root/'ending_src';out=Path(sys.argv[2]);w=Wad(sys.argv[1])
 unique=[];ids={};refs=[];attrs=[];palettes=[]
 for name in ['DoomCREDIT10','disclaimer_and_credits','endMD2']:
@@ -49,4 +49,13 @@ for ty in range(8):
    for x in range(8):v=(v<<4)|int(a[ty*8+y,tx*8+x])
    words.append(v)
 s+=['const u16 finale_pal[16]={'+','.join(map(str,cram))+'};','const u32 finale_tiles[512]={'+','.join(hex(v) for v in words)+'};']
+# Store the intermission background at 160x112 4bpp; expand 2x2 while loading.
+# UI remains native resolution. No extra framebuffer or decompression RAM.
+a=read_patch(w.get('WIMAP0'));a=np.where(a<0,0,a).astype(np.uint8)
+im=Image.fromarray(pal[a],'RGB').resize((160,112),Image.Resampling.NEAREST)
+q=im.quantize(colors=15,dither=Image.Dither.NONE);pp=q.getpalette()[:45]
+cram=[0]+[(lv(pp[i+2])<<9)|(lv(pp[i+1])<<5)|(lv(pp[i])<<1) for i in range(0,45,3)]
+a=np.asarray(q)+1;packed=((a[:,::2]<<4)|a[:,1::2]).flatten()
+s+=['const u16 inter_pal[16]={'+','.join(map(str,cram))+'};','const u8 inter_data[8960]={'+','.join(map(str,packed))+'};']
+print('Intermission: 8960 bytes packed background, UI native resolution')
 (out/'ending_data.c').write_text('\n'.join(s)+'\n');print('Ending art:',len(unique),'unique tiles,',len(lines),'text lines')

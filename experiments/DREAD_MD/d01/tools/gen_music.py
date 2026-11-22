@@ -13,6 +13,7 @@ payload = json.loads((ROOT / "assets/r25-music.json").read_text())
 want = {"E1M1": "bgm_e1m1", "Intro": "bgm_intro"}
 if sys.argv[2:] == ["--episode"]:
     want.update({f"E1M{i}": f"bgm_e1m{i}" for i in range(2, 10)})
+    want["Inter"]="bgm_inter"
 res = []
 for t in payload["tracks"]:
     if t["name"] not in want: continue

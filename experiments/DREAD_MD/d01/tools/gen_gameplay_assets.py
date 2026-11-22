@@ -5,7 +5,7 @@ import sys,struct,math
 import numpy as np
 from conv import Wad,read_patch
 w=Wad(sys.argv[1]);out=Path(sys.argv[2]);pal=np.frombuffer(w.get('PLAYPAL')[:768],np.uint8).reshape(256,3).astype(float)
-sets=[('PUNG','ABCD',None),('PISG','ABCB','PISF'),('SHTG','ABCD','SHTF'),('CHGG','ABAB','CHGF'),('MISG','ABCD','MISF'),('SAWG','ABCD',None)]
+sets=[('PUNG','ABCD',None),('PISG','ABCB','PISF'),('SHTG','AABC','SHTF'),('CHGG','ABAB','CHGF'),('MISG','ABAB','MISF'),('SAWG','ABAB',None)]
 frames=[]
 for prefix,letters,flash in sets:
  canv=[]
@@ -20,7 +20,7 @@ for prefix,letters,flash in sets:
     for x in range(ww):
      if a[y,x]>=0 and 0<=y+yy<200 and 0<=x+xx<320:c[y+yy,x+xx]=a[y,x]
   canv.append(c)
- ys,xs=np.nonzero(np.any(np.asarray(canv)>=0,axis=0));x0,x1=xs.min(),xs.max()+1;y0,y1=ys.min(),min(168,ys.max()+1)
+ ys,xs=np.nonzero(np.any(np.asarray(canv)>=0,axis=0));x0,x1=xs.min(),xs.max()+1;y0,y1=ys.min(),min(184,ys.max()+1)
  scale=min(1.,128/(x1-x0),80/(y1-y0));ww=max(1,round((x1-x0)*scale));hh=max(1,round((y1-y0)*scale))
  for c in canv:
   a=np.full((80,128),-1,np.int16)

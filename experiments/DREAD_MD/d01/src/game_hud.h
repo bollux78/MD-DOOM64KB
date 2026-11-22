@@ -18,7 +18,7 @@ static inline void HUD_Opening(void) {}
 static inline void HUD_Init(uint16_t row0) { (void)row0; }
 static inline void HUD_Draw(const HudState *st) { (void)st; }
 static inline void HUD_WeaponFrame(uint16_t f) { (void)f; }
-static inline uint16_t HUD_VBlank(void) { return 0; }
+static inline uint16_t HUD_VBlank(uint16_t budget) { return 0; }
 static inline void HUD_Text(uint16_t line, const char *s) { (void)line; (void)s; }
 static inline void HUD_WeaponBob(int16_t dx, int16_t dy) { (void)dx; (void)dy; }
 static inline void HUD_SetLayout(uint16_t col0, int16_t dx) { (void)col0; (void)dx; }
@@ -26,15 +26,19 @@ static inline void HUD_SetLayout(uint16_t col0, int16_t dx) { (void)col0; (void)
 void HUD_Opening(void);
 void HUD_ShowOpening(void);
 #ifdef DREAD_GAMEPLAY
+void HUD_WeaponFire(uint16_t weapon);
+void HUD_WeaponPause(uint16_t on);
+void HUD_RestoreTextColor(void);
 void HUD_WeaponInvisible(uint16_t on);
 void HUD_ShowArt(uint16_t page);
 void HUD_ShowFinaleText(void);
+void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds);
 #endif
 void HUD_ClearOpening(void);
 void HUD_Init(uint16_t row0);
 void HUD_Draw(const HudState *st);
 void HUD_WeaponFrame(uint16_t f);
-uint16_t HUD_VBlank(void);
+uint16_t HUD_VBlank(uint16_t budget);
 void HUD_Text(uint16_t line, const char *s);
 void HUD_WeaponBob(int16_t dx, int16_t dy);
 void HUD_SetLayout(uint16_t col0, int16_t dx);

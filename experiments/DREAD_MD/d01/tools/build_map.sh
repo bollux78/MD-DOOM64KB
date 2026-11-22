@@ -84,6 +84,7 @@ else
 fi
 if [[ -z "$geometry_flag" ]]; then
     python3 "$source_dir/tools/gen_hud.py" --wad "$wad" --out "$stage/src/hud_assets.h"
+    if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then python3 "$source_dir/tools/gen_hud_white.py" "$stage/src/hud_assets.h"; fi
     sed -i 's|#include <stdint.h>|#include "mapdata.h"|' "$stage/src/hud_assets.h"
     python3 "$source_dir/tools/gen_weapon.py" "$wad" "$stage/src/weapon.c"
     if [[ "$map" == EPISODE ]]; then

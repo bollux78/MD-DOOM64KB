@@ -9,6 +9,9 @@ static uint16_t floor_wait[MAP_NSECTORS],ceil_wait[MAP_NSECTORS];
 static uint8_t floor_active[MAP_NSECTORS],ceil_active[MAP_NSECTORS];
 static uint8_t used_lines[2048];
 static uint16_t map_id,hazard_clock,boss_done;
+uint32_t level_time;
+uint16_t level_secrets,level_total_secrets;
+static uint8_t secret_visited[(MAP_NSECTORS+7)/8];
 static uint16_t invuln,suit,invisible,bright,berserk,berserk_red,scroll_clock;
 extern uint16_t r_fullbright,r_scroll;
 void World_Power(uint16_t kind){if(kind==70)invuln=1800;else if(kind==71){berserk=1;berserk_red=1200;}else if(kind==72)invisible=3600;else if(kind==73)suit=3600;else if(kind==75)bright=7200;}
@@ -38,6 +41,9 @@ uint16_t World_Tint(void){
 }
 void World_Init(uint16_t m)
 {
+    level_time=0;level_secrets=level_total_secrets=0;
+    for(uint16_t i=0;i<sizeof(secret_visited);i++)secret_visited[i]=0;
+    for(uint16_t i=0;i<map_counts[4];i++)if(level_meta[m].specials[i]==9)level_total_secrets++;
     map_id=m;hazard_clock=0;boss_done=0;invuln=suit=invisible=bright=berserk=berserk_red=scroll_clock=0;r_fullbright=0;r_scroll=0;
     for(uint16_t s=0;s<map_counts[4];s++) {
         floor_active[s]=ceil_active[s]=0;floor_wait[s]=ceil_wait[s]=0;
@@ -131,11 +137,15 @@ void World_Shoot(const View *view)
 }
 uint16_t World_Tick(uint16_t dt,View *view,HudState *hud)
 {
+    level_time+=dt;
     invuln=invuln>dt?invuln-dt:0;suit=suit>dt?suit-dt:0;invisible=invisible>dt?invisible-dt:0;bright=bright>dt?bright-dt:0;r_fullbright=bright || invuln;
     berserk_red=berserk_red>dt?berserk_red-dt:0;
     HUD_WeaponInvisible(invisible && (invisible>240 || (invisible&32)));
     scroll_clock+=dt*35;while(scroll_clock>=60){scroll_clock-=60;r_scroll++;}
     const uint16_t player_sector=map_subs[R_PointInSub(view->x>>16,view->y>>16)].sector;
+    if(level_meta[map_id].specials[player_sector]==9 && !(secret_visited[player_sector>>3]&(1<<(player_sector&7)))){
+        secret_visited[player_sector>>3]|=1<<(player_sector&7);level_secrets++;
+    }
     for(uint16_t s=0;s<map_counts[4];s++){
         if(floor_active[s]){
             int16_t *f=&map_sectors[s].floor;const int16_t delta=2*dt;

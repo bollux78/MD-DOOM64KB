@@ -3,6 +3,8 @@
 #include "game_hud.h"
 #ifdef DREAD_GAMEPLAY
 void World_Init(uint16_t map);
+extern uint32_t level_time;
+extern uint16_t level_secrets,level_total_secrets;
 uint16_t World_Tint(void);
 void World_Power(uint16_t kind);
 uint16_t World_Invulnerable(void);

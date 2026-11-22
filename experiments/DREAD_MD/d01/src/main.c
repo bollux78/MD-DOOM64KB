@@ -79,6 +79,8 @@ static void scene_palettes(void)
     }
 }
 #endif
+static volatile uint16_t game_video_active;
+volatile uint16_t intermission_active;
 static volatile uint8_t shown;            /* VRAM copy currently displayed */
 
 /* bench: the test harness (or holding B on the title) drives a fixed input script */
@@ -118,7 +120,8 @@ static void vint_cb(void)
     }
     /* all VRAM traffic must end inside the VBlank: a DMA that runs into the active display halts the
        68000 (frame time) and delays the row-doubling H-int (lines of the wrong rows, the picture jumps) */
-    const uint16_t hud_bytes = HUD_VBlank();
+    if(!game_video_active)return;
+    const uint16_t hud_bytes = HUD_VBlank(DMA_CHUNK);
     if (dma_src && hud_bytes < DMA_CHUNK) {
         const uint16_t budget = (DMA_CHUNK - hud_bytes) & ~1u;
         const uint16_t n = (FB_BYTES - dma_pos) > budget ? budget : (FB_BYTES - dma_pos);
@@ -444,18 +447,21 @@ static void menu_draw(uint16_t sel)
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
     sprintf(l[4], "%c LIMITE:  %s", sel == 4 ? '>' : ' ', fcap_s[fcap_i]);
     sprintf(l[5], "%c CHEATS",sel==5?'>':' ');
-    sprintf(l[6], "%c VOLTAR",sel==6?'>':' ');
+    sprintf(l[6], "%c VOLTAR A ABERTURA",sel==6?'>':' ');
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
     VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 3);
     for (int i = 0; i < 7; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
-    VDP_drawTextBG(WINDOW, "A:TIRO B:USO C+A:ARMA", 1, 13);
+    VDP_drawTextBG(WINDOW, "A:TIRO B:USO/CORRER C+A:ARMA", 1, 13);
     VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 14);
     SYS_enableInts();
 }
 static void menu(void)
 {
     uint16_t sel = 0, pj = BUTTON_START;
+#ifdef DREAD_GAMEPLAY
+    uint16_t go_title=0;HUD_WeaponPause(1);
+#endif
     while (dma_src) {}
     SYS_disableInts();
     VDP_setTextPalette(PAL3);
@@ -475,7 +481,12 @@ static void menu(void)
         if (e & BUTTON_UP) { sel = (sel + 6) % 7; menu_draw(sel); }
         if (e & BUTTON_DOWN) { sel = (sel + 1) % 7; menu_draw(sel); }
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
-            if (sel == 6) break;
+            if (sel == 6){
+#ifdef DREAD_GAMEPLAY
+                go_title=1;
+#endif
+                break;
+            }
 #ifdef DREAD_GAMEPLAY
             if(sel==5){cheats_menu();menu_draw(sel);pj=JOY_readJoypad(JOY_1);continue;}
 #endif
@@ -508,7 +519,13 @@ static void menu(void)
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
     VDP_setWindowVPos(FALSE, 0);
+#ifdef DREAD_GAMEPLAY
+    HUD_RestoreTextColor();HUD_WeaponPause(0);
+#endif
     SYS_enableInts();
+#ifdef DREAD_GAMEPLAY
+    if(go_title)SYS_hardReset();
+#endif
     prev_joy = BUTTON_START;
 #ifdef DREAD_GAMEPLAY
     joy_edges=0;
@@ -863,6 +880,13 @@ static void episode_end(void)
 int main(bool hard)
 {
     (void)hard;
+    SYS_disableInts();
+    hint_on=0;game_video_active=0;dma_src=0;dma_pos=0;shown=cur_buf=0;
+    VDP_setHInterrupt(FALSE);SYS_setHIntCallback(0);
+#ifdef DREAD_GAMEPLAY
+    owned_weapons=3;current_weapon=1;player_keys=0;cheat_god=cheat_kfa=0;joy_edges=joy_previous=0;
+#endif
+    SYS_enableInts();
 #ifdef DREAD_JOY_VBLANK
     /* The game reads JOY_1 only. Avoid polling an unused second port every VBlank. */
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
@@ -886,7 +910,9 @@ int main(bool hard)
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);
     set_mode(START_MODE);
+    game_video_active=1;
     static HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };
+    hud=(HudState){100,0,50,{50,0,0,0},{200,50,50,300},1,0,0};
     HUD_Draw(&hud);
 #ifdef DREAD_GAMEPLAY
     active_hud=&hud;
@@ -983,7 +1009,7 @@ int main(bool hard)
 #endif
         /* turn / move (per vblank speeds, Doom-like) */
         const int strafe = (j & BUTTON_C) != 0;
-        const int32_t speed = 0x30000;     /* map units per vblank, 16.16 */
+        const int32_t speed = (j&BUTTON_B)?0x60000:0x30000;     /* map units per vblank, 16.16 */
         /* pistol: A fires (Doom timing), the status bar counts the bullets */
         if (bench_req == 2 && !bench_done && (bench_frames & 3) == 0) j |= BUTTON_A;   /* combat bench: keeps shooting */
         if (bench_req == 2 && hud.ammo[0] < 5) hud.ammo[0] = 50;
@@ -998,9 +1024,9 @@ int main(bool hard)
         if(!weap_t && (j&BUTTON_A) && !(j&BUTTON_C) && (ammo==255 || hud.ammo[ammo])) {
             if(ammo!=255)hud.ammo[ammo]--;
             weap_step=1;weap_t=weapon_delay[current_weapon];
-            HUD_WeaponFrame(current_weapon*4+1);Game_Sound(weapon_sound[current_weapon]);
+            HUD_WeaponFire(current_weapon);Game_Sound(weapon_sound[current_weapon]);
             Actors_FireWeapon(&view,current_weapon);
-        } else if(weap_step && weap_t<weapon_delay[current_weapon]/2) HUD_WeaponFrame(current_weapon*4+2);
+        }
         prev_weapon_joy=j;
         hud.ammo_cur=ammo==255?0:hud.ammo[ammo];HUD_Draw(&hud);
 #else
@@ -1032,7 +1058,7 @@ int main(bool hard)
         if (fwd || side) {
             bob += dt;
             const int16_t sx = sintab[(bob * 12) & 1023] >> 11, sy = sintab[(bob * 24) & 1023] >> 11;
-            HUD_WeaponBob(sx, sy < 0 ? -sy : sy);
+            HUD_WeaponBob(sx, sy < 0 ? sy : -sy);
         }
         if (fwd || side) {
             const int32_t mx = ((fwd >> 8) * cs + (side >> 8) * sn) >> 6;
@@ -1095,12 +1121,29 @@ int main(bool hard)
         if (exit_req) {                                 /* level done: next map (E1M8 ends the episode) */
 #ifdef DREAD_EPISODE
             const uint16_t secret = exit_req == 2;
+#ifdef DREAD_GAMEPLAY
+            while(dma_src){}SYS_disableInts();hint_on=0;game_video_active=0;
+            VDP_setHInterrupt(FALSE);SYS_setHIntCallback(NULL);SYS_enableInts();
+            uint16_t total=0,items=0,totalitems=0;
+            for(uint16_t i=0;i<map_nthings;i++){
+                const MapThing *t=&map_things[i];const uint16_t code=t->flags>>8;
+                if(t->flags&THING_MONSTER){if(THING_KIND(t->flags)!=5)total++;continue;}
+                if(code==5 || code==6 || code==9 || code==70 || code==71 || code==72 || code==74 || code==75){totalitems++;if(Thing_Taken(i))items++;}
+            }
+#ifndef DREAD_NO_MUSIC
+            if(music_on)XGM2_play(bgm_inter);
+#endif
+            intermission_active=1;
+            HUD_ShowIntermission(title_levels[selected_map]+6,combat_kills,total,items,totalitems,level_secrets,level_total_secrets,level_time/60);
+            wait_any_button();intermission_active=0;
+#else
             char msg[32];
             sprintf(msg, "E1M%u CONCLUIDA", selected_map + 1);
             HUD_Text(1, msg);
             const uint16_t t0 = vints;
             while ((uint16_t)(vints - t0) < 120) {}
             HUD_Text(1, "");
+#endif
             if (selected_map == 7) {
 #ifdef DREAD_GAMEPLAY
                 episode_end();
@@ -1111,6 +1154,9 @@ int main(bool hard)
             selected_map = secret ? 8 : (selected_map == 8 ? 3 : selected_map + 1);
 #ifdef DREAD_GAMEPLAY
             hud.keys=0;player_keys=0;weap_step=weap_t=0;HUD_WeaponFrame(current_weapon*4);
+#endif
+#ifdef DREAD_GAMEPLAY
+            HUD_ClearOpening();HUD_Init(HUD_ROW0);set_mode(mode);game_video_active=1;HUD_WeaponFrame(current_weapon*4);HUD_Draw(&hud);
 #endif
             start_level(); place_player();
 #ifndef DREAD_NO_MUSIC
