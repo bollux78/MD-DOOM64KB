@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          OUT="$RUNNER_TEMP/dread-c7-green-$GITHUB_RUN_ID"
+          export OUT="$RUNNER_TEMP/dread-c7-green-$GITHUB_RUN_ID"
           mkdir -p "$OUT/build" "$OUT/release"
           echo "OUT=$OUT" >> "$GITHUB_ENV"
           export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
