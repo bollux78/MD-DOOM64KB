@@ -50,7 +50,7 @@ jobs:
           export DREAD_PREPARED_MAPS="$OUT/prepared"
           for variant in CONTROL CELLSTREAM; do
             mkdir -p "$OUT/$variant"
-            flags="-DDREAD_VALIDATION_TEST -DDREAD_JOY_VBLANK -DDREAD_SPAWN_PROFILE"
+            flags="-DDREAD_VALIDATION_TEST -DDREAD_JOY_VBLANK -DDREAD_SPAWN_PROFILE -DDREAD_CELLSTREAM_REPORT"
             if [[ "$variant" == CELLSTREAM ]]; then flags="$flags -DDREAD_CELL_STREAM"; fi
             echo "::group::Build $variant"
             DREAD_EXTRA_FLAGS="$flags" bash experiments/DREAD_MD/d01/tools/build_map.sh \
