@@ -622,6 +622,23 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_setHInterrupt(FALSE);
     SYS_setHIntCallback(NULL);
     SYS_setVIntCallback(NULL);         /* do not let HUD VBlank repaint the report */
+    /* Gameplay writes reg 1/2 and VSRAM directly, bypassing SGDK's cache.
+     * The last VBlank may have disabled display pending hint_a; that callback
+     * no longer runs here. Explicitly restore a static, unscrolled text screen.
+     * Also select the SDK's BG_A table, not the last double-buffered table. */
+    VDP_setEnable(FALSE);
+    *(volatile uint16_t *)0xC00004 = 0x8200 | (NT0 >> 10);
+    VDP_setWindowHPos(FALSE, 0);
+    VDP_setWindowVPos(FALSE, 0);
+    VDP_setHorizontalScroll(BG_A, 0);
+    VDP_setHorizontalScroll(BG_B, 0);
+    VDP_setVerticalScroll(BG_A, 0);
+    VDP_setVerticalScroll(BG_B, 0);
+    /* Hide the weapon's hardware sprite chain on the report. */
+    VDP_setAutoInc(2);
+    vram_cmd(0xF400);
+    for (uint16_t i = 0; i < 4; i++)
+        *(volatile uint16_t *)0xC00000 = 0;
     VDP_setHilightShadow(FALSE);
     VDP_setTextPalette(PAL3);
     VDP_setTextPriority(TRUE);
@@ -660,6 +677,8 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_drawTextBG(BG_A, "PIXELS: NAO VALIDADOS", 2, 22);
     VDP_drawTextBG(BG_A, "CENAS: TESTAR NO HARDWARE", 2, 23);
     VDP_drawTextBG(BG_A, "START: REINICIAR", 2, 26);
+    /* Never rely on hint_a to turn the report on. */
+    VDP_setEnable(TRUE);
     SYS_enableInts();
     for (;;) {
         JOY_update();
