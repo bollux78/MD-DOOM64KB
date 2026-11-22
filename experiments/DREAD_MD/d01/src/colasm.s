@@ -146,6 +146,9 @@ seg_columns:
         lea     r_colofs,%a0
         move.l  J_FB(%a6),%a2
         adda.w  0(%a0,%d6.w),%a2            /* column pointer */
+#ifdef DREAD_OPT_COLPTR_INCREMENTAL
+.Lcol_ptrready:                              /* adjacent H40 row columns reuse a2 */
+#endif
         movem.w (%a3),%d2-%d3               /* raw yc, yf of this column (ColRec) */
         cmp.w   %d0,%d2                     /* yc = clamp(yc, top, bot) */
         bge.s   1f
@@ -286,7 +289,26 @@ seg_columns:
         cmp.w   %d4,%d7
         bne.s   .Lskip
         lea     REC(%a3),%a3                /* next column, next record */
+#ifdef DREAD_OPT_COLPTR_INCREMENTAL
+        /* Fast H40/H32 row-doubled path.  A consecutive column starts one
+         * byte later, except at the 4-byte tile-column boundary (288-3=285).
+         * Keep the original r_colofs lookup for column-doubled modes and
+         * jumps across already-closed columns. Pixel math is unchanged. */
+        cmp.w   J_XE(%a6),%d7
+        bge     .Ldone
+        cmpi.w  #1,r_colb
+        bne     .Lcol
+        move.w  %d7,%d4
+        andi.w  #3,%d4
+        beq.s   .Lcolptr_wrap
+        addq.l  #1,%a2
+        bra     .Lcol_ptrready
+.Lcolptr_wrap:
+        adda.w  #285,%a2
+        bra     .Lcol_ptrready
+#else
         bra     .Lcol
+#endif
 .Lskip:
         move.b  0(%a0,%d4.w),%d5
         move.b  %d5,0(%a0,%d7.w)
