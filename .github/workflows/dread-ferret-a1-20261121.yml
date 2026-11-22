@@ -79,7 +79,9 @@ jobs:
             cat > "$OUT/$variant/spawn.lua" <<EOF
           local frames = 0
           local space = manager.machine.devices[":maincpu"].spaces["program"]
-          local addr = tonumber("$address", 16)
+          -- ELF symbols may be reported with a high linker region (e.g. E0FF160C).
+          -- Normalize to the 24-bit 68000 bus address before reading Mega Drive RAM.
+          local addr = tonumber("$address", 16) % 0x1000000
           local first = nil
           emu.register_frame_done(function()
             frames = frames + 1
@@ -93,13 +95,22 @@ jobs:
             end
           end)
           EOF
+            # Do not let an emulator failure abort testing the second variant.
+            set +e
             timeout 120 mame megadriv -cart "$OUT/DREAD-FERRET-$variant.bin" -video none -sound none \
               -plugins 0 -autoboot_script "$OUT/$variant/spawn.lua" \
               -seconds_to_run 55 -nothrottle -skip_gameinfo \
               > "$OUT/$variant/mame.log" 2>&1
             rc=$?
+            set -e
+            echo "MAME_LOG_BEGIN variant=$variant"
+            tail -35 "$OUT/$variant/mame.log" || true
+            echo "MAME_LOG_END variant=$variant"
             grep -E 'SPAWN_|Error|error|Average speed' "$OUT/$variant/mame.log" | tail -25 || true
             echo "$variant MAME_EXIT=$rc"
+            if ! grep -q "SPAWN_RESULT variant=$variant" "$OUT/$variant/mame.log"; then
+              echo "::warning::Missing validated spawn measurement for $variant (MAME exit $rc)"
+            fi
             echo "::endgroup::"
           done
       - name: Package binaries and evidence
