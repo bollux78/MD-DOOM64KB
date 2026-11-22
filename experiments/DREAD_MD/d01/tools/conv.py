@@ -310,7 +310,8 @@ def main():
     MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
     # Shared C7 palette: index 12 used to be medium gray (3,3,3).
     # Replace it with the *actual* SSF green 0x4C4 = MD RGB (2,6,2).
-    # Only NUKEDGE* wall texels and BAL7 Baron-ball sprites may use it.
+    # Only NUKEDGE* wall texels, BAL7 ball, BAR1 toxic barrel and the
+    # green hair in living POSS zombieman sprite frames may use it.
     # All other colours are remapped OFFLINE to two existing colours.
     accent_green = os.environ.get("DREAD_GREEN_ACCENT", "0") == "1"
     accent_slot = 12
@@ -320,6 +321,8 @@ def main():
             raise ValueError("DREAD_GREEN_ACCENT requires palette index 12 to be the SSF green (2,6,2)")
     accent_texture_count = 0
     accent_baronglow_count = 0
+    accent_barrel_count = 0
+    accent_zombie_hair_count = 0
     DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
     cand_lv = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
     cand = DAC[cand_lv]
@@ -475,8 +478,8 @@ def main():
     pal_of = {it: int(g) for (it, _), g in zip(items, asg)}
 
     lut = {}
-    def lut_for(b, k, acid_or_baron=False):
-        key = (b, k, bool(acid_or_baron))
+    def lut_for(b, k, green_asset=False, soft_green=False):
+        key = (b, k, bool(green_asset), bool(soft_green))
         if key not in lut:
             pl = pals[k]
             out = []
@@ -484,10 +487,15 @@ def main():
                 rgb = pal[cmap[LIGHT_ROWS[b]][i]]
                 # Require a recognisably saturated green source. Even for
                 # target assets, don't recolour their metal/shadow/grays.
-                green_pixel = (rgb[1] >= 78 and rgb[1] >= rgb[0] + 18
-                               and rgb[1] >= rgb[2] + 18)
+                if soft_green:
+                    # Zombieman hair can have darker olive-green pixels.
+                    green_pixel = (rgb[1] >= 52 and rgb[1] >= rgb[0] + 10
+                                   and rgb[1] >= rgb[2] + 10)
+                else:
+                    green_pixel = (rgb[1] >= 78 and rgb[1] >= rgb[0] + 18
+                                   and rgb[1] >= rgb[2] + 18)
                 out.append(pl.pair(rgb, allow_accent=accent_green
-                                   and acid_or_baron and green_pixel))
+                                   and green_asset and green_pixel))
             lut[key] = out
         return lut[key]
 
@@ -652,10 +660,16 @@ def main():
             if b not in spr_used.get(si, ()):
                 offs.append(None); continue
             k = pal_of.get(("p", si, b), 0)
-            # BAL7 is the Baron of Hell's green plasma ball, not the imp
-            # fireball (BAL1) or unrelated sprites.
+            # BAR1 is the poison/liquid barrel, BAL7 is the Baron shot.
+            # Living POSS frames (A-G) have green hair; limit that accent
+            # to the head region and *originally green* source pixels.
+            # Do not tint faces, skin, clothing, metal, or corpse frames.
             is_baron_ball = accent_green and key[0] == "BAL7"
-            L = lut_for(b, k, is_baron_ball)
+            is_poison_barrel = accent_green and key[0] == "BAR1"
+            is_zombie = accent_green and key[0] == "POSS" and key[1] in "ABCDEFG"
+            green_asset = is_baron_ball or is_poison_barrel
+            L = lut_for(b, k, green_asset)
+            hair_L = lut_for(b, k, True, True) if is_zombie else L
             base = len(sblob)
             cols = []
             for j in range(w2):
@@ -664,12 +678,21 @@ def main():
                     if img[y, sx] < 0: y += 1; continue
                     y1 = y
                     while y1 < h_ and img[y1, sx] >= 0 and y1 - y < 250: y1 += 1
-                    if is_baron_ball:
-                        for yy in range(y, y1):
-                            aa, bb = L[img[yy, sx]]
+                    run = bytearray()
+                    for yy in range(y, y1):
+                        # Restrict zombie green to upper quarter of sprite.
+                        # Per-scanline source mapping is OFFLINE only.
+                        is_hair_pixel = is_zombie and yy < max(4, h_ // 4)
+                        src_lut = hair_L if is_hair_pixel else L
+                        aa, bb = src_lut[img[yy, sx]]
+                        if is_baron_ball:
                             accent_baronglow_count += (aa == accent_slot) + (bb == accent_slot)
-                    run = bytes((L[img[yy, sx]][0] << 4) | L[img[yy, sx]][1] for yy in range(y, y1))
-                    col += bytes([y, y1 - y]) + run + run[-1:] * 3   # 3 pad bytes: the scalers' rounding may read past the end
+                        if is_poison_barrel:
+                            accent_barrel_count += (aa == accent_slot) + (bb == accent_slot)
+                        if is_hair_pixel:
+                            accent_zombie_hair_count += (aa == accent_slot) + (bb == accent_slot)
+                        run.append((aa << 4) | bb)
+                    col += bytes([y, y1 - y]) + run + run[-1:] * 3   # scaler padding
                     y = y1
                 col.append(0xFF)
                 cols.append(col)
@@ -731,6 +754,8 @@ def main():
         print("C7 GREEN ACCENT 0x4C4: map", mapname,
               "NUKEDGE texels", accent_texture_count,
               "BAL7 sprite texels", accent_baronglow_count,
+              "BAR1 barrel texels", accent_barrel_count,
+              "POSS hair texels", accent_zombie_hair_count,
               "other assets: reserved slot excluded")
         if accent_baronglow_count == 0 and not args.geometry_only:
             raise ValueError("C7 accent produced no green texels in BAL7 sprites")

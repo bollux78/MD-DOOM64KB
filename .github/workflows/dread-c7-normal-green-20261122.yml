@@ -1,4 +1,4 @@
-name: DREAD C7 NORMAL - exact SSF green and boot gate
+name: DREAD C7 NORMAL - green Baron, barrel and zombie hair + boot gate
 on:
   push:
     branches: [exp-dread-c7-easy-ai12-proj20-20261122]
@@ -50,7 +50,7 @@ jobs:
           export DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
           unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
           echo "Build C7 NORMAL (4MiB) | E1M1-E1M9 | AI 12Hz | projectiles 20Hz | no SSF"
-          echo "Palette: exact SSF green 0x4C4 solely BAL7 and NUKEDGE; original WAD weapons"
+          echo "Palette: exact SSF green 0x4C4 in BAL7, NUKEDGE, BAR1 and POSS hair; original WAD weapons"
           bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/build"
           test -s "$OUT/build/EPISODE.bin"
           cp "$OUT/build/EPISODE.bin" "$OUT/release/DREAD-C7-NORMAL-VERDE.bin"
@@ -60,7 +60,7 @@ jobs:
           sha256sum "$OUT/release/DREAD-C7-NORMAL-VERDE.bin" > "$OUT/release/SHA256SUMS.txt"
           cat > "$OUT/release/LEIA-ME.txt" <<EOF
           DREAD MD C7 - NORMAL (sem SSF), commit $GITHUB_SHA
-          Verde 0x4C4 (SSF) somente tiro do Baron BAL7 e borda NUKEDGE.
+          Verde 0x4C4 (SSF) somente BAL7, NUKEDGE, BAR1 e cabelo POSS.
           Cinza substituido aproximado por duas cores no processamento offline.
           IA 12Hz, projetil 20Hz, armas originais dithered, grades 2x2.
           Esta ROM exige validacao automatizada no MAME e depois no hardware.
