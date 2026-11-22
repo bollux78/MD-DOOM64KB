@@ -1,0 +1,92 @@
+name: DREAD C7 - hosted MAME screen compare
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths: ['.github/workflows/dread-c7-mame-boot-diag.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  mame:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with:
+          name: DREAD-C7-DUAS-VERSOES-SELFHOST-45044466617
+          run-id: 45044466617
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/c7
+      - name: Install MAME and image parser
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-pil
+      - name: Extract reference ROMs
+        run: |
+          mkdir -p "$RUNNER_TEMP/diag"
+          python3 - <<'PY'
+          import os,zipfile,pathlib
+          d=pathlib.Path(os.environ["RUNNER_TEMP"])/"diag"
+          with zipfile.ZipFile("experiments/DREAD_MD/d01/gameplay/releases/DREAD-C6-DUAS-VERSOES.zip") as z:
+              for x in z.namelist():
+                  if x.endswith(".bin") and "NORMAL" in x: (d/"C6-NORMAL.bin").write_bytes(z.read(x))
+          for x in (pathlib.Path(os.environ["RUNNER_TEMP"])/"c7").rglob("*.bin"):
+              if "NORMAL" in x.name:(d/"C7-NORMAL.bin").write_bytes(x.read_bytes())
+          print([(x.name,x.stat().st_size) for x in d.glob("*.bin")])
+          PY
+      - name: Emulate and capture C6 and C7 at equal frame counts
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/diag"
+          cat > diag.lua <<'LUA'
+          local cpu = manager.machine.devices[":maincpu"]
+          local screen = manager.machine.screens[":screen"] or manager.machine.screens:at(1)
+          local frames=0
+          emu.register_frame_done(function()
+            frames=frames+1
+            if frames==60 or frames==240 or frames==600 then
+              local pcreg=cpu.state["PC"]
+              local pc=pcreg and pcreg.value or -1
+              local kinds={}
+              for y=20,180,20 do
+                for x=20,300,20 do
+                  local v=screen:pixel(x,y)
+                  kinds[v]=(kinds[v] or 0)+1
+                end
+              end
+              local n=0 for _,_ in pairs(kinds) do n=n+1 end
+              print(string.format("BOOT_FRAME=%d PC=%08X SAMPLE_DISTINCT=%d",frames,pc,n))
+              local ok,err=pcall(function()screen:snapshot(os.getenv("DIAG_VARIANT").."-"..frames..".png")end)
+              if not ok then print("SNAP_ERROR "..tostring(err)) end
+            end
+          end)
+          LUA
+          for variant in C6-NORMAL C7-NORMAL; do
+            echo "::group::$variant"
+            DIAG_VARIANT="$variant" timeout 100 mame megadriv -cart "$PWD/$variant.bin" \
+              -video none -sound none -autoboot_script "$PWD/diag.lua" \
+              -seconds_to_run 11 -nothrottle -skip_gameinfo \
+              > "$variant.log" 2>&1 || true
+            grep -E 'BOOT_FRAME=|SNAP_ERROR|Error|Fatal' "$variant.log" || true
+            echo "::endgroup::"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import numpy as np
+          for f in sorted(Path.cwd().glob("*.png")):
+              a=np.asarray(Image.open(f).convert("RGB"))
+              print("SCREENSHOT",f.name, "pixels",a.shape, "nonblack",(a.max(axis=2)>10).sum(),"colors",len(np.unique(a.reshape(-1,3),axis=0)),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DREAD-C7-MAME-BOOT-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/diag/*.log
+            ${{ runner.temp }}/diag/*.png
