@@ -14,6 +14,9 @@ export DREAD_COMBAT=1 DREAD_GAMEPLAY=1 DREAD_SKILL=easy
 # C7 original WAD weapons (C5), with optional colour diffusion in PAL1.
 # DREAD_WEAPON_DITHER=0 restores exactly the C5 nearest-colour palette mapping.
 export DREAD_WEAPON_DITHER="${DREAD_WEAPON_DITHER:-1}"
+# Exact E1 SSF chromatic green 0x4C4 only in Baron ball and NUKEDGE wall trims.
+# All other former gray-12 uses are remapped to the remaining grays offline.
+export DREAD_GREEN_ACCENT="${DREAD_GREEN_ACCENT:-1}"
 # Draw transparent two-sided grates at 2x2 logical-pixel resolution.
 # Set DREAD_GRATE_HALF_RES=0 for an A/B test with C6-resolution grates.
 grate_flags=""

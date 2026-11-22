@@ -1,0 +1,164 @@
+name: DREAD C7 NORMAL - exact SSF green and boot gate
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths: ['.github/workflows/dread-c7-normal-green-20261122.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-normal:
+    name: Compile one NORMAL ROM on user's runner
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 90
+    env:
+      WAD: /home/dan/Projetos/doom-md/assets/wads/doom1.wad
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Verify local toolchain, source and green palette
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$WAD"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          python3 -m py_compile experiments/DREAD_MD/d01/tools/conv.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("experiments/DREAD_MD/d01/tools/gameplay_palette.json")
+          x=json.loads(p.read_text())
+          assert len(x)==16 and x[12]==[2,6,2],x
+          print("GREEN_ACCENT_CONFIRMED: CRAM 0x4C4 at palette index 12")
+          PY
+          gdk=""
+          for d in "$HOME/Projetos/marsdev/sgdk/SGDK" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/mars/m68k-elf" "/opt/sgdk"; do
+            if [[ -f "$d/makefile.gen" ]]; then gdk="$d"; break; fi
+          done
+          test -n "$gdk"
+          echo "GDK=$gdk" >> "$GITHUB_ENV"
+      - name: Build C7 NORMAL only (no SSF)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/dread-c7-green-$GITHUB_RUN_ID"
+          mkdir -p "$OUT/build" "$OUT/release"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export OPENBLAS_NUM_THREADS=1 DREAD_GREEN_ACCENT=1
+          export DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
+          unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
+          echo "Build C7 NORMAL (4MiB) | E1M1-E1M9 | AI 12Hz | projectiles 20Hz | no SSF"
+          echo "Palette: exact SSF green 0x4C4 solely BAL7 and NUKEDGE; original WAD weapons"
+          bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/build"
+          test -s "$OUT/build/EPISODE.bin"
+          cp "$OUT/build/EPISODE.bin" "$OUT/release/DREAD-C7-NORMAL-VERDE.bin"
+          bytes=$(stat -c %s "$OUT/release/DREAD-C7-NORMAL-VERDE.bin")
+          echo "ROM_SIZE_BYTES=$bytes"
+          test "$bytes" -le 4194304
+          sha256sum "$OUT/release/DREAD-C7-NORMAL-VERDE.bin" > "$OUT/release/SHA256SUMS.txt"
+          cat > "$OUT/release/LEIA-ME.txt" <<EOF
+          DREAD MD C7 - NORMAL (sem SSF), commit $GITHUB_SHA
+          Verde 0x4C4 (SSF) somente tiro do Baron BAL7 e borda NUKEDGE.
+          Cinza substituido aproximado por duas cores no processamento offline.
+          IA 12Hz, projetil 20Hz, armas originais dithered, grades 2x2.
+          Esta ROM exige validacao automatizada no MAME e depois no hardware.
+          EOF
+          (cd "$OUT/release" && zip -9 -q "$OUT/DREAD-C7-NORMAL-VERDE.zip" ./*)
+          unzip -t "$OUT/DREAD-C7-NORMAL-VERDE.zip"
+          echo "NORMAL_BUILD_SUCCESS: $bytes bytes"
+      - name: Upload single ROM for boot QA and download
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DREAD-C7-NORMAL-VERDE-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            ${{ env.OUT }}/release/*
+            ${{ env.OUT }}/DREAD-C7-NORMAL-VERDE.zip
+  boot-gate:
+    name: C7 vs C6 normal - MAME actual frame test
+    needs: build-normal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with:
+          name: DREAD-C7-NORMAL-VERDE-${{ github.run_id }}
+          path: ${{ runner.temp }}/rom
+      - name: Install MAME video diagnostics
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-pil python3-numpy
+      - name: Boot both C6 control and new C7 in MAME
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/boot"
+          mkdir -p "$OUT"
+          cp "$RUNNER_TEMP/rom/DREAD-C7-NORMAL-VERDE.bin" "$OUT/C7-NORMAL.bin"
+          python3 - <<'PY'
+          import zipfile, pathlib, os
+          z=pathlib.Path("experiments/DREAD_MD/d01/gameplay/releases/DREAD-C6-DUAS-VERSOES.zip")
+          d=pathlib.Path(os.environ["RUNNER_TEMP"])/"boot"
+          with zipfile.ZipFile(z) as ar:
+              names=[x for x in ar.namelist() if x.endswith(".bin") and "NORMAL" in x]
+              assert len(names)==1,names
+              (d/"C6-NORMAL.bin").write_bytes(ar.read(names[0]))
+          PY
+          cd "$OUT"
+          cat > gate.lua <<'LUA'
+          local screen = manager.machine.screens[":screen"] or manager.machine.screens:at(1)
+          local cpu = manager.machine.devices[":maincpu"]
+          local f = 0
+          emu.register_frame_done(function()
+            f = f + 1
+            if f == 60 or f == 240 then
+              local distinct = {}
+              for y=20,180,20 do
+                for x=20,300,20 do distinct[screen:pixel(x,y)]=true end
+              end
+              local n=0 for _ in pairs(distinct) do n=n+1 end
+              local pc=cpu.state["CURPC"].value
+              print(string.format("BOOT_FRAME=%d PC=%08X SAMPLE_COLORS=%d",f,pc,n))
+              screen:snapshot(os.getenv("PWD").."/"..os.getenv("DIAG_VARIANT").."-"..f..".png")
+            end
+          end)
+          LUA
+          for variant in C6-NORMAL C7-NORMAL; do
+            DIAG_VARIANT="$variant" timeout 45 mame megadriv -cart "$PWD/$variant.bin" -video none -sound none -nothrottle -seconds_to_run 6 -skip_gameinfo -autoboot_script "$PWD/gate.lua" > "$variant.log" 2>&1
+            grep 'BOOT_FRAME=' "$variant.log"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import numpy as np,re
+          for name in ("C6-NORMAL","C7-NORMAL"):
+              log=Path(name+".log").read_text()
+              points=re.findall(r"BOOT_FRAME=(\d+) PC=([0-9A-F]+) SAMPLE_COLORS=(\d+)",log)
+              assert len(points)==2,(name,log[-2500:])
+              for f in (60,240):
+                  p=Path(f"{name}-{f}.png")
+                  assert p.exists(),f"Missing screenshot {p}"
+                  a=np.asarray(Image.open(p).convert("RGB"))
+                  colored=int(np.count_nonzero(np.max(a,axis=2)>10))
+                  n=len(np.unique(a.reshape(-1,3),axis=0))
+                  print(f"BOOT_GATE {name} frame={f} colored={colored} palette={n}")
+                  assert colored>1000 and n>3,f"BLACK_SCREEN {name} frame {f}"
+              if name=="C7-NORMAL":
+                  assert all(int(pc,16)!=0x169F4 for _,pc,_ in points),"C7 stuck at old fatal VDP PC"
+          print("BOOT_GATE_PASS: C7 NORMAL has nonblack title at 60/240 frames, comparable to C6")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: C7-NORMAL-VERDE-BOOT-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/boot/*.png
+            ${{ runner.temp }}/boot/*.log

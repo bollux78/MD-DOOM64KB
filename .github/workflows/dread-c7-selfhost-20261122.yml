@@ -1,9 +1,5 @@
-name: DREAD C7 - self-hosted build NORMAL and SSF
+name: DREAD C7 - legacy self-hosted build (manual only)
 on:
-  push:
-    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
-    paths:
-      - 'experiments/DREAD_MD/d01/**'
   workflow_dispatch:
 permissions:
   contents: read

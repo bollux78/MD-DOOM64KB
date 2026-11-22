@@ -308,6 +308,18 @@ def main():
     # Items = (texture, light bucket) and (flat, light bucket); every item gets one palette.
     NPAL = int(os.environ.get("DREAD_NPAL", "3"))
     MIXW = float(os.environ.get("DREAD_MIX_PENALTY", "0.08"))
+    # Shared C7 palette: index 12 used to be medium gray (3,3,3).
+    # Replace it with the *actual* SSF green 0x4C4 = MD RGB (2,6,2).
+    # Only NUKEDGE* wall texels and BAL7 Baron-ball sprites may use it.
+    # All other colours are remapped OFFLINE to two existing colours.
+    accent_green = os.environ.get("DREAD_GREEN_ACCENT", "0") == "1"
+    accent_slot = 12
+    if accent_green and args.palette:
+        actual = json.loads(args.palette.read_text())
+        if actual[accent_slot] != [2, 6, 2]:
+            raise ValueError("DREAD_GREEN_ACCENT requires palette index 12 to be the SSF green (2,6,2)")
+    accent_texture_count = 0
+    accent_baronglow_count = 0
     DAC = np.array([0, 52, 87, 116, 144, 172, 206, 255], float)   # MD DAC levels (approx. measured curve)
     cand_lv = np.array([(r, g, b) for r in range(8) for g in range(8) for b in range(8)])
     cand = DAC[cand_lv]
@@ -394,14 +406,21 @@ def main():
             self.rgb = cand[chosen]
             lin = (self.rgb / 255.0) ** 2.2
             self.pairs = [(x, y) for x in range(16) for y in range(x, 16)]
+            self.gray_fallback_pairs = np.array([i for i, (x, y) in enumerate(self.pairs)
+                if accent_slot not in (x, y)], dtype=np.int16)
             self.mix = np.array([((lin[x] + lin[y]) / 2) ** (1 / 2.2) * 255.0 for x, y in self.pairs])
             self.spread = np.array([np.sqrt(((self.rgb[x] - self.rgb[y]) ** 2).sum()) for x, y in self.pairs])
         def cost(self, X):          # per-pixel error with the best pair
             d = np.sqrt(((X[:, None, :] - self.mix[None]) ** 2).sum(-1)) + MIXW * self.spread[None]
             return d.min(1)
-        def pair(self, rgb):
+        def pair(self, rgb, allow_accent=False):
             d = np.sqrt(((self.mix - rgb) ** 2).sum(-1)) + MIXW * self.spread
-            x, y = self.pairs[int(d.argmin())]
+            if accent_green and not allow_accent:
+                # Use pairs of other colours in lieu of the removed gray.
+                p = int(self.gray_fallback_pairs[int(d[self.gray_fallback_pairs].argmin())])
+            else:
+                p = int(d.argmin())
+            x, y = self.pairs[p]
             if self.rgb[x].sum() > self.rgb[y].sum(): x, y = y, x
             return x, y
         def byte(self, rgb):
@@ -456,11 +475,21 @@ def main():
     pal_of = {it: int(g) for (it, _), g in zip(items, asg)}
 
     lut = {}
-    def lut_for(b, k):
-        if (b, k) not in lut:
+    def lut_for(b, k, acid_or_baron=False):
+        key = (b, k, bool(acid_or_baron))
+        if key not in lut:
             pl = pals[k]
-            lut[(b, k)] = [pl.pair(pal[cmap[LIGHT_ROWS[b]][i]]) for i in range(256)]
-        return lut[(b, k)]
+            out = []
+            for i in range(256):
+                rgb = pal[cmap[LIGHT_ROWS[b]][i]]
+                # Require a recognisably saturated green source. Even for
+                # target assets, don't recolour their metal/shadow/grays.
+                green_pixel = (rgb[1] >= 78 and rgb[1] >= rgb[0] + 18
+                               and rgb[1] >= rgb[2] + 18)
+                out.append(pl.pair(rgb, allow_accent=accent_green
+                                   and acid_or_baron and green_pixel))
+            lut[key] = out
+        return lut[key]
 
     skypal = pal_of[("s",)]
     skycol = pals[skypal].byte(sky_rgb)
@@ -481,13 +510,18 @@ def main():
                 offs.append(None); pids.append(None)
                 continue
             k = pal_of[("t", nm, b)]
-            L = lut_for(b, k)
+            # NUKEDGE textures are the green trim of Doom's acid pools.
+            # Never allow accent-green into unrelated walls, floor, sky, HUD.
+            is_acid_trim = accent_green and nm.startswith("NUKEDGE")
+            L = lut_for(b, k, is_acid_trim)
             col = bytearray()
             for u in range(W2):
                 sx = (u % hw) * 2
                 one = bytearray()
                 for v in range(H2):
                     pa, pb = L[img[v % h, sx]]
+                    if is_acid_trim:
+                        accent_texture_count += (pa == accent_slot) + (pb == accent_slot)
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
                 col += one + (one[:min(len(one), args.tex_pad)] if args.tex_pad else one)   # repeated start: the scalers skip the wrap mask
             offs.append(len(blob)); pids.append(k)
@@ -618,7 +652,10 @@ def main():
             if b not in spr_used.get(si, ()):
                 offs.append(None); continue
             k = pal_of.get(("p", si, b), 0)
-            L = lut_for(b, k)
+            # BAL7 is the Baron of Hell's green plasma ball, not the imp
+            # fireball (BAL1) or unrelated sprites.
+            is_baron_ball = accent_green and key[0] == "BAL7"
+            L = lut_for(b, k, is_baron_ball)
             base = len(sblob)
             cols = []
             for j in range(w2):
@@ -627,6 +664,10 @@ def main():
                     if img[y, sx] < 0: y += 1; continue
                     y1 = y
                     while y1 < h_ and img[y1, sx] >= 0 and y1 - y < 250: y1 += 1
+                    if is_baron_ball:
+                        for yy in range(y, y1):
+                            aa, bb = L[img[yy, sx]]
+                            accent_baronglow_count += (aa == accent_slot) + (bb == accent_slot)
                     run = bytes((L[img[yy, sx]][0] << 4) | L[img[yy, sx]][1] for yy in range(y, y1))
                     col += bytes([y, y1 - y]) + run + run[-1:] * 3   # 3 pad bytes: the scalers' rounding may read past the end
                     y = y1
@@ -686,6 +727,13 @@ def main():
     print("map %s: %d verts %d segs %d subsectors %d nodes %d sectors %d lines; %d textures, texture blob %d bytes; sky %d"
           % (mapname, len(verts), len(seg_rows), len(ssecs), len(nodes), len(sec_rows), len(lines), len(texnames), len(blob), skycol))
     for k, pl in enumerate(pals): print("palette", k, pl.lv)
+    if accent_green:
+        print("C7 GREEN ACCENT 0x4C4: map", mapname,
+              "NUKEDGE texels", accent_texture_count,
+              "BAL7 sprite texels", accent_baronglow_count,
+              "other assets: reserved slot excluded")
+        if accent_baronglow_count == 0 and not args.geometry_only:
+            raise ValueError("C7 accent produced no green texels in BAL7 sprites")
 
 
 if __name__ == "__main__":
