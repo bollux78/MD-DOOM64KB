@@ -1,0 +1,18 @@
+name: C7 - cancel superseded experimental compile
+on:
+  push:
+    branches: [exp-dread-c7-easy-ai12-proj20-20261122]
+    paths: ['.github/workflows/dread-c7-prune-older.yml']
+permissions:
+  actions: write
+jobs:
+  cancel-old:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Release self-hosted runner by cancelling superseded 45049068387
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/${{ github.repository }}/actions/runs/45049068387/cancel"
+          echo "Obsolete run cancelled; next run 45049072351 contains both RAM fixes."
