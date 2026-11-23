@@ -83,9 +83,11 @@ static volatile uint16_t game_video_active;
 volatile uint16_t intermission_active;
 static volatile uint8_t shown;            /* VRAM copy currently displayed */
 
-/* bench: the test harness (or holding B on the title) drives a fixed input script */
+/* Bench API: 1 = DEMO3 render without AI; 2 = DEMO3 with AI; 3 = full on-menu DEMO3. */
 volatile uint16_t bench_req;
-volatile uint16_t bench_joy;
+#ifndef DREAD_EPISODE
+volatile uint16_t bench_joy; /* Non-episode legacy renderer tests only. */
+#endif
 volatile uint32_t bench_frames, bench_vints;
 volatile uint16_t bench_done;
 volatile uint16_t cur_buf;
@@ -455,11 +457,13 @@ static void try_move(int32_t mx, int32_t my)
     if (view.x != ox || view.y != oy) check_walk_exits((int16_t)(ox >> 16), (int16_t)(oy >> 16), (int16_t)(view.x >> 16), (int16_t)(view.y >> 16));
 }
 
-/* bench route: (vblanks, buttons) */
+/* Legacy renderer-test route; never included in C7 EPISODE ROMs. */
+#ifndef DREAD_EPISODE
 static const uint16_t bench_script[][2] = {
     {60, 0}, {120, BUTTON_UP}, {60, BUTTON_LEFT}, {150, BUTTON_UP}, {90, BUTTON_RIGHT}, {180, BUTTON_UP},
     {120, BUTTON_RIGHT | BUTTON_UP}, {120, BUTTON_UP}, {200, BUTTON_LEFT}, {150, BUTTON_UP}, {0, 0}
 };
+#endif
 
 /* in-game menu (START): detail levels switch at once, the renderer adapts */
 /* frame cap: minimum VBlanks per rendered frame (steady pacing, the spare time goes to the game) */
@@ -823,9 +827,8 @@ static void pickups(HudState *hud, uint16_t psub)
 #endif
 
 #ifdef DREAD_CELLSTREAM_REPORT
-/* Dedicated fullscreen summary at the end of the 312-frame route.
- * Kept behind an experimental flag; normal gameplay/menu are unchanged. */
-#ifdef DREAD_CELL_STREAM
+/* Fullscreen DEMO3 result for C7, legacy report only for non-episode renderer tests. */
+#if defined(DREAD_CELL_STREAM) && !defined(DREAD_EPISODE)
 extern volatile uint32_t cell_stream_rebuilds, cell_stream_hits, cell_stream_fallbacks;
 extern volatile uint16_t cell_stream_last_len;
 #endif
@@ -862,7 +865,7 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
-    if(bench_req==3){
+    {
         const uint32_t seconds100=(bench_vints*100UL+30)/60;
         VDP_drawTextBG(BG_A,"DOOM MD - DEMO3 BENCHMARK",2,1);
         VDP_drawTextBG(BG_A,"ROM:",2,3);
@@ -898,8 +901,9 @@ static void benchmark_report_screen(uint16_t f100)
             SYS_doVBlankProcess();
         }
     }
-#endif
-    VDP_drawTextBG(BG_A, bench_req == 2 ? "DOOM MD COMBAT BENCHMARK" : "DOOM MD  RENDER BENCHMARK", 2, 1);
+#else
+    /* Used only by older single-map tests, not compiled into C7. */
+    VDP_drawTextBG(BG_A,"DOOM MD RENDER BENCHMARK",2,1);
     VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
 #ifdef DREAD_NATIVE_PERSPECTIVE
     VDP_drawTextBG(BG_A, "MODO: NATIVE PERSPECTIVE", 2, 5);
@@ -941,6 +945,7 @@ static void benchmark_report_screen(uint16_t f100)
         if (JOY_readJoypad(JOY_1) & BUTTON_START) SYS_hardReset();
         SYS_doVBlankProcess();
     }
+#endif
 }
 #endif
 
@@ -985,7 +990,7 @@ int main(bool hard)
 #endif
     title();
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
-    if(bench_req==3)selected_map=demo3_map-1;
+    if(bench_req)selected_map=demo3_map-1;
 #endif
     start_level();
 #if !defined(DREAD_EPISODE) && !defined(DREAD_TEXT_TITLE)
@@ -1034,12 +1039,14 @@ int main(bool hard)
 #endif
 
     uint16_t last = vints, fps_v0 = vints, fps_n = 0;
+#ifndef DREAD_EPISODE
     uint16_t script_i = 0, script_t = 0;
+#endif
     uint32_t bench_v0 = 0;
     char txt[40];
     if (bench_req) bench_v0 = vints;
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
-    if(bench_req==3)demo3_reset();
+    if(bench_req)demo3_reset();
 #endif
     for (;;) {
         uint16_t now = vints;
@@ -1049,7 +1056,7 @@ int main(bool hard)
 #else
         if (dt > 8) dt = 8;
 #endif
-        if (bench_req && !bench_done) dt = 4;    /* bench: same camera path at any speed (frames are comparable) */
+        if (bench_req && !bench_done) dt = 4; /* deterministic DEMO3 ticcmd advancement for all C7 benchmarks */
 #ifndef DREAD_JOY_VBLANK
         JOY_update();
 #endif
@@ -1070,7 +1077,7 @@ int main(bool hard)
 #endif
         if (bench_req && !bench_done) {
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
-            if(bench_req==3){
+            {
                 /* 35 Doom tics/s in 60 NTSC VBlanks/s. Process each recorded
                  * ticcmd, even if multiple commands fall in one drawn frame. */
                 demo3_fraction+=(uint16_t)(35u*dt);
@@ -1088,13 +1095,13 @@ int main(bool hard)
                 }
                 j=actions;
                 view.angle+=(uint16_t)demo_turn;
-                if(demo3_played>=demo3_tics){
+                if(demo3_played>=demo3_tics || (bench_req!=3 && bench_frames>=312)){
                     bench_done=1;
                     bench_vints=(uint16_t)(vints-(uint16_t)bench_v0);
                     j=0;
                 }
-            }else
-#endif
+            }
+#else
             {
                 script_t += dt;
                 while (bench_script[script_i][0] && script_t >= bench_script[script_i][0]) { script_t -= bench_script[script_i][0]; script_i++; }
@@ -1104,6 +1111,7 @@ int main(bool hard)
                     bench_done = 1; bench_vints = vints - bench_v0;
                 }
             }
+#endif
         }
 #ifdef DREAD_GAMEPLAY
         if(!hud.health){
@@ -1132,16 +1140,15 @@ int main(bool hard)
         /* turn / move (per vblank speeds, Doom-like) */
         const int strafe = (j & BUTTON_C) != 0;
         const int32_t speed = (j&BUTTON_B)?0x60000:0x30000;     /* map units per vblank, 16.16 */
-        /* mode 2 synthetic gunfire; mode 3 honours the original WAD buttons */
-        if (bench_req == 2 && !bench_done && (bench_frames & 3) == 0) j |= BUTTON_A;
-        if ((bench_req == 2 || bench_req == 3) && hud.ammo[0] < 5) hud.ammo[0] = 50;
+        /* The WAD demo supplies fire/use commands; synthetic benchmark gunfire removed. */
+        if (bench_req && hud.ammo[0] < 5) hud.ammo[0] = 50;
 #ifdef DREAD_GAMEPLAY
         if ((j&(BUTTON_C|BUTTON_A))==(BUTTON_C|BUTTON_A) && !(prev_weapon_joy&BUTTON_A)) {
             do { current_weapon=(current_weapon+1)%6; } while(!(owned_weapons&(1u<<current_weapon)));
             weap_step=0;weap_t=0;HUD_WeaponFrame(current_weapon*4);
         }
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
-        if(bench_req==3 && demo_weapon>=0 && demo_weapon<6 && (owned_weapons&(1u<<demo_weapon))){
+        if(bench_req && demo_weapon>=0 && demo_weapon<6 && (owned_weapons&(1u<<demo_weapon))){
             current_weapon=(uint16_t)demo_weapon;
             weap_step=weap_t=0;HUD_WeaponFrame(current_weapon*4);
         }
@@ -1180,7 +1187,7 @@ int main(bool hard)
         const uint16_t a = view.angle >> 6;
         const int32_t cs = sintab[(a + 256) & 1023], sn = sintab[a];
         int32_t fwd = 0, side = 0;
-        if(bench_req==3){
+        if(bench_req){
             /* C7 and original Doom have different inertia; approximate each
              * ticcmd's displacement without changing the gameplay physics. */
             fwd=demo_fwd*16384;
@@ -1217,7 +1224,7 @@ int main(bool hard)
             pl.x = (int16_t)(view.x >> 16); pl.y = (int16_t)(view.y >> 16); pl.z = view.z;
             pl.sub = (uint16_t)R_PointInSub(pl.x, pl.y);
             pl.health = &hud.health; pl.armor = &hud.armor;
-            if (!bench_req || bench_req == 2 || bench_req == 3) Actors_Tick(&pl, dt);
+            if (!bench_req || bench_req != 1) Actors_Tick(&pl, dt); /* mode 1 only suppresses AI */
 #ifdef DREAD_GAMEPLAY
             if(combat_drop_ammo || combat_drop_shotgun){
                 hud.ammo[0]+=combat_drop_ammo;combat_drop_ammo=0;if(hud.ammo[0]>hud.maxammo[0])hud.ammo[0]=hud.maxammo[0];
@@ -1225,7 +1232,7 @@ int main(bool hard)
                 HUD_Draw(&hud);
             }
 #endif
-            if ((bench_req == 2 || bench_req == 3) && hud.health < 30) hud.health = 100;
+            if (bench_req && hud.health < 30) hud.health = 100;
             pickups(&hud, pl.sub);
 #ifdef DREAD_GAMEPLAY
             if(!hud.health){
