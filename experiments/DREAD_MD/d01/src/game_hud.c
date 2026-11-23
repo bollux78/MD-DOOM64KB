@@ -353,7 +353,8 @@ void HUD_SetLayout(uint16_t col0, int16_t dx)
 }
 
 #ifdef DREAD_GAMEPLAY
-extern const uint16_t ending_refs[],ending_attrs[],ending_pal[],finale_pal[],finale_nlines;
+extern const uint8_t ending_refs12[],ending_attrs5[];
+extern const uint16_t ending_pal[],finale_pal[],finale_nlines;
 extern const uint32_t ending_tiles[],finale_tiles[];
 extern const char *const finale_lines[];
 static void static_screen(void)
@@ -370,10 +371,22 @@ void HUD_ShowArt(uint16_t page)
 {
     if(page>=3)return;SYS_disableInts();static_screen();
     cram_set(0,ending_pal+page*64,64);
-    for(uint16_t i=0;i<1120;i++)vram_copy32(TILE_TITLE+i,ending_tiles+(uint32_t)ending_refs[page*1120+i]*8,1);
+    /* 12-bit unique tile references: lossless against the original u16 array. */
+    for(uint16_t i=0;i<1120;i++){
+        const uint32_t bit=((uint32_t)page*1120+i)*12;
+        const uint16_t word=((uint16_t)ending_refs12[bit>>3]<<8)|ending_refs12[(bit>>3)+1];
+        const uint16_t tile=(word>>(4-(bit&7)))&0xfff;
+        vram_copy32(TILE_TITLE+i,ending_tiles+(uint32_t)tile*8,1);
+    }
     for(uint16_t y=0;y<28;y++){
         vram_addr(BGB+y*128);
-        for(uint16_t x=0;x<40;x++)vram_w(ending_attrs[page*1120+y*40+x]|(TILE_TITLE+y*40+x));
+        for(uint16_t x=0;x<40;x++){
+            const uint32_t idx=(uint32_t)page*1120+y*40+x;
+            const uint32_t bit=idx*5;
+            const uint16_t word=((uint16_t)ending_attrs5[bit>>3]<<8)|ending_attrs5[(bit>>3)+1];
+            const uint16_t attr=((word>>(11-(bit&7)))&31)<<11;
+            vram_w(attr|(TILE_TITLE+y*40+x));
+        }
     }
     VDP_setEnable(TRUE);SYS_enableInts();
 }
