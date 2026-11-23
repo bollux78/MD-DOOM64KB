@@ -610,7 +610,7 @@ tex_native:
         addq.w  #2,%d6
         cmp.w   %d6,%d1
 #endif
-        bcc     .Lnative_table
+        bcc     .Lnative_wrap
         sub.w   %d3,%d0                    /* base cancelling signed scaler origin */
         move.w  8(%a3),%d6
         and.w   4(%a4),%d6
@@ -676,6 +676,96 @@ tex_native:
         move.b  0(%a1,%d3.w),(%a4)
         addq.l  #4,%a4
         dbra    %d4,2b
+        moveq   #1,%d0
+        rts
+.Lnative_wrap:
+        /* The span runs past the stored texels (a tall wall whose texture repeats inside the column). Instead of the
+         * per-pixel table loop (about 52 cycles/pixel), cut the rows into pieces whose source indices stay inside the
+         * stored texels and run the ROM scaler on each. Pixel-identical: a piece starting at row ys reads
+         * col[start + off[y] - off[ys]] with start = (vbase + off[ys]) & hmask, which is (vbase + off[y]) mod H
+         * because every column is stored twice (the same property the single-piece fast path relies on).
+         * Entry: a0 scaler row zero, a1 offsets table, a2 column base, a3 ColRec, a4 Part, d4 n, d5 y0.
+         * The scaler row code uses only a0, a1 and d6. */
+        movem.l %d7/%a3/%a5,-(%sp)
+        move.l  %a1,%a5                    /* a5 = offsets of this scaler level */
+        move.l  %a0,-(%sp)                 /* scaler row zero */
+        move.w  8(%a3),%d6
+        and.w   4(%a4),%d6
+#ifdef DREAD_EPISODE
+        lsl.w   #2,%d6
+        move.l  (%a4),%a1
+        move.l  0(%a1,%d6.w),%a1
+#else
+        move.w  6(%a4),%d1
+        lsl.l   %d1,%d6
+        move.l  (%a4),%a1
+        adda.l  %d6,%a1
+#endif
+        move.l  (%sp)+,%a3                 /* a3 = scaler row zero (the ColRec is no longer needed) */
+        move.l  12(%a4),%d7
+        swap    %d7                        /* d7 = vbase integer */
+#ifdef DREAD_EPISODE
+        move.w  6(%a4),%d1                 /* stored texels per column */
+#else
+        move.w  8(%a4),%d1
+        add.w   %d1,%d1
+        addq.w  #2,%d1
+#endif
+        move.w  8(%a4),%d2                 /* hmask */
+        move.l  %a1,-(%sp)                 /* 4(sp) texture column */
+        move.w  %d1,-(%sp)                 /* 2(sp) limit */
+        move.w  %d2,-(%sp)                 /* 0(sp) hmask */
+.Lw_piece:
+        move.w  %d5,%d0
+        add.w   %d0,%d0
+        move.w  0(%a5,%d0.w),%d1           /* s0 = offset of the first row of this piece */
+        move.w  %d1,%d2
+        add.w   %d7,%d2
+        and.w   0(%sp),%d2                 /* d2 = first source index, in [0, H) */
+        move.w  2(%sp),%d0
+        subq.w  #1,%d0
+        sub.w   %d2,%d0                    /* largest source distance the piece may span */
+        add.w   %d1,%d0                    /* d0 = largest row offset the piece may reach */
+        move.l  4(%sp),%a1
+        adda.w  %d2,%a1
+        suba.w  %d1,%a1                    /* a1 = column + start - s0 (row offsets are added by the scaler) */
+        moveq   #1,%d3                     /* binary search: largest k in [1, n] with off[ys + k - 1] <= d0 */
+        move.w  %d4,%d6
+.Lw_bs:
+        cmp.w   %d6,%d3
+        bge.s   .Lw_found
+        move.w  %d3,%d1
+        add.w   %d6,%d1
+        addq.w  #1,%d1
+        lsr.w   #1,%d1                     /* mid = (lo + hi + 1) / 2 */
+        move.w  %d5,%d2
+        add.w   %d1,%d2
+        subq.w  #1,%d2
+        add.w   %d2,%d2
+        move.w  0(%a5,%d2.w),%d2           /* offset of row ys + mid - 1 */
+        cmp.w   %d0,%d2
+        bgt.s   1f
+        move.w  %d1,%d3                    /* fits: lo = mid */
+        bra.s   .Lw_bs
+1:      subq.w  #1,%d1
+        move.w  %d1,%d6                    /* too far: hi = mid - 1 */
+        bra.s   .Lw_bs
+.Lw_found:                                 /* d3 = rows in this piece */
+        move.w  %d5,%d0
+        add.w   %d0,%d0
+        add.w   %d5,%d0
+        lsl.w   #2,%d0                     /* ys * 12 */
+        move.l  %a3,%a4
+        adda.w  %d0,%a4                    /* entry = row zero + ys * 12 */
+        move.l  %a2,%a0
+        move.w  %d3,%d6
+        subq.w  #1,%d6
+        jsr     (%a4)
+        add.w   %d3,%d5
+        sub.w   %d3,%d4
+        bgt     .Lw_piece
+        addq.l  #8,%sp                     /* hmask, limit, texture column */
+        movem.l (%sp)+,%d7/%a3/%a5
         moveq   #1,%d0
         rts
 .Lnative_fail:
