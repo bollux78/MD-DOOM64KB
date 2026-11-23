@@ -1,0 +1,40 @@
+name: DREAD C7 - runner task (assembler/compile checks, no ROM, no benchmark)
+# Runs experiments/DREAD_MD/d01/gameplay/optimization/runner_task.sh on the self-hosted runner and uploads its log.
+# Used for fast assembly/compile checks with the runner's m68k toolchain (a few minutes, no full build).
+# The script is part of the branch (reviewable); it never publishes a WAD, a ROM or an ELF.
+on:
+  push:
+    branches: [exp-dread-c7-optimization-matrix-20261123]
+    paths:
+      - 'experiments/DREAD_MD/d01/gameplay/optimization/runner_task.sh'
+      - '.github/workflows/dread-c7-runner-task.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dread-c7-runner-task-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  task:
+    name: "Runner task"
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run task
+        shell: bash
+        run: |
+          set -uo pipefail
+          out="$RUNNER_TEMP/runner-task-$GITHUB_RUN_ID"; mkdir -p "$out"
+          echo "TASK_OUT=$out" >> "$GITHUB_ENV"
+          bash experiments/DREAD_MD/d01/gameplay/optimization/runner_task.sh "$out" 2>&1 | tee "$out/task.log"
+          echo "task exit: ${PIPESTATUS[0]}" | tee -a "$out/task.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runner-task-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: ${{ env.TASK_OUT }}/**
