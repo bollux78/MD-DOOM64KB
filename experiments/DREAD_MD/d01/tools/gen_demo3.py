@@ -19,8 +19,8 @@ def main(wad_path, dst_path):
     if demo is None or len(demo) < 14:
         raise ValueError("The supplied WAD has no usable DEMO3")
     version, skill, episode, map_no = demo[:4]
-    if episode != 1 or not 1 <= map_no <= 9:
-        raise ValueError(f"DEMO3 map {episode}/{map_no} is not available in this E1 C7 build")
+    if (episode, map_no) != (1, 7):
+        raise ValueError(f"Canonical benchmark requires DEMO3 E1M7; WAD contains E{episode}M{map_no}")
     pos = 13 # vanilla Doom header: version, 8 options, 4 player flags
     commands = []
     while pos < len(demo) and demo[pos] != 0x80:
