@@ -68,7 +68,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-numpy python3-pil
-      - name: Benchmark exact internal E1M1 route twice
+      - name: Benchmark DEMO3 E1M7 first 312 frames in render and combat modes
         shell: bash
         run: |
           set -euo pipefail
