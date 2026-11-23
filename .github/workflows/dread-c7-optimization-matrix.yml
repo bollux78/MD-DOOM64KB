@@ -1,4 +1,4 @@
-name: DREAD C7 - eight optimization ROMs and FPS comparison
+name: DREAD C7 - optimization round (5 ROMs) and FPS comparison
 on:
   push:
     branches: [exp-dread-c7-optimization-matrix-20261123]
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, AI6, AI4, TEX2, TEX4, GEO_SAFE, GEO_STEPS, ALL]
+        variant: [CONTROL, GEO_SAFE, AI6, AI6S, ALL]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, AI6, AI4, TEX2, TEX4, GEO_SAFE, GEO_STEPS, ALL]
+        variant: [CONTROL, GEO_SAFE, AI6, AI6S, ALL]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
@@ -83,7 +83,7 @@ jobs:
           path: ${{ runner.temp }}/results/*
 
   release:
-    name: One ZIP with 8 ROMs and comparative results
+    name: One ZIP with the round ROMs and comparative results
     needs: [build, benchmark]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-24.04
@@ -101,20 +101,20 @@ jobs:
           pattern: C7BENCH-*-${{ github.run_id }}
           merge-multiple: true
           path: ${{ runner.temp }}/bench
-      - name: Check eight ROMs, geometry and pack comparison ZIP
+      - name: Check ROMs, geometry and pack comparison ZIP
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/bench"
           python3 experiments/DREAD_MD/d01/gameplay/optimization/pack_matrix.py \
             --roms "$RUNNER_TEMP/roms" --bench "$RUNNER_TEMP/bench" \
-            --out "$RUNNER_TEMP/DREAD-C7-OTIMIZACOES-8ROMS.zip"
+            --out "$RUNNER_TEMP/DREAD-C7-OTIMIZACOES.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: DREAD-C7-OTIMIZACOES-8ROMS-${{ github.run_id }}
+          name: DREAD-C7-OTIMIZACOES-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES-8ROMS.zip
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES-8ROMS.csv
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES-8ROMS.json
+            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.zip
+            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.csv
+            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.json

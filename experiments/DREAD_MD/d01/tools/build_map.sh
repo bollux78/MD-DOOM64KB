@@ -71,7 +71,7 @@ if [[ "$map" == EPISODE ]]; then
                 python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32 --palette "$palette"
             fi
             cc -O2 -DPVS_GEN $pvs_flags -DDREAD_ROW_ONLY -I"$level" -I"$stage/src" -o "$level/pvsgen" \
-               "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$level/mapdata.c"
+               "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$([[ -f "$level/mapdata_pvs.c" ]] && echo "$level/mapdata_pvs.c" || echo "$level/mapdata.c")"
             "$level/pvsgen" "$level/pvs.c"
             levels+=("$level")
         done
@@ -92,7 +92,7 @@ if [[ "$map" == EPISODE ]]; then
 else
     python3 "$source_dir/tools/conv.py" "$wad" "$map" "$stage/src" "${convert_flags[@]}"
     cc -O2 -DPVS_GEN $pvs_flags -DDREAD_ROW_ONLY -I"$stage/src" -o "$stage/pvsgen" \
-       "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$stage/src/mapdata.c"
+       "$source_dir/tools/pvsgen.c" "$stage/src/render.c" "$([[ -f "$stage/src/mapdata_pvs.c" ]] && echo "$stage/src/mapdata_pvs.c" || echo "$stage/src/mapdata.c")"
     "$stage/pvsgen" "$stage/src/pvs.c"
 fi
 if [[ -z "$geometry_flag" ]]; then

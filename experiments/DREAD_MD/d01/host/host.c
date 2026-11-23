@@ -56,10 +56,65 @@ static void sweep(int n)
     }
     printf("sweep: %d views, %d with differences, %ld byte diffs\n", n, badviews, bad);
 }
+/* cmp N [POSFILE [DUMPFILE]]: N views for A/B checks between converted variants of the same map.
+ * Positions are chosen inside the map (right of every seg of their subsector, in the unmodified map) and
+ * saved to POSFILE; give the same POSFILE to the other variants so every build renders the SAME views.
+ * DUMPFILE receives every framebuffer (FB_BYTES each) for a pixel-level comparison. One line per view: index, framebuffer hash, segs drawn, BSP nodes, subsectors, column visits, x y z angle. */
+static int inside_map(int x, int y)
+{
+    const MapSub *ss = &map_subs[R_PointInSub(x, y)];
+    for (int k = 0; k < ss->count; k++) {
+        const MapSeg *sg = &map_segs[ss->first + k];
+        const long dx = map_verts[sg->v2][0] - map_verts[sg->v1][0], dy = map_verts[sg->v2][1] - map_verts[sg->v1][1];
+        if (dx * (y - map_verts[sg->v1][1]) - dy * (x - map_verts[sg->v1][0]) > 0) return 0;
+    }
+    return ss->count > 0;
+}
+static void cmp(int n, const char *posfile, const char *dumpfile)
+{
+    FILE *dump = dumpfile ? fopen(dumpfile, "wb") : NULL;
+    int px[4096], py[4096], pa[4096];
+    FILE *pf = posfile ? fopen(posfile, "r") : NULL;
+    if (n > 4096) n = 4096;
+    int have = 0;
+    if (pf) { while (have < n && fscanf(pf, "%d %d %d", &px[have], &py[have], &pa[have]) == 3) have++; fclose(pf); }
+    if (have < n) {
+        int minx = 32767, miny = 32767, maxx = -32768, maxy = -32768;
+        for (int i = 0; i < map_counts[0]; i++) {
+            if (map_verts[i][0] < minx) minx = map_verts[i][0];
+            if (map_verts[i][0] > maxx) maxx = map_verts[i][0];
+            if (map_verts[i][1] < miny) miny = map_verts[i][1];
+            if (map_verts[i][1] > maxy) maxy = map_verts[i][1];
+        }
+        srand(11);
+        for (long guard = 0; have < n && guard < 4000000; guard++) {
+            const int x = minx + rand() % (maxx - minx + 1), y = miny + rand() % (maxy - miny + 1);
+            if (!inside_map(x, y)) continue;
+            px[have] = x; py[have] = y; pa[have] = rand() & 0xFFFF; have++;
+        }
+        n = have;
+        if (posfile) { pf = fopen(posfile, "w"); for (int i = 0; i < n; i++) fprintf(pf, "%d %d %d\n", px[i], py[i], pa[i]); fclose(pf); }
+    }
+    unsigned long tsegs = 0, tnodes = 0, tcols = 0, tsubs = 0;
+    for (int i = 0; i < n; i++) {
+        View v; v.x = (int32_t)px[i] << 16; v.y = (int32_t)py[i] << 16; v.angle = (uint16_t)pa[i];
+        v.z = map_sectors[map_subs[R_PointInSub(px[i], py[i])].sector].floor + 41;
+        memset(fb, 0xEE, sizeof fb);
+        R_RenderView(&v, fb);
+        if (dump) fwrite(fb, 1, FB_BYTES, dump);
+        uint32_t h = 2166136261u;
+        for (int b = 0; b < FB_BYTES; b++) h = (h ^ fb[b]) * 16777619u;
+        printf("%d %08x %u %u %u %u %d %d %d %u\n", i, h, rstats.segs_drawn, rstats.nodes_visited, rstats.subs_visited, rstats.col_visits, px[i], py[i], (int)v.z, (unsigned)v.angle);
+        tsegs += rstats.segs_drawn; tnodes += rstats.nodes_visited; tsubs += rstats.subs_visited; tcols += rstats.col_visits;
+    }
+    printf("TOTAL views=%d segs=%lu nodes=%lu subs=%lu colvisits=%lu fbbytes=%d\n", n, tsegs, tnodes, tsubs, tcols, (int)FB_BYTES);
+    if (dump) fclose(dump);
+}
 int main(int argc, char **argv)
 {
     R_Init();
     if (argc > 2 && !strcmp(argv[2], "sweep")) { sweep(atoi(argv[3])); return 0; }
+    if (argc > 3 && !strcmp(argv[2], "cmp")) { cmp(atoi(argv[3]), argc > 4 ? argv[4] : NULL, argc > 5 ? argv[5] : NULL); return 0; }
     if (argc > 3 && !strcmp(argv[2], "things")) {   /* things N: views of the first N things from 4 sides */
         int n = atoi(argv[3]), k = 0;
         static const int dx[4] = {96, 0, -96, 0}, dy[4] = {0, 96, 0, -96}, ang[4] = {180, 270, 0, 90};

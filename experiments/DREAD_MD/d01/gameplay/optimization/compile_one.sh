@@ -28,6 +28,12 @@ cp "$output/EPISODE.elf" "$output/release/DREAD-C7-OPT-$variant.elf"
 mkdir -p "$output/release/geometry/$variant"
 cp "$output"/geometry/E1M*.json "$output/release/geometry/$variant/"
 sha256sum "$output/release/DREAD-C7-OPT-$variant.bin" > "$output/release/SHA256-$variant.txt"
+if [[ $variant == GEO_SAFE ]]; then
+  # host-side proof that the reduced geometry still draws the same image (no ROM or emulator needed)
+  bash "$root/gameplay/optimization/verify_geo_exact.sh" "$wad" "E1M1 E1M2 E1M5 E1M8" 1500 "$output/geo-verify" "control merge" \
+    | tee "$output/release/geo-verify-GEO_SAFE.txt" || echo "::warning::GEO_SAFE host verification FAILED (see geo-verify-GEO_SAFE.txt)"
+  cp "$output/geo-verify/summary.json" "$output/release/geo-verify-GEO_SAFE.json" 2>/dev/null || true
+fi
 python3 - "$output" "$variant" <<'PY'
 from pathlib import Path
 import subprocess,json,hashlib,sys

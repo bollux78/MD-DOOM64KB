@@ -590,6 +590,7 @@ def main():
     ss_sec = []
     for (cnt, first) in ssecs:
         ss_sec.append(seg_rows[first][2])
+    full_seg_rows, full_ssecs = list(seg_rows), list(ssecs)   # PVS must be built from the UNREDUCED geometry
     seg_rows,ssecs,reduction=reduce_segments(seg_rows,ssecs,verts,secs,lines,sides,args.render_geometry)
     reduction["step_changes"]=step_changes
     reduction["collision_changed"]=bool(step_changes)
@@ -620,8 +621,10 @@ def main():
             rem.append("{%s}" % ",".join(map(str, t)))
     H.append("const uint8_t pal_remap[%d][256] = {%s};" % (NPAL * NPAL, ",".join(rem)))
     H.append("const int16_t map_verts[%d][2] = {%s};" % (len(verts), ",".join("{%d,%d}" % v for v in verts)))
+    i_segs = len(H)
     H.append("const MapSeg map_segs[%d] = {%s};" % (len(seg_rows), ",".join(
         "{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in seg_rows)))
+    i_subs = len(H)
     H.append("const MapSub map_subs[%d] = {%s};" % (len(ssecs), ",".join(
         "{%d,%d,%d}" % (first, cnt, ss_sec[i]) for i, (cnt, first) in enumerate(ssecs))))
     H.append("const MapNode map_nodes[%d] = {%s};" % (len(nodes), ",".join(
@@ -774,9 +777,22 @@ def main():
         "{%d,%d,%d,%d,{%s},{%s}}" % (m[0], m[1], m[2], m[3], ",".join(str(o) for o in m[4]), ",".join(str(x) for x in m[5])) for m in texmeta) or "{0}"))
     H.append("const int16_t sintab[1024] = {%s};" % ",".join(str(int(round(16384 * math.sin(i * 2 * math.pi / 1024)))) for i in range(1024)))
     H.append("const int16_t map_start[3] = {%d,%d,%d};" % (start[0], start[1], start[2]))
+    i_counts = len(H)
     H.append("const uint16_t map_counts[6] = {%d,%d,%d,%d,%d,%d};" % (
         len(verts), len(seg_rows), len(ssecs), len(nodes), len(sec_rows), len(lines)))
     (out / "mapdata.c").write_text("\n".join(H) + "\n")
+    if len(full_seg_rows) != len(seg_rows):
+        # Same map with the unreduced seg/subsector tables. Only tools/pvsgen.c reads it: a seg that draws nothing
+        # (a same-sector portal) is still a visibility portal, so removing it from the PVS input would hide
+        # neighbouring leaves. The ROM keeps the reduced tables and the PVS built from this file.
+        Hp = list(H)
+        Hp[i_segs] = "const MapSeg map_segs[%d] = {%s};" % (len(full_seg_rows), ",".join(
+            "{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}" % r for r in full_seg_rows))
+        Hp[i_subs] = "const MapSub map_subs[%d] = {%s};" % (len(full_ssecs), ",".join(
+            "{%d,%d,%d}" % (first, cnt, ss_sec[i]) for i, (cnt, first) in enumerate(full_ssecs)))
+        Hp[i_counts] = "const uint16_t map_counts[6] = {%d,%d,%d,%d,%d,%d};" % (
+            len(verts), len(full_seg_rows), len(full_ssecs), len(nodes), len(sec_rows), len(lines))
+        (out / "mapdata_pvs.c").write_text("\n".join(Hp) + "\n")
     # sizes the renderer's per-vertex caches exactly (RAM budget)
     (out / "mapcounts.h").write_text("#define MAP_NVERTS %d\n#define MAP_NSECTORS %d\n" % (len(verts), len(sec_rows)))
 

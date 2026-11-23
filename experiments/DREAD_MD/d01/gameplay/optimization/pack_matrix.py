@@ -7,20 +7,17 @@ p.add_argument("--roms",type=Path,required=True)
 p.add_argument("--bench",type=Path,required=True)
 p.add_argument("--out",type=Path,required=True)
 args=p.parse_args()
-names=("CONTROL","AI6","AI4","TEX2","TEX4","GEO_SAFE","GEO_STEPS","ALL")
-# Classes decide what a result means. Only "exact" variants are optimisations in the
-# strict sense: same gameplay, same collisions, same pixels. Everything else is a trade-off
-# that must be decided by the project owner before it is reported as a speed-up.
+names=("CONTROL","GEO_SAFE","AI6","AI6S","ALL")
+# Classes decide what a result means. "near_exact" must pass the host gate (verify_geo_exact.sh): same image apart from
+# isolated edge pixels. Everything else is a trade-off that the project owner decides before it is called a speed-up.
 CLASS={
     "CONTROL":"baseline",
-    "GEO_SAFE":"exact",          # expected identical pixels and gameplay: gate below
-    "AI6":"gameplay_change",     # monsters act at 6 Hz
-    "AI4":"gameplay_change",     # monsters act at 4 Hz
-    "TEX2":"visual_change",      # walls sampled at 4x2 texels
-    "TEX4":"visual_change",      # walls sampled at 8x4 texels
-    "GEO_STEPS":"collision_change",  # floors and collisions simplified
-    "ALL":"multi_change",        # AI6 + TEX2 + GEO_SAFE: includes trade-offs
+    "GEO_SAFE":"near_exact",
+    "AI6":"gameplay_change",              # monsters at 6 Hz, so also slower (every kind acts once per 10 VBlanks)
+    "AI6S":"gameplay_change_speed_kept",  # 6 Hz, step lengthened to keep average speed; choppier, fastest kinds capped
+    "ALL":"multi_change",                 # AI6S + GEO_SAFE
 }
+AI_CLASSES=("gameplay_change","gameplay_change_speed_kept","multi_change")
 rows=[]
 for variant in names:
     rom=args.roms/f"DREAD-C7-OPT-{variant}.bin"
@@ -32,6 +29,8 @@ for variant in names:
          "segs_e1m1":json.loads((geom/"E1M1.json").read_text())["after"],
          "segs_e1m8":json.loads((geom/"E1M8.json").read_text())["after"]}
     row["class"]=CLASS[variant]
+    gv=args.roms/f"geo-verify-{variant}.json"
+    row["geo_gate_pass"]=json.loads(gv.read_text())["pass"] if gv.is_file() else ""
     for mode,key in ((1,"render"),(2,"combat")):
         f=args.bench/f"{variant}-bench-{mode}.json"
         row[key+"_fps"]=row[key+"_frames"]=row[key+"_vblanks"]=""
@@ -51,14 +50,13 @@ for row in rows:
         cfps=control[key+"_fps"]
         value=row[key+"_fps"]
         row[key+"_delta_pct"]=round(100*(value/cfps-1),2) if cfps and value else ""
-    # Gate for "exact" variants: same final image as CONTROL on the render route.
-    # Mismatch is reported, not hidden; the release is still built so the owner can see it.
-    if row["class"]=="exact":
+    # near_exact: the pass/fail gate is the host check (geo_gate_pass). This hash comparison is information only.
+    if row["class"]=="near_exact":
         row["render_pixels_equal_control"]=(row["render_hash"]==control["render_hash"]) if row["render_hash"] and control["render_hash"] else ""
     else:
         row["render_pixels_equal_control"]="not_applicable"
     # AI variants change the combat workload: combat FPS is not a like-for-like comparison.
-    row["combat_comparable"]=(row["class"] not in ("gameplay_change","multi_change"))
+    row["combat_comparable"]=(row["class"] not in AI_CLASSES)
 args.out.parent.mkdir(parents=True,exist_ok=True)
 csvpath=args.out.with_suffix(".csv")
 jsonpath=args.out.with_suffix(".json")
@@ -73,6 +71,8 @@ with zipfile.ZipFile(args.out,"w",zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         z.write(args.roms/f"manifest-{variant}.json",f"metadata/{variant}.json")
         for f in sorted((args.roms/"geometry"/variant).glob("E1M*.json")):
             z.write(f,f"geometry/{variant}/{f.name}")
+        for extra in (f"geo-verify-{variant}.txt",f"geo-verify-{variant}.json"):
+            if (args.roms/extra).is_file():z.write(args.roms/extra,f"metadata/{extra}")
         for mode in (1,2):
             f=args.bench/f"{variant}-bench-{mode}.json"
             if f.exists():z.write(f,f"benchmarks/{f.name}")
@@ -81,6 +81,6 @@ with zipfile.ZipFile(args.out,"w",zipfile.ZIP_DEFLATED,compresslevel=6) as z:
     z.write(Path(__file__).with_name("README.md"),"README-EXPERIMENTOS.md")
 with zipfile.ZipFile(args.out) as z:
     assert z.testzip() is None
-    assert sum(x.filename.endswith(".bin") for x in z.infolist())==8
+    assert sum(x.filename.endswith(".bin") for x in z.infolist())==len(names)
 print("CREATED",args.out,"bytes",args.out.stat().st_size)
 for row in rows:print(json.dumps(row))

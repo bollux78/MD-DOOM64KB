@@ -39,6 +39,7 @@ def reduce_segments(rows, subsectors, verts, sectors, lines, sides, mode="contro
             j=join(leaf[-1],r) if mode=="merge" and leaf else None
             if j is None:leaf.append(r)
             else:leaf[-1]=j;merged+=1
+        if not leaf and count:leaf=[rows[first]]   # an empty leaf would have no PVS portals and could not be drawn
         ranges.append((len(leaf),len(result)));result.extend(leaf)
     assert sum(n for n,_ in ranges)==len(result)
     return result,ranges,dict(mode=mode,before=len(rows),after=len(result),
