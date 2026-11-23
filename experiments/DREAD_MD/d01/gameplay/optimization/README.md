@@ -147,3 +147,17 @@ Ferramenta: amostra o PC a cada linha, mapeia símbolos e linhas DWARF do ELF pu
 | `__mulsi3` restante | 3,6 | `main` (blocked_from inlinado) 1,6; resto pulverizado |
 
 Resultado acumulado no MAME (E1M1, 312 quadros): render 3,995 → 4,252 FPS (+6,4%); combate 3,485 → 3,931 FPS (+12,8%). Ganhos restantes exigem mudança de arquitetura (menos colunas processadas), não microajuste.
+
+## Medições no console, DEMO3 E1M7 (dono, 2026-11-23, ROM do commit 950271)
+Jogo idêntico em todas as telas (11 acordados, 155 ataques recebidos, 2 abatidos), exceto com IA 50% (9 / 36 / 2). A CONTROL de ontem (sem as otimizações de código de hoje) fez 2,90 FPS, 155 ataques.
+| Configuração (IA 100%, resolução padrão) | FPS | Ganho sobre o padrão |
+|---|---|---|
+| H40, recorte 0 (padrão) | 3,29 | |
+| H40, recorte −2 | 3,51 | +6,7% |
+| H40, recorte −4 | 3,76 | +14,3% |
+| H32, recorte 0 | 3,64 | +10,6% |
+| H32, recorte −2 | 3,93 | +19,5% |
+| H32, recorte −4 | 4,29 | +30,4% |
+| H40, IA 50% | 3,62 | +10,0% (ataques recebidos 155 → 36) |
+| Tudo no mínimo, IA 50% | 5,37 | +63% |
+A resolução mínima isolada ajuda pouco e o modo colunas é sempre mais lento (observação do dono). O ganho das otimizações de código sozinho (padrão, 3,29 contra 2,90 da CONTROL de ontem) é de +13,4% com o jogo idêntico.
