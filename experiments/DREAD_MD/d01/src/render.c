@@ -1178,7 +1178,7 @@ void R_RenderView(const View *v, uint8_t *fb)
 {
     rfb = fb;
     job.yc = &rec[0].yc; job.yf = 0; job.ybc = 0; job.ybf = 0; job.u = 0; job.zpp = 0;
-#ifdef DREAD_COMBAT
+#if defined(DREAD_COMBAT) && !defined(PVS_GEN)
     Actors_FrameBegin();
 #endif
     frame_id++;
