@@ -3,7 +3,7 @@
 set -euo pipefail
 variant=${1:?variant required}
 output=${2:?output required}
-root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 test -s /home/dan/Projetos/doom-md/assets/wads/doom1.wad
 wad=/home/dan/Projetos/doom-md/assets/wads/doom1.wad
 test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
