@@ -102,6 +102,7 @@ if [[ -z "$geometry_flag" ]]; then
     python3 "$source_dir/tools/gen_weapon.py" "$wad" "$stage/src/weapon.c"
     if [[ "$map" == EPISODE ]]; then
         python3 "$source_dir/tools/pack_tiles.py" "$stage/src/hud_assets.h" "$stage/src/weapon.c" "$stage/src/image_tiles.h"
+        if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then python3 "$source_dir/tools/gen_demo3.py" "$wad" "$stage/src/demo3_data.h"; fi
     fi
 fi
 if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
