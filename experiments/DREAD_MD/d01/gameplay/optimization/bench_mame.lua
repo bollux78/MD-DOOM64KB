@@ -24,8 +24,8 @@ local last_v=0
 local hist={}
 local function screen_hash()
   local screen=manager.machine.screens[":screen"] or manager.machine.screens:at(1)
-  local w=screen:width()
-  local h=screen:height()
+  local w=screen.width
+  local h=screen.height
   local acc=0
   for y=0,h-1,2 do
     for x=0,w-1,2 do
@@ -51,15 +51,15 @@ emu.register_frame_done(function()
     print(string.format("DREAD_BENCH_REQUEST mode=%d readback=%d",mode,mem:read_u16(req)))
   end
   if requested and not reported then
+    -- bench_vints is only filled at the end of the run, so count VBlanks here: one emulated frame = one VBlank
     local f=mem:read_u32(frames_addr)
-    local v=mem:read_u32(vblanks_addr)
     if f~=last_f then
       if last_f>=0 then
-        local d=v-last_v
+        local d=frame-last_v
         hist[d]=(hist[d] or 0)+1
       end
       last_f=f
-      last_v=v
+      last_v=frame
     end
   end
   if requested and not reported and mem:read_u16(done)>=1 then
