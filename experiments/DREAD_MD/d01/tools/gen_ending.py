@@ -34,7 +34,36 @@ for name in ['DoomCREDIT10','disclaimer_and_credits','endMD2']:
    if tile not in ids:ids[tile]=len(unique);unique.append(tile)
    ref.append(ids[tile])
  refs.extend(ref);attrs.extend(lookup[x,y]<<13 for y in range(28) for x in range(40))
-s=['#include <types.h>','const u16 ending_refs[3360]={'+','.join(map(str,refs))+'};','const u16 ending_attrs[3360]={'+','.join(map(str,attrs))+'};','const u16 ending_pal[192]={'+','.join(map(str,palettes))+'};','const u32 ending_tiles['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in struct.unpack('>8I',t))+'};']
+# Losslessly compress credits map metadata while retaining the original art.
+# Nearly all tile references are new sequential IDs; only emit explicit IDs
+# when an existing tile is reused across or within the three credits screens.
+old_mask=bytearray(420);old_refs=[];start_new=[];start_old=[];next_new=0
+for i,ref in enumerate(refs):
+ if i%1120==0:
+  start_new.append(next_new);start_old.append(len(old_refs))
+ if ref==next_new:
+  next_new+=1
+ else:
+  assert ref<next_new,(i,ref,next_new)
+  old_mask[i>>3]|=128>>(i&7);old_refs.append(ref)
+assert next_new==len(unique) and len(start_new)==3
+# 5 bits retain every original tile attribute including flip and priority.
+attr5=bytearray(2101)
+for i,v in enumerate(attrs):
+ val=(v>>11)&31
+ for j in range(5):
+  if val&(1<<(4-j)):
+   b=i*5+j;attr5[b>>3]|=128>>(b&7)
+s=['#include <types.h>',
+   'const u8 ending_old_mask[420]={'+','.join(map(str,old_mask))+'};',
+   'const u16 ending_old_refs['+str(len(old_refs))+']={'+','.join(map(str,old_refs))+'};',
+   'const u16 ending_start_new[3]={'+','.join(map(str,start_new))+'};',
+   'const u16 ending_start_old[3]={'+','.join(map(str,start_old))+'};',
+   'const u8 ending_attr5[2101]={'+','.join(map(str,attr5))+'};',
+   'const u16 ending_pal[192]={'+','.join(map(str,palettes))+'};',
+   'const u32 ending_tiles['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in struct.unpack('>8I',t))+'};']
+print('Credits metadata:',len(old_refs),'reused references; lossless compact index/attrs')
+
 # Original E1 finale text already in this repository's Doom source.
 text=(root.parents[3]/'src/d_englsh.h').read_text().split('#define E1TEXT',1)[1].split('#endif',1)[0]
 text=''.join(ast.literal_eval(x) for x in re.findall(r'"(?:[^"\\]|\\.)*"',text))
@@ -51,61 +80,21 @@ for ty in range(8):
    for x in range(8):v=(v<<4)|int(a[ty*8+y,tx*8+x])
    words.append(v)
 s+=['const u16 finale_pal[16]={'+','.join(map(str,cram))+'};','const u32 finale_tiles[512]={'+','.join(hex(v) for v in words)+'};']
-# Native H40 intermission: same original Doom WIMAP0 artwork as supplied reference,
-# 320x224 pixels, three independent 15-colour MD palettes, PAL3 reserved for text.
-# Quantize the top, middle and bottom thirds separately, then choose the palette
-# with minimum tile error, preserving individual 8x8 tiles (no 2x2 pixel scaling).
-a=read_patch(w.get('WIMAP0'));a=np.where(a<0,0,a).astype(np.uint8)
-im=Image.fromarray(pal[a],'RGB').resize((320,224),Image.Resampling.BILINEAR)
-rgb=np.asarray(im,dtype=np.int16)
-palettes_rgb=[]
-for k in range(3):
- region=Image.fromarray(np.asarray(im)[k*74:min(224,(k+1)*74+2)].copy(),'RGB')
- quant=region.quantize(colors=15,method=Image.Quantize.MEDIANCUT,dither=Image.Dither.NONE)
- pp=quant.getpalette()
- colors=[]
- for i in range(15):
-  rr,gg,bb=pp[3*i:3*i+3]
-  colors.append([int(round(rr/36.43))*34,int(round(gg/36.43))*34,int(round(bb/36.43))*34])
- palettes_rgb.append(np.asarray(colors,dtype=np.int16))
-inter_pal=[]
-for colors in palettes_rgb:
- inter_pal.append(0)
- for rr,gg,bb in colors:
-  inter_pal.append((int(bb)//34<<9)|(int(gg)//34<<5)|(int(rr)//34<<1))
-inter_pal.extend([0]*16) # PAL3 text uses CRAM entry 63, set by HUD.
-# Encode every native 8x8 tile with a private four-colour dictionary.
-# 2 bits/pixel (16 bytes) + 2 bytes for the four actual hardware colour
-# indices. Decode a tile on the fly at intermission; no large RAM buffer.
-tilepal=[];packed=bytearray()
-bayer=np.array([[-6,3],[6,-3]],dtype=np.int16)
-for ty in range(28):
- for tx in range(40):
-  tile=rgb[ty*8:(ty+1)*8,tx*8:(tx+1)*8].copy()
-  choices=[]
-  for colors in palettes_rgb:
-   dist=np.sum((tile[:,:,None,:]-colors[None,None,:,:])**2,axis=3)
-   choices.append(int(np.min(dist,axis=2).sum()))
-  chosen=int(np.argmin(choices));tilepal.append(chosen)
-  colors=palettes_rgb[chosen]
-  tile=np.clip(tile+bayer[:,:,None].repeat(4,axis=0).repeat(4,axis=1),0,255)
-  dist=np.sum((tile[:,:,None,:]-colors[None,None,:,:])**2,axis=3)
-  full=np.argmin(dist,axis=2).astype(np.uint8)
-  # Keep the four strongest colours from this tile and remap the others
-  # to the nearest of those four, retaining the full 320x224 pixel grid.
-  counts=np.bincount(full.flatten(),minlength=15)
-  select=np.argsort(-counts,kind='stable')[:4]
-  lookup=np.argmin(np.sum((colors[:,None,:]-colors[select][None,:,:])**2,axis=2),axis=1)
-  tiny=lookup[full].astype(np.uint8)
-  packed.extend([(int(select[0]+1)<<4)|int(select[1]+1),
-                 (int(select[2]+1)<<4)|int(select[3]+1)])
-  for yy in range(8):
-   for xx in range(0,8,4):
-    group=tiny[yy,xx:xx+4]
-    packed.append(int((group[0]<<6)|(group[1]<<4)|(group[2]<<2)|group[3]))
-assert len(packed)==20160 and len(tilepal)==1120
-s+=['const u16 inter_pal[64]={'+','.join(map(str,inter_pal))+'};',
-    'const u8 inter_tilepal[1120]={'+','.join(map(str,tilepal))+'};',
-    'const u8 inter_data[20160]={'+','.join(map(str,packed))+'};']
-print('Intermission: native H40 320x224, per-tile four-colour packing, 20160 bytes')
+# Two user-approved Tile Palette Studio pictures, packed at native 320x224.
+# ROM packs each 8x8 tile into a 4-colour local dictionary + 2bpp pixels;
+# all 4 CRAM palettes and every spatial pixel are retained.
+import base64,lzma,hashlib
+lines=(src/'c7_user_compact_art.b85').read_text().splitlines()
+assert lines[0]=='C7_USER_ART_2BPP_V1'
+expected={'inter':'f7b5d9b849e952f7d8eaddbadcca45adbfa9077b2e245380d58549690517202b',
+          'final':'fc7c280f7244a38e40a8f52e17ca1f9791d60000e096f864b75abe1e48b89b02'}
+for name in ('inter','final'):
+ j=lines.index('ASSET '+name)
+ data=lzma.decompress(base64.b85decode(lines[j+1]))
+ assert len(data)==20568 and hashlib.sha256(data).hexdigest()==expected[name]
+ cp=struct.unpack('>64H',data[:128]);attrs2=data[128:408];tiles2=data[408:]
+ s+=['const u16 '+name+'_pal[64]={'+','.join(map(str,cp))+'};',
+     'const u8 '+name+'_tilepal2[280]={'+','.join(map(str,attrs2))+'};',
+     'const u8 '+name+'_data[20160]={'+','.join(map(str,tiles2))+'};']
+print('User intermission and ending: native 320x224, 4 CRAM palettes each')
 (out/'ending_data.c').write_text('\n'.join(s)+'\n');print('Ending art:',len(unique),'unique tiles,',len(lines),'text lines')
