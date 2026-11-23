@@ -65,7 +65,18 @@ static uint16_t nactors, tick_no;
 /* Menu option "IA": 100% = period 5 (control), 50% = period 10 with the walking speed kept (see above).
  * The period is a run-time variable so the menu can switch it; DREAD_AI_PERIOD is only its start value. */
 static uint8_t ai_period = DREAD_AI_PERIOD;
-static uint8_t sp_comp[8], sp_for;
+static uint8_t sp_comp[8], sp_f[8], sp_for;
+/* Per kind, for the current period P: step length (speed * gap(P) / gap(5)) and f = gap(P) / gap(5), how many control-rate
+ * (5 VBlank) steps one AI step stands for. f = 2 for the kinds that walk every 5 VBlanks in the control. */
+static void ai_comp_update(void)
+{
+    if (sp_for == ai_period) return;
+    for (uint8_t k = 0; k < 8; k++) {
+        sp_comp[k] = (uint8_t)(((uint16_t)kinds[k].speed * AI_GAP(kinds[k].chase, ai_period)) / AI_GAP(kinds[k].chase, 5));
+        sp_f[k] = (uint8_t)(AI_GAP(kinds[k].chase, ai_period) / AI_GAP(kinds[k].chase, 5));
+    }
+    sp_for = ai_period;
+}
 void Actors_SetAIHalf(uint8_t on) { ai_period = on ? 10 : 5; sp_for = 0; }
 uint8_t Actors_AIHalf(void) { return ai_period != 5; }
 /* VBlank-time fixed-step clocks, independent of rendered FPS.
@@ -268,10 +279,7 @@ static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
     if (dir >= 8) return 0;
     int16_t sp = kinds[a->kind].speed;
     if (ai_period != 5) {
-        if (sp_for != ai_period) {
-            for (uint8_t k = 0; k < 8; k++) sp_comp[k] = (uint8_t)(((uint16_t)kinds[k].speed * AI_GAP(kinds[k].chase, ai_period)) / AI_GAP(kinds[k].chase, 5));
-            sp_for = ai_period;
-        }
+        ai_comp_update();
         sp = sp_comp[a->kind] > AI_STEP_MAX ? AI_STEP_MAX : sp_comp[a->kind];
     }
     const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
@@ -409,7 +417,11 @@ static void chase(Actor *a, uint8_t i, ActorPlayer *pl)
     const KindInfo *k = &kinds[a->kind];
     const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
     const int16_t dist = approx_dist(pl->x - x, pl->y - y);
-    if (a->reaction) a->reaction--;
+    /* Slow AI (period 10): one step stands for f control steps, so the reaction time counts down f at a time and the
+     * missile roll is made f times; at period 5 f = 1 and this is exactly the control (same random numbers). */
+    uint8_t f = 1;
+    if (ai_period != 5) { ai_comp_update(); f = sp_f[a->kind]; }
+    if (a->reaction) a->reaction = a->reaction > f ? (uint8_t)(a->reaction - f) : 0;
     /* melee */
     if (dist < MELEE && (k->attack == A_IMP || k->attack == A_BITE || k->attack == A_SOUL || k->attack == A_BARON || k->attack == A_CACO)) {
         if (can_see(a, pl, 0) == 1) goto start_attack;
@@ -419,9 +431,9 @@ static void chase(Actor *a, uint8_t i, ActorPlayer *pl)
         int16_t d = dist - 64;
         if (d > 200) d = 200;
         if (d < 0) d = 0;
-        if (rnd() >= d && can_see(a, pl, 0) == 1) goto start_attack;
+        for (uint8_t r = 0; r < f; r++) if (rnd() >= d && can_see(a, pl, 0) == 1) goto start_attack;
     }
-    if (a->movecount) a->movecount--;
+    if (a->movecount) a->movecount = a->movecount > f ? (uint8_t)(a->movecount - f) : 0;
     if (!a->movecount || a->dir >= 8 || !try_move(a, i, a->dir, pl)) new_chase_dir(a, i, pl);
     a->step = (uint8_t)((a->step + 1) % k->walkn);
     a->frame = (uint8_t)(k->walk0 + a->step);
