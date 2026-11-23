@@ -131,3 +131,19 @@ O job de compilação roda em runner self-hosted em repositório público. Restr
 
 ## Decisão do dono (2026-11-23): IA vira opção de menu
 Depois da otimização de `scenery_blocked`/`World_Shoot` (commit a43bad5), AI6 e AI6S ganharam só 2% e 3% de FPS em combate sobre o CONTROL (antes 4% e 5%). Decisão: AI6/AI6S saem da rodada. No lugar, o menu do jogo (START) ganhou **IA: 100% / 50%** (`Actors_SetAIHalf`): 100% = período 5 (CONTROL); 50% = período 10 com o passo proporcional da AI6S (velocidade mantida, passo limitado a 16). O padrão é 100%. A rodada passa a ter só CONTROL; `variant.sh` continua aceitando AI6/AI6S para teste pontual.
+
+## Perfil medido (2026-11-23, DEMO3 E1M7, ROM CONTROL com ELF, amostragem por PC no GPGX headless)
+Ferramenta: amostra o PC a cada linha, mapeia símbolos e linhas DWARF do ELF publicado (shareware). Depois do commit 46ed282:
+| Bloco | % do tempo | Observação |
+|---|---|---|
+| `seg_columns` (contabilidade por coluna) | 11,7 | custo está no número de colunas, não em instruções soltas |
+| `render_node` | 9,8 | distribuído: laço de segs 3,2 / vértices 2,1 / caminho dos nós 2,0 / coisas do subsetor 1,3 / muls 0,8 |
+| `tex_native` | 8,5 | ~440 ciclos por chamada; já enxuto |
+| escalonadores `native_b_N` | 8,3 | escrita de pixel, é o piso |
+| `draw_seg_body` + `proj` + `native_anchors` | 15 | preparo por parede |
+| sprites (`Actors_Draw`, `draw_sprite`, `R_AddSprite`) | ~8 | `Actors_Draw` caiu 28% com as listas por quadro |
+| preenchimento de teto/piso (`span_fill`, núcleos) | ~2,6 | **fundir 4 colunas não compensa** (ganho máximo ~1,5%) |
+| jogo (IA, colisão, tiros) | ~8 | antes ~16%; `scenery_blocked`/`World_Shoot` otimizados |
+| `__mulsi3` restante | 3,6 | `main` (blocked_from inlinado) 1,6; resto pulverizado |
+
+Resultado acumulado no MAME (E1M1, 312 quadros): render 3,995 → 4,252 FPS (+6,4%); combate 3,485 → 3,931 FPS (+12,8%). Ganhos restantes exigem mudança de arquitetura (menos colunas processadas), não microajuste.
