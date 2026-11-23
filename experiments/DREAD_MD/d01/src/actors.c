@@ -71,17 +71,42 @@ static uint8_t ai_vblank_accum, projectile_vblank_accum;
 #define MAXBARRELS 64
 typedef struct {uint16_t thing;int16_t hp;uint8_t frame,tics,state,pad;} Barrel;
 static Barrel barrels[MAXBARRELS];static uint16_t nbarrels;
-static int scenery_blocked(int16_t x,int16_t y,int16_t z){
+/* Static solid scenery (thing type 81) as a compact list built at level start: scenery_blocked() is called for
+ * every monster step and every player move test, and the old version walked ALL map things each time. */
+#define MAXSCEN 255
+typedef struct {int16_t x,y;uint16_t sec;} Scen;
+static Scen scen[MAXSCEN];static uint8_t nscen;static uint8_t scen_overflow;
+static void scen_build(void){
+    nscen=0;scen_overflow=0;
     for(uint16_t i=0;i<map_nthings;i++){
         const MapThing *t=&map_things[i];if((t->flags&THING_MONSTER) || (t->flags>>8)!=81)continue;
-        const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
+        if(nscen>=MAXSCEN){scen_overflow=1;break;}
+        scen[nscen].x=t->x;scen[nscen].y=t->y;scen[nscen].sec=map_subs[t->sub].sector;nscen++;
+    }
+}
+static int scenery_blocked(int16_t x,int16_t y,int16_t z){
+    if(scen_overflow){
+        for(uint16_t i=0;i<map_nthings;i++){
+            const MapThing *t=&map_things[i];if((t->flags&THING_MONSTER) || (t->flags>>8)!=81)continue;
+            const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
+            if(z-41>=f+56 || z+15<=f)continue;
+            const int32_t dx=x-t->x,dy=y-t->y;if(dx*dx+dy*dy<32*32)return 1;
+        }
+    }else for(uint8_t i=0;i<nscen;i++){
+        const Scen *t=&scen[i];
+        const int dx=x-t->x;if(dx>=32 || dx<=-32)continue;
+        const int dy=y-t->y;if(dy>=32 || dy<=-32)continue;
+        const int16_t f=map_sectors[t->sec].floor;
         if(z-41>=f+56 || z+15<=f)continue;
-        const int32_t dx=x-t->x,dy=y-t->y;if(dx*dx+dy*dy<32*32)return 1;
+        if(m16((int16_t)dx,(int16_t)dx)+m16((int16_t)dy,(int16_t)dy)<32*32)return 1;
     }
     for(uint16_t i=0;i<nbarrels;i++)if(!barrels[i].state){
-        const MapThing *t=&map_things[barrels[i].thing];const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
+        const MapThing *t=&map_things[barrels[i].thing];
+        const int dx=x-t->x;if(dx>=26 || dx<=-26)continue;
+        const int dy=y-t->y;if(dy>=26 || dy<=-26)continue;
+        const int16_t f=map_sectors[map_subs[t->sub].sector].floor;
         if(z-41>=f+42 || z+15<=f)continue;
-        const int32_t dx=x-t->x,dy=y-t->y;if(dx*dx+dy*dy<26*26)return 1;
+        if(m16((int16_t)dx,(int16_t)dx)+m16((int16_t)dy,(int16_t)dy)<26*26)return 1;
     }return 0;
 }
 #endif
@@ -195,6 +220,7 @@ static void link_actor(uint8_t i)
 void Actors_Init(void)
 {
 #ifdef DREAD_GAMEPLAY
+    scen_build();
     nbarrels=0;for(uint16_t i=0;i<map_nthings && nbarrels<MAXBARRELS;i++)if(!(map_things[i].flags&THING_MONSTER) && (map_things[i].flags>>8)==80){
         Barrel *b=&barrels[nbarrels++];b->thing=i;b->hp=20;b->state=b->frame=b->tics=0;
     }

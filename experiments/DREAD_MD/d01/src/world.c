@@ -123,8 +123,13 @@ void World_Shoot(const View *view)
     const uint16_t angle=view->angle>>6;
     const int32_t dx=((2048L*sintab[(angle+256)&1023])>>14),dy=((2048L*sintab[angle])>>14);
     int best=-1;uint32_t nearest=65537;
+    /* The shot is the segment (x,y)-(x+dx,y+dy): a line whose bounding box misses the segment's box cannot
+     * intersect it, so reject those with four compares before the 32-bit multiplies below (same result). */
+    const int32_t bx0=(dx<0?x+dx:x),bx1=(dx<0?x:x+dx),by0=(dy<0?y+dy:y),by1=(dy<0?y:y+dy);
     for(uint16_t i=0;i<map_counts[5];i++){
         const MapLine *l=&map_lines[i];
+        {const int16_t ux=map_verts[l->v1][0],uy=map_verts[l->v1][1],vx=map_verts[l->v2][0],vy=map_verts[l->v2][1];
+         if((ux<vx?vx:ux)<bx0 || (ux<vx?ux:vx)>bx1 || (uy<vy?vy:uy)<by0 || (uy<vy?uy:vy)>by1)continue;}
         if(l->back!=NO_MAP_SECTOR && !(l->flags&1) && l->special!=46){
             const int16_t lo=map_sectors[l->front].floor>map_sectors[l->back].floor?map_sectors[l->front].floor:map_sectors[l->back].floor;
             const int16_t hi=sec_ceil[l->front]<sec_ceil[l->back]?sec_ceil[l->front]:sec_ceil[l->back];
