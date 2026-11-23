@@ -58,6 +58,7 @@ jobs:
           unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
           echo "Build C7 NORMAL (4MiB) | E1M1-E1M9 | AI 12Hz | projectiles 20Hz | no SSF"
           echo "Palette: 0x4C4 green in BAL7, NUKEDGE, BAR1, POSS hair, PLAY corpses, ARM1/BON1, green torches and SUIT"
+          echo "Intermission: native H40, compact 2bpp tile dictionaries"
           bash experiments/DREAD_MD/d01/gameplay/build.sh "$WAD" "$OUT/build"
           test -s "$OUT/build/EPISODE.bin"
           cp "$OUT/build/EPISODE.bin" "$OUT/release/DREAD-C7-NORMAL-VERDE.bin"
