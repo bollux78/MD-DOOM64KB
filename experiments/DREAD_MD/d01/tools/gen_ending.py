@@ -74,28 +74,38 @@ for colors in palettes_rgb:
  for rr,gg,bb in colors:
   inter_pal.append((int(bb)//34<<9)|(int(gg)//34<<5)|(int(rr)//34<<1))
 inter_pal.extend([0]*16) # PAL3 text uses CRAM entry 63, set by HUD.
+# Encode every native 8x8 tile with a private four-colour dictionary.
+# 2 bits/pixel (16 bytes) + 2 bytes for the four actual hardware colour
+# indices. Decode a tile on the fly at intermission; no large RAM buffer.
 tilepal=[];packed=bytearray()
 bayer=np.array([[-6,3],[6,-3]],dtype=np.int16)
 for ty in range(28):
  for tx in range(40):
   tile=rgb[ty*8:(ty+1)*8,tx*8:(tx+1)*8].copy()
-  # Select one of the three hardware palettes for this tile.
   choices=[]
   for colors in palettes_rgb:
    dist=np.sum((tile[:,:,None,:]-colors[None,None,:,:])**2,axis=3)
    choices.append(int(np.min(dist,axis=2).sum()))
   chosen=int(np.argmin(choices));tilepal.append(chosen)
   colors=palettes_rgb[chosen]
-  # Subtle ordered 2x2 dither; preserve native H40 spatial detail.
   tile=np.clip(tile+bayer[:,:,None].repeat(4,axis=0).repeat(4,axis=1),0,255)
   dist=np.sum((tile[:,:,None,:]-colors[None,None,:,:])**2,axis=3)
-  indices=np.argmin(dist,axis=2).astype(np.uint8)+1
+  full=np.argmin(dist,axis=2).astype(np.uint8)
+  # Keep the four strongest colours from this tile and remap the others
+  # to the nearest of those four, retaining the full 320x224 pixel grid.
+  counts=np.bincount(full.flatten(),minlength=15)
+  select=np.argsort(-counts,kind='stable')[:4]
+  lookup=np.argmin(np.sum((colors[:,None,:]-colors[select][None,:,:])**2,axis=2),axis=1)
+  tiny=lookup[full].astype(np.uint8)
+  packed.extend([(int(select[0]+1)<<4)|int(select[1]+1),
+                 (int(select[2]+1)<<4)|int(select[3]+1)])
   for yy in range(8):
-   for xx in range(0,8,2):
-    packed.append(int((indices[yy,xx]<<4)|indices[yy,xx+1]))
-assert len(packed)==35840 and len(tilepal)==1120
+   for xx in range(0,8,4):
+    group=tiny[yy,xx:xx+4]
+    packed.append(int((group[0]<<6)|(group[1]<<4)|(group[2]<<2)|group[3]))
+assert len(packed)==20160 and len(tilepal)==1120
 s+=['const u16 inter_pal[64]={'+','.join(map(str,inter_pal))+'};',
     'const u8 inter_tilepal[1120]={'+','.join(map(str,tilepal))+'};',
-    'const u8 inter_data[35840]={'+','.join(map(str,packed))+'};']
-print('Intermission: native H40 320x224, 3 palette background, 35840 bytes')
+    'const u8 inter_data[20160]={'+','.join(map(str,packed))+'};']
+print('Intermission: native H40 320x224, per-tile four-colour packing, 20160 bytes')
 (out/'ending_data.c').write_text('\n'.join(s)+'\n');print('Ending art:',len(unique),'unique tiles,',len(lines),'text lines')
