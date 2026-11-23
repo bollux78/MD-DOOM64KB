@@ -208,6 +208,7 @@ static void vint_cb(void)
 #ifndef START_CROP
 #define START_CROP 0
 #endif
+static uint16_t start_mode = START_MODE;                   /* video mode used when a game starts; kept across a restart */
 static uint16_t crop = START_CROP;                         /* side crop: tiles removed on each side (0, 2, 4) */
 static void set_mode(uint16_t m)
 {
@@ -495,6 +496,34 @@ static uint16_t fcap = 6;
 static const uint8_t fcap_v[4] = { 0, 5, 6, 8 };
 static const char *const fcap_s[4] = { "LIVRE   ", "12 FPS  ", "10 FPS  ", "7.5 FPS " };
 static uint16_t fcap_i = 2;
+/* Restart to the title like SYS_hardReset(), but keep the menu settings (video mode, crop, frame limit, music, AI rate).
+ * SYS_hardReset() jumps to _start_entry, which clears all 64 KB of RAM, so every setting went back to its default.
+ * Here: save the settings, clear .data/.bss ourselves, reload .data from ROM exactly as the SGDK start code does,
+ * put the settings back and enter SYS_reset(), which runs the same init as a cold start (it only skips the RAM clear). */
+extern char _stext, _sdata, _bend;
+static void game_restart(void)
+{
+    const uint16_t k_mode = mode, k_crop = crop, k_fcap_i = fcap_i, k_music = music_on;
+#if defined(DREAD_COMBAT) && defined(DREAD_COMBAT_12_20)
+    const uint8_t k_ai = Actors_AIHalf();
+#endif
+    SYS_disableInts();
+    __asm__ volatile("move #0x2700,%%sr" ::: "memory");
+    {
+        volatile uint16_t *p = (volatile uint16_t *)0xE0FF0000UL;
+        const uint32_t end = (uint32_t)&_bend;
+        while ((uint32_t)p < end) *p++ = 0;
+        const uint16_t *src = (const uint16_t *)(uint32_t)&_stext;
+        uint16_t *dst = (uint16_t *)0xE0FF0000UL;
+        for (uint32_t n = ((uint32_t)&_sdata + 1) >> 1; n; n--) *dst++ = *src++;
+    }
+    start_mode = k_mode; crop = k_crop; fcap_i = k_fcap_i; fcap = fcap_v[k_fcap_i]; music_on = k_music;
+#if defined(DREAD_COMBAT) && defined(DREAD_COMBAT_12_20)
+    Actors_SetAIHalf(k_ai);
+#endif
+    SYS_reset();
+    for (;;) {}
+}
 static void menu_draw(uint16_t sel)
 {
     static const char *const res[2]={"H40 (320)","H32 (256)"};
@@ -591,7 +620,7 @@ static void menu(void)
 #endif
     SYS_enableInts();
 #ifdef DREAD_GAMEPLAY
-    if(go_title)SYS_hardReset();
+    if(go_title)game_restart();
 #endif
     prev_joy = BUTTON_START;
 #ifdef DREAD_GAMEPLAY
@@ -930,7 +959,7 @@ static void benchmark_report_screen(uint16_t f100)
         SYS_enableInts();
         for(;;){
             JOY_update();
-            if(JOY_readJoypad(JOY_1)&BUTTON_START)SYS_hardReset();
+            if(JOY_readJoypad(JOY_1)&BUTTON_START)game_restart();
             SYS_doVBlankProcess();
         }
     }
@@ -975,7 +1004,7 @@ static void benchmark_report_screen(uint16_t f100)
     SYS_enableInts();
     for (;;) {
         JOY_update();
-        if (JOY_readJoypad(JOY_1) & BUTTON_START) SYS_hardReset();
+        if (JOY_readJoypad(JOY_1) & BUTTON_START) game_restart();
         SYS_doVBlankProcess();
     }
 #endif
@@ -995,7 +1024,7 @@ static void episode_end(void)
     HUD_ShowFinaleText();wait_any_button();
     credits_sequence();
     for(;;){JOY_update();if(!JOY_readJoypad(JOY_1))break;SYS_doVBlankProcess();}
-    SYS_hardReset();
+    game_restart();
 }
 #endif
 
@@ -1034,7 +1063,7 @@ int main(bool hard)
 #endif
     HUD_Init(HUD_ROW0);
     VDP_setHInterrupt(TRUE);
-    set_mode(START_MODE);
+    set_mode(start_mode);
     game_video_active=1;
     static HudState hud = { 100, 0, 50, {50, 0, 0, 0}, {200, 50, 50, 300}, 1, 0, 0 };
     hud=(HudState){100,0,50,{50,0,0,0},{200,50,50,300},1,0,0};
@@ -1332,7 +1361,7 @@ int main(bool hard)
 #ifdef DREAD_GAMEPLAY
                 episode_end();
 #else
-                SYS_hardReset();
+                game_restart();
 #endif
             }     /* end of the episode: back to the title */
             selected_map = secret ? 8 : (selected_map == 8 ? 3 : selected_map + 1);
