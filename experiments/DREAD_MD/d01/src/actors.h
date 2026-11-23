@@ -32,6 +32,7 @@ void Actors_FireWeapon(const View *view, uint16_t weapon);
 void Actors_SetAIHalf(uint8_t on);   /* menu: AI at 50% (period 10, speed kept) instead of 100% (period 5) */
 uint8_t Actors_AIHalf(void);
 void Actors_Tick(ActorPlayer *pl, uint16_t dt);
+void Actors_FrameBegin(void);   /* once per rendered frame, before the BSP walk */
 void Actors_Draw(uint16_t sub);
 int  Thing_Taken(uint16_t index);
 void Thing_Take(uint16_t index);

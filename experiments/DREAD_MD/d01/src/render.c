@@ -1178,6 +1178,9 @@ void R_RenderView(const View *v, uint8_t *fb)
 {
     rfb = fb;
     job.yc = &rec[0].yc; job.yf = 0; job.ybc = 0; job.ybf = 0; job.u = 0; job.zpp = 0;
+#ifdef DREAD_COMBAT
+    Actors_FrameBegin();
+#endif
     frame_id++;
     if (frame_id == 0xFFFF) { frame_id = 0; for (int i = 0; i < VCACHE_SIZE; i++) vstamp[i] = 0xFFFF; }
     view_x4 = v->x >> 14; view_y4 = v->y >> 14; view_z = v->z;

@@ -722,6 +722,22 @@ uint16_t Actors_BossDone(void)
 {
     uint16_t found=0;for(uint16_t i=0;i<nactors;i++)if(actors[i].kind==6){found=1;if(actors[i].state<ST_DEATH)return 0;}return found;
 }
+/* Per-frame lists of the dynamic things worth drawing (barrels still standing, active drops, live projectiles):
+ * Actors_Draw() runs for every visible subsector, and scanning 32 drops + 8 projectiles + all barrels in each
+ * call cost ~6% of the frame. Lists are built once per rendered frame, in index order, so draw order is unchanged. */
+static uint8_t fd_drop[32], fd_nd, fd_proj[MAXPROJ], fd_np;
+#ifdef DREAD_GAMEPLAY
+static uint8_t fd_bar[MAXBARRELS], fd_nb;
+#endif
+void Actors_FrameBegin(void)
+{
+    fd_nd = 0; for (uint8_t i = 0; i < 32; i++) if (drops[i].active) fd_drop[fd_nd++] = i;
+    fd_np = 0; for (uint8_t k = 0; k < MAXPROJ; k++) if (proj[k].kind != 0xFF) fd_proj[fd_np++] = k;
+#ifdef DREAD_GAMEPLAY
+    fd_nb = 0; for (uint8_t i = 0; i < nbarrels; i++) if (barrels[i].state != 2) fd_bar[fd_nb++] = i;
+#endif
+}
+
 void Actors_Draw(uint16_t sub)
 {
     extern int16_t r_view_xi, r_view_yi;
@@ -741,18 +757,18 @@ void Actors_Draw(uint16_t sub)
         R_AddSprite(x, y, sec->floor, spr, flip, sec);
     }
 #ifdef DREAD_GAMEPLAY
-    for(uint16_t i=0;i<nbarrels;i++){
-        const Barrel *b=&barrels[i];const MapThing *t=&map_things[b->thing];if(t->sub!=sub || b->state==2)continue;
+    for(uint8_t n=0;n<fd_nb;n++){
+        const Barrel *b=&barrels[fd_bar[n]];const MapThing *t=&map_things[b->thing];if(t->sub!=sub)continue;
         const MapSector *sec=&map_sectors[map_subs[sub].sector];
         R_AddSprite(t->x,t->y,sec->floor,b->state?map_fx[14+b->frame]:t->sprite,0,sec);
     }
 #endif
-    for(uint16_t i=0;i<32;i++)if(drops[i].active && drops[i].sub==sub){
+    for(uint8_t n=0;n<fd_nd;n++){const uint8_t i=fd_drop[n];if(drops[i].sub!=sub)continue;
         R_AddSprite(drops[i].x,drops[i].y,map_sectors[map_subs[sub].sector].floor,map_fx[drops[i].type?12:13],0,&map_sectors[map_subs[sub].sector]);
     }
-    for (uint16_t k = 0; k < MAXPROJ; k++) {
-        const Proj *p = &proj[k];
-        if (p->kind == 0xFF || p->sub != sub) continue;
+    for (uint8_t n = 0; n < fd_np; n++) {
+        const Proj *p = &proj[fd_proj[n]];
+        if (p->sub != sub) continue;
         uint16_t spr;
         if (p->kind==3) spr=map_fx[p->state?9+p->frame:8];
         else if (p->state) spr = map_fx[2 + p->frame];
