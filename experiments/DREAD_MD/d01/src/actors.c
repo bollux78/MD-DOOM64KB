@@ -77,6 +77,9 @@ static void ai_comp_update(void)
     }
     sp_for = ai_period;
 }
+/* Slow-AI attack tuning (run-time so it can be calibrated in the emulator): extra missile rolls per step and the reaction
+ * delay after an attack starts. Control values at period 5 are fixed (3 and 1 roll) and never read these. */
+volatile uint8_t ai_xroll = 0, ai_react = 2;
 void Actors_SetAIHalf(uint8_t on) { ai_period = on ? 10 : 5; sp_for = 0; }
 uint8_t Actors_AIHalf(void) { return ai_period != 5; }
 /* VBlank-time fixed-step clocks, independent of rendered FPS.
@@ -431,7 +434,7 @@ static void chase(Actor *a, uint8_t i, ActorPlayer *pl)
         int16_t d = dist - 64;
         if (d > 200) d = 200;
         if (d < 0) d = 0;
-        for (uint8_t r = 0; r < f; r++) if (rnd() >= d && can_see(a, pl, 0) == 1) goto start_attack;
+        for (uint8_t r = 0, nr = (uint8_t)(f + (ai_period != 5 ? ai_xroll : 0)); r < nr; r++) if (rnd() >= d && can_see(a, pl, 0) == 1) goto start_attack;
     }
     if (a->movecount) a->movecount = a->movecount > f ? (uint8_t)(a->movecount - f) : 0;
     if (!a->movecount || a->dir >= 8 || !try_move(a, i, a->dir, pl)) new_chase_dir(a, i, pl);
@@ -442,7 +445,7 @@ static void chase(Actor *a, uint8_t i, ActorPlayer *pl)
 start_attack:
     a->state = ST_ATK; a->step = 0; a->frame = k->atk0; a->tics = 10;
     a->dir = octant(pl->x - x, pl->y - y);
-    a->reaction = 3;
+    a->reaction = ai_period != 5 ? ai_react : 3;
 }
 
 static void look(Actor *a, const ActorPlayer *pl)
