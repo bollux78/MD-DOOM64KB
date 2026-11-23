@@ -23,6 +23,14 @@ case "$variant" in
   ALL) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10 -DDREAD_AI_SPEED_COMP" DREAD_RENDER_GEOMETRY=merge ;;
   *) echo "Unknown experimental variant: $variant" >&2;exit 2 ;;
 esac
+# Every experimental ROM must identify its optimization in the game's ROM
+# field, the Sega header, and the DEMO3 results screen.
+case "$variant" in
+  CONTROL) export DREAD_ROM_LABEL="DREAD C7 CONTROL AI 12HZ" ;;
+  AI6)     export DREAD_ROM_LABEL="DREAD C7 AI6 AI 6HZ" ;;
+  AI6S)    export DREAD_ROM_LABEL="DREAD C7 AI6S AI 6HZ COMP" ;;
+  *)       export DREAD_ROM_LABEL="DREAD C7 $variant EXPERIMENT" ;;
+esac
 export DREAD_OPT_FLAGS="$DREAD_OPT_FLAGS -DDREAD_BENCH_$variant"
-echo "DREAD OPT $variant: AI_FLAGS=${DREAD_OPT_FLAGS:-12Hz} TEX_FACTOR=$DREAD_TEXTURE_FACTOR GEOMETRY=$DREAD_RENDER_GEOMETRY STEPS=$DREAD_SIMPLIFY_STEPS"
+echo "DREAD OPT $variant ROM_NAME=$DREAD_ROM_LABEL: AI_FLAGS=${DREAD_OPT_FLAGS:-12Hz} TEX_FACTOR=$DREAD_TEXTURE_FACTOR GEOMETRY=$DREAD_RENDER_GEOMETRY STEPS=$DREAD_SIMPLIFY_STEPS"
 bash "$(dirname "$0")/../build.sh" "$2" "$3"
