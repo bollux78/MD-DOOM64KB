@@ -861,6 +861,44 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_clearPlane(WINDOW, TRUE);
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
+#if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
+    if(bench_req==3){
+        const uint32_t seconds100=(bench_vints*100UL+30)/60;
+        VDP_drawTextBG(BG_A,"DOOM MD - DEMO3 BENCHMARK",2,1);
+        VDP_drawTextBG(BG_A,"ROM:",2,3);
+        VDP_drawTextBG(BG_A,ROM_NAME,2,4);
+        VDP_drawTextBG(BG_A,"VARIANTE: " DEMO_VARIANT,2,6);
+        sprintf(line,"DEMO3 / E1M%u / WAD",demo3_map);
+        VDP_drawTextBG(BG_A,line,2,7);
+        sprintf(line,"FPS MEDIO: %u.%02u",f100/100,f100%100);
+        VDP_drawTextBG(BG_A,line,2,9);
+        sprintf(line,"TEMPO REAL: %lu.%02lu SEG",
+                (unsigned long)(seconds100/100),(unsigned long)(seconds100%100));
+        VDP_drawTextBG(BG_A,line,2,11);
+        sprintf(line,"VBLANKS: %lu",(unsigned long)bench_vints);
+        VDP_drawTextBG(BG_A,line,2,12);
+        sprintf(line,"QUADROS: %lu",(unsigned long)bench_frames);
+        VDP_drawTextBG(BG_A,line,2,13);
+        sprintf(line,"TICS DEMO: %lu",(unsigned long)demo3_played);
+        VDP_drawTextBG(BG_A,line,2,14);
+        sprintf(line,"MONSTROS ACORDADOS: %u",combat_wakes);
+        VDP_drawTextBG(BG_A,line,2,16);
+        sprintf(line,"ATAQUES RECEBIDOS: %u",combat_attacks);
+        VDP_drawTextBG(BG_A,line,2,17);
+        sprintf(line,"MONSTROS ABATIDOS: %u",combat_kills);
+        VDP_drawTextBG(BG_A,line,2,18);
+        VDP_drawTextBG(BG_A,"REPLAY: FISICA C7 APROXIMADA",2,22);
+        VDP_drawTextBG(BG_A,"1 VBLANK = 1/60 SEGUNDO",2,23);
+        VDP_drawTextBG(BG_A,"START: REINICIAR",2,26);
+        VDP_setEnable(TRUE);
+        SYS_enableInts();
+        for(;;){
+            JOY_update();
+            if(JOY_readJoypad(JOY_1)&BUTTON_START)SYS_hardReset();
+            SYS_doVBlankProcess();
+        }
+    }
+#endif
     VDP_drawTextBG(BG_A, bench_req == 2 ? "DOOM MD COMBAT BENCHMARK" : "DOOM MD  RENDER BENCHMARK", 2, 1);
     VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
 #ifdef DREAD_NATIVE_PERSPECTIVE
