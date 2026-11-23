@@ -8,6 +8,19 @@ p.add_argument("--bench",type=Path,required=True)
 p.add_argument("--out",type=Path,required=True)
 args=p.parse_args()
 names=("CONTROL","AI6","AI4","TEX2","TEX4","GEO_SAFE","GEO_STEPS","ALL")
+# Classes decide what a result means. Only "exact" variants are optimisations in the
+# strict sense: same gameplay, same collisions, same pixels. Everything else is a trade-off
+# that must be decided by the project owner before it is reported as a speed-up.
+CLASS={
+    "CONTROL":"baseline",
+    "GEO_SAFE":"exact",          # expected identical pixels and gameplay: gate below
+    "AI6":"gameplay_change",     # monsters act at 6 Hz
+    "AI4":"gameplay_change",     # monsters act at 4 Hz
+    "TEX2":"visual_change",      # walls sampled at 4x2 texels
+    "TEX4":"visual_change",      # walls sampled at 8x4 texels
+    "GEO_STEPS":"collision_change",  # floors and collisions simplified
+    "ALL":"multi_change",        # AI6 + TEX2 + GEO_SAFE: includes trade-offs
+}
 rows=[]
 for variant in names:
     rom=args.roms/f"DREAD-C7-OPT-{variant}.bin"
@@ -18,21 +31,34 @@ for variant in names:
          "sha256":hashlib.sha256(rom.read_bytes()).hexdigest(),
          "segs_e1m1":json.loads((geom/"E1M1.json").read_text())["after"],
          "segs_e1m8":json.loads((geom/"E1M8.json").read_text())["after"]}
+    row["class"]=CLASS[variant]
     for mode,key in ((1,"render"),(2,"combat")):
         f=args.bench/f"{variant}-bench-{mode}.json"
         row[key+"_fps"]=row[key+"_frames"]=row[key+"_vblanks"]=""
+        row[key+"_vpf"]=row[key+"_hash"]=""
         if f.is_file():
             d=json.loads(f.read_text())
             assert int(d["mode"])==mode
             row[key+"_fps"]=float(d["fps"])
             row[key+"_frames"]=int(d["frames"])
             row[key+"_vblanks"]=int(d["vblanks"])
+            row[key+"_vpf"]=d.get("vblanks_per_frame_mean","")
+            row[key+"_hash"]=d.get("visual_hash","")
     rows.append(row)
+control=rows[0]
 for row in rows:
     for key in ("render","combat"):
-        control=rows[0][key+"_fps"]
+        cfps=control[key+"_fps"]
         value=row[key+"_fps"]
-        row[key+"_delta_pct"]=round(100*(value/control-1),2) if control and value else ""
+        row[key+"_delta_pct"]=round(100*(value/cfps-1),2) if cfps and value else ""
+    # Gate for "exact" variants: same final image as CONTROL on the render route.
+    # Mismatch is reported, not hidden; the release is still built so the owner can see it.
+    if row["class"]=="exact":
+        row["render_pixels_equal_control"]=(row["render_hash"]==control["render_hash"]) if row["render_hash"] and control["render_hash"] else ""
+    else:
+        row["render_pixels_equal_control"]="not_applicable"
+    # AI variants change the combat workload: combat FPS is not a like-for-like comparison.
+    row["combat_comparable"]=(row["class"] not in ("gameplay_change","multi_change"))
 args.out.parent.mkdir(parents=True,exist_ok=True)
 csvpath=args.out.with_suffix(".csv")
 jsonpath=args.out.with_suffix(".json")

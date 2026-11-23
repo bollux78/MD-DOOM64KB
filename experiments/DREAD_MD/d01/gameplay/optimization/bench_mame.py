@@ -36,8 +36,24 @@ m=re.search(r"DREAD_BENCH_RESULT mode=(\d+) frames=(\d+) vblanks=(\d+) fps_x1000
 assert m,(args.rom,args.mode,run.returncode,output[-1800:])
 mode,frames,vblanks,fps1000=map(int,m.groups())
 assert mode==args.mode and frames>=200 and vblanks>frames and fps1000>0,(mode,frames,vblanks,fps1000)
+# VBlanks per game frame: how many frames took 1, 2, 3... VBlanks (quantisation shows here)
+h=re.search(r"DREAD_BENCH_HIST ([0-9x,]+)",output)
+hist={}
+if h:
+    for item in h.group(1).split(","):
+        d,c=item.split("x")
+        hist[int(d)]=int(c)
+vh=re.search(r"DREAD_VISUAL_HASH mode=(\d+) hash=(\d+)",output)
+visual_hash=int(vh.group(2)) if vh and int(vh.group(1))==mode else None
 result={"mode":mode,"type":"combat_with_ai" if mode==2 else "render_without_ai",
+        # render (mode 1) runs with AI off: comparable across variants only if AI is unchanged.
+        # combat (mode 2) runs with AI on: enemy behaviour differs between AI variants,
+        # so the same route is NOT the same workload there. Report AI cost separately.
+        "ai_active":mode==2,
         "frames":frames,"vblanks":vblanks,"fps":round(frames*60/vblanks,4),
+        "vblanks_per_frame_mean":round(vblanks/frames,3),
+        "vblank_histogram":{str(k):v for k,v in sorted(hist.items())},
+        "visual_hash":visual_hash,
         "boot_sample_colors":int(re.search(r"DREAD_BOOT_SAMPLED_COLORS=(\d+)",output).group(1))
            if "DREAD_BOOT_SAMPLED_COLORS=" in output else None,
         "mame_returncode":run.returncode}
