@@ -24,7 +24,7 @@ test -s "$output/EPISODE.elf"
 bytes=$(stat -c %s "$output/EPISODE.bin")
 (( bytes <= 4194304 ))
 cp "$output/EPISODE.bin" "$output/release/DREAD-C7-OPT-$variant.bin"
-cp "$output/EPISODE.elf" "$output/release/DREAD-C7-OPT-$variant.elf"
+# Keep EPISODE.elf local on the runner for symbol extraction; never upload it.
 mkdir -p "$output/release/geometry/$variant"
 cp "$output"/geometry/E1M*.json "$output/release/geometry/$variant/"
 sha256sum "$output/release/DREAD-C7-OPT-$variant.bin" > "$output/release/SHA256-$variant.txt"
