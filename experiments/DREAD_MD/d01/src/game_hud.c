@@ -353,9 +353,9 @@ void HUD_SetLayout(uint16_t col0, int16_t dx)
 }
 
 #ifdef DREAD_GAMEPLAY
-extern const uint16_t ending_refs[],ending_attrs[],ending_pal[],finale_pal[],finale_nlines;
-extern const uint32_t ending_tiles[],finale_tiles[];
-extern const char *const finale_lines[];
+extern const uint16_t ending_old_refs[],ending_start_new[],ending_start_old[],ending_pal[];
+extern const uint8_t ending_old_mask[],ending_attr5[];
+extern const uint32_t ending_tiles[];
 static void static_screen(void)
 {
     VDP_setEnable(FALSE);VDP_setScreenWidth320();VDP_setHilightShadow(FALSE);
@@ -366,45 +366,69 @@ static void static_screen(void)
     VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);VDP_clearPlane(WINDOW,TRUE);
     VDP_setAutoInc(2);vram_addr(SLIST);for(uint16_t i=0;i<4;i++)vram_w(0);
 }
+/* Restore all three existing credit images with lossless packed reference
+ * indices and 5-bit tile attributes. New tile IDs are sequential, and the
+ * duplicate mask stores only reused IDs. No game graphics are modified. */
 void HUD_ShowArt(uint16_t page)
 {
-    if(page>=3)return;SYS_disableInts();static_screen();
+    if(page>=3)return;
+    SYS_disableInts();static_screen();
     cram_set(0,ending_pal+page*64,64);
-    for(uint16_t i=0;i<1120;i++)vram_copy32(TILE_TITLE+i,ending_tiles+(uint32_t)ending_refs[page*1120+i]*8,1);
+    uint16_t nextNew=ending_start_new[page],nextOld=ending_start_old[page];
+    for(uint16_t i=0;i<1120;i++){
+        const uint16_t g=page*1120+i;
+        const uint16_t ref=(ending_old_mask[g>>3]&(0x80>>(g&7)))?ending_old_refs[nextOld++]:nextNew++;
+        vram_copy32(TILE_TITLE+i,ending_tiles+(uint32_t)ref*8,1);
+    }
     for(uint16_t y=0;y<28;y++){
         vram_addr(BGB+y*128);
-        for(uint16_t x=0;x<40;x++)vram_w(ending_attrs[page*1120+y*40+x]|(TILE_TITLE+y*40+x));
+        for(uint16_t x=0;x<40;x++){
+            const uint16_t g=page*1120+y*40+x;
+            const uint16_t b=g*5;
+            const uint16_t pair=((uint16_t)ending_attr5[b>>3]<<8)|ending_attr5[(b>>3)+1];
+            const uint16_t attr=((pair>>(11-(b&7)))&31)<<11;
+            vram_w(attr|(TILE_TITLE+y*40+x));
+        }
     }
     VDP_setEnable(TRUE);SYS_enableInts();
 }
-extern const uint16_t inter_pal[];
-extern const uint8_t inter_tilepal[],inter_data[];
-void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds)
+extern const uint16_t inter_pal[],final_pal[];
+extern const uint8_t inter_tilepal2[],inter_data[],final_tilepal2[],final_data[];
+/* Static user-approved 320x224 H40 image, four original CRAM palettes.
+ * Each original 8x8 tile is expanded from a four-colour local dictionary. */
+static void draw_user_h40(const uint16_t *pal,const uint8_t *pals,const uint8_t *data)
 {
-    SYS_disableInts();static_screen();
-    cram_set(0,inter_pal,64);
-    const uint16_t white=0xeee;cram_set(63,&white,1);
-    /* Upload real 8x8 H40 tiles, without the old 160x112 stretch. */
-    for(uint16_t y=0;y<28;y++)for(uint16_t x=0;x<40;x++){
+    static_screen();
+    cram_set(0,pal,64);
+    for(uint16_t i=0;i<1120;i++){
+        const uint8_t *p=data+(uint32_t)i*18;
+        const uint16_t color[4]={p[0]>>4,p[0]&15,p[1]>>4,p[1]&15};
         uint32_t tile[8];
-        const uint8_t *p=inter_data+((uint32_t)y*40+x)*18;
-        uint16_t colors[4]={p[0]>>4,p[0]&15,p[1]>>4,p[1]&15};
         for(uint16_t row=0;row<8;row++){
             uint32_t word=0;
             for(uint16_t col=0;col<8;col++){
-                uint8_t group=p[2+row*2+(col>>2)];
-                uint8_t index=(group>>(6-((col&3)<<1)))&3;
-                word=(word<<4)|colors[index];
+                const uint8_t bits=p[2+row*2+(col>>2)];
+                word=(word<<4)|color[(bits>>(6-((col&3)<<1)))&3];
             }
             tile[row]=word;
         }
-        vram_copy32(TILE_TITLE+y*40+x,tile,1);
+        vram_copy32(TILE_TITLE+i,tile,1);
     }
     for(uint16_t y=0;y<28;y++){
         vram_addr(BGB+y*128);
-        for(uint16_t x=0;x<40;x++)
-            vram_w((inter_tilepal[y*40+x]<<13)|(TILE_TITLE+y*40+x));
+        for(uint16_t x=0;x<40;x++){
+            const uint16_t i=y*40+x;
+            const uint16_t palidx=(pals[i>>2]>>(6-((i&3)<<1)))&3;
+            vram_w((palidx<<13)|(TILE_TITLE+i));
+        }
     }
+}
+void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds)
+{
+    SYS_disableInts();
+    draw_user_h40(inter_pal,inter_tilepal2,inter_data);
+    /* Only intermission statistics need a live text overlay. */
+    const uint16_t white=0xeee;cram_set(63,&white,1);
     VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
     VDP_drawTextBG(BG_A,name,(40-strlen(name))/2,4);VDP_drawTextBG(BG_A,"CONCLUIDO",15,6);
     char text[40];sprintf(text,"MORTES    %3u / %3u",kills,total);VDP_drawTextBG(BG_A,text,9,11);
@@ -416,13 +440,10 @@ void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_
 }
 void HUD_ShowFinaleText(void)
 {
-    SYS_disableInts();static_screen();cram_set(0,finale_pal,16);
-    const uint16_t white=0xeee;cram_set(63,&white,1);
-    vram_copy32(TILE_TITLE,finale_tiles,64);
-    for(uint16_t y=0;y<28;y++){vram_addr(BGB+y*128);for(uint16_t x=0;x<40;x++)vram_w(TILE_TITLE+(y&7)*8+(x&7));}
-    VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
-    for(uint16_t i=0;i<finale_nlines;i++)VDP_drawTextBG(BG_A,finale_lines[i],2,3+i);
-    VDP_drawTextBG(BG_A,"APERTE QUALQUER BOTAO",8,25);
+    SYS_disableInts();
+    draw_user_h40(final_pal,final_tilepal2,final_data);
+    /* The user's final artwork already contains the full text. */
     VDP_setEnable(TRUE);SYS_enableInts();
 }
+
 #endif
