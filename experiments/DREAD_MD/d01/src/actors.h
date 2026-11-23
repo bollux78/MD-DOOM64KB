@@ -29,6 +29,8 @@ uint16_t Actors_BossDone(void);
 int Actors_PlayerBlocked(int16_t x,int16_t y,int16_t z);
 void Actors_Fire(const View *view, uint16_t pellets, uint16_t damage_mul);   /* hitscan from the view; wakes by noise */
 void Actors_FireWeapon(const View *view, uint16_t weapon);
+void Actors_SetAIHalf(uint8_t on);   /* menu: AI at 50% (period 10, speed kept) instead of 100% (period 5) */
+uint8_t Actors_AIHalf(void);
 void Actors_Tick(ActorPlayer *pl, uint16_t dt);
 void Actors_Draw(uint16_t sub);
 int  Thing_Taken(uint16_t index);

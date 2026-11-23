@@ -128,3 +128,6 @@ O job de compilação roda em runner self-hosted em repositório público. Restr
 - O host usa os caminhos em C do renderizador e não roda o assembly do 68000. A equivalência de pixels vale para os dados e para a lógica em C; ela não prova a ausência de efeitos no assembly nem no hardware.
 - `AI6S` foi compilado no host só para sintaxe (`actors.c`); o comportamento dos monstros não foi jogado.
 - Nada foi medido em FPS do Mega Drive.
+
+## Decisão do dono (2026-11-23): IA vira opção de menu
+Depois da otimização de `scenery_blocked`/`World_Shoot` (commit a43bad5), AI6 e AI6S ganharam só 2% e 3% de FPS em combate sobre o CONTROL (antes 4% e 5%). Decisão: AI6/AI6S saem da rodada. No lugar, o menu do jogo (START) ganhou **IA: 100% / 50%** (`Actors_SetAIHalf`): 100% = período 5 (CONTROL); 50% = período 10 com o passo proporcional da AI6S (velocidade mantida, passo limitado a 16). O padrão é 100%. A rodada passa a ter só CONTROL; `variant.sh` continua aceitando AI6/AI6S para teste pontual.

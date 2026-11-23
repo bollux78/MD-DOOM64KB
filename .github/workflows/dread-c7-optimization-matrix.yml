@@ -1,5 +1,5 @@
 name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
-# Explicitly requested test round: CONTROL, AI6, AI6S. Shareware ELF is published for profiling; no WAD.
+# Round: CONTROL only (AI6/AI6S were dropped; the AI rate is now a menu option, IA 100% or 50%). Shareware ELF is published for profiling; no WAD.
 # WAD DEMO3 experimental menu replay (real ticcmd stream, E1M map from header).
 # Build retry after SGDK stdint.h typedef conflict fix.
 # Original 312-frame modes 1 and 2 remain for automated comparisons.
@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, AI6, AI6S]
+        variant: [CONTROL]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, AI6, AI6S]
+        variant: [CONTROL]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}

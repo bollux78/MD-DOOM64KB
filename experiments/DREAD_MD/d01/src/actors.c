@@ -52,8 +52,8 @@ static uint16_t nactors, tick_no;
 #if DREAD_AI_PERIOD < 1 || DREAD_AI_PERIOD > 60
 #error DREAD_AI_PERIOD must be between 1 and 60 VBlanks
 #endif
-#ifdef DREAD_AI_SPEED_COMP
-/* Optional: keep the walking speed the control build has when the AI period is longer than 5 VBlanks.
+#if 1
+/* Keep the walking speed the control build has when the AI period is longer than 5 VBlanks.
  * A monster acts every ceil(chase/P)*P VBlanks (chase = VBlanks per walk step, P = AI period). The control
  * (P=5) therefore walks speed/gap(5) per VBlank for each kind; with a longer P one step must cover
  * speed*gap(P)/gap(5), otherwise AI6/AI4 simply slow the monsters down. blocked_from() (main.c) only looks
@@ -62,6 +62,12 @@ static uint16_t nactors, tick_no;
 #define AI_STEP_MAX 16
 #define AI_GAP(chase, p) ((((chase) + (p) - 1) / (p)) * (p))
 #endif
+/* Menu option "IA": 100% = period 5 (control), 50% = period 10 with the walking speed kept (see above).
+ * The period is a run-time variable so the menu can switch it; DREAD_AI_PERIOD is only its start value. */
+static uint8_t ai_period = DREAD_AI_PERIOD;
+static uint8_t sp_comp[8], sp_for;
+void Actors_SetAIHalf(uint8_t on) { ai_period = on ? 10 : 5; sp_for = 0; }
+uint8_t Actors_AIHalf(void) { return ai_period != 5; }
 /* VBlank-time fixed-step clocks, independent of rendered FPS.
  * 60 NTSC VBlanks/s -> AI at 12 Hz (5 VBlanks), projectiles at 20 Hz (3).
  * Remainders are carried across rendered frames so time does not drift. */
@@ -260,16 +266,14 @@ static void wake(Actor *a)
 static int try_move(Actor *a, uint8_t i, uint8_t dir, const ActorPlayer *pl)
 {
     if (dir >= 8) return 0;
-#ifdef DREAD_AI_SPEED_COMP
-    static uint8_t sp_comp[8], sp_ready;
-    if (!sp_ready) {
-        for (uint8_t k = 0; k < 8; k++) sp_comp[k] = (uint8_t)(((uint16_t)kinds[k].speed * AI_GAP(kinds[k].chase, DREAD_AI_PERIOD)) / AI_GAP(kinds[k].chase, 5));
-        sp_ready = 1;
+    int16_t sp = kinds[a->kind].speed;
+    if (ai_period != 5) {
+        if (sp_for != ai_period) {
+            for (uint8_t k = 0; k < 8; k++) sp_comp[k] = (uint8_t)(((uint16_t)kinds[k].speed * AI_GAP(kinds[k].chase, ai_period)) / AI_GAP(kinds[k].chase, 5));
+            sp_for = ai_period;
+        }
+        sp = sp_comp[a->kind] > AI_STEP_MAX ? AI_STEP_MAX : sp_comp[a->kind];
     }
-    const int16_t sp = sp_comp[a->kind] > AI_STEP_MAX ? AI_STEP_MAX : sp_comp[a->kind];
-#else
-    const int16_t sp = kinds[a->kind].speed;
-#endif
     const int16_t x = (int16_t)(a->x >> 16), y = (int16_t)(a->y >> 16);
     const int16_t nx = x + (int16_t)((sp * dirx[dir]) >> 8), ny = y + (int16_t)((sp * diry[dir]) >> 8);
     if (iabs16(nx - pl->x) < 32 && iabs16(ny - pl->y) < 32) return 0;
@@ -678,9 +682,9 @@ void Actors_Tick(ActorPlayer *pl,uint16_t dt)
     for (uint16_t tick = 0; tick < dt; tick++) tick_barrels(pl);
 #endif
     uint16_t acc = (uint16_t)ai_vblank_accum + dt;
-    while (acc >= DREAD_AI_PERIOD) {
-        acc -= DREAD_AI_PERIOD;
-        actors_step(pl, DREAD_AI_PERIOD);
+    while (acc >= ai_period) {
+        acc -= ai_period;
+        actors_step(pl, ai_period);
     }
     ai_vblank_accum = (uint8_t)acc;
 

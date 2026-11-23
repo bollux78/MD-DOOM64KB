@@ -499,18 +499,23 @@ static void menu_draw(uint16_t sel)
 {
     static const char *const res[2]={"H40 (320)","H32 (256)"};
     static const char *const crp[3]={"LARGURA TOTAL ","-2 TILES/LADO ","-4 TILES/LADO "};
-    char l[7][36];
+    char l[8][36];
     sprintf(l[0],"%c TELA: %s",sel==0?'>':' ',res[(mode>>1)&1]);
     sprintf(l[1],"%c RESOLUCAO: %uX%u",sel==1?'>':' ',r_vw,r_vh);
     sprintf(l[2], "%c RECORTE: %s", sel == 2 ? '>' : ' ', crp[crop >> 1]);
     sprintf(l[3], "%c MUSICA:  %s", sel == 3 ? '>' : ' ', music_on ? "LIGADA   " : "DESLIGADA");
     sprintf(l[4], "%c LIMITE:  %s", sel == 4 ? '>' : ' ', fcap_s[fcap_i]);
-    sprintf(l[5], "%c CHEATS",sel==5?'>':' ');
-    sprintf(l[6], "%c VOLTAR A ABERTURA",sel==6?'>':' ');
+#if defined(DREAD_COMBAT) && defined(DREAD_COMBAT_12_20)
+    sprintf(l[5], "%c IA:      %s", sel == 5 ? '>' : ' ', Actors_AIHalf() ? "50%      " : "100%     ");
+#else
+    sprintf(l[5], "%c IA:      %s", sel == 5 ? '>' : ' ', "100%     ");
+#endif
+    sprintf(l[6], "%c CHEATS",sel==6?'>':' ');
+    sprintf(l[7], "%c VOLTAR A ABERTURA",sel==7?'>':' ');
     SYS_disableInts();
     VDP_clearPlane(WINDOW, TRUE);
-    VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 3);
-    for (int i = 0; i < 7; i++) VDP_drawTextBG(WINDOW, l[i], 1, 5 + i);
+    VDP_drawTextBG(WINDOW, "MODOS DE VIDEO", 1, 2);
+    for (int i = 0; i < 8; i++) VDP_drawTextBG(WINDOW, l[i], 1, 4 + i);
     VDP_drawTextBG(WINDOW, "A:TIRO B:USO/CORRER C+A:ARMA", 1, 13);
     VDP_drawTextBG(WINDOW, "lados troca, START sai", 1, 14);
     SYS_enableInts();
@@ -537,17 +542,20 @@ static void menu(void)
         const uint16_t j = JOY_readJoypad(JOY_1), e = j & ~pj;
         pj = j;
         if (e & BUTTON_START) break;
-        if (e & BUTTON_UP) { sel = (sel + 6) % 7; menu_draw(sel); }
-        if (e & BUTTON_DOWN) { sel = (sel + 1) % 7; menu_draw(sel); }
+        if (e & BUTTON_UP) { sel = (sel + 7) % 8; menu_draw(sel); }
+        if (e & BUTTON_DOWN) { sel = (sel + 1) % 8; menu_draw(sel); }
         if (e & (BUTTON_LEFT | BUTTON_RIGHT | BUTTON_A | BUTTON_C)) {
-            if (sel == 6){
+            if (sel == 7){
 #ifdef DREAD_GAMEPLAY
                 go_title=1;
 #endif
                 break;
             }
 #ifdef DREAD_GAMEPLAY
-            if(sel==5){cheats_menu();menu_draw(sel);pj=JOY_readJoypad(JOY_1);continue;}
+            if(sel==6){cheats_menu();menu_draw(sel);pj=JOY_readJoypad(JOY_1);continue;}
+#endif
+#if defined(DREAD_COMBAT) && defined(DREAD_COMBAT_12_20)
+            if (sel == 5) { Actors_SetAIHalf(!Actors_AIHalf()); menu_draw(sel); continue; }
 #endif
             if (sel == 4) {
                 fcap_i = (uint16_t)((fcap_i + ((e & BUTTON_LEFT) ? 3 : 1)) & 3);
