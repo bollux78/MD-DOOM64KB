@@ -4,7 +4,6 @@
  *    player's shots (flood through sectors whose openings are not closed and lines without "block sound")
  *  - per-kind hit points, speed, pain chance and attacks (hitscan, shotgun, claws/bites, fireballs)
  *  - sprites: walk/attack/pain in rotations 1-5 (6-8 mirrored), death frames, corpse stays           */
-#include <string.h>
 #include "actors.h"
 #include "game_sfx.h"
 #include "world.h"
@@ -750,7 +749,7 @@ static uint8_t fd_sub[(MAP_NSUBS + 7) >> 3];
 #define FD_SET(s) do { if ((s) < MAP_NSUBS) fd_sub[(s) >> 3] |= (uint8_t)(1u << ((s) & 7)); } while (0)
 void Actors_FrameBegin(void)
 {
-    memset(fd_sub, 0, sizeof fd_sub);
+    for (uint8_t i = 0; i < sizeof fd_sub; i++) fd_sub[i] = 0;
     fd_nd = 0; for (uint8_t i = 0; i < 32; i++) if (drops[i].active) { fd_drop[fd_nd++] = i; FD_SET(drops[i].sub); }
     fd_np = 0; for (uint8_t k = 0; k < MAXPROJ; k++) if (proj[k].kind != 0xFF) { fd_proj[fd_np++] = k; FD_SET(proj[k].sub); }
 #ifdef DREAD_GAMEPLAY
