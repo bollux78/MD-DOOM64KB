@@ -500,7 +500,7 @@ static uint16_t fcap_i = 2;
  * SYS_hardReset() jumps to _start_entry, which clears all 64 KB of RAM, so every setting went back to its default.
  * Here: save the settings, clear .data/.bss ourselves, reload .data from ROM exactly as the SGDK start code does,
  * put the settings back and enter SYS_reset(), which runs the same init as a cold start (it only skips the RAM clear). */
-extern char _stext, _sdata, _bend;
+extern char dread_ld_stext __asm__("_stext"), dread_ld_sdata __asm__("_sdata"), dread_ld_bend __asm__("_bend");   /* linker symbols (SGDK headers declare them with other types) */
 static void game_restart(void)
 {
     const uint16_t k_mode = mode, k_crop = crop, k_fcap_i = fcap_i, k_music = music_on;
@@ -511,11 +511,11 @@ static void game_restart(void)
     __asm__ volatile("move #0x2700,%%sr" ::: "memory");
     {
         volatile uint16_t *p = (volatile uint16_t *)0xE0FF0000UL;
-        const uint32_t end = (uint32_t)&_bend;
+        const uint32_t end = (uint32_t)&dread_ld_bend;
         while ((uint32_t)p < end) *p++ = 0;
-        const uint16_t *src = (const uint16_t *)(uint32_t)&_stext;
+        const uint16_t *src = (const uint16_t *)(uint32_t)&dread_ld_stext;
         uint16_t *dst = (uint16_t *)0xE0FF0000UL;
-        for (uint32_t n = ((uint32_t)&_sdata + 1) >> 1; n; n--) *dst++ = *src++;
+        for (uint32_t n = ((uint32_t)&dread_ld_sdata + 1) >> 1; n; n--) *dst++ = *src++;
     }
     start_mode = k_mode; crop = k_crop; fcap_i = k_fcap_i; fcap = fcap_v[k_fcap_i]; music_on = k_music;
 #if defined(DREAD_COMBAT) && defined(DREAD_COMBAT_12_20)
