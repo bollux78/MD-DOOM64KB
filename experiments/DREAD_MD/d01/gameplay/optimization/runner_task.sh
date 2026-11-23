@@ -9,3 +9,4 @@ for f in colasm segasm; do
   echo "== $f.s"
   ${TC}gcc $FL -c "$root/src/$f.s" -o "$out/$f.o" && ${TC}size "$out/$f.o" && ${TC}objdump -d "$out/$f.o" > "$out/$f.dis" && echo "ok ($(wc -l < "$out/$f.dis") lines of disassembly)"
 done
+# task 1: assembler check of colasm.s/segasm.s
