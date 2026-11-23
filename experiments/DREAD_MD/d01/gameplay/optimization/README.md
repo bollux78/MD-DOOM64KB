@@ -1,5 +1,8 @@
 # DREAD C7 - rodada de otimização
 
+> **Benchmark da C7 experimental (atualização):** o menu usa somente a gravação `DEMO3` do WAD; a rota fixa de E1M1 e seu relatório antigo são excluídos da ROM `DREAD_EPISODE`. Os modos 1 e 2, que o MAME solicita via `bench_req`, agora percorrem os primeiros 312 quadros renderizados da mesma `DEMO3` (IA desligada / ligada). O modo 3 do menu percorre a gravação inteira e mostra FPS, tempo em VBlanks, variante e atividade de combate. A física é aproximada na C7; o percurso não é bit a bit equivalente ao Doom original. Revisar os resultados de combate segundo as regras de comparabilidade abaixo.
+
+
 Base congelada: `c816e6c72a8fc6a3bc989b347ea7166fda835893` (última C7 NORMAL validada no boot). A C7 estável não é alterada. Handoff de referência: DREAD-OTIMIZACAO-HANDOFF.zip (22/11/2026).
 
 Esta rodada foi revisada em 23/11/2026 depois de ler o código de cada variante e de testar a geometria no renderizador de host: WAD do Doom 1 shareware (E1M1 a E1M9, 2000 vistas cada) e, para achar os bugs, Freedoom (3000 vistas). Os números do host são de **trabalho do renderizador** (segs, nós da BSP, colunas) e de **pixels**. Eles não são FPS do Mega Drive.
