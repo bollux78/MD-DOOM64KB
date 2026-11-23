@@ -30,6 +30,15 @@ for prefix,letters,flash in sets:
   for y in range(hh):
    for x in range(ww):a[80-hh+y,(128-ww)//2+x]=c[y0+min(y1-y0-1,int(y/scale)),x0+min(x1-x0-1,int(x/scale))]
   frames.append(a)
+if os.environ.get("DREAD_WEAPON_DUMP"):
+ from PIL import Image
+ d=Path(os.environ["DREAD_WEAPON_DUMP"]);d.mkdir(parents=True,exist_ok=True)
+ nm=['soco','pistola','escopeta','metralhadora','lanca-foguetes','motosserra'];ph=[['pronta','fogo1','fogo2','fogo3'],['pronta','fogo1','fogo2','fogo3'],['pronta','fogo1','fogo2','fogo3'],['pronta','fogo1','fogo2','fogo3'],['pronta','fogo1','fogo2','fogo3'],['idle-C','idle-D','ataque-A','ataque-B']]
+ sheet=Image.new('RGBA',(128*4,80*6),(0,0,0,0))
+ for i,fr in enumerate(frames):
+  a=np.zeros((80,128,4),np.uint8);m=fr>=0;a[m,:3]=pal[fr[m]].astype(np.uint8);a[m,3]=255
+  im=Image.fromarray(a);im.save(d/('%d_%s_%d_%s.png'%(i//4,nm[i//4],i%4,ph[i//4][i%4])));sheet.paste(im,((i%4)*128,(i//4)*80))
+ sheet.save(d/'folha_completa_128x80.png')
 # One 15-colour palette PER weapon (swapped when the weapon changes). k-means over the pixels, seeded by luminance
 # quantiles and weighted by use, so the greys of the metal are kept instead of being pulled toward the skin/brown tones.
 def fit(fr):
@@ -51,16 +60,35 @@ def bayer(rgb,colors,mask):
     v=np.clip(rgb[y,x]+BAYER[y&3,x&3]*amp,0,255);out[y,x]=((colors-v)**2).sum(1).argmin()
  return out
 indexed=[];pals=[]
-for wi in range(6):
- fr=frames[wi*4:wi*4+4];levels=fit(fr);rgb=DAC[levels].astype(float)
- lut=np.r_[1+((pal[:,None]-rgb[None])**2).sum(2).argmin(1),0]
- for frame in fr:
-  mask=frame>=0
-  if weapon_dither:
-   idx=bayer(pal[np.maximum(frame,0)],rgb,mask).astype(np.uint8)+1;idx[~mask]=0
-  else:idx=lut[frame]
-  indexed.append(idx)
- pals.append([0]+[(int(b)*2<<8)|(int(g)*2<<4)|(int(r)*2) for r,g,b in levels])
+pdir=Path(__file__).resolve().parent/'weapon_src'/'palettized'
+nmw=['soco','pistola','escopeta','metralhadora','lanca-foguetes','motosserra']
+if all((pdir/('%d_%s_pal.png'%(i,nmw[i]))).exists() for i in range(6)) and os.environ.get("DREAD_WEAPON_PALETTIZED","1")=="1":
+ # Hand-converted weapon sheets (user): 512x80 = 4 frames of 128x80, <=15 opaque colours + transparent, one palette per weapon.
+ from PIL import Image
+ for wi in range(6):
+  im=np.asarray(Image.open(pdir/('%d_%s_pal.png'%(wi,nmw[wi]))).convert('RGBA'));assert im.shape==(80,512,4)
+  op=im[im[:,:,3]>=128][:,:3];cols=np.unique(op,axis=0);assert len(cols)<=15,(wi,len(cols))
+  cols=cols[np.argsort(cols@np.array([.299,.587,.114]),kind='stable')]
+  lv=np.clip(np.rint(cols/34.0),0,7).astype(int)        # the sheets use the 0,34,..,238 steps = Mega Drive levels 0..7
+  lut={tuple(c):i+1 for i,c in enumerate(cols.tolist())}
+  for f in range(4):
+   fr=im[:,f*128:(f+1)*128];idx=np.zeros((80,128),np.uint8)
+   for y in range(80):
+    for x in range(128):
+     if fr[y,x,3]>=128:idx[y,x]=lut[tuple(int(v) for v in fr[y,x,:3])]
+   indexed.append(idx)
+  pals.append([0]+[(int(b)*2<<8)|(int(g)*2<<4)|(int(r)*2) for r,g,b in lv]+[0]*(15-len(lv)))
+else:
+ for wi in range(6):
+  fr=frames[wi*4:wi*4+4];levels=fit(fr);rgb=DAC[levels].astype(float)
+  lut=np.r_[1+((pal[:,None]-rgb[None])**2).sum(2).argmin(1),0]
+  for frame in fr:
+   mask=frame>=0
+   if weapon_dither:
+    idx=bayer(pal[np.maximum(frame,0)],rgb,mask).astype(np.uint8)+1;idx[~mask]=0
+   else:idx=lut[frame]
+   indexed.append(idx)
+  pals.append([0]+[(int(b)*2<<8)|(int(g)*2<<4)|(int(r)*2) for r,g,b in levels])
 if os.environ.get("DREAD_WEAPON_PREVIEW"):
  from PIL import Image
  pv=Image.new('RGB',(128*4*2,80*6*2))
