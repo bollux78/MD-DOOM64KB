@@ -1,5 +1,5 @@
 -- NTSC DREAD C7 benchmark launched from frozen title via RAM request.
--- Starts the same 312-frame scripted E1M1 camera route for all ROMs.
+-- Starts the first 312 rendered frames of the WAD DEMO3 E1M7 in all ROMs.
 -- Adds, per run: a histogram of VBlanks per game frame (sampled once per
 -- emulated frame, so every game frame is counted) and a visual hash of the
 -- final screen, to check that variants marked "exact" really draw the same image.
