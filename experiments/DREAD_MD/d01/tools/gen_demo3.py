@@ -72,7 +72,7 @@ def main(wad_path, dst_path):
         fragments.append("    " + ",".join(f"0x{x:02x}" for x in packets[k:k+24]) + ",")
     dst.write_text(
         "/* Auto-generated from local WAD DEMO3: no original WAD is checked in. */\n"
-        "#include <stdint.h>\n"
+        "/* uint8_t/uint32_t are provided by genesis.h (SGDK). */\n"
         f"static const uint8_t demo3_map = {map_no};\n"
         f"static const uint8_t demo3_skill = {skill};\n"
         f"static const uint32_t demo3_tics = {len(commands)}u;\n"
