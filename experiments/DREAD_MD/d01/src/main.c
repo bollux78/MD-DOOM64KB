@@ -120,10 +120,34 @@ static int demo3_next(uint8_t out[4])
 }
 #if defined(DREAD_BENCH_AI6S)
 #define DEMO_VARIANT "AI6S"
+#define DEMO_OPT_NAME "IA 6HZ PASSOS COMPENSADOS"
 #elif defined(DREAD_BENCH_AI6)
 #define DEMO_VARIANT "AI6"
-#else
+#define DEMO_OPT_NAME "IA 6HZ"
+#elif defined(DREAD_BENCH_CONTROL)
 #define DEMO_VARIANT "CONTROL"
+#define DEMO_OPT_NAME "IA 12HZ / REFERENCIA"
+#elif defined(DREAD_BENCH_AI4)
+#define DEMO_VARIANT "AI4"
+#define DEMO_OPT_NAME "IA 4HZ"
+#elif defined(DREAD_BENCH_TEX2)
+#define DEMO_VARIANT "TEX2"
+#define DEMO_OPT_NAME "TEXTURAS FATOR 2"
+#elif defined(DREAD_BENCH_TEX4)
+#define DEMO_VARIANT "TEX4"
+#define DEMO_OPT_NAME "TEXTURAS FATOR 4"
+#elif defined(DREAD_BENCH_GEO_SAFE)
+#define DEMO_VARIANT "GEO_SAFE"
+#define DEMO_OPT_NAME "GEOMETRIA REDUZIDA SEGURA"
+#elif defined(DREAD_BENCH_GEO_STEPS)
+#define DEMO_VARIANT "GEO_STEPS"
+#define DEMO_OPT_NAME "GEOMETRIA + ESCADAS"
+#elif defined(DREAD_BENCH_ALL)
+#define DEMO_VARIANT "ALL"
+#define DEMO_OPT_NAME "IA 6HZ + GEO REDUZIDA"
+#else
+#define DEMO_VARIANT "PADRAO"
+#define DEMO_OPT_NAME "CONFIGURACAO PADRAO"
 #endif
 #endif
 
@@ -870,6 +894,7 @@ static void benchmark_report_screen(uint16_t f100)
         VDP_drawTextBG(BG_A,"DOOM MD - DEMO3 BENCHMARK",2,1);
         VDP_drawTextBG(BG_A,"ROM:",2,3);
         VDP_drawTextBG(BG_A,ROM_NAME,2,4);
+        VDP_drawTextBG(BG_A,"OTIMIZACAO: " DEMO_OPT_NAME,2,5);
         VDP_drawTextBG(BG_A,"VARIANTE: " DEMO_VARIANT,2,6);
         sprintf(line,"DEMO3 / E1M%u / WAD",demo3_map);
         VDP_drawTextBG(BG_A,line,2,7);
