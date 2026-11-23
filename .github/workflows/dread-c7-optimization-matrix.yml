@@ -1,6 +1,7 @@
 name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
 # Explicitly requested test round: CONTROL, AI6, AI6S. No WAD/ELF publication.
 # WAD DEMO3 experimental menu replay (real ticcmd stream, E1M map from header).
+# Build retry after SGDK stdint.h typedef conflict fix.
 # Original 312-frame modes 1 and 2 remain for automated comparisons.
 # Report includes ROM/variant, measured FPS and VBlank time.
 # No WAD/ELF data are published.
