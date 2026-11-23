@@ -4,6 +4,7 @@ name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
 # Build retry after SGDK stdint.h typedef conflict fix.
 # Original 312-frame modes 1 and 2 remain for automated comparisons.
 # Report includes ROM/variant, measured FPS and VBlank time.
+# C7 legacy fixed-route E1M1 benchmark removed from episode ROM; MAME 1/2 now uses DEMO3.
 # No WAD/ELF data are published.
 on:
   push:
