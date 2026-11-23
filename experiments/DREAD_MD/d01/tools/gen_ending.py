@@ -34,7 +34,33 @@ for name in ['DoomCREDIT10','disclaimer_and_credits','endMD2']:
    if tile not in ids:ids[tile]=len(unique);unique.append(tile)
    ref.append(ids[tile])
  refs.extend(ref);attrs.extend(lookup[x,y]<<13 for y in range(28) for x in range(40))
-s=['#include <types.h>','const u16 ending_refs[3360]={'+','.join(map(str,refs))+'};','const u16 ending_attrs[3360]={'+','.join(map(str,attrs))+'};','const u16 ending_pal[192]={'+','.join(map(str,palettes))+'};','const u32 ending_tiles['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in struct.unpack('>8I',t))+'};']
+# Lossless bit packing: 3360 tile IDs fit in 12 bits (<4096 unique);
+# attribute high 5 bits contain priority, palette, vertical/horizontal flip.
+# These arrays are read only while drawing static pages, not per game frame.
+assert len(refs)==len(attrs)==3360 and len(unique)<=4096
+assert all(0<=v<4096 for v in refs)
+assert all(v&0x7ff==0 for v in attrs)
+def pack_bits(vals,width):
+ out=bytearray((len(vals)*width+7)//8+1)  # one guard byte for last 5-bit load
+ bit=0
+ for v in vals:
+  assert 0<=v<(1<<width)
+  for k in range(width-1,-1,-1):
+   if (v>>k)&1:out[bit>>3]|=1<<(7-(bit&7))
+   bit+=1
+ for i,v in enumerate(vals):
+  b=i*width
+  word=(out[b>>3]<<8)|out[(b>>3)+1]
+  assert ((word>>(16-width-(b&7)))&((1<<width)-1))==v
+ return out
+refs12=pack_bits(refs,12)
+attrs5=pack_bits([v>>11 for v in attrs],5)
+s=['#include <types.h>',
+   'const u8 ending_refs12['+str(len(refs12))+']={'+','.join(map(str,refs12))+'};',
+   'const u8 ending_attrs5['+str(len(attrs5))+']={'+','.join(map(str,attrs5))+'};',
+   'const u16 ending_pal[192]={'+','.join(map(str,palettes))+'};',
+   'const u32 ending_tiles['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in struct.unpack('>8I',t))+'};']
+print('Credits lossless packed refs/attrs:',len(refs12),len(attrs5),'bytes vs',len(refs)*2+len(attrs)*2)
 # Original E1 finale text already in this repository's Doom source.
 text=(root.parents[3]/'src/d_englsh.h').read_text().split('#define E1TEXT',1)[1].split('#endif',1)[0]
 text=''.join(ast.literal_eval(x) for x in re.findall(r'"(?:[^"\\]|\\.)*"',text))
