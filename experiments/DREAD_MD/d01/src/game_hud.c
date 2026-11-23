@@ -354,7 +354,7 @@ void HUD_SetLayout(uint16_t col0, int16_t dx)
 
 #ifdef DREAD_GAMEPLAY
 extern const uint16_t ending_old_refs[],ending_start_new[],ending_start_old[],ending_pal[];
-extern const uint8_t ending_old_mask[],ending_attr5[];
+extern const uint8_t ending_old_mask[],ending_attr2[];
 extern const uint32_t ending_tiles[];
 static void static_screen(void)
 {
@@ -367,7 +367,7 @@ static void static_screen(void)
     VDP_setAutoInc(2);vram_addr(SLIST);for(uint16_t i=0;i<4;i++)vram_w(0);
 }
 /* Restore all three existing credit images with lossless packed reference
- * indices and 5-bit tile attributes. New tile IDs are sequential, and the
+ * indices and two-bit palette attributes. New tile IDs are sequential, and the
  * duplicate mask stores only reused IDs. No game graphics are modified. */
 void HUD_ShowArt(uint16_t page)
 {
@@ -384,9 +384,7 @@ void HUD_ShowArt(uint16_t page)
         vram_addr(BGB+y*128);
         for(uint16_t x=0;x<40;x++){
             const uint16_t g=page*1120+y*40+x;
-            const uint16_t b=g*5;
-            const uint16_t pair=((uint16_t)ending_attr5[b>>3]<<8)|ending_attr5[(b>>3)+1];
-            const uint16_t attr=((pair>>(11-(b&7)))&31)<<11;
+            const uint16_t attr=((ending_attr2[g>>2]>>(6-((g&3)<<1)))&3)<<13;
             vram_w(attr|(TILE_TITLE+y*40+x));
         }
     }
