@@ -15,6 +15,7 @@ usage: conv.py WAD MAP OUTDIR
 import argparse, json, struct, math, os
 from pathlib import Path
 import numpy as np
+from map_reduce import reduce_segments, simplify_steps
 
 NO_SECTOR = 0xFFFF
 
@@ -101,6 +102,12 @@ def main():
     parser.add_argument("--fit-from", type=Path, nargs="+", help="fit one palette to these npz samples, write it to --palette-out and stop")
     parser.add_argument("--palette-out", type=Path)
     parser.add_argument("--tex-pad", type=int, default=0, help="store H + min(H, PAD) texels per column instead of 2H (episode builds)")
+    parser.add_argument("--texture-factor", type=int, choices=(1,2,4),
+                        default=int(os.environ.get("DREAD_TEXTURE_FACTOR","1")))
+    parser.add_argument("--render-geometry", choices=("control","safe","merge"),
+                        default=os.environ.get("DREAD_RENDER_GEOMETRY","control"))
+    parser.add_argument("--simplify-steps", action="store_true",
+                        default=os.environ.get("DREAD_SIMPLIFY_STEPS","0")=="1")
     args = parser.parse_args()
     skill_mask = {"easy": 1, "medium": 2, "hard": 4}[args.skill]
     wad = Wad(args.wad)
@@ -132,6 +139,7 @@ def main():
     ssecs = [struct.unpack_from("<HH", lump["SSECTORS"], i) for i in range(0, len(lump["SSECTORS"]), 4)]
     nodes = [struct.unpack_from("<hhhh8hHH", lump["NODES"], i) for i in range(0, len(lump["NODES"]), 28)]
     things = [struct.unpack_from("<hhhhh", lump["THINGS"], i) for i in range(0, len(lump["THINGS"]), 10)]
+    step_changes = simplify_steps(secs,lines,sides) if args.simplify_steps else []
 
     pal = np.frombuffer(wad.get("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(np.float64)
     cmap = np.frombuffer(wad.get("COLORMAP")[:34 * 256], np.uint8).reshape(34, 256)
@@ -508,12 +516,16 @@ def main():
     skypal = pal_of[("s",)]
     skycol = pals[skypal].byte(sky_rgb)
 
+    # Do not downsample masked two-sided middle textures (holes/grates).
+    masked_names = {sides[sd][4] for line in lines if line[2] & 4
+                    for sd in line[5:7] if sd != 0xFFFF}
     # ---- emit textures
     texmeta = []     # (wshift, hshift, realh, realw, [offset per bucket], [palette per bucket])
     blob = bytearray()
     for nm in texnames:
         img = teximg[nm]
         h, w = img.shape
+        factor = 1 if nm in masked_names else args.texture_factor
         hw = max(1, w // 2)
         wsh = max(0, math.ceil(math.log2(hw)))
         hsh = max(0, math.ceil(math.log2(h)))
@@ -530,10 +542,10 @@ def main():
             L = lut_for(b, k, is_acid_trim)
             col = bytearray()
             for u in range(W2):
-                sx = (u % hw) * 2
+                sx = ((u % hw) // factor * factor) * 2
                 one = bytearray()
                 for v in range(H2):
-                    pa, pb = L[img[v % h, sx]]
+                    pa, pb = L[img[((v % h) // factor) * factor, sx]]
                     if is_acid_trim:
                         accent_texture_count += (pa == accent_slot) + (pb == accent_slot)
                     one.append(pa << 4 | pb)   # same order on every row: clean screen-aligned vertical lines
@@ -578,6 +590,10 @@ def main():
     ss_sec = []
     for (cnt, first) in ssecs:
         ss_sec.append(seg_rows[first][2])
+    seg_rows,ssecs,reduction=reduce_segments(seg_rows,ssecs,verts,secs,lines,sides,args.render_geometry)
+    reduction["step_changes"]=step_changes
+    reduction["collision_changed"]=bool(step_changes)
+    (out/"geometry-report.json").write_text(json.dumps(reduction,indent=2)+"\n")
 
     start = next((t for t in things if t[3] == 1), things[0])
 

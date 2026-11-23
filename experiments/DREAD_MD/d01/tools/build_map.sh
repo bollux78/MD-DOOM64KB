@@ -75,6 +75,10 @@ if [[ "$map" == EPISODE ]]; then
             "$level/pvsgen" "$level/pvs.c"
             levels+=("$level")
         done
+        if [[ ${DREAD_OPT_REPORTS:-0} == 1 ]]; then
+            mkdir -p "$out/geometry"
+            for n in {1..9}; do cp "$stage/E1M$n/geometry-report.json" "$out/geometry/E1M$n.json"; done
+        fi
     fi
     if [[ ${DREAD_SSF:-0} == 1 ]]; then
         python3 "$source_dir/tools/pack_ssf.py" "$stage/src" "${levels[@]}"

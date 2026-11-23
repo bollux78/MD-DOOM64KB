@@ -44,6 +44,14 @@ Actor actors[MAP_NACTORS];
 uint8_t actor_heads[MAP_NSUBS];
 static uint16_t nactors, tick_no;
 #ifdef DREAD_COMBAT_12_20
+/* Experimental 60 Hz NTSC actor cadence: control=5, AI6=10, AI4=15.
+ * Reducing actor dispatch ALSO slows its movement and animation. */
+#ifndef DREAD_AI_PERIOD
+#define DREAD_AI_PERIOD 5
+#endif
+#if DREAD_AI_PERIOD < 1 || DREAD_AI_PERIOD > 60
+#error DREAD_AI_PERIOD must be between 1 and 60 VBlanks
+#endif
 /* VBlank-time fixed-step clocks, independent of rendered FPS.
  * 60 NTSC VBlanks/s -> AI at 12 Hz (5 VBlanks), projectiles at 20 Hz (3).
  * Remainders are carried across rendered frames so time does not drift. */
@@ -625,9 +633,9 @@ void Actors_Tick(ActorPlayer *pl,uint16_t dt)
     for (uint16_t tick = 0; tick < dt; tick++) tick_barrels(pl);
 #endif
     uint16_t acc = (uint16_t)ai_vblank_accum + dt;
-    while (acc >= 5) {
-        acc -= 5;
-        actors_step(pl, 5);
+    while (acc >= DREAD_AI_PERIOD) {
+        acc -= DREAD_AI_PERIOD;
+        actors_step(pl, DREAD_AI_PERIOD);
     }
     ai_vblank_accum = (uint8_t)acc;
 
