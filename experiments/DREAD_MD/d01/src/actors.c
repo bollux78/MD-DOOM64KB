@@ -4,6 +4,7 @@
  *    player's shots (flood through sectors whose openings are not closed and lines without "block sound")
  *  - per-kind hit points, speed, pain chance and attacks (hitscan, shotgun, claws/bites, fireballs)
  *  - sprites: walk/attack/pain in rotations 1-5 (6-8 mirrored), death frames, corpse stays           */
+#include <string.h>
 #include "actors.h"
 #include "game_sfx.h"
 #include "world.h"
@@ -744,12 +745,16 @@ static uint8_t fd_drop[32], fd_nd, fd_proj[MAXPROJ], fd_np;
 #ifdef DREAD_GAMEPLAY
 static uint8_t fd_bar[MAXBARRELS], fd_nb;
 #endif
+/* one bit per subsector that holds at least one of those things, so Actors_Draw skips the three scans elsewhere */
+static uint8_t fd_sub[(MAP_NSUBS + 7) >> 3];
+#define FD_SET(s) do { if ((s) < MAP_NSUBS) fd_sub[(s) >> 3] |= (uint8_t)(1u << ((s) & 7)); } while (0)
 void Actors_FrameBegin(void)
 {
-    fd_nd = 0; for (uint8_t i = 0; i < 32; i++) if (drops[i].active) fd_drop[fd_nd++] = i;
-    fd_np = 0; for (uint8_t k = 0; k < MAXPROJ; k++) if (proj[k].kind != 0xFF) fd_proj[fd_np++] = k;
+    memset(fd_sub, 0, sizeof fd_sub);
+    fd_nd = 0; for (uint8_t i = 0; i < 32; i++) if (drops[i].active) { fd_drop[fd_nd++] = i; FD_SET(drops[i].sub); }
+    fd_np = 0; for (uint8_t k = 0; k < MAXPROJ; k++) if (proj[k].kind != 0xFF) { fd_proj[fd_np++] = k; FD_SET(proj[k].sub); }
 #ifdef DREAD_GAMEPLAY
-    fd_nb = 0; for (uint8_t i = 0; i < nbarrels; i++) if (barrels[i].state != 2) fd_bar[fd_nb++] = i;
+    fd_nb = 0; for (uint8_t i = 0; i < nbarrels; i++) if (barrels[i].state != 2) { fd_bar[fd_nb++] = i; FD_SET(map_things[barrels[i].thing].sub); }
 #endif
 }
 
@@ -771,6 +776,7 @@ void Actors_Draw(uint16_t sub)
         const MapSector *sec = &map_sectors[sector_of_sub(a->sub)];
         R_AddSprite(x, y, sec->floor, spr, flip, sec);
     }
+    if (!(fd_sub[sub >> 3] & (1u << (sub & 7)))) return;   /* no barrel, drop or projectile here */
 #ifdef DREAD_GAMEPLAY
     for(uint8_t n=0;n<fd_nb;n++){
         const Barrel *b=&barrels[fd_bar[n]];const MapThing *t=&map_things[b->thing];if(t->sub!=sub)continue;
