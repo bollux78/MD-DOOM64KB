@@ -22,7 +22,7 @@ cmd=[exe,"megadriv","-cart",str(args.rom.resolve()),"-video","none",
      "-sound","none","-nothrottle","-seconds_to_run","145",
      "-skip_gameinfo","-autoboot_script",str(script)]
 args.result.parent.mkdir(parents=True,exist_ok=True)
-print("Running MAME NTSC scripted E1M1; AI active="+str(args.mode==2),flush=True)
+print("Running MAME NTSC DEMO3 E1M7 smoke-test; AI active="+str(args.mode==2),flush=True)
 try:
     run=subprocess.run(cmd,env=env,text=True,stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,timeout=260)
