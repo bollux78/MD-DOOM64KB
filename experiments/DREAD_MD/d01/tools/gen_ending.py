@@ -47,19 +47,18 @@ for i,ref in enumerate(refs):
   assert ref<next_new,(i,ref,next_new)
   old_mask[i>>3]|=128>>(i&7);old_refs.append(ref)
 assert next_new==len(unique) and len(start_new)==3
-# 5 bits retain every original tile attribute including flip and priority.
-attr5=bytearray(2101)
+# All three approved credits maps have palette-only tile attributes.
+# Losslessly represent the two palette bits per tile (840 bytes vs 6720).
+assert all((v&~0x6000)==0 for v in attrs), 'Credits map has unexpected flip/priority flags'
+attr2=bytearray(840)
 for i,v in enumerate(attrs):
- val=(v>>11)&31
- for j in range(5):
-  if val&(1<<(4-j)):
-   b=i*5+j;attr5[b>>3]|=128>>(b&7)
+ attr2[i>>2]|=((v>>13)&3)<<(6-((i&3)*2))
 s=['#include <types.h>',
    'const u8 ending_old_mask[420]={'+','.join(map(str,old_mask))+'};',
    'const u16 ending_old_refs['+str(len(old_refs))+']={'+','.join(map(str,old_refs))+'};',
    'const u16 ending_start_new[3]={'+','.join(map(str,start_new))+'};',
    'const u16 ending_start_old[3]={'+','.join(map(str,start_old))+'};',
-   'const u8 ending_attr5[2101]={'+','.join(map(str,attr5))+'};',
+   'const u8 ending_attr2[840]={'+','.join(map(str,attr2))+'};',
    'const u16 ending_pal[192]={'+','.join(map(str,palettes))+'};',
    'const u32 ending_tiles['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in struct.unpack('>8I',t))+'};']
 print('Credits metadata:',len(old_refs),'reused references; lossless compact index/attrs')
