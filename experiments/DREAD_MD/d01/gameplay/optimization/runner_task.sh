@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Runner task 5: SGDK SYS_reset/SYS_hardReset and the crt0 RAM clear
+# Runner task 6: where _start_entry/_reset_entry are defined and what they clear
 out=${1:?out dir}
 GDK="$HOME/Projetos/marsdev/sgdk/SGDK"
-echo "== sys_a.s 1-60"; sed -n 1,60p "$GDK/src/sys_a.s"
-echo "== _reset_entry / _start_entry"; grep -n "_reset_entry\|_start_entry\|_bstart\|_bend\|ClearBSS\|clear" "$GDK/src/boot/sega.s" "$GDK/src/boot/rom_head.c" "$GDK/src/crt0"* 2>/dev/null | head -20
-ls "$GDK/src/boot"
+f=$(grep -rln "^_reset_entry\|_reset_entry:" "$GDK/src" 2>/dev/null | head -3); echo "files: $f"
+for x in $f; do echo "== $x"; grep -n "_start_entry\|_reset_entry\|bss\|clear\|0xFFFF0000\|0xE0FF0000\|dbra\|rept\|_bend\|_bstart" "$x" | head -40; done
