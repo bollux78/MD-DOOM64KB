@@ -79,7 +79,7 @@ static void ai_comp_update(void)
 }
 /* Slow-AI attack tuning (run-time so it can be calibrated in the emulator): extra missile rolls per step and the reaction
  * delay after an attack starts. Control values at period 5 are fixed (3 and 1 roll) and never read these. */
-volatile uint8_t ai_xroll = 0, ai_react = 2;
+volatile uint8_t ai_xroll = 0, ai_react = 1;
 void Actors_SetAIHalf(uint8_t on) { ai_period = on ? 10 : 5; sp_for = 0; }
 uint8_t Actors_AIHalf(void) { return ai_period != 5; }
 /* VBlank-time fixed-step clocks, independent of rendered FPS.
