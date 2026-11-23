@@ -130,8 +130,13 @@ for ty in range(28):
     group=tiny[yy,xx:xx+4]
     packed.append(int((group[0]<<6)|(group[1]<<4)|(group[2]<<2)|group[3]))
 assert len(packed)==20160 and len(tilepal)==1120
+# Intermission uses only 3 hardware palettes: losslessly pack 4 x 2-bit
+# tile palette selectors into each byte.
+assert len(tilepal)==1120 and all(0<=v<4 for v in tilepal)
+tilepal2=bytearray((tilepal[i]<<6)|(tilepal[i+1]<<4)|(tilepal[i+2]<<2)|tilepal[i+3] for i in range(0,1120,4))
+assert all(((tilepal2[i>>2]>>((3-(i&3))*2))&3)==v for i,v in enumerate(tilepal))
 s+=['const u16 inter_pal[64]={'+','.join(map(str,inter_pal))+'};',
-    'const u8 inter_tilepal[1120]={'+','.join(map(str,tilepal))+'};',
+    'const u8 inter_tilepal2[280]={'+','.join(map(str,tilepal2))+'};',
     'const u8 inter_data[20160]={'+','.join(map(str,packed))+'};']
 print('Intermission: native H40 320x224, per-tile four-colour packing, 20160 bytes')
 (out/'ending_data.c').write_text('\n'.join(s)+'\n');print('Ending art:',len(unique),'unique tiles,',len(lines),'text lines')
