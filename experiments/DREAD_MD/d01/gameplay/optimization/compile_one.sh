@@ -24,7 +24,12 @@ test -s "$output/EPISODE.elf"
 bytes=$(stat -c %s "$output/EPISODE.bin")
 (( bytes <= 4194304 ))
 cp "$output/EPISODE.bin" "$output/release/DREAD-C7-OPT-$variant.bin"
-# Keep EPISODE.elf local on the runner for symbol extraction; never upload it.
+# Publish the ELF only for the shareware WAD (doom1.wad): it carries the same data as the public ROM and lets the
+# profiler map PC samples to functions. Any other WAD (registered/full game) keeps the ELF private on the runner.
+case "$(basename "$wad" | tr '[:upper:]' '[:lower:]')" in
+  doom1.wad) cp "$output/EPISODE.elf" "$output/release/DREAD-C7-OPT-$variant.elf" ;;
+  *) echo "ELF kept private: WAD is not the shareware doom1.wad" ;;
+esac
 mkdir -p "$output/release/geometry/$variant"
 cp "$output"/geometry/E1M*.json "$output/release/geometry/$variant/"
 sha256sum "$output/release/DREAD-C7-OPT-$variant.bin" > "$output/release/SHA256-$variant.txt"

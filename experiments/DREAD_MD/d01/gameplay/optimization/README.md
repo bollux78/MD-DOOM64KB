@@ -110,7 +110,7 @@ Nenhuma foi medida em 68000. Cada uma diz como provar antes de gastar uma build.
 
 ## 6. Arquivos
 
-- `variant.sh`, `compile_one.sh`: compilação independente por variante (o GEO_SAFE roda a verificação do host no fim).
+- `variant.sh`, `compile_one.sh`: compilação independente por variante. Publica `DREAD-C7-OPT-<variante>.elf` só quando o WAD é o `doom1.wad` shareware (para perfil por função); com outro WAD o ELF fica privado no runner (o GEO_SAFE roda a verificação do host no fim).
 - `bench_mame.py`, `bench_mame.lua`: benchmark MAME (histograma, hash visual, `ai_active`).
 - `verify_geo_exact.sh`, `host_stubs.c`, `../../host/host.c` (modo `cmp`): verificação no host.
 - `pack_matrix.py`: ZIP com as ROMs e CSV/JSON com classe, FPS, deltas, `render_pixels_equal_control`, `combat_comparable`, `geo_gate_pass`.
