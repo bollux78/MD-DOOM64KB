@@ -391,7 +391,7 @@ void HUD_ShowArt(uint16_t page)
     VDP_setEnable(TRUE);SYS_enableInts();
 }
 extern const uint16_t inter_pal[];
-extern const uint8_t inter_tilepal[],inter_data[];
+extern const uint8_t inter_tilepal2[],inter_data[];
 void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_t items,uint16_t totalitems,uint16_t secrets,uint16_t totalsecrets,uint32_t seconds)
 {
     SYS_disableInts();static_screen();
@@ -415,8 +415,11 @@ void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_
     }
     for(uint16_t y=0;y<28;y++){
         vram_addr(BGB+y*128);
-        for(uint16_t x=0;x<40;x++)
-            vram_w((inter_tilepal[y*40+x]<<13)|(TILE_TITLE+y*40+x));
+        for(uint16_t x=0;x<40;x++){
+            const uint16_t index=y*40+x;
+            const uint16_t pal=(inter_tilepal2[index>>2]>>((3-(index&3))*2))&3;
+            vram_w((pal<<13)|(TILE_TITLE+index));
+        }
     }
     VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
     VDP_drawTextBG(BG_A,name,(40-strlen(name))/2,4);VDP_drawTextBG(BG_A,"CONCLUIDO",15,6);
