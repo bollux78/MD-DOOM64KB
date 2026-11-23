@@ -23,5 +23,6 @@ case "$variant" in
   ALL) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10 -DDREAD_AI_SPEED_COMP" DREAD_RENDER_GEOMETRY=merge ;;
   *) echo "Unknown experimental variant: $variant" >&2;exit 2 ;;
 esac
+export DREAD_OPT_FLAGS="$DREAD_OPT_FLAGS -DDREAD_BENCH_$variant"
 echo "DREAD OPT $variant: AI_FLAGS=${DREAD_OPT_FLAGS:-12Hz} TEX_FACTOR=$DREAD_TEXTURE_FACTOR GEOMETRY=$DREAD_RENDER_GEOMETRY STEPS=$DREAD_SIMPLIFY_STEPS"
 bash "$(dirname "$0")/../build.sh" "$2" "$3"
