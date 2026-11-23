@@ -387,10 +387,15 @@ void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_
     /* Upload real 8x8 H40 tiles, without the old 160x112 stretch. */
     for(uint16_t y=0;y<28;y++)for(uint16_t x=0;x<40;x++){
         uint32_t tile[8];
-        const uint8_t *p=inter_data+((uint32_t)y*40+x)*32;
+        const uint8_t *p=inter_data+((uint32_t)y*40+x)*18;
+        uint16_t colors[4]={p[0]>>4,p[0]&15,p[1]>>4,p[1]&15};
         for(uint16_t row=0;row<8;row++){
             uint32_t word=0;
-            for(uint16_t c=0;c<4;c++)word=(word<<8)|p[row*4+c];
+            for(uint16_t col=0;col<8;col++){
+                uint8_t group=p[2+row*2+(col>>2)];
+                uint8_t index=(group>>(6-((col&3)<<1)))&3;
+                word=(word<<4)|colors[index];
+            }
             tile[row]=word;
         }
         vram_copy32(TILE_TITLE+y*40+x,tile,1);
