@@ -1,5 +1,7 @@
 # DREAD C7 - rodada de otimização
 
+**Benchmark canônico dos projetos Doom:** [DEMO3 integral em E1M7](../../../../../docs/benchmarks/PADRAO-DOOM-DEMO3-E1M7.md). O trecho automatizado de 312 quadros é somente smoke test e não substitui a demo completa.
+
 > **Benchmark da C7 experimental (atualização):** o menu usa somente a gravação `DEMO3` do WAD; a rota fixa de E1M1 e seu relatório antigo são excluídos da ROM `DREAD_EPISODE`. Os modos 1 e 2, que o MAME solicita via `bench_req`, agora percorrem os primeiros 312 quadros renderizados da mesma `DEMO3` (IA desligada / ligada). O modo 3 do menu percorre a gravação inteira e mostra FPS, tempo em VBlanks, variante e atividade de combate. A física é aproximada na C7; o percurso não é bit a bit equivalente ao Doom original. Revisar os resultados de combate segundo as regras de comparabilidade abaixo.
 
 
