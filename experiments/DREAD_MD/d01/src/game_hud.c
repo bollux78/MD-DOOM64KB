@@ -310,14 +310,17 @@ uint16_t HUD_VBlank(uint16_t max_bytes)    /* returns the bytes sent by DMA (the
     }
     if (weapon_pending >= 0) {
         const uint16_t *refs=weap_frame_refs+(uint16_t)weapon_pending*160;
+        /* The whole frame (only the tiles that differ, <= 160 = 5 KB) goes out in ONE VBlank: a frame uploaded over several
+         * blanks showed its top sprite pieces from the new frame and the bottom ones from the old one for 1-2 fields
+         * (a band across the weapon). The sprite table is rewritten in this same blank (sat_dirty below). */
         while(weapon_pos<160){
             const uint16_t start=weapon_pos,n=(160-start)>32?32:160-start;
             uint16_t changed=0;for(uint16_t i=0;i<n;i++)if(weapon_refs[start+i]!=refs[start+i])changed=1;
             if(changed){DMA_doDma(DMA_VRAM,weapon_frame+start*8,(TILE_WEAP+start)*32,n*16,2);bytes+=n*32;weapon_dma=1;}
             for(uint16_t i=0;i<n;i++)weapon_refs[start+i]=refs[start+i];
-            weapon_pos+=n;if(changed)break;
+            weapon_pos+=n;
         }
-        if (weapon_pos==160){weapon_pending=-1;sat_dirty=1;}
+        weapon_pending=-1;sat_dirty=1;
     }
 #else
     if (weap_req >= 0) {
