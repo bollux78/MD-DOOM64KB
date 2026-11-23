@@ -1,4 +1,4 @@
-name: DREAD C7 - optimization round (5 ROMs) and FPS comparison
+name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
 on:
   push:
     branches: [exp-dread-c7-optimization-matrix-20261123]
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GEO_SAFE, AI6, AI6S, ALL]
+        variant: [CONTROL, AI6, AI6S]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GEO_SAFE, AI6, AI6S, ALL]
+        variant: [CONTROL, AI6, AI6S]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}

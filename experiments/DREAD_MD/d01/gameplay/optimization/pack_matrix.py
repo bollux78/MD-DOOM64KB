@@ -7,7 +7,7 @@ p.add_argument("--roms",type=Path,required=True)
 p.add_argument("--bench",type=Path,required=True)
 p.add_argument("--out",type=Path,required=True)
 args=p.parse_args()
-names=("CONTROL","GEO_SAFE","AI6","AI6S","ALL")
+names=("CONTROL","AI6","AI6S")
 # Classes decide what a result means. "near_exact" must pass the host gate (verify_geo_exact.sh): same image apart from
 # isolated edge pixels. Everything else is a trade-off that the project owner decides before it is called a speed-up.
 CLASS={

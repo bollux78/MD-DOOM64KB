@@ -2,14 +2,14 @@
 
 Base congelada: `c816e6c72a8fc6a3bc989b347ea7166fda835893` (última C7 NORMAL validada no boot). A C7 estável não é alterada. Handoff de referência: DREAD-OTIMIZACAO-HANDOFF.zip (22/11/2026).
 
-Esta rodada foi revisada em 23/11/2026 depois de ler o código de cada variante e de testar a geometria no renderizador de host (WAD Freedoom, mapas E1M1, E1M2, E1M5, 3000 vistas cada). Os números do host são de **trabalho do renderizador** (segs, nós da BSP, colunas) e de **pixels**. Eles não são FPS do Mega Drive.
+Esta rodada foi revisada em 23/11/2026 depois de ler o código de cada variante e de testar a geometria no renderizador de host: WAD do Doom 1 shareware (E1M1 a E1M9, 2000 vistas cada) e, para achar os bugs, Freedoom (3000 vistas). Os números do host são de **trabalho do renderizador** (segs, nós da BSP, colunas) e de **pixels**. Eles não são FPS do Mega Drive.
 
 ## 1. Resultado da revisão (o que estava errado, o que não rende)
 
 | Variante original | Veredito | Evidência |
 |---|---|---|
-| GEO_SAFE | **tinha bug, corrigido**; ganho pequeno | Ver 1.1. |
-| GEO_STEPS | **removida da rodada** | Reduz só 0,6–1,7% dos segs e muda os pixels em 3–12% das vistas (até 79% dos bytes de uma vista), além de alterar colisão. |
+| GEO_SAFE | **tinha bug, corrigido; removida da rodada porque não rende no Doom 1** | Ver 1.1: remove 0 segs em 7 dos 9 mapas do Doom 1 e no máximo 7 em E1M8. |
+| GEO_STEPS | **removida da rodada** | No Doom 1 reduz no máximo 2,4% dos segs (E1M2) e 0 a 0,8% nos demais; muda os pixels em 5–14% das vistas em 8 dos 9 mapas (até 83% dos bytes de uma vista; E1M8: só 4 vistas, máximo 0,71%) e altera colisão. |
 | TEX2, TEX4 | **removidas da rodada** | O blob de texturas tem o mesmo tamanho (`conv.py` grava `W2 × H2` colunas independente do fator; só repete texels). Os escalonadores leem os mesmos bytes e escrevem os mesmos pixels. Não há caminho para reduzir CPU. Só piora a imagem. |
 | AI6, AI4 | **AI6 mantida, AI4 removida**; ver 1.2 | O período longo também desacelera os monstros de forma desigual. |
 
@@ -35,11 +35,21 @@ Depois da correção:
 | E1M2 | 2 / 3000 (0,07%) | 0 | 3,0% | -0,46% | 0,00% | -0,46% |
 | E1M5 | 0 / 3000 | 0 | 0 | -0,12% | 0,00% | -0,12% |
 
-Invariantes conferidos: o `mapdata.c` do CONTROL tem o mesmo SHA-256 de antes das mudanças no conversor (o CONTROL não muda), e a `pvs.c` do GEO_SAFE é idêntica à do CONTROL nos três mapas.
+**Doom 1 shareware (WAD real), `merge` contra CONTROL, 2000 vistas por mapa:**
+
+| Mapa | Segs CONTROL → merge | Vistas diferentes | Quadros em branco | Trabalho de colunas |
+|---|---|---|---|---|
+| E1M1, E1M2, E1M3, E1M5, E1M6, E1M7, E1M9 | iguais (0 removidos) | 0 | 0 | 0,00% |
+| E1M4 | 1172 → 1170 | 0 | 0 | -0,12% |
+| E1M8 | 586 → 579 | 0 | 0 | -0,03% |
+
+Em todos os 9 mapas a imagem saiu **idêntica pixel a pixel** e o gate passou. Só que **no Doom 1 o GEO_SAFE praticamente não faz nada**: a ROM de E1M1 (a rota do benchmark) seria idêntica à do CONTROL. Por isso saiu da rodada. As reduções de Freedoom (acima) só servem para mostrar os bugs.
+
+Invariantes conferidos: o `mapdata.c` do CONTROL tem o mesmo SHA-256 de antes das mudanças no conversor (o CONTROL não muda), e a `pvs.c` do GEO_SAFE é idêntica à do CONTROL nos três mapas do Freedoom.
 
 Conclusões:
-- GEO_SAFE passa a ser **near_exact**: a imagem muda só em pixels isolados de borda (uma coluna na junção de um portal removido). Bit a bit idêntico não é prometido.
-- **Ganho esperado: no máximo ~1,5% do trabalho de colunas, e 0% na BSP.** Provavelmente fica abaixo do ruído do benchmark. Ele fica na rodada porque agora é seguro e é a única redução de geometria que não altera o jogo.
+- No Freedoom o GEO_SAFE mostrou diferenças só em pixels isolados de borda; no Doom 1 não houve diferença nenhuma. A classe continua `near_exact` (bit a bit idêntico não é prometido).
+- **Ganho no Doom 1: ≤0,12% do trabalho de colunas e 0% na BSP.** Não vale uma build.
 - A fusão colinear (`merged_collinear`) deu **0** nos três mapas: dentro de uma folha convexa quase nunca há dois segs consecutivos na mesma reta. `merge` e `safe` saem iguais.
 - O gate é `verify_geo_exact.sh` (ver 4). O CI roda com o WAD do Doom 1 em E1M1, E1M2, E1M5 e E1M8.
 
@@ -56,12 +66,12 @@ Conclusões:
 | Variante | Classe | Mudança | O que muda para o jogador |
 |---|---|---|---|
 | CONTROL | baseline | C7 original (easy, IA 12 Hz, projéteis 20 Hz) | nada |
-| GEO_SAFE | near_exact | Remove segs invisíveis; PVS da geometria completa; folha nunca vazia | nada visível; pixels de borda podem mudar |
-| AI6 | gameplay_change | IA a 6 Hz sem correção | monstros mais lentos; metade da velocidade para imp, baron e caco |
+| AI6 | gameplay_change | IA a 6 Hz sem correção | monstros mais lentos; metade da velocidade para imp, baron, caco e demon |
 | AI6S | gameplay_change_speed_kept | IA a 6 Hz, passo proporcional | mesma velocidade média, movimento mais "em saltos" |
-| ALL | multi_change | AI6S + GEO_SAFE | soma das duas |
 
-Só a classe `near_exact` (e `baseline`) pode ser chamada de otimização sem decisão do dono do projeto. As classes de IA são trade-offs de jogo.
+Fora da rodada, ainda suportadas em `variant.sh`: GEO_SAFE, ALL (AI6S + GEO_SAFE), AI4, TEX2, TEX4, GEO_STEPS.
+
+A rodada tem só variantes de IA, e elas são trade-offs de jogo. Antes de olhar o FPS delas, leia a regra 1 da seção 3: se a IA custar pouco no CONTROL, nem as variantes importam.
 
 ## 3. Como ler os números
 
@@ -73,14 +83,13 @@ Só a classe `near_exact` (e `baseline`) pode ser chamada de otimização sem de
 
 ### Regras de decisão depois da rodada
 
-1. **A IA importa?** Calcule `render_fps / combat_fps − 1` no CONTROL. Se for menor que 5%, nenhuma variante de IA pode render mais que isso: descarte AI6, AI6S e ALL.
+1. **A IA importa?** Calcule `render_fps / combat_fps − 1` no CONTROL. Se for menor que 5%, nenhuma variante de IA pode render mais que isso: descarte AI6 e AI6S.
 2. **Ruído:** rode cada modo duas vezes (o workflow já roda uma vez por modo; rode a matriz duas vezes se o resultado ficar perto do ruído). Diferença menor que a variação entre repetições não é resultado.
-3. **GEO_SAFE:** espere ≤1,5%. Só vale mantê-la se o ganho passar do ruído **e** `geo_gate_pass = True`.
-4. **Promoção:** classes de IA só por escolha do dono do projeto, depois de jogar. Nada vai ao console antes do teste manual em BlastEm e no console.
+3. **Promoção:** classes de IA só por escolha do dono do projeto, depois de jogar. Nada vai ao console antes do teste manual em BlastEm e no console.
 
 ## 4. Verificação no host (sem ROM)
 
-`verify_geo_exact.sh WAD "E1M1 E1M2" [VISTAS] [SAIDA] ["control merge"]` converte cada variante, gera a PVS da geometria completa, compila o renderizador de host, renderiza as mesmas vistas (posições dentro do mapa escolhidas pelo CONTROL) e compara os framebuffers. O gate de `near_exact` é: nenhum quadro em branco, no máximo 2% das vistas diferentes, nenhuma vista com mais de 5% dos bytes diferentes. Escreve `summary.json`. O CI roda no job de compilação do GEO_SAFE (WAD do Doom 1 no runner) e grava `geo-verify-GEO_SAFE.{txt,json}` no ZIP.
+`verify_geo_exact.sh WAD "E1M1 E1M2" [VISTAS] [SAIDA] ["control merge"]` converte cada variante, gera a PVS da geometria completa, compila o renderizador de host, renderiza as mesmas vistas (posições dentro do mapa escolhidas pelo CONTROL) e compara os framebuffers. O gate de `near_exact` é: nenhum quadro em branco, no máximo 2% das vistas diferentes, nenhuma vista com mais de 5% dos bytes diferentes. Escreve `summary.json`. O job de compilação roda a verificação quando a variante GEO_SAFE é compilada (hoje fora da rodada) e grava `geo-verify-GEO_SAFE.{txt,json}` no ZIP.
 
 `host/host.c cmp N [POSFILE [DUMPFILE]]` é o modo usado: imprime hash e contadores de trabalho (`segs`, `nodes`, `subs`, `colvisits`) por vista. Esses contadores mostram, antes de gastar uma build, se uma mudança pode ser mais rápida.
 
@@ -110,7 +119,7 @@ O job de compilação roda em runner self-hosted em repositório público. Restr
 
 ## 8. Limites desta revisão
 
-- Os testes do host usaram o **Freedoom** (o WAD do Doom 1 não está neste ambiente). Os números de redução de segs do Doom 1 podem diferir; o CI repete a verificação com o WAD do Doom 1.
+- Os testes do host não desenham atores (só paredes, planos, céu e coisas estáticas).
 - O host usa os caminhos em C do renderizador e não roda o assembly do 68000. A equivalência de pixels vale para os dados e para a lógica em C; ela não prova a ausência de efeitos no assembly nem no hardware.
 - `AI6S` foi compilado no host só para sintaxe (`actors.c`); o comportamento dos monstros não foi jogado.
 - Nada foi medido em FPS do Mega Drive.

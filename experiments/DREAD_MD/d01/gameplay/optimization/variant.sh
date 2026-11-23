@@ -2,7 +2,7 @@
 # Eight A/B variants; called only from dedicated experimental workflow.
 set -euo pipefail
 if [[ $# != 3 ]]; then
-  echo 'Usage: variant.sh CONTROL|GEO_SAFE|AI6|AI6S|ALL|AI4|TEX2|TEX4|GEO_STEPS WAD OUTPUT' >&2
+  echo 'Usage: variant.sh CONTROL|AI6|AI6S|GEO_SAFE|ALL|AI4|TEX2|TEX4|GEO_STEPS WAD OUTPUT' >&2
   exit 2
 fi
 variant="$1"
