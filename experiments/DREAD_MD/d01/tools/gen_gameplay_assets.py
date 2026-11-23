@@ -6,7 +6,7 @@ import numpy as np
 from conv import Wad,read_patch
 from md_dither import DAC, dither
 w=Wad(sys.argv[1]);out=Path(sys.argv[2]);pal=np.frombuffer(w.get('PLAYPAL')[:768],np.uint8).reshape(256,3).astype(float)
-sets=[('PUNG','ABCD',None),('PISG','ABCB','PISF'),('SHTG','AABC','SHTF'),('CHGG','ABAB','CHGF'),('MISG','ABAB','MISF'),('SAWG','ABAB',None)]
+sets=[('PUNG','ABCD',None),('PISG','ABCB','PISF'),('SHTG','AABC','SHTF'),('CHGG','ABAB','CHGF'),('MISG','ABAB','MISF'),('SAWG','CDAB',None)]
 frames=[]
 for prefix,letters,flash in sets:
  canv=[]
@@ -22,36 +22,52 @@ for prefix,letters,flash in sets:
      if a[y,x]>=0 and 0<=y+yy<200 and 0<=x+xx<320:c[y+yy,x+xx]=a[y,x]
   canv.append(c)
  ys,xs=np.nonzero(np.any(np.asarray(canv)>=0,axis=0));x0,x1=xs.min(),xs.max()+1;y0,y1=ys.min(),min(184,ys.max()+1)
- scale=min(1.,128/(x1-x0),80/(y1-y0));ww=max(1,round((x1-x0)*scale));hh=max(1,round((y1-y0)*scale))
+ scale=min(1.,128/(x1-x0),80/(y1-y0))
+ y1=min(168,y1)   # the 168-line Doom view ends here; the status bar covers the rest of the sprite
+ ww=max(1,round((x1-x0)*scale));hh=max(1,round((y1-y0)*scale))
  for c in canv:
   a=np.full((80,128),-1,np.int16)
   for y in range(hh):
    for x in range(ww):a[80-hh+y,(128-ww)//2+x]=c[y0+min(y1-y0-1,int(y/scale)),x0+min(x1-x0-1,int(x/scale))]
   frames.append(a)
-# deterministic palette over all weapons, preserving transparent index zero.
-used=np.unique(np.concatenate([a[a>=0] for a in frames]));X=pal[used];C=X[np.linspace(0,len(X)-1,15,dtype=int)].copy()
-for _ in range(40):
- ids=((X[:,None]-C[None])**2).sum(2).argmin(1)
- for i in range(15):
-  if np.any(ids==i):C[i]=X[ids==i].mean(0)
-levels=np.clip(np.rint(C/36.43),0,7).astype(int);rgb=levels*36.43
-lut=np.r_[1+((pal[:,None]-rgb[None])**2).sum(2).argmin(1),0]
-# C7 preserves the *original Doom WAD weapon frames and positions from C5*.
-# Optional diffusion dithering uses the actual Genesis DAC values for each of
-# the 15 PAL1 colours, and never diffuses error into transparent pixels.
-# DREAD_WEAPON_DITHER=0 gives the exact nearest-colour quantization of C5.
-weapon_dither = os.environ.get("DREAD_WEAPON_DITHER", "0") == "1"
-indexed=[]
-if weapon_dither:
- md_rgb = DAC[levels].astype(float)
- for frame in frames:
+# One 15-colour palette PER weapon (swapped when the weapon changes). k-means over the pixels, seeded by luminance
+# quantiles and weighted by use, so the greys of the metal are kept instead of being pulled toward the skin/brown tones.
+def fit(fr):
+ used=np.concatenate([a[a>=0] for a in fr]);X=pal[used]
+ lum=X@np.array([.299,.587,.114]);C=X[np.argsort(lum,kind='stable')[np.linspace(0,len(X)-1,15,dtype=int)]].copy()
+ for _ in range(60):
+  ids=((X[:,None]-C[None])**2).sum(2).argmin(1)
+  for i in range(15):
+   if np.any(ids==i):C[i]=X[ids==i].mean(0)
+ lv=np.abs(C[:,:,None]-DAC[None,None,:]).argmin(2);return lv
+weapon_dither=os.environ.get("DREAD_WEAPON_DITHER","0")=="1"
+BAYER=np.array([[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]])/16.0-0.5
+def bayer(rgb,colors,mask):
+ # ordered dither: the SAME offset on R,G and B (grey noise), so no coloured dots; step ~ the DAC level spacing (36)
+ h,w=rgb.shape[:2];out=np.zeros((h,w),np.uint8);amp=float(os.environ.get("DREAD_BAYER_AMP","30"))
+ for y in range(h):
+  for x in range(w):
+   if mask[y,x]:
+    v=np.clip(rgb[y,x]+BAYER[y&3,x&3]*amp,0,255);out[y,x]=((colors-v)**2).sum(1).argmin()
+ return out
+indexed=[];pals=[]
+for wi in range(6):
+ fr=frames[wi*4:wi*4+4];levels=fit(fr);rgb=DAC[levels].astype(float)
+ lut=np.r_[1+((pal[:,None]-rgb[None])**2).sum(2).argmin(1),0]
+ for frame in fr:
   mask=frame>=0
-  rgb_frame=pal[np.maximum(frame,0)]
-  indices=dither(rgb_frame,md_rgb,mask).astype(np.uint8)+1
-  indices[~mask]=0
-  indexed.append(indices)
-else:
- indexed=[lut[frame] for frame in frames]
+  if weapon_dither:
+   idx=bayer(pal[np.maximum(frame,0)],rgb,mask).astype(np.uint8)+1;idx[~mask]=0
+  else:idx=lut[frame]
+  indexed.append(idx)
+ pals.append([0]+[(int(b)*2<<8)|(int(g)*2<<4)|(int(r)*2) for r,g,b in levels])
+if os.environ.get("DREAD_WEAPON_PREVIEW"):
+ from PIL import Image
+ pv=Image.new('RGB',(128*4*2,80*6*2))
+ for i,a in enumerate(indexed):
+  tab=np.array([[0,0,0]]+[[((c&14)>>1)*36.43,(((c>>4)&14)>>1)*36.43,(((c>>8)&14)>>1)*36.43] for c in pals[i//4][1:]],np.uint8)
+  pv.paste(Image.fromarray(tab[a]).resize((256,160),Image.NEAREST),((i%4)*256,(i//4)*160))
+ pv.save(os.environ["DREAD_WEAPON_PREVIEW"])
 pieces=[(x,y,4,min(32,80-y)//8) for y in range(0,80,32) for x in range(0,128,32)]
 unique=[];lookup={};refs=[]
 for a in indexed:
@@ -66,8 +82,7 @@ for a in indexed:
     key=tuple(words)
     if key not in lookup:lookup[key]=len(unique);unique.append(key)
     refs.append(lookup[key])
-md=[0]+[(int(b)*2<<8)|(int(g)*2<<4)|(int(r)*2) for r,g,b in levels]
-s=['#include "mapdata.h"','const uint16_t weap_pal[16]={'+','.join(map(str,md))+'};','const uint16_t weap_x=96,weap_y=64,weap_tiles=160,weap_nframes=24,weap_npieces=12;','const uint8_t weap_piece[12][4]={'+','.join('{'+','.join(map(str,p))+'}' for p in pieces)+'};','const uint16_t weap_frame_refs['+str(len(refs))+']={'+','.join(map(str,refs))+'};','const uint32_t weap_data['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in t)+'};']
+s=['#include "mapdata.h"','const uint16_t weap_pals[6][16]={'+','.join('{'+','.join(map(str,q))+'}' for q in pals)+'};','const uint16_t weap_pal[16]={'+','.join(map(str,pals[1]))+'};','const uint16_t weap_x=96,weap_y=64,weap_tiles=160,weap_nframes=24,weap_npieces=12;','const uint8_t weap_piece[12][4]={'+','.join('{'+','.join(map(str,p))+'}' for p in pieces)+'};','const uint16_t weap_frame_refs['+str(len(refs))+']={'+','.join(map(str,refs))+'};','const uint32_t weap_data['+str(len(unique)*8)+']={'+','.join(hex(v) for t in unique for v in t)+'};']
 (out/'weapon.c').write_text('\n'.join(s)+'\n')
 # XGM2 data must start on 256-byte boundaries, and length be a multiple of 256.
 names=['PISTOL','SHOTGN','PUNCH','SAWFUL','RLAUNC','BAREXP','ITEMUP','WPNUP','DOROPN','DORCLS','SWTCHN','PLPAIN','POSIT1','PODTH1','SGTSIT','SGTDTH','BGACT','BGDTH1','SLOP','TELEPT','PLDETH']

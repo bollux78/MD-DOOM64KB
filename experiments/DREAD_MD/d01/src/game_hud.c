@@ -131,13 +131,16 @@ static uint16_t weapon_pos,weapon_fuzz,weapon_fuzz_request;
 static volatile uint16_t weapon_building,weapon_paused;
 static volatile int16_t weapon_anim=-1;
 static volatile uint16_t weapon_anim_step,weapon_anim_ticks;
-static const uint8_t anim_frames[6][5]={{1,2,3,0,0},{1,2,3,0,0},{1,2,3,2,0},{1,2,0,0,0},{1,2,0,0,0},{1,2,0,0,0}};
-static const uint8_t anim_ticks[6][5]={{8,8,8,0,0},{6,6,5,0,0},{5,10,10,10,0},{4,3,0,0,0},{8,6,0,0,0},{4,3,0,0,0}};
+static const uint8_t anim_frames[6][5]={{1,2,3,0,0},{1,2,3,0,0},{1,2,3,2,0},{1,2,0,0,0},{1,2,0,0,0},{0,0,0,0,0}};
+static const uint8_t anim_ticks[6][5]={{8,8,8,0,0},{6,6,5,0,0},{5,10,10,10,0},{4,3,0,0,0},{8,6,0,0,0},{200,0,0,0,0}};
+/* Chainsaw (Doom): ready = SAWGC/SAWGD alternating every 4 tics (frames 20/21, the idle shake); attack = SAWGA/SAWGB alternating
+ * on every hit (frames 22/23, saw pushed forward). The attack frame is held until the main loop's next fire or return to ready. */
+static volatile uint8_t saw_idle_t, saw_toggle;
 void HUD_WeaponPause(uint16_t on){weapon_paused=on;}
 void HUD_RestoreTextColor(void){cram_set(63,hudw_pal+15,1);}
 void HUD_WeaponFire(uint16_t weapon){
     weapon_anim=-1;weapon_anim_step=0;weapon_anim_ticks=anim_ticks[weapon][0];
-    HUD_WeaponFrame(weapon*4+1);weapon_anim=weapon;
+    if(weapon==5){saw_toggle^=1;HUD_WeaponFrame(22+saw_toggle);}else HUD_WeaponFrame(weapon*4+1);weapon_anim=weapon;
 }
 void HUD_WeaponInvisible(uint16_t on){
     weapon_fuzz_request=on;
@@ -201,6 +204,9 @@ void HUD_Init(uint16_t row0)
 void HUD_Draw(const HudState *st)
 {
 #ifdef DREAD_GAMEPLAY
+    if(weapon_last==20||weapon_last==21){
+        if(saw_idle_t>=7 && weapon_pending<0 && weapon_next<0 && !weapon_paused){saw_idle_t=0;weapon_next=(int16_t)(weapon_last^1);}
+    }else saw_idle_t=0;
     if(weapon_pending<0 && weapon_next>=0){uint16_t f=weapon_next;weapon_next=-1;HUD_WeaponFrame(f);}
 #endif
     uint16_t rows[4][32];
@@ -273,6 +279,10 @@ void HUD_WeaponFrame(uint16_t f)
     weap_req = (int16_t)f;
 #endif
 }
+#ifdef DREAD_GAMEPLAY
+/* weapon whose tiles are completely in VRAM (palette is swapped to it), or 0xFFFF while a change is in progress */
+uint16_t HUD_WeaponShown(void){return (weapon_pending<0 && weapon_next<0 && !weapon_building && weapon_last>=0)?(uint16_t)(weapon_last>>2):0xFFFF;}
+#endif
 void HUD_WeaponBob(int16_t dx, int16_t dy) { bob_x = dx; bob_y = dy; sat_dirty = 1; }
 
 void HUD_Text(uint16_t line, const char *s)      /* line 0/1 = screen rows 25/26 */
@@ -289,6 +299,7 @@ uint16_t HUD_VBlank(uint16_t max_bytes)    /* returns the bytes sent by DMA (the
 {
     uint16_t bytes = 0,weapon_dma=0;
 #ifdef DREAD_GAMEPLAY
+    if(saw_idle_t<255)saw_idle_t++;
     if(weapon_anim>=0 && !weapon_paused){
         if(weapon_anim_ticks)weapon_anim_ticks--;
         if(!weapon_anim_ticks && !weapon_building && weapon_pending<0){

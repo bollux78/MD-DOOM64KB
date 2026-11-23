@@ -28,6 +28,7 @@ void HUD_ShowOpening(void);
 #ifdef DREAD_GAMEPLAY
 void HUD_WeaponFire(uint16_t weapon);
 void HUD_WeaponPause(uint16_t on);
+uint16_t HUD_WeaponShown(void);
 void HUD_RestoreTextColor(void);
 void HUD_WeaponInvisible(uint16_t on);
 void HUD_ShowArt(uint16_t page);

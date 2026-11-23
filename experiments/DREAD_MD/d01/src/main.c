@@ -65,11 +65,12 @@ static volatile uint8_t scene_flash, dma_tint;
 static uint8_t displayed_tint;
 static uint16_t scene_pal[8][32];
 void Game_Flash(void) { scene_flash=1; }
-extern const uint16_t weap_pal[16];
+extern const uint16_t weap_pals[6][16];
+static uint16_t pal_w=1;                    /* weapon whose own 15-colour palette is in PAL1 */
 static void scene_palettes(void)
 {
     for(uint16_t i=0;i<32;i++){
-        uint16_t c=i<16?md_palette[0][i]:weap_pal[i-16];scene_pal[0][i]=c;
+        uint16_t c=i<16?md_palette[0][i]:weap_pals[pal_w][i-16];scene_pal[0][i]=c;
         uint16_t rr=c&14,gg=(c>>4)&14,bb=(c>>8)&14;
         scene_pal[1][i]=i>=16?c:!c?0:((rr>10?14:rr+4)|((gg>10?14:gg+4)<<4)|((bb>10?14:bb+4)<<8));
         scene_pal[3][i]=!c?0:(14-rr)|((14-gg)<<4)|((14-bb)<<8);
@@ -1262,8 +1263,10 @@ int main(bool hard)
         }
         if (fwd || side) {
             bob += dt;
-            const int16_t sx = sintab[(bob * 12) & 1023] >> 11, sy = sintab[(bob * 24) & 1023] >> 12;
-            HUD_WeaponBob(sx, sy < 0 ? sy : -sy);
+            /* Doom: x = cos over the full cycle, y = positive half sine at twice the rate, so the weapon only ever moves DOWN
+             * (into the status bar), never up leaving a gap under it. */
+            const int16_t sx = sintab[(bob * 12 + 256) & 1023] >> 11, sy = sintab[(bob * 12) & 1023] >> 12;
+            HUD_WeaponBob(sx, sy < 0 ? -sy : sy);
         }
         else HUD_WeaponBob(0,0);
         if (fwd || side) {
@@ -1392,6 +1395,7 @@ render_frame:
         frame_segs = rstats.segs_drawn; frame_nodes = rstats.nodes_visited; frame_cols = rstats.col_visits; frame_anchors = rstats.anchors; frame_subs = rstats.subs_visited;
         while (dma_src) {}
 #ifdef DREAD_GAMEPLAY
+        {const uint16_t sw=HUD_WeaponShown();if(sw<6 && sw!=pal_w){pal_w=sw;SYS_disableInts();scene_palettes();displayed_tint=255;SYS_enableInts();}}
         dma_tint=!hud.health?2:World_Tint();if(!dma_tint && scene_flash)dma_tint=1;scene_flash=0;
 #endif
         dma_pos = 0; dma_src = fb;
