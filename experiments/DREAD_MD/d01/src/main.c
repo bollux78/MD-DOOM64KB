@@ -536,7 +536,7 @@ static uint16_t selected_map;
 enum TitleScreen { TITLE_ART, TITLE_MENU, TITLE_LEVELS };
 enum TitleChoice { TITLE_NEW_GAME, TITLE_SELECT_LEVEL, TITLE_BENCHMARK, TITLE_CREDITS };
 
-static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL", "BENCHMARK"
+static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL", "BENCH COMBAT"
 #ifdef DREAD_GAMEPLAY
     ,"CREDITS"
 #endif
@@ -635,7 +635,7 @@ static void title(void)
 #endif
             if (cursor != TITLE_SELECT_LEVEL) {
                 selected_map = 0;
-                bench_req = cursor == TITLE_BENCHMARK;
+                bench_req = cursor == TITLE_BENCHMARK ? 2 : 0;
                 break;
             }
             screen = TITLE_LEVELS;
@@ -826,7 +826,7 @@ static void benchmark_report_screen(uint16_t f100)
     VDP_clearPlane(WINDOW, TRUE);
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
-    VDP_drawTextBG(BG_A, "DOOM MD  RENDER BENCHMARK", 2, 1);
+    VDP_drawTextBG(BG_A, bench_req == 2 ? "DOOM MD COMBAT BENCHMARK" : "DOOM MD  RENDER BENCHMARK", 2, 1);
     VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
 #ifdef DREAD_NATIVE_PERSPECTIVE
     VDP_drawTextBG(BG_A, "MODO: NATIVE PERSPECTIVE", 2, 5);
