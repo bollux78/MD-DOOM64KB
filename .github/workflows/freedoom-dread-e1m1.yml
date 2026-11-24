@@ -1,4 +1,4 @@
-name: Freedoom DREAD E1M1 - Studio conversion and playable ROM
+name: Freedoom DREAD E1M1 - Studio conversion and playable ROM (mask identifier fix)
 on:
   push:
     branches: [exp-freedoom-dread-20261124]

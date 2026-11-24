@@ -165,7 +165,8 @@ for name,(ww,hh,parts) in defs.items():
   for y in range(H):bits.append(int(a[y%hh,(2*x)%ww] or a[y%hh,(2*x+1)%ww]))
  maskdata[name]=np.packbits(np.array(bits,np.uint8),bitorder='little').tobytes()
 s=['#include "levelmeta.h"'];maps=[]
-for name,data in maskdata.items():s.append('static const uint8_t mask_'+name+'['+str(len(data))+']={'+','.join(map(str,data))+'};')
+mask_id={name:'mask_'+str(i) for i,name in enumerate(sorted(maskdata))}
+for name,data in maskdata.items():s.append('static const uint8_t '+mask_id[name]+'['+str(len(data))+']={'+','.join(map(str,data))+'};')
 for m in range(1,2 if os.environ.get("DREAD_FREEDOOM")=="1" else 10):
  i=w.find('E1M'+str(m));sides=w.idx(i+3);names=set()
  for j in range(0,len(sides),30):
@@ -173,7 +174,7 @@ for m in range(1,2 if os.environ.get("DREAD_FREEDOOM")=="1" else 10):
    name=sides[j+k:j+k+8].rstrip(b'\0').decode()
    if name in defs:names.add(name)
  names=sorted(names)
- s.append('static const uint8_t *const masks%d[%d]={%s};'%(m,len(names),','.join('mask_'+n if n in maskdata else '0' for n in names)))
+ s.append('static const uint8_t *const masks%d[%d]={%s};'%(m,len(names),','.join(mask_id[n] if n in maskdata else '0' for n in names)))
  sectors=w.idx(i+8);things=w.idx(i+1);ss=[struct.unpack_from('<h',sectors,j+22)[0] for j in range(0,len(sectors),26)]
  tele=[]
  for j in range(0,len(things),10):
