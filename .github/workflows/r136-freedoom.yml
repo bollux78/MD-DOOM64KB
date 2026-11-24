@@ -1,4 +1,4 @@
-name: R136b Freedoom E1M1 Wall Rendering
+name: R136b Freedoom E1M1 Wall Rendering - reconstruction with demo fallback
 on:
   workflow_dispatch:
   push:
