@@ -1,0 +1,73 @@
+name: Manifold Freedoom E1M1 - clean build (no Doom WAD, no Doom music)
+on:
+  workflow_dispatch:
+  push:
+    branches: [exp-manifold-freedoom-20261124]
+    paths: ['.github/workflows/manifold-freedoom-e1m1.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Freedoom 0.13.0 (BSD-3-Clause) and pinned Manifold upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/mfd-$GITHUB_RUN_ID"; mkdir -p "$out/in" "$out/release"
+          curl --fail --location --retry 3 https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip -o "$out/in/f.zip"
+          python3 -m zipfile -e "$out/in/f.zip" "$out/in"
+          wad="$out/in/freedoom-0.13.0/freedoom1.wad"; test -s "$wad"
+          cp "$out/in/freedoom-0.13.0/"{COPYING,CREDITS}.txt "$out/release/"
+          python3 -c 'import shapely' 2>/dev/null || python3 -m pip install --user --break-system-packages -q shapely
+          python3 experiments/DOOM_Manifold_E1M1/m01/bootstrap.py --out "$out/stage" > "$out/bootstrap.log" 2>&1 || { tail -20 "$out/bootstrap.log"; exit 1; }
+          echo "OUT=$out" >> "$GITHUB_ENV"; echo "WAD=$wad" >> "$GITHUB_ENV"
+      - name: Stage Freedoom E1M1 (no music)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1 \
+          MANIFOLD_EYE=48 MANIFOLD_TEX_U=1 MANIFOLD_WEAPON=pistol MANIFOLD_BUILD_TAG="FREEDOOM MANIFOLD E1M1" \
+          python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source "$OUT/stage/manifold" --wad "$WAD" --out "$OUT/stage/candidate" 2>&1 | tee "$OUT/stage.log" | tail -40
+      - name: Compile ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdk=""
+          for d in "$GITHUB_WORKSPACE/vendor/sgdk" "$HOME/Projetos/doom-md/vendor/sgdk" "$HOME/Projetos/MD-DOOM64KB/vendor/sgdk" "$HOME/mars/sgdk" "$HOME/mars/SGDK" "$HOME/sgdk" "/opt/sgdk"; do
+            test -f "$d/makefile.gen" && { gdk="$d"; break; }
+          done
+          if test -z "$gdk"; then gdk=$(dirname "$(find "$HOME" /opt -maxdepth 9 -type f -name makefile.gen 2>/dev/null | head -1)"); fi
+          test -f "$gdk/makefile.gen"
+          native_xgm="$HOME/mars/m68k-elf/bin/xgmtool"
+          [ -x "$gdk/bin/xgmtool" ] || { [ -x "$native_xgm" ] && ln -s "$native_xgm" "$gdk/bin/xgmtool"; } || true
+          export GDK="$gdk"; tc="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          c="$OUT/stage/candidate"
+          [ -f "$c/src/math3d.h" ] && [ ! -e "$c/src/math3D.h" ] && ln -s math3d.h "$c/src/math3D.h"
+          python3 - "$gdk/makefile.gen" "$OUT/makefile-no-lto.gen" <<'PY'
+          import pathlib,sys
+          s=pathlib.Path(sys.argv[1]).read_text();pat="-flto -flto=auto -ffat-lto-objects"
+          assert s.count(pat)>=2
+          pathlib.Path(sys.argv[2]).write_text(s.replace(pat,"-fno-lto"))
+          PY
+          make -C "$c" -f "$OUT/makefile-no-lto.gen" -j2 release OS=Linux PREFIX="$tc" CC="${tc}gcc" LD="${tc}ld" AR="${tc}ar" NM="${tc}nm" OBJCPY="${tc}objcopy" > "$OUT/build.log" 2>&1 || { grep -m30 -iE "error|undefined" "$OUT/build.log"; exit 1; }
+          cp "$c/out/rom.bin" "$OUT/release/MANIFOLD-FREEDOOM-E1M1.bin"
+          (cd "$OUT/release" && sha256sum MANIFOLD-FREEDOOM-E1M1.bin > SHA256.txt)
+          ls -l "$OUT/release"
+      - name: Package
+        if: always()
+        shell: bash
+        run: |
+          cp "$OUT/stage.log" "$OUT/build.log" "$OUT/release/" 2>/dev/null || true
+          cp "$OUT/stage/candidate/e1m1-stage.json" "$OUT/release/stage.json" 2>/dev/null || true
+          cd "$OUT/release" && python3 -m zipfile -c "$GITHUB_WORKSPACE/MANIFOLD-FREEDOOM-E1M1.zip" .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Manifold-Freedoom-E1M1
+          path: MANIFOLD-FREEDOOM-E1M1.zip
