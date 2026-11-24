@@ -230,6 +230,12 @@ class _SafeWad:
     def lump(self,n):
         try: return self._w.lump(n)
         except KeyError:
+            import re as _re
+            _m=_re.fullmatch(r"(\w{4})([A-Z])(\d)\2\d",n)      # Doom mirrored lump XXXXA3A7: other IWADs ship it as XXXXA3 only
+            if _m:
+                try: return self._w.lump(_m.group(1)+_m.group(2)+_m.group(3))
+                except KeyError: pass
+            print("M12 SAFE_WAD placeholder for missing lump",n)
             if n.startswith(("TEXTURE","PNAMES","PLAYPAL","COLORMAP")): raise
             if n.startswith("DS"): return b"\x03\x00\x11\x2b\x20\x00\x00\x00"+b"\x80"*32
             return self._DUMMY
