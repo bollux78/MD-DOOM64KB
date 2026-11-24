@@ -4501,6 +4501,8 @@ def m14_perf(out):
     3. object.c monsters: one dot product shared by in_front/view, 16-bit muls (muls.w) and divu.w for the bearing."""
     def sub(f, old, new, what):
         t=f.read_text()
+        if t.count(old)==0 and what=="world_tick bbox" and os.environ.get("MANIFOLD_AMBIG")=="first":
+            print("m14_perf: world_tick anchor absent (generic doors), skipped"); return
         if t.count(old)!=1: raise ValueError("m14_perf anchor changed (%d): %s"%(t.count(old),what))
         f.write_text(t.replace(old,new,1))
     c=out/"src/collision.c"
