@@ -1,0 +1,105 @@
+name: Freedoom DREAD E1M1 - Studio conversion and playable ROM
+on:
+  push:
+    branches: [exp-freedoom-dread-20261124]
+    paths: ['.github/workflows/freedoom-dread-e1m1.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain official Freedoom 0.13.0 and convert/build E1M1
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/freedoom-dread-$GITHUB_RUN_ID"
+          echo "FD_OUT=$OUT" >> "$GITHUB_ENV"
+          mkdir -p "$OUT/release" "$OUT/input" "$OUT/build/previews"
+          curl --fail --location --retry 3 https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip -o "$OUT/input/freedoom.zip"
+          unzip -q "$OUT/input/freedoom.zip" -d "$OUT/input"
+          wad="$OUT/input/freedoom-0.13.0/freedoom1.wad"
+          test -s "$wad"
+          cp "$OUT/input/freedoom-0.13.0/"{COPYING,CREDITS,CREDITS-MUSIC}.txt "$OUT/release/"
+          GDK="$HOME/Projetos/marsdev/sgdk/SGDK"
+          test -f "$GDK/makefile.gen"
+          export GDK DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
+          export PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
+          export DREAD_FREEDOOM=1 DREAD_MAP_LIST=1 DREAD_GREEN_ACCENT=0 DREAD_WEAPON_PALETTIZED=0
+          export DREAD_FREEDOOM_PREVIEWS="$OUT/build/previews" DREAD_ROM_LABEL="FREEDOOM DREAD E1M1"
+          export DREAD_OPT_FLAGS="-DDREAD_VALIDATION_TEST"
+          unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
+          export OPENBLAS_NUM_THREADS=1
+          root=experiments/DREAD_MD/d01
+          python3 -m py_compile "$root/tools/"{freedoom_art,studio_quantizer,gen_gameplay_assets,gen_demo3}.py
+          bash "$root/gameplay/build.sh" "$wad" "$OUT/build"
+          cp "$OUT/build/EPISODE.bin" "$OUT/release/FREEDOOM-DREAD-E1M1.bin"
+          test "$(stat -c %s "$OUT/release/FREEDOOM-DREAD-E1M1.bin")" -le 4194304
+          cp -r "$OUT/build/previews" "$OUT/release/"
+          sha256sum "$OUT/release/FREEDOOM-DREAD-E1M1.bin" > "$OUT/release/SHA256.txt"
+          echo "Studio: diagonal2, strength 1.0, iterations 40; E1M1 only; base 254c3df; no Doom WAD or Doom music." > "$OUT/release/BUILD.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Freedoom-DREAD-E1M1-build
+          path: |
+            ${{ env.FD_OUT }}/release
+            ${{ env.FD_OUT }}/build/previews
+          if-no-files-found: warn
+  qa:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Freedoom-DREAD-E1M1-build
+          path: out
+      - name: MAME boot and automatic E1M1 entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mame python3-pil
+          rom=$(find out -name FREEDOOM-DREAD-E1M1.bin -print -quit)
+          test -s "$rom"
+          mkdir -p qa
+          cat > qa/test.lua <<'LUA'
+          local frame=0
+          emu.register_frame_done(function()
+            frame=frame+1
+            if frame==120 or frame==1500 then
+              local screen=manager.machine.screens[":screen"]
+              local colors={}
+              for y=20,180,10 do for x=20,300,10 do colors[screen:pixel(x,y)]=true end end
+              local n=0 for _ in pairs(colors) do n=n+1 end
+              print("FD_FRAME "..frame.." COLORS "..n)
+            end
+          end)
+          LUA
+          /usr/games/mame megadriv -cart "$rom" -video none -sound none -nothrottle -seconds_to_run 30 -skip_gameinfo -autoboot_script "$PWD/qa/test.lua" > qa/mame.log 2>&1
+          cat qa/mame.log
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          s=Path("qa/mame.log").read_text()
+          for frame in (120,1500):
+              m=re.search(r"FD_FRAME "+str(frame)+r" COLORS (\d+)",s)
+              assert m and int(m[1])>=4,(frame,m)
+          PY
+      - name: Consolidate ROM previews and license
+        run: |
+          mkdir -p package
+          cp -r "$(dirname "$(find out -name FREEDOOM-DREAD-E1M1.bin -print -quit)")/." package/
+          cp qa/mame.log package/
+          cd package
+          zip -r ../FREEDOOM-DREAD-E1M1.zip .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Freedoom-DREAD-E1M1-final
+          path: |
+            FREEDOOM-DREAD-E1M1.zip
+            qa/mame.log
