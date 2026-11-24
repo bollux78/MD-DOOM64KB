@@ -10,6 +10,7 @@
         .globl  col_tex
         .globl  col_tex_nm
         .globl  seg_columns
+        .globl  seg_columns_h
 
 col_fill:
         move.l  4(%sp),%a0
@@ -127,16 +128,21 @@ texnm_end:
 #define REC 12                              /* ColRec size (J_YC = base of the records) */
 #define PT_VLIM 20                          /* Part: last texel the scalers may reach (stored - 2) */
 
-seg_columns:
+.macro SEGCOLUMNS name, sfx, half, bs
+        .globl \name
+\name:
         movem.l %d2-%d7/%a2-%a6,-(%sp)
         move.l  48(%sp),%a6
+        .if \half
+        move.w  #-2,hd_c
+        .endif
         move.l  r_clipbuf,%a5
         lea     128(%a5),%a5                /* a5 = clip + 128: ceiling at CEIL_D, floor at FLOOR_D (8-bit displacements) */
         move.w  J_C0(%a6),%d7
-        bra     .Lseta3
-.Lcol:
+        bra     .Lseta3\sfx
+.Lcol\sfx:
         cmp.w   J_XE(%a6),%d7
-        bge     .Ldone
+        bge     .Ldone\sfx
         moveq   #0,%d0
         move.b  CEIL_D(%a5,%d7.w),%d0       /* top */
         moveq   #0,%d1
@@ -220,16 +226,55 @@ seg_columns:
 1:
         move.w  J_FLAGS(%a6),%d4
         btst    #0,%d4
-        beq.s   .Lportal
+        beq\bs   .Lportal\sfx
         btst    #1,%d4                      /* solid wall */
-        beq.s   .Lclose
+        beq\bs   .Lclose\sfx
         move.w  %d3,%d4
         sub.w   %d2,%d4
-        ble.s   .Lclose
+        ble\bs   .Lclose\sfx
+        .if \half
+        /* Half horizontal resolution at distance (menu option): an odd column whose wall rows lie inside those of the even
+         * column just drawn in this seg, and whose texel step is >= r_half_q (far), copies that column's wall pixels. */
+        move.w  10(%a3),%d5
+        andi.w  #0x7fff,%d5
+        cmp.w   r_half_q,%d5
+        blo.s   .Lnodup\sfx
+        btst    #0,%d7
+        bne.s   .Lodd\sfx
+        move.w  %d7,hd_c
+        move.w  %d2,hd_yc
+        move.w  %d3,hd_yf
+        move.l  %a2,hd_ptr
+        bra.s   .Lnodup\sfx
+.Lodd\sfx:
+        move.w  %d7,%d5
+        subq.w  #1,%d5
+        cmp.w   hd_c,%d5
+        bne   .Lnodup\sfx
+        cmp.w   hd_yc,%d2
+        blt   .Lnodup\sfx
+        cmp.w   hd_yf,%d3
+        bgt   .Lnodup\sfx
+        move.l  hd_ptr,%a0
+        move.w  %d2,%d5
+        add.w   %d5,%d5
+        add.w   %d5,%d5
+        lea     -4(%a0,%d5.w),%a0
+        lea     -4(%a2,%d5.w),%a1
+        add.w   %d4,%d4                     /* n*6 bytes of code */
+        move.w  %d4,%d5
+        add.w   %d4,%d4
+        add.w   %d5,%d4
+        lea     colcopy_end(%pc),%a4
+        suba.w  %d4,%a4
+        jsr     (%a4)
+        bra     .Lclose\sfx
+.Lnodup\sfx:
+        .endif
         move.w  %d2,%d5
         lea     J_MID(%a6),%a4
         bsr     tex_fast
-.Lclose:
+.Lclose\sfx:
         clr.b   CEIL_D(%a5,%d7.w)
         clr.b   FLOOR_D(%a5,%d7.w)
         move.l  r_nxt,%a0
@@ -237,12 +282,12 @@ seg_columns:
         addq.w  #1,%d4
         move.b  %d4,0(%a0,%d7.w)
         addq.w  #1,J_CLOSED(%a6)
-        bra.s   .Lnext
-.Lportal:
+        bra\bs   .Lnext\sfx
+.Lportal\sfx:
         move.w  %d2,%d0                     /* ntop = yc, nbot = yf */
         move.w  %d3,%d1
         btst    #2,%d4
-        beq.s   .Lnoup
+        beq\bs   .Lnoup\sfx
         move.w  4(%a3),%d5                  /* ybc = clamp(ybc, yc, yf) */
         cmp.w   %d2,%d5
         bge.s   1f
@@ -253,15 +298,15 @@ seg_columns:
 1:      move.w  %d5,%d0
         move.w  %d5,%d4
         sub.w   %d2,%d4
-        ble.s   .Lnoup
+        ble\bs   .Lnoup\sfx
         move.w  %d2,%d5
         lea     J_UP(%a6),%a4
         movem.w %d0-%d1/%d3,-(%sp)
         bsr     tex_fast
         movem.w (%sp)+,%d0-%d1/%d3
-.Lnoup:
+.Lnoup\sfx:
         btst    #3,J_FLAGS+1(%a6)
-        beq.s   .Lnolo
+        beq\bs   .Lnolo\sfx
         move.w  6(%a3),%d5                  /* ybf = clamp(ybf, ntop, yf) */
         cmp.w   %d0,%d5
         bge.s   1f
@@ -272,26 +317,26 @@ seg_columns:
 1:      move.w  %d5,%d1
         move.w  %d3,%d4
         sub.w   %d5,%d4
-        ble.s   .Lnolo
+        ble\bs   .Lnolo\sfx
         lea     J_LO(%a6),%a4
         movem.w %d0-%d1,-(%sp)
         bsr     tex_fast
         movem.w (%sp)+,%d0-%d1
-.Lnolo:
+.Lnolo\sfx:
         cmp.w   %d1,%d0
-        bge     .Lclose
+        bge     .Lclose\sfx
         move.b  %d0,CEIL_D(%a5,%d7.w)
         move.b  %d1,FLOOR_D(%a5,%d7.w)
-.Lnext:
+.Lnext\sfx:
         addq.w  #1,%d7                      /* c = find_open(c + 1), path halving */
         move.l  r_nxt,%a0
         moveq   #0,%d4
         move.b  0(%a0,%d7.w),%d4
         cmp.w   %d4,%d7
-        bne.s   .Lskip
+        bne.s   .Lskip\sfx
         lea     REC(%a3),%a3                /* next column, next record */
-        bra     .Lcol
-.Lskip:
+        bra     .Lcol\sfx
+.Lskip\sfx:
         move.b  0(%a0,%d4.w),%d5
         move.b  %d5,0(%a0,%d7.w)
         moveq   #0,%d7
@@ -299,8 +344,8 @@ seg_columns:
         moveq   #0,%d4
         move.b  0(%a0,%d7.w),%d4
         cmp.w   %d4,%d7
-        bne.s   .Lskip
-.Lseta3:                                    /* a3 = &rec[c] (12 bytes per column) */
+        bne.s   .Lskip\sfx
+.Lseta3\sfx:                                    /* a3 = &rec[c] (12 bytes per column) */
         move.w  %d7,%d4
         add.w   %d4,%d4
         add.w   %d7,%d4
@@ -308,10 +353,30 @@ seg_columns:
         add.w   %d4,%d4
         move.l  J_YC(%a6),%a3
         adda.w  %d4,%a3
-        bra     .Lcol
-.Ldone:
+        bra     .Lcol\sfx
+.Ldone\sfx:
         movem.l (%sp)+,%d2-%d7/%a2-%a6
         rts
+.endm
+        SEGCOLUMNS seg_columns, a, 0, .s
+        SEGCOLUMNS seg_columns_h, h, 1,
+
+/* column copy for the half-resolution option: a0 = source column - 4 + y0*4, a1 = destination likewise, entry = end - n*6 */
+        .set    k,144
+colcopy:
+        .rept   144
+        move.b  k*4(%a0),k*4(%a1)
+        .set    k,k-1
+        .endr
+colcopy_end:
+        rts
+        .bss
+        .even
+hd_c:   .skip   2
+hd_yc:  .skip   2
+hd_yf:  .skip   2
+hd_ptr: .skip   4
+        .text
 
 /* span_fill: a4.w = colour (byte, or byte*0x101 in column-doubled modes), d5 = y0, d4 = n (> 0), a2 column.
    clobbers a0, a1, d4, d5 */
