@@ -8,6 +8,9 @@ on:
       merge:
         description: 'merge floor steps up to N units (0 = off)'
         default: '0'
+      aggressive:
+        description: 'aggressive map simplification (1 = on): steps 24, loose light/flats, ceilings 64, narrow protection, wall join 16'
+        default: '0'
 permissions:
   contents: read
 jobs:
@@ -39,6 +42,7 @@ jobs:
           export OPENBLAS_NUM_THREADS=1
           MERGE="${{ inputs.merge || '0' }}"; SUF=""
           if [ "$MERGE" != "0" ]; then export DREAD_RENDER_GEOMETRY=merge DREAD_MERGE_STEPS="$MERGE" DREAD_MERGE_FLATS=1 DREAD_OPT_REPORTS=1; SUF="-STEPS$MERGE"; fi
+          if [ "${{ inputs.aggressive || '0' }}" = "1" ]; then export DREAD_RENDER_GEOMETRY=merge DREAD_MERGE_STEPS=24 DREAD_MERGE_FLATS=1 DREAD_MERGE_LOOSE=1 DREAD_MERGE_CEIL=64 DREAD_NARROW_PROTECT=1 DREAD_JOIN_TOL=16 DREAD_OPT_REPORTS=1; SUF="-AGRESSIVO"; fi
           echo "SUF=$SUF" >> "$GITHUB_ENV"
           root=experiments/DREAD_MD/d01
           python3 -m py_compile "$root/tools/"{freedoom_art,studio_quantizer,gen_gameplay_assets,gen_demo3}.py
@@ -54,6 +58,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Freedoom-DREAD-E1M1${{ inputs.merge && inputs.merge != '0' && format('-STEPS{0}', inputs.merge) || '' }}
+          name: Freedoom-DREAD-E1M1${{ inputs.aggressive == '1' && '-AGRESSIVO' || (inputs.merge && inputs.merge != '0' && format('-STEPS{0}', inputs.merge)) || '' }}
           path: FREEDOOM-DREAD-E1M1*.zip
           if-no-files-found: error

@@ -112,6 +112,11 @@ def main():
                         help="merge sectors that differ only by a floor step of at most N units (collision changes)")
     parser.add_argument("--merge-flats", action="store_true", default=os.environ.get("DREAD_MERGE_FLATS","0")=="1",
                         help="with --merge-steps, also unify the floor flat of merged sectors")
+    parser.add_argument("--join-tol", type=float, default=float(os.environ.get("DREAD_JOIN_TOL","0")),
+                        help="merge consecutive wall segs whose middle vertex is within N map units of the merged wall")
+    parser.add_argument("--narrow-protect", action="store_true", default=os.environ.get("DREAD_NARROW_PROTECT","0")=="1")
+    parser.add_argument("--merge-loose", action="store_true", default=os.environ.get("DREAD_MERGE_LOOSE","0")=="1")
+    parser.add_argument("--merge-ceil", type=int, default=int(os.environ.get("DREAD_MERGE_CEIL","0")))
     args = parser.parse_args()
     skill_mask = {"easy": 1, "medium": 2, "hard": 4}[args.skill]
     wad = Wad(args.wad)
@@ -143,7 +148,7 @@ def main():
     ssecs = [struct.unpack_from("<HH", lump["SSECTORS"], i) for i in range(0, len(lump["SSECTORS"]), 4)]
     nodes = [struct.unpack_from("<hhhh8hHH", lump["NODES"], i) for i in range(0, len(lump["NODES"]), 28)]
     things = [struct.unpack_from("<hhhhh", lump["THINGS"], i) for i in range(0, len(lump["THINGS"]), 10)]
-    step_changes = merge_steps(secs,lines,sides,args.merge_steps,merge_flats=args.merge_flats) if args.merge_steps else (simplify_steps(secs,lines,sides) if args.simplify_steps else [])
+    step_changes = merge_steps(secs,lines,sides,args.merge_steps,merge_flats=args.merge_flats,loose=args.merge_loose,ceil_tol=args.merge_ceil) if args.merge_steps else (simplify_steps(secs,lines,sides) if args.simplify_steps else [])
 
     pal = np.frombuffer(wad.get("PLAYPAL")[:768], np.uint8).reshape(256, 3).astype(np.float64)
     cmap = np.frombuffer(wad.get("COLORMAP")[:34 * 256], np.uint8).reshape(34, 256)
@@ -595,7 +600,7 @@ def main():
     for (cnt, first) in ssecs:
         ss_sec.append(seg_rows[first][2])
     full_seg_rows, full_ssecs = list(seg_rows), list(ssecs)   # PVS must be built from the UNREDUCED geometry
-    seg_rows,ssecs,reduction=reduce_segments(seg_rows,ssecs,verts,secs,lines,sides,args.render_geometry)
+    seg_rows,ssecs,reduction=reduce_segments(seg_rows,ssecs,verts,secs,lines,sides,args.render_geometry,args.join_tol,args.narrow_protect)
     reduction["step_changes"]=step_changes
     reduction["collision_changed"]=bool(step_changes)
     (out/"geometry-report.json").write_text(json.dumps(reduction,indent=2)+"\n")
