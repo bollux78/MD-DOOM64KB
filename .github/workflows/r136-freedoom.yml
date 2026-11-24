@@ -1,4 +1,4 @@
-name: R136 Playable Freedoom E1M1
+name: R136 Playable Freedoom E1M1 - reconstruction with demo fallback
 on:
   workflow_dispatch:
   push:
