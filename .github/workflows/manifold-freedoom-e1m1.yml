@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1 \
+          MANIFOLD_AMBIG=first MANIFOLD_BSP=0 MANIFOLD_RADIUS=1 MANIFOLD_STABLE_VIEW=1 MANIFOLD_H32=0 MANIFOLD_OBJECTS=1 MANIFOLD_PICKUPS=1 MANIFOLD_DOORS=1 \
           MANIFOLD_EYE=48 MANIFOLD_TEX_U=1 MANIFOLD_WEAPON=pistol MANIFOLD_BUILD_TAG="FREEDOOM MANIFOLD E1M1" \
           python3 experiments/DOOM_Manifold_E1M1/m01/stage_rom.py --source "$OUT/stage/manifold" --wad "$WAD" --out "$OUT/stage/candidate" 2>&1 | tee "$OUT/stage.log" | tail -40
       - name: Compile ROM

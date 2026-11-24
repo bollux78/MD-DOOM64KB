@@ -277,7 +277,12 @@ def weld_and_pair(cells, lumps, clockwise=True):
             b = poly[(k + 1) % len(poly)]
             nb = [c for c in index.get((b, a), []) if c != ci]
             if len(nb) > 1:
-                raise ValueError(f"ambiguous edge {a}->{b}")
+                if os.environ.get("MANIFOLD_AMBIG","error") != "first":
+                    raise ValueError(f"ambiguous edge {a}->{b}")
+                # Freedoom maps can stack two leaves on one edge: prefer the
+                # neighbour of a different sector, then the lowest cell id.
+                nb.sort(key=lambda c: (split[c][0] == sec, c))
+                print("ambiguous edge %s->%s cells %s sectors %s -> %d" % (a, b, nb, [split[c][0] for c in nb], nb[0]))
             walls.append({"a": a, "b": b, "neighbor": nb[0] if nb else -1})
         out.append({"id": ci, "doom_sector": sec, "ss": ss, "walls": merge_collinear(walls)})
     return out
