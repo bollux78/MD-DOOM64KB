@@ -5309,6 +5309,9 @@ def stage(src, wad, out, control=False):
         raise ValueError(f"expected one player 1 spawn, got {len(spawns)}")
     x,y,angle=spawns[0]
     sp=[c["id"] for c in cells if point_inside([w["a"] for w in c["walls"]],(x*16,y*16))]
+    if len(sp)>1 and os.environ.get("MANIFOLD_AMBIG")=="first":
+        print("player spawn on a cell border:",sp,"sectors",[c["doom_sector"] for c in cells if c["id"] in sp],"-> using",sp[0])
+        sp=sp[:1]
     if len(sp)!=1:
         raise ValueError(f"player spawn {x,y} falls in {len(sp)} BSP cells: {sp}")
     spawn_cell=sp[0]
