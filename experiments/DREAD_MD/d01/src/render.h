@@ -35,8 +35,6 @@ extern uint16_t r_colofs[VW_MAX];               /* byte offset of each logical c
 /* framebuffer layout = VDP tiles, column-major: tile column tc holds VIEW_H/8 tiles stacked,
  * a byte is a pair of 4bpp pixels; logical column x starts at byte x*COLB of the 4-byte tile rows. */
 #define FB_COL(fb, x) ((fb) + r_colofs[x])
-void R_SetHalfDist(uint16_t level);   /* 0 = off, 1..3 = half horizontal resolution beyond 1024 / 512 / 256 units */
-uint16_t R_HalfDist(void);
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop);  /* tcols = 40 (H40) or 32 (H32), crop = tiles removed per side */
 
 typedef struct {

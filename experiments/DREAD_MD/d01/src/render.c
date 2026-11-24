@@ -206,18 +206,6 @@ uint16_t r_skyshift;
 const void *r_skyend;
 const uint8_t *r_sky_blob;
 #endif
-/* Menu option "DISTANCIA": half horizontal resolution for far solid walls (colasm.s seg_columns_h). The threshold is a native
- * scaler level q (texels per row, log scale: q = ln(64*step)/ln(2048^(1/159)), step = z/focal); levels: 1 = z >= 1024 map
- * units, 2 = z >= 512, 3 = z >= 256. Only the native single-byte-column modes support it; r_half_q = 0 selects the normal loop. */
-uint16_t r_half_q;
-static uint16_t half_level;
-static void half_update(void)
-{
-    static const uint8_t qthr[2][3] = { { 123, 109, 94 }, { 137, 123, 108 } };      /* [view 144 rows, 72 rows][level-1] */
-    r_half_q = (half_level && half_level < 4 && r_colb == 1) ? qthr[r_vh == 144 ? 0 : 1][half_level - 1] : 0;
-}
-void R_SetHalfDist(uint16_t level) { half_level = level; half_update(); }
-uint16_t R_HalfDist(void) { return half_level; }
 void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
 {
     r_focal = colb == 2 ? tcols : tcols * 2;          /* half of the full-screen width in columns */
@@ -231,7 +219,6 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_vfocal = r_vh == 144 ? 179 : 90;
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
-    half_update();
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
 #if defined(__m68k__) || defined(__mc68000__)
     RCPF = rcpf_tab[r_focal == 80 ? 0 : r_focal == 40 ? 1 : r_focal == 64 ? 2 : 3];
@@ -440,8 +427,6 @@ uint8_t *const r_tilepal = tilepal;
 const uint8_t *const r_remap = &pal_remap[0][0];
 #if defined(__m68k__) || defined(__mc68000__)
 extern void seg_columns(ColJob *j);
-extern void seg_columns_h(ColJob *j);
-extern uint16_t r_half_q;
 uint8_t *const r_clipbuf = clipbuf;   /* exported for colasm.s */
 uint8_t *const r_nxt = nxt;
 #else
@@ -795,9 +780,6 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
         uint16_t sh = 0; while ((1u << sh) < t) sh++;
         job.tsh = sh;
     }
-#if (defined(__m68k__) || defined(__mc68000__)) && defined(DREAD_NATIVE_PERSPECTIVE)
-    if (r_half_q) seg_columns_h(&job); else
-#endif
     seg_columns(&job);
     closed += job.closed;
     rstats.col_visits++;
