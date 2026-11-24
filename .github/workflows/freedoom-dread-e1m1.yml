@@ -4,6 +4,10 @@ on:
     branches: [exp-freedoom-dread-clean-20261124]
     paths: ['.github/workflows/freedoom-dread-e1m1.yml']
   workflow_dispatch:
+    inputs:
+      merge:
+        description: 'merge floor steps up to N units (0 = off)'
+        default: '0'
 permissions:
   contents: read
 jobs:
@@ -33,19 +37,23 @@ jobs:
           export DREAD_OPT_FLAGS="-DDREAD_VALIDATION_TEST"
           unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
           export OPENBLAS_NUM_THREADS=1
+          MERGE="${{ inputs.merge || '0' }}"; SUF=""
+          if [ "$MERGE" != "0" ]; then export DREAD_RENDER_GEOMETRY=merge DREAD_MERGE_STEPS="$MERGE" DREAD_MERGE_FLATS=1 DREAD_OPT_REPORTS=1; SUF="-STEPS$MERGE"; fi
+          echo "SUF=$SUF" >> "$GITHUB_ENV"
           root=experiments/DREAD_MD/d01
           python3 -m py_compile "$root/tools/"{freedoom_art,studio_quantizer,gen_gameplay_assets,gen_demo3}.py
           bash "$root/gameplay/build.sh" "$wad" "$OUT/build"
-          cp "$OUT/build/EPISODE.bin" "$OUT/release/FREEDOOM-DREAD-E1M1.bin"
-          test "$(stat -c %s "$OUT/release/FREEDOOM-DREAD-E1M1.bin")" -le 4194304
+          cp "$OUT/build/EPISODE.bin" "$OUT/release/FREEDOOM-DREAD-E1M1$SUF.bin"
+          [ -d "$OUT/build/geometry" ] && cp -r "$OUT/build/geometry" "$OUT/release/geometry" || true
+          test "$(stat -c %s "$OUT/release/FREEDOOM-DREAD-E1M1$SUF.bin")" -le 4194304
           cp -r "$OUT/build/previews" "$OUT/release/"
-          sha256sum "$OUT/release/FREEDOOM-DREAD-E1M1.bin" > "$OUT/release/SHA256.txt"
+          (cd "$OUT/release" && sha256sum FREEDOOM-DREAD-E1M1$SUF.bin) > "$OUT/release/SHA256.txt"
           echo "Freedoom 0.13.0 phase 1, E1M1 only; DREAD C7 base 254c3df; static screens converted by the author from Freedoom TITLEPIC/INTERPIC; no Doom assets." > "$OUT/release/BUILD.txt"
-          (cd "$OUT/release" && python3 -m zipfile -c ../FREEDOOM-DREAD-E1M1.zip .)
-          cp "$OUT/FREEDOOM-DREAD-E1M1.zip" "$GITHUB_WORKSPACE/FREEDOOM-DREAD-E1M1.zip"
+          (cd "$OUT/release" && python3 -m zipfile -c ../FREEDOOM-DREAD-E1M1$SUF.zip .)
+          cp "$OUT/FREEDOOM-DREAD-E1M1$SUF.zip" "$GITHUB_WORKSPACE/FREEDOOM-DREAD-E1M1$SUF.zip"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Freedoom-DREAD-E1M1
-          path: FREEDOOM-DREAD-E1M1.zip
+          name: Freedoom-DREAD-E1M1${{ inputs.merge && inputs.merge != '0' && format('-STEPS{0}', inputs.merge) || '' }}
+          path: FREEDOOM-DREAD-E1M1*.zip
           if-no-files-found: error

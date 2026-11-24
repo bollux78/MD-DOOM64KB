@@ -81,3 +81,72 @@ def simplify_steps(sectors,lines,sides,max_step=16):
         assert s[1:]==original[i][1:]
         assert abs(s[0]-original[i][0])<=8
     return changes
+
+
+def merge_steps(sectors,lines,sides,max_step=24,min_clear=56,merge_flats=False):
+    """GEO_STEPS ONLY (changes collision). Merge sectors that differ only by a small floor step into one floor height.
+
+    Rules (exact integer height arithmetic, Doom map units):
+      * a pair/group is merged only when every other field matches (ceiling, flats, light, special, tag) and neither the
+        sectors nor their lines have a tag/special (doors, lifts, switches stay exact);
+      * the merged group spans at most max_step (the 24-unit step height the player can climb);
+      * the new floor is the midpoint of the group's extremes, and every member keeps >= min_clear headroom;
+      * for every neighbouring sector outside the group, a step that was climbable (<=24) stays climbable and a wall
+        (>24) stays a wall, so no route opens or closes."""
+    n=len(sectors)
+    touch=[set() for _ in range(n)];protected=set()
+    for l in lines:
+        ends=[sides[sd][5] for sd in l[5:7] if sd!=65535]
+        for a in ends:touch[a].update(e for e in ends if e!=a)
+        if l[3] or l[4]:protected.update(ends)
+    for i,s in enumerate(sectors):
+        if s[5] or s[6] or s[1]-s[0]<min_clear:protected.add(i)
+    edges=[]
+    for l in lines:
+        if not l[2]&4 or 65535 in l[5:7]:continue
+        rs,ls=sides[l[5]],sides[l[6]];a,b=rs[5],ls[5]
+        if a==b or a in protected or b in protected:continue
+        if rs[4]!='-' or ls[4]!='-':continue
+        A,B=sectors[a],sectors[b]
+        same=(A[1:]==B[1:]) if not merge_flats else (A[1]==B[1] and A[3:]==B[3:])
+        if not same:continue
+        d=abs(A[0]-B[0])
+        if 0<d<=max_step:edges.append((d,a,b))
+    edges.sort()
+    parent=list(range(n));members={i:[i] for i in range(n)}
+    floor0=[s[0] for s in sectors];cur=list(floor0)
+    def find(x):
+        while parent[x]!=x:parent[x]=parent[parent[x]];x=parent[x]
+        return x
+    changes=0
+    for d,a,b in edges:
+        ra,rb=find(a),find(b)
+        if ra==rb:continue
+        mem=members[ra]+members[rb]
+        lo=min(floor0[m] for m in mem);hi=max(floor0[m] for m in mem)
+        if hi-lo>max_step:continue
+        h=lo+(hi-lo)//2
+        if any(sectors[m][1]-h<min_clear for m in mem):continue
+        ms=set(mem);ok=True
+        for m in mem:
+            for o in touch[m]:
+                if o in ms:continue
+                old=abs(floor0[m]-cur[o]) if False else abs(cur[m]-cur[o])
+                new=abs(h-cur[o])
+                if (old<=24)!=(new<=24):ok=False;break
+            if not ok:break
+        if not ok:continue
+        parent[rb]=ra;members[ra]=mem
+        for m in mem:cur[m]=h
+    out=[]
+    if merge_flats:
+        from collections import Counter
+        for r,mem in members.items():
+            if len(mem)>1 and find(r)==r:
+                pic=Counter(sectors[m][2] for m in mem).most_common(1)[0][0]
+                for m in mem:
+                    if sectors[m][2]!=pic:out.append({"sector":m,"floorpic":[sectors[m][2],pic]});sectors[m][2]=pic
+    for i in range(n):
+        if cur[i]!=floor0[i]:
+            sectors[i][0]=cur[i];out.append({"sector":i,"old":floor0[i],"new":cur[i]})
+    return out
