@@ -411,6 +411,10 @@ void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_
     SYS_disableInts();static_screen();
     cram_set(0,inter_pal,64);
     const uint16_t white=0xeee;cram_set(63,&white,1);
+ #ifdef DREAD_FREEDOOM
+    extern const uint32_t freedoom_inter_tiles[];
+    vram_copy32(TILE_TITLE,freedoom_inter_tiles,1120);
+ #else
     /* Upload real 8x8 H40 tiles, without the old 160x112 stretch. */
     for(uint16_t y=0;y<28;y++)for(uint16_t x=0;x<40;x++){
         uint32_t tile[8];
@@ -427,6 +431,7 @@ void HUD_ShowIntermission(const char *name,uint16_t kills,uint16_t total,uint16_
         }
         vram_copy32(TILE_TITLE+y*40+x,tile,1);
     }
+ #endif
     for(uint16_t y=0;y<28;y++){
         vram_addr(BGB+y*128);
         for(uint16_t x=0;x<40;x++){

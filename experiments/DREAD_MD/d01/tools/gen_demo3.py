@@ -19,7 +19,12 @@ def main(wad_path, dst_path):
     if demo is None or len(demo) < 14:
         raise ValueError("The supplied WAD has no usable DEMO3")
     version, skill, episode, map_no = demo[:4]
-    if (episode, map_no) != (1, 7):
+    import os
+    if os.environ.get("DREAD_FREEDOOM")=="1":
+        # Synthetic deterministic E1M1 input, not a borrowed Doom demo.
+        episode,map_no,skill=1,1,0
+        demo=bytes([109,0,1,1,0,0,0,0,0,1,0,0,0])+bytes([0,0,0,0])*350+bytes([128])
+    if (episode, map_no) != (1, 7) and os.environ.get("DREAD_FREEDOOM")!="1":
         raise ValueError(f"Canonical benchmark requires DEMO3 E1M7; WAD contains E{episode}M{map_no}")
     pos = 13 # vanilla Doom header: version, 8 options, 4 player flags
     commands = []

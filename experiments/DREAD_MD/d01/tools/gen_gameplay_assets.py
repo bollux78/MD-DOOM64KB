@@ -62,7 +62,20 @@ def bayer(rgb,colors,mask):
 indexed=[];pals=[]
 pdir=Path(__file__).resolve().parent/'weapon_src'/'palettized'
 nmw=['soco','pistola','escopeta','metralhadora','lanca-foguetes','motosserra']
-if all((pdir/('%d_%s_pal.png'%(i,nmw[i]))).exists() for i in range(6)) and os.environ.get("DREAD_WEAPON_PALETTIZED","1")=="1":
+if os.environ.get("DREAD_FREEDOOM")=="1":
+ from PIL import Image
+ from studio_quantizer import Settings,quantize
+ for wi in range(6):
+  sheet=np.zeros((80,512,4),np.uint8)
+  for f,frame in enumerate(frames[wi*4:wi*4+4]):
+   m=frame>=0
+   tile=sheet[:,f*128:(f+1)*128]
+   tile[m,:3]=pal[frame[m]].astype(np.uint8);tile[m,3]=255
+  result=quantize(Image.fromarray(sheet),Settings(palettes=1,colors=16,iterations=40,dither="diagonal2",dither_strength=1.0,transparent=True))
+  for f in range(4): indexed.append(result.indices[:,f*128:(f+1)*128].copy())
+  pals.append([(int(b)//34<<9)|(int(g)//34<<5)|(int(r)//34<<1) for r,g,b in result.palettes_rgb[0]])
+  result.preview.save(Path(os.environ["DREAD_FREEDOOM_PREVIEWS"])/("weapon-%d.png"%wi))
+elif all((pdir/('%d_%s_pal.png'%(i,nmw[i]))).exists() for i in range(6)) and os.environ.get("DREAD_WEAPON_PALETTIZED","1")=="1":
  # Hand-converted weapon sheets (user): 512x80 = 4 frames of 128x80, <=15 opaque colours + transparent, one palette per weapon.
  from PIL import Image
  for wi in range(6):
@@ -153,7 +166,7 @@ for name,(ww,hh,parts) in defs.items():
  maskdata[name]=np.packbits(np.array(bits,np.uint8),bitorder='little').tobytes()
 s=['#include "levelmeta.h"'];maps=[]
 for name,data in maskdata.items():s.append('static const uint8_t mask_'+name+'['+str(len(data))+']={'+','.join(map(str,data))+'};')
-for m in range(1,10):
+for m in range(1,2 if os.environ.get("DREAD_FREEDOOM")=="1" else 10):
  i=w.find('E1M'+str(m));sides=w.idx(i+3);names=set()
  for j in range(0,len(sides),30):
   for k in [4,12,20]:

@@ -654,9 +654,13 @@ static void credits_sequence(void)
 }
 #endif
 static const char *const title_levels[] = {
+ #ifdef DREAD_FREEDOOM
+    "E1M1  FREEDOOM"
+ #else
     "E1M1  HANGAR", "E1M2  NUCLEAR PLANT", "E1M3  TOXIN REFINERY",
     "E1M4  COMMAND CONTROL", "E1M5  PHOBOS LAB", "E1M6  CENTRAL PROCESSING",
     "E1M7  COMPUTER STATION", "E1M8  PHOBOS ANOMALY", "E1M9  MILITARY BASE"
+ #endif
 };
 
 static void draw_title_menu(enum TitleScreen screen, uint16_t cursor)
@@ -1047,6 +1051,9 @@ int main(bool hard)
     SYS_setVIntCallback(vint_cb);
     SYS_setHIntCallback(hint_a);
     SYS_enableInts();
+#ifdef DREAD_FREEDOOM
+    XGM2_loadDriver(TRUE);
+#endif
 #ifndef DREAD_NO_MUSIC
     XGM2_loadDriver(TRUE);
     if (music_on) XGM2_play(bgm_intro);
@@ -1360,9 +1367,17 @@ int main(bool hard)
             while ((uint16_t)(vints - t0) < 120) {}
             HUD_Text(1, "");
 #endif
-            if (selected_map == 7) {
+            if (selected_map == 7
+#ifdef DREAD_FREEDOOM
+                || selected_map == 0
+#endif
+            ) {
 #ifdef DREAD_GAMEPLAY
+ #ifdef DREAD_FREEDOOM
+                game_restart();
+ #else
                 episode_end();
+ #endif
 #else
                 game_restart();
 #endif

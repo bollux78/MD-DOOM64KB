@@ -40,7 +40,7 @@ if [[ "$map" == EPISODE ]]; then
     if [[ ${DREAD_COMBAT:-0} == 1 ]]; then render_flags+=" -DDREAD_COMBAT"; fi
     levels=()
     if [[ -n ${DREAD_PREPARED_MAPS:-} ]]; then
-        for n in {1..9}; do
+        for n in ${DREAD_MAP_LIST:-1 2 3 4 5 6 7 8 9}; do
             if [[ ${DREAD_GAMEPLAY:-0} == 1 ]] && ! grep -q 'map_fx\[19\]' "$DREAD_PREPARED_MAPS/E1M$n/mapdata.c"; then
                 echo "Prepared map E1M$n predates gameplay schema; regenerate with current conv.py" >&2; exit 1
             fi
@@ -52,18 +52,18 @@ if [[ "$map" == EPISODE ]]; then
     else
         palette="$stage/palette.json"
         mkdir -p "$stage/palette"
-        if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
+        if [[ ${DREAD_GAMEPLAY:-0} == 1 && ${DREAD_FREEDOOM:-0} != 1 ]]; then
             cp "$source_dir/tools/gameplay_palette.json" "$palette"
         else
         # one palette for the whole episode: colour samples of every map (walls, flats, sky, sprites), one fit
         samples=()
-        for n in {1..9}; do
+        for n in ${DREAD_MAP_LIST:-1 2 3 4 5 6 7 8 9}; do
             python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$stage/palette" --row-only --collect-items "$stage/palette/E1M$n.npz" > /dev/null
             samples+=("$stage/palette/E1M$n.npz")
         done
         python3 "$source_dir/tools/conv.py" "$wad" E1M1 "$stage/palette" --row-only --fit-from "${samples[@]}" --palette-out "$palette"
         fi
-        for n in {1..9}; do
+        for n in ${DREAD_MAP_LIST:-1 2 3 4 5 6 7 8 9}; do
             level="$stage/E1M$n"
             if [[ ${DREAD_SSF:-0} == 1 ]]; then
                 DREAD_PAL_ROUNDS=1 python3 "$source_dir/tools/conv.py" "$wad" "E1M$n" "$level" --row-only --tex-pad 32
@@ -77,7 +77,7 @@ if [[ "$map" == EPISODE ]]; then
         done
         if [[ ${DREAD_OPT_REPORTS:-0} == 1 ]]; then
             mkdir -p "$out/geometry"
-            for n in {1..9}; do cp "$stage/E1M$n/geometry-report.json" "$out/geometry/E1M$n.json"; done
+            for n in ${DREAD_MAP_LIST:-1 2 3 4 5 6 7 8 9}; do cp "$stage/E1M$n/geometry-report.json" "$out/geometry/E1M$n.json"; done
         fi
     fi
     if [[ ${DREAD_SSF:-0} == 1 ]]; then
@@ -86,8 +86,13 @@ if [[ "$map" == EPISODE ]]; then
     else
         python3 "$source_dir/tools/pack_episode.py" "$stage/src" "${levels[@]}"
     fi
-    python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
-    python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
+    if [[ ${DREAD_FREEDOOM:-0} == 1 ]]; then
+        render_flags+=" -DDREAD_FREEDOOM -DDREAD_NO_MUSIC -DSTART_MUSIC=0"
+        python3 "$source_dir/tools/freedoom_art.py" "$wad" "$stage/src" "$out/previews"
+    else
+        python3 "$source_dir/tools/gen_music.py" "$stage/res" --episode
+        python3 "$source_dir/tools/gen_title.py" "$stage/src/title.c" --menu
+    fi
     title_flags=
 else
     python3 "$source_dir/tools/conv.py" "$wad" "$map" "$stage/src" "${convert_flags[@]}"
@@ -109,12 +114,16 @@ if [[ ${DREAD_GAMEPLAY:-0} == 1 ]]; then
     # C7: gen_gameplay_assets.py restores the original Doom WAD weapon frames
     # used in C5. Do NOT overwrite weapon.c with the C6 custom sheet.
     python3 "$source_dir/tools/gen_gameplay_assets.py" "$wad" "$stage/src"
-    python3 "$source_dir/tools/gen_ending.py" "$wad" "$stage/src"
+    if [[ ${DREAD_FREEDOOM:-0} != 1 ]]; then python3 "$source_dir/tools/gen_ending.py" "$wad" "$stage/src"; fi
     render_flags+=" -DDREAD_GAMEPLAY"
 fi
 python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 gen_c="$stage/src/episode.c"; [[ -f "$gen_c" ]] || gen_c="$stage/src/mapdata.c"
-if [[ ${DREAD_SSF:-0} != 1 ]]; then python3 "$source_dir/tools/gen_sky.py" "$source_dir/tools/sky_e1doom_256x72_pal.png" "$gen_c" "$stage/src/sky.c"; fi
+if [[ ${DREAD_SSF:-0} != 1 ]]; then
+    sky="$source_dir/tools/sky_e1doom_256x72_pal.png"
+    if [[ ${DREAD_FREEDOOM:-0} == 1 ]]; then sky="$out/previews/sky.png"; fi
+    python3 "$source_dir/tools/gen_sky.py" "$sky" "$gen_c" "$stage/src/sky.c"
+fi
 python3 "$source_dir/tools/gen_tables.py" "$stage/src/tables.c"
 sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$stage/makefile.gen"
 # toolchain: PREFIX=m68k-elf- from PATH, or DREAD_TC=/path/m68k-elf- (e.g. the CI runner's marsdev toolchain)
