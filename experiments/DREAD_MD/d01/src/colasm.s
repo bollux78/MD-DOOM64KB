@@ -350,22 +350,8 @@ tex_fast:
 #ifdef DREAD_NATIVE_PERSPECTIVE
         cmpi.w  #1,r_colb
         bne     tex_legacy
-        /* Guard only clobbers scratch registers; span/part inputs remain live. */
-        bsr     tex_native
-        tst.w   %d0
-        bne.s   1f
-        /* A wrapping span still uses the selected native scale in the generic
-         * mask kernel. Restore its tagged record afterwards for lower parts. */
-        move.w  10(%a3),-(%sp)
-        move.w  10(%a3),%d3
-        andi.w  #0x7fff,%d3
-        add.w   %d3,%d3
-        lea     native_steps,%a0
-        move.w  0(%a0,%d3.w),10(%a3)
-        bsr     tex_legacy
-        move.w  (%sp)+,10(%a3)
-        rts
-1:      rts
+        /* tex_native always draws (masked fallback covers wraps): tail call, its rts returns to our caller. */
+        bra     tex_native
 #endif
 tex_legacy:
         moveq   #0,%d6
@@ -575,8 +561,6 @@ tmkw_end:
  * The generated rows contain MOVE/DBRA/RTS; no self-modifying ROM or SRAM.
  * All source bounds are checked using actual emitted scaler offsets. */
 tex_native:
-        move.w  %d4,%d0
-        add.w   %d5,%d0                    /* y1 */
         move.w  10(%a3),%d2
         andi.w  #0x7fff,%d2                /* native scaler selected from inverse depth */
         lsl.w   #2,%d2
@@ -587,11 +571,12 @@ tex_native:
         beq     .Lnative_table
         move.l  0(%a1,%d2.w),%a1
         move.w  %d5,%d2
-        add.w   %d2,%d2
+        add.w   %d2,%d2                    /* 2*y0 */
         move.w  0(%a1,%d2.w),%d3           /* exact displacement at y0 */
-        subq.w  #1,%d0
+        move.w  %d4,%d0
         add.w   %d0,%d0
-        move.w  0(%a1,%d0.w),%d1           /* exact displacement at y1-1 */
+        add.w   %d2,%d0                    /* 2*(y0+n) */
+        move.w  -2(%a1,%d0.w),%d1          /* exact displacement at y1-1 */
         sub.w   %d3,%d1                    /* source span */
         move.l  12(%a4),%d0
         swap    %d0                       /* vbase integer, no per-column MULS */
@@ -621,18 +606,17 @@ tex_native:
         adda.l  %d6,%a1
 #endif
         adda.w  %d0,%a1
-        move.w  %d5,%d0                    /* entry = row0 + y0*12 */
+        move.w  %d2,%d0                    /* entry = row0 + y0*12 (d2 = 2*y0) */
         add.w   %d0,%d0
-        add.w   %d5,%d0
-        lsl.w   #2,%d0
+        move.w  %d0,%d1
+        add.w   %d0,%d0
+        add.w   %d1,%d0
         adda.w  %d0,%a0
         move.l  %a0,%a4
         move.l  %a2,%a0                    /* column base, absolute row destinations */
         move.w  %d4,%d6
         subq.w  #1,%d6
-        jsr     (%a4)
-        moveq   #1,%d0
-        rts
+        jmp     (%a4)                      /* scaler rts returns to tex_fast's caller */
 .Lnative_table:
         /* Exact masked fallback: same absolute row offsets as the ROM scaler.
          * Also used by full-height gameplay to reclaim duplicate code in ROM. */
@@ -694,9 +678,5 @@ tex_native:
         move.b  0(%a1,%d3.w),12(%a4)
         lea     16(%a4),%a4
         dbra    %d6,4b
-5:      moveq   #1,%d0
-        rts
-.Lnative_fail:
-        moveq   #0,%d0
-        rts
+5:      rts
 #endif
