@@ -1,2 +1,0 @@
-modes [(1, 80, 144), (9, 80, 72), (4, 160, 144), (0, 160, 72)]
-weapon tests [{"weapon": 0, "min_nonblack_ratio": 0.9339470323155891, "infinite_ammo": true}, {"weapon": 1, "min_nonblack_ratio": 0.9513423020872226, "infinite_ammo": true}, {"weapon": 2, "min_nonblack_ratio": 0.9792597844942198, "infinite_ammo": true}, {"weapon": 3, "min_nonblack_ratio": 0.9734698317540128, "infinite_ammo": true}, {"weapon": 4, "min_nonblack_ratio": 0.9586908704164753, "infinite_ammo": true}, {"weapon": 5, "min_nonblack_ratio": 0.9249709026769537, "infinite_ammo": true}]

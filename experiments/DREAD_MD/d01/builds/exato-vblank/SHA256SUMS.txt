@@ -1,4 +1,0 @@
-761488d7b1e0235e862241143a4f6d67a0f1445e664225325653e76beafd8e67  00-Claudio-0681cb0.bin
-b4b08b55baf37ce42d85d3c2e62fcb3f326c80d46ca19e90608dd4e1b0573507  01-Textura-Exata-Controle.bin
-1a74de22b9e5c3d436be58b5da3a0bb5f11ab2b27aedce86ac45c4fdf90f881e  02-Textura-Exata-Rapida.bin
-243e7082a62c2ccffab2e3931e0980372f9e7a663b607fa42ac3b6ef07c9301d  03-Textura-Exata-Input-VBlank.bin

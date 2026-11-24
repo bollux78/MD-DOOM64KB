@@ -33,8 +33,19 @@ static uint16_t music_on = START_MUSIC;
 #ifndef ROM_NAME
 #define ROM_NAME "DREAD-MD D01 SOM"
 #endif
+#ifdef DREAD_FREEDOOM
+#define DREAD_BENCH_TITLE1 "FREEDOOM DREAD - DEMO BENCHMARK"
+#define DREAD_BENCH_TITLE2 "FREEDOOM DREAD RENDER BENCHMARK"
+#else
+#define DREAD_BENCH_TITLE1 "DOOM MD - DEMO3 BENCHMARK"
+#define DREAD_BENCH_TITLE2 "DOOM MD RENDER BENCHMARK"
+#endif
 #ifndef DREAD_MAP_LABEL
+#ifdef DREAD_FREEDOOM
+#define DREAD_MAP_LABEL "E1M1 FREEDOOM"
+#else
 #define DREAD_MAP_LABEL "E1M1 DOOM"
+#endif
 #endif
 #ifndef START_MODE
 #define START_MODE 0                           /* 0 H40 linhas, 1 H40 colunas, 2 H32 linhas, 3 H32 colunas */
@@ -637,7 +648,12 @@ static uint16_t selected_map;
 enum TitleScreen { TITLE_ART, TITLE_MENU, TITLE_LEVELS };
 enum TitleChoice { TITLE_NEW_GAME, TITLE_SELECT_LEVEL, TITLE_BENCHMARK, TITLE_CREDITS };
 
-static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL", "WAD DEMO3"
+static const char *const title_items[] = { "NEW GAME", "SELECT LEVEL",
+#ifdef DREAD_FREEDOOM
+    "BENCHMARK"
+#else
+    "WAD DEMO3"
+#endif
 #ifdef DREAD_GAMEPLAY
     ,"CREDITS"
 #endif
@@ -650,7 +666,25 @@ static void wait_any_button(void)
 }
 static void credits_sequence(void)
 {
+#ifdef DREAD_FREEDOOM
+    /* no episode ending art in the Freedoom build: licence/credit text page */
+    SYS_disableInts();
+    VDP_clearPlane(BG_A,TRUE);VDP_clearPlane(BG_B,TRUE);
+    PAL_setColor(0,0);PAL_setColor(63,0xeee);
+    VDP_setTextPalette(PAL3);VDP_setTextPriority(TRUE);
+    VDP_drawTextBG(BG_A,"FREEDOOM PHASE 1  0.13.0",8,5);
+    VDP_drawTextBG(BG_A,"COPYRIGHT 2001-2024",10,8);
+    VDP_drawTextBG(BG_A,"THE FREEDOOM PROJECT",10,9);
+    VDP_drawTextBG(BG_A,"CONTRIBUTORS",13,10);
+    VDP_drawTextBG(BG_A,"BSD 3-CLAUSE LICENSE",10,12);
+    VDP_drawTextBG(BG_A,"SEE COPYING.TXT",12,13);
+    VDP_drawTextBG(BG_A,"MD RENDERER: DREAD-MD",9,17);
+    VDP_drawTextBG(BG_A,"BY BOLLUX78 2026",11,18);
+    SYS_enableInts();
+    wait_any_button();
+#else
     for(uint16_t page=0;page<3;page++){HUD_ShowArt(page);wait_any_button();}
+#endif
 }
 #endif
 static const char *const title_levels[] = {
@@ -933,7 +967,7 @@ static void benchmark_report_screen(uint16_t f100)
 #if defined(DREAD_EPISODE) && defined(DREAD_GAMEPLAY)
     {
         const uint32_t seconds100=(bench_vints*100UL+30)/60;
-        VDP_drawTextBG(BG_A,"DOOM MD - DEMO3 BENCHMARK",2,1);
+        VDP_drawTextBG(BG_A,DREAD_BENCH_TITLE1,2,1);
         VDP_drawTextBG(BG_A,"ROM:",2,3);
         VDP_drawTextBG(BG_A,ROM_NAME,2,4);
         VDP_drawTextBG(BG_A,"OTIMIZACAO: " DEMO_OPT_NAME,2,5);
@@ -970,7 +1004,7 @@ static void benchmark_report_screen(uint16_t f100)
     }
 #else
     /* Used only by older single-map tests, not compiled into C7. */
-    VDP_drawTextBG(BG_A,"DOOM MD RENDER BENCHMARK",2,1);
+    VDP_drawTextBG(BG_A,DREAD_BENCH_TITLE2,2,1);
     VDP_drawTextBG(BG_A, "E1M1 / ROTA FIXA / NTSC", 2, 3);
 #ifdef DREAD_NATIVE_PERSPECTIVE
     VDP_drawTextBG(BG_A, "MODO: NATIVE PERSPECTIVE", 2, 5);
