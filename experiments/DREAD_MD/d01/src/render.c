@@ -197,6 +197,10 @@ uint16_t r_colofs[VW_MAX];
 extern const uint8_t fillb_end[], fillw_end[], tmkb_end[], tmkw_end[];
 extern const uint32_t scal_b[], scal_w[], scal_f[];
 const void *r_fill_end, *r_tmk_end; const uint32_t *r_scal;
+#ifdef DREAD_NATIVE_PERSPECTIVE
+extern const char nat_sym_b[] __asm__("native_b"), nat_sym_f[] __asm__("native_f"), nat_off_b[] __asm__("native_offsets_b"), nat_off_f[] __asm__("native_offsets_f");
+const void *r_nat_scal, *r_nat_offs;       /* tex_native: scaler and offset tables of the current row count (72 = _b, else _f) */
+#endif
 uint16_t r_tmk_sz, r_tsh, r_ssh;
 /* sky (gen_sky.py): 128 columns of 76 bytes = 90 degrees; per screen column offset, set each frame */
 #define SKY_STRIDE 76
@@ -233,6 +237,10 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_scal = colb == 2 ? scal_w : (r_fullheight ? scal_f : scal_b);
     r_tsh = 0;                                       /* texels are bytes in every mode */
     r_ssh = colb == 2 ? 1 : 0;                       /* scaler rows: 6 or 12 bytes */
+#ifdef DREAD_NATIVE_PERSPECTIVE
+    r_nat_scal = r_vh == 72 ? (const void *)nat_sym_b : (const void *)nat_sym_f;
+    r_nat_offs = r_vh == 72 ? (const void *)nat_off_b : (const void *)nat_off_f;
+#endif
     r_skyshift = r_vh==144?1:0;
     r_skyend = (const void *)r_scal[scal_q[r_vh == 144 ? 512 : 1024]];   /* 1 sky row per view row (column-doubled: 1/2) */
 #endif

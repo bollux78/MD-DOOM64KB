@@ -580,13 +580,9 @@ tex_native:
         move.w  10(%a3),%d2
         andi.w  #0x7fff,%d2                /* native scaler selected from inverse depth */
         lsl.w   #2,%d2
-        lea     native_b,%a0
-        lea     native_offsets_b,%a1
-        cmpi.w  #72,r_vh
-        beq.s   1f
-        lea     native_f,%a0
-        lea     native_offsets_f,%a1
-1:      move.l  0(%a0,%d2.w),%a0           /* first instruction (row zero) */
+        move.l  r_nat_scal,%a0             /* native_b or native_f (set by R_SetMode) */
+        move.l  r_nat_offs,%a1
+        move.l  0(%a0,%d2.w),%a0           /* first instruction (row zero) */
         move.l  %a0,%d1
         beq     .Lnative_table
         move.l  0(%a1,%d2.w),%a1
@@ -643,11 +639,8 @@ tex_native:
         move.w  10(%a3),%d0
         andi.w  #0x7fff,%d0
         lsl.w   #2,%d0
-        lea     native_offsets_b,%a0
-        cmpi.w  #72,r_vh
-        beq.s   1f
-        lea     native_offsets_f,%a0
-1:      move.l  0(%a0,%d0.w),%a0
+        move.l  r_nat_offs,%a0
+        move.l  0(%a0,%d0.w),%a0
         move.w  %d5,%d0
         add.w   %d0,%d0
         adda.w  %d0,%a0
@@ -669,6 +662,11 @@ tex_native:
         lsl.w   #2,%d5
         move.l  %a2,%a4
         adda.w  %d5,%a4
+        /* n pixels: n&3 single steps, then n>>2 groups of four with fixed destination displacements (no addq per pixel) */
+        move.w  %d4,%d6
+        lsr.w   #2,%d6                     /* groups */
+        andi.w  #3,%d4                     /* remainder */
+        beq.s   3f
         subq.w  #1,%d4
 2:      move.w  (%a0)+,%d3
         add.w   %d1,%d3
@@ -676,7 +674,27 @@ tex_native:
         move.b  0(%a1,%d3.w),(%a4)
         addq.l  #4,%a4
         dbra    %d4,2b
-        moveq   #1,%d0
+3:      subq.w  #1,%d6
+        bmi.s   5f
+4:      move.w  (%a0)+,%d3
+        add.w   %d1,%d3
+        and.w   %d2,%d3
+        move.b  0(%a1,%d3.w),(%a4)
+        move.w  (%a0)+,%d3
+        add.w   %d1,%d3
+        and.w   %d2,%d3
+        move.b  0(%a1,%d3.w),4(%a4)
+        move.w  (%a0)+,%d3
+        add.w   %d1,%d3
+        and.w   %d2,%d3
+        move.b  0(%a1,%d3.w),8(%a4)
+        move.w  (%a0)+,%d3
+        add.w   %d1,%d3
+        and.w   %d2,%d3
+        move.b  0(%a1,%d3.w),12(%a4)
+        lea     16(%a4),%a4
+        dbra    %d6,4b
+5:      moveq   #1,%d0
         rts
 .Lnative_fail:
         moveq   #0,%d0
