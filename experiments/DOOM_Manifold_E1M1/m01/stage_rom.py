@@ -985,6 +985,34 @@ def apply_doom_textures(out, lumps, cells, wad):
     from emit_portal_map import assign_wall_textures, _nm
     names=assign_wall_textures(lumps,cells)
     default="STARTAN3" if "STARTAN3" in names else names[0]
+    if len(names)>64 and os.environ.get("MANIFOLD_TEX_REMAP","0")=="1":
+        # Freedoom maps use more distinct wall textures than the 64-slot table:
+        # keep the 64 most used (by wall length) and map each other texture to
+        # the kept one with the closest average colour.
+        import math as _m
+        _w=WT.Wad(wad); _p=WT.playpal(_w); _d=WT.textures(_w)
+        use={n:0.0 for n in names}
+        for _c in cells:
+            for _wl in _c["walls"]:
+                _L=_m.hypot(_wl["a"][0]-_wl["b"][0],_wl["a"][1]-_wl["b"][1])
+                for _k in ("upper","lower","mid"):
+                    if _wl.get(_k): use[_wl[_k]]+=_L
+        avg={}
+        for n in names:
+            _wd,_ht,_img=WT.compose(_w,_d,n); avg[n]=WT.average(WT.rgb_of(_p,_img))
+        keep=sorted(names,key=lambda n:-use[n])[:64]
+        if default not in keep: keep[-1]=default
+        mp={}
+        for n in names:
+            if n in keep: continue
+            mp[n]=min(keep,key=lambda k:sum((a-b)**2 for a,b in zip(avg[n],avg[k])))
+        for _c in cells:
+            for _wl in _c["walls"]:
+                for _k in ("upper","lower","mid"):
+                    if _wl.get(_k) in mp: _wl[_k]=mp[_wl[_k]]
+        print("M14 texture remap: %d -> 64 (%d replaced); worst-used kept %.0f"%(len(names),len(mp),min(use[k] for k in keep)))
+        names=sorted(keep)
+        default=default if default in names else names[0]
     if len(names)>64: raise ValueError(f"{len(names)} textures > Manifold limit 64")
     flats=sorted({_nm(x) for sec in lumps["SECTORS"] for x in (sec[2],sec[3])})
     sprite_lumps=None
