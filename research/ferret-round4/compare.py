@@ -2,22 +2,34 @@
 Raw evidence and ROM remain local. Only numeric summaries are exported."""
 import argparse, hashlib, json, pathlib, sys, tempfile, zipfile
 P=pathlib.Path
-ARCHIVES={
-"6a7a280b98358e920bbc06ab074ed6397cb370a94d0aeeedf9c355e0c58d35d1": ("ferret_contract.py","ferret_stage.py","raster_state.py","frame_contract.py","kernel_cpu.py"),
-"81bf5e0e27cf3026c3f9d59447a8fae79a58307f242ca9f9f89a02af93ffa271": ("visibility.py","projection.py")
+HASHES={
+"ferret_contract.py":"75105b0946eab58b9447c9ba0f254fa00dcad3d38ebcc14ed434d0342ab0e2fb",
+"ferret_stage.py":"b8d92efe405370094680f92be170518555073f1813469f95ba5019cf65939100",
+"raster_state.py":"39e55238a008c1babaec5a7f163b5de8d211699a56337e715d9f1a92deb6e604",
+"frame_contract.py":"bcf2413001a007729c49e438673ddbe1cd80453f0b43db2897e7402f2c0ef9d5",
+"kernel_cpu.py":"ed0d6b83127020c99cf4120970bfe5c809b35c7a4474c59c38f36f0b0f53f2a7",
+"visibility.py":"9ba0e64d903d9ccf1383778052199d04df7dcaac331cd3fcb9cf3d15fbaf15f4",
+"projection.py":"5bd1120c423d15967219f1518db2e18de5c26dc0417e72d8f2d477453690b46c"
 }
 def load_models(root,dest):
-    needed=set(ARCHIVES)
-    for p in root.rglob("*.zip"):
-        digest=hashlib.sha256(p.read_bytes()).hexdigest()
-        if digest not in needed:continue
-        with zipfile.ZipFile(p) as z:
-            for name in ARCHIVES[digest]:
-                matches=[i for i in z.namelist() if i.rsplit("/",1)[-1]==name and (digest.startswith("6a7a") or "/modelos-anteriores/reconstruction/" in i)]
-                if len(matches)!=1:raise ValueError("ambiguous archive member")
-                (dest/name).write_bytes(z.read(matches[0]))
-        needed.remove(digest)
-    if needed:raise FileNotFoundError("Required original or round3 ZIP not found by SHA256")
+    needed=set(HASHES)
+    def accept(name,data):
+        if name in needed and hashlib.sha256(data).hexdigest()==HASHES[name]:
+            (dest/name).write_bytes(data);needed.remove(name)
+    for p in root.rglob("*"):
+        if not needed:break
+        if not p.is_file():continue
+        if p.name in needed and p.stat().st_size<100000:
+            accept(p.name,p.read_bytes())
+        elif p.suffix.lower()==".zip":
+            try:
+                with zipfile.ZipFile(p) as z:
+                    for info in z.infolist():
+                        name=info.filename.rsplit("/",1)[-1]
+                        if name in needed and info.file_size<100000:accept(name,z.read(info))
+            except zipfile.BadZipFile:continue
+    print("Verified model members:",sorted(set(HASHES)-needed),flush=True)
+    if needed:raise FileNotFoundError("Missing verified model members: "+", ".join(sorted(needed)))
     sys.path.insert(0,str(dest))
 
 def analyze(rom,folder):
@@ -67,6 +79,8 @@ def analyze(rom,folder):
             except Exception as exc:
                 # No raw exception message or memory contents exported.
                 row[label]={"error_type":type(exc).__name__}
+                import traceback
+                with (folder/"compare-errors.log").open("a") as log: traceback.print_exc(file=log)
         rows.append(row)
     def passed(r,label):
         x=r[label]
@@ -85,6 +99,6 @@ def main():
         for folder in sorted(a.captures.glob("sram*-turn*")):
             if (folder/"summary.json").exists():res[folder.name]=analyze(rom,folder)
         a.out.write_text(json.dumps(res,indent=2))
-        print(json.dumps({k:v["stage_pass"] for k,v in res.items()}))
+        print(json.dumps(res),flush=True)
         if len(res)!=4 or any(v["scenes"]!=16 or any(x!=16 for x in v["stage_pass"].values()) for v in res.values()):sys.exit(2)
 if __name__=="__main__":main()
