@@ -12,6 +12,8 @@ case "$variant" in
   CONTROL) ;;
   # same as CONTROL but grates use the old per-row coverage test (baseline for the opaque-run loop)
   GRATE_OLD) export DREAD_GRATE_OLD=1 ;;
+  # half horizontal resolution: 80 columns x 72 rows, every pixel 4 wide (column-doubled with row duplication)
+  HALFCOL) export DREAD_OPT_FLAGS="-DSTART_MODE=9" ;;
   AI6) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10" ;;
   # AI at 6 Hz with each kind's step lengthened so its average walking speed matches CONTROL (capped at 16 units)
   AI6S) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10 -DDREAD_AI_SPEED_COMP" ;;

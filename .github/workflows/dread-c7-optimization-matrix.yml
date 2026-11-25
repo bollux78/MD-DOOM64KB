@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GRATE_OLD]
+        variant: [CONTROL, HALFCOL]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GRATE_OLD]
+        variant: [CONTROL, HALFCOL]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
