@@ -65,7 +65,7 @@ int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *sca
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
     for(int j=0;j<n;j++){
         int x=w->x0+j,t=f->top[x],b=f->bottom[x];
-        if(t>H||b>H||t>b)return -3;
+        if(t>H||b>H)return -3;
         if(t==0&&b==0)continue;
         int r[4];for(int k=0;k<4;k++)r[k]=s16(sar((int64_t)e[k]+(int64_t)d[k]*j,8));
         uint16_t inv=(uint16_t)(w->inv0+w->scale_step*j);
