@@ -1,0 +1,130 @@
+name: Ferret R01 - BlastEm and MAME independent validation
+on:
+  pull_request:
+    branches: [research-ferret-r01-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r01-alt.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  blastem:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r01-alt-emulators-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build diagnostic cartridges without Genesis Plus GX
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r01-alt/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-alt-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "ALT=$out" >> "$GITHUB_ENV"
+          gcc="$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -x "$gcc"
+          python3 research/ferret-native/export_scene.py "$private/fixture"
+          python3 research/ferret-native/build_demo.py "$private/fixture" "$gcc" --label "FERRET-MD R01 FIXTURE"
+          cp "$private/fixture/FERRET-MD-R01.bin" "$out/public/FERRET-MD-R01-FIXTURE.bin"
+          python3 - "$private" "$out/public/fixture-host.json" <<'PY'
+          import pathlib,sys,json
+          sys.path.insert(0,"research/ferret-native")
+          from test_demo import host
+          pathlib.Path(sys.argv[2]).write_text(json.dumps(host(pathlib.Path(sys.argv[1])/"fixture")))
+          PY
+          wad="$(find "$root" -type f -iname doom1.wad -print -quit)"
+          test -n "$wad"
+          python3 research/ferret-native/export_scene.py "$private/doom1" --wad "$wad" --fsc "$root/backend/45715146307/scaler.fsc"
+          python3 research/ferret-native/build_demo.py "$private/doom1" "$gcc" --label "FERRET-MD R01 E1M1"
+      - name: BlastEm debugger checkpoints and framebuffer comparison
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          blastem="$HOME/Projetos/blastem64-1.0.0/blastem"
+          test -x "$blastem"
+          export M68K_NM="$HOME/mars/m68k-elf/bin/m68k-elf-nm"
+          export XDG_CONFIG_HOME="$ALT/config"
+          mkdir -p "$XDG_CONFIG_HOME/blastem"
+          if test -f "$(dirname "$blastem")/default.cfg"; then cp "$(dirname "$blastem")/default.cfg" "$XDG_CONFIG_HOME/blastem/blastem.cfg"; fi
+          rc=0
+          for scene in fixture doom1; do
+            if ! test -s "$PRIVATE/$scene/FERRET-MD-R01.bin"; then rc=1; continue; fi
+            for attempt in 1 2 3 4 5; do
+              log="$PRIVATE/$scene/blastem-$attempt.log"
+              if python3 research/ferret-native/test_blastem.py "$PRIVATE/$scene" "$blastem" "$ALT/public/$scene-blastem.json" > "$log" 2>&1; then
+                cat "$log"; break
+              fi
+              cat "$log"
+              if ! grep -q 'out of range of a 32-bit displacement' "$log" || [ "$attempt" = 5 ]; then rc=1; break; fi
+            done
+          done
+          exit "$rc"
+      - name: MAME local E1M1 and fixture if installed
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mame="$(command -v mame || true)"
+          if [ -z "$mame" ]; then echo "MAME_LOCAL_UNAVAILABLE: hosted fixture check is separate"; exit 0; fi
+          rc=0
+          for scene in fixture doom1; do
+            test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
+            poses=4; if [ "$scene" = doom1 ]; then poses=12; fi
+            export FR_POSES="$poses"
+            timeout 180 "$mame" megadriv -cart "$PRIVATE/$scene/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 100 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/$scene/mame.log" 2>&1 || true
+            grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/$scene/mame.log" > "$ALT/public/$scene-mame.log" || true
+            cat "$ALT/public/$scene-mame.log"
+            python3 research/ferret-native/check_mame.py "$PRIVATE/$scene" "$ALT/public/$scene-mame.log" "$ALT/public/$scene-mame.json" || rc=1
+          done
+          exit "$rc"
+      - name: Publish synthetic cartridge and numerical reports
+        if: always() && env.ALT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r01-alt
+          path: ${{ runner.temp }}/ferret-alt-${{ github.run_id }}/public/*
+          if-no-files-found: warn
+  mame:
+    needs: blastem
+    if: always() && (github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r01-alt-emulators-20261125'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ferret-r01-alt
+          path: ${{ runner.temp }}/fixture
+      - name: Install MAME
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mame
+      - name: Independently verify original fixture on hosted MAME
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FR_POSES=4
+          out="$RUNNER_TEMP/fixture"
+          cd "$out"
+          timeout 180 mame megadriv -cart "$out/FERRET-MD-R01-FIXTURE.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 60 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > mame.log 2>&1 || true
+          cat mame.log
+          python3 "$GITHUB_WORKSPACE/research/ferret-native/check_mame.py" "$out/fixture-host.json" "$out/mame.log" "$out/mame.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ferret-r01-hosted-mame
+          path: |
+            ${{ runner.temp }}/fixture/mame.log
+            ${{ runner.temp }}/fixture/mame.json
+          if-no-files-found: warn
