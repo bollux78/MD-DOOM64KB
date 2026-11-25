@@ -40,9 +40,15 @@ static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t
     for(int y=max(t,lo);y<min(b,hi);y++)f->pixels[pixel(x,y)]=sky?sky[x*H+y]:c;
     return 0;
 }
-static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc){
+static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
     for(int y=max(t,lo);y<min(b,hi);y++){
-        uint8_t c;if(sample(a,(int64_t)offset+sc[y],&c))return -2;
+        uint8_t c;
+        if(packed){
+            int32_t p=offset+sc[y]+a.origin;
+            if(!a.data||a.size!=4096||p<0||p>=24576)return -2;
+            unsigned i=(unsigned)p&8191u;uint8_t b=a.data[i>>1];
+            c=(uint8_t)((i&1?b&15:b>>4)*17u);
+        }else if(sample(a,(int64_t)offset+sc[y],&c))return -2;
         f->pixels[pixel(x,y)]=c;
     }
     return 0;
@@ -51,7 +57,7 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
  * sky is a caller-supplied visible 160x72 column-major sample array.
  * Assets provide a bounded byte view and a logical texture origin.
  */
-int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
+static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed){
     int v=w->variant,n=w->width;
     if(v<0||v>17||n<=0||w->x0<0||w->x0>=W||n>W-w->x0)return -1;
     if(has(skies,v)&&!sky)return -1;
@@ -76,8 +82,8 @@ int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *sca
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:q/inv)&0x1f80u)+sar(w->z,1);
             const int16_t *sc=scalers+(inv>>5)*H;
-            if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc))return -2;
-            if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc))return -2;
+            if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
+            if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
         }
         if(fl){int color=((v==11||v==17)&&t>=r[2]&&b>=r[3])?0:w->floor;fill(f,x,t,b,fs,b,(uint8_t)color,NULL);}
         if(v<=3){f->top[x]=f->bottom[x]=0;f->depth[x]=inv;}
@@ -88,6 +94,15 @@ int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *sca
         }
     }
     return 0;
+}
+int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
+    return wall_impl(f,w,upper,lower,scalers,sky,0);
+}
+/* Same geometry and clipping, packed 4bpp data read directly from ROM.
+ * origin remains in logical expanded-byte coordinates (normally 8192).
+ */
+int fr_wall_packed(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
+    return wall_impl(f,w,upper,lower,scalers,sky,1);
 }
 /* Public projection takes transformed endpoints, near rule, and resource U coordinates.
  * Return 1 for visible, 0 for rejected, negative for unrepresentable division.
