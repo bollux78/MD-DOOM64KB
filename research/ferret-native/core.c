@@ -4,7 +4,6 @@
  */
 #include <stdint.h>
 #include <stddef.h>
-#include <string.h>
 #define W 160
 #define H 72
 #define FB (W*H)
@@ -180,7 +179,8 @@ static int32_t sprite_div(int32_t n,int32_t d,uint32_t *overflow){
     return (int32_t)q;
 }
 int fr_sprite_project(int32_t width,int32_t origin,int32_t tx,int32_t tz,SpriteJob *j){
-    memset(j,0,sizeof(*j));
+    j->left=j->right=j->x0=j->x1=0;
+    j->step=j->u=j->scale=j->overflow=0;
     tz=s16(tz);if(tz<81)return 0;
     if(width<=0||width>32767)return -1;
     int32_t l=s16(tx-s16((int64_t)origin*8)),r=s16(l+s16((int64_t)width*8));
@@ -195,7 +195,7 @@ int fr_sprite_project(int32_t width,int32_t origin,int32_t tx,int32_t tz,SpriteJ
 }
 int fr_sprite(Frame *f,const Sprite *s,int32_t tx,int32_t tz,int32_t delta,uint16_t tag,
               const int16_t *factors,const int16_t *scalers,SpriteStats *st){
-    memset(st,0,sizeof(*st));
+    st->writes=st->tags=st->projected=st->overflow=0;
     if(!s||!s->columns||!factors||!scalers)return -1;
     SpriteJob j;int ret=fr_sprite_project(s->width,s->origin,tx,tz,&j);
     if(ret<=0)return ret;
@@ -224,7 +224,7 @@ int fr_sprite(Frame *f,const Sprite *s,int32_t tx,int32_t tz,int32_t delta,uint1
 }
 int fr_composite(Frame *f,const SpritePart *parts,uint32_t n,int32_t tx,int32_t tz,int32_t delta,uint16_t tag,
                  const int16_t *factors,const int16_t *scalers,SpriteStats *st){
-    memset(st,0,sizeof(*st));if(n>256||(!parts&&n))return -1;
+    st->writes=st->tags=st->projected=st->overflow=0;if(n>256||(!parts&&n))return -1;
     for(uint32_t i=0;i<n;i++){
         SpriteStats p;int ret=fr_sprite(f,parts[i].sprite,s16(tx-s16((int64_t)parts[i].dx*8)),tz,
                                        s16(delta+parts[i].dy),tag,factors,scalers,&p);
