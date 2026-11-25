@@ -3,7 +3,7 @@ Raw evidence and ROM remain local. Only numeric summaries are exported."""
 import argparse, hashlib, json, pathlib, sys, tempfile, zipfile
 P=pathlib.Path
 ARCHIVES={
-"6a7a280b98358e920bbc06ab074ed6397cb370a94d0aeeedf9c355e0c58d35d1": ("ferret_contract.py","ferret_stage.py","raster_state.py","frame_contract.py"),
+"6a7a280b98358e920bbc06ab074ed6397cb370a94d0aeeedf9c355e0c58d35d1": ("ferret_contract.py","ferret_stage.py","raster_state.py","frame_contract.py","kernel_cpu.py"),
 "81bf5e0e27cf3026c3f9d59447a8fae79a58307f242ca9f9f89a02af93ffa271": ("visibility.py","projection.py")
 }
 def load_models(root,dest):
