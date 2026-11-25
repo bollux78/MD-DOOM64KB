@@ -1,7 +1,7 @@
 """R01 emulator verification: compare actual 68000 framebuffer hash and VRAM
 against host execution of the same independent engine. No video files published.
 """
-import argparse,ctypes as C,hashlib,json,pathlib,struct,sys
+import argparse,ctypes as C,hashlib,json,pathlib,struct,sys,os
 P=pathlib.Path
 U8=C.c_uint8;U32=C.c_uint32
 class Info(C.Structure):
@@ -41,10 +41,13 @@ def emulate(core,out,mode,expected,maxframes):
         ("input_poll",C.CFUNCTYPE(None),lambda:None),
         ("input_state",C.CFUNCTYPE(C.c_int16,C.c_uint,C.c_uint,C.c_uint,C.c_uint),lambda *a:0)]:
         c=typ(fn);cb.append(c);getattr(lib,"retro_set_"+name)(c)
-    lib.retro_init();rom=(out/"FERRET-MD-R01.bin").read_bytes();buf=C.create_string_buffer(rom)
-    info=Info(b"FERRET-MD-R01.bin",C.cast(buf,C.c_void_p),len(rom),None)
+    lib.retro_init();rompath=(out/"FERRET-MD-R01.bin").resolve();rom=rompath.read_bytes();buf=C.create_string_buffer(rom)
+    # Use the real absolute filename, matching successful Alpha2 capture.
+    info=Info(os.fsencode(rompath),C.cast(buf,C.c_void_p),len(rom),None)
     lib.retro_load_game.argtypes=[C.POINTER(Info)];lib.retro_load_game.restype=C.c_bool
-    assert lib.retro_load_game(C.byref(info))
+    if not lib.retro_load_game(C.byref(info)):
+        lib.retro_deinit()
+        return {"pass":False,"fatal":"retro_load_game rejected absolute path","mode":mode,"rom_bytes":len(rom),"header":rom[0x100:0x110].decode("ascii",errors="replace"),"expected_poses":len(expected)}
     lib.retro_set_controller_port_device(0,1)
     C.c_uint.in_dll(lib,"retro_sram_block").value=mode
     C.c_uint.in_dll(lib,"retro_trace_active").value=1
