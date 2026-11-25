@@ -1,0 +1,76 @@
+{
+  "status": "source_preflight_passed",
+  "maps": [
+    {
+      "map": "E1M1",
+      "textures": 32,
+      "sprites": 122,
+      "columns_checked": 12352,
+      "resized": false
+    },
+    {
+      "map": "E1M2",
+      "textures": 57,
+      "sprites": 126,
+      "columns_checked": 21792,
+      "resized": false
+    },
+    {
+      "map": "E1M3",
+      "textures": 58,
+      "sprites": 216,
+      "columns_checked": 20032,
+      "resized": false
+    },
+    {
+      "map": "E1M4",
+      "textures": 51,
+      "sprites": 215,
+      "columns_checked": 18752,
+      "resized": false
+    },
+    {
+      "map": "E1M5",
+      "textures": 39,
+      "sprites": 176,
+      "columns_checked": 14528,
+      "resized": false
+    },
+    {
+      "map": "E1M6",
+      "textures": 46,
+      "sprites": 217,
+      "columns_checked": 14912,
+      "resized": false
+    },
+    {
+      "map": "E1M7",
+      "textures": 40,
+      "sprites": 218,
+      "columns_checked": 13536,
+      "resized": false
+    },
+    {
+      "map": "E1M8",
+      "textures": 23,
+      "sprites": 209,
+      "columns_checked": 6592,
+      "resized": false
+    },
+    {
+      "map": "E1M9",
+      "textures": 20,
+      "sprites": 214,
+      "columns_checked": 5792,
+      "resized": false
+    }
+  ],
+  "unique_columns": 19700,
+  "unique_column_raw_bytes": 2987984,
+  "unique_column_rle_bytes": 1688051,
+  "scaler_selectors": 2048,
+  "unique_scaler_rows": 554,
+  "host_probe": "separate host_probe.c required; this script checks generated data only",
+  "rom_build": "not run",
+  "rom_fps": "not measured"
+}

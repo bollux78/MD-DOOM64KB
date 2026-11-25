@@ -77,8 +77,14 @@ if [[ "$map" == EPISODE ]]; then
         done
         if [[ ${DREAD_OPT_REPORTS:-0} == 1 ]]; then
             mkdir -p "$out/geometry"
-            for n in {1..9}; do cp "$stage/E1M$n/geometry-report.json" "$out/geometry/E1M$n.json"; done
+            for n in {1..9}; do
+                cp "$stage/E1M$n/geometry-report.json" "$out/geometry/E1M$n.json"
+                if [[ -f "$stage/E1M$n/source-pixels.json" ]]; then cp "$stage/E1M$n/source-pixels.json" "$out/geometry/E1M$n-source-pixels.json"; fi
+            done
         fi
+    fi
+    if [[ ${DREAD_FERRET_RENDERER:-0} == 1 ]]; then
+        python3 "$source_dir/gameplay/ferret/preflight.py" "$stage" --out "$out/source-preflight.json"
     fi
     if [[ ${DREAD_SSF:-0} == 1 ]]; then
         python3 "$source_dir/tools/pack_ssf.py" "$stage/src" "${levels[@]}"
@@ -115,6 +121,9 @@ fi
 python3 "$source_dir/tools/gen_scalers.py" "$stage/src/scalers.s"
 gen_c="$stage/src/episode.c"; [[ -f "$gen_c" ]] || gen_c="$stage/src/mapdata.c"
 if [[ ${DREAD_SSF:-0} != 1 ]]; then python3 "$source_dir/tools/gen_sky.py" "$source_dir/tools/sky_e1doom_256x72_pal.png" "$gen_c" "$stage/src/sky.c"; fi
+if [[ ${DREAD_FERRET_RENDERER:-0} == 1 ]]; then
+    python3 "$source_dir/tools/gen_ferret_scalers.py" "$stage/src/ferret_scalers.c" --asm "$stage/src/ferret_scalers.s"
+fi
 python3 "$source_dir/tools/gen_tables.py" "$stage/src/tables.c"
 sed 's/-flto -flto=auto -ffat-lto-objects/-fno-lto/g' "$GDK/makefile.gen" > "$stage/makefile.gen"
 # toolchain: PREFIX=m68k-elf- from PATH, or DREAD_TC=/path/m68k-elf- (e.g. the CI runner's marsdev toolchain)

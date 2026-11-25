@@ -1,127 +1,67 @@
-name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
-# Round: CONTROL only (AI6/AI6S were dropped; the AI rate is now a menu option, IA 100% or 50%). Shareware ELF is published for profiling; no WAD.
-# WAD DEMO3 experimental menu replay (real ticcmd stream, E1M map from header).
-# Build retry after SGDK stdint.h typedef conflict fix.
-# Original 312-frame modes 1 and 2 remain for automated comparisons.
-# Report includes ROM/variant, measured FPS and VBlank time.
-# C7 legacy fixed-route E1M1 benchmark removed from episode ROM; MAME 1/2 now uses DEMO3.
-# No WAD is published. The ELF is published only for the shareware doom1.wad (see compile_one.sh).
+name: C7 Ferret nine-map experimental pipeline (manual only)
 on:
-  push:
-    branches: [exp-dread-c7-grates-20261124]
-    paths: ['.github/workflows/dread-c7-optimization-matrix.yml']
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: dread-c7-optimization-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  build:
-    name: "Build C7 ${{ matrix.variant }}"
+  experiment:
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 110
+    timeout-minutes: 120
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
-        variant: [CONTROL, GRATE_OLD]
+        variant: [CONTROL, FERRET160, FERRET80]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Compile independent C7 NORMAL variant
+      - name: Prepare reproducible instrumented emulator
         shell: bash
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/dread-c7-opt-$GITHUB_RUN_ID-${{ matrix.variant }}"
-          echo "C7_OUT=$out" >> "$GITHUB_ENV"
-          echo "::notice::Compilando apenas ${{ matrix.variant }} na C7 experimental, sem SSF"
-          bash experiments/DREAD_MD/d01/gameplay/optimization/compile_one.sh "${{ matrix.variant }}" "$out"
-          echo "::notice::${{ matrix.variant }} compilada; aguardando benchmark independente"
-      - name: Upload ROM, benchmark symbols and geometry (no ELF)
-        uses: actions/upload-artifact@v4
+          core="$RUNNER_TEMP/ferret-core-$GITHUB_RUN_ID"
+          if [[ ! -s "$core/genesis_plus_gx_libretro.so" ]]; then
+            if [[ ! -d "$core/.git" ]]; then
+              git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$core"
+            else
+              git -C "$core" reset --hard 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+              git -C "$core" clean -fdx
+            fi
+            git -C "$core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+            git -C "$core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+            make -C "$core" -f Makefile.libretro -j3 platform=unix
+          fi
+          echo "CORE=$core/genesis_plus_gx_libretro.so" >> "$GITHUB_ENV"
+      - name: Build, verify all maps, test gameplay and measure NTSC
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ferret-$GITHUB_RUN_ID/$VARIANT"
+          mkdir -p "$out"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          bash experiments/DREAD_MD/d01/gameplay/ferret/run_variant.sh "$VARIANT" "$out" "$CORE"
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: C7ROM-${{ matrix.variant }}-${{ github.run_id }}
-          retention-days: 30
+          name: C7-FERRET-${{ matrix.variant }}-${{ github.run_id }}
+          path: ${{ env.OUT }}
           if-no-files-found: warn
-          path: ${{ env.C7_OUT }}/release/**
-
-  benchmark:
-    name: "MAME ${{ matrix.variant }}: render vs combat"
-    needs: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [CONTROL, GRATE_OLD]
+  package:
+    needs: experiment
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: C7ROM-${{ matrix.variant }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/rom
-      - name: Install reference MAME
-        run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mame python3-numpy python3-pil
-      - name: Benchmark DEMO3 E1M7 first 312 frames in render and combat modes
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/results"
-          for mode in 1 2; do
-            python3 experiments/DREAD_MD/d01/gameplay/optimization/bench_mame.py \
-              --rom "$RUNNER_TEMP/rom/DREAD-C7-OPT-${{ matrix.variant }}.bin" \
-              --symbols "$RUNNER_TEMP/rom/symbols-${{ matrix.variant }}.json" \
-              --mode "$mode" \
-              --result "$RUNNER_TEMP/results/${{ matrix.variant }}-bench-$mode.json"
-          done
-      - name: Save measured FPS and emulator diagnostics
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: C7BENCH-${{ matrix.variant }}-${{ github.run_id }}
-          retention-days: 30
-          if-no-files-found: warn
-          path: ${{ runner.temp }}/results/*
-
-  release:
-    name: One ZIP with the round ROMs and comparative results
-    needs: [build, benchmark]
-    if: always() && needs.build.result == 'success'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with: {persist-credentials: false}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: C7ROM-*-${{ github.run_id }}
-          merge-multiple: true
-          path: ${{ runner.temp }}/roms
-      - uses: actions/download-artifact@v4
-        if: needs.benchmark.result == 'success'
-        with:
-          pattern: C7BENCH-*-${{ github.run_id }}
-          merge-multiple: true
-          path: ${{ runner.temp }}/bench
-      - name: Check ROMs, geometry and pack comparison ZIP
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bench"
-          python3 experiments/DREAD_MD/d01/gameplay/optimization/pack_matrix.py \
-            --roms "$RUNNER_TEMP/roms" --bench "$RUNNER_TEMP/bench" \
-            --out "$RUNNER_TEMP/DREAD-C7-OTIMIZACOES.zip"
+          pattern: C7-FERRET-*-${{ github.run_id }}
+          path: results
+      - run: python3 experiments/DREAD_MD/d01/gameplay/ferret/summarize.py results delivery
       - uses: actions/upload-artifact@v4
         with:
-          name: DREAD-C7-OTIMIZACOES-${{ github.run_id }}
-          if-no-files-found: error
-          retention-days: 30
-          path: |
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.zip
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.csv
-            ${{ runner.temp }}/DREAD-C7-OTIMIZACOES.json
+          name: C7-FERRET-CONSOLIDADO-${{ github.run_id }}
+          path: delivery

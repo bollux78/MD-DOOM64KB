@@ -218,6 +218,10 @@ static void set_mode(uint16_t m)
 #ifdef DREAD_ROW_ONLY
     m &= ~1u;
 #endif
+#ifdef DREAD_FERRET_RENDERER
+    /* Only the two supported 72-row modes; do not select a 144-row table. */
+    m = (m & 1) ? 9 : 0;
+#endif
     mode = m;
     const uint16_t h40 = !(m & 2), colb = (m & 1) ? 2 : 1;
     r_fullheight = (m & 4) != 0;

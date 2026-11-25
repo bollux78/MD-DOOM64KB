@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Link one set of converted maps into an episode with shared graphics and packed PVS."""
 import re
+import os
+from ferret_columns import encode_column
 import sys
 from pathlib import Path
 
@@ -75,6 +77,8 @@ def main():
     common = None
     for i, path in enumerate(maps):
         data = entries(path/"mapdata.c")
+        if os.environ.get("DREAD_FERRET_COLUMN_RLE","0")=="1" and 'DREAD_SOURCE_PIXELS=1' not in (path/'mapdata.c').read_text():
+            raise ValueError(f"{path}: compressed Ferret episode requires native WAD source pixels")
         shared = {name: data[name] for name in SHARED}
         if common is None:
             common = shared
@@ -104,7 +108,7 @@ def main():
                     for start in map(int, group[3].split(",")):
                         if start + width * stride > len(blob):
                             raise ValueError(f"{path}: texture outside bank")
-                        row = tuple(bank.add(blob[pos:pos+stride])
+                        row = tuple(bank.add(encode_column(blob[pos:pos+stride]) if os.environ.get("DREAD_FERRET_COLUMN_RLE","0")=="1" else blob[pos:pos+stride])
                                     for pos in range(start, start+width*stride, stride))
                         if row not in column_tables:
                             column_tables[row] = len(columns)

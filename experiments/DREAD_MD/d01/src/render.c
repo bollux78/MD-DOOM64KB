@@ -221,7 +221,13 @@ void R_SetMode(uint16_t colb, uint16_t tcols, uint16_t crop)
     r_halfw = r_vw / 2; r_horizon = r_vh / 2;
     /* Doom's proportions (y scale = 1.2 x the x scale on a 4:3 screen): ~180 screen lines per unit
        in both H32 and H40, since the view always spans the full screen width */
+#ifdef DREAD_FERRET_RENDERER
+    /* The Ferret port and its lookup scalers use a 72-row image. */
+    r_vh = 72; r_horizon = 36;
+    r_vfocal = 80;
+#else
     r_vfocal = r_vh == 144 ? 179 : 90;
+#endif
     r_zppk = (uint16_t)(4194304UL / r_vfocal);
     r_fbbytes = tcols * r_vh * 4;
     r_ash = colb == 2 ? 3 : 4;      /* 16 columns of 2 pixels, or 8 of 4: 32 screen pixels either way */
@@ -575,7 +581,37 @@ static void setup_part(Part *p, uint8_t t, uint8_t bucket, int16_t textop, int16
 static inline const uint8_t *texture_column(const Part *p, uint16_t u)
 {
 #ifdef DREAD_EPISODE
-    return ((const uint8_t *const *)p->tex)[u & p->wmask];
+    const uint8_t *source=((const uint8_t *const *)p->tex)[u & p->wmask];
+#ifdef DREAD_FERRET_COLUMN_RLE
+    /* One column scratch buffer, shared by walls and masks. No scaling or
+     * colour changes: the decoded bytes include the original wrap padding. */
+#ifdef DREAD_FERRET_RENDERER
+    /* Phase-A ColRec is unused by this backend. Reuse its 1920-byte arena
+     * instead of consuming the remaining SGDK heap: 512 bytes + 1024 pairs. */
+    uint8_t *decoded=(uint8_t *)rec;
+#else
+    static uint8_t decoded[512];
+#endif
+    static const uint8_t *previous;
+    if(previous!=source){
+        unsigned size=((unsigned)source[0]<<8)|source[1],at=0;
+        const uint8_t *packed=source+2;
+        if(size>512)size=512; /* converter also rejects it */
+        while(at<size){
+            unsigned control=*packed++,n=(control&127)+1;
+            if(control&128){uint8_t value=*packed++;while(n-- && at<size)decoded[at++]=value;}
+            else{while(n-- && at<size)decoded[at++]=*packed++;}
+        }
+#ifdef DREAD_FERRET_RENDERER
+        uint8_t *pairs=(uint8_t *)rec+512;
+        for(unsigned i=0;i<size;i++){pairs[i*2]=decoded[i];pairs[i*2+1]=decoded[i];}
+#endif
+        previous=source;
+    }
+    return decoded;
+#else
+    return source;
+#endif
 #else
     return p->tex + ((u & p->wmask) << p->hs2);
 #endif
@@ -890,6 +926,9 @@ static void draw_mask_column(const VisSpr *v,int x)
     const int32_t sample_uz=m->uz+mul32k(m->duz,sample_k);
     u=u_of((uint32_t)(sample_uz>0?sample_uz:0)<<8,
            sample_iz>0?sample_iz:1)&m->part.wmask;
+#if defined(DREAD_SOURCE_PIXELS) && !defined(DREAD_FERRET_RENDERER)
+    u=(uint16_t)(u<<1)&m->part.wmask; /* legacy masked interpolation uses half texels */
+#endif
     tc=texture_column(&m->part,u);
 #if defined(__m68k__) && defined(DREAD_NATIVE_PERSPECTIVE)
     extern const uint8_t native_zq72[],native_zq144[];
@@ -1001,6 +1040,11 @@ static void draw_mask_column(const VisSpr *v,int x)
 }
 #endif
 
+#ifdef DREAD_SOURCE_PIXELS
+#define SPR_WORLD_W(sp) ((sp)->w2)
+#else
+#define SPR_WORLD_W(sp) ((sp)->w2 * 2)
+#endif
 /* x, y map position, zb world height of the sprite's bottom, light from sector sec */
 void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t flip, const MapSector *sec)
 {
@@ -1009,8 +1053,8 @@ void R_AddSprite(int16_t x, int16_t y, int16_t zb, uint16_t sprite, uint16_t fli
     cam(x, y, &x4, &z4);
     if (z4 < 64 || z4 > 32767) return;
     const MapSprite *sp = &map_sprites[sprite];
-    const int16_t lo = flip ? (int16_t)(sp->w2 * 2 - sp->leftoff) : sp->leftoff;
-    const int32_t sxl = proj(x4 - (int32_t)lo * 4, z4), sxr = proj(x4 + (int32_t)(sp->w2 * 2 - lo) * 4, z4);
+    const int16_t lo = flip ? (int16_t)(SPR_WORLD_W(sp) - sp->leftoff) : sp->leftoff;
+    const int32_t sxl = proj(x4 - (int32_t)lo * 4, z4), sxr = proj(x4 + (int32_t)(SPR_WORLD_W(sp) - lo) * 4, z4);
     int xa = ceil16(sxl), xb = ceil16(sxr);
     if (xa < 0) xa = 0;
     if (xb > VIEW_W) xb = VIEW_W;
@@ -1071,7 +1115,11 @@ static void draw_sprite(const VisSpr *v)
     if(sprite_column>=0){k0=sprite_column-v->x0;k1=k0+1;u+=mul32k(v->du,k0);}
 #endif
     for (int k = k0; k < k1; k++, u += v->du) {
+        #ifdef DREAD_SOURCE_PIXELS
+        int j = u >> 16;
+#else
         int j = (u >> 16) >> 1;
+#endif
         if (j < 0 || j >= v->w2) continue;
         if (v->flip) j = v->w2 - 1 - j;
         const int top = wc[k], bot = wf[k];
@@ -1170,6 +1218,9 @@ __attribute__((noinline)) static int bbox_visible(const int16_t *bb)
     return a < b && find_open(a) < b;
 }
 
+#if defined(DREAD_FERRET_RENDERER) && !defined(PVS_GEN)
+#include "render_ferret.inc"
+#endif
 static void render_node(uint16_t n)
 {
     if (closed >= VIEW_W) return;
@@ -1201,6 +1252,10 @@ static void render_node(uint16_t n)
                 const int16_t dx = (int16_t)((vb[0] - va[0]) >> 1), dy = (int16_t)((vb[1] - va[1]) >> 1);
                 const int16_t px = (int16_t)((view_xi - va[0]) >> 1), py = (int16_t)((view_yi - va[1]) >> 1);
                 if (muls16(dx, py) - muls16(dy, px) > 256) continue;
+#if defined(DREAD_FERRET_RENDERER) && !defined(PVS_GEN)
+                fr_draw_seg(sg);
+                continue;
+#endif
                 /* inline front: transform, back face, projection and occlusion before any call */
                 const uint16_t slot1 = xform(sg->v1), slot2 = xform(sg->v2);
                 const int16_t x1 = vtx[slot1], z1 = vtz[slot1], x2 = vtx[slot2], z2 = vtz[slot2];

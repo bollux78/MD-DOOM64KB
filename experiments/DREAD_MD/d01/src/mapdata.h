@@ -41,7 +41,7 @@ typedef struct { uint16_t v1, v2, flags; uint16_t front, back; uint16_t special,
 typedef struct { uint16_t sector; int16_t open_ceil; } MapDoor;
 
 typedef struct {
-    uint8_t wshift, hshift;        /* stored width (half of the original) and height, log2 */
+    uint8_t wshift, hshift;        /* stored columns and height, log2; DREAD_SOURCE_PIXELS stores full WAD width */
     int16_t realh, realw;
     uint32_t off[NUM_BUCKETS];     /* offset of each light bucket in tex_blob */
     uint8_t pal[NUM_BUCKETS];      /* palette of each light bucket */
@@ -65,7 +65,7 @@ extern const uint16_t tex_blob_w[];
 extern const MapTex map_tex[];
 extern const int16_t map_start[3];
 extern const uint16_t map_counts[6];
-typedef struct { int16_t w2, h, leftoff, topoff; uint32_t off[NUM_BUCKETS]; } MapSprite;   /* w2 = half width */
+typedef struct { int16_t w2, h, leftoff, topoff; uint32_t off[NUM_BUCKETS]; } MapSprite;   /* w2 = stored columns; full world width with DREAD_SOURCE_PIXELS, otherwise half */
 typedef struct { int16_t x, y; uint16_t sprite, sub, flags; } MapThing;   /* flags 1 = monster; sorted by sub */
 extern const uint8_t spr_blob[];
 extern const MapSprite map_sprites[];

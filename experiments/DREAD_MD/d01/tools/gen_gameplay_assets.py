@@ -146,10 +146,10 @@ for name,(ww,hh,parts) in defs.items():
    for x in range(patch.shape[1]):
     if 0<=oy+y<hh and 0<=ox+x<ww and patch[y,x]>=0:a[oy+y,ox+x]=True
  if a.all():continue
- W=1<<max(0,math.ceil(math.log2(max(1,ww//2))));H=1<<max(0,math.ceil(math.log2(hh)))
+ W=1<<max(0,math.ceil(math.log2(ww if os.environ.get("DREAD_SOURCE_PIXELS","0")=="1" else max(1,ww//2))));H=1<<max(0,math.ceil(math.log2(hh)))
  bits=[]
  for x in range(W):
-  for y in range(H):bits.append(int(a[y%hh,(2*x)%ww] or a[y%hh,(2*x+1)%ww]))
+  for y in range(H):bits.append(int(a[y%hh,x%ww]) if os.environ.get("DREAD_SOURCE_PIXELS","0")=="1" else int(a[y%hh,(2*x)%ww] or a[y%hh,(2*x+1)%ww]))
  maskdata[name]=np.packbits(np.array(bits,np.uint8),bitorder='little').tobytes()
 s=['#include "levelmeta.h"'];maps=[]
 for name,data in maskdata.items():s.append('static const uint8_t mask_'+name+'['+str(len(data))+']={'+','.join(map(str,data))+'};')
