@@ -24,7 +24,7 @@ def main():
         changes=[
             ("if top>=bottom:continue","if top==0 and bottom==0:continue"),
             ("if floor:fill(floor_start,bottom,c1)","if floor:\n    # Kernels 11/17 explicitly clear D5 in lower+floor or floor-only branch.\n    floor_color=0 if variant in (11,17) and top>=rows[2] and bottom>=rows[3] else c1\n    fill(floor_start,bottom,floor_color)"),
-            ("top<edge_top==edge_bottom<bottom","bottom>=edge_top and top<edge_bottom and cliptop[x]==clipbottom[x]")
+            ("if cliptop[x]>=clipbottom[x] and not (variant in (10,11,16,17) and top<edge_top==edge_bottom<bottom):cliptop[x]=clipbottom[x]=0;depth[x]=inv","if (ceiling and bottom<edge_top) or (floor and top>=edge_bottom):cliptop[x]=clipbottom[x]=0;depth[x]=inv")
         ]
         for old,new in changes:
             assert original.count(old)==1
