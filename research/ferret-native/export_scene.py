@@ -19,7 +19,11 @@ def rows(fsc):
             full.extend([tuple((y*step+bias)//65536 for y in range(72))]*(end+1-len(full)))
         assert len(full)==2048
     else:
-        full=[tuple((y-35)*128//max(i,1)-1 for y in range(72)) for i in range(2048)]
+        # Original, independently quantized reciprocal buckets for the fixture.
+        def bucket(i):
+            i=max(i,1);shift=max(0,i.bit_length()-5)
+            return (i>>shift)<<shift
+        full=[tuple((y-35)*128//bucket(i)-1 for y in range(72)) for i in range(2048)]
     unique={};indices=[]
     for r in full:
         if r not in unique:unique[r]=len(unique)
