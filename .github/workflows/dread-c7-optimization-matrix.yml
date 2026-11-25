@@ -6,6 +6,9 @@ on:
       - "experiments/DREAD_MD/**"
       - ".github/workflows/dread-c7-optimization-matrix.yml"
   workflow_dispatch:
+concurrency:
+  group: c7-ferret-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -70,4 +73,3 @@ jobs:
         with:
           name: C7-FERRET-CONSOLIDADO-${{ github.run_id }}
           path: delivery
-
