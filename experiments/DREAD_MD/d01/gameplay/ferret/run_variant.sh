@@ -21,6 +21,7 @@ case $variant in
  FERRET160|FERRET80)
   flags='';[[ $variant != FERRET80 ]] || flags='-DSTART_MODE=9'
   DREAD_FERRET_FLAGS="$flags" bash "$root/gameplay/ferret/build.sh" "$wad" "$out" > "$out/build.log" 2>&1
+  python3 "$root/gameplay/ferret/verify_scalers.py" "$out/EPISODE.bin" "$out/EPISODE.elf" "${DREAD_TC}nm" > "$out/scaler-verification.json"
   cp "$out/EPISODE.bin" "$out/release/DREAD-C7-$variant.bin"
   cp "$out/EPISODE.elf" "$out/release/DREAD-C7-$variant.elf" ;;
  *) exit 2;;

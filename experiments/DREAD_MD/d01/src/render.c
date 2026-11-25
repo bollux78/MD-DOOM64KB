@@ -617,35 +617,63 @@ static inline const uint8_t *texture_column(const Part *p, uint16_t u)
 #ifdef DREAD_EPISODE
     const uint8_t *source=((const uint8_t *const *)p->tex)[u & p->wmask];
 #ifdef DREAD_FERRET_COLUMN_RLE
-    /* One column scratch buffer, shared by walls and masks. No scaling or
-     * colour changes: the decoded bytes include the original wrap padding. */
+    /* Three lossless decoded-column slots fit the old 512-byte arena.
+     * Upper/lower wall alternation must not evict the adjacent-column reuse. */
 #ifdef DREAD_FERRET_RENDERER
-    /* Phase-A ColRec is unused by this backend. Reuse its 1920-byte arena
-     * instead of consuming the remaining SGDK heap: 512 bytes + 1024 pairs. */
-    uint8_t *decoded=(uint8_t *)rec;
+    static const uint8_t *keys[3];static uint16_t victim;
+    uint8_t *decoded;
+    for(uint16_t slot=0;slot<3;slot++)if(keys[slot]==source)return (uint8_t *)rec+slot*160;
+    uint16_t slot=victim;victim=slot==2?0:slot+1;keys[slot]=source;
+    decoded=(uint8_t *)rec+slot*160;
 #else
-    static uint8_t decoded[512];
+    static uint8_t storage[512];static const uint8_t *previous;
+    uint8_t *decoded=storage;
+    if(previous==source)return decoded;
+    previous=source;
 #endif
-    static const uint8_t *previous;
-    if(previous!=source){
-        unsigned header=((unsigned)source[0]<<8)|source[1],size=header&32767,at=0;
-        const uint8_t *packed=source+2;
-        if(size>512)size=512; /* converter also rejects it */
-        if(header&32768){
-            unsigned count=*packed++;if(!count)count=256;
-            const uint8_t *palette=packed;packed+=count;
-            unsigned nbits=0,limit=count-1;do{nbits++;limit>>=1;}while(limit);
-            unsigned mask=(1u<<nbits)-1,acc=0,have=0;
-            while(at<size){
-                if(have<nbits){acc=(acc<<8)|*packed++;have+=8;}
-                have-=nbits;decoded[at++]=palette[(acc>>have)&mask];
+    uint16_t header=((uint16_t)source[0]<<8)|source[1],size=header&32767,at=0;
+    const uint8_t *packed=source+2;
+#ifdef DREAD_FERRET_RENDERER
+    if(size>160)size=160; /* preflight rejects larger columns in this backend */
+#else
+    if(size>512)size=512;
+#endif
+    if(header&32768){
+        uint16_t count=*packed++;if(!count)count=256;
+        const uint8_t *palette=packed;packed+=count;
+        uint16_t nbits=0,limit=count-1;do{nbits++;limit>>=1;}while(limit);
+        /* Constant shifts and several output texels per packet keep the
+         * full-source dictionaries out of the variable-shift hot loop. */
+        if(nbits==4){
+            while(at+2<=size){uint16_t a=*packed++;decoded[at++]=palette[a>>4];decoded[at++]=palette[a&15];}
+        }else if(nbits==3){
+            while(at+8<=size){
+                uint16_t a=*packed++,b=*packed++,c=*packed++;
+                decoded[at++]=palette[a>>5];decoded[at++]=palette[(a>>2)&7];
+                decoded[at++]=palette[((a&3)<<1)|(b>>7)];decoded[at++]=palette[(b>>4)&7];
+                decoded[at++]=palette[(b>>1)&7];decoded[at++]=palette[((b&1)<<2)|(c>>6)];
+                decoded[at++]=palette[(c>>3)&7];decoded[at++]=palette[c&7];
             }
-        }else while(at<size){
-            unsigned control=*packed++,n=(control&127)+1;
-            if(control&128){uint8_t value=*packed++;while(n-- && at<size)decoded[at++]=value;}
-            else{while(n-- && at<size)decoded[at++]=*packed++;}
+        }else if(nbits==2){
+            while(at+4<=size){uint16_t a=*packed++;decoded[at++]=palette[a>>6];decoded[at++]=palette[(a>>4)&3];decoded[at++]=palette[(a>>2)&3];decoded[at++]=palette[a&3];}
+        }else if(nbits==1){
+            while(at+8<=size){
+                uint16_t a=*packed++;
+                decoded[at++]=palette[a>>7];decoded[at++]=palette[(a>>6)&1];
+                decoded[at++]=palette[(a>>5)&1];decoded[at++]=palette[(a>>4)&1];
+                decoded[at++]=palette[(a>>3)&1];decoded[at++]=palette[(a>>2)&1];
+                decoded[at++]=palette[(a>>1)&1];decoded[at++]=palette[a&1];
+            }
         }
-        previous=source;
+        uint16_t mask=(1u<<nbits)-1,acc=0,have=0;
+        while(at<size){
+            if(have<nbits){acc=(uint16_t)((acc<<8)|*packed++);have+=8;}
+            have-=nbits;decoded[at++]=palette[(acc>>have)&mask];
+        }
+    }else while(at<size){
+        uint16_t control=*packed++,n=(control&127)+1;
+        if(control&128){uint8_t value=*packed++;while(n-- && at<size)decoded[at++]=value;}
+        else{while(n-- && at<size)decoded[at++]=*packed++;}
     }
     return decoded;
 #else

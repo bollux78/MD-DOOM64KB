@@ -27,7 +27,7 @@ def main():
                     f.write('fr_%s_%d:\n'%(name,idx))
                     for y,off in enumerate(row):
                         # MOVE.B or MOVE.W from column+offset to tile row y.
-                        words=[0x1169 if name=='byte' else 0x3169,off*(1 if name=='byte' else 2),y*4,0x51ce,2,0x4e75]
+                        words=[0x1169 if name=='byte' else 0x3169,off*(1 if name=='byte' else 2),y*4,0x51ce,4,0x4e75]
                         f.write('.word '+','.join(str(v&65535) for v in words)+'\n')
                     f.write('.word 0x4e75\n')
                 f.write('.globl ferret_scalers_%s\nferret_scalers_%s:\n'%(name,name))

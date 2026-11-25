@@ -75,6 +75,7 @@ emu.register_frame_done(function()
     print("DREAD_BENCH_HIST "..table.concat(parts,","))
     print(string.format("DREAD_VISUAL_HASH mode=%d hash=%d",mode,screen_hash()))
     reported=true
+    manager.machine:exit()
   end
-  if frame%1800==0 then print(string.format("DREAD_BENCH_PROGRESS emu_vblanks=%d done=%d",frame,mem:read_u16(done))) end
+  if frame%1800==0 then print(string.format("DREAD_BENCH_PROGRESS emu_vblanks=%d game_frames=%d done=%d",frame,mem:read_u32(frames_addr),mem:read_u16(done))) end
 end)

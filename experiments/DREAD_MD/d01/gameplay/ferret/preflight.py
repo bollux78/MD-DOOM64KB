@@ -20,7 +20,7 @@ for n in range(1,10):
   stride=h+min(h,32)
   for start in map(int,group[5].split(',')):
    for at in range(start,start+width*stride,stride):
-    col=blob[at:at+stride];assert len(col)==stride
+    col=blob[at:at+stride];assert len(col)==stride and stride<=160
     packed=encode_column(col);assert decode_column(packed)==col;seen.add(col);cols+=1
  rows=numbers(data['map_segs']);assert len(rows)%12==0
  assert all(0<=rows[k]<=256 for k in range(11,len(rows),12))

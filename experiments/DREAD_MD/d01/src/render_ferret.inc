@@ -34,8 +34,8 @@ static int32_t fr_ratio(int32_t value, int32_t a, int32_t den)
 static int fr_clip(int32_t *x0,int32_t *z0,int32_t *u0,
                    int32_t *x1,int32_t *z1,int32_t *u1,int plane)
 {
-    int32_t a=plane==0?*z0-40:plane==1?*z0+*x0:*z0-*x0;
-    int32_t b=plane==0?*z1-40:plane==1?*z1+*x1:*z1-*x1;
+    int32_t a=plane==0?*z0-41:plane==1?*z0+*x0:*z0-*x0;
+    int32_t b=plane==0?*z1-41:plane==1?*z1+*x1:*z1-*x1;
     if(a<0 && b<0)return 0;
     if(a<0){int32_t den=b-a;*x0-=fr_ratio(*x1-*x0,a,den);*z0-=fr_ratio(*z1-*z0,a,den);*u0-=fr_ratio(*u1-*u0,a,den);}
     else if(b<0){int32_t den=a-b;*x1-=fr_ratio(*x0-*x1,b,den);*z1-=fr_ratio(*z0-*z1,b,den);*u1-=fr_ratio(*u0-*u1,b,den);}

@@ -47,3 +47,9 @@ Não foi disparado esse workflow nesta preparação. Possíveis erros de link, i
 O controle compilou com o hash conhecido `bada47a0c028fb70f4f76ddbdd495ea1c0fd6b9797c101b54cb1b064ffc5ad56`. O teste de teleporte mantinha bench_req ativo e ignorava o movimento por controle; a preparação foi corrigida, e o teste passou na mesma ROM.
 
 A primeira ROM Ferret linkou, mas foi rejeitada por exceder 4 MiB (5.373.952 bytes após alinhamento). Para preservar a resolução dos gráficos: dicionário por coluna quando menor que PackBits, compartilhamento dos escaladores entre 160/80 colunas, remoção dos escaladores legados de 144 linhas nesta variante e grupos de PVS comprimidos sem perda. Os conjuntos de visibilidade de referência foram decodificados e comparados byte a byte. A próxima compilação verificará o tamanho final e a execução.
+
+## Validação do código nativo
+
+A ROM de recuperação coube em 4 MiB e iniciou os nove mapas; mecanismos e progressão passaram. A medição ainda não terminou no limite inicial de 145 segundos emulados: o roteiro continuava avançando lentamente, e não estava travado. O profiler apontou 54% de uma cena no decodificador de colunas. Foram adicionados três slots no mesmo espaço de 512 bytes e decodificação de dicionários com deslocamentos constantes. Isso não altera pixels nem aumenta a resolução por interpolação.
+
+O código nativo dos escaladores tinha DBRA com deslocamento 2, que alcançava o RTS; foi corrigido para 4. O novo verificador examina todas as linhas das rotinas no binário linkado, e não apenas o gerador ou a referência C. A distância mínima também passou a 41 em unidades de quarto de mapa: com 40, a profundidade inversa podia chegar a 65536, fora do quociente DIVU de 16 bits. Os testes e o benchmark serão repetidos após recompilar.

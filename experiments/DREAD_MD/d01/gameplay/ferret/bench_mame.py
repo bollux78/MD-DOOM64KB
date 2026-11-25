@@ -19,13 +19,13 @@ env["DREAD_BENCH_MODE"]=str(args.mode)
 exe=shutil.which("mame") or "/usr/games/mame"
 script=Path(__file__).with_suffix(".lua").resolve()
 cmd=[exe,"genesis","-cart",str(args.rom.resolve()),"-video","none",
-     "-sound","none","-nothrottle","-seconds_to_run","145",
+     "-sound","none","-nothrottle","-seconds_to_run","600",
      "-skip_gameinfo","-autoboot_script",str(script)]
 args.result.parent.mkdir(parents=True,exist_ok=True)
 print("Running MAME NTSC DEMO3 E1M7 smoke-test; AI active="+str(args.mode==2),flush=True)
 try:
     run=subprocess.run(cmd,env=env,text=True,stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,timeout=260)
+        stderr=subprocess.STDOUT,timeout=900)
     output=run.stdout
 except subprocess.TimeoutExpired as e:
     output=(e.stdout or b"").decode(errors="replace") if isinstance(e.stdout,bytes) else e.stdout or ""
