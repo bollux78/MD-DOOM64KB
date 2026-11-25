@@ -1,0 +1,68 @@
+name: Ferret Alpha2 RE round 4 - differential replay
+on:
+  pull_request:
+    branches: [research-ferret-solid-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-round4-capture.yml', 'research/ferret-round4/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-round4-x360
+  cancel-in-progress: false
+jobs:
+  capture:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-round4-capture-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify original ROM locally by SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/ferret-r4-$GITHUB_RUN_ID/public"
+          base="$RUNNER_TEMP/ferret-r4-$GITHUB_RUN_ID"
+          echo "R4=$base" >> "$GITHUB_ENV"
+          echo "PRIVATE=$HOME/.local/share/ferret-research/round4/$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+          if ! python3 research/ferret-round4/capture.py locate "$base/rom.path"; then
+            echo '{"status":"original_rom_not_found_in_known_local_locations"}' > "$base/public/status.json"
+            cat "$base/public/status.json" >> "$GITHUB_STEP_SUMMARY"
+            exit 3
+          fi
+          echo '{"status":"original_rom_sha256_verified"}' > "$base/public/status.json"
+      - name: Reuse exact captures from successful collection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$HOME/.local/share/ferret-research/round4/45645383728"
+          test -d "$source"
+          for mode in 0 1; do
+            for turn in 0 1; do
+              folder="$source/sram${mode}-turn${turn}"
+              test -s "$folder/wram.bin"
+              test -s "$folder/events.json"
+              test -s "$folder/summary.json"
+              cp "$folder/summary.json" "$R4/public/sram${mode}-turn${turn}.json"
+              cat "$folder/summary.json"
+            done
+          done
+          echo "PRIVATE=$source" >> "$GITHUB_ENV"
+      - name: Compare against verified models from local archives
+        if: always() && env.PRIVATE != '' && env.R4 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s "$R4/rom.path" && -d "$PRIVATE" ]]; then
+            python3 research/ferret-round4/compare.py "$HOME/.local/share/ferret-research" "$(cat "$R4/rom.path")" "$PRIVATE" "$R4/public/differential.json"
+          fi
+      - name: Upload aggregate results only (no ROM, RAM, screenshots or raw registers)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-round4-summary
+          path: ${{ runner.temp }}/ferret-r4-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
