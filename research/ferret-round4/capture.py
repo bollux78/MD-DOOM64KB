@@ -14,6 +14,7 @@ unsigned int retro_r4_events[65536][24];
 extern unsigned int retro_sram_block;
 static void retro_r4_hook(unsigned int pc) {
  if (!retro_r4_active) return;
+ unsigned int scene=retro_r4_scenes;
  int stage=-1;
  switch(pc) {case 0x77402:stage=0;break;case 0x7751c:stage=1;break;case 0x7e13e:stage=2;break;case 0x7e14e:stage=3;break;}
  if (stage==0 && retro_r4_next!=0) {retro_r4_bad++;retro_r4_next=0;}
@@ -29,7 +30,7 @@ static void retro_r4_hook(unsigned int pc) {
  if(stage>=0 || pc==0x6f4ae || pc==0x6f606 || pc==0x6f646 || pc==0x6f6e6 || pc==0x6f7ac || pc==0x7dcf2 || pc==0x7e0f6 || pc==0x7e130 || pc==0x7e4f0 || pc==0x85f64 || pc==0x7e58c || pc==0x7e368 || pc==0x7e3e8 || pc==0x7e3ea || pc==0x7e444) {
   if(retro_r4_n>=65536) {retro_r4_overflow++;return;}
   unsigned int *e=retro_r4_events[retro_r4_n++];
-  e[0]=pc;e[1]=retro_r4_scenes;e[2]=retro_trace_frame;e[3]=m68k.cycles;
+  e[0]=pc;e[1]=scene;e[2]=retro_trace_frame;e[3]=m68k.cycles;
   for(unsigned int i=0;i<16;i++) e[4+i]=m68k_get_reg((m68k_register_t)i);
   e[20]=m68k_get_reg(M68K_REG_SR);
   e[21]=m68ki_read_32(0xff31c6);e[22]=m68ki_read_32(0xff1008);e[23]=m68ki_read_32(0xff2c72);
