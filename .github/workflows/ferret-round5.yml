@@ -1,0 +1,78 @@
+name: Ferret round 5 - zigzag and chained rendering
+on:
+  pull_request:
+    branches: [research-ferret-round4-capture-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-round5.yml','research/ferret-round5/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-round5-x360
+  cancel-in-progress: false
+jobs:
+  capture:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-round5-zigzag-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare private evidence directory and verify original
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          base="$RUNNER_TEMP/ferret-r5-$GITHUB_RUN_ID"
+          private="$root/round5/$GITHUB_RUN_ID"
+          mkdir -p "$base/public" "$private"
+          echo "R5=$base" >> "$GITHUB_ENV"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          python3 research/ferret-round5/capture.py locate "$base/rom.path"
+      - name: Build pinned instrumented core
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$R5/core"
+          git -C "$R5/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$R5/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-round5/capture.py patch "$R5/core"
+          make -C "$R5/core" -f Makefile.libretro -j3 platform=unix > "$R5/build.log" 2>&1 || { tail -50 "$R5/build.log"; exit 1; }
+      - name: Capture zigzag first, then other E1M1 scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          for pose in zigzag0 zigzag64 zigzag128 zigzag192 spawn stairs patio door walk; do
+            for mode in 0 1; do
+              name="sram${mode}-$pose"
+              out="$PRIVATE/$name"
+              mkdir -p "$out"
+              if python3 research/ferret-round5/capture.py capture "$R5/core/genesis_plus_gx_libretro.so" "$(cat "$R5/rom.path")" "$out" "$mode" "$pose" > "$out/run.log" 2>&1; then
+                echo "$name completed"
+              else
+                echo "$name incomplete or failed; see summary if present"
+              fi
+              if [[ -f "$out/summary.json" ]]; then
+                cp "$out/summary.json" "$R5/public/$name.json"
+                cat "$out/summary.json"
+              else
+                echo '{"status":"capture_failed_before_summary"}' > "$R5/public/$name.json"
+              fi
+            done
+          done
+      - name: Test chained rendering on each captured sequence
+        if: always() && env.PRIVATE != '' && env.R5 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 research/ferret-round5/compare.py "$HOME/.local/share/ferret-research" "$(cat "$R5/rom.path")" "$PRIVATE" "$R5/public/differential.json"
+      - name: Upload aggregate results only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-round5-summary
+          path: ${{ runner.temp }}/ferret-r5-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
