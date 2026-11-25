@@ -148,6 +148,7 @@ static inline uint32_t mulu16(uint16_t a, uint16_t b)
 extern void col_fill(uint8_t *p, uint16_t n, uint16_t c);
 extern void col_tex(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t vbot, int32_t negstep, uint16_t hmask);
 extern void col_tex_nm(uint8_t *p, uint16_t n, const uint8_t *tc, int32_t vbot, int32_t negstep);
+extern void col_native_run(uint8_t *col, const uint8_t *src, const uint8_t *entry, uint32_t n);
 #else
 static inline uint16_t divu16(uint32_t n, uint16_t d) { return (uint16_t)(n / d); }
 static inline int16_t divs16(int32_t n, int16_t d) { return (int16_t)(n / d); }
@@ -893,8 +894,8 @@ static void draw_mask_column(const VisSpr *v,int x)
 #if defined(__m68k__) && defined(DREAD_NATIVE_PERSPECTIVE)
     extern const uint8_t native_zq72[],native_zq144[];
     extern const int16_t *const native_offsets_b[],*const native_offsets_f[];
-    const int16_t *offset=0;
-    if(COLB==1){uint32_t idx=(uint32_t)iz>>5;if(idx>32767)idx=32767;uint16_t q=(VIEW_H==72?native_zq72:native_zq144)[idx];offset=(VIEW_H==72?native_offsets_b:native_offsets_f)[q];}
+    const int16_t *offset=0;uint16_t nq=0;
+    if(COLB==1){uint32_t idx=(uint32_t)iz>>5;if(idx>32767)idx=32767;uint16_t q=(VIEW_H==72?native_zq72:native_zq144)[idx];nq=q;offset=(VIEW_H==72?native_offsets_b:native_offsets_f)[q];}
 #else
     const int16_t *offset=0;
 #endif
@@ -968,7 +969,17 @@ static void draw_mask_column(const VisSpr *v,int x)
             /* draw rows while their texel is inside the run (texel is monotonic in y) */
             int y=lo;
             if(offset){
-                for(;y<bot;y++){const int tx=vbi+offset[y];if(tx>=tb)break;const uint8_t c=tc[tx];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}
+                int ye=y;                          /* first row past the run (texel >= tb) */
+                {int l2=y,h2=1;                    /* gallop: runs are short */
+                 for(;;){const int pr=l2+h2-1;if(pr>=bot){ye=bot;break;}if(vbi+offset[pr]>=tb){ye=pr;break;}l2=pr+1;h2<<=1;}
+                 {int a=l2,b=ye;while(a<b){const int mid=(a+b)>>1;if(vbi+offset[mid]>=tb)b=mid;else a=mid+1;}ye=a;}}
+#if defined(__m68k__) && defined(DREAD_NATIVE_PERSPECTIVE)
+                {
+                    const uint8_t *row0=((const uint8_t *const *)r_nat_scal)[nq];
+                    if(row0 && ye-y>=3){col_native_run(col,tc+vbi,row0+y*12,(uint32_t)(ye-y));y=ye;}
+                }
+#endif
+                for(;y<ye;y++){const uint8_t c=tc[vbi+offset[y]];col[y*4]=c;}
             }else{
                 int32_t v=vb-mul32k(step,HORIZON-y);
                 for(;y<bot;y++,v+=step){const int tx=v>>16;if(tx>=tb)break;const uint8_t c=tc[tx];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}

@@ -680,3 +680,21 @@ tex_native:
         dbra    %d6,4b
 5:      rts
 #endif
+
+/* col_native_run(col, src, entry, n): draw n rows with the generated native scaler.
+ * entry = scaler row0 + y0*12 (first row of the run), src = texture column + (vbase integer),
+ * col = column base (absolute row destinations y*4). Same MOVE/DBRA/RTS code as tex_native; the
+ * scaler's final RTS returns to the pea'd label below. d6 is callee-saved, so it is preserved. */
+        .globl  col_native_run
+col_native_run:
+        move.l  %d6,-(%sp)
+        move.l  8(%sp),%a0                 /* col */
+        move.l  12(%sp),%a1                /* src */
+        move.l  20(%sp),%d6                /* n (low word) */
+        subq.w  #1,%d6
+        pea     .Lcnr_ret(%pc)
+        move.l  20(%sp),-(%sp)             /* entry (shifted by the 2 pushes) */
+        rts
+.Lcnr_ret:
+        move.l  (%sp)+,%d6
+        rts
