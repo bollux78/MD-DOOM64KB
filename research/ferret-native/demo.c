@@ -181,6 +181,7 @@ void md_main(void){
         MB[13]=(uint32_t)(uint16_t)x;MB[14]=(uint32_t)(uint16_t)y;MB[15]=(uint32_t)(uint16_t)a;MB[16]=s.tests;
         MB[2]=rc?0x80000006u:5;MB[1]=++seq;
         if(rc)for(;;){}
+        next_blank(); /* one observable, fully published frame before next render */
     }
 }
 #endif
