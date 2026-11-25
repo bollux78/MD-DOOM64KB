@@ -1,0 +1,88 @@
+name: Ferret target preparation - independent component gates
+on:
+  pull_request:
+    branches: [research-ferret-visibility-v2-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-target-prep.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-target-prep-x360
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-target-prep-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build portable core and target components
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          mkdir -p "$out/public"
+          cc -std=c99 -O2 -Wall -Wextra -Werror -fPIC -shared research/ferret-native/{core,frv2,presentation}.c -o "$out/libferret_native.so"
+      - name: FRV2 native differential
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          python3 research/ferret-native/test_target.py visibility "$HOME/.local/share/ferret-research" "$out/libferret_native.so" "$out/public/visibility.json"
+      - name: VDP tile conversion roundtrip
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          python3 research/ferret-native/test_target.py presentation "$HOME/.local/share/ferret-research" "$out/libferret_native.so" "$out/public/presentation.json"
+      - name: Compact WAD asset roundtrip
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          python3 research/ferret-native/test_target.py assets "$HOME/.local/share/ferret-research" "$out/libferret_native.so" "$out/public/assets.json"
+      - name: Investigate independent scaler formula
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          python3 research/ferret-round4/capture.py locate "$out/rom.path"
+          python3 research/ferret-native/test_target.py scaler "$HOME/.local/share/ferret-research" "$out/libferret_native.so" "$out/public/scaler.json" --rom "$(cat "$out/rom.path")"
+      - name: Inspect available 68000 toolchain
+        if: always()
+        shell: bash
+        run: |
+          set -eu
+          out="$RUNNER_TEMP/ferret-target-$GITHUB_RUN_ID"
+          for tool in m68k-elf-gcc m68k-linux-gnu-gcc m68k-elf-as m68k-linux-gnu-as; do
+            if command -v "$tool" >/dev/null; then "$tool" --version | head -1; fi
+          done
+          if [ -n "${GDK:-}" ] && [ -f "$GDK/bin/m68k-elf-gcc" ]; then "$GDK/bin/m68k-elf-gcc" --version | head -1; fi
+          for compiler in m68k-elf-gcc m68k-linux-gnu-gcc "${GDK:-/nonexistent}/bin/m68k-elf-gcc"; do
+            if command -v "$compiler" >/dev/null; then
+              for unit in core frv2 presentation; do
+                "$compiler" -m68000 -std=c99 -Os -ffreestanding -c "research/ferret-native/$unit.c" -o "$out/$unit.o"
+              done
+              echo "68000 OBJECT BUILD OK"
+              break
+            fi
+          done
+      - name: Publish numeric results only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-target-prep-summary
+          path: ${{ runner.temp }}/ferret-target-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
