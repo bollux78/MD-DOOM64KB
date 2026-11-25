@@ -1,0 +1,100 @@
+name: Ferret backend - scaler and direct packed assets
+on:
+  pull_request:
+    branches: [research-ferret-target-prep-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-md-backend.yml','research/ferret-native/**','research/ferret-wad/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-md-backend-x360
+  cancel-in-progress: false
+jobs:
+  backend:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-md-backend-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build portable core
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-md-$GITHUB_RUN_ID"
+          mkdir -p "$out/public"
+          cc -std=c99 -O2 -Wall -Wextra -Werror -fPIC -shared research/ferret-native/{core,frv2,presentation,md_video}.c -o "$out/libferret_native.so"
+      - name: Fit scaler coefficients and verify all samples
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          out="$RUNNER_TEMP/ferret-md-$GITHUB_RUN_ID"
+          python3 research/ferret-round4/capture.py locate "$out/rom.path"
+          python3 research/ferret-native/fit_scaler.py "$(cat "$out/rom.path")" "$root/backend/$GITHUB_RUN_ID" "$out/public/scaler.json"
+      - name: Packed WAD textures and DMA command tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-md-$GITHUB_RUN_ID"
+          python3 research/ferret-native/test_backend.py "$HOME/.local/share/ferret-research" "$out/libferret_native.so" "$out/public/backend.json"
+      - name: Locate existing target build tooling and compile objects
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-md-$GITHUB_RUN_ID"
+          echo "Existing repository build recipes:"
+          git ls-files .github/workflows | sed -n '1,100p'
+          git grep -n -E 'm68k-elf-gcc|m68k-linux-gnu-gcc|ghcr.io/[^ ]*sgdk|docker (run|pull).*sgdk|GDK(_PATH)?=' -- .github/workflows | sed -n '1,100p' || true
+          python3 - "$out" <<'PY'
+          import json, pathlib, shutil, subprocess, sys, os
+          out=pathlib.Path(sys.argv[1])
+          names=("m68k-elf-gcc","m68k-linux-gnu-gcc","m68k-unknown-elf-gcc","m68k-none-elf-gcc")
+          paths=[pathlib.Path.home()/"mars/m68k-elf/bin/m68k-elf-gcc"]
+          paths.extend(pathlib.Path(x) for n in names if (x:=shutil.which(n)))
+          for v in ("GDK","SGDK","SGDK_PATH"):
+              if os.environ.get(v):paths.extend(pathlib.Path(os.environ[v])/"bin"/n for n in names)
+          roots=[pathlib.Path.home()/"mars",pathlib.Path.home()/"Projetos",pathlib.Path.home()/".local/share",pathlib.Path.home()/".local/opt",pathlib.Path("/opt")]
+          skip={".git","node_modules",".cache","__pycache__","_work","ferret-research"}
+          for root in roots:
+              if not root.is_dir():continue
+              for d,dirs,files in os.walk(root,followlinks=False):
+                  dirs[:]=[x for x in dirs if x not in skip]
+                  for n in names:
+                      if n in files:paths.append(pathlib.Path(d)/n)
+          report={"candidates":0,"objects":0,"cross_compile_confirmed":False,"attempts":[]}
+          for path in dict.fromkeys(paths):
+              if not path.is_file() or not os.access(path,os.X_OK):continue
+              report["candidates"]+=1
+              result={"name":path.name,"objects":0}
+              for unit in ("core","frv2","presentation","md_video"):
+                  c=subprocess.run([str(path),"-m68000","-std=c99","-Os","-ffreestanding","-c",f"research/ferret-native/{unit}.c","-o",str(out/f"{unit}.o")],capture_output=True,text=True)
+                  if c.returncode:
+                      result["failed_unit"]=unit
+                      (out/"compiler-error.txt").write_text(c.stderr)
+                      print("CROSS COMPILE ERROR",unit,c.stderr[-2500:])
+                      break
+                  result["objects"]+=1
+              report["attempts"].append(result)
+              if result["objects"]==4:
+                  report["objects"]=4;report["cross_compile_confirmed"]=True;break
+          (out/"public/toolchain.json").write_text(json.dumps(report))
+          print("TOOLCHAIN "+json.dumps(report))
+          if not report["cross_compile_confirmed"]:sys.exit(2)
+          PY
+      - name: Publish numeric reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-md-backend-summary
+          path: ${{ runner.temp }}/ferret-md-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn

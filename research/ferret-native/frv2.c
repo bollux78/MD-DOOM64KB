@@ -4,7 +4,6 @@
  */
 #include <stdint.h>
 #include <stddef.h>
-#include <string.h>
 #define FR_STACK 64
 typedef struct { const uint8_t *blob,*cells,*masks,*nodes; uint16_t nc,ns,nm,nn,stride; } FRV;
 typedef struct { const FRV *v; const int16_t *planes; const uint8_t *mask; int16_t x,y; uint16_t np,sp,stack[FR_STACK]; uint32_t tests,visits; } FRIter;
@@ -12,7 +11,7 @@ static uint16_t be16(const uint8_t *p){return (uint16_t)((uint16_t)p[0]<<8|p[1])
 static uint32_t be32(const uint8_t *p){return ((uint32_t)be16(p)<<16)|be16(p+2);}
 static int valid_ref(uint16_t r,uint16_t nc,uint16_t nn){return r==65535u||(r&32768u?(r&32767u)<nc:r<nn);}
 int frv_open(FRV *v,const uint8_t *b,size_t n){
-    if(!v||!b||n<16||memcmp(b,"FRV2",4))return -1;
+    if(!v||!b||n<16||(b[0]!='F'||b[1]!='R'||b[2]!='V'||b[3]!='2'))return -1;
     uint16_t nc=be16(b+4),ns=be16(b+6),nm=be16(b+8),nn=be16(b+10);
     uint32_t mb=be32(b+12),stride=((uint32_t)ns+7)/8,cb=(uint32_t)nc*12,nb=(uint32_t)nn*8;
     if(!nc||nc>=32767||!ns||!nm||nn>=32767||mb!=stride*nm)return -2;
