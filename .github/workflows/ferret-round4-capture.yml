@@ -1,7 +1,8 @@
 name: Ferret Alpha2 RE round 4 - capture only
 on:
-  push:
-    branches: [research-ferret-round4-capture-20261125]
+  pull_request:
+    branches: [research-ferret-solid-20261125]
+    types: [opened, synchronize, reopened]
     paths: ['.github/workflows/ferret-round4-capture.yml', 'research/ferret-round4/**']
   workflow_dispatch:
 permissions:
@@ -11,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   capture:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-round4-capture-20261125')
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     steps:
@@ -63,6 +65,14 @@ jobs:
             done
           done
           exit "$status"
+      - name: Compare against verified models from local archives
+        if: always() && env.PRIVATE != '' && env.R4 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s "$R4/rom.path" && -d "$PRIVATE" ]]; then
+            python3 research/ferret-round4/compare.py "$HOME/.local/share/ferret-research" "$(cat "$R4/rom.path")" "$PRIVATE" "$R4/public/differential.json"
+          fi
       - name: Upload aggregate results only (no ROM, RAM, screenshots or raw registers)
         if: always()
         uses: actions/upload-artifact@v4
