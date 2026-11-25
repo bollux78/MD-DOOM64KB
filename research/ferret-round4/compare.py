@@ -1,6 +1,6 @@
 """Run earlier independent models against exact stage snapshots on the runner.
 Raw evidence and ROM remain local. Only numeric summaries are exported."""
-import argparse, hashlib, json, pathlib, sys, tempfile, zipfile
+import argparse, hashlib, json, pathlib, sys, tempfile, zipfile, base64, zlib
 P=pathlib.Path
 HASHES={
 "ferret_contract.py":"75105b0946eab58b9447c9ba0f254fa00dcad3d38ebcc14ed434d0342ab0e2fb",
@@ -16,6 +16,12 @@ def load_models(root,dest):
     def accept(name,data):
         if name in needed and hashlib.sha256(data).hexdigest()==HASHES[name]:
             (dest/name).write_bytes(data);needed.remove(name)
+    bundled=json.loads(P(__file__).with_name("round3-models.json").read_text())
+    for name,encoded in bundled.items():
+        data=zlib.decompress(base64.b64decode(encoded,validate=True))
+        if name not in HASHES or hashlib.sha256(data).hexdigest()!=HASHES[name]:
+            raise ValueError("Bundled model hash mismatch: "+name)
+        accept(name,data)
     for p in root.rglob("*"):
         if not needed:break
         if not p.is_file():continue
