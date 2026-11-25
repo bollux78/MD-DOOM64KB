@@ -41,7 +41,7 @@ def main():
         from ferret_contract import scaler,s16,u16,i16,u32,sprite_column
         from ferret_stage import actor_list,s32,door_step
         table=(I16*(2048*H))();factors=(I16*2048)()
-        for i in range(2048):
+        for i in range((0x500000//81>>5)+1):
             factor,offsets=scaler(rom,i*32);factors[i]=factor;table[i*H:(i+1)*H]=offsets
         rombuf=(U8*len(rom)).from_buffer_copy(rom)
         cache={}
