@@ -49,7 +49,7 @@ def sample_table():
     for i in range(2048):
         for y in range(H):a[i*H+y]=((y-35)*128)//max(i,1)-1
     return a
-def view(lib,r,g,camera,table,output=None):
+def view(lib,r,g,camera,table,output=None,compiled=None):
     x,y,z,angle=camera
     si=round(math.sin(math.radians(90-angle))*16384);co=round(math.cos(math.radians(90-angle))*16384)
     # Camera +X = 0 degrees, positive angle turns towards +Y.
@@ -71,10 +71,29 @@ def view(lib,r,g,camera,table,output=None):
                 b,o=r.packed_texture(k,origin);cache[key]=(U8*len(b)).from_buffer_copy(b),o
         a,o=cache[key];return Asset(a,len(a),o)
     stats={"candidate_segs":0,"projected":0,"closed_columns":0,"projection_errors":0,"raster_errors":0}
-    for leaf in bsp_order(g,x,y):
+    stats["runtime_bsp_tests"]=0
+    keep,order=None,None
+    if compiled is not None:
+        from visibility_compile import selection
+        keep,order=selection(g,x,y,compiled,stats)
+    if order is None:
+        # Count actual visited branch decisions, including traversal before early closure.
+        def baseline():
+            stack=[len(g["nodes"])-1 if g["nodes"] else 32768]
+            while stack:
+                i=stack.pop()
+                if i&32768:yield i&32767;continue
+                a,b,dx,dy,*rest=g["nodes"][i]
+                side=int((x-a)*dy<=(y-b)*dx)
+                stats["runtime_bsp_tests"]+=1
+                c=rest[-2:];stack.extend((c[1-side],c[side]))
+        order=baseline()
+    for leaf in order:
         if all(a==b==0 for a,b in zip(f.top,f.bottom)):break
         n,a=g["subsectors"][leaf]
-        for v0,v1,_,lid,d,ofs in g["segs"][a:a+n]:
+        for segid in range(a,a+n):
+            if keep is not None and segid not in keep:continue
+            v0,v1,_,lid,d,ofs=g["segs"][segid]
             stats["candidate_segs"]+=1
             l=g["lines"][lid];side=l[5+d];other=l[6-d]
             if side==65535:continue
@@ -110,7 +129,7 @@ def view(lib,r,g,camera,table,output=None):
             # Height origin compensates the native camera-dependent byte offset.
             au=tex(uk,ceil+sd[1]) if textured else Asset();al=tex(lk,(back[0] if back else floor)+sd[1]) if textured else Asset()
             if lib.fr_wall(C.byref(f),C.byref(j),au,al,table,sky):stats["raster_errors"]+=1
-    stats.update(closed_columns=sum(a==b==0 for a,b in zip(f.top,f.bottom)),written_bytes=sum(v!=0xa5 for v in f.pixels),unwritten_bytes=sum(v==0xa5 for v in f.pixels),masked_candidates=masked,unsupported_sectors=unsupported,missing_materials=len(fallback),frame_sha256=hashlib.sha256(bytes(f.pixels)).hexdigest())
+    stats.update(closed_columns=sum(a==b==0 for a,b in zip(f.top,f.bottom)),written_bytes=sum(v!=0xa5 for v in f.pixels),unwritten_bytes=sum(v==0xa5 for v in f.pixels),masked_candidates=masked,unsupported_sectors=unsupported,missing_materials=len(fallback),frame_sha256=hashlib.sha256(bytes(f.pixels)).hexdigest(),state_sha256=hashlib.sha256(bytes(f.pixels)+struct.pack(">480H",*f.depth,*f.top,*f.bottom)).hexdigest())
     if output:
         with output.open("wb") as fp:
             fp.write(f"P6\n{W} {H}\n255\n".encode())
