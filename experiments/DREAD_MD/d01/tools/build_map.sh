@@ -144,6 +144,8 @@ if [[ ${DREAD_SSF:-0} == 1 ]]; then
 fi
 size=$(stat -c %s "$rom")
 if [[ ${DREAD_SSF:-0} != 1 ]] && (( size > 4194304 )); then
+    cp "$rom" "$out/OVERSIZE-DIAGNOSTIC.bin"
+    cp "$elf" "$out/OVERSIZE-DIAGNOSTIC.elf"
     echo "$map excede 4 MiB: $size bytes" >&2
     exit 1
 fi

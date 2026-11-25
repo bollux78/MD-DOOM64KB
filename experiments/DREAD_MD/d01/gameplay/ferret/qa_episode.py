@@ -3,6 +3,8 @@ rows=[]
 for mapid in range(9):
  g=v.Game(VARIANT);g.play(mapid);g.put('cheat_god',1);g.put('fcap',0)
  before=g.rd('vints');g.e.step(180,capture=True);assert g.rd('vints')!=before
+ angle=g.raw('view',12)[10:12];g.e.step(80,6);g.e.step(80,capture=True)
+ assert g.raw('view',12)[10:12]!=angle,'main loop stopped during wall render'
  assert g.rd('r_vh')==72
  assert g.rd('r_vw') in [80,160]
  img=g.e.screenshot();assert len(img.getcolors(320*224) or [])>=8,'black/blank output'

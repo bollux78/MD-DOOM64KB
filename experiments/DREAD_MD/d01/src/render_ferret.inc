@@ -11,7 +11,7 @@
 extern const int16_t *const ferret_sample_offsets[2048];
 #endif
 #if defined(__m68k__) || defined(__mc68000__)
-extern const uint8_t *const ferret_scalers_byte[2048],*const ferret_scalers_pair[2048];
+extern const uint8_t *const ferret_scalers_byte[2048];
 extern void col_native_run(uint8_t*,const uint8_t*,const uint8_t*,uint32_t);
 #endif
 static int fr_offset(uint16_t scale,int y)
@@ -70,10 +70,11 @@ static void fr_texture(int x,int y0,int y1,const Part *p,uint16_t u,uint16_t inv
     int last=first+fr_offset(selector,y1-1)-fr_offset(selector,y0);
     if(last<=p->vlim){
         int32_t origin=first-fr_offset(selector,y0);
-        const uint8_t *base_source=COLB==1?source:(const uint8_t *)rec+512;
-        const uint8_t *src=(const uint8_t *)((unsigned long)base_source+origin*(COLB==1?1:2));
-        const uint8_t *entry=(COLB==1?ferret_scalers_byte:ferret_scalers_pair)[inv>>5];
-        if(entry){col_native_run(dst,src,entry+y0*12,(uint32_t)(y1-y0));return;}
+        const uint8_t *src=(const uint8_t *)((unsigned long)source+origin);
+        const uint8_t *entry=ferret_scalers_byte[inv>>5];
+        col_native_run(dst,src,entry+y0*12,(uint32_t)(y1-y0));
+        if(COLB==2)for(int y=y0;y<y1;y++)dst[y*4+1]=dst[y*4];
+        return;
     }
 #endif
     for(int y=y0;y<y1;y++){
@@ -85,7 +86,7 @@ static void fr_draw_seg(const MapSeg *s)
 {
     uint16_t a=xform(s->v1),b=xform(s->v2);
     int32_t x0=vtx[a],z0=vtz[a],x1=vtx[b],z1=vtz[b];
-    if((int64_t)x0*z1-(int64_t)x1*z0>=0)return;
+    if(muls16((int16_t)x0,(int16_t)z1)-muls16((int16_t)x1,(int16_t)z0)>=0)return;
     /* Q6 U allows 511 source pixels and their inverse-depth products to fit
      * in unsigned 32 bits; modulo 256 preserves every supported material. */
     int32_t u0=(uint16_t)s->xoff&255,u1=u0+s->len;

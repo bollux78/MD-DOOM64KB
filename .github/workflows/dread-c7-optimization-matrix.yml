@@ -60,6 +60,15 @@ jobs:
             make -C "$core" -f Makefile.libretro -j3 platform=unix
           fi
           echo "CORE=$core/genesis_plus_gx_libretro.so" >> "$GITHUB_ENV"
+      - name: Restore verified unmodified CONTROL ROM
+        if: matrix.variant == 'CONTROL'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: C7-FERRET-CONTROL-45607031274
+          run-id: 45607031274
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ferret-${{ github.run_id }}/CONTROL
       - name: Build, verify all maps, test gameplay and measure NTSC
         shell: bash
         env:

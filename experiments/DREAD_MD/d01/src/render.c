@@ -50,13 +50,46 @@ static void load_pvs_row(uint16_t sub)
 {
     if (cached_pvs_sub == sub) return;
     cached_pvs_sub = sub;
+#ifdef DREAD_FERRET_COLUMN_RLE
+    extern uint8_t fr_work_arena[] __asm__("rec");
+    static const uint8_t *previous_block;
+    const uint32_t ref=dread_map->pvs_offsets[sub];
+    const uint8_t *src=episode_pvs+(ref>>3);
+    uint8_t *group=fr_work_arena+512;
+    if(previous_block!=src){
+        const uint8_t *packed=src+3;
+        uint16_t size=((uint16_t)src[1]<<8)|src[2],at=0;
+        while(at<size){
+            uint8_t packet=*packed++;
+            if(packet&128){
+                uint16_t n=(packet&127)+3,distance=(uint16_t)packed[0]<<8|packed[1];packed+=2;
+                while(n--){group[at]=group[at-distance];at++;}
+            }else{uint16_t n=packet+1;while(n--)group[at++]=*packed++;}
+        }
+        previous_block=src;
+    }
+    uint16_t left=dread_map->pvs_nbytes+dread_map->pvs_sbytes;
+    const uint8_t *row=group+(ref&7)*left;uint8_t *dst=pvs_row;
+    while(left--)*dst++=*row++;
+#else
     const uint8_t *src = episode_pvs + dread_map->pvs_offsets[sub];
     uint16_t left = dread_map->pvs_nbytes + dread_map->pvs_sbytes;
     uint8_t *dst = pvs_row;
-    if (*src++ == 0) {
+    const uint8_t encoding=*src++;
+    if (encoding == 0) {
         while (left--) *dst++ = *src++;
         return;
     }
+#ifdef DREAD_FERRET_COLUMN_RLE
+    if(encoding==2){
+        while(left){
+            uint8_t packet=*src++;uint16_t n;
+            if(packet&128){n=(packet&127)+3;uint16_t distance=*src++;left-=n;while(n--){*dst=*(dst-distance);dst++;}}
+            else{n=packet+1;left-=n;while(n--)*dst++=*src++;}
+        }
+        return;
+    }
+#endif
     while (left) {
         const uint8_t packet = *src++;
         uint16_t n = (packet & 127) + 1;
@@ -64,6 +97,7 @@ static void load_pvs_row(uint16_t sub)
         if (packet & 128) { while (n--) *dst++ = 0; }
         else { while (n--) *dst++ = *src++; }
     }
+#endif
 }
 #else
 extern const uint8_t pvs_nodes[], pvs_subs[];   /* pvs.c (generated): bitsets per subsector */
@@ -594,18 +628,23 @@ static inline const uint8_t *texture_column(const Part *p, uint16_t u)
 #endif
     static const uint8_t *previous;
     if(previous!=source){
-        unsigned size=((unsigned)source[0]<<8)|source[1],at=0;
+        unsigned header=((unsigned)source[0]<<8)|source[1],size=header&32767,at=0;
         const uint8_t *packed=source+2;
         if(size>512)size=512; /* converter also rejects it */
-        while(at<size){
+        if(header&32768){
+            unsigned count=*packed++;if(!count)count=256;
+            const uint8_t *palette=packed;packed+=count;
+            unsigned nbits=0,limit=count-1;do{nbits++;limit>>=1;}while(limit);
+            unsigned mask=(1u<<nbits)-1,acc=0,have=0;
+            while(at<size){
+                if(have<nbits){acc=(acc<<8)|*packed++;have+=8;}
+                have-=nbits;decoded[at++]=palette[(acc>>have)&mask];
+            }
+        }else while(at<size){
             unsigned control=*packed++,n=(control&127)+1;
             if(control&128){uint8_t value=*packed++;while(n-- && at<size)decoded[at++]=value;}
             else{while(n-- && at<size)decoded[at++]=*packed++;}
         }
-#ifdef DREAD_FERRET_RENDERER
-        uint8_t *pairs=(uint8_t *)rec+512;
-        for(unsigned i=0;i<size;i++){pairs[i*2]=decoded[i];pairs[i*2+1]=decoded[i];}
-#endif
         previous=source;
     }
     return decoded;

@@ -3,6 +3,7 @@
 import re
 import os
 from ferret_columns import encode_column
+from ferret_pvs import encode as pvs_lz_encode, encode_group
 import sys
 from pathlib import Path
 
@@ -61,7 +62,10 @@ def pvs_encode(raw):
         if not zero:
             packed.extend(raw[first:last])
         first = last
-    return bytes(packed) if len(packed) < len(raw)+1 else b"\0" + raw
+    result=bytes(packed) if len(packed)<len(raw)+1 else b"\0"+raw
+    if os.environ.get("DREAD_FERRET_COLUMN_RLE","0")=="1":
+        result=min([result,pvs_lz_encode(raw)],key=len)
+    return result
 
 
 def main():
@@ -131,7 +135,16 @@ def main():
         if len(nodes) != nsub*nw or len(subs) != nsub*sw:
             raise ValueError(f"{path}: PVS size mismatch")
         sizes["visibility"] += len(nodes)+len(subs)
-        offsets = [pvs.add(pvs_encode(nodes[j*nw:(j+1)*nw] + subs[j*sw:(j+1)*sw])) for j in range(nsub)]
+        if os.environ.get("DREAD_FERRET_COLUMN_RLE","0")=="1":
+            rows=[nodes[j*nw:(j+1)*nw]+subs[j*sw:(j+1)*sw] for j in range(nsub)]
+            count=min(8,1408//(nw+sw))
+            if count<1:raise ValueError('PVS row exceeds Ferret shared arena')
+            offsets=[]
+            for first in range(0,nsub,count):
+                raw=b''.join(rows[first:first+count]);offset=pvs.add(encode_group(raw))
+                offsets.extend((offset<<3)|k for k in range(min(count,nsub-first)))
+        else:
+            offsets = [pvs.add(pvs_encode(nodes[j*nw:(j+1)*nw] + subs[j*sw:(j+1)*sw])) for j in range(nsub)]
         out.append(array(f"ep{i}_pvs", offsets, "uint32_t"))
         # The renderer uses the segment length, but never reads its linedef ID.
         data["map_segs"] = re.sub(r"\{((?:-?\d+,){10})-?\d+,(-?\d+)\}",

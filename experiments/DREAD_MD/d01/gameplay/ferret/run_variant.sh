@@ -13,7 +13,11 @@ done
 export GDK DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-" PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
 case $variant in
  CONTROL)
-  (unset DREAD_FERRET_RENDERER DREAD_FERRET_COLUMN_RLE DREAD_SOURCE_PIXELS; bash "$root/gameplay/optimization/compile_one.sh" CONTROL "$out") > "$out/build.log" 2>&1 ;;
+  if [[ -s "$out/EPISODE.bin" && -s "$out/EPISODE.elf" ]] && [[ $(sha256sum "$out/EPISODE.bin" | cut -d' ' -f1) == bada47a0c028fb70f4f76ddbdd495ea1c0fd6b9797c101b54cb1b064ffc5ad56 ]]; then
+    echo 'Reusing verified CONTROL ROM from run45607031274; repeating QA and NTSC benchmarks' | tee -a "$out/build.log"
+  else
+    (unset DREAD_FERRET_RENDERER DREAD_FERRET_COLUMN_RLE DREAD_SOURCE_PIXELS; bash "$root/gameplay/optimization/compile_one.sh" CONTROL "$out") > "$out/build.log" 2>&1
+  fi ;;
  FERRET160|FERRET80)
   flags='';[[ $variant != FERRET80 ]] || flags='-DSTART_MODE=9'
   DREAD_FERRET_FLAGS="$flags" bash "$root/gameplay/ferret/build.sh" "$wad" "$out" > "$out/build.log" 2>&1

@@ -17,7 +17,7 @@ ax,ay=struct.unpack_from('<hh',verts,l[0]*4);bx,by=struct.unpack_from('<hh',vert
 warp(g,(ax+bx)/2+dy/length*80,(ay+by)/2-dx/length*80,math.degrees(math.atan2(dx,-dy)));g.e.step(100,capture=True);g.shot('masked-wall')
 results.append({'case':'masked_wall','queued':g.rd('nmasked'),'dropped_total':g.rd('r_mask_dropped')});g.e.close()
 # Walk across an actual teleporter line from its front side.
-g=fixture(4);i=w.find('E1M5');ld=w.idx(i+2);verts=w.idx(i+4)
+g=fixture(4);g.put('bench_req',0);g.put('cheat_god',1);i=w.find('E1M5');ld=w.idx(i+2);verts=w.idx(i+4)
 for j in range(0,len(ld),14):
  l=struct.unpack_from('<7H',ld,j)
  if l[3]!=97:continue

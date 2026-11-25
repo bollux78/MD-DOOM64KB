@@ -2,7 +2,7 @@
 
 Preparação de 25/11/2026. Base C7: `114a4147073c7c7ce3aa314d2ad93b57d2a15bae`, com a otimização de grades. Branch experimental `exp-ferret-episode-20261125`.
 
-**Estado: implementação experimental preparada; ROM não compilada, integração 68000 não validada e FPS ainda não medido.** O usuário reservou a execução no runner para o comando “compilar”. Não existe alegação de velocidade igual à Ferret ou de conclusão da validação do jogo.
+**Estado: compilação autorizada em 25/11/2026, com recuperação automática em andamento.** A primeira ROM Ferret excedeu 4 MiB; ainda não há ROM Ferret validada ou FPS medido. Não existe alegação de velocidade igual à Ferret ou de conclusão da validação do jogo.
 
 ## O que mudou
 
@@ -10,7 +10,7 @@ Preparação de 25/11/2026. Base C7: `114a4147073c7c7ce3aa314d2ad93b57d2a15bae`,
 - Adaptação ao framebuffer da C7, em 160x72 ou 80x72 colunas/linhas lógicas. O modo de 80 colunas duplica os bytes de saída, com as mesmas coordenadas de textura e projeção vertical. Os modos 144 linhas e H32 ficam indisponíveis nesta experiência; o menu normaliza a seleção para os dois modos H40 suportados.
 - Coordenadas U em unidades do WAD, textura com todas as colunas originais e pegamento vertical da C7. Uma porta de 128 unidades consulta a textura de 128 pixels uma vez. Não há ampliação de texturas C7 já reduzidas.
 - Paredes, objetos e frames de inimigos são regenerados do WAD shareware em largura e altura originais. A conversão conserva o mapeamento de cores para a paleta Mega Drive da C7; isto não significa cores RGB originais do PC. O campo histórico `w2` de MapSprite passa a conter a largura inteira quando DREAD_SOURCE_PIXELS está ativo, e a projeção usa essa mesma convenção.
-- Colunas de textura comprimidas sem perda e deduplicadas entre os nove mapas. O buffer de descompressão de 512 bytes e sua cópia em pares reutilizam a arena ColRec que este backend não usa; não alocam mais 1536 bytes de WRAM. Apenas o ponteiro do último bloco decodificado é novo estado persistente.
+- Colunas de textura comprimidas sem perda e deduplicadas entre os nove mapas. O buffer de descompressão de 512 bytes e o cache de grupos de PVS (até 1408 bytes) reutilizam a arena ColRec de 1920 bytes, que este backend não usa. Dois ponteiros de cache são novo estado persistente. O modo de 80 colunas duplica a saída depois do mesmo escalador de bytes, compartilhando o código entre os dois modos.
 - Segmentos de desenho com comprimento máximo de 256 unidades, para limitar os produtos de perspectiva. Linhas de colisão, setores, especiais e topologia BSP não são simplificados.
 - Mantidos setores mutáveis, lógica, animações, armas, música, progressão, saída secreta e grades da C7. A integração desses sistemas está escrita, mas precisa dos testes reais de ROM abaixo.
 
@@ -26,7 +26,7 @@ O projeto não precisa da ROM Ferret para converter ou compilar. O WAD shareware
 - Verificação sintática com GCC 68000, incluindo os defines de combate. Sem linkedição e sem ROM.
 - Sintaxe Python, Bash, estrutura YAML e `git diff --check` dos fontes (o patch externo conserva o whitespace do contexto original).
 
-Os gráficos regenerados em bruto somaram 9.755.392 bytes de textura nos nove mapas, antes de compartilhar colunas e comprimir. O banco compartilhado comprimido com seus ponteiros ficou em **1.788.307 bytes**. Sprites compartilhados: **484.122 bytes**. Há 554 escalas distintas para 2048 seletores; o deslocamento das instruções MOVE é também a tabela de offsets no 68000, evitando outra cópia das tabelas. Esses valores não são o tamanho final da ROM. O pipeline rejeita resultado acima de 4 MiB; SSF permanece desligado. O tamanho e a margem de RAM finais só serão conhecidos após a linkedição.
+Os gráficos regenerados em bruto somaram 9.755.392 bytes de textura nos nove mapas, antes de compartilhar colunas e comprimir. O banco compartilhado comprimido com dicionários locais, compressão sem perda e seus ponteiros ficou em **1.361.053 bytes**. Sprites compartilhados: **484.122 bytes**. Há 554 escalas distintas para 2048 seletores; o deslocamento das instruções MOVE é também a tabela de offsets no 68000, evitando outra cópia das tabelas. Esses valores não são o tamanho final da ROM. O pipeline rejeita resultado acima de 4 MiB; SSF permanece desligado. O tamanho e a margem de RAM finais só serão conhecidos após a linkedição.
 
 `preflight-20261125.json` registra a auditoria dos dados. O log `host-probe-20261125.txt` registra as 576 vistas. Nenhum número do tempo do computador host deve ser apresentado como FPS do Mega Drive.
 
@@ -41,3 +41,9 @@ Workflow `.github/workflows/dread-c7-optimization-matrix.yml`, somente `workflow
 5. Consolidar ROMs, ELFs, imagens, logs e relatório comparativo. Em falha, conservar artefatos de diagnóstico; não promover a branch a estável.
 
 Não foi disparado esse workflow nesta preparação. Possíveis erros de link, inicialização, RAM, desempenho, artefatos nas junções de paredes e regressões de gameplay ainda devem ser resolvidos e medidos quando a compilação for autorizada.
+
+## Primeira compilação e recuperação
+
+O controle compilou com o hash conhecido `bada47a0c028fb70f4f76ddbdd495ea1c0fd6b9797c101b54cb1b064ffc5ad56`. O teste de teleporte mantinha bench_req ativo e ignorava o movimento por controle; a preparação foi corrigida, e o teste passou na mesma ROM.
+
+A primeira ROM Ferret linkou, mas foi rejeitada por exceder 4 MiB (5.373.952 bytes após alinhamento). Para preservar a resolução dos gráficos: dicionário por coluna quando menor que PackBits, compartilhamento dos escaladores entre 160/80 colunas, remoção dos escaladores legados de 144 linhas nesta variante e grupos de PVS comprimidos sem perda. Os conjuntos de visibilidade de referência foram decodificados e comparados byte a byte. A próxima compilação verificará o tamanho final e a execução.

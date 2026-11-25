@@ -8,6 +8,7 @@
 #include <string.h>
 #include "render.h"
 extern uint8_t pvs_seen[];
+extern volatile uint16_t dbg_flags;
 static uint8_t fb[FB_MAX];
 
 static int nsub, nnode;
@@ -27,6 +28,7 @@ int main(int argc, char **argv)
 {
     nsub = map_counts[2]; nnode = map_counts[3];
     R_Init();
+    dbg_flags=1; /* visibility uses clipping, never the sampled texture colours */
     /* doors open: everything behind a door must be in the visible sets */
 #ifndef DREAD_OPEN_PVS
     for (int d = 0; d < map_ndoors; d++) sec_ceil[map_doors[d].sector] = map_doors[d].open_ceil;

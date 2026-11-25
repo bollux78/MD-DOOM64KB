@@ -67,7 +67,7 @@
   ],
   "unique_columns": 19700,
   "unique_column_raw_bytes": 2987984,
-  "unique_column_rle_bytes": 1688051,
+  "unique_column_rle_bytes": 1260797,
   "scaler_selectors": 2048,
   "unique_scaler_rows": 554,
   "host_probe": "separate host_probe.c required; this script checks generated data only",

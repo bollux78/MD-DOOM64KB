@@ -21,7 +21,7 @@ def main():
     if a.assembly:
         with a.assembly.open('w') as f:
             f.write('.text\n.align 2\n')
-            for name in ['byte','pair']:
+            for name in ['byte']:
                 for row,idx in unique.items():
                     if name=='pair' and any(not -16384<=v<=16383 for v in row):continue
                     f.write('fr_%s_%d:\n'%(name,idx))
