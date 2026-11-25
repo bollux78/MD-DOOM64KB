@@ -924,6 +924,51 @@ static void draw_mask_column(const VisSpr *v,int x)
         return;
     }
 #endif
+#ifndef DREAD_GRATE_OLD
+    if(m->mask && H>=8){
+        /* Opaque runs: the texel row is monotonic in y, so instead of testing
+         * the coverage bit on every screen row, find the runs of opaque texels
+         * in this column (skipping empty bytes 8 at a time) and draw only the
+         * screen rows that map into them. Bit-exact with the per-row test. */
+        const int32_t vb=m->part.vbase16;
+        const int32_t vbi=vb>>16;
+        #define GTEX(yy) (offset?(vbi+offset[yy]):((vb-mul32k(step,HORIZON-(yy)))>>16))
+        const uint8_t *mb=m->mask+(((uint32_t)u*H)>>3);
+        const int tmax=m->realh-1;
+        int tl=GTEX(top),th=GTEX(bot-1);
+        if(tl<0)tl=0;if(th>tmax)th=tmax;
+        if(th<tl)return;
+        int t=tl,ya=top;
+        while(t<=th){
+            int ta=t;                              /* next opaque texel >= t */
+            for(;;){
+                if(ta>th){ta=th+1;break;}
+                uint8_t b=(uint8_t)(mb[ta>>3]>>(ta&7));
+                if(b){while(!(b&1)){b>>=1;ta++;}break;}
+                ta=(ta|7)+1;
+            }
+            if(ta>th)break;
+            int tb=ta;                             /* first transparent texel >= ta */
+            for(;;){
+                if(tb>th){tb=th+1;break;}
+                uint8_t b=(uint8_t)(((uint8_t)~mb[tb>>3])>>(tb&7));
+                if(b){while(!(b&1)){b>>=1;tb++;}break;}
+                tb=(tb|7)+1;
+            }
+            if(tb>th+1)tb=th+1;
+            /* first row y >= ya whose texel >= ta, and first row whose texel >= tb */
+            int lo=ya,hi=bot;
+            while(lo<hi){int mid=(lo+hi)>>1;if(GTEX(mid)>=ta)hi=mid;else lo=mid+1;}
+            const int y0=lo;
+            hi=bot;
+            while(lo<hi){int mid=(lo+hi)>>1;if(GTEX(mid)>=tb)hi=mid;else lo=mid+1;}
+            for(int y=y0;y<lo;y++){const uint8_t c=tc[GTEX(y)];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}
+            ya=lo;t=tb;
+        }
+        #undef GTEX
+        return;
+    }
+#endif
     for(int y=top;y<bot;y++){
         const int32_t tex=offset?(m->part.vbase16>>16)+offset[y]:(m->part.vbase16-mul32k(step,HORIZON-y))>>16;
         if(tex<0 || tex>=m->realh)continue;

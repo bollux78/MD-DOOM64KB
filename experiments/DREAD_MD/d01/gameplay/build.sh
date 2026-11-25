@@ -17,11 +17,15 @@ export DREAD_WEAPON_DITHER="${DREAD_WEAPON_DITHER:-1}"
 # Exact E1 SSF chromatic green 0x4C4 only in Baron ball and NUKEDGE wall trims.
 # All other former gray-12 uses are remapped to the remaining grays offline.
 export DREAD_GREEN_ACCENT="${DREAD_GREEN_ACCENT:-1}"
-# Draw transparent two-sided grates at 2x2 logical-pixel resolution.
-# Set DREAD_GRATE_HALF_RES=0 for an A/B test with C6-resolution grates.
+# Grates are drawn at full resolution by default (2x2 half resolution gave no measurable gain).
+# DREAD_GRATE_HALF_RES=1 restores the 2x2 mode; DREAD_GRATE_OLD=1 draws grates with the old per-row coverage test
+# instead of the opaque-run loop (A/B baseline).
 grate_flags=""
-if [[ ${DREAD_GRATE_HALF_RES:-1} == 1 ]]; then
+if [[ ${DREAD_GRATE_HALF_RES:-0} == 1 ]]; then
     grate_flags="-DDREAD_GRATE_HALF_RES"
+fi
+if [[ ${DREAD_GRATE_OLD:-0} == 1 ]]; then
+    grate_flags="$grate_flags -DDREAD_GRATE_OLD"
 fi
 DREAD_EXTRA_FLAGS="-DDREAD_JOY_VBLANK -DDREAD_NATIVE_PERSPECTIVE -DDREAD_CELLSTREAM_REPORT -DDREAD_COMBAT_12_20 -DDREAD_EASY_MODE $grate_flags ${DREAD_OPT_FLAGS:-}" \
     bash "$root/tools/build_map.sh" "$wad" EPISODE "$out" "${DREAD_ROM_LABEL:-DREAD GAMEPLAY C7 EASY}"

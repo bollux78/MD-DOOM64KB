@@ -14,7 +14,7 @@ done
 test -n "$GDK"
 export GDK PATH="$HOME/mars/m68k-elf/bin:$GDK/bin:$PATH"
 export DREAD_TC="$HOME/mars/m68k-elf/bin/m68k-elf-"
-export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=1
+export OPENBLAS_NUM_THREADS=1 DREAD_WEAPON_DITHER=1 DREAD_GRATE_HALF_RES=0
 unset DREAD_SSF DREAD_COPY_SEGA_S DREAD_PREPARED_MAPS
 mkdir -p "$output/release"
 python3 -m py_compile "$root/tools/conv.py" "$root/tools/map_reduce.py"

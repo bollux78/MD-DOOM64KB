@@ -2,7 +2,7 @@
 # Eight A/B variants; called only from dedicated experimental workflow.
 set -euo pipefail
 if [[ $# != 3 ]]; then
-  echo 'Usage: variant.sh CONTROL|AI6|AI6S|GEO_SAFE|ALL|AI4|TEX2|TEX4|GEO_STEPS|GEO_AGGR WAD OUTPUT' >&2
+  echo 'Usage: variant.sh CONTROL|GRATE_OLD|AI6|AI6S|GEO_SAFE|ALL|AI4|TEX2|TEX4|GEO_STEPS|GEO_AGGR WAD OUTPUT' >&2
   exit 2
 fi
 variant="$1"
@@ -10,6 +10,8 @@ export DREAD_OPT_FLAGS='' DREAD_TEXTURE_FACTOR=1 DREAD_RENDER_GEOMETRY=control
 export DREAD_SIMPLIFY_STEPS=0 DREAD_OPT_REPORTS=1 DREAD_GREEN_ACCENT=1
 case "$variant" in
   CONTROL) ;;
+  # same as CONTROL but grates use the old per-row coverage test (baseline for the opaque-run loop)
+  GRATE_OLD) export DREAD_GRATE_OLD=1 ;;
   AI6) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10" ;;
   # AI at 6 Hz with each kind's step lengthened so its average walking speed matches CONTROL (capped at 16 units)
   AI6S) export DREAD_OPT_FLAGS="-DDREAD_AI_PERIOD=10 -DDREAD_AI_SPEED_COMP" ;;

@@ -8,7 +8,7 @@ name: DREAD C7 - optimization round (3 ROMs) and FPS comparison
 # No WAD is published. The ELF is published only for the shareware doom1.wad (see compile_one.sh).
 on:
   push:
-    branches: [exp-dread-c7-geo-20261124]
+    branches: [exp-dread-c7-grates-20261124]
     paths: ['.github/workflows/dread-c7-optimization-matrix.yml']
   workflow_dispatch:
 permissions:
@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GEO_AGGR]
+        variant: [CONTROL, GRATE_OLD]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [CONTROL, GEO_AGGR]
+        variant: [CONTROL, GRATE_OLD]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}

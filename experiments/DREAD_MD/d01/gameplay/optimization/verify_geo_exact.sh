@@ -15,7 +15,7 @@ wad=$(realpath "${1:?WAD}"); maps=${2:-E1M1}; views=${3:-3000}; out=$(realpath -
 variants=${5:-control merge}
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/../.." && pwd)"
 export DREAD_COMBAT=1 DREAD_GAMEPLAY=1 DREAD_SKILL=easy DREAD_NPAL=1 OPENBLAS_NUM_THREADS=1
-FL="-DDREAD_ROW_ONLY -DDREAD_COMBAT -DDREAD_GAMEPLAY -DDREAD_COMBAT_12_20 -DDREAD_GRATE_HALF_RES"
+FL="-DDREAD_ROW_ONLY -DDREAD_COMBAT -DDREAD_GAMEPLAY -DDREAD_COMBAT_12_20"
 mkdir -p "$out"
 for m in $maps; do
   for v in $variants; do
