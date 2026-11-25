@@ -1,0 +1,44 @@
+name: Ferret WAD - independent resource and scene compiler
+on:
+  pull_request:
+    branches: [research-ferret-native-core-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-wad.yml','research/ferret-wad/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-wad-x360
+  cancel-in-progress: false
+jobs:
+  wad:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-wad-compiler-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile native core
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-wad-$GITHUB_RUN_ID"
+          mkdir -p "$out/public"
+          cc -std=c99 -O2 -Wall -Wextra -Werror -fPIC -shared research/ferret-native/core.c -o "$out/libferret_native.so"
+      - name: Compile own assets and render independent scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          out="$RUNNER_TEMP/ferret-wad-$GITHUB_RUN_ID"
+          python3 research/ferret-wad/render_scene.py "$root" "$out/libferret_native.so" "$root/wad-compiler/$GITHUB_RUN_ID" "$out/public/summary.json"
+      - name: Publish counts and diagnostics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-wad-summary
+          path: ${{ runner.temp }}/ferret-wad-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
