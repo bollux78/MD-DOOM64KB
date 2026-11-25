@@ -1,4 +1,4 @@
-name: Ferret Alpha2 RE round 4 - capture only
+name: Ferret Alpha2 RE round 4 - differential replay
 on:
   pull_request:
     branches: [research-ferret-solid-20261125]
@@ -34,37 +34,23 @@ jobs:
             exit 3
           fi
           echo '{"status":"original_rom_sha256_verified"}' > "$base/public/status.json"
-      - name: Build pinned research emulator only
+      - name: Reuse exact captures from successful collection
         shell: bash
         run: |
           set -euo pipefail
-          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$R4/core"
-          git -C "$R4/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
-          git -C "$R4/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
-          python3 research/ferret-round4/capture.py patch "$R4/core"
-          make -C "$R4/core" -f Makefile.libretro -j3 platform=unix > "$R4/build.log" 2>&1 || { tail -50 "$R4/build.log"; exit 1; }
-      - name: Collect complete stages with and without SRAM16
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          mkdir -p "$PRIVATE"
-          status=0
+          source="$HOME/.local/share/ferret-research/round4/45645383728"
+          test -d "$source"
           for mode in 0 1; do
             for turn in 0 1; do
-              name="sram${mode}-turn${turn}"
-              out="$PRIVATE/$name"
-              mkdir -p "$out"
-              python3 research/ferret-round4/capture.py capture "$R4/core/genesis_plus_gx_libretro.so" "$(cat "$R4/rom.path")" "$out" "$mode" "$turn" > "$out/run.log" 2>&1 || status=1
-              if [[ -f "$out/summary.json" ]]; then
-                cp "$out/summary.json" "$R4/public/$name.json"
-                cat "$out/summary.json" >> "$GITHUB_STEP_SUMMARY"
-              else
-                echo '{"status":"capture_failed_before_summary"}' > "$R4/public/$name.json"
-              fi
+              folder="$source/sram${mode}-turn${turn}"
+              test -s "$folder/wram.bin"
+              test -s "$folder/events.json"
+              test -s "$folder/summary.json"
+              cp "$folder/summary.json" "$R4/public/sram${mode}-turn${turn}.json"
+              cat "$folder/summary.json"
             done
           done
-          exit "$status"
+          echo "PRIVATE=$source" >> "$GITHUB_ENV"
       - name: Compare against verified models from local archives
         if: always() && env.PRIVATE != '' && env.R4 != ''
         shell: bash
