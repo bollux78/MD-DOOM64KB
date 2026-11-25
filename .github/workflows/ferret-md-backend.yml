@@ -53,16 +53,17 @@ jobs:
           umask 077
           out="$RUNNER_TEMP/ferret-md-$GITHUB_RUN_ID"
           echo "Existing repository build recipes:"
-          git ls-files .github/workflows | head -100
-          git grep -n -E 'm68k-elf-gcc|m68k-linux-gnu-gcc|ghcr.io/[^ ]*sgdk|docker (run|pull).*sgdk|GDK(_PATH)?=' -- .github/workflows | head -100 || true
+          git ls-files .github/workflows | sed -n '1,100p'
+          git grep -n -E 'm68k-elf-gcc|m68k-linux-gnu-gcc|ghcr.io/[^ ]*sgdk|docker (run|pull).*sgdk|GDK(_PATH)?=' -- .github/workflows | sed -n '1,100p' || true
           python3 - "$out" <<'PY'
           import json, pathlib, shutil, subprocess, sys, os
           out=pathlib.Path(sys.argv[1])
           names=("m68k-elf-gcc","m68k-linux-gnu-gcc","m68k-unknown-elf-gcc","m68k-none-elf-gcc")
-          paths=[pathlib.Path(x) for n in names if (x:=shutil.which(n))]
+          paths=[pathlib.Path.home()/"mars/m68k-elf/bin/m68k-elf-gcc"]
+          paths.extend(pathlib.Path(x) for n in names if (x:=shutil.which(n)))
           for v in ("GDK","SGDK","SGDK_PATH"):
               if os.environ.get(v):paths.extend(pathlib.Path(os.environ[v])/"bin"/n for n in names)
-          roots=[pathlib.Path.home()/"Projetos",pathlib.Path.home()/".local/share",pathlib.Path.home()/".local/opt",pathlib.Path("/opt")]
+          roots=[pathlib.Path.home()/"mars",pathlib.Path.home()/"Projetos",pathlib.Path.home()/".local/share",pathlib.Path.home()/".local/opt",pathlib.Path("/opt")]
           skip={".git","node_modules",".cache","__pycache__","_work","ferret-research"}
           for root in roots:
               if not root.is_dir():continue
@@ -80,6 +81,7 @@ jobs:
                   if c.returncode:
                       result["failed_unit"]=unit
                       (out/"compiler-error.txt").write_text(c.stderr)
+                      print("CROSS COMPILE ERROR",unit,c.stderr[-2500:])
                       break
                   result["objects"]+=1
               report["attempts"].append(result)
@@ -87,6 +89,7 @@ jobs:
                   report["objects"]=4;report["cross_compile_confirmed"]=True;break
           (out/"public/toolchain.json").write_text(json.dumps(report))
           print("TOOLCHAIN "+json.dumps(report))
+          if not report["cross_compile_confirmed"]:sys.exit(2)
           PY
       - name: Publish numeric reports
         if: always()
