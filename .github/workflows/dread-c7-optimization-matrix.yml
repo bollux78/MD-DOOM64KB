@@ -1,5 +1,10 @@
-name: C7 Ferret nine-map experimental pipeline (manual only)
+name: C7 Ferret nine-map experimental pipeline (authorized build)
 on:
+  push:
+    branches: [exp-ferret-episode-20261125]
+    paths:
+      - "experiments/DREAD_MD/**"
+      - ".github/workflows/dread-c7-optimization-matrix.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -65,3 +70,4 @@ jobs:
         with:
           name: C7-FERRET-CONSOLIDADO-${{ github.run_id }}
           path: delivery
+
