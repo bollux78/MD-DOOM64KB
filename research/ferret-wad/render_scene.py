@@ -49,7 +49,7 @@ def sample_table():
     for i in range(2048):
         for y in range(H):a[i*H+y]=((y-35)*128)//max(i,1)-1
     return a
-def view(lib,r,g,camera,table,output=None,compiled=None):
+def view(lib,r,g,camera,table,output=None,compiled=None,packed=False):
     x,y,z,angle=camera
     si=round(math.sin(math.radians(90-angle))*16384);co=round(math.cos(math.radians(90-angle))*16384)
     # Camera +X = 0 degrees, positive angle turns towards +Y.
@@ -61,14 +61,25 @@ def view(lib,r,g,camera,table,output=None,compiled=None):
         for xx in range(W):
             for yy in range(H):sky[xx*H+yy]=sr[min(sh-1,yy*sh//H)][(int(angle*sw/360)+xx*sw//(W*4))%sw]
     cache={};fallback=set();masked=0;unsupported=0
+    wall=lib.fr_wall_packed if packed else lib.fr_wall
+    if packed:
+        wall.argtypes=lib.fr_wall.argtypes;wall.restype=lib.fr_wall.restype
+    def packed_bytes(b):
+        tile=b[8192:16384]
+        return bytes((tile[i]&240)|(tile[i+1]&15) for i in range(0,8192,2))
     def tex(k,origin):
         if k not in r.defs:
             fallback.add(k);key=("?",0)
-            if key not in cache:cache[key]=(U8*24576)(*([0x55]*24576)),8192
+            if key not in cache:
+                b=bytes([0x55])*24576
+                if packed:b=packed_bytes(b)
+                cache[key]=(U8*len(b)).from_buffer_copy(b),8192
         else:
             key=(k,origin)
             if key not in cache:
-                b,o=r.packed_texture(k,origin);cache[key]=(U8*len(b)).from_buffer_copy(b),o
+                b,o=r.packed_texture(k,origin)
+                if packed:b=packed_bytes(b)
+                cache[key]=(U8*len(b)).from_buffer_copy(b),o
         a,o=cache[key];return Asset(a,len(a),o)
     stats={"candidate_segs":0,"projected":0,"closed_columns":0,"projection_errors":0,"raster_errors":0}
     stats["runtime_bsp_tests"]=0
@@ -128,7 +139,7 @@ def view(lib,r,g,camera,table,output=None,compiled=None):
             stats["projected"]+=1
             # Height origin compensates the native camera-dependent byte offset.
             au=tex(uk,ceil+sd[1]) if textured else Asset();al=tex(lk,(back[0] if back else floor)+sd[1]) if textured else Asset()
-            if lib.fr_wall(C.byref(f),C.byref(j),au,al,table,sky):stats["raster_errors"]+=1
+            if wall(C.byref(f),C.byref(j),au,al,table,sky):stats["raster_errors"]+=1
     stats.update(closed_columns=sum(a==b==0 for a,b in zip(f.top,f.bottom)),written_bytes=sum(v!=0xa5 for v in f.pixels),unwritten_bytes=sum(v==0xa5 for v in f.pixels),masked_candidates=masked,unsupported_sectors=unsupported,missing_materials=len(fallback),frame_sha256=hashlib.sha256(bytes(f.pixels)).hexdigest(),state_sha256=hashlib.sha256(bytes(f.pixels)+struct.pack(">480H",*f.depth,*f.top,*f.bottom)).hexdigest())
     if output:
         with output.open("wb") as fp:
