@@ -1,0 +1,107 @@
+name: Ferret R01 - first independent Mega Drive diagnostic ROM
+on:
+  pull_request:
+    branches: [research-ferret-md-backend-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r01.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r01-x360
+  cancel-in-progress: false
+jobs:
+  r01:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r01-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare isolated build directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          out="$RUNNER_TEMP/ferret-r01-$GITHUB_RUN_ID"
+          private="$root/r01/$GITHUB_RUN_ID"
+          mkdir -p "$out/public" "$private/fixture" "$private/doom1"
+          echo "R01=$out" >> "$GITHUB_ENV"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+          test -x "$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+      - name: Build original synthetic fixture ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/export_scene.py "$PRIVATE/fixture"
+          python3 research/ferret-native/build_demo.py "$PRIVATE/fixture" "$GCC68" --label "FERRET-MD R01 ORIGINAL FIXTURE"
+          cp "$PRIVATE/fixture/scene.json" "$R01/public/fixture-scene.json"
+          cp "$PRIVATE/fixture/build.json" "$R01/public/fixture-build.json"
+          cp "$PRIVATE/fixture/FERRET-MD-R01.bin" "$R01/public/FERRET-MD-R01-FIXTURE.bin"
+      - name: Build private E1M1 diagnostic ROM
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          wad="$(python3 - "$root" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          files=sorted(f for f in p.rglob("*") if f.is_file() and f.name.lower()=="doom1.wad")
+          assert files,"doom1.wad unavailable"
+          print(files[0])
+          PY
+          )"
+          fsc="$root/backend/45715146307/scaler.fsc"
+          test -s "$fsc"
+          python3 research/ferret-native/export_scene.py "$PRIVATE/doom1" --wad "$wad" --fsc "$fsc"
+          python3 research/ferret-native/build_demo.py "$PRIVATE/doom1" "$GCC68" --label "FERRET-MD R01 E1M1"
+          cp "$PRIVATE/doom1/scene.json" "$R01/public/doom1-scene.json"
+          cp "$PRIVATE/doom1/build.json" "$R01/public/doom1-build.json"
+      - name: Build pinned instrumented Genesis Plus GX
+        if: always() && env.R01 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$R01/core"
+          git -C "$R01/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$R01/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$R01/core" -f Makefile.libretro -j3 platform=unix > "$R01/build-core.log" 2>&1 || { tail -60 "$R01/build-core.log"; exit 1; }
+      - name: Verify fixture on emulated SRAM16 and WRAM fallback
+        if: always() && env.R01 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test -s "$PRIVATE/fixture/FERRET-MD-R01.bin"
+          test -s "$R01/core/genesis_plus_gx_libretro.so"
+          rc=0
+          for mode in 0 1 2; do
+            python3 research/ferret-native/test_demo.py "$PRIVATE/fixture" "$R01/core/genesis_plus_gx_libretro.so" "$R01/public/fixture-mode$mode.json" --mode "$mode" --maxframes 2400 || rc=1
+          done
+          exit "$rc"
+      - name: Verify E1M1 spawn and zigzag on emulated SRAM16 and WRAM
+        if: always() && env.R01 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test -s "$PRIVATE/doom1/FERRET-MD-R01.bin"
+          test -s "$R01/core/genesis_plus_gx_libretro.so"
+          rc=0
+          for mode in 0 1; do
+            python3 research/ferret-native/test_demo.py "$PRIVATE/doom1" "$R01/core/genesis_plus_gx_libretro.so" "$R01/public/doom1-mode$mode.json" --mode "$mode" --maxframes 3600 || rc=1
+          done
+          exit "$rc"
+      - name: Publish original fixture ROM and numeric reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FERRET-MD-R01-diagnostic
+          path: ${{ runner.temp }}/ferret-r01-${{ github.run_id }}/public/*
+          if-no-files-found: warn
