@@ -122,13 +122,13 @@ class Compiler:
             v=min(cross(a,b,p) for p in cs)
             if length2 and v>0 and v*v>=16*16*length2:backface.add(j)
         blocked=set()
-        if mode=="occlusion":
+        if mode in ("occlusion","occlusion96"):
             cx,cy=center
             blockers=[j for j,(a,b,_,solid) in enumerate(self.segs) if solid and safe[j] and j not in backface]
             blockers.sort(key=lambda j:sum((p[0]-cx)**2+(p[1]-cy)**2 for p in self.segs[j][:2]))
             for j,(c,d,_,_) in enumerate(self.segs):
                 if not safe[j] or j in backface:continue
-                for k in blockers[:24]:
+                for k in blockers[:96 if mode=="occlusion96" else 24]:
                     if k==j or not before(k,j):continue
                     a,b=self.segs[k][:2]
                     if occludes(a,b,c,d,cs):blocked.add(j);break
@@ -186,3 +186,68 @@ def pack(g,compiled):
         entries.append(struct.pack(">iiiiII",*box,masks[mask],programs[p]))
     header=struct.pack(">4sHHIII",b"FRV1",len(compiled),len(g["segs"]),sum(map(len,entries)),len(md),len(pd))
     return header+b"".join(entries)+md+pd,{"unique_masks":len(masks),"unique_programs":len(programs),"mask_bytes":len(md),"program_bytes":len(pd),"cell_bytes":sum(map(len,entries))}
+
+
+def pack_dag(g,compiled):
+    """FRV2: shared DAG of leaf runs, fixed sequences and conditional nodes.
+    Binary format: BE header, 16-bit bounded cell boxes, mask index, program ID;
+    interned masks; fixed 8-byte nodes. Leaves use the high-bit reference range.
+    No decompression allocation is needed at runtime.
+    """
+    masks={};md=bytearray();nodes=[];intern={};entries=[]
+    def node(rec):
+        if rec not in intern:
+            need(len(nodes)<32767,"FRV2 DAG exceeds 15-bit references")
+            intern[rec]=len(nodes);nodes.append(rec)
+        return intern[rec]
+    def seq(a,b):
+        if a==65535:return b
+        if b==65535:return a
+        return node((1,0,a,b))
+    def run(v):
+        if not v:return 65535
+        if len(v)==1:
+            need(v[0]<32767,"leaf exceeds FRV2 reference")
+            return 32768|v[0]
+        m=len(v)//2
+        return seq(run(v[:m]),run(v[m:]))
+    def code(p):
+        if p is None:return 65535
+        if p[0]==0:return run(p[1])
+        if p[0]==1:return seq(code(p[1]),code(p[2]))
+        return node((2,p[1],code(p[2]),code(p[3])))
+    for i,c in sorted(compiled.items()):
+        mask=bytearray((len(g["segs"])+7)//8)
+        for j in c["keep"]:mask[j//8]|=1<<(j%8)
+        mask=bytes(mask)
+        if mask not in masks:masks[mask]=len(masks);md.extend(mask)
+        box=c["box"] or (0,0,0,0)
+        entries.append(struct.pack(">hhhhHH",*box,masks[mask],code(c["program"])))
+    header=struct.pack(">4sHHHHI",b"FRV2",len(compiled),len(g["segs"]),len(masks),len(nodes),len(md))
+    blob=header+b"".join(entries)+md+b"".join(struct.pack(">HHHH",*n) for n in nodes)
+    return blob,{"bytes":len(blob),"unique_masks":len(masks),"dag_nodes":len(nodes),"mask_bytes":len(md),"program_bytes":8*len(nodes),"cell_bytes":12*len(entries)}
+
+def read_dag(g,blob):
+    magic,nc,ns,nm,nn,mb=struct.unpack_from(">4sHHHHI",blob)
+    need(magic==b"FRV2" and nc==len(g["subsectors"]) and ns==len(g["segs"]),"FRV2 header")
+    stride=(ns+7)//8
+    mo=16+12*nc;no=mo+mb
+    need(mb==nm*stride and len(blob)==no+nn*8,"FRV2 length")
+    def cell(i):
+        a,b,c,d,m,p=struct.unpack_from(">hhhhHH",blob,16+12*i)
+        need(m<nm,"FRV2 mask index")
+        mask=blob[mo+m*stride:mo+(m+1)*stride]
+        return (a,b,c,d),{j for j in range(ns) if mask[j//8]&(1<<(j%8))},p
+    def walk(ref,x,y,stats):
+        if ref==65535:return
+        if ref&32768:
+            yield ref&32767;return
+        need(ref<nn,"FRV2 node index")
+        op,n,a,b=struct.unpack_from(">HHHH",blob,no+8*ref)
+        if op==2:
+            stats["runtime_bsp_tests"]+=1
+            if side_value(g["nodes"][n],(x,y))>=0:a,b=b,a
+        else:need(op==1,"FRV2 opcode")
+        yield from walk(a,x,y,stats)
+        yield from walk(b,x,y,stats)
+    return cell,walk
