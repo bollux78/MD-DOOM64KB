@@ -140,3 +140,95 @@ void fr_transform(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t co,int32_t s
     *tx=s16(sar((int64_t)dx*co-(int64_t)dy*si,14));
     *tz=s16(sar((int64_t)dx*si+(int64_t)dy*co,14));
 }
+
+
+/* Native sprite ABI: decoded column ranges and opaque spans, not ROM pointers.
+ * Offsets are relative to an asset origin; per-scale numeric tables are supplied
+ * by the caller. Column offsets are indexes into the span array.
+ */
+typedef struct { int32_t offset; int16_t lo,hi; } SpriteSpan;
+typedef struct { uint32_t first,count; } SpriteColumn;
+typedef struct {
+    int32_t width,origin;
+    Asset pixels;
+    const SpriteColumn *columns;
+    const SpriteSpan *spans;
+    uint32_t span_count;
+} Sprite;
+typedef struct { const Sprite *sprite; int32_t dx,dy; } SpritePart;
+typedef struct { uint32_t writes,tags,projected,overflow; } SpriteStats;
+typedef struct { int32_t left,right,x0,x1; uint32_t step,u,scale,overflow; } SpriteJob;
+/* 68000 DIVS.W leaves destination unchanged on signed quotient overflow. */
+static int32_t sprite_div(int32_t n,int32_t d,uint32_t *overflow){
+    int64_t q=(int64_t)n/d;
+    if(q < -32768 || q > 32767){*overflow=1;return n;}
+    return (int32_t)q;
+}
+int fr_sprite_project(int32_t width,int32_t origin,int32_t tx,int32_t tz,SpriteJob *j){
+    memset(j,0,sizeof(*j));
+    tz=s16(tz);if(tz<81)return 0;
+    if(width<=0||width>32767)return -1;
+    int32_t l=s16(tx-s16((int64_t)origin*8)),r=s16(l+s16((int64_t)width*8));
+    r=s16(sprite_div(r*80,tz,&j->overflow)+80);if(r<0)return 0;
+    l=s16(sprite_div(l*80,tz,&j->overflow)+80);if(l>=W)return 0;
+    int n=s16(r-l);if(n<=0)return 0;
+    j->step=((uint32_t)width*2u<<16)/(uint32_t)n;
+    j->u=l<0?(uint32_t)(-l)*j->step:0;
+    j->scale=(uint16_t)sprite_div(0x500000,tz,&j->overflow);
+    j->left=l;j->right=r;j->x0=max(0,l);j->x1=min(W,r);
+    return j->x0<j->x1;
+}
+int fr_sprite(Frame *f,const Sprite *s,int32_t tx,int32_t tz,int32_t delta,uint16_t tag,
+              const int16_t *factors,const int16_t *scalers,SpriteStats *st){
+    memset(st,0,sizeof(*st));
+    if(!s||!s->columns||!factors||!scalers)return -1;
+    SpriteJob j;int ret=fr_sprite_project(s->width,s->origin,tx,tz,&j);
+    if(ret<=0)return ret;
+    st->projected=1;st->overflow=j.overflow;
+    int factor=factors[j.scale>>5];const int16_t *sc=scalers+(j.scale>>5)*H;
+    int32_t eye=s16((int64_t)delta*64);
+    for(int x=j.x0;x<j.x1;x++){
+        uint32_t col=((j.u>>16)&0xfffeu)/2u;j.u+=j.step;
+        if(j.scale<f->depth[x])continue;
+        if(col>=(uint32_t)s->width)return -2;
+        if(tag){f->owner[x]=tag;st->tags++;}
+        SpriteColumn c=s->columns[col];
+        if(c.first>s->span_count||c.count>s->span_count-c.first||(c.count&&!s->spans))return -2;
+        for(uint32_t i=0;i<c.count;i++){
+            SpriteSpan p=s->spans[c.first+i];
+            if(p.lo>=p.hi)return -2;
+            int a=max(-144,s16(sar((int64_t)s16(p.lo-eye)*factor,16))&~3);
+            int b=min(144,s16(sar((int64_t)s16(p.hi-eye)*factor,16))&~3);
+            for(int y=36+a/4;y<36+b/4;y++){
+                uint8_t v;if(sample(s->pixels,(int64_t)delta+p.offset+sc[y],&v))return -3;
+                f->pixels[pixel(x,y)]=v;st->writes++;
+            }
+        }
+    }
+    return 1;
+}
+int fr_composite(Frame *f,const SpritePart *parts,uint32_t n,int32_t tx,int32_t tz,int32_t delta,uint16_t tag,
+                 const int16_t *factors,const int16_t *scalers,SpriteStats *st){
+    memset(st,0,sizeof(*st));if(n>256||(!parts&&n))return -1;
+    for(uint32_t i=0;i<n;i++){
+        SpriteStats p;int ret=fr_sprite(f,parts[i].sprite,s16(tx-s16((int64_t)parts[i].dx*8)),tz,
+                                       s16(delta+parts[i].dy),tag,factors,scalers,&p);
+        if(ret<0)return ret;
+        st->writes+=p.writes;st->tags+=p.tags;st->projected+=p.projected;st->overflow+=p.overflow;
+    }
+    return 0;
+}
+typedef struct { uint32_t id; int32_t key; } SpriteOrder;
+void fr_sprite_order(SpriteOrder *a,uint32_t n){
+    if(!a||n<2)return;
+    for(uint32_t i=n-1;i>0;i--){
+        if(a[i-1].key>a[i].key){SpriteOrder t=a[i-1];a[i-1]=a[i];a[i]=t;}
+    }
+}
+/* Graphics-only Q14 door motion. Game code owns collision and trigger logic. */
+int fr_door_phase(int32_t phase,int32_t speed,int32_t ticks,int32_t *out_phase,int32_t *out_speed){
+    int32_t p=s16(phase+(int64_t)s16(speed)*s16(ticks));
+    if(p>=16384){p=16384;speed=0;}else if(p<=0){p=0;speed=0;}
+    *out_phase=p;*out_speed=speed;return p<16384;
+}
+int32_t fr_door_lerp(int32_t a,int32_t b,int32_t phase){return s16(a+sar((int64_t)(b-a)*phase,14));}
