@@ -1,0 +1,54 @@
+name: Ferret native C - projection and raster
+on:
+  pull_request:
+    branches: [research-ferret-round6-fixes-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-native.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-native-x360
+  cancel-in-progress: false
+jobs:
+  native:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-native-core-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile portable C reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-native-$GITHUB_RUN_ID"
+          mkdir -p "$out/public"
+          cc -std=c99 -O2 -Wall -Wextra -Werror -fPIC -shared research/ferret-native/core.c -o "$out/libferret_native.so"
+      - name: Verify new texture and compare 352 real frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-native-$GITHUB_RUN_ID"
+          root="$HOME/.local/share/ferret-research"
+          python3 research/ferret-round4/capture.py locate "$out/rom.path"
+          python3 research/ferret-native/test_native.py "$root" "$(cat "$out/rom.path")" "$out/libferret_native.so" "$out/public/native.json"
+      - name: Verify native sprites, custom composites and Q14 door arithmetic
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-native-$GITHUB_RUN_ID"
+          root="$HOME/.local/share/ferret-research"
+          python3 research/ferret-native/test_sprites.py "$root" "$(cat "$out/rom.path")" "$out/libferret_native.so" "$out/public/sprites.json"
+      - name: Publish numeric results only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-native-summary
+          path: ${{ runner.temp }}/ferret-native-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
