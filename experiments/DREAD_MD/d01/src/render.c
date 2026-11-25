@@ -956,13 +956,24 @@ static void draw_mask_column(const VisSpr *v,int x)
                 tb=(tb|7)+1;
             }
             if(tb>th+1)tb=th+1;
-            /* first row y >= ya whose texel >= ta, and first row whose texel >= tb */
-            int lo=ya,hi=bot;
+            /* first row y >= ya whose texel >= ta: runs are short, so gallop from ya */
+            int lo=ya,hi,st=1;
+            for(;;){
+                const int pr=lo+st-1;
+                if(pr>=bot){hi=bot;break;}
+                if(GTEX(pr)>=ta){hi=pr;break;}
+                lo=pr+1;st<<=1;
+            }
             while(lo<hi){int mid=(lo+hi)>>1;if(GTEX(mid)>=ta)hi=mid;else lo=mid+1;}
-            const int y0=lo;
-            hi=bot;
-            while(lo<hi){int mid=(lo+hi)>>1;if(GTEX(mid)>=tb)hi=mid;else lo=mid+1;}
-            for(int y=y0;y<lo;y++){const uint8_t c=tc[GTEX(y)];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}
+            /* draw rows while their texel is inside the run (texel is monotonic in y) */
+            int y=lo;
+            if(offset){
+                for(;y<bot;y++){const int tx=vbi+offset[y];if(tx>=tb)break;const uint8_t c=tc[tx];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}
+            }else{
+                int32_t v=vb-mul32k(step,HORIZON-y);
+                for(;y<bot;y++,v+=step){const int tx=v>>16;if(tx>=tb)break;const uint8_t c=tc[tx];col[y*4]=c;if(COLB==2)col[y*4+1]=c;}
+            }
+            lo=y;
             ya=lo;t=tb;
         }
         #undef GTEX
