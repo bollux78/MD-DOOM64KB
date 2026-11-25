@@ -1113,30 +1113,6 @@ static void draw_things(void)
     if(nmasked){
         /* Per-column ordering: an oblique grate can be in front of a sprite on
          * one side and behind it on the other. Centre-depth sorting is insufficient. */
-#ifndef DREAD_THINGS_OLD
-        /* Incremental order: the active list is kept across columns. Items leave at x1, enter at x0, masked
-         * walls get a new depth, and one insertion sort pass (nearly sorted) restores the same total order as
-         * before: far to near, equal depth by ascending index. */
-        uint8_t order[MAXVIS];uint16_t depth[MAXVIS],count=0;
-        for(int x=0;x<VIEW_W;x++){
-            {uint16_t w=0;
-             for(uint16_t r=0;r<count;r++){const uint8_t i=order[r];if(x>=vis[i].x1)continue;order[w]=i;depth[w]=depth[r];w++;}
-             count=w;}
-            for(uint16_t i=0;i<nvis;i++){
-                const VisSpr *v=&vis[i];
-                if(!(x==v->x0 || (x==0 && v->x0<0)) || x>=v->x1)continue;
-                order[count]=(uint8_t)i;depth[count]=v->z4;count++;
-            }
-            for(uint16_t r=0;r<count;r++){
-                const VisSpr *v=&vis[order[r]];
-                if(v->maskid>=0){const MaskWall *m=&masked[v->maskid];depth[r]=z4_of(m->iz+mul32k(m->diz,x-m->xs));}
-            }
-            for(uint16_t r=1;r<count;r++){
-                const uint8_t ei=order[r];const uint16_t ed=depth[r];int pos=r;
-                while(pos>0 && (depth[pos-1]<ed || (depth[pos-1]==ed && order[pos-1]>ei))){depth[pos]=depth[pos-1];order[pos]=order[pos-1];pos--;}
-                depth[pos]=ed;order[pos]=ei;
-            }
-#else
         for(int x=0;x<VIEW_W;x++){
             uint8_t order[MAXVIS];uint16_t depth[MAXVIS],count=0;
             for(uint16_t i=0;i<nvis;i++){
@@ -1146,7 +1122,6 @@ static void draw_things(void)
                 int pos=count;while(pos>0 && depth[pos-1]<z){depth[pos]=depth[pos-1];order[pos]=order[pos-1];pos--;}
                 depth[pos]=z;order[pos]=i;count++;
             }
-#endif
             sprite_column=x;
             for(uint16_t i=0;i<count;i++){const VisSpr *v=&vis[order[i]];if(v->maskid>=0)draw_mask_column(v,x);else draw_sprite(v);}
         }
