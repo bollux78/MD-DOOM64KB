@@ -56,7 +56,7 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
  * sky is a caller-supplied visible 160x72 column-major sample array.
  * Assets provide a bounded byte view and a logical texture origin.
  */
-static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed){
+static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed,const uint8_t *indices){
     int v=w->variant,n=w->width;
     if(v<0||v>17||n<=0||w->x0<0||w->x0>=W||n>W-w->x0)return -1;
     if(has(skies,v)&&!sky)return -1;
@@ -80,7 +80,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
             uint32_t q=w->u0+w->du*(uint32_t)j;
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:q/inv)&0x1f80u)+sar(w->z,1);
-            const int16_t *sc=scalers+(inv>>5)*H;
+            const int16_t *sc=scalers+(indices?indices[inv>>5]:(inv>>5))*H;
             if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
             if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
         }
@@ -95,13 +95,17 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     return 0;
 }
 int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
-    return wall_impl(f,w,upper,lower,scalers,sky,0);
+    return wall_impl(f,w,upper,lower,scalers,sky,0,NULL);
 }
 /* Same geometry and clipping, packed 4bpp data read directly from ROM.
  * origin remains in logical expanded-byte coordinates (normally 8192).
  */
 int fr_wall_packed(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
-    return wall_impl(f,w,upper,lower,scalers,sky,1);
+    return wall_impl(f,w,upper,lower,scalers,sky,1,NULL);
+}
+/* 158 unique rows, 2048 byte indices, instead of a 288 KiB dense table. */
+int fr_wall_indexed(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *rows,const uint8_t *indices,const uint8_t *sky){
+    return wall_impl(f,w,upper,lower,rows,sky,1,indices);
 }
 /* Public projection takes transformed endpoints, near rule, and resource U coordinates.
  * Return 1 for visible, 0 for rejected, negative for unrepresentable division.
