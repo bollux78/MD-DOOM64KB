@@ -1,10 +1,5 @@
-name: C7 Ferret nine-map experimental pipeline (authorized build)
+name: C7 Ferret nine-map experimental pipeline (manual only)
 on:
-  push:
-    branches: [exp-ferret-episode-20261125]
-    paths:
-      - "experiments/DREAD_MD/**"
-      - ".github/workflows/dread-c7-optimization-matrix.yml"
   workflow_dispatch:
 concurrency:
   group: c7-ferret-${{ github.ref }}

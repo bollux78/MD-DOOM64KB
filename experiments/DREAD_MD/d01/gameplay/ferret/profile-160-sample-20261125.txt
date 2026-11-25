@@ -1,0 +1,21 @@
+frames 3 cycles 152105647
+texture_column 40.75 61983866
+hint_b 8.46 12870200
+fr_draw_seg 8.39 12759488
+fr_texture 4.9 7455210
+__mulsi3_internal 3.89 5921762
+render_node 1.98 3013906
+__udivsi3_internal 1.84 2803738
+World_Shoot 1.64 2492350
+col_fill 1.45 2201976
+fr_fill 1.37 2082122
+muls16 1.29 1968316
+noise 1.25 1907472
+memcpy 0.94 1423520
+hint_a 0.93 1417444
+fr_offset 0.93 1411130
+HUD_VBlank 0.77 1175454
+__udivmoddi4 0.75 1143184
+fr_clamp 0.68 1026718
+col_native_run 0.67 1012172
+draw_sprite 0.64 969360

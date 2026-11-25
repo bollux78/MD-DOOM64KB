@@ -2,7 +2,7 @@
 
 Preparação de 25/11/2026. Base C7: `114a4147073c7c7ce3aa314d2ad93b57d2a15bae`, com a otimização de grades. Branch experimental `exp-ferret-episode-20261125`.
 
-**Estado: compilação autorizada em 25/11/2026, com recuperação automática em andamento.** A primeira ROM Ferret excedeu 4 MiB; ainda não há ROM Ferret validada ou FPS medido. Não existe alegação de velocidade igual à Ferret ou de conclusão da validação do jogo.
+**Estado final: CONTROL, FERRET160 e FERRET80 compilados, com testes automáticos e benchmarks concluídos.** O port ficou mais lento que o controle; a versão estável foi preservada. Veja [RESULTADOS-20261125.md](RESULTADOS-20261125.md).
 
 ## O que mudou
 
@@ -40,16 +40,20 @@ Workflow `.github/workflows/dread-c7-optimization-matrix.yml`, somente `workflow
 4. Medir o mesmo DEMO3 E1M7 em MAME `genesis` NTSC, sem IA e com IA, mantendo VBlanks brutos. A conversão usa 59,9227434 Hz. O emulador pode repetir uma execução de benchmark que falhou; o primeiro log é preservado. Imagens diferentes são esperadas, pois resolução, escala e recursos mudaram; hashes iguais não são requisito nem prova de correção.
 5. Consolidar ROMs, ELFs, imagens, logs e relatório comparativo. Em falha, conservar artefatos de diagnóstico; não promover a branch a estável.
 
-Não foi disparado esse workflow nesta preparação. Possíveis erros de link, inicialização, RAM, desempenho, artefatos nas junções de paredes e regressões de gameplay ainda devem ser resolvidos e medidos quando a compilação for autorizada.
+O workflow foi disparado após o comando “compile” do usuário. A rodada final 45612848296 terminou com sucesso. Depois dela, o workflow voltou a exigir execução manual; não inicia mais compilações por push nesta branch.
 
 ## Primeira compilação e recuperação
 
 O controle compilou com o hash conhecido `bada47a0c028fb70f4f76ddbdd495ea1c0fd6b9797c101b54cb1b064ffc5ad56`. O teste de teleporte mantinha bench_req ativo e ignorava o movimento por controle; a preparação foi corrigida, e o teste passou na mesma ROM.
 
-A primeira ROM Ferret linkou, mas foi rejeitada por exceder 4 MiB (5.373.952 bytes após alinhamento). Para preservar a resolução dos gráficos: dicionário por coluna quando menor que PackBits, compartilhamento dos escaladores entre 160/80 colunas, remoção dos escaladores legados de 144 linhas nesta variante e grupos de PVS comprimidos sem perda. Os conjuntos de visibilidade de referência foram decodificados e comparados byte a byte. A próxima compilação verificará o tamanho final e a execução.
+A primeira ROM Ferret linkou, mas foi rejeitada por exceder 4 MiB (5.373.952 bytes após alinhamento). Para preservar a resolução dos gráficos: dicionário por coluna quando menor que PackBits, compartilhamento dos escaladores entre 160/80 colunas, remoção dos escaladores legados de 144 linhas nesta variante e grupos de PVS comprimidos sem perda. Os conjuntos de visibilidade de referência foram decodificados e comparados byte a byte. A rodada final confirmou 4 MiB em cada ROM e concluiu os testes automáticos.
 
 ## Validação do código nativo
 
 A ROM de recuperação coube em 4 MiB e iniciou os nove mapas; mecanismos e progressão passaram. A medição ainda não terminou no limite inicial de 145 segundos emulados: o roteiro continuava avançando lentamente, e não estava travado. O profiler apontou 54% de uma cena no decodificador de colunas. Foram adicionados três slots no mesmo espaço de 512 bytes e decodificação de dicionários com deslocamentos constantes. Isso não altera pixels nem aumenta a resolução por interpolação.
 
-O código nativo dos escaladores tinha DBRA com deslocamento 2, que alcançava o RTS; foi corrigido para 4. O novo verificador examina todas as linhas das rotinas no binário linkado, e não apenas o gerador ou a referência C. A distância mínima também passou a 41 em unidades de quarto de mapa: com 40, a profundidade inversa podia chegar a 65536, fora do quociente DIVU de 16 bits. Os testes e o benchmark serão repetidos após recompilar.
+O código nativo dos escaladores tinha DBRA com deslocamento 2, que alcançava o RTS; foi corrigido para 4. O novo verificador examina todas as linhas das rotinas no binário linkado, e não apenas o gerador ou a referência C. A distância mínima também passou a 41 em unidades de quarto de mapa: com 40, a profundidade inversa podia chegar a 65536, fora do quociente DIVU de 16 bits. Os testes e os benchmarks foram repetidos com sucesso após recompilar; os dados completos estão no relatório final.
+
+## Resultado final
+
+Build funcional `9f65f780b77b084079436586812604ff0d6d384a`, run45612848296. CONTROL:3,6487/3,3547 FPS; FERRET160:1,3549/1,3514; FERRET80:2,1323/2,0453 (sem IA/com IA, mesmo DEMO3 NTSC). As duas variantes Ferret passaram pela inicialização e resposta aos controles nos nove mapas e pelos testes de mecanismos e progressão. Não houve promoção para estável. A imagem mais detalhada e o novo caminho com descompressão não demonstraram melhoria de FPS.
