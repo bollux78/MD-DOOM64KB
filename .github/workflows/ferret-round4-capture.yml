@@ -1,0 +1,72 @@
+name: Ferret Alpha2 RE round 4 - capture only
+on:
+  push:
+    branches: [research-ferret-round4-capture-20261125]
+    paths: ['.github/workflows/ferret-round4-capture.yml', 'research/ferret-round4/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-round4-x360
+  cancel-in-progress: false
+jobs:
+  capture:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify original ROM locally by SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/ferret-r4-$GITHUB_RUN_ID/public"
+          base="$RUNNER_TEMP/ferret-r4-$GITHUB_RUN_ID"
+          echo "R4=$base" >> "$GITHUB_ENV"
+          echo "PRIVATE=$HOME/.local/share/ferret-research/round4/$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+          if ! python3 research/ferret-round4/capture.py locate "$base/rom.path"; then
+            echo '{"status":"original_rom_not_found_in_known_local_locations"}' > "$base/public/status.json"
+            cat "$base/public/status.json" >> "$GITHUB_STEP_SUMMARY"
+            exit 3
+          fi
+          echo '{"status":"original_rom_sha256_verified"}' > "$base/public/status.json"
+      - name: Build pinned research emulator only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$R4/core"
+          git -C "$R4/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$R4/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-round4/capture.py patch "$R4/core"
+          make -C "$R4/core" -f Makefile.libretro -j3 platform=unix > "$R4/build.log" 2>&1 || { tail -50 "$R4/build.log"; exit 1; }
+      - name: Collect complete stages with and without SRAM16
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE"
+          status=0
+          for mode in 0 1; do
+            for turn in 0 1; do
+              name="sram${mode}-turn${turn}"
+              out="$PRIVATE/$name"
+              mkdir -p "$out"
+              python3 research/ferret-round4/capture.py capture "$R4/core/genesis_plus_gx_libretro.so" "$(cat "$R4/rom.path")" "$out" "$mode" "$turn" > "$out/run.log" 2>&1 || status=1
+              if [[ -f "$out/summary.json" ]]; then
+                cp "$out/summary.json" "$R4/public/$name.json"
+                cat "$out/summary.json" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo '{"status":"capture_failed_before_summary"}' > "$R4/public/$name.json"
+              fi
+            done
+          done
+          exit "$status"
+      - name: Upload aggregate results only (no ROM, RAM, screenshots or raw registers)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-round4-summary
+          path: ${{ runner.temp }}/ferret-r4-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
