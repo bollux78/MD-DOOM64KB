@@ -38,6 +38,15 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         r5.load_models(root,P(t))
         from visibility import Memory
+        class Bus(Memory):
+            def __init__(self,rom,ram,sram=None):
+                super().__init__(rom,ram)
+                self.sram=sram
+            def get(self,a,n):
+                a &= 0xffffff
+                if self.sram is not None and 0x200000<=a and a+n<=0x210000:
+                    return self.sram[a-0x200000:a-0x200000+n]
+                return super().get(a,n)
         from ferret_contract import scaler,s16,u16,i16,u32,sprite_column
         from ferret_stage import actor_list,s32,door_step
         table=(I16*(2048*H))();factors=(I16*2048)()
@@ -60,9 +69,14 @@ def main():
             for folder in sorted((root/f"round{rnd}"/str(run)).glob("sram*-*")):
                 if not (folder/"summary.json").exists():continue
                 n=json.loads((folder/"summary.json").read_text())["scenes"];raw=(folder/"wram.bin").read_bytes()
+                sram=(folder/"sram.bin").read_bytes() if (folder/"sram.bin").exists() else None
+                assert len(raw)==n*4*65536 and (sram is None or len(sram)==len(raw))
+                def snapshot(i,j):
+                    off=(i*4+j)*65536
+                    return Bus(rom,raw[off:off+65536],None if sram is None else sram[off:off+65536])
                 row={k:0 for k in total}
                 for i in range(n):
-                    m=Memory(rom,raw[(i*4+2)*65536:(i*4+3)*65536]);ref=Memory(rom,raw[(i*4+3)*65536:(i*4+4)*65536])
+                    m=snapshot(i,2);ref=snapshot(i,3)
                     f=Frame();base=m.u32(0xff2c72);f.pixels[:]=m.get(base,W*H)
                     f.depth[:]=[m.u16(0xff1524+8*x) for x in range(W)];f.owner[:]=[m.u16(0xff1526+8*x) for x in range(W)]
                     txz={};order=[]
