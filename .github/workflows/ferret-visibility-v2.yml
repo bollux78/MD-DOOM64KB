@@ -1,0 +1,44 @@
+name: Ferret visibility v2 - compact lists and acid walkway
+on:
+  pull_request:
+    branches: [research-ferret-visibility-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-visibility-v2.yml','research/ferret-wad/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-visibility-v2-x360
+  cancel-in-progress: false
+jobs:
+  visibility:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-visibility-v2-20261125')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile native C
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-vis2-$GITHUB_RUN_ID"
+          mkdir -p "$out/public"
+          cc -std=c99 -O2 -Wall -Wextra -Werror -fPIC -shared research/ferret-native/core.c -o "$out/libferret_native.so"
+      - name: Validate FRV2 binary decoder and acid walkway views
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          out="$RUNNER_TEMP/ferret-vis2-$GITHUB_RUN_ID"
+          python3 research/ferret-wad/test_visibility.py "$root" "$out/libferret_native.so" "$root/visibility-v2/$GITHUB_RUN_ID" "$out/public/report.json"
+      - name: Publish numeric evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-visibility-v2-summary
+          path: ${{ runner.temp }}/ferret-vis2-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
