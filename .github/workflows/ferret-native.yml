@@ -36,6 +36,15 @@ jobs:
           root="$HOME/.local/share/ferret-research"
           python3 research/ferret-round4/capture.py locate "$out/rom.path"
           python3 research/ferret-native/test_native.py "$root" "$(cat "$out/rom.path")" "$out/libferret_native.so" "$out/public/native.json"
+      - name: Verify native sprites, custom composites and Q14 door arithmetic
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ferret-native-$GITHUB_RUN_ID"
+          root="$HOME/.local/share/ferret-research"
+          python3 research/ferret-native/test_sprites.py "$root" "$(cat "$out/rom.path")" "$out/libferret_native.so" "$out/public/sprites.json"
       - name: Publish numeric results only
         if: always()
         uses: actions/upload-artifact@v4
