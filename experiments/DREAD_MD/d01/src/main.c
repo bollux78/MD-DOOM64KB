@@ -125,6 +125,15 @@ static int demo3_next(uint8_t out[4])
 #elif defined(DREAD_BENCH_AI6)
 #define DEMO_VARIANT "AI6"
 #define DEMO_OPT_NAME "IA 6HZ"
+#elif defined(DREAD_BENCH_CACHE2)
+#define DEMO_VARIANT "CACHE2"
+#define DEMO_OPT_NAME "FERRET CACHE 2 WAY"
+#elif defined(DREAD_BENCH_SPARSE)
+#define DEMO_VARIANT "SPARSE"
+#define DEMO_OPT_NAME "FERRET OPEN RUNS"
+#elif defined(DREAD_BENCH_FERRET_ALL)
+#define DEMO_VARIANT "FERRET_ALL"
+#define DEMO_OPT_NAME "FERRET CACHE AND RUNS"
 #elif defined(DREAD_BENCH_CONTROL)
 #define DEMO_VARIANT "CONTROL"
 #define DEMO_OPT_NAME "IA 12HZ / REFERENCIA"

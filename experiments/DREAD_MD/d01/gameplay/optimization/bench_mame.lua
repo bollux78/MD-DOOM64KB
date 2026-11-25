@@ -22,6 +22,8 @@ local reported=false
 local last_f=-1
 local last_v=0
 local hist={}
+local clock120=nil
+local hz=nil
 local function screen_hash()
   local screen=manager.machine.screens[":screen"] or manager.machine.screens:at(1)
   local w=screen.width
@@ -36,6 +38,11 @@ local function screen_hash()
 end
 emu.register_frame_done(function()
   frame=frame+1
+  if frame==120 then clock120=emu.time() end
+  if frame==720 then
+    hz=600/(emu.time()-clock120)
+    print(string.format("DREAD_VIDEO_HZ %.9f",hz))
+  end
   if frame==60 then
     local screen=manager.machine.screens[":screen"] or manager.machine.screens:at(1)
     local colors={}

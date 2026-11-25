@@ -18,7 +18,7 @@ for k in keys:env["DREAD_"+k.upper()]=str(symbols[k])
 env["DREAD_BENCH_MODE"]=str(args.mode)
 exe=shutil.which("mame") or "/usr/games/mame"
 script=Path(__file__).with_suffix(".lua").resolve()
-cmd=[exe,"megadriv","-cart",str(args.rom.resolve()),"-video","none",
+cmd=[exe,"genesis","-cart",str(args.rom.resolve()),"-video","none",
      "-sound","none","-nothrottle","-seconds_to_run","145",
      "-skip_gameinfo","-autoboot_script",str(script)]
 args.result.parent.mkdir(parents=True,exist_ok=True)
@@ -45,12 +45,17 @@ if h:
         hist[int(d)]=int(c)
 vh=re.search(r"DREAD_VISUAL_HASH mode=(\d+) hash=(\d+)",output)
 visual_hash=int(vh.group(2)) if vh and int(vh.group(1))==mode else None
-result={"mode":mode,"type":"combat_with_ai" if mode==2 else "render_without_ai",
+hm=re.search(r"DREAD_VIDEO_HZ ([0-9.]+)",output)
+assert hm,"Missing measured emulated video frequency"
+hz=float(hm.group(1))
+assert 59 < hz < 61,("Expected NTSC",hz)
+assert run.returncode==0,("Emulator failed",run.returncode)
+result={"video_hz":hz,"system":"genesis","mode":mode,"type":"combat_with_ai" if mode==2 else "render_without_ai",
         # render (mode 1) runs with AI off: comparable across variants only if AI is unchanged.
         # combat (mode 2) runs with AI on: enemy behaviour differs between AI variants,
         # so the same route is NOT the same workload there. Report AI cost separately.
         "ai_active":mode==2,
-        "frames":frames,"vblanks":vblanks,"fps":round(frames*60/vblanks,4),
+        "frames":frames,"vblanks":vblanks,"fps":round(frames*hz/vblanks,4),
         "vblanks_per_frame_mean":round(vblanks/frames,3),
         "vblank_histogram":{str(k):v for k,v in sorted(hist.items())},
         "visual_hash":visual_hash,

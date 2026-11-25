@@ -7,11 +7,12 @@ p.add_argument("--roms",type=Path,required=True)
 p.add_argument("--bench",type=Path,required=True)
 p.add_argument("--out",type=Path,required=True)
 args=p.parse_args()
-names=("CONTROL",)
+names=("CONTROL","CACHE2","SPARSE","FERRET_ALL")
 # Classes decide what a result means. "near_exact" must pass the host gate (verify_geo_exact.sh): same image apart from
 # isolated edge pixels. Everything else is a trade-off that the project owner decides before it is called a speed-up.
 CLASS={
     "CONTROL":"baseline",
+    "CACHE2":"exact_candidate", "SPARSE":"exact_candidate", "FERRET_ALL":"exact_candidate",
     "GEO_SAFE":"near_exact",
     "AI6":"gameplay_change",              # monsters at 6 Hz, so also slower (every kind acts once per 10 VBlanks)
     "AI6S":"gameplay_change_speed_kept",  # 6 Hz, step lengthened to keep average speed; choppier, fastest kinds capped
@@ -50,13 +51,19 @@ for row in rows:
         cfps=control[key+"_fps"]
         value=row[key+"_fps"]
         row[key+"_delta_pct"]=round(100*(value/cfps-1),2) if cfps and value else ""
+    if row["class"]=="exact_candidate":
+        for key in ("render","combat"):
+            row[key+"_pixels_equal_control"]=(row[key+"_hash"]==control[key+"_hash"]) if row[key+"_hash"] and control[key+"_hash"] else "missing"
+    for key in ("render","combat"):
+        row.setdefault(key+"_pixels_equal_control",True if row["variant"]=="CONTROL" else "not_applicable")
     # near_exact: the pass/fail gate is the host check (geo_gate_pass). This hash comparison is information only.
     if row["class"]=="near_exact":
         row["render_pixels_equal_control"]=(row["render_hash"]==control["render_hash"]) if row["render_hash"] and control["render_hash"] else ""
-    else:
+    elif row["class"] not in ("exact_candidate","baseline"):
         row["render_pixels_equal_control"]="not_applicable"
     # AI variants change the combat workload: combat FPS is not a like-for-like comparison.
     row["combat_comparable"]=(row["class"] not in AI_CLASSES)
+    row["final_image_gate_pass"]=all(row[k+"_fps"] and row.get(k+"_pixels_equal_control") is True for k in ("render","combat"))
 args.out.parent.mkdir(parents=True,exist_ok=True)
 csvpath=args.out.with_suffix(".csv")
 jsonpath=args.out.with_suffix(".json")
@@ -82,5 +89,9 @@ with zipfile.ZipFile(args.out,"w",zipfile.ZIP_DEFLATED,compresslevel=6) as z:
 with zipfile.ZipFile(args.out) as z:
     assert z.testzip() is None
     assert sum(x.filename.endswith(".bin") for x in z.infolist())==len(names)
+# Keep the package even when an experiment fails. The report explicitly rejects it.
+for row in rows:
+    row_ok=all(row[k+"_fps"] and row.get(k+"_pixels_equal_control") is True for k in ("render","combat"))
+    print("EXPERIMENT_GATE",row["variant"],"PASS" if row_ok else "REJECTED_OR_INCOMPLETE")
 print("CREATED",args.out,"bytes",args.out.stat().st_size)
 for row in rows:print(json.dumps(row))

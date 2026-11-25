@@ -56,6 +56,6 @@ assert wanted.issubset(syms),wanted-set(syms)
 (out/'release'/f'manifest-{v}.json').write_text(json.dumps({
     'variant':v,'rom_bytes':rom.stat().st_size,
     'sha256':hashlib.sha256(rom.read_bytes()).hexdigest(),
-    'benchmark':'pending MAME','base_c7':'c816e6c72a8fc6a3bc989b347ea7166fda835893'},indent=2)+'\n')
+    'benchmark':'pending MAME','base_c7':'114a4147073c7c7ce3aa314d2ad93b57d2a15bae'},indent=2)+'\n')
 print(f'BUILD {v} OK: {rom.stat().st_size} bytes',flush=True)
 PY

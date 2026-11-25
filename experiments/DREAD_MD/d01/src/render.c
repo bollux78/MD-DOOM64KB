@@ -287,9 +287,30 @@ static inline void cam(int16_t px, int16_t py, int32_t *x4, int32_t *z4)
 static inline uint16_t xform(uint16_t v)
 {
 #if MAXV > 768
+#ifdef DREAD_FERRET_CACHE2
+    /* Two ways in the same 256 entries. The high bit of key[base] stores
+     * which way was used last; map vertex indices are below 32768. */
+#if MAXV > 32768
+#error FERRET_CACHE2 requires 15-bit vertex indices
+#endif
+    const uint16_t base = (v & (VCACHE_SIZE / 2 - 1)) * 2;
+    uint16_t slot;
+    if (vstamp[base] == frame_id && (vkey[base] & 0x7fff) == v) {
+        vkey[base] |= 0x8000; return base;
+    }
+    if (vstamp[base+1] == frame_id && vkey[base+1] == v) {
+        vkey[base] &= 0x7fff; return base+1;
+    }
+    if (vstamp[base] != frame_id) slot = base;
+    else if (vstamp[base+1] != frame_id) slot = base+1;
+    else slot = base + (vkey[base] >> 15); /* evict the other way */
+    if (slot == base) vkey[base] = v | 0x8000;
+    else { vkey[slot] = v; vkey[base] &= 0x7fff; }
+#else
     const uint16_t slot = v & (VCACHE_SIZE - 1);
     if (vstamp[slot] == frame_id && vkey[slot] == v) return slot;
     vkey[slot] = v;
+#endif
 #else
     const uint16_t slot = v;
     if (vstamp[slot] == frame_id) return slot;
@@ -759,19 +780,57 @@ __attribute__((noinline)) static void draw_seg_body(const MapSeg *s, int16_t x1,
     while (xe2 > c && ceilclip[xe2 - 1] >= floorclip[xe2 - 1]) xe2--;
     xe = xe2;
 
+    static SegA sa;
+#if defined(DREAD_FERRET_SPARSE) && defined(DREAD_NATIVE_PERSPECTIVE)
+    /* Only the native path has independent rational U per column. The old
+     * anchor-interpolated modes must retain their original anchor boundaries.
+     * Limit run count and require >=16 hidden columns to amortise setup. */
+    int sparse = 0;
+    int16_t starts[8], ends[8];
+    if (COLB == 1 && xe - xs >= 24) {
+        int x = xs, runs = 0, open = 0;
+        while (x < xe && runs < 8) {
+            x = find_open(x); if (x >= xe) break;
+            starts[runs] = (int16_t)x;
+            while (x < xe && ceilclip[x] < floorclip[x]) { x++; open++; }
+            ends[runs++] = (int16_t)x;
+        }
+        if (x < xe) x = find_open(x);
+        if (x >= xe && xe - xs - open >= 16) sparse = runs;
+    }
+    if (sparse) {
+        for (int ri = 0; ri < sparse; ri++) {
+            const int off = starts[ri] - xs, n = ends[ri] - starts[ri];
+            /* Unsigned multiply/add preserves the original 32-bit wrap. */
+#define AT_RUN(v,d) ((int32_t)((uint32_t)(v) + (uint32_t)(d) * (uint32_t)off))
+            seg_rows2(&rec[starts[ri]].yc, &rec[starts[ri]].yf,
+                      AT_RUN(Yc,dYc),dYc,AT_RUN(Yf,dYf),dYf,(int16_t)n);
+            if (has_up) seg_rows1(&rec[starts[ri]].ybc,AT_RUN(Ybc,dYbc),dYbc,(int16_t)n);
+            if (has_lo) seg_rows1(&rec[starts[ri]].ybf,AT_RUN(Ybf,dYbf),dYbf,(int16_t)n);
+            if (need_tex) {
+                sa.iz=AT_RUN(iz,diz); sa.uz=AT_RUN(uz,duz);
+                sa.diz=diz; sa.duz=duz; sa.diz8=diz8; sa.duz8=duz8;
+                sa.xs=starts[ri]; sa.xe=ends[ri]; native_anchors(&sa);
+            }
+#undef AT_RUN
+        }
+    } else
+#endif
+    {
     /* phase A: per-column values in plain arrays (68000: segasm.s) */
     const int16_t ncols = (int16_t)(xe - xs);
     seg_rows2(&rec[xs].yc, &rec[xs].yf, Yc, dYc, Yf, dYf, ncols);
     if (has_up) seg_rows1(&rec[xs].ybc, Ybc, dYbc, ncols);
     if (has_lo) seg_rows1(&rec[xs].ybf, Ybf, dYbf, ncols);
     if (need_tex) {
-        static SegA sa;
         sa.iz = iz; sa.uz = uz; sa.diz = diz; sa.duz = duz; sa.diz8 = diz8; sa.duz8 = duz8; sa.xs = (int16_t)xs; sa.xe = (int16_t)xe;
 #ifdef DREAD_NATIVE_PERSPECTIVE
         if (COLB == 1) native_anchors(&sa); else seg_anchors(&sa);
 #else
         seg_anchors(&sa);
 #endif
+    }
+
     }
 
 #if defined(DREAD_GAMEPLAY) && !defined(PVS_GEN)
