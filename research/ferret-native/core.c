@@ -22,7 +22,8 @@ static int32_t max(int32_t a,int32_t b){return a>b?a:b;}
 /* Both target and host GCC implement arithmetic right shift; assert that contract. */
 typedef char fr_arithmetic_shift_required[((-1LL >> 1)==-1LL)?1:-1];
 static int32_t sar(int64_t n,unsigned bits){return (int32_t)(n>>bits);}
-static size_t pixel(int x,int y){return (size_t)(x/2)*144u+(x&1)+2u*(unsigned)y;}
+/* x is a column 0..159: (x/2)*144 as shifts, so no __mulsi3 call on the 68000 */
+static size_t pixel(int x,int y){unsigned h=(unsigned)x>>1;return (size_t)((h<<7)+(h<<4))+((unsigned)x&1u)+2u*(unsigned)y;}
 static int has(unsigned mask,int v){return (mask>>v)&1u;}
 static int sample(Asset a,int64_t off,uint8_t *out){
     int64_t p=(int64_t)a.origin+off;
@@ -47,7 +48,15 @@ static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t
     const int y0=max(t,lo),y1=min(b,hi);
     if(y0>=y1)return 0;
     uint8_t *dst=f->pixels+pixel(x,y0);
-    if(sky&&fr_sky_column){const uint8_t *s=fr_sky_column(x);const uint16_t *ro=fr_sky_rows;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[ro[y]];*dst=pair?pair_phase(v,y):v;}}
+    if(sky&&fr_sky_column){
+        const uint8_t *s=fr_sky_column(x);const uint16_t *ro=fr_sky_rows+y0;int n=y1-y0;
+        if(!pair){while(n--){*dst=s[*ro++];dst+=2;}}
+        else{ /* paired art: odd rows store the nibble-swapped byte; parity handled outside the inner loop */
+            if(y0&1){uint8_t v=s[*ro++];*dst=(uint8_t)((v<<4)|(v>>4));dst+=2;n--;}
+            for(;n>=2;n-=2,dst+=4){uint8_t e=s[ro[0]],o=s[ro[1]];ro+=2;dst[0]=e;dst[2]=(uint8_t)((o<<4)|(o>>4));}
+            if(n>0)*dst=s[*ro];
+        }
+    }
     else if(sky){const uint8_t *s=sky+x*H;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[y];*dst=pair?pair_phase(v,y):v;}}
     else if(pair){const uint8_t e=c,o=pair_phase(c,1);int y=y0;if(y&1){*dst=o;dst+=2;y++;}
         for(;y+1<y1;y+=2,dst+=4){dst[0]=e;dst[2]=o;} if(y<y1)*dst=e;}
@@ -136,7 +145,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
             uint32_t q=q_j;
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:div_u16(q,inv))&0x1f80u)+sar(w->z,1);
-            const int16_t *sc=scalers+(indices?indices[inv>>5]:(inv>>5))*H;
+            const unsigned si_=(indices?indices[inv>>5]:(inv>>5));const int16_t *sc=scalers+(si_<<6)+(si_<<3); /* *H (72) */
             if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
             if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
         }
