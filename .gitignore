@@ -36,3 +36,5 @@ dist/
 
 # Generated alongside colormap_cells.h
 src/r20_colorcell.h
+__pycache__/
+*.pyc
