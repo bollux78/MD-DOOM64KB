@@ -130,14 +130,21 @@ static void init_vdp(void){
         DATA=(uint16_t)((y>=5&&y<23&&x<40)?1+(y-5)*40+x:0);
     reg(1,0x54);
 }
+static uint8_t probe_pattern(unsigned i,unsigned pass){
+    return (uint8_t)((i*73u+(i>>8)*19u+pass*91u)^((i&1u)?0x5au:0xa5u));
+}
 static int probe_sram(void){
-    volatile uint16_t *p=(volatile uint16_t *)0x20a600ul;
-    volatile uint16_t *q=(volatile uint16_t *)0x20fffeul;
+    volatile uint8_t *p=(volatile uint8_t *)0x20a600ul;
     IO8(0xa130f1ul)=1;
-    /* Diagnostic cartridge owns the whole declared SRAM area. */
-    *p=0x5aa5;*q=0xa55a;
-    if(*p==0x5aa5&&*q==0xa55a){*p=0xa55a;*q=0x5aa5;if(*p==0xa55a&&*q==0x5aa5)return 1;}
-    IO8(0xa130f1ul)=0;return 0;
+    /* Whole staging block, byte lane and address alias tests. No game saves
+       are stored in this diagnostic cartridge's staging area. */
+    for(unsigned pass=0;pass<2;pass++){
+        for(unsigned i=0;i<23040;i++)p[i]=probe_pattern(i,pass);
+        for(unsigned i=0;i<23040;i++)if(p[i]!=probe_pattern(i,pass)){
+            IO8(0xa130f1ul)=0;return 0;
+        }
+    }
+    IO8(0xa130f1ul)=0;return 1;
 }
 static unsigned pad(void){
     IO8(0xa10009ul)=0x40;IO8(0xa10003ul)=0x40;
@@ -159,6 +166,7 @@ void *memcpy(void *p,const void *q,size_t n){uint8_t *d=p;const uint8_t *s=q;whi
 /* Read-only debugger checkpoint, after DMA and mailbox update. */
 __attribute__((noinline,used)) void fr_published(void){__asm__ volatile("" ::: "memory");}
 void md_main(void){
+    for(unsigned i=0;i<64;i++)MB[i]=0;
     MB[0]=0x46523031u;MB[1]=0;MB[2]=1;
     if(IO8(0xa10001ul)&15u)IO32(0xa14000ul)=0x53454741u;
     IO16(0xa11100ul)=0x0100;IO16(0xa11200ul)=0x0000;
@@ -172,7 +180,7 @@ void md_main(void){
         if(seq<SC_POSES){idx=seq;x=sc_poses[4*idx];y=sc_poses[4*idx+1];z=sc_poses[4*idx+2];a=sc_poses[4*idx+3];}
         else {
             unsigned p=pad(),pressed=p&~last;last=p;
-            if((pressed&0x40u)&&has_sram)use_sram=!use_sram; /* A */
+            if((pressed&0x40u)&&has_sram){use_sram=!use_sram;IO8(0xa130f1ul)=use_sram?1:0;} /* A */
             if(pressed&0x10u){idx=(idx+1)%SC_POSES;x=sc_poses[idx*4];y=sc_poses[idx*4+1];z=sc_poses[idx*4+2];a=sc_poses[idx*4+3];}
             if(p&4u)a=(int16_t)((a+355)%360);
             if(p&8u)a=(int16_t)((a+5)%360);
@@ -186,12 +194,24 @@ void md_main(void){
         MB[2]=3;
         rc=render_pose(x,y,z,a,&s);
         if(rc){MB[2]=0x80000000u|(uint32_t)(-rc);for(;;){}}
-        uint8_t *dst=use_sram?(uint8_t *)0x20a600ul:worktiles;
+        /* WRAM is the reference and always works. Optional SRAM is not
+           claimed as accelerated until a future direct-conversion backend. */
+        uint8_t *dst=worktiles;
         MB[2]=4;
-        if(fr_tiles(frame.pixels,dst,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
-        s.tiles_hash=hash_bytes(dst,23040);
+        if(fr_tiles(frame.pixels,worktiles,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
+        s.tiles_hash=hash_bytes(worktiles,23040);
+        if(use_sram){
+            volatile uint8_t *p=(volatile uint8_t *)0x20a600ul;
+            for(unsigned i=0;i<23040;i++)p[i]=worktiles[i];
+            for(unsigned i=0;i<23040;i++)if(p[i]!=worktiles[i]){
+                has_sram=use_sram=0;MB[3]=0;MB[36]++;IO8(0xa130f1ul)=0;break;
+            }
+            if(use_sram)dst=(uint8_t *)0x20a600ul;
+        }
         next_blank();reg(1,0x14);
         rc=fr_md_dma((uint32_t)(uintptr_t)dst,0x20,23040);
+        if(rc&&use_sram){has_sram=use_sram=0;MB[3]=0;MB[36]++;IO8(0xa130f1ul)=0;
+            rc=fr_md_dma((uint32_t)(uintptr_t)worktiles,0x20,23040);}
         reg(1,0x54);
         MB[4]=idx;MB[5]=s.hash;MB[6]=s.tiles_hash;MB[7]=s.candidates;MB[8]=s.projected;
         MB[9]=s.errors;MB[10]=s.closed;MB[11]=(uint32_t)use_sram;MB[12]=(uint32_t)rc;
