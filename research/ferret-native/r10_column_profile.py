@@ -37,12 +37,12 @@ assert patch.count(marker) == patch.count(after) == 1
 decl = "static const unsigned char r10_kernel[] = {\n" + "".join(
     f"[0x{pc:x}]={kind},\n" for pc, kind in sorted(table.items())) + "};\n"
 decl += """
-unsigned int r10_column[256][4][2];
+unsigned int retro_r10_column[256][4][2];
 static void r10_count(unsigned int pc, unsigned int cycles) {
     if (!retro_r09_active || retro_r09_count == 0 || retro_r09_stage != 3 ||
         pc >= sizeof(r10_kernel) || !r10_kernel[pc]) return;
     unsigned int kind = r10_kernel[pc];
-    unsigned int *row = r10_column[retro_r09_count - 1][(kind & 7) - 1];
+    unsigned int *row = retro_r10_column[retro_r09_count - 1][(kind & 7) - 1];
     row[0] += cycles;
     row[1] += kind >> 3;
 }
@@ -56,7 +56,7 @@ so = root / "genesis_plus_gx_libretro.so"
 lib = ct.CDLL(str(so))
 data = run(so, scene, 1)
 assert data["actual_sram_selected"] == [0]
-counts = (((ct.c_uint * 2) * 4) * 256).in_dll(lib, "r10_column")
+counts = (((ct.c_uint * 2) * 4) * 256).in_dll(lib, "retro_r10_column")
 names = ("generated_even", "generated_odd", "wrap", "no_wrap_fallback")
 
 def metric(cycles, stores):
