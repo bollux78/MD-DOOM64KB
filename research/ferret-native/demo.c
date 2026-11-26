@@ -87,6 +87,11 @@ static void transform_vertex(unsigned i,int32_t cx,int32_t cy,int16_t co,int16_t
         vertex_tx[i]=(int16_t)*tx;vertex_tz[i]=(int16_t)*tz;vertex_valid[i]=1;
     }else{*tx=vertex_tx[i];*tz=vertex_tz[i];}
 }
+static int span_hidden(int x0,int width){
+    const uint16_t *t=frame.top+x0,*b=frame.bottom+x0;
+    for(int i=0;i<width;i++)if(t[i]|b[i])return 0;
+    return 1;
+}
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
@@ -97,7 +102,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;}
 #endif
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
-    fr_begin(&frame);closed_scan=0;
+    fr_begin(&frame);closed_scan=0;fr_span_hidden=span_hidden;
     for(unsigned i=0;i<SC_VERTEX_COUNT;i++)vertex_valid[i]=0;
         sky_setup(a);
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
@@ -143,6 +148,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             job.ceiling=w[10];job.floor=w[11];
             int r=fr_project(tx,tz,ux,uz,w[3],w[4],w[5],&job);
             if(r<0){s->errors++;continue;}if(!r)continue;s->projected++;
+            if(r==2)continue; /* fully occluded span: nothing to draw */
             #if SC_ART_PAIR
             if(fr_wall_indexed_pair(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sc_sky))s->errors++;
 #else
