@@ -146,14 +146,21 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
     uint32_t acc[4]={(uint32_t)e[0],(uint32_t)e[1],(uint32_t)e[2],(uint32_t)e[3]};
     uint32_t inv_acc=(uint32_t)w->inv0,q_acc=w->u0; /* running inv0+step*j and u0+du*j (same modular values, no multiply per column) */
+    int jn=0; /* the running sums below hold the values for column jn */
     for(int j=0;j<n;j++){
         int x=w->x0+j,t=f->top[x],b=f->bottom[x];
+        if(t>H||b>H)return -3;
+        if(t==0&&b==0)continue;   /* occluded column: nothing to update */
+        if(j!=jn){                /* first open column after occluded ones: jump the sums (same modular values) */
+            const uint32_t jj=(uint32_t)j;
+            for(int k=0;k<4;k++)acc[k]=(uint32_t)e[k]+(uint32_t)d[k]*jj;
+            inv_acc=(uint32_t)w->inv0+(uint32_t)w->scale_step*jj;q_acc=w->u0+w->du*jj;
+        }
+        jn=j+1;
         /* e+d*j kept as a running 32-bit sum: only bits 8..23 are used, so the 64-bit product was redundant */
         const uint32_t c0=acc[0],c1=acc[1],c2=acc[2],c3=acc[3];
         acc[0]+=(uint32_t)d[0];acc[1]+=(uint32_t)d[1];acc[2]+=(uint32_t)d[2];acc[3]+=(uint32_t)d[3];
         const uint32_t inv_j=inv_acc,q_j=q_acc;inv_acc+=(uint32_t)w->scale_step;q_acc+=w->du;
-        if(t>H||b>H)return -3;
-        if(t==0&&b==0)continue;
         int r[4];r[0]=s16bits(c0,8);r[1]=s16bits(c1,8);r[2]=s16bits(c2,8);r[3]=s16bits(c3,8);
         uint16_t inv=(uint16_t)inv_j;
         int low=(v==1||v==3)?r[1]:r[2],fs=(v==0||v==2)?r[1]:(l?r[3]:r[2]);
