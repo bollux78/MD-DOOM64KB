@@ -50,6 +50,9 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          # R05 host-only fix: byte reference instead of native-endian long stores.
+          # The target __m68k__ path is identical to the pinned R05 source.
+          cp research/ferret-native/presentation.c r05-baseline/research/ferret-native/presentation.c
           FR_EXTRA_CFLAGS=-DFR_BENCH python3 r05-baseline/research/ferret-native/build_demo.py "$PRIVATE/r05-bench" "$GCC68" --label "FERRET-MD R05 BENCH"
           FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/r06-bench" "$GCC68" --label "FERRET-MD R06 BENCH"
           python3 research/ferret-native/build_demo.py "$PRIVATE/r06-verify" "$GCC68" --label "FERRET-MD R06 VERIFY"
