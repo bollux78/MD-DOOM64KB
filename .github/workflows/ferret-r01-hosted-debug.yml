@@ -1,0 +1,106 @@
+name: Ferret R01 - hosted FRV2 fault isolation
+on:
+  pull_request:
+    branches: [research-ferret-r01-alt-emulators-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r01-hosted-debug.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  isolate:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r01-hosted-debug-20261126')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: FERRET-MD-R01-diagnostic
+          run-id: 45716253010
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/r01-original
+      - name: Install alternative cross compiler and MAME
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mame gcc-m68k-linux-gnu binutils-m68k-linux-gnu python3-pil
+      - name: Disassemble original fault and build instrumented fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/r01-debug"
+          mkdir -p "$out/evidence" "$out/tc"
+          m68k-linux-gnu-objdump -D -b binary -m m68k:68000 --start-address=0x2800 --stop-address=0x2a40 "$RUNNER_TEMP/r01-original/FERRET-MD-R01-FIXTURE.bin" > "$out/evidence/original-fault.asm"
+          cat "$out/evidence/original-fault.asm"
+          printf '#!/bin/sh\nexec /usr/bin/m68k-linux-gnu-gcc -no-pie -static "$@"\n' > "$out/tc/m68k-elf-gcc"
+          chmod +x "$out/tc/m68k-elf-gcc"
+          ln -s /usr/bin/m68k-linux-gnu-objcopy "$out/tc/m68k-elf-objcopy"
+          python3 research/ferret-native/export_scene.py "$out/fixture"
+          python3 research/ferret-native/build_demo.py "$out/fixture" "$out/tc/m68k-elf-gcc" --label "FERRET-MD R01 FRV DIAGNOSTIC"
+          cp "$out/fixture/FERRET-MD-R01.bin" "$out/evidence/R01-FRV-DIAG.bin"
+          m68k-linux-gnu-nm -n "$out/fixture/demo.elf" > "$out/evidence/symbols.txt"
+          m68k-linux-gnu-objdump -d "$out/fixture/demo.elf" > "$out/evidence/diagnostic.asm"
+          grep -E "(__bss_start|__bss_end|worktiles| frame$| vis$| ready$)" "$out/evidence/symbols.txt"
+          python3 - "$out/evidence/symbols.txt" <<'PY'
+          import sys
+          syms={v[-1]:int(v[0],16) for l in open(sys.argv[1]) if len(v:=l.split())==3}
+          assert syms["__bss_start"]==0xff0000
+          assert 0xff0000<syms["__bss_end"]<=0xffe800
+          print("WRAM layout verified",hex(syms["__bss_start"]),hex(syms["__bss_end"]))
+          PY
+          python3 - "$out" <<'PY'
+          import sys,json,pathlib
+          sys.path.insert(0,"research/ferret-native")
+          from test_demo import host
+          p=pathlib.Path(sys.argv[1])
+          (p/"evidence/host.json").write_text(json.dumps(host(p/"fixture"),indent=2))
+          PY
+      - name: Test rebuilt fixture and inspect FRV operands
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/r01-debug"
+          cat > debug.lua <<'LUA'
+          local cpu=manager.machine.devices[":maincpu"]
+          local mem=cpu.spaces["program"]
+          local screen=manager.machine.screens[":screen"] or manager.machine.screens:at(1)
+          local frames,last=0,0
+          emu.register_frame_done(function()
+            frames=frames+1
+            local seq=mem:read_u32(0xfff004)
+            if frames==1 or frames==30 or frames==120 or frames==600 or (seq>last and seq<=4) then
+              local pc=cpu.state["CURPC"] or cpu.state["PC"]
+              local m={}
+              for i=0,32 do m[#m+1]=string.format("%08X",mem:read_u32(0xfff000+4*i)) end
+              print(string.format("DIAG frame=%d pc=%08X mailbox=%s",frames,pc and pc.value or 0,table.concat(m," ")))
+              local ok,err=pcall(function() screen:snapshot(os.getenv("PWD").."/evidence/frame-"..frames..".png") end)
+              print("SNAP "..tostring(ok).." "..tostring(err))
+            end
+            last=seq
+          end)
+          LUA
+          timeout 120 mame megadriv -cart "$PWD/fixture/FERRET-MD-R01.bin" -video none -sound none -autoboot_script "$PWD/debug.lua" -seconds_to_run 20 -nothrottle -skip_gameinfo > evidence/mame.log 2>&1 || true
+          cat evidence/mame.log
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          from collections import Counter
+          import json
+          p=Path("evidence");rows=[]
+          for f in sorted(p.glob("frame-*.png")):
+              im=Image.open(f).convert("RGB")
+              c=Counter(im.getdata());color,n=c.most_common(1)[0]
+              row={"file":f.name,"colors":len(c),"dominant_rgb":color,"dominant_fraction":n/(im.width*im.height)}
+              rows.append(row);print("SCREEN",json.dumps(row))
+          (p/"screens.json").write_text(json.dumps(rows,indent=2))
+          if not rows:raise SystemExit("No screenshots")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: R01-hosted-FRV-fault-diagnostic
+          path: ${{ runner.temp }}/r01-debug/evidence/
+          if-no-files-found: warn

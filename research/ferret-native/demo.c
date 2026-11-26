@@ -53,7 +53,22 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
     int cell=leaf_at(x,y);if(cell<0)return -2;
     s->leaf=(uint32_t)cell;
-    FRIter it;if(frv_begin(&it,&vis,(uint16_t)cell,x,y,sc_planes,SC_NODES)!=1)return -3;
+    FRIter it;
+    int begin_rc=frv_begin(&it,&vis,(uint16_t)cell,x,y,sc_planes,SC_NODES);
+#ifdef __m68k__
+    /* Record the precise operands before any error loop. */
+    volatile uint32_t *diag=(volatile uint32_t *)0xfff044ul;
+    diag[0]=(uint32_t)begin_rc;diag[1]=(uint32_t)(int32_t)x;diag[2]=(uint32_t)(int32_t)y;
+    diag[3]=(uint32_t)cell;diag[4]=vis.nc;diag[5]=vis.ns;
+    diag[6]=(uint32_t)(uintptr_t)vis.cells;diag[7]=(uint32_t)(uintptr_t)sc_frv;
+    diag[8]=SC_FRV_BYTES;diag[9]=SC_NODES;
+    if(cell>=0&&cell<vis.nc){
+        const uint8_t *b=vis.cells+12u*(unsigned)cell;
+        for(unsigned k=0;k<4;k++)diag[10+k]=(uint32_t)(int32_t)(int16_t)be16(b+2*k);
+        diag[14]=be16(b+8);diag[15]=be16(b+10);
+    }
+#endif
+    if(begin_rc!=1)return -3;
     uint16_t leaf;int rc;
     while((rc=frv_next(&it,&leaf))>0){
         if(closed())break;
