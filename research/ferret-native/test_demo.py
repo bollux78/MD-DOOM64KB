@@ -1,7 +1,7 @@
 """R01 emulator verification: compare actual 68000 framebuffer hash and VRAM
 against host execution of the same independent engine. No video files published.
 """
-import argparse,ctypes as C,hashlib,json,pathlib,struct,sys,os
+import argparse,ctypes as C,hashlib,json,pathlib,struct,sys,os,subprocess
 P=pathlib.Path
 U8=C.c_uint8;U32=C.c_uint32
 class Info(C.Structure):
@@ -29,7 +29,27 @@ def host(out):
         (out/f"expected-tiles-{i}.bin").write_bytes(bytes(tiles))
         results.append(row)
     return results
-def emulate(core,out,mode,expected,maxframes):
+def cycle_profile(lib, elf, nm):
+    """Read cumulative master-clock counts attributed to 68000 instruction PCs."""
+    output=subprocess.check_output([nm,"--print-size","--defined-only",elf],text=True)
+    ranges={}
+    for line in output.splitlines():
+        fields=line.split()
+        if len(fields)!=4 or fields[2] not in ("t","T"):
+            continue
+        address,size=int(fields[0],16),int(fields[1],16)
+        if size and address+size<=0x200000:
+            ranges.setdefault((address//2,(address+size+1)//2),fields[3])
+    if not ranges:
+        raise ValueError("No 68000 text symbols for profiling")
+    cycles=(C.c_ulonglong*1048576).in_dll(lib,"retro_research_cycles")
+    active=C.c_uint.in_dll(lib,"retro_research_active")
+    active.value=1
+    def snapshot():
+        return {name:sum(cycles[start:end]) for (start,end),name in ranges.items()}
+    return snapshot,active
+
+def emulate(core,out,mode,expected,maxframes,nm=None):
     lib=C.CDLL(str(core));cb=[];frames=0
     def env(cmd,p):
         if cmd==3:C.cast(p,C.POINTER(C.c_bool))[0]=True;return True
@@ -63,6 +83,8 @@ def emulate(core,out,mode,expected,maxframes):
         b=b"".join(b[i:i+2][::-1] for i in range(0,len(b),2))
         return struct.unpack(">17I",b)
     checks=[];seen=set();last=0;last_seq=0;fatal=None
+    snapshot,active=cycle_profile(lib,out/"demo.elf",nm) if nm else (None,None)
+    previous=snapshot() if snapshot else {}
     try:
         for frames in range(1,maxframes+1):
             lib.retro_run();m=mailbox()
@@ -89,6 +111,14 @@ def emulate(core,out,mode,expected,maxframes):
             ok=m[5]==e["hash"] and m[6]==e["tiles_hash"] and h==e["tiles_hash"] and mismatch==0 and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
             if m[11]!=0:ok=False # mandatory WRAM baseline, all cartridge configurations
             checks.append({"pose":i,"frame":frames,"elapsed_video_frames":frames-last,"match":ok,"fb":m[5],"expected_fb":e["hash"],"tile":m[6],"vram":h,"vram_swapped":hs,"expected_swapped":e["swapped_tiles_hash"],"mismatch_bytes":mismatch,"mismatch_swapped":mismatch_swapped,"first_actual":vram[:16].hex(),"first_expected":target[:16].hex(),"expected_tile":e["tiles_hash"],"sram":m[11],"errors":m[9],"candidates":m[7],"projected":m[8]})
+            if snapshot:
+                current=snapshot()
+                delta={name:count-previous[name] for name,count in current.items() if count!=previous[name]}
+                if not delta or min(delta.values())<0:
+                    raise ValueError("Missing or invalid emulator cycle counts")
+                checks[-1]["includes_boot"]=not seen
+                checks[-1]["master_cycles_by_symbol"]=delta
+                previous=current
             seen.add(i);last=frames
             if len(seen)==len(expected):break
         m=mailbox()
@@ -100,11 +130,14 @@ def emulate(core,out,mode,expected,maxframes):
         # DMA must actually have occurred, not just matching the host plan.
         result["pass"]=len(checks)==len(expected) and all(x["match"] for x in checks) and len(pubs)>=len(expected) and fatal is None
         return result
-    finally:lib.retro_unload_game();lib.retro_deinit()
+    finally:
+        if active is not None:
+            active.value=0
+        lib.retro_unload_game();lib.retro_deinit()
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("core",type=P);p.add_argument("report",type=P);p.add_argument("--maxframes",type=int,default=3600);p.add_argument("--mode",type=int,choices=(0,1,2),required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("core",type=P);p.add_argument("report",type=P);p.add_argument("--maxframes",type=int,default=3600);p.add_argument("--mode",type=int,choices=(0,1,2),required=True);p.add_argument("--profile-nm");a=p.parse_args()
     expected=host(a.out)
-    r=emulate(a.core,a.out,a.mode,expected,a.maxframes)
+    r=emulate(a.core,a.out,a.mode,expected,a.maxframes,a.profile_nm)
     a.report.write_text(json.dumps(r,indent=2));print("EMULATOR "+json.dumps(r),flush=True)
     if not r["pass"]:sys.exit(2)
 if __name__=="__main__":main()

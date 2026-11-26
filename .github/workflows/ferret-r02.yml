@@ -4,6 +4,8 @@ on:
     branches: [research-ferret-r01-audit-claudio-20261126]
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/ferret-r02.yml','research/ferret-native/**']
+  push:
+    branches: [research-ferret-r03-profile]
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-fixture:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -82,7 +84,7 @@ jobs:
             ${{ runner.temp }}/r02-hosted/asym/geometry-oracle.json
           if-no-files-found: warn
   x360:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 40
     steps:
@@ -138,7 +140,11 @@ jobs:
           for scene in fixture asym doom1; do
             test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
             for mode in 0 1 2; do
-              python3 research/ferret-native/test_demo.py "$PRIVATE/$scene" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/$scene-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+              profile_args=()
+              if [[ "$GITHUB_REF_NAME" == research-ferret-r03-profile && "$mode" == 1 ]]; then
+                profile_args=(--profile-nm "$HOME/mars/m68k-elf/bin/m68k-elf-nm")
+              fi
+              python3 research/ferret-native/test_demo.py "$PRIVATE/$scene" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/$scene-mode$mode.json" --mode "$mode" --maxframes 12000 "${profile_args[@]}" || rc=1
             done
           done
           exit "$rc"
