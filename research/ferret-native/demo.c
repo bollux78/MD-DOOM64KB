@@ -163,7 +163,7 @@ void md_main(void){
     if(IO8(0xa10001ul)&15u)IO32(0xa14000ul)=0x53454741u;
     IO16(0xa11100ul)=0x0100;IO16(0xa11200ul)=0x0000;
     init_vdp();
-    int has_sram=probe_sram(),use_sram=has_sram;
+    int has_sram=probe_sram(),use_sram=0;
     MB[3]=(uint32_t)has_sram;MB[2]=2;
     unsigned seq=0,idx=0,last=0;
     int16_t x=sc_poses[0],y=sc_poses[1],z=sc_poses[2],a=sc_poses[3];
