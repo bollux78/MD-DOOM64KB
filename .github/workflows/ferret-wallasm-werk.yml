@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: f0b861b32d8c23f6e23b4fb21c18fee1d6586756
+          ref: 996e4f8790e28d2f2f8380538705f8e57afc3971
           path: fused
           persist-credentials: false
       - uses: actions/checkout@v4
