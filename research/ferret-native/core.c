@@ -17,7 +17,9 @@ typedef struct {
 static int32_t s16(int64_t n) { uint32_t v=(uint32_t)n&65535u; return v>=32768u?(int32_t)v-65536:(int32_t)v; }
 static int32_t min(int32_t a,int32_t b){return a<b?a:b;}
 static int32_t max(int32_t a,int32_t b){return a>b?a:b;}
-static int32_t sar(int64_t n,unsigned bits){int64_t d=(int64_t)1<<bits;return (int32_t)(n>=0?n/d:-((-n+d-1)/d));}
+/* Both target and host GCC implement arithmetic right shift; assert that contract. */
+typedef char fr_arithmetic_shift_required[((-1LL >> 1)==-1LL)?1:-1];
+static int32_t sar(int64_t n,unsigned bits){return (int32_t)(n>>bits);}
 static size_t pixel(int x,int y){return (size_t)(x/2)*144u+(x&1)+2u*(unsigned)y;}
 static int has(unsigned mask,int v){return (mask>>v)&1u;}
 static int sample(Asset a,int64_t off,uint8_t *out){
