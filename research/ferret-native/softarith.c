@@ -27,13 +27,30 @@ uint32_t __udivsi3(uint32_t n,uint32_t d){uint32_t r;return udm32(n,d,&r);}
 uint32_t __umodsi3(uint32_t n,uint32_t d){uint32_t r;udm32(n,d,&r);return r;}
 int32_t __divsi3(int32_t n,int32_t d){uint32_t r;uint32_t un=n<0?0u-(uint32_t)n:(uint32_t)n,ud=d<0?0u-(uint32_t)d:(uint32_t)d;uint32_t q=udm32(un,ud,&r);return ((n<0)!=(d<0))?(int32_t)(0u-q):(int32_t)q;}
 int32_t __modsi3(int32_t n,int32_t d){uint32_t r;uint32_t un=n<0?0u-(uint32_t)n:(uint32_t)n,ud=d<0?0u-(uint32_t)d:(uint32_t)d;udm32(un,ud,&r);return n<0?(int32_t)(0u-r):(int32_t)r;}
-uint64_t __muldi3(uint64_t a,uint64_t b){uint64_t r=0;while(b){if(b&1u)r+=a;a<<=1;b>>=1;}return r;}
+uint64_t __muldi3(uint64_t a,uint64_t b){
+    uint32_t al=(uint32_t)a,bl=(uint32_t)b,ah=(uint32_t)(a>>32),bh=(uint32_t)(b>>32);
+    uint32_t p00=mulu16((uint16_t)al,(uint16_t)bl);
+    uint32_t p01=mulu16((uint16_t)al,(uint16_t)(bl>>16));
+    uint32_t p10=mulu16((uint16_t)(al>>16),(uint16_t)bl);
+    uint32_t hi=mulu16((uint16_t)(al>>16),(uint16_t)(bl>>16))+(p01>>16)+(p10>>16);
+    uint32_t lo=p00,t=lo+(p01<<16);hi+=(t<lo);lo=t;
+    t=lo+(p10<<16);hi+=(t<lo);lo=t;
+    hi+=__mulsi3(ah,bl)+__mulsi3(al,bh);
+    return ((uint64_t)hi<<32)|lo;
+}
 static uint64_t udm64(uint64_t n,uint64_t d,uint64_t *rem){
     if(!d){*rem=n;return ~0ull;}
     uint64_t q=0,r=0;
-    for(int i=63;i>=0;i--){
-        uint64_t m=n;for(int k=0;k<i;k++)m>>=1; /* bit i of n, shifts by 1 only */
-        r=(r<<1)|(m&1u);q<<=1;if(r>=d){r-=d;q|=1u;}
+    if((n>>32)==0 && (d>>32)==0){
+        uint32_t rem32,q32=udm32((uint32_t)n,(uint32_t)d,&rem32);
+        *rem=rem32;return q32;
+    }
+    /* Restoring division: stream the dividend bits in 64 steps, rather
+       than recomputing each bit by up to 63 single shifts. */
+    for(unsigned i=0;i<64;i++){
+        uint64_t carry=r>>63;
+        r=(r<<1)|(n>>63);n<<=1;q<<=1;
+        if(carry||r>=d){r-=d;q|=1u;}
     }
     *rem=r;return q;
 }
