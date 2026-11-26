@@ -1,0 +1,116 @@
+name: Ferret R04 - DREAD art control and Alpha2 visual reference
+on:
+  pull_request:
+    branches: [research-ferret-r03-art-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r04.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r04-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r04-visual-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare private paths and reuse verified R03 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r04/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r04-$GITHUB_RUN_ID"
+          play="$root/playtest/R04-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public" "$play"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "PLAY=$play" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+          wad="$(find "$root" -type f -iname doom1.wad -print -quit)"
+          if [ -z "$wad" ]; then wad="$HOME/Projetos/doom-md/assets/wads/doom1.wad"; fi
+          test -s "$wad"
+          echo "WAD=$wad" >> "$GITHUB_ENV"
+      - name: Build E1M1 with DREAD C7 palette and COLORMAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/export_scene.py "$PRIVATE/dread" --wad "$WAD" --fsc "$ROOT/backend/45715146307/scaler.fsc" --dread-art
+          python3 research/ferret-native/build_demo.py "$PRIVATE/dread" "$GCC68" --label "FERRET-MD R04 DREAD COLOR"
+          cp "$PRIVATE/dread/FERRET-MD-R01.bin" "$PLAY/FERRET-MD-R04-DREAD-ART.bin"
+          for f in art-report scene build; do cp "$PRIVATE/dread/$f.json" "$OUT/public/$f.json"; done
+          printf 'PRIVATE ROM: %s\n' "$PLAY/FERRET-MD-R04-DREAD-ART.bin"
+      - name: Build pinned instrumented Genesis Plus GX
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Actual Alpha2 source reference video (private)
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/reference_visual.py "$OUT/core/genesis_plus_gx_libretro.so" "$PLAY/alpha2-screens" "$OUT/public/alpha2-screen-stats.json"
+      - name: Verify R04 all SRAM configurations and geometry
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          rc=0
+          for mode in 0 1 2; do
+            python3 research/ferret-native/test_demo.py "$PRIVATE/dread" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/dread-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+          done
+          python3 research/ferret-native/compare_art.py "$ROOT/r03/45818401864/legacy" "$PRIVATE/dread" "$ROOT/round5/45657627918" "$OUT/public/art-comparison.json" || rc=1
+          exit "$rc"
+      - name: Real MAME screens and private comparison gallery
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export SDL_VIDEODRIVER=dummy FR_POSES=12 FR_SCREEN_DIR="$PRIVATE/dread"
+          timeout 180 "$(command -v mame)" genesis -cart "$PRIVATE/dread/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 200 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/dread/mame.log" 2>&1 || true
+          grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/dread/mame.log" > "$OUT/public/dread-mame.log" || true
+          python3 research/ferret-native/check_mame.py "$PRIVATE/dread" "$OUT/public/dread-mame.log" "$OUT/public/dread-mame.json"
+          python3 research/ferret-native/check_screen.py "$PRIVATE/dread" "$OUT/public/dread-screen.json"
+          mkdir -p "$PLAY/dread-screens"
+          cp "$PRIVATE/dread"/pose-*.png "$PLAY/dread-screens/"
+          python3 - <<'PY'
+          import os,pathlib
+          from PIL import Image,ImageDraw
+          p=pathlib.Path(os.environ["PLAY"])
+          root=pathlib.Path(os.environ["ROOT"])
+          sources=[("R02 original",root/"r02/45808741817/doom1"),("R03 map palette",root/"r03/45818401864/art"),("R04 DREAD palette",p/"dread-screens")]
+          gallery=Image.new("RGB",(960,12*248),(10,10,10));draw=ImageDraw.Draw(gallery)
+          for row in range(12):
+              for col,(label,d) in enumerate(sources):
+                  f=d/f"pose-{row}.png"
+                  x=col*320;y=row*248
+                  draw.text((x+4,y+3),f"{label} / pose {row}",fill="white")
+                  if f.exists():
+                      im=Image.open(f).convert("RGB")
+                      gallery.paste(im.resize((320,224),Image.Resampling.NEAREST),(x,y+24))
+          gallery.save(p/"R02-R03-R04-comparison.png")
+          PY
+      - name: Publish aggregate numeric results only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r04-numeric-results
+          path: |
+            ${{ runner.temp }}/ferret-r04-${{ github.run_id }}/public/*
+          if-no-files-found: warn
