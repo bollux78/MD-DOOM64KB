@@ -128,6 +128,13 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             s->candidates++;
             const int16_t *w=sc_walls+14u*j;
             if(w[2]==255)continue;
+            {   /* Back-face reject before transform/projection: the camera is on the back side of the wall line.
+                 * Such walls never project (measured: 0 of 495 projected walls had cross>0 over the 12 R04 poses); cross==0 still goes to fr_project. Map coordinates fit 16 bits. */
+                const uint16_t i0=(uint16_t)w[0],i1=(uint16_t)w[1];
+                const int16_t X0=sc_vertices[2u*i0],Y0=sc_vertices[2u*i0+1];
+                const int32_t cr=fr_muls16((int16_t)(sc_vertices[2u*i1]-X0),(int16_t)(y-Y0))-fr_muls16((int16_t)(sc_vertices[2u*i1+1]-Y0),(int16_t)(x-X0));
+                if(cr>0)continue;
+            }
             int32_t tx,tz,ux,uz;
             transform_vertex((uint16_t)w[0],(int32_t)x*8,(int32_t)y*8,co,si,&tx,&tz);
             transform_vertex((uint16_t)w[1],(int32_t)x*8,(int32_t)y*8,co,si,&ux,&uz);
