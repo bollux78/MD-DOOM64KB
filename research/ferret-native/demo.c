@@ -91,7 +91,11 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
     int16_t co=sc_trig[a*2],si=sc_trig[a*2+1];
-    {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
+#ifdef __m68k__
+    {extern void fr_clear11520(void *p);fr_clear11520(frame.pixels);} /* MOVEM clear; pixels is word aligned */
+#else
+    {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;}
+#endif
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);closed_scan=0;
     for(unsigned i=0;i<SC_VERTEX_COUNT;i++)vertex_valid[i]=0;

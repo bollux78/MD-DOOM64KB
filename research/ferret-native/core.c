@@ -67,6 +67,7 @@ static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t
 extern void fr_col_pair(uint8_t *dst,const uint8_t *src,const int16_t *sc,int32_t base,uint32_t n,uint32_t odd_first,const uint8_t *swap);
 #endif
 static uint8_t swap_lut[256];static int swap_ready;
+static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed) __attribute__((noinline));
 static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
     if(packed==2&&a.data&&a.size==8192){
         /* Fast path. Scaler rows are affine in y (monotonic), so checking the two end rows bounds every row;
@@ -100,6 +101,22 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
         f->pixels[pixel(x,y)]=c;
     }
     return 0;
+}
+/* Inlined front of tex() for the paired-art fast path: avoids a call with an 11-register prologue per column.
+ * Anything it does not handle goes to tex(), so results and error codes are unchanged. */
+static inline __attribute__((always_inline)) int tex_col(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
+#ifdef __m68k__
+    if(packed==2&&a.data&&a.size==8192){
+        const int y0=max(t,lo),y1=min(b,hi);
+        if(y0>=y1)return 0;
+        const int32_t base=offset+a.origin,pa=base+sc[y0],pb=base+sc[y1-1];
+        if(swap_ready&&pa>=0&&pa<24576&&pb>=0&&pb<24576){
+            fr_col_pair(f->pixels+pixel(x,y0),a.data,sc+y0,base,(uint32_t)(y1-y0),(uint32_t)(y0&1),swap_lut);
+            return 0;
+        }
+    }
+#endif
+    return tex(f,x,t,b,lo,hi,a,offset,sc,packed);
 }
 /* Offset table is pure numeric data, indexed by (scale >> 5), 72 entries per row.
  * sky is a caller-supplied visible 160x72 column-major sample array.
@@ -146,8 +163,8 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:div_u16(q,inv))&0x1f80u)+sar(w->z,1);
             const unsigned si_=(indices?indices[inv>>5]:(inv>>5));const int16_t *sc=scalers+(si_<<6)+(si_<<3); /* *H (72) */
-            if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
-            if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
+            if(u&&tex_col(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
+            if(l&&tex_col(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
         }
         if(fl){int color=((v==11||v==17)&&t>=r[2]&&b>=r[3])?0:w->floor;fill(f,x,t,b,fs,b,(uint8_t)color,NULL,packed==2);}
         if(v<=3){f->top[x]=f->bottom[x]=0;f->depth[x]=inv;}

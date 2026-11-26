@@ -51,3 +51,29 @@ fr_col_pair:
     move.b (%a1,%d0.w),(%a0)
 9:  movem.l (%sp)+,%d2-%d5/%a2-%a3
     rts
+
+| void fr_clear11520(void *p): zero 11520 bytes (the 160x72 frame) with MOVEM, 48 bytes per store, 240 stores.
+| p must be word aligned (68000 long access needs only even addresses).
+    .globl fr_clear11520
+    .even
+fr_clear11520:
+    movem.l %d2-%d7/%a2-%a5,-(%sp)
+    move.l 44(%sp),%a0
+    lea 11520(%a0),%a0
+    moveq #0,%d1
+    moveq #0,%d2
+    moveq #0,%d3
+    moveq #0,%d4
+    moveq #0,%d5
+    moveq #0,%d6
+    moveq #0,%d7
+    move.l %d1,%a1
+    move.l %d1,%a2
+    move.l %d1,%a3
+    move.l %d1,%a4
+    move.l %d1,%a5
+    move.w #239,%d0
+1:  movem.l %d1-%d7/%a1-%a5,-(%a0)
+    dbra %d0,1b
+    movem.l (%sp)+,%d2-%d7/%a2-%a5
+    rts
