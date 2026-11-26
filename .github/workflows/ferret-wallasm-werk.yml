@@ -1,0 +1,102 @@
+name: Ferret fused wall columns - MAME A/B/C
+on: [pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: ferret-wallasm-werk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  mame:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-wallasm-werk-bench-20261126'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 72e700b39fa15b442760f040239346c1fdc3d276
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 996e4f8790e28d2f2f8380538705f8e57afc3971
+          path: fused
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: c5e64ca6d483a3a636f577ba8e61e56a8945b257
+          path: r04
+          persist-credentials: false
+      - name: Compare timing and parity on the twelve original poses
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export SDL_VIDEODRIVER=dummy FR_POSES=12
+          ferret_root="$HOME/.local/share/ferret-research"
+          private="$ferret_root/wallasm-werk/$GITHUB_RUN_ID"
+          public="$RUNNER_TEMP/ferret-wallasm-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$public"
+          gcc="$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          mame="$(command -v mame)"
+          for variant in c stock-asm fused-asm r04; do
+            case "$variant" in
+              c) renderer=control; flags='' ;;
+              stock-asm) renderer=control; flags=-DFR_WALLASM ;;
+              fused-asm) renderer=fused; flags=-DFR_WALLASM ;;
+              r04) renderer=r04; flags='' ;;
+            esac
+            for mode in bench normal legacy; do
+              if [[ "$variant" == r04 && "$mode" != legacy ]]; then continue; fi
+              phase_flags="$flags"
+              case "$mode" in
+                bench) phase_flags="$flags -DFR_BENCH" ;;
+                legacy) if [[ "$variant" != r04 ]]; then phase_flags="$flags -DFR_SKY_LEGACY"; fi ;;
+              esac
+              scene="$private/$variant-$mode"
+              mkdir -p "$scene"
+              cp "$ferret_root/r04/45818948354/dread/"{scene.h,scene.json} "$scene/"
+              FR_EXTRA_CFLAGS="$phase_flags" python3 "$renderer/research/ferret-native/build_demo.py" "$scene" "$gcc" --label "FERRET-MD $variant $mode" > "$scene/build.log" 2>&1
+              if [[ "$mode" == bench ]]; then
+                lua="$GITHUB_WORKSPACE/control/research/ferret-native/mame_render_time.lua"
+              else
+                lua="$GITHUB_WORKSPACE/control/research/ferret-native/mame_r01.lua"
+                export FR_SCREEN_DIR="$scene"
+              fi
+              timeout 300 "$mame" genesis -cart "$scene/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 400 -autoboot_script "$lua" > "$scene/mame.log" 2>&1
+              if [[ "$mode" == bench ]]; then
+                grep -E '^RENDER_TIMES ' "$scene/mame.log" | sed "s/^/$variant /" | tee -a "$public/render-times.txt"
+              else
+                python3 "$renderer/research/ferret-native/check_mame.py" "$scene" "$scene/mame.log" "$scene/mailbox.json"
+              fi
+            done
+          done
+          python3 - "$private" "$public" <<'PY'
+          import json, pathlib, sys
+          from PIL import Image
+          private, public = map(pathlib.Path, sys.argv[1:])
+          result = {}
+          for variant in ('stock-asm', 'fused-asm'):
+              normal = private / f'{variant}-normal'
+              baseline = private / 'c-normal'
+              legacy = private / f'{variant}-legacy'
+              r04 = private / 'r04-legacy'
+              def mailbox(path):
+                  return [row['mailbox'] for row in json.loads((path/'mailbox.json').read_text())['records']]
+              exact = []
+              for pose in range(12):
+                  with Image.open(normal/f'pose-{pose}.png') as a, Image.open(baseline/f'pose-{pose}.png') as b:
+                      exact.append(a.size == b.size and a.convert('RGB').tobytes() == b.convert('RGB').tobytes())
+              result[variant] = {'pixels_equal_by_pose':exact,
+                                 'normal_mailbox_equal':mailbox(normal) == mailbox(baseline),
+                                 'legacy_mailbox_equal_r04':mailbox(legacy) == mailbox(r04)}
+          (public/'parity.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2), flush=True)
+          assert all(all(v['pixels_equal_by_pose']) and v['normal_mailbox_equal'] and v['legacy_mailbox_equal_r04']
+                     for v in result.values())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wallasm-numeric
+          path: ${{ runner.temp }}/ferret-wallasm-${{ github.run_id }}/*
+          if-no-files-found: warn
