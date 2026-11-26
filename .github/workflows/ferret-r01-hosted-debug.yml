@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [research-ferret-r01-alt-emulators-20261125]
     types: [opened, synchronize, reopened]
-    paths: ['.github/workflows/ferret-r01-hosted-debug.yml','research/ferret-native/demo.c']
+    paths: ['.github/workflows/ferret-r01-hosted-debug.yml','research/ferret-native/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,6 +43,14 @@ jobs:
           cp "$out/fixture/FERRET-MD-R01.bin" "$out/evidence/R01-FRV-DIAG.bin"
           m68k-linux-gnu-nm -n "$out/fixture/demo.elf" > "$out/evidence/symbols.txt"
           m68k-linux-gnu-objdump -d "$out/fixture/demo.elf" > "$out/evidence/diagnostic.asm"
+          grep -E "(__bss_start|__bss_end|worktiles| frame$| vis$| ready$)" "$out/evidence/symbols.txt"
+          python3 - "$out/evidence/symbols.txt" <<'PY'
+          import sys
+          syms={v[-1]:int(v[0],16) for l in open(sys.argv[1]) if len(v:=l.split())==3}
+          assert syms["__bss_start"]==0xff0000
+          assert 0xff0000<syms["__bss_end"]<=0xffe800
+          print("WRAM layout verified",hex(syms["__bss_start"]),hex(syms["__bss_end"]))
+          PY
           python3 - "$out" <<'PY'
           import sys,json,pathlib
           sys.path.insert(0,"research/ferret-native")
