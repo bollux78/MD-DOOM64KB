@@ -7,7 +7,18 @@
 #define FR_STACK 64
 typedef struct { const uint8_t *blob,*cells,*masks,*nodes; uint16_t nc,ns,nm,nn,stride; } FRV;
 typedef struct { const FRV *v; const int16_t *planes; const uint8_t *mask; int16_t x,y; uint16_t np,sp,stack[FR_STACK]; uint32_t tests,visits; } FRIter;
-static uint16_t be16(const uint8_t *p){return (uint16_t)((uint16_t)p[0]<<8|p[1]);}
+/* FRV2 masks have byte granularity; a DAG node can start at an odd address.
+ * On 68000 explicitly preserve byte accesses: no compiler load combining.
+ * This is not a format change and leaves host semantics identical. */
+static uint16_t be16(const uint8_t *p){
+#ifdef __m68k__
+    const volatile uint8_t *q=p;
+    uint16_t hi=q[0],lo=q[1];
+    return (uint16_t)((hi<<8)|lo);
+#else
+    return (uint16_t)((uint16_t)p[0]<<8|p[1]);
+#endif
+}
 static uint32_t be32(const uint8_t *p){return ((uint32_t)be16(p)<<16)|be16(p+2);}
 static int valid_ref(uint16_t r,uint16_t nc,uint16_t nn){return r==65535u||(r&32768u?(r&32767u)<nc:r<nn);}
 int frv_open(FRV *v,const uint8_t *b,size_t n){
