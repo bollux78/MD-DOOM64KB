@@ -1,0 +1,52 @@
+name: Ferret R10 WRAM audit
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  r10:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r10-werk-bench-20261126'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: a36793be69c588cdbc10a9b21247d9048451278d
+          path: r10
+          persist-credentials: false
+      - name: Measure R10 with matched R09 limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r10-werk/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r10-$GITHUB_RUN_ID"
+          mkdir -p "$private/scene" "$out"
+          cp "$root/r04/45818948354/dread/"{scene.h,scene.json} "$private/scene/"
+          python3 - "$private/scene/scene.h" <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          cameras = [(1056,-3616,41,90)] + [(2980,-3286,17,a) for a in (0,270,180,90)]
+          poses = [p for p in cameras for _ in range(2)] + [cameras[0]]*2
+          scene, count = re.subn(r'static const int16_t sc_poses\[48\] = \{[^}]*\};',
+              'static const int16_t sc_poses[48] = {' + ','.join(str(v) for p in poses for v in p) + '};',
+              path.read_text())
+          assert count == 1
+          path.write_text(scene)
+          PY
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 r10/research/ferret-native/build_demo.py "$private/scene" "$HOME/mars/m68k-elf/bin/m68k-elf-gcc" --label "FERRET-MD R10 BENCH" > "$private/build.log" 2>&1
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$out/core"
+          git -C "$out/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$out/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-native/r09_gpgx_time.py patch "$out/core"
+          make -C "$out/core" -f Makefile.libretro -j3 platform=unix > "$private/core.log" 2>&1
+          python3 research/ferret-native/r09_gpgx_time.py run "$out/core/genesis_plus_gx_libretro.so" "$private/scene" "$out/r10-wram.json" 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r10-wram-numeric
+          path: ${{ runner.temp }}/ferret-r10-${{ github.run_id }}/r10-wram.json
+          if-no-files-found: error
