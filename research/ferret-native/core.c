@@ -314,6 +314,7 @@ static int divword(int32_t a,int32_t b,int32_t *out){
 }
 /* delta and num are 16-bit values (s16 results): one MULS.W */
 #define DIVSUB(dst,delta,num,den) do {int32_t q_;if(divword(fr_muls16((int16_t)s16(delta),(int16_t)(num)),(den),&q_))return -5;(dst)=s16((dst)-q_);}while(0)
+static int (*fr_span_hidden)(int x0,int width); /* optional: set by the frame owner */
 int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t u0,int32_t u1,WallJob *w){
     int textured=near&1;int32_t l0=s16(x0+z0),r1,l1,r0,den,q0,q1;
     w->textured=textured;w->linear=0;w->u0=w->du=0;
@@ -334,6 +335,9 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
     w->x0=max(0,s16(q0+80));int xend=min(W,s16(q1+80));w->width=s16(xend-w->x0);
     if(w->width<=0)return 0;
     if(!z0||!z1)return -5;
+    /* Early occlusion: if every column of the span is already closed, the wall can draw nothing. Return 2
+     * ("projected, hidden") before the perspective divisions and texture setup. Caller counts it as projected. */
+    if(fr_span_hidden&&fr_span_hidden(w->x0,w->width))return 2;
     w->inv0=div_u16(0x500000,(uint16_t)z0);w->inv1=div_u16(0x500000,(uint16_t)z1);
     if(w->inv0>65535||w->inv1>65535||divword(w->inv1-w->inv0,w->width,&w->scale_step))return -5;
     if(textured){
@@ -352,7 +356,7 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
 #undef DIVSUB
 /* Portable transformed vertex, with explicit 16-bit wrap. */
 void fr_transform(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t co,int32_t si,int32_t *tx,int32_t *tz){
-    int32_t dx=s16(s16((int64_t)x*8)-cx),dy=s16(s16((int64_t)y*8)-cy);
+    int32_t dx=s16(s16((int32_t)((uint32_t)x<<3))-cx),dy=s16(s16((int32_t)((uint32_t)y<<3))-cy); /* only the low 16 bits of x*8 are kept */
     /* |dx|,|dy|<=32768 and |co|,|si|<=16384: each product fits 31 bits; only bits 14..29 of the sum are used, so wrapping 32-bit math is exact */
     *tx=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)co)-(uint32_t)fr_muls16((int16_t)dy,(int16_t)si),14);
     *tz=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)si)+(uint32_t)fr_muls16((int16_t)dy,(int16_t)co),14);
