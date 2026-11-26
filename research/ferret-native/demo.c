@@ -141,6 +141,8 @@ static void next_blank(void){
 }
 void *memset(void *p,int c,size_t n){uint8_t *d=p;while(n--)*d++=(uint8_t)c;return p;}
 void *memcpy(void *p,const void *q,size_t n){uint8_t *d=p;const uint8_t *s=q;while(n--)*d++=*s++;return p;}
+/* Read-only debugger checkpoint, after DMA and mailbox update. */
+__attribute__((noinline,used)) void fr_published(void){__asm__ volatile("" ::: "memory");}
 void md_main(void){
     MB[0]=0x46523031u;MB[1]=0;MB[2]=1;
     if(IO8(0xa10001ul)&15u)IO32(0xa14000ul)=0x53454741u;
@@ -180,6 +182,7 @@ void md_main(void){
         MB[9]=s.errors;MB[10]=s.closed;MB[11]=(uint32_t)use_sram;MB[12]=(uint32_t)rc;
         MB[13]=(uint32_t)(uint16_t)x;MB[14]=(uint32_t)(uint16_t)y;MB[15]=(uint32_t)(uint16_t)a;MB[16]=s.tests;
         MB[2]=rc?0x80000006u:5;MB[1]=++seq;
+        fr_published();
         if(rc)for(;;){}
         next_blank(); /* one observable, fully published frame before next render */
     }

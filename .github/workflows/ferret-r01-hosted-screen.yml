@@ -1,0 +1,80 @@
+name: Ferret R01 - hosted MAME screen capture (existing ROM)
+on:
+  pull_request:
+    branches: [research-ferret-r01-20261125]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r01-hosted-screen.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  screenshot:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r01-alt-emulators-20261125')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: FERRET-MD-R01-diagnostic
+          run-id: 45716253010
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/r01-screen
+      - name: Install MAME
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mame python3-pil
+      - name: Capture actual original ROM screen and CPU state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/r01-screen"
+          mkdir -p evidence
+          sha256sum FERRET-MD-R01-FIXTURE.bin | tee evidence/rom.sha256
+          echo "c15c5b2cbaa8291922fa4e2e3822675f2d82fc80a65391d1251b7443a0615752  FERRET-MD-R01-FIXTURE.bin" | sha256sum -c -
+          cat > capture.lua <<'LUA'
+          local cpu=manager.machine.devices[":maincpu"]
+          local screen=manager.machine.screens[":screen"] or manager.machine.screens:at(1)
+          local mem=cpu.spaces["program"]
+          local frames,last=0,0
+          emu.register_frame_done(function()
+            frames=frames+1
+            local seq=mem:read_u32(0xfff004)
+            local stage=mem:read_u32(0xfff008)
+            if frames==1 or frames==30 or frames==60 or frames==120 or frames==300 or frames==600 or frames==1200 or frames==1800 or (seq~=last and seq<=4) then
+              local pc=cpu.state["CURPC"] or cpu.state["PC"]
+              local m={}
+              for i=0,16 do m[#m+1]=string.format("%08X",mem:read_u32(0xfff000+4*i)) end
+              print(string.format("FRAME %d PC %08X MB %s",frames,pc and pc.value or 0,table.concat(m," ")))
+              local filename=os.getenv("PWD").."/evidence/frame-"..frames..".png"
+              local ok,err=pcall(function() screen:snapshot(filename) end)
+              print("SNAPSHOT "..frames.." "..tostring(ok).." "..tostring(err))
+            end
+            last=seq
+          end)
+          LUA
+          timeout 180 mame megadriv -cart "$PWD/FERRET-MD-R01-FIXTURE.bin" -video none -sound none -autoboot_script "$PWD/capture.lua" -seconds_to_run 32 -nothrottle -skip_gameinfo > evidence/mame.log 2>&1 || true
+          cat evidence/mame.log
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          from collections import Counter
+          import json
+          out=Path("evidence")
+          rows=[]
+          for p in sorted(out.glob("*.png")):
+              im=Image.open(p).convert("RGB")
+              colors=Counter(im.getdata())
+              rgb,n=colors.most_common(1)[0]
+              row=dict(file=p.name,size=im.size,colors=len(colors),dominant_rgb=rgb,dominant_fraction=n/(im.width*im.height))
+              rows.append(row)
+              print("SCREEN",json.dumps(row))
+          (out/"screens.json").write_text(json.dumps(rows,indent=2))
+          if not rows:raise SystemExit("No real screenshots captured")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: R01-original-ROM-MAME-screens
+          path: ${{ runner.temp }}/r01-screen/evidence/
+          if-no-files-found: warn
