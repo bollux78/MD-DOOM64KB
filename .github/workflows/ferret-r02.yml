@@ -22,7 +22,7 @@ jobs:
       - name: Install independent 68000 toolchain and MAME
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-m68k-linux-gnu binutils-m68k-linux-gnu mame
+          sudo apt-get install -y -qq gcc-m68k-linux-gnu binutils-m68k-linux-gnu mame python3-pil
       - name: Build original asymmetric fixture
         shell: bash
         run: |
@@ -47,10 +47,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export FR_POSES=8 SDL_VIDEODRIVER=dummy
+          export FR_POSES=8 SDL_VIDEODRIVER=dummy FR_SCREEN_DIR="$OUT/asym"
           timeout 180 mame genesis -cart "$OUT/asym/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 150 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$OUT/public/mame.log" 2>&1 || true
           cat "$OUT/public/mame.log"
           python3 research/ferret-native/check_mame.py "$OUT/asym" "$OUT/public/mame.log" "$OUT/public/mame.json"
+          python3 research/ferret-native/check_screen.py "$OUT/asym" "$OUT/public/screen.json"
       - name: Upload original assets and aggregate evidence only
         if: always() && env.OUT != ''
         uses: actions/upload-artifact@v4
@@ -134,9 +135,11 @@ jobs:
           for scene in fixture asym doom1; do
             test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
             export FR_POSES="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["poses"])' "$PRIVATE/$scene/scene.json")"
+            export FR_SCREEN_DIR="$PRIVATE/$scene"
             timeout 180 "$mame" genesis -cart "$PRIVATE/$scene/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 200 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/$scene/mame.log" 2>&1 || true
             grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/$scene/mame.log" > "$OUT/public/$scene-mame.log" || true
             python3 research/ferret-native/check_mame.py "$PRIVATE/$scene" "$OUT/public/$scene-mame.log" "$OUT/public/$scene-mame.json" || rc=1
+            python3 research/ferret-native/check_screen.py "$PRIVATE/$scene" "$OUT/public/$scene-screen.json" || rc=1
           done
           exit "$rc"
       - name: Publish only numeric reports
