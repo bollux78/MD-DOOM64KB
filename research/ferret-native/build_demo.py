@@ -8,7 +8,7 @@ def main():
     src=P(__file__).resolve().parent;out=a.out.resolve();gcc=a.gcc.resolve()
     flags=["-m68000","-std=c99","-O2","-ffreestanding","-fno-builtin","-ffunction-sections","-fdata-sections","-fno-common","-fno-pic","-fno-unwind-tables","-fno-asynchronous-unwind-tables",*__import__("os").environ.get("FR_EXTRA_CFLAGS","").split()]
     def run(args):subprocess.run([str(x) for x in args],check=True)
-    run(["cc","-std=c99","-O2","-fPIC","-shared",*[x for x in flags if x=="-DFR_SKY_LEGACY"],"-I",out,src/"demo.c","-o",out/"demo-host.so"])
+    run(["cc","-std=c99","-O2","-fPIC","-shared",*[x for x in flags if x in ("-DFR_SKY_LEGACY","-DFR_ANGLE_PVS")],"-I",out,src/"demo.c","-o",out/"demo-host.so"])
     run([gcc,*flags,"-I",out,"-c",src/"demo.c","-o",out/"demo.o"])
     run([gcc,*flags,"-c",src/"softarith.c","-o",out/"softarith.o"])
     run([gcc,"-m68000","-c",src/"boot.s","-o",out/"boot.o"])
