@@ -25,6 +25,8 @@ def host(out):
         # independent tile decoding from logical buffer
         expected=bytes(fb[(x//2)*144+(x&1)+2*(y//2)] for ty in range(18) for tx in range(40) for ry in range(8) for k in range(4) for x,y in [(tx*4+k,ty*8+ry)])
         assert expected==bytes(tiles)
+        row["swapped_tiles_hash"]=fnv(bytes(tiles[i^1] for i in range(23040)))
+        (out/f"expected-tiles-{i}.bin").write_bytes(bytes(tiles))
         results.append(row)
     return results
 def emulate(core,out,mode,expected,maxframes):
@@ -77,9 +79,16 @@ def emulate(core,out,mode,expected,maxframes):
             e=expected[i]
             vram=bytearray()
             for a in range(0x20,0x20+23040,2):vram.extend((lib.retro_dread_vram_word(a)&65535).to_bytes(2,"big"))
-            h=fnv(vram);ok=m[5]==e["hash"] and m[6]==e["tiles_hash"] and h==e["tiles_hash"] and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
+            target=(out/f"expected-tiles-{i}.bin").read_bytes()
+            h=fnv(vram)
+            swapped=bytes(vram[j^1] for j in range(len(vram)))
+            hs=fnv(swapped)
+            mismatch=sum(a!=b for a,b in zip(vram,target))
+            mismatch_swapped=sum(a!=b for a,b in zip(swapped,target))
+            (out/f"actual-vram-mode{mode}-pose{i}.bin").write_bytes(vram)
+            ok=m[5]==e["hash"] and m[6]==e["tiles_hash"] and h==e["tiles_hash"] and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
             if m[11]!=0:ok=False # mandatory WRAM baseline, all cartridge configurations
-            checks.append({"pose":i,"frame":frames,"elapsed_video_frames":frames-last,"match":ok,"fb":m[5],"expected_fb":e["hash"],"tile":m[6],"vram":h,"expected_tile":e["tiles_hash"],"sram":m[11],"errors":m[9],"candidates":m[7],"projected":m[8]})
+            checks.append({"pose":i,"frame":frames,"elapsed_video_frames":frames-last,"match":ok,"fb":m[5],"expected_fb":e["hash"],"tile":m[6],"vram":h,"vram_swapped":hs,"expected_swapped":e["swapped_tiles_hash"],"mismatch_bytes":mismatch,"mismatch_swapped":mismatch_swapped,"first_actual":vram[:16].hex(),"first_expected":target[:16].hex(),"expected_tile":e["tiles_hash"],"sram":m[11],"errors":m[9],"candidates":m[7],"projected":m[8]})
             seen.add(i);last=frames
             if len(seen)==len(expected):break
         m=mailbox()
