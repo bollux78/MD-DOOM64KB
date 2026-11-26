@@ -47,6 +47,17 @@ static Asset texture_at(unsigned i){
     if(i<SC_ASSETS){a.data=sc_textures+SC_ASSET_BYTES*i;a.size=SC_ASSET_BYTES;a.origin=8192;}
     return a;
 }
+static uint32_t sky_rowoff[72],sky_done[5];static unsigned sky_base;static int sky_rows_ready;
+static const uint8_t *sky_column(int x){
+    uint8_t *d=&sky[(unsigned)x*72u];
+    if(!(sky_done[(unsigned)x>>5]&(1u<<((unsigned)x&31u)))){
+        if(!sky_rows_ready){for(unsigned j=0;j<72;j++)sky_rowoff[j]=(uint32_t)((j*SC_SKYH/72)*SC_SKYW);sky_rows_ready=1;}
+        const unsigned c=(sky_base+(unsigned)x*SC_SKYW/640)%SC_SKYW;
+        for(unsigned j=0;j<72;j++)d[j]=sc_sky[sky_rowoff[j]+c];
+        sky_done[(unsigned)x>>5]|=1u<<((unsigned)x&31u);
+    }
+    return d;
+}
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
@@ -54,13 +65,11 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);closed_scan=0;
-    {   /* sky: hoist the per-pixel multiplies/divides/modulo (11520x) into 72 row and 160 column offsets */
-        static uint32_t rowoff[72];static uint32_t coloff[160];
-        for(unsigned j=0;j<72;j++)rowoff[j]=(uint32_t)((j*SC_SKYH/72)*SC_SKYW);
-        const unsigned base=a*SC_SKYW/360;
-        for(unsigned i=0;i<160;i++)coloff[i]=(uint32_t)((base+i*SC_SKYW/640)%SC_SKYW);
-        for(unsigned i=0;i<160;i++){uint8_t *d=&sky[i*72];const unsigned c=coloff[i];for(unsigned j=0;j<72;j++)d[j]=sc_sky[rowoff[j]+c];}
-    }
+    /* sky: columns are built on first use by fill() (most poses show sky in few or no columns);
+     * row/column offsets are hoisted out of the per-pixel loop. Same bytes as the eager version. */
+    sky_base=a*SC_SKYW/360;sky_rows_ready=0;
+    for(unsigned i=0;i<5;i++)sky_done[i]=0;
+    fr_sky_column=sky_column;
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
     int cell=leaf_at(x,y);if(cell<0)return -2;
     s->leaf=(uint32_t)cell;
@@ -234,7 +243,9 @@ void md_main(void){
         MB[2]=rc?0x80000006u:5;MB[1]=++seq;
         fr_published();
         if(rc)for(;;){}
-        next_blank(); /* one observable, fully published frame before next render */
+#ifndef FR_BENCH
+        next_blank(); /* one observable, fully published frame before next render (verification builds only) */
+#endif
     }
 }
 #endif

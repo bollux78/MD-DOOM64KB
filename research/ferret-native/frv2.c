@@ -12,7 +12,8 @@ typedef struct { const FRV *v; const int16_t *planes; const uint8_t *mask; int16
  * This is not a format change and leaves host semantics identical. */
 static uint16_t be16(const uint8_t *p){
 #ifdef __m68k__
-    const volatile uint8_t *q=p;
+    if(!((uintptr_t)p&1u))return *(const volatile uint16_t *)(const volatile void *)p; /* even: one big-endian word read */
+    const volatile uint8_t *q=p;                                                   /* odd: two byte reads (no address error) */
     uint16_t hi=q[0],lo=q[1];
     return (uint16_t)((hi<<8)|lo);
 #else
