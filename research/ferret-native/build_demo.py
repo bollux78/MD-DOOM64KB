@@ -9,12 +9,15 @@ def main():
     flags=["-m68000","-std=c99","-O2","-ffreestanding","-fno-builtin","-ffunction-sections","-fdata-sections","-fno-common","-fno-pic","-fno-unwind-tables","-fno-asynchronous-unwind-tables",*__import__("os").environ.get("FR_EXTRA_CFLAGS","").split()]
     def run(args):subprocess.run([str(x) for x in args],check=True)
     run(["cc","-std=c99","-O2","-fPIC","-shared",*[x for x in flags if x=="-DFR_SKY_LEGACY"],"-I",out,src/"demo.c","-o",out/"demo-host.so"])
-    run([gcc,*flags,"-I",out,"-c",src/"demo.c","-o",out/"demo.o"])
+    gen=subprocess.run(["python3",str(src/"gen_scale.py"),str(out/"scene.h"),str(out/"gen_scale.s")],check=True,capture_output=True,text=True).stdout
+    gflags=["-DFR_GENSCALE"] if not gen.strip().endswith(" 0") else []
+    run([gcc,*flags,*gflags,"-I",out,"-c",src/"demo.c","-o",out/"demo.o"])
+    run([gcc,"-m68000","-c",out/"gen_scale.s","-o",out/"gen_scale.o"])
     run([gcc,*flags,"-c",src/"softarith.c","-o",out/"softarith.o"])
     run([gcc,"-m68000","-c",src/"boot.s","-o",out/"boot.o"])
     run([gcc,"-m68000","-c",src/"colpair.s","-o",out/"colpair.o"])
     run([gcc,"-m68000","-c",src/"wallcols.s","-o",out/"wallcols.o"])
-    run([gcc,"-m68000","-nostdlib","-Wl,--gc-sections","-Wl,-T,"+str(src/"md.ld"),"-Wl,-Map,"+str(out/"demo.map"),out/"boot.o",out/"demo.o",out/"softarith.o",out/"colpair.o",out/"wallcols.o","-o",out/"demo.elf"])
+    run([gcc,"-m68000","-nostdlib","-Wl,--gc-sections","-Wl,-T,"+str(src/"md.ld"),"-Wl,-Map,"+str(out/"demo.map"),out/"boot.o",out/"demo.o",out/"softarith.o",out/"colpair.o",out/"wallcols.o",out/"gen_scale.o","-o",out/"demo.elf"])
     objdump=gcc.with_name(gcc.name.replace("gcc","objdump"))
     run(["python3",src/"check_isa.py",out/"demo.elf",objdump])   # fail the build on any 68020+ instruction (e.g. distro libgcc)
     objcopy=gcc.with_name(gcc.name.replace("gcc","objcopy"))

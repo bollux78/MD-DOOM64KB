@@ -130,13 +130,28 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
 }
 /* Inlined front of tex() for the paired-art fast path: avoids a call with an 11-register prologue per column.
  * Anything it does not handle goes to tex(), so results and error codes are unchanged. */
-static inline __attribute__((always_inline)) int tex_col(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
+#if defined(__m68k__)&&defined(FR_GENSCALE)
+extern const void *const fr_gs_rows[]; /* gen_scale.py: unrolled scaler row entry points, [row*72+y] */
+#endif
+static inline __attribute__((always_inline)) int tex_col(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed,unsigned si){
 #ifdef __m68k__
     if(packed==2&&a.data&&a.size==8192){
         const int y0=max(t,lo),y1=min(b,hi);
         if(y0>=y1)return 0;
         const int32_t base=offset+a.origin,pa=base+sc[y0],pb=base+sc[y1-1];
         if(swap_ready&&pa>=0&&pa<24576&&pb>=0&&pb<24576){
+#ifdef FR_GENSCALE
+            if((pa>>13)==(pb>>13)){ /* generated unrolled scaler for this scale row: no table reads per pixel */
+                register uint8_t *ga0 __asm__("a0")=f->pixels+pixel(x,0);
+                register const uint8_t *ga1 __asm__("a1")=a.data+(base-(pa&~8191));
+                register const uint8_t *ga2 __asm__("a2")=swap_lut;
+                register const void *ga3 __asm__("a3")=fr_gs_rows[si*72u+(unsigned)y0];
+                register uint32_t gd6 __asm__("d6")=(uint32_t)(y1-y0-1);
+                register uint32_t gd0 __asm__("d0")=0;
+                __asm__ volatile("jsr (%%a3)":"+d"(gd6),"+d"(gd0):"a"(ga0),"a"(ga1),"a"(ga2),"a"(ga3):"memory","cc");
+                return 0;
+            }
+#endif
             {   /* register call: no argument pushes, no MOVEM in the kernel */
                 register uint8_t *ra0 __asm__("a0")=f->pixels+pixel(x,y0);
                 register const uint8_t *ra1 __asm__("a1")=a.data;
@@ -266,8 +281,8 @@ pass1_end:;
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:div_u16(q,inv))&0x1f80u)+sar(w->z,1);
             const unsigned si_=(indices?indices[inv>>5]:(inv>>5));const int16_t *sc=scalers+(si_<<6)+(si_<<3); /* *H (72) */
-            if(u&&tex_col(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
-            if(l&&tex_col(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
+            if(u&&tex_col(f,x,t,b,r[0],r[1],upper,offset,sc,packed,si_))return -2;
+            if(l&&tex_col(f,x,t,b,low,r[3],lower,offset,sc,packed,si_))return -2;
         }
         if(fl){int color=((v==11||v==17)&&t>=r[2]&&b>=r[3])?0:w->floor;fill(f,x,t,b,fs,b,(uint8_t)color,NULL,packed==2);}
         if(v<=3){f->top[x]=f->bottom[x]=0;f->depth[x]=inv;}
