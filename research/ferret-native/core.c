@@ -205,9 +205,9 @@ static uint32_t div_u16(uint32_t n,uint16_t d){
 typedef struct {
     const void *recs;int32_t ncol;uint16_t *top,*bottom,*depth;uint8_t *pixels;int32_t x0;uint32_t flags;
     uint16_t lowo,fso;uint8_t ce,co,fe,fo;int32_t zsh;const int16_t *scal;const uint8_t *ind;
-    const uint8_t *udat;int32_t uorg;const uint8_t *ldat;int32_t lorg;const uint8_t *const *skyc;const uint16_t *skyr;const uint8_t *swap;
+    const uint8_t *udat;int32_t uorg;const uint8_t *ldat;int32_t lorg;const uint8_t *const *skyc;const uint16_t *skyr;const uint8_t *swap;const void *const *gen;
 } WallCtx;
-typedef char wallctx_layout[(offsetof(WallCtx,flags)==28&&offsetof(WallCtx,ce)==36&&offsetof(WallCtx,zsh)==40&&offsetof(WallCtx,udat)==52&&offsetof(WallCtx,skyc)==68&&offsetof(WallCtx,swap)==76)?1:-1];
+typedef char wallctx_layout[(offsetof(WallCtx,flags)==28&&offsetof(WallCtx,ce)==36&&offsetof(WallCtx,zsh)==40&&offsetof(WallCtx,udat)==52&&offsetof(WallCtx,skyc)==68&&offsetof(WallCtx,swap)==76&&offsetof(WallCtx,gen)==80)?1:-1];
 extern int fr_wall_cols(const WallCtx *k,int m);
 #endif
 static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed,const uint8_t *indices){
@@ -257,7 +257,7 @@ pass1_end:;
 #ifdef __m68k__
     /* Assembly draw pass for the paired-art path; any column it cannot handle comes back to the C body below. */
     int use_asm=0;WallCtx k;
-#ifdef FR_WALLASM /* opt-in: measured slower than GCC's code for this pass (R08 notes) */
+#ifdef FR_WALLASM /* opt-in pending validation with the full scene */
     if(packed==2&&(!has(skies,v)||(fr_sky_column&&fr_sky_rows))){
         if(has(skies,v)&&!fr_sky_cols_ok){for(int i=0;i<W;i++)fr_sky_cols[i]=fr_sky_column(i);fr_sky_cols_ok=1;}
         if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=FR_SWAP4(i);swap_ready=1;}
@@ -268,7 +268,13 @@ pass1_end:;
         k.zsh=sar(w->z,1);k.scal=scalers;k.ind=indices;
         k.udat=(upper.data&&upper.size==8192)?upper.data:0;k.uorg=upper.origin;
         k.ldat=(lower.data&&lower.size==8192)?lower.data:0;k.lorg=lower.origin;
-        k.skyc=fr_sky_cols;k.skyr=fr_sky_rows;k.swap=swap_lut;use_asm=1;
+        k.skyc=fr_sky_cols;k.skyr=fr_sky_rows;k.swap=swap_lut;
+#ifdef FR_GENSCALE
+        k.gen=fr_gs_rows;
+#else
+        k.gen=0;
+#endif
+        use_asm=1;
     }
 #endif
 #endif

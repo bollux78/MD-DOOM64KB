@@ -29,6 +29,7 @@ K_LORG   = 64
 K_SKYC   = 68     | table of 160 sky column pointers (by x)
 K_SKYR   = 72     | sky row offsets (uint16, by y)
 K_SWAP   = 76     | 256-byte nibble swap table
+K_GEN    = 80     | generated scaler entry-point table, or null
 | locals (link a6,#-40)
 L_T   = -2
 L_B   = -4
@@ -39,6 +40,14 @@ L_FS  = -16
 L_SC  = -20       | scaler row pointer for this column
 L_OFF = -24       | texture offset (column part + sar(z,1))
 L_J2  = -28       | 2*j
+L_GEN = -32       | generated scaler entry-point row, or null
+
+    .macro clamp_word branch
+    cmp.w %d1,%d0
+    \branch\().s 1f
+    move.w %d1,%d0
+1:
+    .endm
 
     .text
     .globl fr_wall_cols
@@ -48,6 +57,7 @@ fr_wall_cols:
     movem.l %d2-%d7/%a2-%a5,-(%sp)
     move.l 8(%a6),%a5
     move.l 12(%a6),%d7
+    move.l K_FLAGS(%a5),%d6           | d6 = flags for the whole wall
 .Lloop:
     cmp.l K_NCOL(%a5),%d7
     bge .Ldone
@@ -81,7 +91,6 @@ fr_wall_cols:
     move.w (%a4,%d0.w),L_LOW(%a6)
     move.w K_FSO(%a5),%d0
     move.w (%a4,%d0.w),L_FS(%a6)
-    move.l K_FLAGS(%a5),%d6           | d6 = flags for the whole column
 
     | ---- texture setup first (only checks; may fall back before anything is drawn) ----
     btst #7,%d6
@@ -103,7 +112,6 @@ fr_wall_cols:
     cmp.l %d4,%d1
     bcc .Lfallback                    | quotient would not fit DIVU.W: C path
     divu.w %d4,%d0
-    and.l #0xffff,%d0
 2:  and.l #0x1f80,%d0
     add.l K_ZSH(%a5),%d0
     move.l %d0,L_OFF(%a6)
@@ -121,43 +129,19 @@ fr_wall_cols:
     add.l %d2,%d1
     add.l K_SCAL(%a5),%d1
     move.l %d1,L_SC(%a6)
-    | pre-check upper span
-    btst #1,%d6
+    move.l K_GEN(%a5),%d2
     beq.s 4f
-    move.w L_T(%a6),%d0
-    move.w (%a4),%d1                  | r0
-    bsr .Lmax                         | d0=max(t,r0)
-    move.w %d0,%d2
-    move.w L_B(%a6),%d0
-    move.w 2(%a4),%d1                 | r1
-    bsr .Lmin                         | d0=min(b,r1)
-    move.w %d0,%d3
-    move.l K_UDAT(%a5),%d5
-    move.l K_UORG(%a5),%d4
-    bsr .Lcheck
-    bne .Lfallback
-4:  btst #2,%d6
-    beq.s 5f
-    move.w L_T(%a6),%d0
-    move.w L_LOW(%a6),%d1
-    bsr .Lmax
-    move.w %d0,%d2
-    move.w L_B(%a6),%d0
-    move.w 6(%a4),%d1                 | r3
-    bsr .Lmin
-    move.w %d0,%d3
-    move.l K_LDAT(%a5),%d5
-    move.l K_LORG(%a5),%d4
-    bsr .Lcheck
-    bne .Lfallback
-5:
+    sub.l K_SCAL(%a5),%d1
+    add.l %d1,%d1                    | *288 bytes (72 entry pointers)
+    add.l %d1,%d2
+4:  move.l %d2,L_GEN(%a6)
 .Lnotex:
     | ---- ceiling: rows [t, min(b,r0)) ----
     btst #0,%d6
     beq.s .Lnoceil
     move.w L_B(%a6),%d0
     move.w (%a4),%d1
-    bsr .Lmin
+    clamp_word ble
     move.w L_T(%a6),%d2
     sub.w %d2,%d0                     | n
     ble.s .Lnoceil
@@ -190,35 +174,37 @@ fr_wall_cols:
     beq.s 7f
     move.w L_T(%a6),%d0
     move.w (%a4),%d1
-    bsr .Lmax
+    clamp_word bge
     move.w %d0,%d2
     move.w L_B(%a6),%d0
     move.w 2(%a4),%d1
-    bsr .Lmin
+    clamp_word ble
     move.w %d0,%d3
     move.l K_UDAT(%a5),%a1
     move.l K_UORG(%a5),%d4
     bsr .Ltex
+    bne .Lfallback
 7:  btst #2,%d6
     beq.s .Lnotex2
     move.w L_T(%a6),%d0
     move.w L_LOW(%a6),%d1
-    bsr .Lmax
+    clamp_word bge
     move.w %d0,%d2
     move.w L_B(%a6),%d0
     move.w 6(%a4),%d1
-    bsr .Lmin
+    clamp_word ble
     move.w %d0,%d3
     move.l K_LDAT(%a5),%a1
     move.l K_LORG(%a5),%d4
     bsr .Ltex
+    bne .Lfallback
 .Lnotex2:
     | ---- floor: rows [max(t,fs), b) ----
     btst #3,%d6
     beq.s .Lnofloor
     move.w L_T(%a6),%d0
     move.w L_FS(%a6),%d1
-    bsr .Lmax
+    clamp_word bge
     move.w %d0,%d2                    | y0
     move.w L_B(%a6),%d0
     sub.w %d2,%d0                     | n
@@ -316,72 +302,74 @@ fr_wall_cols:
     unlk %a6
     rts
 
-| d0 = max(d0,d1), signed words
-.Lmax:
-    cmp.w %d1,%d0
-    bge.s 1f
-    move.w %d1,%d0
-1:  rts
-| d0 = min(d0,d1), signed words
-.Lmin:
-    cmp.w %d1,%d0
-    ble.s 1f
-    move.w %d1,%d0
-1:  rts
-
-| .Lcheck: span [d2,d3) of a texture with data d5 and origin d4. Z=1 (beq) when OK or empty.
-| Uses L_SC/L_OFF. Fails (Z=0) when data is 0 or an end row is outside [0,24576).
-.Lcheck:
-    cmp.w %d3,%d2
-    bge.s 9f                          | empty span: nothing to check
-    tst.l %d5
-    beq.s 8f
-    move.l L_SC(%a6),%a0
-    add.l L_OFF(%a6),%d4              | base
-    move.w %d2,%d0
-    ext.l %d0
-    add.l %d0,%d0
-    move.w (%a0,%d0.l),%d1
-    ext.l %d1
-    add.l %d4,%d1
-    bmi.s 8f
-    cmp.l #24576,%d1
-    bge.s 8f
-    move.w %d3,%d0
-    ext.l %d0
-    subq.l #1,%d0
-    add.l %d0,%d0
-    move.w (%a0,%d0.l),%d1
-    ext.l %d1
-    add.l %d4,%d1
-    bmi.s 8f
-    cmp.l #24576,%d1
-    bge.s 8f
-9:  moveq #0,%d0                      | Z=1
-    rts
-8:  moveq #1,%d0                      | Z=0
-    rts
-
-| .Ltex: draw span [d2,d3) from texture a1 (origin d4) using the register kernel.
+| .Ltex: validate and draw [d2,d3) from texture a1 (origin d4).
+| Returns Z=1 on success or an empty span. On failure, C retries this column;
+| previous ceiling/upper writes are idempotent and clip has not been updated.
 .Ltex:
     move.w %d3,%d5
-    sub.w %d2,%d5                     | n
-    ble.s 9f
-    ext.l %d5
-    add.l L_OFF(%a6),%d4              | base
+    sub.w %d2,%d5                    | n
+    ble .Ltex_ok
+    cmpa.l #0,%a1
+    beq .Ltex_bad
+    add.l L_OFF(%a6),%d4             | base
     move.l L_SC(%a6),%a3
-    move.w %d2,%d0
+    add.w %d2,%a3
+    add.w %d2,%a3                    | sc + y0 (y0 is nonnegative after clipping)
+    move.w (%a3),%d0
     ext.l %d0
-    add.l %d0,%a3
-    add.l %d0,%a3                     | sc + y0
+    add.l %d4,%d0                    | first sample address
+    cmp.l #24576,%d0
+    bcc .Ltex_bad
+    move.w %d5,%d1
+    add.w %d1,%d1
+    subq.w #2,%d1
+    move.w (%a3,%d1.w),%d1
+    ext.l %d1
+    add.l %d4,%d1                    | last sample address
+    cmp.l #24576,%d1
+    bcc .Ltex_bad
     move.l L_CB(%a6),%a0
-    add.l %d0,%a0
-    add.l %d0,%a0                     | dst
-    moveq #1,%d3
-    and.l %d0,%d3                     | parity
     move.l K_SWAP(%a5),%a2
+    eor.l %d0,%d1
+    and.w #0xe000,%d1               | both samples are below 24576
+    bne.s .Ltex_wrapped
+    and.w #0xe000,%d0               | same 8 KB block: rebase once
+    sub.l %d0,%d4
+    move.l L_GEN(%a6),%d1
+    beq.s .Ltex_unwrapped
+    move.l %d1,%a3
+    move.w %d2,%d1
+    lsl.w #2,%d1
+    move.l (%a3,%d1.w),%a3
+    add.l %d4,%a1
+    move.l %d6,-(%sp)
+    moveq #0,%d6
+    move.w %d5,%d6
+    subq.w #1,%d6
+    moveq #0,%d0
+    jsr (%a3)
+    move.l (%sp)+,%d6
+    bra.s .Ltex_ok
+.Ltex_unwrapped:
+    bsr.s .Ltex_dst
+    jsr fr_col_pair_rn
+    bra.s .Ltex_ok
+.Ltex_wrapped:
+    bsr.s .Ltex_dst
     jsr fr_col_pair_r
-9:  rts
+.Ltex_ok:
+    moveq #0,%d0
+    rts
+.Ltex_bad:
+    moveq #1,%d0
+    rts
+.Ltex_dst:
+    add.w %d2,%a0
+    add.w %d2,%a0
+    moveq #1,%d3
+    and.w %d2,%d3
+    ext.l %d5
+    rts
 
 | .Lfsolid: a0 dst, d0 n (>0), d1 parity, d2 even byte, d3 odd byte
 .Lfsolid:
