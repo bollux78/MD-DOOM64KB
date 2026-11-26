@@ -20,10 +20,11 @@ for line in asm.splitlines():
         row = re.fullmatch(r"gs\d+_(\d+)", name)
         kernel = (1 + int(row[1]) % 2 if row else
                   {"fr_col_pair_r": 3, "fr_col_pair_rn": 4}.get(name, 0))
-    ins = re.match(r"^\s*([0-9a-f]+):\s+(?:[0-9a-f]{4}\s+)+(\S+)\s*(.*)", line)
+    ins = re.match(r"^\s*([0-9a-f]+):\s+([0-9a-f]{4})\s+(?:[0-9a-f]{4}\s+)*(\S+)\s*(.*)", line)
     if kernel and ins:
-        pc, mnemonic, operands = ins.groups()
-        store = mnemonic in ("moveb", "move.b") and "(%a0)" in operands
+        pc, word, _, _ = ins.groups()
+        opcode = int(word, 16)
+        store = opcode >> 12 == 1 and (opcode >> 9) & 7 == 0 and (opcode >> 6) & 7 in (2, 5)
         table[int(pc, 16)] = kernel + 8 * store
 assert set(table.values()) == {1, 2, 3, 4, 9, 10, 11, 12}, set(table.values())
 source = root / "core/m68k/m68kcpu.c"
