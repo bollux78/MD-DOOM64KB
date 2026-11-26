@@ -117,3 +117,37 @@ fr_col_pair_r:
     and.w %d2,%d0
     move.b (%a1,%d0.w),(%a0)
 9:  rts
+
+| fr_col_pair_rn: as fr_col_pair_r but without the 8191 wrap; the caller guarantees every
+| base+sc[y] is inside one 8 KB block and has already subtracted that block (indices 0..8191).
+    .globl fr_col_pair_rn
+    .even
+fr_col_pair_rn:
+    moveq #0,%d1
+    tst.l %d3
+    beq.s 1f
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    move.b (%a1,%d0.w),%d1
+    move.b (%a2,%d1.w),(%a0)
+    addq.l #2,%a0
+    subq.l #1,%d5
+1:  move.l %d5,%d3
+    lsr.l #1,%d3
+    beq.s 3f
+    subq.l #1,%d3
+2:  move.w (%a3)+,%d0
+    add.w %d4,%d0
+    move.b (%a1,%d0.w),(%a0)
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    move.b (%a1,%d0.w),%d1
+    move.b (%a2,%d1.w),2(%a0)
+    addq.l #4,%a0
+    dbra %d3,2b
+3:  btst #0,%d5
+    beq.s 9f
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    move.b (%a1,%d0.w),(%a0)
+9:  rts

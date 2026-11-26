@@ -142,13 +142,21 @@ static inline __attribute__((always_inline)) int tex_col(Frame *f,int x,int t,in
                 register const uint8_t *ra1 __asm__("a1")=a.data;
                 register const int16_t *ra3 __asm__("a3")=sc+y0;
                 register const uint8_t *ra2 __asm__("a2")=swap_lut;
-                register int32_t rd4 __asm__("d4")=base;
                 register uint32_t rd5 __asm__("d5")=(uint32_t)(y1-y0);
                 register uint32_t rd3 __asm__("d3")=(uint32_t)(y0&1);
-                __asm__ volatile("jsr fr_col_pair_r"
-                    :"+a"(ra0),"+a"(ra1),"+a"(ra3),"+d"(rd4),"+d"(rd5),"+d"(rd3)
-                    :"a"(ra2)
-                    :"d0","d1","d2","memory","cc");
+                if((pa>>13)==(pb>>13)){ /* rows monotonic: whole span inside one 8 KB block, no wrap needed */
+                    register int32_t rd4 __asm__("d4")=base-(pa&~8191);
+                    __asm__ volatile("jsr fr_col_pair_rn"
+                        :"+a"(ra0),"+a"(ra1),"+a"(ra3),"+d"(rd4),"+d"(rd5),"+d"(rd3)
+                        :"a"(ra2)
+                        :"d0","d1","d2","memory","cc");
+                }else{
+                    register int32_t rd4 __asm__("d4")=base;
+                    __asm__ volatile("jsr fr_col_pair_r"
+                        :"+a"(ra0),"+a"(ra1),"+a"(ra3),"+d"(rd4),"+d"(rd5),"+d"(rd3)
+                        :"a"(ra2)
+                        :"d0","d1","d2","memory","cc");
+                }
             }
             return 0;
         }
@@ -219,7 +227,8 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
                 col[ncol].inv=(uint16_t)ia;col[ncol].q=qa;col[ncol].j=(uint8_t)jj_;ncol++; \
                 a0+=d0;a1+=d1;a2+=d2;a3+=d3;ia+=ds;qa+=dq;jn=jj_+1; } }while(0)
         int j=0;
-        for(;j<n;j++)FR_OPEN_COL(j);
+        for(;j<n;j++){if(!(tp[j]|bp[j]))continue; /* closed (0,0) column: passes the H check, nothing to record */
+            FR_OPEN_COL(j);}
 #undef FR_OPEN_COL
     }
 pass1_end:;
