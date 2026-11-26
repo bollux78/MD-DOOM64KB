@@ -1,0 +1,149 @@
+name: Ferret R02 - mandatory WRAM and independent geometry validation
+on:
+  pull_request:
+    branches: [research-ferret-r01-audit-claudio-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r02.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r02
+  cancel-in-progress: false
+jobs:
+  original-fixture:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install independent 68000 toolchain and MAME
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-m68k-linux-gnu binutils-m68k-linux-gnu mame
+      - name: Build original asymmetric fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/r02-hosted"
+          mkdir -p "$out/tools" "$out/public"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          printf '#!/bin/sh\nexec /usr/bin/m68k-linux-gnu-gcc -no-pie -static "$@"\n' > "$out/tools/m68k-elf-gcc"
+          chmod +x "$out/tools/m68k-elf-gcc"
+          ln -s /usr/bin/m68k-linux-gnu-objcopy "$out/tools/m68k-elf-objcopy"
+          ln -s /usr/bin/m68k-linux-gnu-objdump "$out/tools/m68k-elf-objdump"
+          python3 research/ferret-native/export_scene.py "$out/asym" --asymmetric
+          python3 research/ferret-native/build_demo.py "$out/asym" "$out/tools/m68k-elf-gcc" --label "FERRET-MD R02 ASYMMETRIC"
+          cp "$out/asym/FERRET-MD-R01.bin" "$out/public/FERRET-MD-R02-ASYM.bin"
+          cp "$out/asym/scene.json" "$out/public/asym-scene.json"
+      - name: Independent analytic ray geometry test
+        if: always() && env.OUT != ''
+        run: |
+          python3 research/ferret-native/asymmetric_fixture.py "$OUT/asym"
+      - name: Actual MAME output and hashes
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FR_POSES=8 SDL_VIDEODRIVER=dummy
+          timeout 180 mame genesis -cart "$OUT/asym/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 150 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$OUT/public/mame.log" 2>&1 || true
+          cat "$OUT/public/mame.log"
+          python3 research/ferret-native/check_mame.py "$OUT/asym" "$OUT/public/mame.log" "$OUT/public/mame.json"
+      - name: Upload original assets and aggregate evidence only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r02-original-fixture
+          path: |
+            ${{ runner.temp }}/r02-hosted/public/*
+            ${{ runner.temp }}/r02-hosted/asym/geometry-oracle.json
+          if-no-files-found: warn
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r02-validation-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build with audited code and actual Marsdev
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r02/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r02-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          gcc="$HOME/mars/m68k-elf/bin/m68k-elf-gcc"
+          test -x "$gcc"
+          python3 research/ferret-native/export_scene.py "$private/fixture"
+          python3 research/ferret-native/build_demo.py "$private/fixture" "$gcc"
+          python3 research/ferret-native/export_scene.py "$private/asym" --asymmetric
+          python3 research/ferret-native/build_demo.py "$private/asym" "$gcc"
+          wad="$(find "$root" -type f -iname doom1.wad -print -quit)"
+          test -n "$wad"
+          python3 research/ferret-native/export_scene.py "$private/doom1" --wad "$wad" --fsc "$root/backend/45715146307/scaler.fsc"
+          python3 research/ferret-native/build_demo.py "$private/doom1" "$gcc" --label "FERRET-MD R02 E1M1"
+          for scene in fixture asym doom1; do
+            cp "$private/$scene/scene.json" "$out/public/$scene-scene.json"
+            cp "$private/$scene/build.json" "$out/public/$scene-build.json"
+          done
+      - name: Independent geometry oracle
+        if: always() && env.PRIVATE != ''
+        run: |
+          python3 research/ferret-native/asymmetric_fixture.py "$PRIVATE/asym"
+      - name: Reuse or build pinned instrumented Genesis Plus GX
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fresh build from exact pinned revision, no external assets.
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Verify WRAM with SRAM16, no SRAM and SRAM8
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          rc=0
+          for scene in fixture asym doom1; do
+            test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
+            for mode in 0 1 2; do
+              python3 research/ferret-native/test_demo.py "$PRIVATE/$scene" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/$scene-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+            done
+          done
+          exit "$rc"
+      - name: MAME local validation if available
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mame="$(command -v mame || true)"
+          if [ -z "$mame" ]; then echo "MAME_LOCAL_UNAVAILABLE"; exit 0; fi
+          export SDL_VIDEODRIVER=dummy
+          rc=0
+          for scene in fixture asym doom1; do
+            test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
+            export FR_POSES="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["poses"])' "$PRIVATE/$scene/scene.json")"
+            timeout 180 "$mame" genesis -cart "$PRIVATE/$scene/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 200 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/$scene/mame.log" 2>&1 || true
+            grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/$scene/mame.log" > "$OUT/public/$scene-mame.log" || true
+            python3 research/ferret-native/check_mame.py "$PRIVATE/$scene" "$OUT/public/$scene-mame.log" "$OUT/public/$scene-mame.json" || rc=1
+          done
+          exit "$rc"
+      - name: Publish only numeric reports
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r02-x360-results
+          path: |
+            ${{ runner.temp }}/ferret-r02-${{ github.run_id }}/public/*
+          if-no-files-found: warn
