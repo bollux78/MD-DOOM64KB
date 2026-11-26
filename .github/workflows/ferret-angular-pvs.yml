@@ -1,0 +1,126 @@
+name: Ferret directional PVS - independent exact rejection experiment
+on:
+  pull_request:
+    branches: [research-ferret-r07-perf-claudio-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-angular-pvs.yml','research/ferret-native/angular_pvs.py','research/ferret-native/test_angular_pvs.py','research/ferret-native/demo.c']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-angular-pvs-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-angular-pvs-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Prepare exact same scene and matched camera sequence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/angular-pvs/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-angular-pvs-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+          src="$root/r04/45818948354/dread"
+          for v in baseline angular verify; do
+            mkdir -p "$private/$v"
+            cp "$src/scene.h" "$src/scene.json" "$private/$v/"
+          done
+          python3 - "$private" <<'PY'
+          import pathlib,re,sys
+          root=pathlib.Path(sys.argv[1])
+          poses=[(1056,-3616,41,90)]+[(2980,-3286,17,a) for a in (0,270,180,90)]
+          poses=[p for p in poses for _ in range(2)]+[poses[0]]*2
+          for v in ("baseline","angular","verify"):
+              path=root/v/"scene.h"
+              h=path.read_text()
+              s="static const int16_t sc_poses[48] = {\n"+",".join(str(z) for p in poses for z in p)+",\n};"
+              h,n=re.subn(r"static const int16_t sc_poses\[48\] = \{[^}]*\};",s,h);assert n==1
+              path.write_text(h)
+          print("MATCHED CAMERAS",poses)
+          PY
+      - name: Compile 8, 16 and 32-direction mask options
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          for n in 8 16 32; do
+            python3 research/ferret-native/angular_pvs.py "$PRIVATE/angular/scene.h" "$PRIVATE/angle-$n.h" "$OUT/public/angle-$n.json" --bins "$n"
+          done
+          cp "$PRIVATE/angle-16.h" "$PRIVATE/angular/scene_angle.h"
+          cp "$PRIVATE/angle-16.h" "$PRIVATE/verify/scene_angle.h"
+      - name: Build matched R09 controls and angular variant
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/baseline" "$GCC68" --label "FERRET-MD R09 CONTROL"
+          FR_EXTRA_CFLAGS="-DFR_BENCH -DFR_ANGLE_PVS" python3 research/ferret-native/build_demo.py "$PRIVATE/angular" "$GCC68" --label "FERRET-MD ANGULAR BENCH"
+          FR_EXTRA_CFLAGS=-DFR_ANGLE_PVS python3 research/ferret-native/build_demo.py "$PRIVATE/verify" "$GCC68" --label "FERRET-MD ANGULAR VERIFY"
+          for v in baseline angular verify; do cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"; done
+      - name: Independent full-state differential over all headings and cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/test_angular_pvs.py "$PRIVATE/baseline" "$PRIVATE/angular" "$OUT/public/differential.json"
+      - name: Exact MAME render timing at paired camera positions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SDL_VIDEODRIVER=dummy
+          for v in baseline angular; do
+            timeout 180 "$(command -v mame)" genesis -cart "$PRIVATE/$v/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 300 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_render_time.lua" 2>&1 | grep RENDER_TIMES | sed "s/^/$v /" | tee -a "$OUT/public/render-times.txt"
+          done
+          python3 - "$OUT/public/render-times.txt" "$OUT/public/timing.json" <<'PY'
+          import json,sys,pathlib
+          p,o=map(pathlib.Path,sys.argv[1:])
+          t={s.split()[0]:[float(v) for v in s.split()[2:14]] for s in p.read_text().splitlines()}
+          assert all(len(v)==12 for v in t.values()) and len(t)==2
+          rows=[]
+          for i,label in enumerate(("spawn","zigzag-0","zigzag-64","zigzag-128","zigzag-192")):
+              j=2*i+1
+              a,b=t["baseline"][j],t["angular"][j]
+              rows.append({"camera":label,"baseline_seconds":a,"angular_seconds":b,"speedup":a/b})
+          result={"rows":rows,"mean_speedup":sum(r["baseline_seconds"] for r in rows)/sum(r["angular_seconds"] for r in rows),"scope":"MAME exact stage3 to stage4 render; warm second frame per pose, no hashing, no conversion or gameplay"}
+          o.write_text(json.dumps(result,indent=2));print("ANGULAR TIMING "+json.dumps(result))
+          PY
+      - name: Build pinned Genesis Plus GX for actual VRAM checks
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Validate exact VRAM and WRAM baseline in three SRAM modes
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          rc=0
+          for mode in 0 1 2; do
+            python3 research/ferret-native/test_demo.py "$PRIVATE/verify" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/verify-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+          done
+          exit "$rc"
+      - name: Numeric reports only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-angular-pvs-numeric
+          path: ${{ runner.temp }}/ferret-angular-pvs-${{ github.run_id }}/public/*
+          if-no-files-found: warn
