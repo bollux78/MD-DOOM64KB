@@ -1,5 +1,8 @@
 name: Ferret R10 WRAM audit
 on: [pull_request]
+concurrency:
+  group: ferret-r10-werk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -50,4 +53,32 @@ jobs:
         with:
           name: r10-wram-numeric
           path: ${{ runner.temp }}/ferret-r10-${{ github.run_id }}/r10-*.json
+          if-no-files-found: error
+  alpha2-nibbles:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r10-werk-bench-20261126'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Measure packed wall texels in GPGX WRAM mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          private="$HOME/.local/share/ferret-research/r10-werk/$GITHUB_RUN_ID/alpha2"
+          out="$RUNNER_TEMP/ferret-alpha2-nibbles-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out"
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$out/core"
+          git -C "$out/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$out/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-native/alpha2_nibble_probe.py patch "$out/core"
+          make -C "$out/core" -f Makefile.libretro -j3 platform=unix > "$private/build.log" 2>&1
+          python3 research/ferret-native/alpha2_nibble_probe.py profile "$out/core/genesis_plus_gx_libretro.so" "$private" "$out/alpha2-nibbles.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha2-nibbles-numeric
+          path: ${{ runner.temp }}/ferret-alpha2-nibbles-${{ github.run_id }}/alpha2-nibbles.json
           if-no-files-found: error
