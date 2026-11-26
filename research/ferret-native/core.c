@@ -356,7 +356,7 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
 #undef DIVSUB
 /* Portable transformed vertex, with explicit 16-bit wrap. */
 void fr_transform(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t co,int32_t si,int32_t *tx,int32_t *tz){
-    int32_t dx=s16(s16((int64_t)x*8)-cx),dy=s16(s16((int64_t)y*8)-cy);
+    int32_t dx=s16(s16((int32_t)((uint32_t)x<<3))-cx),dy=s16(s16((int32_t)((uint32_t)y<<3))-cy); /* only the low 16 bits of x*8 are kept */
     /* |dx|,|dy|<=32768 and |co|,|si|<=16384: each product fits 31 bits; only bits 14..29 of the sum are used, so wrapping 32-bit math is exact */
     *tx=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)co)-(uint32_t)fr_muls16((int16_t)dy,(int16_t)si),14);
     *tz=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)si)+(uint32_t)fr_muls16((int16_t)dy,(int16_t)co),14);

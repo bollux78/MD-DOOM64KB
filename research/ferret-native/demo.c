@@ -87,6 +87,7 @@ static void transform_vertex(unsigned i,int32_t cx,int32_t cy,int16_t co,int16_t
         vertex_tx[i]=(int16_t)*tx;vertex_tz[i]=(int16_t)*tz;vertex_valid[i]=1;
     }else{*tx=vertex_tx[i];*tz=vertex_tz[i];}
 }
+static inline int32_t s16i(int32_t v){return (int16_t)v;} /* same wrap as core.c s16() */
 static int span_hidden(int x0,int width){
     const uint16_t *t=frame.top+x0,*b=frame.bottom+x0;
     for(int i=0;i<width;i++)if(t[i]|b[i])return 0;
@@ -143,6 +144,13 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             int32_t tx,tz,ux,uz;
             transform_vertex((uint16_t)w[0],(int32_t)x*8,(int32_t)y*8,co,si,&tx,&tz);
             transform_vertex((uint16_t)w[1],(int32_t)x*8,(int32_t)y*8,co,si,&ux,&uz);
+            {   /* Same first two tests as fr_project (left and right of the 90-degree frustum), done inline so the
+                 * ~80% of candidates rejected there skip the call and the job setup. The right test is only
+                 * repeated when no left clip happened (fr_project would have moved the first endpoint). */
+                const int32_t l0=s16i(tx+tz),l1=s16i(ux+uz);
+                if(l0<0&&l1<0)continue;
+                if(l0>=0&&s16i(uz-ux)<0&&s16i(tz-tx)<0)continue;
+            }
             WallJob job;job.variant=w[2];job.z=-z;
             for(unsigned k=0;k<4;k++)job.heights[k]=w[6+k];
             job.ceiling=w[10];job.floor=w[11];
