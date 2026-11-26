@@ -45,8 +45,9 @@ jobs:
           python3 research/ferret-native/r09_gpgx_time.py patch "$out/core"
           make -C "$out/core" -f Makefile.libretro -j3 platform=unix > "$private/core.log" 2>&1
           python3 research/ferret-native/r09_gpgx_time.py run "$out/core/genesis_plus_gx_libretro.so" "$private/scene" "$out/r10-wram.json" 1
+          python3 research/ferret-native/r10_column_profile.py "$out/core" "$private/scene/demo.elf" "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" "$private/scene" "$out/r10-kernel.json"
       - uses: actions/upload-artifact@v4
         with:
           name: r10-wram-numeric
-          path: ${{ runner.temp }}/ferret-r10-${{ github.run_id }}/r10-wram.json
+          path: ${{ runner.temp }}/ferret-r10-${{ github.run_id }}/r10-*.json
           if-no-files-found: error
