@@ -9,6 +9,12 @@
 #include "presentation.c"
 #include "md_video.c"
 #include "scene.h"
+#ifdef FR_ANGLE_PVS
+#include "scene_angle.h"
+#endif
+#ifndef __m68k__
+static uint32_t fr_audit_project_calls;
+#endif
 static Frame frame;
 static uint8_t worktiles[23040] __attribute__((aligned(2)));
 static FRV vis;
@@ -119,12 +125,23 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     }
 #endif
     if(begin_rc!=1)return -3;
+#ifndef __m68k__
+    fr_audit_project_calls=0;
+#endif
+#ifdef FR_ANGLE_PVS
+    if((unsigned)cell>=SC_ANG_CELLS)return -6;
+    const uint8_t *angle_mask=sc_ang_masks+(uint32_t)sc_ang_index[(unsigned)cell*SC_ANG_BINS+sc_ang_bucket[a]]*SC_ANG_STRIDE;
+#endif
     uint16_t leaf;int rc;
     while((rc=frv_next(&it,&leaf))>0){
         if(closed())break;
         unsigned n=sc_leaves[leaf*2],first=sc_leaves[leaf*2+1];
         for(unsigned j=first;j<first+n;j++){
+#ifdef FR_ANGLE_PVS
+            if(!(angle_mask[j>>3]&(1u<<(j&7))))continue;
+#else
             if(!frv_keep(&it,(uint16_t)j))continue;
+#endif
             s->candidates++;
             const int16_t *w=sc_walls+14u*j;
             if(w[2]==255)continue;
@@ -141,6 +158,9 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             WallJob job;job.variant=w[2];job.z=-z;
             for(unsigned k=0;k<4;k++)job.heights[k]=w[6+k];
             job.ceiling=w[10];job.floor=w[11];
+#ifndef __m68k__
+            fr_audit_project_calls++;
+#endif
             int r=fr_project(tx,tz,ux,uz,w[3],w[4],w[5],&job);
             if(r<0){s->errors++;continue;}if(!r)continue;s->projected++;
             #if SC_ART_PAIR
@@ -161,6 +181,14 @@ static int pose(unsigned i,DemoStats *s){
     return render_pose(p[0],p[1],p[2],p[3],s);
 }
 #ifndef __m68k__
+/* Host-only differential audit of complete raster state at arbitrary cameras. */
+int fr_demo_camera(int x,int y,int z,int a,DemoStats *s,uint8_t *state,uint32_t *calls){
+    int r=render_pose((int16_t)x,(int16_t)y,(int16_t)z,(int16_t)a,s);
+    if(r)return r;
+    const uint8_t *src=(const uint8_t *)(const void *)&frame;
+    for(unsigned i=0;i<sizeof(frame);i++)state[i]=src[i];
+    *calls=fr_audit_project_calls;return 0;
+}
 int fr_demo_frame(unsigned i,DemoStats *s,uint8_t *fb,uint8_t *tiles){
     int r=pose(i,s);if(r)return r;
     if(fr_tiles(frame.pixels,worktiles,sizeof(worktiles))!=23040)return -5;
