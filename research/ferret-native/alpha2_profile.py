@@ -75,8 +75,8 @@ void retro_ap_vdp_word(void){
 """
     anchor="void m68k_run(unsigned int cycles)"
     before="    unsigned int research_start = m68k.cycles;"
-    after="    USE_CYCLES(CYC_INSTRUCTION[REG_IR]);"
-    assert all(s.count(a)==1 for a in (anchor,before,after))
+    after="    /* Execute instruction */\n    m68ki_instruction_jump_table[REG_IR]();\n    USE_CYCLES(CYC_INSTRUCTION[REG_IR]);"
+    assert all(s.count(a)==1 for a in (anchor,before,after)),[(a,s.count(a)) for a in (anchor,before,after)]
     p.write_text(s.replace(anchor,decl+"\n"+anchor).replace(before,before+"\n    retro_ap_before(research_pc & 0xffffff);").replace(after,after+"\n    retro_ap_after(research_pc & 0xffffff,m68k.cycles-research_start);"))
     p=root/"core/vdp_ctrl.c";s=p.read_text()
     anchor="static void vdp_68k_data_w_m5(unsigned int data)\n{"
