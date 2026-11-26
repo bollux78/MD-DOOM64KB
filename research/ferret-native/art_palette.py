@@ -3,6 +3,7 @@ A byte represents TWO independent 4-bit displayed pixels. Blended pairs
 improve color approximation without reducing the logical grid further.
 """
 from collections import Counter
+from functools import lru_cache
 from compiler import Resources,name
 import math
 def dist(a,b):
@@ -38,6 +39,7 @@ class Art(Resources):
                 b=wad.at(self.flats[k]);h=Counter(b)
                 for i,n in h.items():hist[i]+=n*64/max(1,len(b))
         self.hist=hist
+        self.raw_cache=dict(self.cache)
         candidates=sorted({grid(c) for c in self.rgb}|{(0,0,0)})
         items=[(self.rgb[i],w) for i,w in sorted(hist.items()) if w>0]
         assert items
@@ -67,6 +69,7 @@ class Art(Resources):
         newerr=sum(w*min(dist(c,p) for p in palette) for c,w in items)/denom
         pairerr=sum(w*dist(c,mix(palette[self.encode(c)>>4],palette[self.encode(c)&15])) for c,w in items)/denom
         self.report={"legacy_weighted_mse":olderr,"new_solid_weighted_mse":newerr,"pair_blend_weighted_mse":pairerr,"palette":palette,"weighted_source_colors":len(items),"pair_colors":len(set(self.pair_lut)),"scope":"source-material RGB error, not screenshot likeness to original Ferret"}
+    @lru_cache(maxsize=65536)
     def encode(self,c):
         a,b,_,_=min(self.pairs,key=lambda p:dist(c,p[2])+p[3]*.065)
         return a*16+b
@@ -81,10 +84,11 @@ class Art(Resources):
     def pair_texture(self,k,z):
         # Preserve the actual 2x2 WAD source footprint before quantizing to a
         # two-pixel pair; use full byte per logical texel, not duplicated nibble.
-        old=self.lut;self.lut=list(range(256));self.cache.pop(k,None)
-        w,h,rows=self.texture(k)
-        self.cache.pop(k,None);self.lut=old
-        from functools import lru_cache
+        if k not in self.raw_cache:
+            old=self.lut;self.lut=list(range(256));self.cache.pop(k,None)
+            self.raw_cache[k]=self.texture(k)
+            self.cache.pop(k,None);self.lut=old
+        w,h,rows=self.raw_cache[k]
         @lru_cache(maxsize=32768)
         def encode4(a,b,c,d):
             rgb=tuple(sum(self.rgb[i][j] for i in (a,b,c,d))/4 for j in range(3))
