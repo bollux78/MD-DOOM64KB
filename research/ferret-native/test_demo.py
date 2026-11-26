@@ -29,7 +29,7 @@ def host(out):
         (out/f"expected-tiles-{i}.bin").write_bytes(bytes(tiles))
         results.append(row)
     return results
-def emulate(core,out,mode,expected,maxframes):
+def emulate(core,out,mode,expected,maxframes,bench=False):
     lib=C.CDLL(str(core));cb=[];frames=0
     def env(cmd,p):
         if cmd==3:C.cast(p,C.POINTER(C.c_bool))[0]=True;return True
@@ -86,7 +86,7 @@ def emulate(core,out,mode,expected,maxframes):
             mismatch=sum(a!=b for a,b in zip(vram,target))
             mismatch_swapped=sum(a!=b for a,b in zip(swapped,target))
             (out/f"actual-vram-mode{mode}-pose{i}.bin").write_bytes(vram)
-            ok=m[5]==e["hash"] and m[6]==e["tiles_hash"] and h==e["tiles_hash"] and mismatch==0 and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
+            ok=((m[5]==0 and m[6]==0) if bench else (m[5]==e["hash"] and m[6]==e["tiles_hash"])) and h==e["tiles_hash"] and mismatch==0 and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
             if m[11]!=0:ok=False # mandatory WRAM baseline, all cartridge configurations
             checks.append({"pose":i,"frame":frames,"elapsed_video_frames":frames-last,"match":ok,"fb":m[5],"expected_fb":e["hash"],"tile":m[6],"vram":h,"vram_swapped":hs,"expected_swapped":e["swapped_tiles_hash"],"mismatch_bytes":mismatch,"mismatch_swapped":mismatch_swapped,"first_actual":vram[:16].hex(),"first_expected":target[:16].hex(),"expected_tile":e["tiles_hash"],"sram":m[11],"errors":m[9],"candidates":m[7],"projected":m[8]})
             seen.add(i);last=frames
@@ -102,9 +102,9 @@ def emulate(core,out,mode,expected,maxframes):
         return result
     finally:lib.retro_unload_game();lib.retro_deinit()
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("core",type=P);p.add_argument("report",type=P);p.add_argument("--maxframes",type=int,default=3600);p.add_argument("--mode",type=int,choices=(0,1,2),required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("core",type=P);p.add_argument("report",type=P);p.add_argument("--maxframes",type=int,default=3600);p.add_argument("--mode",type=int,choices=(0,1,2),required=True);p.add_argument("--bench",action="store_true");a=p.parse_args()
     expected=host(a.out)
-    r=emulate(a.core,a.out,a.mode,expected,a.maxframes)
+    r=emulate(a.core,a.out,a.mode,expected,a.maxframes,a.bench)
     a.report.write_text(json.dumps(r,indent=2));print("EMULATOR "+json.dumps(r),flush=True)
     if not r["pass"]:sys.exit(2)
 if __name__=="__main__":main()

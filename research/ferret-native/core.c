@@ -96,6 +96,16 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
  * sky is a caller-supplied visible 160x72 column-major sample array.
  * Assets provide a bounded byte view and a logical texture origin.
  */
+/* Native 32/16 DIVU when the unsigned quotient is representable. */
+static uint32_t div_u16(uint32_t n,uint16_t d){
+#ifdef __m68k__
+    if(d&&(n>>16)<d){
+        __asm__("divu.w %1,%0":"+&d"(n):"dmi"(d):"cc");
+        return (uint16_t)n;
+    }
+#endif
+    return n/d;
+}
 static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed,const uint8_t *indices){
     int v=w->variant,n=w->width;
     if(v<0||v>17||n<=0||w->x0<0||w->x0>=W||n>W-w->x0)return -1;
@@ -125,7 +135,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
         if(w->textured&&(u||l)){
             uint32_t q=q_j;
             if(!w->linear&&!inv)return -4;
-            int offset=(int)((w->linear?q:q/inv)&0x1f80u)+sar(w->z,1);
+            int offset=(int)((w->linear?q:div_u16(q,inv))&0x1f80u)+sar(w->z,1);
             const int16_t *sc=scalers+(indices?indices[inv>>5]:(inv>>5))*H;
             if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
             if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
@@ -162,6 +172,14 @@ int fr_wall_indexed_pair(Frame *f,const WallJob *w,Asset upper,Asset lower,const
  */
 static int divword(int32_t a,int32_t b,int32_t *out){
     if(!b)return -1;
+#ifdef __m68k__
+    if(b>=-32768&&b<=32767){
+        uint8_t overflow;int32_t q=a;
+        __asm__ volatile("divs.w %2,%0\n\tsvs %1":"+&d"(q),"=&d"(overflow):"dmi"((int16_t)b):"cc");
+        if(overflow)return -1;
+        *out=(int16_t)q;return 0;
+    }
+#endif
     int64_t q=(int64_t)a/b;if(q<-32768||q>32767)return -1;
     *out=(int32_t)q;return 0;
 }
@@ -186,18 +204,18 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
     w->x0=max(0,s16(q0+80));int xend=min(W,s16(q1+80));w->width=s16(xend-w->x0);
     if(w->width<=0)return 0;
     if(!z0||!z1)return -5;
-    w->inv0=0x500000/(uint16_t)z0;w->inv1=0x500000/(uint16_t)z1;
+    w->inv0=div_u16(0x500000,(uint16_t)z0);w->inv1=div_u16(0x500000,(uint16_t)z1);
     if(w->inv0>65535||w->inv1>65535||divword(w->inv1-w->inv0,w->width,&w->scale_step))return -5;
     if(textured){
         uint32_t a=((uint32_t)u0<<7)&65535u,b=((uint32_t)u1<<7)&65535u;
         uint32_t p0=a*(uint32_t)w->inv0,p1=b*(uint32_t)w->inv1,mi=(w->inv0+w->inv1)/2;
         if(!mi)return -5;
-        uint32_t ap=(uint32_t)(((uint64_t)p0+p1)/2/mi),mu=(a+b)/2;
+        uint32_t ap=div_u16((p0>>1)+(p1>>1)+(p0&p1&1u),(uint16_t)mi),mu=(a+b)/2;
         if(ap>65535)return -5;
         uint32_t er=(mu-ap)&65535u;if(s16(mu)<s16(ap))er=(-er)&65535u;
-        w->linear=er<512||((er-512)&65535u)<10000000u/mi;
+        w->linear=er<512||((er-512)&65535u)<div_u16(10000000u,(uint16_t)mi);
         uint32_t left=w->linear?a:p0,right=w->linear?b:p1;
-        w->u0=left;w->du=(uint32_t)(((int64_t)right-left)/w->width);
+        w->u0=left;w->du=right>=left?div_u16(right-left,(uint16_t)w->width):0u-div_u16(left-right,(uint16_t)w->width);
     }
     return 1;
 }

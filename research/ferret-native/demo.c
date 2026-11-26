@@ -76,6 +76,17 @@ static void sky_setup(unsigned a){
 #endif
     fr_sky_rows=sky_rows;fr_sky_column=sky_column;
 }
+/* Cache transformed shared vertices for one pose; no approximation or
+ * visibility change. 5 bytes per vertex, bounded by actual scene size. */
+#define SC_VERTEX_COUNT (sizeof(sc_vertices)/sizeof(sc_vertices[0])/2u)
+static int16_t vertex_tx[SC_VERTEX_COUNT],vertex_tz[SC_VERTEX_COUNT];
+static uint8_t vertex_valid[SC_VERTEX_COUNT];
+static void transform_vertex(unsigned i,int32_t cx,int32_t cy,int16_t co,int16_t si,int32_t *tx,int32_t *tz){
+    if(!vertex_valid[i]){
+        fr_transform(sc_vertices[2u*i],sc_vertices[2u*i+1],cx,cy,co,si,tx,tz);
+        vertex_tx[i]=(int16_t)*tx;vertex_tz[i]=(int16_t)*tz;vertex_valid[i]=1;
+    }else{*tx=vertex_tx[i];*tz=vertex_tz[i];}
+}
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
@@ -83,6 +94,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);closed_scan=0;
+    for(unsigned i=0;i<SC_VERTEX_COUNT;i++)vertex_valid[i]=0;
         sky_setup(a);
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
     int cell=leaf_at(x,y);if(cell<0)return -2;
@@ -113,8 +125,8 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             const int16_t *w=sc_walls+14u*j;
             if(w[2]==255)continue;
             int32_t tx,tz,ux,uz;
-            fr_transform(sc_vertices[2u*w[0]],sc_vertices[2u*w[0]+1],(int32_t)x*8,(int32_t)y*8,co,si,&tx,&tz);
-            fr_transform(sc_vertices[2u*w[1]],sc_vertices[2u*w[1]+1],(int32_t)x*8,(int32_t)y*8,co,si,&ux,&uz);
+            transform_vertex((uint16_t)w[0],(int32_t)x*8,(int32_t)y*8,co,si,&tx,&tz);
+            transform_vertex((uint16_t)w[1],(int32_t)x*8,(int32_t)y*8,co,si,&ux,&uz);
             WallJob job;job.variant=w[2];job.z=-z;
             for(unsigned k=0;k<4;k++)job.heights[k]=w[6+k];
             job.ceiling=w[10];job.floor=w[11];

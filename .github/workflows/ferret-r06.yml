@@ -1,0 +1,118 @@
+name: Ferret R06 - exact projection and controlled R05 performance comparison
+on:
+  pull_request:
+    branches: [research-ferret-r05-perf-claudio-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r06.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r06-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r06-perf-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 4ac9f0a48a2ae3437695ed3bd6e13d067931cf86
+          path: r05-baseline
+          persist-credentials: false
+      - name: Prepare private directories and same R04 scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r06/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r06-$GITHUB_RUN_ID"
+          play="$root/playtest/R06-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public" "$play"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "PLAY=$play" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+          src="$root/r04/45818948354/dread"
+          test -s "$src/scene.h"
+          for v in r05-bench r06-bench r06-verify r06-legacy-sky; do
+            mkdir -p "$private/$v"
+            cp "$src/scene.h" "$src/scene.json" "$private/$v/"
+          done
+      - name: Build R05 and R06 matched benchmark variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          # R05 host-only fix: byte reference instead of native-endian long stores.
+          # The target __m68k__ path is identical to the pinned R05 source.
+          cp research/ferret-native/presentation.c r05-baseline/research/ferret-native/presentation.c
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 r05-baseline/research/ferret-native/build_demo.py "$PRIVATE/r05-bench" "$GCC68" --label "FERRET-MD R05 BENCH"
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/r06-bench" "$GCC68" --label "FERRET-MD R06 BENCH"
+          python3 research/ferret-native/build_demo.py "$PRIVATE/r06-verify" "$GCC68" --label "FERRET-MD R06 VERIFY"
+          FR_EXTRA_CFLAGS=-DFR_SKY_LEGACY python3 research/ferret-native/build_demo.py "$PRIVATE/r06-legacy-sky" "$GCC68" --label "FERRET-MD R06 LEGACY SKY"
+          cp "$PRIVATE/r06-bench/FERRET-MD-R01.bin" "$PLAY/FERRET-MD-R06-E1M1.bin"
+          cp "$PRIVATE/r05-bench/FERRET-MD-R01.bin" "$PLAY/FERRET-MD-R05-BASELINE.bin"
+          for v in r05-bench r06-bench r06-verify r06-legacy-sky; do cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"; done
+      - name: Build pinned instrumented Genesis Plus GX
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Exact VRAM benchmark and mandatory WRAM modes
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          rc=0
+          for v in r05-bench r06-bench r06-verify r06-legacy-sky; do
+            test -s "$PRIVATE/$v/FERRET-MD-R01.bin" || { rc=1; continue; }
+            modes="1"; flags=""
+            if [ "$v" = r06-verify ]; then modes="0 1 2"; fi
+            if [[ "$v" == *-bench ]]; then flags="--bench"; fi
+            for mode in $modes; do
+              python3 research/ferret-native/test_demo.py "$PRIVATE/$v" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/$v-mode$mode.json" --mode "$mode" --maxframes 12000 $flags || rc=1
+            done
+          done
+          python3 research/ferret-native/compare_bench.py "$OUT/public" "$PRIVATE" || rc=1
+          python3 - "$ROOT/r04/45818948354/dread" "$PRIVATE/r06-legacy-sky" <<'PY' || rc=1
+          import pathlib,sys
+          old,new=map(pathlib.Path,sys.argv[1:])
+          for i in range(12):
+              k=f"expected-tiles-{i}.bin"
+              assert (old/k).read_bytes()==(new/k).read_bytes(),(i,"legacy sky regression")
+          print("R04 legacy sky parity: 12/12 exact frames")
+          PY
+          exit "$rc"
+      - name: Real R06 MAME screen regression
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export SDL_VIDEODRIVER=dummy FR_POSES=12 FR_SCREEN_DIR="$PRIVATE/r06-verify"
+          timeout 180 "$(command -v mame)" genesis -cart "$PRIVATE/r06-verify/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 200 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/r06-verify/mame.log" 2>&1 || true
+          grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/r06-verify/mame.log" > "$OUT/public/r06-mame.log" || true
+          python3 research/ferret-native/check_mame.py "$PRIVATE/r06-verify" "$OUT/public/r06-mame.log" "$OUT/public/r06-mame.json"
+          python3 research/ferret-native/check_screen.py "$PRIVATE/r06-verify" "$OUT/public/r06-screen.json"
+          mkdir -p "$PLAY/screens"
+          cp "$PRIVATE/r06-verify"/pose-*.png "$PLAY/screens/"
+      - name: Numeric reports only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r06-numeric-results
+          path: |
+            ${{ runner.temp }}/ferret-r06-${{ github.run_id }}/public/*
+          if-no-files-found: warn
