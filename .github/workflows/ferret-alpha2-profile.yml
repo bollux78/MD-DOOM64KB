@@ -1,0 +1,62 @@
+name: Ferret Alpha2 independent visibility and cycle audit
+on:
+  pull_request:
+    branches: [research-ferret-r07-perf-claudio-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-alpha2-profile.yml','research/ferret-native/alpha2_profile.py','research/ferret-native/alpha2_visibility_audit.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-alpha2-profile-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-alpha2-profile-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare private profile directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/alpha2-profile/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-alpha2-profile-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+      - name: Build pinned independent profiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-native/alpha2_profile.py patch "$OUT/core"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Authentic Alpha2 same-camera visibility and direct-write benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/alpha2_profile.py profile "$OUT/core/genesis_plus_gx_libretro.so" "$PRIVATE" "$OUT/public/alpha2-profile.json"
+      - name: Compare independent original captures with new measured counts
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/alpha2_visibility_audit.py "$ROOT/round5/45657627918" "$OUT/public/visibility-census.json"
+      - name: Numeric results only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-alpha2-profile-numeric
+          path: ${{ runner.temp }}/ferret-alpha2-profile-${{ github.run_id }}/public/*
+          if-no-files-found: warn
