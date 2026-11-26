@@ -17,7 +17,9 @@ typedef struct {
 static int32_t s16(int64_t n) { uint32_t v=(uint32_t)n&65535u; return v>=32768u?(int32_t)v-65536:(int32_t)v; }
 static int32_t min(int32_t a,int32_t b){return a<b?a:b;}
 static int32_t max(int32_t a,int32_t b){return a>b?a:b;}
-static int32_t sar(int64_t n,unsigned bits){int64_t d=(int64_t)1<<bits;return (int32_t)(n>=0?n/d:-((-n+d-1)/d));}
+/* Both target and host GCC implement arithmetic right shift; assert that contract. */
+typedef char fr_arithmetic_shift_required[((-1LL >> 1)==-1LL)?1:-1];
+static int32_t sar(int64_t n,unsigned bits){return (int32_t)(n>>bits);}
 static size_t pixel(int x,int y){return (size_t)(x/2)*144u+(x&1)+2u*(unsigned)y;}
 static int has(unsigned mask,int v){return (mask>>v)&1u;}
 static int sample(Asset a,int64_t off,uint8_t *out){
@@ -35,14 +37,22 @@ static const unsigned uppers=B(0)|B(1)|B(2)|B(3)|B(9)|B(10)|B(11)|B(15)|B(16)|B(
 static const unsigned lowers=B(1)|B(3)|B(5)|B(8)|B(11)|B(14)|B(17);
 static const unsigned floors=B(0)|B(1)|B(2)|B(3)|B(4)|B(5)|B(7)|B(8)|B(10)|B(11)|B(13)|B(14)|B(16)|B(17);
 static const unsigned skies=B(2)|B(3)|B(12)|B(13)|B(14)|B(15)|B(16)|B(17);
-static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t *sky){
-    for(int y=max(t,lo);y<min(b,hi);y++)f->pixels[pixel(x,y)]=sky?sky[x*H+y]:c;
+static uint8_t pair_phase(uint8_t c,int y){return (y&1)?(uint8_t)((c<<4)|(c>>4)):c;}
+static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t *sky,int pair){
+    for(int y=max(t,lo);y<min(b,hi);y++){
+        uint8_t v=sky?sky[x*H+y]:c;
+        f->pixels[pixel(x,y)]=pair?pair_phase(v,y):v;
+    }
     return 0;
 }
 static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
     for(int y=max(t,lo);y<min(b,hi);y++){
         uint8_t c;
-        if(packed){
+        if(packed==2){
+            int32_t p=offset+sc[y]+a.origin;
+            if(!a.data||a.size!=8192||p<0||p>=24576)return -2;
+            c=pair_phase(a.data[(unsigned)p&8191u],y);
+        }else if(packed){
             int32_t p=offset+sc[y]+a.origin;
             if(!a.data||a.size!=4096||p<0||p>=24576)return -2;
             unsigned i=(unsigned)p&8191u;uint8_t b=a.data[i>>1];
@@ -75,7 +85,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
         int r[4];for(int k=0;k<4;k++)r[k]=s16(sar((int64_t)e[k]+(int64_t)d[k]*j,8));
         uint16_t inv=(uint16_t)(w->inv0+w->scale_step*j);
         int low=(v==1||v==3)?r[1]:r[2],fs=(v==0||v==2)?r[1]:(l?r[3]:r[2]);
-        if(c)fill(f,x,t,b,t,r[0],(uint8_t)w->ceiling,has(skies,v)?sky:NULL);
+        if(c)fill(f,x,t,b,t,r[0],(uint8_t)w->ceiling,has(skies,v)?sky:NULL,packed==2);
         if(w->textured&&(u||l)){
             uint32_t q=w->u0+w->du*(uint32_t)j;
             if(!w->linear&&!inv)return -4;
@@ -84,7 +94,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
             if(u&&tex(f,x,t,b,r[0],r[1],upper,offset,sc,packed))return -2;
             if(l&&tex(f,x,t,b,low,r[3],lower,offset,sc,packed))return -2;
         }
-        if(fl){int color=((v==11||v==17)&&t>=r[2]&&b>=r[3])?0:w->floor;fill(f,x,t,b,fs,b,(uint8_t)color,NULL);}
+        if(fl){int color=((v==11||v==17)&&t>=r[2]&&b>=r[3])?0:w->floor;fill(f,x,t,b,fs,b,(uint8_t)color,NULL,packed==2);}
         if(v<=3){f->top[x]=f->bottom[x]=0;f->depth[x]=inv;}
         else {
             int et=u?r[1]:(c?r[0]:t),eb=l?low:(fl?fs:b);
@@ -106,6 +116,10 @@ int fr_wall_packed(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16
 /* 158 unique rows, 2048 byte indices, instead of a 288 KiB dense table. */
 int fr_wall_indexed(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *rows,const uint8_t *indices,const uint8_t *sky){
     return wall_impl(f,w,upper,lower,rows,sky,1,indices);
+}
+/* Full byte per sample: independent left/right palette nibbles, same geometry. */
+int fr_wall_indexed_pair(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *rows,const uint8_t *indices,const uint8_t *sky){
+    return wall_impl(f,w,upper,lower,rows,sky,2,indices);
 }
 /* Public projection takes transformed endpoints, near rule, and resource U coordinates.
  * Return 1 for visible, 0 for rejected, negative for unrepresentable division.

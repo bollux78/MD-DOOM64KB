@@ -36,17 +36,27 @@ def emit(f,ctype,n,values):
     f.write(f"static const {ctype} {n}[{len(values)}] = {{\n")
     for i in range(0,len(values),24):f.write(",".join(map(str,values[i:i+24]))+",\n")
     f.write("};\n")
-def export(wad,k,output,fsc,fixture,asymmetric=False):
-    g=geometry(wad,k);r=Resources(wad);c=Compiler(g)
+def export(wad,k,output,fsc,fixture,asymmetric=False,art=False):
+    g=geometry(wad,k)
+    if art:
+        from art_palette import Art
+        r=Art(wad,g)
+        (output.parent/"art-report.json").write_text(json.dumps(r.report,indent=2))
+        print("ART PALETTE "+json.dumps(r.report),flush=True)
+    else:r=Resources(wad)
+    c=Compiler(g)
+    asset_bytes=8192 if art else 4096
     cp=c.compile("occlusion96");dag,_=pack_dag(g,cp)
     assets=[];asset_index={};keys={}
     def texture(k,z):
-        if k not in r.defs:raw=bytes([0x55])*4096;key=("fallback",0)
+        if k not in r.defs:raw=bytes([0 if art else 0x55])*asset_bytes;key=("fallback",0)
         else:
             _,h,_=r.texture(k);key=(k,z%h)
             if key in keys:return keys[key]
-            b,o=r.packed_texture(k,z%h);t=b[o:o+8192]
-            raw=bytes((t[i]&240)|(t[i+1]&15) for i in range(0,8192,2))
+            if art:raw=r.pair_texture(k,z%h)
+            else:
+                b,o=r.packed_texture(k,z%h);t=b[o:o+8192]
+                raw=bytes((t[i]&240)|(t[i+1]&15) for i in range(0,8192,2))
         if raw not in asset_index:asset_index[raw]=len(assets);assets.append(raw)
         keys[key]=asset_index[raw];return keys[key]
     walls=[];leaf_floors=[];leaf_ceilings=[]
@@ -92,7 +102,7 @@ def export(wad,k,output,fsc,fixture,asymmetric=False):
     output.parent.mkdir(parents=True,exist_ok=True)
     with output.open("w") as f:
         f.write("/* Generated locally; no original executable code. */\n")
-        for n,v in (("SC_NODES",len(g["nodes"])),("SC_LEAVES",len(g["subsectors"])),("SC_WALLS",len(walls)),("SC_ASSETS",len(assets)),("SC_POSES",len(poses)),("SC_ROWS",len(rs)),("SC_SKYW",sw),("SC_SKYH",sh),("SC_FRV_BYTES",len(dag))):
+        for n,v in (("SC_ART_PAIR",int(art)),("SC_ASSET_BYTES",asset_bytes),("SC_NODES",len(g["nodes"])),("SC_LEAVES",len(g["subsectors"])),("SC_WALLS",len(walls)),("SC_ASSETS",len(assets)),("SC_POSES",len(poses)),("SC_ROWS",len(rs)),("SC_SKYW",sw),("SC_SKYH",sh),("SC_FRV_BYTES",len(dag))):
             f.write(f"#define {n} {v}\n")
         emit(f,"uint8_t","sc_frv",dag)
         emit(f,"int16_t","sc_planes",(x for n in g["nodes"] for x in n[:4]))
@@ -108,10 +118,10 @@ def export(wad,k,output,fsc,fixture,asymmetric=False):
         emit(f,"int16_t","sc_poses",(x for p in poses for x in p))
         emit(f,"int16_t","sc_trig",(v for a in range(360) for v in (round(math.cos(math.radians(90-a))*16384),round(math.sin(math.radians(90-a))*16384))))
         emit(f,"uint16_t","sc_palette",((round(b*7/255)<<9)|(round(g*7/255)<<5)|(round(r*7/255)<<1) for r,g,b in r.palette))
-    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":4096*len(assets),"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
+    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":asset_bytes*len(assets),"art_pair":art,"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
     print("SCENE "+json.dumps(info),flush=True);return info
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");p.add_argument("--art",action="store_true");a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=True)
     fixture=not a.wad;wad=a.wad or a.out/"fixture.wad"
     if a.asymmetric:
@@ -119,6 +129,7 @@ def main():
         from asymmetric_fixture import make
         make(wad)
     elif fixture:make_fixture(wad)
-    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric)
+    assert not (a.art and fixture),"art mode needs actual WAD materials"
+    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric,a.art)
     (a.out/"scene.json").write_text(json.dumps(info,indent=2))
 if __name__=="__main__":main()
