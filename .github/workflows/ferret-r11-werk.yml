@@ -1,0 +1,88 @@
+name: Ferret R11 same-camera WRAM audit
+on: [pull_request]
+concurrency:
+  group: ferret-r11-werk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  r11:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r11-werk-bench-20261126'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 72e700b39fa15b442760f040239346c1fdc3d276
+          path: renderer
+          persist-credentials: false
+      - name: Measure R11 control and no-phase with matched limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r11-werk/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r11-$GITHUB_RUN_ID"
+          mkdir -p "$private/scene" "$out"
+          cp "$root/r04/45818948354/dread/"{scene.h,scene.json} "$private/scene/"
+          python3 - "$private/scene/scene.h" <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          cameras = [(1056,-3616,41,90)] + [(2980,-3286,17,a) for a in (0,270,180,90)]
+          poses = [p for p in cameras for _ in range(2)] + [cameras[0]]*2
+          scene, count = re.subn(r'static const int16_t sc_poses\[48\] = \{[^}]*\};',
+              'static const int16_t sc_poses[48] = {' + ','.join(str(v) for p in poses for v in p) + '};',
+              path.read_text())
+          assert count == 1
+          path.write_text(scene)
+          PY
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$out/core"
+          git -C "$out/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$out/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-native/r09_gpgx_time.py patch "$out/core"
+          for variant in control no-phase; do
+            scene="$private/$variant"
+            core="$out/core-$variant"
+            mkdir -p "$scene"
+            cp "$private/scene/"{scene.h,scene.json} "$scene/"
+            cp -a "$out/core" "$core"
+            flags=-DFR_BENCH
+            if [[ "$variant" == no-phase ]]; then flags="$flags -DFR_NO_PAIR_PHASE"; fi
+            FR_EXTRA_CFLAGS="$flags" python3 renderer/research/ferret-native/build_demo.py "$scene" "$HOME/mars/m68k-elf/bin/m68k-elf-gcc" --label "FERRET-MD R11 BENCH" > "$private/$variant-build.log" 2>&1
+            make -C "$core" -f Makefile.libretro -j3 platform=unix > "$private/$variant-core.log" 2>&1
+            python3 research/ferret-native/r09_gpgx_time.py run "$core/genesis_plus_gx_libretro.so" "$scene" "$out/r11-$variant-wram.json" 1
+            python3 research/ferret-native/r10_column_profile.py "$core" "$scene/demo.elf" "$HOME/mars/m68k-elf/bin/m68k-elf-objdump" "$scene" "$out/r11-$variant-kernel.json"
+          done
+          python3 - "$out" <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          clock = 53_693_175
+          result = {}
+          for variant in ('control', 'no-phase'):
+              warm = json.loads((root / f'r11-{variant}-wram.json').read_text())['warm_cameras']
+              kernels = json.loads((root / f'r11-{variant}-kernel.json').read_text())['cameras']
+              rows = {}
+              for cam in warm:
+                  name = cam['camera']
+                  total = round(cam['wall_pipeline_ms'] * clock / 1000)
+                  kernel = kernels[name]['all']['master_cycles']
+                  assert 0 < kernel <= total, (variant, name, kernel, total)
+                  rows[name] = {'total_master_cycles': total, 'kernel_master_cycles': kernel,
+                                'outside_kernel_master_cycles': total - kernel,
+                                'wall_render_ms': cam['wall_pipeline_ms'],
+                                'store_bytes': kernels[name]['all']['bytes']}
+              result[variant] = rows
+          (root / 'r11-ab-summary.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2), flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r11-wram-numeric
+          path: ${{ runner.temp }}/ferret-r11-${{ github.run_id }}/r11-*.json
+          if-no-files-found: error
