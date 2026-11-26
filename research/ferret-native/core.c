@@ -111,7 +111,19 @@ static inline __attribute__((always_inline)) int tex_col(Frame *f,int x,int t,in
         if(y0>=y1)return 0;
         const int32_t base=offset+a.origin,pa=base+sc[y0],pb=base+sc[y1-1];
         if(swap_ready&&pa>=0&&pa<24576&&pb>=0&&pb<24576){
-            fr_col_pair(f->pixels+pixel(x,y0),a.data,sc+y0,base,(uint32_t)(y1-y0),(uint32_t)(y0&1),swap_lut);
+            {   /* register call: no argument pushes, no MOVEM in the kernel */
+                register uint8_t *ra0 __asm__("a0")=f->pixels+pixel(x,y0);
+                register const uint8_t *ra1 __asm__("a1")=a.data;
+                register const int16_t *ra3 __asm__("a3")=sc+y0;
+                register const uint8_t *ra2 __asm__("a2")=swap_lut;
+                register int32_t rd4 __asm__("d4")=base;
+                register uint32_t rd5 __asm__("d5")=(uint32_t)(y1-y0);
+                register uint32_t rd3 __asm__("d3")=(uint32_t)(y0&1);
+                __asm__ volatile("jsr fr_col_pair_r"
+                    :"+a"(ra0),"+a"(ra1),"+a"(ra3),"+d"(rd4),"+d"(rd5),"+d"(rd3)
+                    :"a"(ra2)
+                    :"d0","d1","d2","memory","cc");
+            }
             return 0;
         }
     }

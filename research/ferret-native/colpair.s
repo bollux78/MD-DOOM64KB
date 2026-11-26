@@ -77,3 +77,43 @@ fr_clear11520:
     dbra %d0,1b
     movem.l (%sp)+,%d2-%d7/%a2-%a5
     rts
+
+| fr_col_pair_r: same kernel, register calling convention for inline callers (no stack traffic):
+|   a0=dst a1=src a3=sc d4=base(low 16 bits used) d5=n d3=odd_first a2=swap
+| Clobbers d0-d5, a0, a1, a3 (a2 preserved). Caller guarantees n>0.
+    .globl fr_col_pair_r
+    .even
+fr_col_pair_r:
+    move.w #8191,%d2
+    moveq #0,%d1
+    tst.l %d3
+    beq.s 1f
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    and.w %d2,%d0
+    move.b (%a1,%d0.w),%d1
+    move.b (%a2,%d1.w),(%a0)
+    addq.l #2,%a0
+    subq.l #1,%d5
+1:  move.l %d5,%d3
+    lsr.l #1,%d3
+    beq.s 3f
+    subq.l #1,%d3
+2:  move.w (%a3)+,%d0
+    add.w %d4,%d0
+    and.w %d2,%d0
+    move.b (%a1,%d0.w),(%a0)
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    and.w %d2,%d0
+    move.b (%a1,%d0.w),%d1
+    move.b (%a2,%d1.w),2(%a0)
+    addq.l #4,%a0
+    dbra %d3,2b
+3:  btst #0,%d5
+    beq.s 9f
+    move.w (%a3)+,%d0
+    add.w %d4,%d0
+    and.w %d2,%d0
+    move.b (%a1,%d0.w),(%a0)
+9:  rts
