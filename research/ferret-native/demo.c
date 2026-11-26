@@ -38,7 +38,7 @@ static int closed(void){
 }
 static Asset texture_at(unsigned i){
     Asset a={NULL,0,0};
-    if(i<SC_ASSETS){a.data=sc_textures+4096u*i;a.size=4096;a.origin=8192;}
+    if(i<SC_ASSETS){a.data=sc_textures+SC_ASSET_BYTES*i;a.size=SC_ASSET_BYTES;a.origin=8192;}
     return a;
 }
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
@@ -86,7 +86,11 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             job.ceiling=w[10];job.floor=w[11];
             int r=fr_project(tx,tz,ux,uz,w[3],w[4],w[5],&job);
             if(r<0){s->errors++;continue;}if(!r)continue;s->projected++;
+            #if SC_ART_PAIR
+            if(fr_wall_indexed_pair(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sky))s->errors++;
+#else
             if(fr_wall_indexed(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sky))s->errors++;
+#endif
         }
     }
     if(rc<0)return -4;
