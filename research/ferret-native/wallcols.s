@@ -143,8 +143,9 @@ fr_wall_cols:
     move.w (%a4),%d1
     clamp_word ble
     move.w L_T(%a6),%d2
-    sub.w %d2,%d0                     | n
+    cmp.w %d2,%d0
     ble.s .Lnoceil
+    sub.w %d2,%d0                     | n
     move.l L_CB(%a6),%a0
     add.w %d2,%a0
     add.w %d2,%a0
@@ -306,9 +307,10 @@ fr_wall_cols:
 | Returns Z=1 on success or an empty span. On failure, C retries this column;
 | previous ceiling/upper writes are idempotent and clip has not been updated.
 .Ltex:
+    cmp.w %d3,%d2
+    bge .Ltex_ok
     move.w %d3,%d5
     sub.w %d2,%d5                    | n
-    ble .Ltex_ok
     cmpa.l #0,%a1
     beq .Ltex_bad
     add.l L_OFF(%a6),%d4             | base
