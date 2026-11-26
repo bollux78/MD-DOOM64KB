@@ -41,13 +41,37 @@ static const unsigned floors=B(0)|B(1)|B(2)|B(3)|B(4)|B(5)|B(7)|B(8)|B(10)|B(11)
 static const unsigned skies=B(2)|B(3)|B(12)|B(13)|B(14)|B(15)|B(16)|B(17);
 static uint8_t pair_phase(uint8_t c,int y){return (y&1)?(uint8_t)((c<<4)|(c>>4)):c;}
 static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t *sky,int pair){
-    for(int y=max(t,lo);y<min(b,hi);y++){
-        uint8_t v=sky?sky[x*H+y]:c;
-        f->pixels[pixel(x,y)]=pair?pair_phase(v,y):v;
-    }
+    const int y0=max(t,lo),y1=min(b,hi);
+    if(y0>=y1)return 0;
+    uint8_t *dst=f->pixels+pixel(x,y0);
+    if(sky){const uint8_t *s=sky+x*H;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[y];*dst=pair?pair_phase(v,y):v;}}
+    else if(pair){const uint8_t e=c,o=pair_phase(c,1);int y=y0;if(y&1){*dst=o;dst+=2;y++;}
+        for(;y+1<y1;y+=2,dst+=4){dst[0]=e;dst[2]=o;} if(y<y1)*dst=e;}
+    else for(int y=y0;y<y1;y++,dst+=2)*dst=c;
     return 0;
 }
+#ifdef __m68k__
+extern void fr_col_pair(uint8_t *dst,const uint8_t *src,const int16_t *sc,int32_t base,uint32_t n,uint32_t odd_first,const uint8_t *swap);
+#endif
+static uint8_t swap_lut[256];static int swap_ready;
 static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const int16_t *sc,int packed){
+    if(packed==2&&a.data&&a.size==8192){
+        /* Fast path. Scaler rows are affine in y (monotonic), so checking the two end rows bounds every row;
+         * otherwise fall through to the checked per-row loop below, which keeps the exact error behaviour. */
+        const int y0=max(t,lo),y1=min(b,hi);
+        if(y0>=y1)return 0;
+        const int32_t base=offset+a.origin,pa=base+sc[y0],pb=base+sc[y1-1];
+        if(pa>=0&&pa<24576&&pb>=0&&pb<24576){
+            uint8_t *dst=f->pixels+pixel(x,y0);
+            if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=(uint8_t)((i<<4)|(i>>4));swap_ready=1;}
+#ifdef __m68k__
+            fr_col_pair(dst,a.data,sc+y0,base,(uint32_t)(y1-y0),(uint32_t)(y0&1),swap_lut);
+#else
+            for(int y=y0;y<y1;y++,dst+=2){uint8_t c=a.data[(unsigned)(base+sc[y])&8191u];*dst=(y&1)?swap_lut[c]:c;}
+#endif
+            return 0;
+        }
+    }
     for(int y=max(t,lo);y<min(b,hi);y++){
         uint8_t c;
         if(packed==2){
@@ -81,19 +105,21 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     }
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
     uint32_t acc[4]={(uint32_t)e[0],(uint32_t)e[1],(uint32_t)e[2],(uint32_t)e[3]};
+    uint32_t inv_acc=(uint32_t)w->inv0,q_acc=w->u0; /* running inv0+step*j and u0+du*j (same modular values, no multiply per column) */
     for(int j=0;j<n;j++){
         int x=w->x0+j,t=f->top[x],b=f->bottom[x];
         /* e+d*j kept as a running 32-bit sum: only bits 8..23 are used, so the 64-bit product was redundant */
         const uint32_t c0=acc[0],c1=acc[1],c2=acc[2],c3=acc[3];
         acc[0]+=(uint32_t)d[0];acc[1]+=(uint32_t)d[1];acc[2]+=(uint32_t)d[2];acc[3]+=(uint32_t)d[3];
+        const uint32_t inv_j=inv_acc,q_j=q_acc;inv_acc+=(uint32_t)w->scale_step;q_acc+=w->du;
         if(t>H||b>H)return -3;
         if(t==0&&b==0)continue;
         int r[4];r[0]=s16bits(c0,8);r[1]=s16bits(c1,8);r[2]=s16bits(c2,8);r[3]=s16bits(c3,8);
-        uint16_t inv=(uint16_t)(w->inv0+w->scale_step*j);
+        uint16_t inv=(uint16_t)inv_j;
         int low=(v==1||v==3)?r[1]:r[2],fs=(v==0||v==2)?r[1]:(l?r[3]:r[2]);
         if(c)fill(f,x,t,b,t,r[0],(uint8_t)w->ceiling,has(skies,v)?sky:NULL,packed==2);
         if(w->textured&&(u||l)){
-            uint32_t q=w->u0+w->du*(uint32_t)j;
+            uint32_t q=q_j;
             if(!w->linear&&!inv)return -4;
             int offset=(int)((w->linear?q:q/inv)&0x1f80u)+sar(w->z,1);
             const int16_t *sc=scalers+(indices?indices[inv>>5]:(inv>>5))*H;

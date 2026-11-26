@@ -37,8 +37,9 @@ static int leaf_at(int16_t x,int16_t y){
 static int scene_init(void){
     if(!ready){if(frv_open(&vis,sc_frv,SC_FRV_BYTES))return -1;ready=1;}return 0;
 }
+static unsigned closed_scan; /* columns never reopen once top=bottom=0, so resume the scan where it stopped */
 static int closed(void){
-    for(unsigned x=0;x<160;x++)if(frame.top[x]||frame.bottom[x])return 0;
+    for(unsigned x=closed_scan;x<160;x++)if(frame.top[x]||frame.bottom[x]){closed_scan=x;return 0;}
     return 1;
 }
 static Asset texture_at(unsigned i){
@@ -52,7 +53,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     int16_t co=sc_trig[a*2],si=sc_trig[a*2+1];
     {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
-    fr_begin(&frame);
+    fr_begin(&frame);closed_scan=0;
     {   /* sky: hoist the per-pixel multiplies/divides/modulo (11520x) into 72 row and 160 column offsets */
         static uint32_t rowoff[72];static uint32_t coloff[160];
         for(unsigned j=0;j<72;j++)rowoff[j]=(uint32_t)((j*SC_SKYH/72)*SC_SKYW);
