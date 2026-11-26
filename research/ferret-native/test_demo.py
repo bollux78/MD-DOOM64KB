@@ -65,20 +65,20 @@ def emulate(core,out,mode,expected,maxframes):
         for frames in range(1,maxframes+1):
             lib.retro_run();m=mailbox()
             if m[0]!=0x46523031:continue
-            if m[2]&0x80000000:fatal=m[2];break
+            if m[2]&0x80000000:fatal={"stage":m[2],"exception_frame":C.string_at(ptr+0xf0a0,52).hex()};break
             if m[1]==0 or m[1]==last_seq:continue
-            last_seq=m[1]
             i=m[4]
             if i>=len(expected):fatal="invalid pose";break
             if i in seen:continue
             # If another DMA has started, skip this sample rather than
             # attribute a partially updated VRAM to the previous pose.
             if m[2]==4:continue
+            last_seq=m[1]
             e=expected[i]
             vram=bytearray()
             for a in range(0x20,0x20+23040,2):vram.extend((lib.retro_dread_vram_word(a)&65535).to_bytes(2,"big"))
             h=fnv(vram);ok=m[5]==e["hash"] and m[6]==e["tiles_hash"] and h==e["tiles_hash"] and m[7]==e["candidates"] and m[8]==e["projected"] and m[9]==e["errors"] and m[10]==e["closed"] and m[12]==0
-            if m[11]!=(1 if mode==0 else 0):ok=False
+            if m[11]!=0:ok=False # mandatory WRAM baseline, all cartridge configurations
             checks.append({"pose":i,"frame":frames,"elapsed_video_frames":frames-last,"match":ok,"fb":m[5],"expected_fb":e["hash"],"tile":m[6],"vram":h,"expected_tile":e["tiles_hash"],"sram":m[11],"errors":m[9],"candidates":m[7],"projected":m[8]})
             seen.add(i);last=frames
             if len(seen)==len(expected):break
