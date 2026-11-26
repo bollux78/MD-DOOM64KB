@@ -1,8 +1,8 @@
 name: Ferret directional PVS - independent exact rejection experiment
 on:
   pull_request:
-    branches: [research-ferret-r07-perf-claudio-20261126]
-    types: [opened, synchronize, reopened]
+    branches: [research-ferret-r09-reference-2dfd468]
+    types: [opened, synchronize, reopened, edited]
     paths: ['.github/workflows/ferret-angular-pvs.yml','research/ferret-native/**']
   workflow_dispatch:
 permissions:
