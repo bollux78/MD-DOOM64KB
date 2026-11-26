@@ -18,7 +18,7 @@ unsigned int retro_ap_rows[256][48],retro_ap_prev_pc;
 static unsigned int *retro_ap_row;
 static unsigned int retro_ap_phase;
 static unsigned char wall_written[65536], wall_mask[11520], wall_value[11520];
-unsigned char packed_mask[11520], packed_value[11520];
+unsigned char retro_packed_mask[11520], retro_packed_value[11520];
 extern unsigned int retro_research_captured;
 static void retro_ap_before(unsigned int pc) {
  if(!retro_ap_active)return;
@@ -45,8 +45,8 @@ static void retro_ap_before(unsigned int pc) {
  if(pc==0x7716e)r[9]++;
  if(pc==0x7731e || pc==0x773fc){r[pc==0x7731e?10:11]++;r[12]+=m68ki_read_16(0xff0018);}
  if(pc==0x7e368 && !retro_research_captured){
-   memcpy(packed_mask,wall_mask,11520);
-   memcpy(packed_value,wall_value,11520);
+   memcpy(retro_packed_mask,wall_mask,11520);
+   memcpy(retro_packed_value,wall_value,11520);
  }
  if(pc==0x7e13e){
    unsigned int base=m68ki_read_32(0xff2c72)&65535;
@@ -196,8 +196,8 @@ def profile(core,rom,pose,mode,frames=480):
         assert var("retro_research_captured").value
         def read(key,n):
             return bytes((C.c_ubyte*n).in_dll(lib,key))
-        mask=read("packed_mask",11520)
-        walls=read("packed_value",11520)
+        mask=read("retro_packed_mask",11520)
+        walls=read("retro_packed_value",11520)
         src=read("retro_research_completed_source",11520)
         vram=read("retro_research_completed_tiles",23040)
         mappings=[]
