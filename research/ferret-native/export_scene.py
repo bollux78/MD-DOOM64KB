@@ -36,7 +36,7 @@ def emit(f,ctype,n,values):
     f.write(f"static const {ctype} {n}[{len(values)}] = {{\n")
     for i in range(0,len(values),24):f.write(",".join(map(str,values[i:i+24]))+",\n")
     f.write("};\n")
-def export(wad,k,output,fsc,fixture):
+def export(wad,k,output,fsc,fixture,asymmetric=False):
     g=geometry(wad,k);r=Resources(wad);c=Compiler(g)
     cp=c.compile("occlusion96");dag,_=pack_dag(g,cp)
     assets=[];asset_index={};keys={}
@@ -84,6 +84,9 @@ def export(wad,k,output,fsc,fixture):
     spawn=[p for label,p,_,_ in allposes if label=="spawn"]
     zig=[p for label,p,_,_ in allposes if label=="zigzag-walkway"]
     poses=spawn[:4]+zig[:8] if zig else spawn[:4]
+    if asymmetric:
+        from asymmetric_fixture import POSES
+        poses=POSES
     assert poses
     rs,idx=rows(fsc)
     output.parent.mkdir(parents=True,exist_ok=True)
@@ -105,13 +108,17 @@ def export(wad,k,output,fsc,fixture):
         emit(f,"int16_t","sc_poses",(x for p in poses for x in p))
         emit(f,"int16_t","sc_trig",(v for a in range(360) for v in (round(math.cos(math.radians(90-a))*16384),round(math.sin(math.radians(90-a))*16384))))
         emit(f,"uint16_t","sc_palette",((round(b*7/255)<<9)|(round(g*7/255)<<5)|(round(r*7/255)<<1) for r,g,b in r.palette))
-    info={"fixture":fixture,"map":k,"poses":len(poses),"zigzag_poses":len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":4096*len(assets),"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
+    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":4096*len(assets),"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
     print("SCENE "+json.dumps(info),flush=True);return info
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=True)
     fixture=not a.wad;wad=a.wad or a.out/"fixture.wad"
-    if fixture:make_fixture(wad)
-    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture)
+    if a.asymmetric:
+        assert fixture,"asymmetric fixture cannot use external WAD"
+        from asymmetric_fixture import make
+        make(wad)
+    elif fixture:make_fixture(wad)
+    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric)
     (a.out/"scene.json").write_text(json.dumps(info,indent=2))
 if __name__=="__main__":main()
