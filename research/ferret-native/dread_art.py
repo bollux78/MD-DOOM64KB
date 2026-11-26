@@ -17,7 +17,12 @@ class DreadArt(Resources):
     def __init__(self,wad,g):
         super().__init__(wad)
         root=pathlib.Path(__file__).resolve().parents[2]
-        self.levels=json.loads((root/"experiments/DREAD_MD/d01/tools/gameplay_palette.json").read_text())
+        # FR_PALETTE: optional path to a 16-entry palette (DAC levels 0..7 per channel, entry 0 black);
+        # replaces the shared C7 palette and drops the reserved green accent.
+        import os
+        alt=os.environ.get("FR_PALETTE")
+        self.levels=json.loads(pathlib.Path(alt).read_text() if alt else (root/"experiments/DREAD_MD/d01/tools/gameplay_palette.json").read_text())
+        self.green_idx=None if alt else 12
         assert len(self.levels)==16 and self.levels[0]==[0,0,0]
         self.palette=[tuple(DAC[i] for i in p) for p in self.levels]
         self.rgb=[tuple(wad.get("PLAYPAL")[i:i+3]) for i in range(0,768,3)]
@@ -28,7 +33,7 @@ class DreadArt(Resources):
     @lru_cache(maxsize=65536)
     def encode(self,c,green=False):
         # Use saturated green only for green source texels in acid materials.
-        a,b,_,_=min((p for p in self.pairs if green or 12 not in p[:2]),key=lambda p:math.dist(c,p[2])+.08*p[3])
+        a,b,_,_=min((p for p in self.pairs if green or self.green_idx is None or self.green_idx not in p[:2]),key=lambda p:math.dist(c,p[2])+.08*p[3])
         if sum(self.palette[a])>sum(self.palette[b]):a,b=b,a
         return (a<<4)|b
     def raw(self,k):
