@@ -30,7 +30,9 @@ assert set(table.values()) == {1, 2, 3, 4, 9, 10, 11, 12}, set(table.values())
 source = root / "core/m68k/m68kcpu.c"
 patch = source.read_text()
 marker = "void m68k_run(unsigned int cycles)"
-after = "    USE_CYCLES(CYC_INSTRUCTION[REG_IR]);"
+after = ("    /* Execute instruction */\n"
+         "    m68ki_instruction_jump_table[REG_IR]();\n"
+         "    USE_CYCLES(CYC_INSTRUCTION[REG_IR]);")
 assert patch.count(marker) == patch.count(after) == 1
 decl = "static const unsigned char r10_kernel[] = {\n" + "".join(
     f"[0x{pc:x}]={kind},\n" for pc, kind in sorted(table.items())) + "};\n"
