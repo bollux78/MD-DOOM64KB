@@ -17,6 +17,31 @@ typedef struct {
 static int32_t s16(int64_t n) { uint32_t v=(uint32_t)n&65535u; return v>=32768u?(int32_t)v-65536:(int32_t)v; }
 /* bits [lo,lo+16) of a 32-bit value as a signed 16-bit result: identical to s16(sar(n,lo)) whenever lo+16<=32 */
 static int32_t s16bits(uint32_t v,unsigned lo){uint32_t t=(v>>lo)&65535u;return t>=32768u?(int32_t)t-65536:(int32_t)t;}
+/* Exact low-32-bit products without a __mulsi3 call: one MULS.W, or two MULU.W for 32x16. */
+static inline int32_t fr_muls16(int16_t a,int16_t b){
+#ifdef __m68k__
+    int32_t r=a;__asm__("muls.w %1,%0":"+d"(r):"dmi"(b):"cc");return r;
+#else
+    return (int32_t)a*b;
+#endif
+}
+static inline uint32_t fr_mulu16(uint16_t a,uint16_t b){
+#ifdef __m68k__
+    uint32_t r=a;__asm__("mulu.w %1,%0":"+d"(r):"dmi"(b):"cc");return r;
+#else
+    return (uint32_t)a*b;
+#endif
+}
+static inline uint32_t fr_mul32x16u(uint32_t a,uint16_t u){
+#ifdef __m68k__
+    uint32_t lo=(uint16_t)a,hi=a>>16;
+    __asm__("mulu.w %1,%0":"+d"(lo):"dmi"(u):"cc");
+    __asm__("mulu.w %1,%0":"+d"(hi):"dmi"(u):"cc");
+    return lo+(hi<<16);
+#else
+    return a*u;
+#endif
+}
 static int32_t min(int32_t a,int32_t b){return a<b?a:b;}
 static int32_t max(int32_t a,int32_t b){return a>b?a:b;}
 /* Both target and host GCC implement arithmetic right shift; assert that contract. */
@@ -44,6 +69,7 @@ static uint8_t pair_phase(uint8_t c,int y){return (y&1)?(uint8_t)((c<<4)|(c>>4))
 /* Optional direct sky: when set, sky pixel (x,y) = fr_sky_column(x)[fr_sky_rows[y]], read straight from the
  * sky texture (no 160x72 buffer). Otherwise the caller's buffer sky+x*H is used. */
 static const uint8_t *(*fr_sky_column)(int x);static const uint16_t *fr_sky_rows;
+static const uint8_t *fr_sky_cols[160];static int fr_sky_cols_ok; /* lazily built for the assembly draw pass; reset per pose */
 static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t *sky,int pair){
     const int y0=max(t,lo),y1=min(b,hi);
     if(y0>=y1)return 0;
@@ -144,6 +170,16 @@ static uint32_t div_u16(uint32_t n,uint16_t d){
 #endif
     return n/d;
 }
+#ifdef __m68k__
+/* Context for wallcols.s (offsets checked below). */
+typedef struct {
+    const void *recs;int32_t ncol;uint16_t *top,*bottom,*depth;uint8_t *pixels;int32_t x0;uint32_t flags;
+    uint16_t lowo,fso;uint8_t ce,co,fe,fo;int32_t zsh;const int16_t *scal;const uint8_t *ind;
+    const uint8_t *udat;int32_t uorg;const uint8_t *ldat;int32_t lorg;const uint8_t *const *skyc;const uint16_t *skyr;const uint8_t *swap;
+} WallCtx;
+typedef char wallctx_layout[(offsetof(WallCtx,flags)==28&&offsetof(WallCtx,ce)==36&&offsetof(WallCtx,zsh)==40&&offsetof(WallCtx,udat)==52&&offsetof(WallCtx,skyc)==68&&offsetof(WallCtx,swap)==76)?1:-1];
+extern int fr_wall_cols(const WallCtx *k,int m);
+#endif
 static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky,int packed,const uint8_t *indices){
     int v=w->variant,n=w->width;
     if(v<0||v>17||n<=0||w->x0<0||w->x0>=W||n>W-w->x0)return -1;
@@ -152,7 +188,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     int32_t e[4],d[4];
     for(int k=0;k<4;k++){
         int32_t h=w->heights[k]-w->z;
-        int32_t a=sar(w->inv0,5)*h,b=sar(w->inv1,5)*h;
+        int32_t a=(int32_t)fr_mul32x16u((uint32_t)h,(uint16_t)sar(w->inv0,5)),b=(int32_t)fr_mul32x16u((uint32_t)h,(uint16_t)sar(w->inv1,5)); /* inv>>5 <= 2047 */
         e[k]=a+9344;d[k]=(b-a)/n;
     }
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
@@ -164,22 +200,51 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     static struct {int16_t r[4];uint16_t inv;uint8_t j;uint32_t q;} col[W];
     int ncol=0,bad=0; /* bad: an invalid column was met; draw the columns before it, then return -3 as before */
     {
+        /* Most columns of a projected wall are already closed. Scan top/bottom two columns at a time and
+         * only touch the sums at open columns: the sums jump (same modular values) after a closed run. */
         uint32_t a0=acc[0],a1=acc[1],a2=acc[2],a3=acc[3],ia=inv_acc,qa=q_acc;
         const uint32_t d0=(uint32_t)d[0],d1=(uint32_t)d[1],d2=(uint32_t)d[2],d3=(uint32_t)d[3];
         const uint32_t ds=(uint32_t)w->scale_step,dq=w->du;
         const uint16_t *tp=f->top+w->x0,*bp=f->bottom+w->x0;
-        for(int j=0;j<n;j++){
-            const int t=tp[j],b=bp[j];
-            if(t>H||b>H){bad=1;break;}
-            if(t|b){
-                col[ncol].r[0]=(int16_t)(a0>>8);col[ncol].r[1]=(int16_t)(a1>>8);
-                col[ncol].r[2]=(int16_t)(a2>>8);col[ncol].r[3]=(int16_t)(a3>>8);
-                col[ncol].inv=(uint16_t)ia;col[ncol].q=qa;col[ncol].j=(uint8_t)j;ncol++;
-            }
-            a0+=d0;a1+=d1;a2+=d2;a3+=d3;ia+=ds;qa+=dq;
-        }
+        int jn=0; /* sums hold column jn */
+#define FR_OPEN_COL(J) do{ const int jj_=(J); const int t_=tp[jj_],b_=bp[jj_]; \
+            if(t_>H||b_>H){bad=1;goto pass1_end;} \
+            if(t_|b_){ \
+                if(jj_!=jn){const uint32_t u_=(uint32_t)jj_; \
+                    a0=(uint32_t)e[0]+fr_mul32x16u(d0,(uint16_t)u_);a1=(uint32_t)e[1]+fr_mul32x16u(d1,(uint16_t)u_); \
+                    a2=(uint32_t)e[2]+fr_mul32x16u(d2,(uint16_t)u_);a3=(uint32_t)e[3]+fr_mul32x16u(d3,(uint16_t)u_); \
+                    ia=(uint32_t)w->inv0+fr_mul32x16u(ds,(uint16_t)u_);qa=w->u0+fr_mul32x16u(dq,(uint16_t)u_);} \
+                col[ncol].r[0]=(int16_t)(a0>>8);col[ncol].r[1]=(int16_t)(a1>>8); \
+                col[ncol].r[2]=(int16_t)(a2>>8);col[ncol].r[3]=(int16_t)(a3>>8); \
+                col[ncol].inv=(uint16_t)ia;col[ncol].q=qa;col[ncol].j=(uint8_t)jj_;ncol++; \
+                a0+=d0;a1+=d1;a2+=d2;a3+=d3;ia+=ds;qa+=dq;jn=jj_+1; } }while(0)
+        int j=0;
+        for(;j<n;j++)FR_OPEN_COL(j);
+#undef FR_OPEN_COL
     }
+pass1_end:;
+#ifdef __m68k__
+    /* Assembly draw pass for the paired-art path; any column it cannot handle comes back to the C body below. */
+    int use_asm=0;WallCtx k;
+#ifdef FR_WALLASM /* opt-in: measured slower than GCC's code for this pass (R08 notes) */
+    if(packed==2&&(!has(skies,v)||(fr_sky_column&&fr_sky_rows))){
+        if(has(skies,v)&&!fr_sky_cols_ok){for(int i=0;i<W;i++)fr_sky_cols[i]=fr_sky_column(i);fr_sky_cols_ok=1;}
+        if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=(uint8_t)((i<<4)|(i>>4));swap_ready=1;}
+        k.recs=col;k.ncol=ncol;k.top=f->top+w->x0;k.bottom=f->bottom+w->x0;k.depth=f->depth+w->x0;k.pixels=f->pixels;k.x0=w->x0;
+        k.flags=(uint32_t)(c|u<<1|l<<2|fl<<3|has(skies,v)<<4|(v<=3)<<5|(v==11||v==17)<<6|(w->textured!=0)<<7|(w->linear!=0)<<8);
+        k.lowo=(v==1||v==3)?2:4;k.fso=(v==0||v==2)?2:(l?6:4);
+        k.ce=(uint8_t)w->ceiling;k.co=pair_phase((uint8_t)w->ceiling,1);k.fe=(uint8_t)w->floor;k.fo=pair_phase((uint8_t)w->floor,1);
+        k.zsh=sar(w->z,1);k.scal=scalers;k.ind=indices;
+        k.udat=(upper.data&&upper.size==8192)?upper.data:0;k.uorg=upper.origin;
+        k.ldat=(lower.data&&lower.size==8192)?lower.data:0;k.lorg=lower.origin;
+        k.skyc=fr_sky_cols;k.skyr=fr_sky_rows;k.swap=swap_lut;use_asm=1;
+    }
+#endif
+#endif
     for(int m=0;m<ncol;m++){
+#ifdef __m68k__
+        if(use_asm){int mm=fr_wall_cols(&k,m);if(mm>=ncol)break;m=mm;}
+#endif
         const int j=col[m].j;
         int x=w->x0+j,t=f->top[x],b=f->bottom[x];
         int r[4];r[0]=col[m].r[0];r[1]=col[m].r[1];r[2]=col[m].r[2];r[3]=col[m].r[3];
@@ -238,7 +303,8 @@ static int divword(int32_t a,int32_t b,int32_t *out){
     int64_t q=(int64_t)a/b;if(q<-32768||q>32767)return -1;
     *out=(int32_t)q;return 0;
 }
-#define DIVSUB(dst,delta,num,den) do {int32_t q_;if(divword(s16(delta)*(num),(den),&q_))return -5;(dst)=s16((dst)-q_);}while(0)
+/* delta and num are 16-bit values (s16 results): one MULS.W */
+#define DIVSUB(dst,delta,num,den) do {int32_t q_;if(divword(fr_muls16((int16_t)s16(delta),(int16_t)(num)),(den),&q_))return -5;(dst)=s16((dst)-q_);}while(0)
 int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t u0,int32_t u1,WallJob *w){
     int textured=near&1;int32_t l0=s16(x0+z0),r1,l1,r0,den,q0,q1;
     w->textured=textured;w->linear=0;w->u0=w->du=0;
@@ -263,7 +329,7 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
     if(w->inv0>65535||w->inv1>65535||divword(w->inv1-w->inv0,w->width,&w->scale_step))return -5;
     if(textured){
         uint32_t a=((uint32_t)u0<<7)&65535u,b=((uint32_t)u1<<7)&65535u;
-        uint32_t p0=a*(uint32_t)w->inv0,p1=b*(uint32_t)w->inv1,mi=(w->inv0+w->inv1)/2;
+        uint32_t p0=fr_mulu16((uint16_t)a,(uint16_t)w->inv0),p1=fr_mulu16((uint16_t)b,(uint16_t)w->inv1),mi=(w->inv0+w->inv1)/2; /* a,b,inv < 65536 */
         if(!mi)return -5;
         uint32_t ap=div_u16((p0>>1)+(p1>>1)+(p0&p1&1u),(uint16_t)mi),mu=(a+b)/2;
         if(ap>65535)return -5;
@@ -279,8 +345,8 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
 void fr_transform(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t co,int32_t si,int32_t *tx,int32_t *tz){
     int32_t dx=s16(s16((int64_t)x*8)-cx),dy=s16(s16((int64_t)y*8)-cy);
     /* |dx|,|dy|<=32768 and |co|,|si|<=16384: each product fits 31 bits; only bits 14..29 of the sum are used, so wrapping 32-bit math is exact */
-    *tx=s16bits((uint32_t)(dx*co)-(uint32_t)(dy*si),14);
-    *tz=s16bits((uint32_t)(dx*si)+(uint32_t)(dy*co),14);
+    *tx=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)co)-(uint32_t)fr_muls16((int16_t)dy,(int16_t)si),14);
+    *tz=s16bits((uint32_t)fr_muls16((int16_t)dx,(int16_t)si)+(uint32_t)fr_muls16((int16_t)dy,(int16_t)co),14);
 }
 
 

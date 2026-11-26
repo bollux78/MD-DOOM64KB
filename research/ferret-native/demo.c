@@ -74,7 +74,7 @@ static void sky_setup(unsigned a){
 #else
     sky_base=(a*1024u/360u)%256u;
 #endif
-    fr_sky_rows=sky_rows;fr_sky_column=sky_column;
+    fr_sky_rows=sky_rows;fr_sky_column=sky_column;fr_sky_cols_ok=0;
 }
 /* Cache transformed shared vertices for one pose; no approximation or
  * visibility change. 5 bytes per vertex, bounded by actual scene size. */
