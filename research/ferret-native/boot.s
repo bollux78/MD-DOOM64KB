@@ -20,8 +20,7 @@ _start:
     bra.s 1b
 2:
     jsr md_main
-trap:
-    move.l #0x800000ff,0xfff008
+    move.l #0x80000100,0xfff008
 3:
     bra.s 3b
 
@@ -36,5 +35,8 @@ vcommon:
     moveq #11,%d0
 1:  move.l (%sp)+,(%a0)+
     dbra %d0,1b
-    move.l #0x800000ff,0xfff008
+    moveq #0,%d0
+    move.w 0xfff0a0,%d0
+    ori.l #0x80000200,%d0
+    move.l %d0,0xfff008
 2:  bra.s 2b
