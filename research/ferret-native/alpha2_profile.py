@@ -8,13 +8,13 @@ P=pathlib.Path
 sys.path.insert(0,str(P(__file__).resolve().parent.parent/"ferret-round5"))
 from capture import locate,SHA
 from test_demo import Info
-COLS=("start_frame","start_cycle","x8","y8","z","angle","cell","records","project","after_transform","dispatch_linear","dispatch_perspective","dispatch_width","wall_scaler_entries","sprite_scaler_entries","visibility_cycles","projection_cycles","kernel_cycles","wall_scaler_cycles","sprite_cycles","sprite_scaler_cycles","conversion_cycles","other_cycles","list_complete","walls_end_frame","walls_end_cycle","sprites_end_frame","sprites_end_cycle","direct_first_frame","direct_first_cycle","direct_last_frame","direct_last_cycle","direct_words","direct_calls","sram_convert_calls","bad_list","render_end_frame","render_end_cycle","total_instructions","scaler_instructions")
+COLS=("start_frame","start_cycle","x8","y8","z","angle","cell","records","project","after_transform","dispatch_linear","dispatch_perspective","dispatch_width","wall_scaler_entries","sprite_scaler_entries","visibility_cycles","projection_cycles","kernel_cycles","wall_scaler_cycles","sprite_cycles","sprite_scaler_cycles","conversion_cycles","other_cycles","list_complete","walls_end_frame","walls_end_cycle","sprites_end_frame","sprites_end_cycle","direct_first_frame","direct_first_cycle","direct_last_frame","direct_last_cycle","direct_words","direct_calls","sram_convert_calls","bad_list","render_end_frame","render_end_cycle","total_instructions","scaler_instructions","wall_scale_pixels","wall_scale_master_cycles","wall_scale_dbf","wall_scale_jmp","wall_scale_nop","wall_scale_other","wall_scale_entries","wall_scale_entry_row_sum")
 def patch(root):
     p=root/"core/m68k/m68kcpu.c";s=p.read_text()
     decl=r"""
 /* Werk independent profile: aggregate only, no ROM bytes in report. */
 unsigned int retro_ap_active,retro_ap_n,retro_ap_overflow,retro_ap_direct;
-unsigned int retro_ap_rows[256][40],retro_ap_prev_pc;
+unsigned int retro_ap_rows[256][48],retro_ap_prev_pc;
 static unsigned int *retro_ap_row;
 static unsigned int retro_ap_phase;
 static void retro_ap_before(unsigned int pc) {
@@ -50,12 +50,24 @@ static void retro_ap_before(unsigned int pc) {
     if(retro_ap_phase==2)r[13]++;
     else if(retro_ap_phase==3)r[14]++;
  }
+ if(pc>=0x4b992 && pc<0x6d4ae && !(retro_ap_prev_pc>=0x4b992 && retro_ap_prev_pc<0x6d4ae)){
+    r[46]++;r[47]+=((pc-0x4b992)%868)/12;
+ }
  retro_ap_prev_pc=pc;
 }
 static void retro_ap_after(unsigned int pc,unsigned int cycles) {
  if(!retro_ap_active||!retro_ap_row)return;
  unsigned int *r=retro_ap_row;unsigned int bin=22;
  r[38]++;
+ if(pc>=0x4b992 && pc<0x6d4ae){
+    unsigned int off=(pc-0x4b992)%868;
+    r[41]+=cycles;
+    if(off<864 && off%12==8)r[40]++;
+    else if(off<864 && off%12==0)r[42]++;
+    else if(off==864 || off%12==4)r[43]++;
+    else if(off==866 || off%12==6)r[44]++;
+    else r[45]++;
+ }
  if(pc>=0x21b1c&&pc<0x6d4ae){
     r[39]++;
     if(retro_ap_phase==2)bin=18;else if(retro_ap_phase==3)bin=20;
@@ -119,7 +131,7 @@ def profile(core,rom,pose,mode,frames=480):
         for off,val,n in [(0x31e6,x*65536,4),(0x31e2,y*65536,4),(0x31de,z*65536,4),(0x31da,0,4),(0x31d6,0,4),(0x31d2,0,4),(0x31ca,a<<8,2),(0x31cc,a,2),(0x1a32,x*8,2),(0x1a30,y*8,2),(0x1a2e,z,2),(0x31c6,0,4)]:put(off,val,n)
         step(120)
         var("retro_ap_n").value=0;var("retro_ap_overflow").value=0
-        arr=(C.c_uint*(256*40)).in_dll(lib,"retro_ap_rows")
+        arr=(C.c_uint*(256*48)).in_dll(lib,"retro_ap_rows")
         C.memset(C.addressof(arr),0,C.sizeof(arr))
         var("retro_ap_active").value=1;var("retro_trace_active").value=1
         start=var("retro_trace_dmas").value
@@ -127,7 +139,7 @@ def profile(core,rom,pose,mode,frames=480):
         var("retro_ap_active").value=0;var("retro_trace_active").value=0
         count=var("retro_ap_n").value
         assert count>10 and not var("retro_ap_overflow").value,count
-        rows=[dict(zip(COLS,arr[i*40:(i+1)*40])) for i in range(count-1)]
+        rows=[dict(zip(COLS,arr[i*48:(i+1)*48])) for i in range(count-1)]
         clock=53693175;period=896040
         signed=lambda v:v-65536 if v>=32768 else v
         tick=lambda f,c:f*period+c
@@ -149,6 +161,11 @@ def profile(core,rom,pose,mode,frames=480):
         cycles={k:sum(r[k] for r in valid) for k in COLS[15:23]}
         total=sum(cycles.values())
         result={"mode":mode,"camera":pose,"complete_frames":len(valid),"means":means,"fps_from_render_interval":1000/means["render_interval_ms"],"direct_bursts":len(direct),"direct_burst_mean_interval_ms":statistics.mean(intervals) if intervals else None,"direct_burst_fps":1000/statistics.mean(intervals) if intervals else None,"dma_groups":[{"destination":a,"words":b,"events":n} for (a,b),n in groups.most_common(10)],"pc_region_percent":{k:round(v*100/total,2) for k,v in cycles.items()},"actual_cameras":sorted({(r["x8"],r["y8"],r["z"],r["angle"],r["cell"]) for r in valid}),"scope":"render-entry cadence and direct-conversion write bursts; PC bins exclusive, not inclusive subroutine times; projection counts and kernel dispatch are actual executed entry points; scaler entries count transitions into generated code, not all flat columns"}
+        sc={k:sum(r[k] for r in valid) for k in COLS[40:48]}
+        sc["cpu_cycles_per_byte"]=sc["wall_scale_master_cycles"]/7/max(1,sc["wall_scale_pixels"])
+        sc["mean_entry_row"]=sc["wall_scale_entry_row_sum"]/max(1,sc["wall_scale_entries"])
+        result["wall_scaler_exact"]=sc
+        assert sc["wall_scale_pixels"] and sc["wall_scale_other"]==0,sc
         assert mode!=1 or len(direct)>=8,("no-SRAM direct bursts",len(direct))
         return result,valid
     finally:lib.retro_unload_game();lib.retro_deinit()
