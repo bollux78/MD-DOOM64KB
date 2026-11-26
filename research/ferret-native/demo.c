@@ -16,7 +16,11 @@ static FRV vis;
 static int ready;
 typedef struct {uint32_t candidates,projected,errors,closed,hash,tiles_hash,leaf,tests;} DemoStats;
 static uint32_t hash_bytes(const uint8_t *p,uint32_t n){
-    uint32_t h=2166136261u;while(n--)h=(h^*p++)*16777619u;return h;
+#ifdef FR_BENCH
+    (void)p;(void)n;return 0; /* benchmark build: no diagnostic hashing (verification builds keep it) */
+#else
+    uint32_t h=2166136261u;while(n--){h^=*p++;h=(h<<24)+(h<<8)+(h<<7)+(h<<4)+(h<<1)+h;} /* == h*16777619u without a __mulsi3 call per byte */return h;
+#endif
 }
 static int leaf_at(int16_t x,int16_t y){
     uint16_t node=SC_NODES?SC_NODES-1:32768u;
@@ -48,8 +52,13 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     for(unsigned i=0;i<11520;i++)frame.pixels[i]=0;
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);
-    for(unsigned i=0;i<160;i++)for(unsigned j=0;j<72;j++)
-        sky[i*72+j]=sc_sky[(j*SC_SKYH/72)*SC_SKYW+(a*SC_SKYW/360+i*SC_SKYW/640)%SC_SKYW];
+    {   /* sky: hoist the per-pixel multiplies/divides/modulo (11520x) into 72 row and 160 column offsets */
+        static uint32_t rowoff[72];static uint32_t coloff[160];
+        for(unsigned j=0;j<72;j++)rowoff[j]=(uint32_t)((j*SC_SKYH/72)*SC_SKYW);
+        const unsigned base=a*SC_SKYW/360;
+        for(unsigned i=0;i<160;i++)coloff[i]=(uint32_t)((base+i*SC_SKYW/640)%SC_SKYW);
+        for(unsigned i=0;i<160;i++){uint8_t *d=&sky[i*72];const unsigned c=coloff[i];for(unsigned j=0;j<72;j++)d[j]=sc_sky[rowoff[j]+c];}
+    }
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
     int cell=leaf_at(x,y);if(cell<0)return -2;
     s->leaf=(uint32_t)cell;

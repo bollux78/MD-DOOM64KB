@@ -6,7 +6,7 @@ P=pathlib.Path
 def main():
     p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("gcc",type=P);p.add_argument("--label",default="FERRET-MD R01");a=p.parse_args()
     src=P(__file__).resolve().parent;out=a.out.resolve();gcc=a.gcc.resolve()
-    flags=["-m68000","-std=c99","-O2","-ffreestanding","-fno-builtin","-ffunction-sections","-fdata-sections","-fno-common","-fno-pic","-fno-unwind-tables","-fno-asynchronous-unwind-tables"]
+    flags=["-m68000","-std=c99","-O2","-ffreestanding","-fno-builtin","-ffunction-sections","-fdata-sections","-fno-common","-fno-pic","-fno-unwind-tables","-fno-asynchronous-unwind-tables",*__import__("os").environ.get("FR_EXTRA_CFLAGS","").split()]
     def run(args):subprocess.run([str(x) for x in args],check=True)
     run(["cc","-std=c99","-O2","-fPIC","-shared","-I",out,src/"demo.c","-o",out/"demo-host.so"])
     run([gcc,*flags,"-I",out,"-c",src/"demo.c","-o",out/"demo.o"])
