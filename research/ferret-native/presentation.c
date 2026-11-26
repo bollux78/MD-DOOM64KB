@@ -27,6 +27,7 @@ size_t fr_tiles(const uint8_t *fb,uint8_t *tiles,size_t cap){
     /* Same mapping as the byte path. For tile column tx the four bytes of a tile row come from
      * fb[(2tx)*144+2y .. +1] and fb[(2tx+1)*144+2y .. +1], i.e. two aligned 16-bit words, and each
      * logical row is shown twice. 68000: 2 word reads + 2 long writes per tile row. */
+    { extern size_t fr_tiles68k(const uint8_t *fb,uint8_t *tiles); return fr_tiles68k(fb,tiles); } /* colpair.s */
     uint32_t *dst=(uint32_t *)tiles;
     for(unsigned ty=0;ty<18;ty++){
         const uint16_t *c0=(const uint16_t *)(fb+ty*8);   /* 2*y with y=ty*4 */
