@@ -146,22 +146,32 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
     uint32_t acc[4]={(uint32_t)e[0],(uint32_t)e[1],(uint32_t)e[2],(uint32_t)e[3]};
     uint32_t inv_acc=(uint32_t)w->inv0,q_acc=w->u0; /* running inv0+step*j and u0+du*j (same modular values, no multiply per column) */
-    int jn=0; /* the running sums below hold the values for column jn */
-    for(int j=0;j<n;j++){
-        int x=w->x0+j,t=f->top[x],b=f->bottom[x];
-        if(t>H||b>H)return -3;
-        if(t==0&&b==0)continue;   /* occluded column: nothing to update */
-        if(j!=jn){                /* first open column after occluded ones: jump the sums (same modular values) */
-            const uint32_t jj=(uint32_t)j;
-            for(int k=0;k<4;k++)acc[k]=(uint32_t)e[k]+(uint32_t)d[k]*jj;
-            inv_acc=(uint32_t)w->inv0+(uint32_t)w->scale_step*jj;q_acc=w->u0+w->du*jj;
+    /* Pass 1: a tight loop that only advances the six running sums and records, for each open column,
+     * the four heights, inv and q. Pass 2 draws from the records. Splitting keeps the sums in registers
+     * (one combined loop made GCC spill them to the stack on every column). Same values, same order. */
+    static struct {int16_t r[4];uint16_t inv;uint8_t j;uint32_t q;} col[W];
+    int ncol=0,bad=0; /* bad: an invalid column was met; draw the columns before it, then return -3 as before */
+    {
+        uint32_t a0=acc[0],a1=acc[1],a2=acc[2],a3=acc[3],ia=inv_acc,qa=q_acc;
+        const uint32_t d0=(uint32_t)d[0],d1=(uint32_t)d[1],d2=(uint32_t)d[2],d3=(uint32_t)d[3];
+        const uint32_t ds=(uint32_t)w->scale_step,dq=w->du;
+        const uint16_t *tp=f->top+w->x0,*bp=f->bottom+w->x0;
+        for(int j=0;j<n;j++){
+            const int t=tp[j],b=bp[j];
+            if(t>H||b>H){bad=1;break;}
+            if(t|b){
+                col[ncol].r[0]=(int16_t)(a0>>8);col[ncol].r[1]=(int16_t)(a1>>8);
+                col[ncol].r[2]=(int16_t)(a2>>8);col[ncol].r[3]=(int16_t)(a3>>8);
+                col[ncol].inv=(uint16_t)ia;col[ncol].q=qa;col[ncol].j=(uint8_t)j;ncol++;
+            }
+            a0+=d0;a1+=d1;a2+=d2;a3+=d3;ia+=ds;qa+=dq;
         }
-        jn=j+1;
-        /* e+d*j kept as a running 32-bit sum: only bits 8..23 are used, so the 64-bit product was redundant */
-        const uint32_t c0=acc[0],c1=acc[1],c2=acc[2],c3=acc[3];
-        acc[0]+=(uint32_t)d[0];acc[1]+=(uint32_t)d[1];acc[2]+=(uint32_t)d[2];acc[3]+=(uint32_t)d[3];
-        const uint32_t inv_j=inv_acc,q_j=q_acc;inv_acc+=(uint32_t)w->scale_step;q_acc+=w->du;
-        int r[4];r[0]=s16bits(c0,8);r[1]=s16bits(c1,8);r[2]=s16bits(c2,8);r[3]=s16bits(c3,8);
+    }
+    for(int m=0;m<ncol;m++){
+        const int j=col[m].j;
+        int x=w->x0+j,t=f->top[x],b=f->bottom[x];
+        int r[4];r[0]=col[m].r[0];r[1]=col[m].r[1];r[2]=col[m].r[2];r[3]=col[m].r[3];
+        const uint32_t inv_j=col[m].inv,q_j=col[m].q;
         uint16_t inv=(uint16_t)inv_j;
         int low=(v==1||v==3)?r[1]:r[2],fs=(v==0||v==2)?r[1]:(l?r[3]:r[2]);
         if(c)fill(f,x,t,b,t,r[0],(uint8_t)w->ceiling,has(skies,v)?sky:NULL,packed==2);
@@ -181,7 +191,7 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
             if((c&&b<et)||(fl&&t>=eb)){f->top[x]=f->bottom[x]=0;f->depth[x]=inv;}
         }
     }
-    return 0;
+    return bad?-3:0;
 }
 int fr_wall(Frame *f,const WallJob *w,Asset upper,Asset lower,const int16_t *scalers,const uint8_t *sky){
     return wall_impl(f,w,upper,lower,scalers,sky,0,NULL);
