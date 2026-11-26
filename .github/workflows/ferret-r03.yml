@@ -1,0 +1,147 @@
+name: Ferret R03 - real E1M1 art and paired-pixel color
+on:
+  pull_request:
+    branches: [research-ferret-r02-validation-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r03.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r03-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r03-art-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare private visual test directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r03/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r03-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+          wad="$(find "$root" -type f -iname doom1.wad -print -quit)"
+          if [ -z "$wad" ]; then wad="$HOME/Projetos/doom-md/assets/wads/doom1.wad"; fi
+          test -s "$wad"
+          echo "WAD=$wad" >> "$GITHUB_ENV"
+          test -s "$root/backend/45715146307/scaler.fsc"
+      - name: Build E1M1 art and prepare actual private playable ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          fsc="$ROOT/backend/45715146307/scaler.fsc"
+          python3 research/ferret-native/export_scene.py "$PRIVATE/art" --wad "$WAD" --fsc "$fsc" --art
+          python3 research/ferret-native/build_demo.py "$PRIVATE/art" "$GCC68" --label "FERRET-MD R03 E1M1 ART"
+          cp "$PRIVATE/art/art-report.json" "$OUT/public/art-report.json"
+          cp "$PRIVATE/art/scene.json" "$OUT/public/art-scene.json"
+          cp "$PRIVATE/art/build.json" "$OUT/public/art-build.json"
+          play="$ROOT/playtest/R03-$GITHUB_RUN_ID"
+          mkdir -p "$play"
+          cp "$PRIVATE/art/FERRET-MD-R01.bin" "$play/FERRET-MD-R03-E1M1.bin"
+          printf 'PRIVATE ROM: %s\n' "$play/FERRET-MD-R03-E1M1.bin"
+      - name: Build legacy E1M1 and asymmetric control for regression
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          fsc="$ROOT/backend/45715146307/scaler.fsc"
+          python3 research/ferret-native/export_scene.py "$PRIVATE/legacy" --wad "$WAD" --fsc "$fsc"
+          python3 research/ferret-native/build_demo.py "$PRIVATE/legacy" "$GCC68" --label "FERRET-MD R03 LEGACY"
+          python3 research/ferret-native/export_scene.py "$PRIVATE/asym" --asymmetric
+          python3 research/ferret-native/build_demo.py "$PRIVATE/asym" "$GCC68"
+          python3 research/ferret-native/asymmetric_fixture.py "$PRIVATE/asym"
+          play="$ROOT/playtest/R03-$GITHUB_RUN_ID"
+          mkdir -p "$play"
+          cp "$PRIVATE/legacy/FERRET-MD-R01.bin" "$play/FERRET-MD-R03-E1M1-LEGACY.bin"
+          cp "$PRIVATE/asym/geometry-oracle.json" "$OUT/public/geometry-oracle.json"
+      - name: Compare geometry and paired color against legacy and numeric Alpha2 baseline
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/compare_art.py "$PRIVATE/legacy" "$PRIVATE/art" "$ROOT/round5/45657627918" "$OUT/public/art-comparison.json"
+          python3 - "$ROOT/r02/45808741817/doom1" "$PRIVATE/legacy" <<'PY'
+          import pathlib,sys,hashlib
+          old,new=map(pathlib.Path,sys.argv[1:])
+          files=sorted(new.glob("expected-tiles-*.bin"))
+          assert len(files)==12
+          compared=0
+          for f in files:
+              p=old/f.name
+              if p.is_file():
+                  assert p.read_bytes()==f.read_bytes(),f"R02 legacy output regression: {f.name}"
+                  compared+=1
+          print("R02 exact legacy tiles matched:",compared,"/12; missing prior files are not a pass")
+          assert compared==12
+          PY
+      - name: Build pinned Genesis Plus GX
+        if: always() && env.OUT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Test real E1M1 in all cartridge configurations
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          rc=0
+          for scene in art legacy asym; do
+            test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
+            modes="0 1 2"
+            if [ "$scene" != art ]; then modes="1"; fi
+            for mode in $modes; do
+              python3 research/ferret-native/test_demo.py "$PRIVATE/$scene" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/$scene-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+            done
+          done
+          exit "$rc"
+      - name: Actual MAME images and exact screen comparison
+        if: always() && env.PRIVATE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mame="$(command -v mame)"
+          export SDL_VIDEODRIVER=dummy
+          rc=0
+          for scene in art legacy; do
+            test -s "$PRIVATE/$scene/FERRET-MD-R01.bin" || { rc=1; continue; }
+            export FR_POSES=12 FR_SCREEN_DIR="$PRIVATE/$scene"
+            timeout 180 "$mame" genesis -cart "$PRIVATE/$scene/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 200 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/$scene/mame.log" 2>&1 || true
+            grep -E 'PUBLISHED|BOOT|FATAL|Error|error' "$PRIVATE/$scene/mame.log" > "$OUT/public/$scene-mame.log" || true
+            python3 research/ferret-native/check_mame.py "$PRIVATE/$scene" "$OUT/public/$scene-mame.log" "$OUT/public/$scene-mame.json" || rc=1
+            python3 research/ferret-native/check_screen.py "$PRIVATE/$scene" "$OUT/public/$scene-screen.json" || rc=1
+          done
+          play="$ROOT/playtest/R03-$GITHUB_RUN_ID"
+          mkdir -p "$play/art-screens" "$play/legacy-screens"
+          for scene in art legacy; do
+            find "$PRIVATE/$scene" -maxdepth 1 -name 'pose-*.png' -exec cp {} "$play/$scene-screens/" \;
+          done
+          exit "$rc"
+      - name: Publish numeric reports only, no Doom assets
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r03-numeric-results
+          path: |
+            ${{ runner.temp }}/ferret-r03-${{ github.run_id }}/public/*
+          if-no-files-found: warn
