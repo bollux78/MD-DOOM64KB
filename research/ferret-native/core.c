@@ -40,13 +40,15 @@ static const unsigned lowers=B(1)|B(3)|B(5)|B(8)|B(11)|B(14)|B(17);
 static const unsigned floors=B(0)|B(1)|B(2)|B(3)|B(4)|B(5)|B(7)|B(8)|B(10)|B(11)|B(13)|B(14)|B(16)|B(17);
 static const unsigned skies=B(2)|B(3)|B(12)|B(13)|B(14)|B(15)|B(16)|B(17);
 static uint8_t pair_phase(uint8_t c,int y){return (y&1)?(uint8_t)((c<<4)|(c>>4)):c;}
-/* Optional lazy sky: when set, returns the 72-byte column x (built on first use); otherwise sky+x*H is used. */
-static const uint8_t *(*fr_sky_column)(int x);
+/* Optional direct sky: when set, sky pixel (x,y) = fr_sky_column(x)[fr_sky_rows[y]], read straight from the
+ * sky texture (no 160x72 buffer). Otherwise the caller's buffer sky+x*H is used. */
+static const uint8_t *(*fr_sky_column)(int x);static const uint16_t *fr_sky_rows;
 static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t *sky,int pair){
     const int y0=max(t,lo),y1=min(b,hi);
     if(y0>=y1)return 0;
     uint8_t *dst=f->pixels+pixel(x,y0);
-    if(sky){const uint8_t *s=fr_sky_column?fr_sky_column(x):sky+x*H;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[y];*dst=pair?pair_phase(v,y):v;}}
+    if(sky&&fr_sky_column){const uint8_t *s=fr_sky_column(x);const uint16_t *ro=fr_sky_rows;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[ro[y]];*dst=pair?pair_phase(v,y):v;}}
+    else if(sky){const uint8_t *s=sky+x*H;for(int y=y0;y<y1;y++,dst+=2){uint8_t v=s[y];*dst=pair?pair_phase(v,y):v;}}
     else if(pair){const uint8_t e=c,o=pair_phase(c,1);int y=y0;if(y&1){*dst=o;dst+=2;y++;}
         for(;y+1<y1;y+=2,dst+=4){dst[0]=e;dst[2]=o;} if(y<y1)*dst=e;}
     else for(int y=y0;y<y1;y++,dst+=2)*dst=c;

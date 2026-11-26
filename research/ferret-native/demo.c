@@ -10,7 +10,6 @@
 #include "md_video.c"
 #include "scene.h"
 static Frame frame;
-static uint8_t sky[11520];
 static uint8_t worktiles[23040] __attribute__((aligned(2)));
 static FRV vis;
 static int ready;
@@ -47,16 +46,35 @@ static Asset texture_at(unsigned i){
     if(i<SC_ASSETS){a.data=sc_textures+SC_ASSET_BYTES*i;a.size=SC_ASSET_BYTES;a.origin=8192;}
     return a;
 }
-static uint32_t sky_rowoff[72],sky_done[5];static unsigned sky_base;static int sky_rows_ready;
+/* Sky, drawn straight from the SKY texture by fill(): nothing is built or stored when no sky is visible.
+ * Default mapping follows classic Doom: 256 texels per 90 degrees (the texture wraps 4x per turn) and the
+ * horizon (row 36) at texel 100, scaled 128 texels per 72 rows. FR_SKY_LEGACY keeps the R04 mapping
+ * (whole texture over 360 degrees, texel 0 at the top), for regression against R02-R04 hashes. */
+static uint16_t sky_rows[72];static unsigned sky_base;static int sky_rows_ready;
 static const uint8_t *sky_column(int x){
-    uint8_t *d=&sky[(unsigned)x*72u];
-    if(!(sky_done[(unsigned)x>>5]&(1u<<((unsigned)x&31u)))){
-        if(!sky_rows_ready){for(unsigned j=0;j<72;j++)sky_rowoff[j]=(uint32_t)((j*SC_SKYH/72)*SC_SKYW);sky_rows_ready=1;}
-        const unsigned c=(sky_base+(unsigned)x*SC_SKYW/640)%SC_SKYW;
-        for(unsigned j=0;j<72;j++)d[j]=sc_sky[sky_rowoff[j]+c];
-        sky_done[(unsigned)x>>5]|=1u<<((unsigned)x&31u);
+#ifdef FR_SKY_LEGACY
+    return sc_sky+(sky_base+(unsigned)x*SC_SKYW/640)%SC_SKYW;
+#else
+    return sc_sky+((sky_base+(unsigned)x*8u/5u)%256u)*SC_SKYW/256u; /* 160 columns = 90 degrees = 256 texel units */
+#endif
+}
+static void sky_setup(unsigned a){
+    if(!sky_rows_ready){
+        for(unsigned j=0;j<72;j++){
+#ifdef FR_SKY_LEGACY
+            sky_rows[j]=(uint16_t)((j*SC_SKYH/72)*SC_SKYW);
+#else
+            sky_rows[j]=(uint16_t)((((128u*j+11808u)/72u)%128u*SC_SKYH/128u)*SC_SKYW);
+#endif
+        }
+        sky_rows_ready=1;
     }
-    return d;
+#ifdef FR_SKY_LEGACY
+    sky_base=a*SC_SKYW/360;
+#else
+    sky_base=(a*1024u/360u)%256u;
+#endif
+    fr_sky_rows=sky_rows;fr_sky_column=sky_column;
 }
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
     if(scene_init())return -1;
@@ -65,11 +83,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);closed_scan=0;
-    /* sky: columns are built on first use by fill() (most poses show sky in few or no columns);
-     * row/column offsets are hoisted out of the per-pixel loop. Same bytes as the eager version. */
-    sky_base=a*SC_SKYW/360;sky_rows_ready=0;
-    for(unsigned i=0;i<5;i++)sky_done[i]=0;
-    fr_sky_column=sky_column;
+        sky_setup(a);
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
     int cell=leaf_at(x,y);if(cell<0)return -2;
     s->leaf=(uint32_t)cell;
@@ -107,9 +121,9 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             int r=fr_project(tx,tz,ux,uz,w[3],w[4],w[5],&job);
             if(r<0){s->errors++;continue;}if(!r)continue;s->projected++;
             #if SC_ART_PAIR
-            if(fr_wall_indexed_pair(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sky))s->errors++;
+            if(fr_wall_indexed_pair(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sc_sky))s->errors++;
 #else
-            if(fr_wall_indexed(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sky))s->errors++;
+            if(fr_wall_indexed(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sc_sky))s->errors++;
 #endif
         }
     }
