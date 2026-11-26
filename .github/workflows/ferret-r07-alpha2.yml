@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: bbd5151
+          ref: bbd51513a9420b292fedb4ca1c8e363f9b66cc6f
           path: r06-baseline
           persist-credentials: false
       - name: Prepare private directories, same R04 scene, comparison poses
