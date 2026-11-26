@@ -15,6 +15,8 @@ typedef struct {
     int32_t z, heights[4], ceiling,floor;
 } WallJob;
 static int32_t s16(int64_t n) { uint32_t v=(uint32_t)n&65535u; return v>=32768u?(int32_t)v-65536:(int32_t)v; }
+/* bits [lo,lo+16) of a 32-bit value as a signed 16-bit result: identical to s16(sar(n,lo)) whenever lo+16<=32 */
+static int32_t s16bits(uint32_t v,unsigned lo){uint32_t t=(v>>lo)&65535u;return t>=32768u?(int32_t)t-65536:(int32_t)t;}
 static int32_t min(int32_t a,int32_t b){return a<b?a:b;}
 static int32_t max(int32_t a,int32_t b){return a>b?a:b;}
 /* Both target and host GCC implement arithmetic right shift; assert that contract. */
@@ -78,11 +80,15 @@ static int wall_impl(Frame *f,const WallJob *w,Asset upper,Asset lower,const int
         e[k]=a+9344;d[k]=(b-a)/n;
     }
     int c=has(ceilings,v),u=has(uppers,v),l=has(lowers,v),fl=has(floors,v);
+    uint32_t acc[4]={(uint32_t)e[0],(uint32_t)e[1],(uint32_t)e[2],(uint32_t)e[3]};
     for(int j=0;j<n;j++){
         int x=w->x0+j,t=f->top[x],b=f->bottom[x];
+        /* e+d*j kept as a running 32-bit sum: only bits 8..23 are used, so the 64-bit product was redundant */
+        const uint32_t c0=acc[0],c1=acc[1],c2=acc[2],c3=acc[3];
+        acc[0]+=(uint32_t)d[0];acc[1]+=(uint32_t)d[1];acc[2]+=(uint32_t)d[2];acc[3]+=(uint32_t)d[3];
         if(t>H||b>H)return -3;
         if(t==0&&b==0)continue;
-        int r[4];for(int k=0;k<4;k++)r[k]=s16(sar((int64_t)e[k]+(int64_t)d[k]*j,8));
+        int r[4];r[0]=s16bits(c0,8);r[1]=s16bits(c1,8);r[2]=s16bits(c2,8);r[3]=s16bits(c3,8);
         uint16_t inv=(uint16_t)(w->inv0+w->scale_step*j);
         int low=(v==1||v==3)?r[1]:r[2],fs=(v==0||v==2)?r[1]:(l?r[3]:r[2]);
         if(c)fill(f,x,t,b,t,r[0],(uint8_t)w->ceiling,has(skies,v)?sky:NULL,packed==2);
@@ -169,8 +175,9 @@ int fr_project(int32_t x0,int32_t z0,int32_t x1,int32_t z1,int32_t near,int32_t 
 /* Portable transformed vertex, with explicit 16-bit wrap. */
 void fr_transform(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t co,int32_t si,int32_t *tx,int32_t *tz){
     int32_t dx=s16(s16((int64_t)x*8)-cx),dy=s16(s16((int64_t)y*8)-cy);
-    *tx=s16(sar((int64_t)dx*co-(int64_t)dy*si,14));
-    *tz=s16(sar((int64_t)dx*si+(int64_t)dy*co,14));
+    /* |dx|,|dy|<=32768 and |co|,|si|<=16384: each product fits 31 bits; only bits 14..29 of the sum are used, so wrapping 32-bit math is exact */
+    *tx=s16bits((uint32_t)(dx*co)-(uint32_t)(dy*si),14);
+    *tz=s16bits((uint32_t)(dx*si)+(uint32_t)(dy*co),14);
 }
 
 

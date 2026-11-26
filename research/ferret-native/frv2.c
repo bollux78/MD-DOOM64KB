@@ -61,8 +61,8 @@ int frv_next(FRIter *it,uint16_t *leaf){
             const int16_t *q=it->planes+4u*i;
             /* 64-bit only for full coordinate range; replace with bounded
                32-bit target specialization after map range validation. */
-            int64_t side=(int64_t)q[2]*((int32_t)it->y-q[1])-(int64_t)q[3]*((int32_t)it->x-q[0]);
-            if(side>=0){uint16_t t=a;a=b;b=t;}it->tests++;
+            int32_t sa=(int32_t)q[2]*((int32_t)it->y-q[1]),sb=(int32_t)q[3]*((int32_t)it->x-q[0]); /* each < 2^31 */
+            if(sa>=sb){uint16_t t=a;a=b;b=t;}it->tests++;
         }
         if(it->sp>FR_STACK-2)return -4;
         it->stack[it->sp++]=b;it->stack[it->sp++]=a;

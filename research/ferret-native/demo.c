@@ -28,8 +28,9 @@ static int leaf_at(int16_t x,int16_t y){
     while(!(node&32768u)){
         if(node>=SC_NODES||++limit>SC_NODES)return -1;
         const int16_t *p=sc_planes+4u*node;
-        int64_t s=(int64_t)p[2]*((int32_t)y-p[1])-(int64_t)p[3]*((int32_t)x-p[0]);
-        node=sc_children[2u*node+(s>=0)];
+        /* |p|<=32768 and |dx|,|dy|<=65535: each product fits int32 (<2^31), so compare them instead of subtracting in 64 bits */
+        int32_t pa=(int32_t)p[2]*((int32_t)y-p[1]),pb=(int32_t)p[3]*((int32_t)x-p[0]);
+        node=sc_children[2u*node+(pa>=pb)];
     }
     return (node&32767u)<SC_LEAVES?(int)(node&32767u):-1;
 }
@@ -49,7 +50,7 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
     int16_t co=sc_trig[a*2],si=sc_trig[a*2+1];
-    for(unsigned i=0;i<11520;i++)frame.pixels[i]=0;
+    {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
     fr_begin(&frame);
     {   /* sky: hoist the per-pixel multiplies/divides/modulo (11520x) into 72 row and 160 column offsets */

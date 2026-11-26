@@ -27,30 +27,29 @@ uint32_t __udivsi3(uint32_t n,uint32_t d){uint32_t r;return udm32(n,d,&r);}
 uint32_t __umodsi3(uint32_t n,uint32_t d){uint32_t r;udm32(n,d,&r);return r;}
 int32_t __divsi3(int32_t n,int32_t d){uint32_t r;uint32_t un=n<0?0u-(uint32_t)n:(uint32_t)n,ud=d<0?0u-(uint32_t)d:(uint32_t)d;uint32_t q=udm32(un,ud,&r);return ((n<0)!=(d<0))?(int32_t)(0u-q):(int32_t)q;}
 int32_t __modsi3(int32_t n,int32_t d){uint32_t r;uint32_t un=n<0?0u-(uint32_t)n:(uint32_t)n,ud=d<0?0u-(uint32_t)d:(uint32_t)d;udm32(un,ud,&r);return n<0?(int32_t)(0u-r):(int32_t)r;}
-uint64_t __muldi3(uint64_t a,uint64_t b){
-    uint32_t al=(uint32_t)a,bl=(uint32_t)b,ah=(uint32_t)(a>>32),bh=(uint32_t)(b>>32);
-    uint32_t p00=mulu16((uint16_t)al,(uint16_t)bl);
-    uint32_t p01=mulu16((uint16_t)al,(uint16_t)(bl>>16));
-    uint32_t p10=mulu16((uint16_t)(al>>16),(uint16_t)bl);
-    uint32_t hi=mulu16((uint16_t)(al>>16),(uint16_t)(bl>>16))+(p01>>16)+(p10>>16);
-    uint32_t lo=p00,t=lo+(p01<<16);hi+=(t<lo);lo=t;
-    t=lo+(p10<<16);hi+=(t<lo);lo=t;
-    hi+=__mulsi3(ah,bl)+__mulsi3(al,bh);
+/* 64-bit helpers. Fast paths avoid the bit loops: a 32x32->64 product is four MULU.W. */
+static uint64_t mul32x32(uint32_t a,uint32_t b){
+    const uint16_t ah=(uint16_t)(a>>16),al=(uint16_t)a,bh=(uint16_t)(b>>16),bl=(uint16_t)b;
+    const uint32_t p0=mulu16(al,bl),p1=mulu16(al,bh),p2=mulu16(ah,bl),p3=mulu16(ah,bh);
+    uint32_t mid=p1+p2,carry=(mid<p1)?1u:0u;                 /* mid may wrap: keep the carry (worth 2^48) */
+    uint32_t lo=p0+(mid<<16),hi=p3+(mid>>16)+(carry<<16)+((lo<p0)?1u:0u);
     return ((uint64_t)hi<<32)|lo;
+}
+uint64_t __muldi3(uint64_t a,uint64_t b){
+    const uint32_t ah=(uint32_t)(a>>32),al=(uint32_t)a,bh=(uint32_t)(b>>32),bl=(uint32_t)b;
+    uint64_t r=mul32x32(al,bl);
+    const uint32_t cross=__mulsi3(ah,bl)+__mulsi3(al,bh);   /* only the low 32 bits matter: they land in the high word */
+    return r+((uint64_t)cross<<32);
 }
 static uint64_t udm64(uint64_t n,uint64_t d,uint64_t *rem){
     if(!d){*rem=n;return ~0ull;}
+    if(!(n>>32)&&!(d>>32)){uint32_t r32;uint32_t q=udm32((uint32_t)n,(uint32_t)d,&r32);*rem=r32;return q;}
+    uint32_t nh=(uint32_t)(n>>32),nl=(uint32_t)n;
     uint64_t q=0,r=0;
-    if((n>>32)==0 && (d>>32)==0){
-        uint32_t rem32,q32=udm32((uint32_t)n,(uint32_t)d,&rem32);
-        *rem=rem32;return q32;
-    }
-    /* Restoring division: stream the dividend bits in 64 steps, rather
-       than recomputing each bit by up to 63 single shifts. */
-    for(unsigned i=0;i<64;i++){
-        uint64_t carry=r>>63;
-        r=(r<<1)|(n>>63);n<<=1;q<<=1;
-        if(carry||r>=d){r-=d;q|=1u;}
+    for(int i=0;i<64;i++){
+        const uint32_t top=nh>>31;                           /* shift the dividend left by 1 through both halves */
+        nh=(nh<<1)|(nl>>31);nl<<=1;
+        r=(r<<1)|top;q<<=1;if(r>=d){r-=d;q|=1u;}
     }
     *rem=r;return q;
 }
