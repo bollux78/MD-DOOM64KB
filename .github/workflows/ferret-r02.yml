@@ -50,6 +50,26 @@ jobs:
           export FR_POSES=8 SDL_VIDEODRIVER=dummy FR_SCREEN_DIR="$OUT/asym"
           timeout 180 mame genesis -cart "$OUT/asym/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 150 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$OUT/public/mame.log" 2>&1 || true
           cat "$OUT/public/mame.log"
+          if grep -q 'FATAL stage=' "$OUT/public/mame.log"; then
+            # Previous address-error frame pointed to an odd operand at 0x10acd
+            # and PC 0x1f1c. Decode any new exception frame, plus symbol ranges.
+            python3 - "$OUT" <<'PY'
+          import pathlib,re,subprocess,sys
+          p=pathlib.Path(sys.argv[1]);elf=p/"asym/demo.elf"
+          text=(p/"public/mame.log").read_text()
+          m=re.search(r"FATAL stage=([0-9A-F]+) exception=([0-9A-F ]+)",text)
+          if m:
+              b=bytes.fromhex(m.group(2));v=int.from_bytes(b[:2],"big")
+              # 68000 bus/address exception stack: SSW, address, IR, SR, PC
+              if v in (2,3) and len(b)>=18:
+                  a=int.from_bytes(b[6:10],"big");pc=int.from_bytes(b[14:18],"big")
+              else:
+                  a=None;pc=int.from_bytes(b[6:10],"big")
+              print("EXCEPTION vector",v,"address",a,"pc",hex(pc),flush=True)
+              subprocess.run(["m68k-linux-gnu-objdump","-d","--start-address="+str(max(0,pc-32)),"--stop-address="+str(pc+32),str(elf)],check=False)
+              subprocess.run(["m68k-linux-gnu-nm","-n",str(elf)],check=False)
+          PY
+          fi
           python3 research/ferret-native/check_mame.py "$OUT/asym" "$OUT/public/mame.log" "$OUT/public/mame.json"
           python3 research/ferret-native/check_screen.py "$OUT/asym" "$OUT/public/screen.json"
       - name: Upload original assets and aggregate evidence only
