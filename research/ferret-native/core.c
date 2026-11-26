@@ -65,7 +65,14 @@ static const unsigned uppers=B(0)|B(1)|B(2)|B(3)|B(9)|B(10)|B(11)|B(15)|B(16)|B(
 static const unsigned lowers=B(1)|B(3)|B(5)|B(8)|B(11)|B(14)|B(17);
 static const unsigned floors=B(0)|B(1)|B(2)|B(3)|B(4)|B(5)|B(7)|B(8)|B(10)|B(11)|B(13)|B(14)|B(16)|B(17);
 static const unsigned skies=B(2)|B(3)|B(12)|B(13)|B(14)|B(15)|B(16)|B(17);
-static uint8_t pair_phase(uint8_t c,int y){return (y&1)?(uint8_t)((c<<4)|(c>>4)):c;}
+/* Paired art stores two horizontal pixels per byte. By default odd rows swap the two nibbles (checker dither of
+ * the R03/R04 art). FR_NO_PAIR_PHASE keeps the same byte on every row (no swap), like the Alpha2's VRAM. */
+#ifdef FR_NO_PAIR_PHASE
+#define FR_SWAP4(v) ((uint8_t)(v))
+#else
+#define FR_SWAP4(v) ((uint8_t)(((v)<<4)|((v)>>4)))
+#endif
+static uint8_t pair_phase(uint8_t c,int y){return (y&1)?FR_SWAP4(c):c;}
 /* Optional direct sky: when set, sky pixel (x,y) = fr_sky_column(x)[fr_sky_rows[y]], read straight from the
  * sky texture (no 160x72 buffer). Otherwise the caller's buffer sky+x*H is used. */
 static const uint8_t *(*fr_sky_column)(int x);static const uint16_t *fr_sky_rows;
@@ -78,8 +85,8 @@ static int fill(Frame *f,int x,int t,int b,int lo,int hi,uint8_t c,const uint8_t
         const uint8_t *s=fr_sky_column(x);const uint16_t *ro=fr_sky_rows+y0;int n=y1-y0;
         if(!pair){while(n--){*dst=s[*ro++];dst+=2;}}
         else{ /* paired art: odd rows store the nibble-swapped byte; parity handled outside the inner loop */
-            if(y0&1){uint8_t v=s[*ro++];*dst=(uint8_t)((v<<4)|(v>>4));dst+=2;n--;}
-            for(;n>=2;n-=2,dst+=4){uint8_t e=s[ro[0]],o=s[ro[1]];ro+=2;dst[0]=e;dst[2]=(uint8_t)((o<<4)|(o>>4));}
+            if(y0&1){uint8_t v=s[*ro++];*dst=FR_SWAP4(v);dst+=2;n--;}
+            for(;n>=2;n-=2,dst+=4){uint8_t e=s[ro[0]],o=s[ro[1]];ro+=2;dst[0]=e;dst[2]=FR_SWAP4(o);}
             if(n>0)*dst=s[*ro];
         }
     }
@@ -103,7 +110,7 @@ static int tex(Frame *f,int x,int t,int b,int lo,int hi,Asset a,int offset,const
         const int32_t base=offset+a.origin,pa=base+sc[y0],pb=base+sc[y1-1];
         if(pa>=0&&pa<24576&&pb>=0&&pb<24576){
             uint8_t *dst=f->pixels+pixel(x,y0);
-            if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=(uint8_t)((i<<4)|(i>>4));swap_ready=1;}
+            if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=FR_SWAP4(i);swap_ready=1;}
 #ifdef __m68k__
             fr_col_pair(dst,a.data,sc+y0,base,(uint32_t)(y1-y0),(uint32_t)(y0&1),swap_lut);
 #else
@@ -253,7 +260,7 @@ pass1_end:;
 #ifdef FR_WALLASM /* opt-in: measured slower than GCC's code for this pass (R08 notes) */
     if(packed==2&&(!has(skies,v)||(fr_sky_column&&fr_sky_rows))){
         if(has(skies,v)&&!fr_sky_cols_ok){for(int i=0;i<W;i++)fr_sky_cols[i]=fr_sky_column(i);fr_sky_cols_ok=1;}
-        if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=(uint8_t)((i<<4)|(i>>4));swap_ready=1;}
+        if(!swap_ready){for(unsigned i=0;i<256;i++)swap_lut[i]=FR_SWAP4(i);swap_ready=1;}
         k.recs=col;k.ncol=ncol;k.top=f->top+w->x0;k.bottom=f->bottom+w->x0;k.depth=f->depth+w->x0;k.pixels=f->pixels;k.x0=w->x0;
         k.flags=(uint32_t)(c|u<<1|l<<2|fl<<3|has(skies,v)<<4|(v<=3)<<5|(v==11||v==17)<<6|(w->textured!=0)<<7|(w->linear!=0)<<8);
         k.lowo=(v==1||v==3)?2:4;k.fso=(v==0||v==2)?2:(l?6:4);
