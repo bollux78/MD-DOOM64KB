@@ -1,0 +1,122 @@
+name: Ferret R07 - same-pose comparison with authentic Alpha2 and render timing
+# Run by opening a PR from research-ferret-r07-perf-claudio-20261126 into research-ferret-r06-perf-20261126,
+# or by workflow_dispatch. Private images stay in ~/.local/share/ferret-research; only numbers are uploaded.
+on:
+  pull_request:
+    branches: [research-ferret-r06-perf-20261126]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/ferret-r07-alpha2.yml','research/ferret-native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ferret-r07-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-ferret-r07-perf-claudio-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: bbd5151
+          path: r06-baseline
+          persist-credentials: false
+      - name: Prepare private directories, same R04 scene, comparison poses
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/r07/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/ferret-r07-$GITHUB_RUN_ID"
+          mkdir -p "$private" "$out/public"
+          { echo "PRIVATE=$private"; echo "OUT=$out"; echo "ROOT=$root"; echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc"; } >> "$GITHUB_ENV"
+          src="$root/r04/45818948354/dread"
+          test -s "$src/scene.h"
+          for v in r06-bench r07-bench r07-legacy-sky r07-compare; do
+            mkdir -p "$private/$v"; cp "$src/scene.h" "$src/scene.json" "$private/$v/"
+          done
+          # r07-compare: the 12 R04 poses replaced by Alpha2-equivalent cameras (see alpha2_pose_compare.py).
+          python3 - "$private/r07-compare/scene.h" <<'PY'
+          import re,sys,pathlib
+          sys.path.insert(0,"research/ferret-native")
+          from alpha2_pose_compare import alpha_to_ferret
+          alpha=[(1056,-160,-40,192)]+[(2980,170,-16,a) for a in (0,64,128,192)]
+          poses=[alpha_to_ferret(*p) for p in alpha]; poses+= [poses[0]]*(12-len(poses))
+          p=pathlib.Path(sys.argv[1]);h=p.read_text()
+          s="static const int16_t sc_poses[48] = {\n"+",".join(str(v) for q in poses for v in q)+",\n};"
+          h,n=re.subn(r"static const int16_t sc_poses\[48\] = \{[^}]*\};",s,h);assert n==1
+          p.write_text(h);print("COMPARE POSES",poses[:5])
+          PY
+      - name: Build R06 baseline and R07 variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 r06-baseline/research/ferret-native/build_demo.py "$PRIVATE/r06-bench" "$GCC68" --label "FERRET-MD R06 BENCH"
+          FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/r07-bench" "$GCC68" --label "FERRET-MD R07 BENCH"
+          FR_EXTRA_CFLAGS=-DFR_SKY_LEGACY python3 research/ferret-native/build_demo.py "$PRIVATE/r07-legacy-sky" "$GCC68" --label "FERRET-MD R07 LEGACY SKY"
+          python3 research/ferret-native/build_demo.py "$PRIVATE/r07-compare" "$GCC68" --label "FERRET-MD R07 ALPHA2 POSES"
+          for v in r06-bench r07-bench r07-legacy-sky r07-compare; do cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"; done
+      - name: Exact render time per pose (MAME machine time), R06 vs R07
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SDL_VIDEODRIVER=dummy
+          for v in r06-bench r07-bench; do
+            timeout 300 "$(command -v mame)" genesis -cart "$PRIVATE/$v/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 400 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_render_time.lua" 2>&1 | grep RENDER_TIMES | sed "s/^/$v /" | tee -a "$OUT/public/render-times.txt"
+          done
+      - name: Legacy sky parity with R04 (12 exact frames)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export SDL_VIDEODRIVER=dummy FR_POSES=12 FR_SCREEN_DIR="$PRIVATE/r07-legacy-sky"
+          timeout 240 "$(command -v mame)" genesis -cart "$PRIVATE/r07-legacy-sky/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 300 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/r07-legacy-sky/mame.log" 2>&1 || true
+          grep PUBLISHED "$PRIVATE/r07-legacy-sky/mame.log" | awk '{print $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19}' > "$OUT/public/r07-legacy-mailbox.txt"
+          test "$(wc -l < "$OUT/public/r07-legacy-mailbox.txt")" -eq 12
+          echo "Compare with the R04 run mailbox (fields 2..18): must be identical"
+      - name: Build pinned instrumented Genesis Plus GX (Alpha2 capture)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Same-pose comparison (numbers only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          cmp="$PRIVATE/r07-compare"
+          export SDL_VIDEODRIVER=dummy FR_POSES=5 FR_SCREEN_DIR="$cmp"
+          timeout 240 "$(command -v mame)" genesis -cart "$cmp/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 300 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$cmp/mame.log" 2>&1 || true
+          mkdir -p "$cmp/alpha2"
+          python3 - "$OUT/core/genesis_plus_gx_libretro.so" "$cmp" <<'PY'
+          import sys,json,pathlib
+          sys.path.insert(0,"research/ferret-native")
+          import reference_visual as rv
+          from capture import locate
+          core,cmp=sys.argv[1],pathlib.Path(sys.argv[2])
+          rom=locate();assert rom,"verified original Alpha2 unavailable"
+          alpha=[("spawn",(1056,-160,-40,192))]+[(f"zigzag-{a}",(2980,170,-16,a)) for a in (0,64,128,192)]
+          man=[]
+          for i,(name,p) in enumerate(alpha):
+              rv.run(pathlib.Path(core),rom,cmp/"alpha2"/name,p)
+              man.append({"name":name,"alpha":str(cmp/"alpha2"/(name+".png")),"ferret":str(cmp/f"pose-{i}.png")})
+          (cmp/"manifest.json").write_text(json.dumps(man))
+          PY
+          python3 research/ferret-native/alpha2_pose_compare.py "$cmp/manifest.json" "$OUT/public/alpha2-compare.json"
+      - name: Numeric reports only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferret-r07-numeric-results
+          path: ${{ runner.temp }}/ferret-r07-${{ github.run_id }}/public/*
+          if-no-files-found: warn
