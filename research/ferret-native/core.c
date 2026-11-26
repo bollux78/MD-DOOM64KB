@@ -66,8 +66,9 @@ static const unsigned lowers=B(1)|B(3)|B(5)|B(8)|B(11)|B(14)|B(17);
 static const unsigned floors=B(0)|B(1)|B(2)|B(3)|B(4)|B(5)|B(7)|B(8)|B(10)|B(11)|B(13)|B(14)|B(16)|B(17);
 static const unsigned skies=B(2)|B(3)|B(12)|B(13)|B(14)|B(15)|B(16)|B(17);
 /* Paired art stores two horizontal pixels per byte. By default odd rows swap the two nibbles (checker dither of
- * the R03/R04 art). FR_NO_PAIR_PHASE keeps the same byte on every row (no swap), like the Alpha2's VRAM. */
-#ifdef FR_NO_PAIR_PHASE
+ * the R03/R04 art) only with FR_PAIR_PHASE. Default (since R11): the same byte on every row, no swap, like the
+ * Alpha2's VRAM (vertical stripes instead of a checkerboard; faster). */
+#ifndef FR_PAIR_PHASE
 #define FR_SWAP4(v) ((uint8_t)(v))
 #else
 #define FR_SWAP4(v) ((uint8_t)(((v)<<4)|((v)>>4)))

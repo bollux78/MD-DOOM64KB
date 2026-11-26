@@ -60,7 +60,7 @@ jobs:
           umask 077
           FR_EXTRA_CFLAGS=-DFR_BENCH python3 r06-baseline/research/ferret-native/build_demo.py "$PRIVATE/r06-bench" "$GCC68" --label "FERRET-MD R06 BENCH"
           FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/r07-bench" "$GCC68" --label "FERRET-MD R07 BENCH"
-          FR_EXTRA_CFLAGS=-DFR_SKY_LEGACY python3 research/ferret-native/build_demo.py "$PRIVATE/r07-legacy-sky" "$GCC68" --label "FERRET-MD R07 LEGACY SKY"
+          FR_EXTRA_CFLAGS="-DFR_SKY_LEGACY -DFR_PAIR_PHASE" python3 research/ferret-native/build_demo.py "$PRIVATE/r07-legacy-sky" "$GCC68" --label "FERRET-MD R07 LEGACY SKY"
           python3 research/ferret-native/build_demo.py "$PRIVATE/r07-compare" "$GCC68" --label "FERRET-MD R07 ALPHA2 POSES"
           for v in r06-bench r07-bench r07-legacy-sky r07-compare; do cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"; done
       - name: Exact render time per pose (MAME machine time), R06 vs R07
