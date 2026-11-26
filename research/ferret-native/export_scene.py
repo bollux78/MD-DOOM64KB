@@ -36,11 +36,15 @@ def emit(f,ctype,n,values):
     f.write(f"static const {ctype} {n}[{len(values)}] = {{\n")
     for i in range(0,len(values),24):f.write(",".join(map(str,values[i:i+24]))+",\n")
     f.write("};\n")
-def export(wad,k,output,fsc,fixture,asymmetric=False,art=False):
+def export(wad,k,output,fsc,fixture,asymmetric=False,art=False,dread=False):
     g=geometry(wad,k)
     if art:
-        from art_palette import Art
-        r=Art(wad,g)
+        if dread:
+            from dread_art import DreadArt
+            r=DreadArt(wad,g)
+        else:
+            from art_palette import Art
+            r=Art(wad,g)
         (output.parent/"art-report.json").write_text(json.dumps(r.report,indent=2))
         print("ART PALETTE "+json.dumps(r.report),flush=True)
     else:r=Resources(wad)
@@ -48,12 +52,16 @@ def export(wad,k,output,fsc,fixture,asymmetric=False,art=False):
     asset_bytes=8192 if art else 4096
     cp=c.compile("occlusion96");dag,_=pack_dag(g,cp)
     assets=[];asset_index={};keys={}
-    def texture(k,z):
+    def texture(k,z,light=255):
         if k not in r.defs:raw=bytes([0 if art else 0x55])*asset_bytes;key=("fallback",0)
         else:
-            _,h,_=r.texture(k);key=(k,z%h)
+            if dread:
+                from dread_art import bucket
+                _,h,_=r.raw(k);key=(k,z%h,bucket(light))
+            else:_,h,_=r.texture(k);key=(k,z%h)
             if key in keys:return keys[key]
-            if art:raw=r.pair_texture(k,z%h)
+            if dread:raw=r.pair_texture(k,z%h,light)
+            elif art:raw=r.pair_texture(k,z%h)
             else:
                 b,o=r.packed_texture(k,z%h);t=b[o:o+8192]
                 raw=bytes((t[i]&240)|(t[i+1]&15) for i in range(0,8192,2))
@@ -85,9 +93,10 @@ def export(wad,k,output,fsc,fixture,asymmetric=False,art=False):
             heights=(-ceil,-min(ceil,bc) if upper else -ceil,-max(floor,bf),-floor)
             uk,lk=name(sd[2]),name(sd[3]);textured=upper or lower
         u0=((sd[0]+ofs)//2)%64;u1=u0+round(math.dist(g["vertices"][v0],g["vertices"][v1]))//2
-        au=texture(uk,ceil+sd[1]) if textured else 0
-        al=texture(lk,(back[0] if back else floor)+sd[1]) if textured else 0
-        walls.append((v0,v1,variant,161 if textured else 160,u0,u1,*heights,r.color(name(front[3])),r.color(name(front[2])),au,al))
+        au=texture(uk,ceil+sd[1],front[4]) if textured else 0
+        al=texture(lk,(back[0] if back else floor)+sd[1],front[4]) if textured else 0
+        cc,fc=(r.color(name(front[3]),front[4]),r.color(name(front[2]),front[4])) if dread else (r.color(name(front[3])),r.color(name(front[2])))
+        walls.append((v0,v1,variant,161 if textured else 160,u0,u1,*heights,cc,fc,au,al))
     sk=next((k for k in ("SKY1","SKY2","SKY3","SKY4") if k in r.defs),None)
     sw,sh,sky=r.texture(sk) if sk else (1,1,[bytes([0])])
     allposes=cameras(g,c,not fixture)
@@ -118,10 +127,10 @@ def export(wad,k,output,fsc,fixture,asymmetric=False,art=False):
         emit(f,"int16_t","sc_poses",(x for p in poses for x in p))
         emit(f,"int16_t","sc_trig",(v for a in range(360) for v in (round(math.cos(math.radians(90-a))*16384),round(math.sin(math.radians(90-a))*16384))))
         emit(f,"uint16_t","sc_palette",((round(b*7/255)<<9)|(round(g*7/255)<<5)|(round(r*7/255)<<1) for r,g,b in r.palette))
-    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":asset_bytes*len(assets),"art_pair":art,"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
+    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":asset_bytes*len(assets),"art_pair":art,"dread_profile":dread,"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
     print("SCENE "+json.dumps(info),flush=True);return info
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");p.add_argument("--art",action="store_true");a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");p.add_argument("--art",action="store_true");p.add_argument("--dread-art",action="store_true");a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=True)
     fixture=not a.wad;wad=a.wad or a.out/"fixture.wad"
     if a.asymmetric:
@@ -129,7 +138,7 @@ def main():
         from asymmetric_fixture import make
         make(wad)
     elif fixture:make_fixture(wad)
-    assert not (a.art and fixture),"art mode needs actual WAD materials"
-    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric,a.art)
+    assert not ((a.art or a.dread_art) and fixture),"art mode needs actual WAD materials"
+    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric,a.art or a.dread_art,a.dread_art)
     (a.out/"scene.json").write_text(json.dumps(info,indent=2))
 if __name__=="__main__":main()
