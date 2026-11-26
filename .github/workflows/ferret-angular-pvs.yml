@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [research-ferret-r07-perf-claudio-20261126]
     types: [opened, synchronize, reopened]
-    paths: ['.github/workflows/ferret-angular-pvs.yml','research/ferret-native/angular_pvs.py','research/ferret-native/test_angular_pvs.py','research/ferret-native/demo.c']
+    paths: ['.github/workflows/ferret-angular-pvs.yml','research/ferret-native/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Prepare exact same scene and matched camera sequence
+      - name: Prepare private matched R04 and Alpha2 pose sets
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +34,7 @@ jobs:
           echo "ROOT=$root" >> "$GITHUB_ENV"
           echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
           src="$root/r04/45818948354/dread"
-          for v in baseline angular verify; do
+          for v in r04-base r04-angle r04-legacy r04-base-screen r04-angle-screen alpha-base alpha-angle alpha-base-screen alpha-angle-screen alpha-sram; do
             mkdir -p "$private/$v"
             cp "$src/scene.h" "$src/scene.json" "$private/$v/"
           done
@@ -43,61 +43,104 @@ jobs:
           root=pathlib.Path(sys.argv[1])
           poses=[(1056,-3616,41,90)]+[(2980,-3286,17,a) for a in (0,270,180,90)]
           poses=[p for p in poses for _ in range(2)]+[poses[0]]*2
-          for v in ("baseline","angular","verify"):
-              path=root/v/"scene.h"
-              h=path.read_text()
+          for d in root.glob("alpha-*"):
+              path=d/"scene.h";h=path.read_text()
               s="static const int16_t sc_poses[48] = {\n"+",".join(str(z) for p in poses for z in p)+",\n};"
               h,n=re.subn(r"static const int16_t sc_poses\[48\] = \{[^}]*\};",s,h);assert n==1
               path.write_text(h)
-          print("MATCHED CAMERAS",poses)
           PY
-      - name: Compile 8, 16 and 32-direction mask options
+      - name: Compile angle masks and all R09 control variants
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           for n in 8 16 32; do
-            python3 research/ferret-native/angular_pvs.py "$PRIVATE/angular/scene.h" "$PRIVATE/angle-$n.h" "$OUT/public/angle-$n.json" --bins "$n"
+            python3 research/ferret-native/angular_pvs.py "$PRIVATE/r04-base/scene.h" "$PRIVATE/angle-$n.h" "$OUT/public/angle-$n.json" --bins "$n"
           done
-          cp "$PRIVATE/angle-16.h" "$PRIVATE/angular/scene_angle.h"
-          cp "$PRIVATE/angle-16.h" "$PRIVATE/verify/scene_angle.h"
-      - name: Build matched R09 controls and angular variant
+          for v in r04-base r04-angle r04-legacy r04-base-screen r04-angle-screen alpha-base alpha-angle alpha-base-screen alpha-angle-screen alpha-sram; do
+            flags=""
+            case "$v" in
+              *-angle*) flags="-DFR_ANGLE_PVS";;
+              r04-legacy) flags="-DFR_ANGLE_PVS -DFR_SKY_LEGACY";;
+              alpha-sram) flags="-DFR_FORCE_SRAM";;
+            esac
+            case "$v" in *-screen|r04-legacy) ;; *) flags="$flags -DFR_BENCH";; esac
+            cp "$PRIVATE/angle-16.h" "$PRIVATE/$v/scene_angle.h"
+            FR_EXTRA_CFLAGS="$flags" python3 research/ferret-native/build_demo.py "$PRIVATE/$v" "$GCC68" --label "FERRET-MD R09 $v"
+            cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"
+          done
+          play="$ROOT/playtest/R09-audit-$GITHUB_RUN_ID"
+          mkdir -p "$play"
+          cp "$PRIVATE/r04-base/FERRET-MD-R01.bin" "$play/FERRET-MD-R09-BENCH.bin"
+          cp "$PRIVATE/r04-base-screen/FERRET-MD-R01.bin" "$play/FERRET-MD-R09-VERIFY.bin"
+          cp "$PRIVATE/r04-angle/FERRET-MD-R01.bin" "$play/FERRET-MD-R09-ANGLE-BENCH.bin"
+      - name: Full state differential and counts per pose
         shell: bash
         run: |
           set -euo pipefail
           umask 077
-          FR_EXTRA_CFLAGS=-DFR_BENCH python3 research/ferret-native/build_demo.py "$PRIVATE/baseline" "$GCC68" --label "FERRET-MD R09 CONTROL"
-          FR_EXTRA_CFLAGS="-DFR_BENCH -DFR_ANGLE_PVS" python3 research/ferret-native/build_demo.py "$PRIVATE/angular" "$GCC68" --label "FERRET-MD ANGULAR BENCH"
-          FR_EXTRA_CFLAGS=-DFR_ANGLE_PVS python3 research/ferret-native/build_demo.py "$PRIVATE/verify" "$GCC68" --label "FERRET-MD ANGULAR VERIFY"
-          for v in baseline angular verify; do cp "$PRIVATE/$v/build.json" "$OUT/public/$v-build.json"; done
-      - name: Independent full-state differential over all headings and cells
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          python3 research/ferret-native/test_angular_pvs.py "$PRIVATE/baseline" "$PRIVATE/angular" "$OUT/public/differential.json"
-      - name: Exact MAME render timing at paired camera positions
+          python3 research/ferret-native/test_angular_pvs.py "$PRIVATE/r04-base" "$PRIVATE/r04-angle" "$OUT/public/differential.json"
+          python3 - "$PRIVATE" "$OUT/public/pose-census.json" <<'PY'
+          import sys,json,pathlib
+          sys.path.insert(0,"research/ferret-native")
+          from test_angular_pvs import load
+          from angular_pvs import arr
+          p,o=map(pathlib.Path,sys.argv[1:]);result={}
+          for group in ("r04","alpha"):
+              a,ga=load(p/(group+"-base"));b,gb=load(p/(group+"-angle"))
+              poses=arr((p/(group+"-base")/"scene.h").read_text(),"sc_poses").reshape(-1,4).tolist()
+              rows=[]
+              for i,v in enumerate(poses):
+                  ra,sa,ma,ca=ga(v);rb,sb,mb,cb=gb(v)
+                  assert ra==rb==0 and sa==sb and ma["projected"]==mb["projected"],(group,i)
+                  rows.append({"pose":i,"camera":v,"candidates_before":ma["candidates"],"candidates_after":mb["candidates"],"removed":ma["candidates"]-mb["candidates"],"project_calls_before":ca,"project_calls_after":cb,"projected":ma["projected"]})
+              result[group]=rows
+          o.write_text(json.dumps(result,indent=2));print("R09 POSE CENSUS "+json.dumps(result))
+          PY
+      - name: Exact MAME render timing before and after
         shell: bash
         run: |
           set -euo pipefail
           export SDL_VIDEODRIVER=dummy
-          for v in baseline angular; do
+          for v in r04-base r04-angle alpha-base alpha-angle; do
             timeout 180 "$(command -v mame)" genesis -cart "$PRIVATE/$v/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 300 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_render_time.lua" 2>&1 | grep RENDER_TIMES | sed "s/^/$v /" | tee -a "$OUT/public/render-times.txt"
           done
-          python3 - "$OUT/public/render-times.txt" "$OUT/public/timing.json" <<'PY'
-          import json,sys,pathlib
-          p,o=map(pathlib.Path,sys.argv[1:])
-          t={s.split()[0]:[float(v) for v in s.split()[2:14]] for s in p.read_text().splitlines()}
-          assert all(len(v)==12 for v in t.values()) and len(t)==2
-          rows=[]
-          for i,label in enumerate(("spawn","zigzag-0","zigzag-64","zigzag-128","zigzag-192")):
-              j=2*i+1
-              a,b=t["baseline"][j],t["angular"][j]
-              rows.append({"camera":label,"baseline_seconds":a,"angular_seconds":b,"speedup":a/b})
-          result={"rows":rows,"mean_speedup":sum(r["baseline_seconds"] for r in rows)/sum(r["angular_seconds"] for r in rows),"scope":"MAME exact stage3 to stage4 render; warm second frame per pose, no hashing, no conversion or gameplay"}
-          o.write_text(json.dumps(result,indent=2));print("ANGULAR TIMING "+json.dumps(result))
+      - name: MAME actual screenshot and legacy mailbox parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export SDL_VIDEODRIVER=dummy FR_POSES=12
+          for v in r04-base-screen r04-angle-screen r04-legacy alpha-base-screen alpha-angle-screen; do
+            export FR_SCREEN_DIR="$PRIVATE/$v"
+            timeout 180 "$(command -v mame)" genesis -cart "$PRIVATE/$v/FERRET-MD-R01.bin" -video none -sound none -nothrottle -skip_gameinfo -seconds_to_run 300 -autoboot_script "$GITHUB_WORKSPACE/research/ferret-native/mame_r01.lua" > "$PRIVATE/$v/mame.log" 2>&1 || true
+            python3 research/ferret-native/check_mame.py "$PRIVATE/$v" "$PRIVATE/$v/mame.log" "$OUT/public/$v-mame.json"
+          done
+          python3 - "$PRIVATE" "$ROOT/r04/45818948354/dread" "$OUT/public/screen-parity.json" <<'PY'
+          import json,pathlib,sys
+          from PIL import Image
+          p,old,out=map(pathlib.Path,sys.argv[1:]);r={}
+          def mailbox(d):
+              return [[int(v,16) for v in s.split()[2:19]] for s in (d/"mame.log").read_text(errors="replace").splitlines() if s.startswith("PUBLISHED ")]
+          def screen(a,b):
+              x=Image.open(a).convert("RGB");y=Image.open(b).convert("RGB")
+              assert x.size==y.size
+              return sum(u!=v for u,v in zip(x.getdata(),y.getdata()))
+          for group in ("r04","alpha"):
+              a=p/(group+"-base-screen");b=p/(group+"-angle-screen");aa,bb=mailbox(a),mailbox(b)
+              assert len(aa)==len(bb)==12
+              diffs=[screen(a/f"pose-{i}.png",b/f"pose-{i}.png") for i in range(12)]
+              assert not any(diffs),(group,diffs)
+              assert all(all(x[k]==y[k] for k in range(17) if k!=7) for x,y in zip(aa,bb))
+              r[group]={"screen_pixel_diffs":diffs,"candidate_counter_changes":[x[7]-y[7] for x,y in zip(aa,bb)]}
+          a,b=mailbox(old),mailbox(p/"r04-legacy")
+          assert len(a)==len(b)==12
+          # Candidate count must change; state and image fields must not.
+          assert all(all(x[k]==y[k] for k in range(17) if k!=7) for x,y in zip(a,b)),[(i,[k for k in range(17) if x[k]!=y[k]]) for i,(x,y) in enumerate(zip(a,b))]
+          r["r04_legacy"]={"mailbox_equal_except_candidate_counter":12}
+          out.write_text(json.dumps(r,indent=2));print("R09 SCREEN PARITY "+json.dumps(r))
           PY
-      - name: Build pinned Genesis Plus GX for actual VRAM checks
+      - name: Build same GPGX instrumented master-clock profiler
         if: always() && env.OUT != ''
         shell: bash
         run: |
@@ -105,16 +148,18 @@ jobs:
           git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
           git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
           git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          python3 research/ferret-native/r09_gpgx_time.py patch "$OUT/core"
           make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
-      - name: Validate exact VRAM and WRAM baseline in three SRAM modes
+      - name: R09 same-camera full frame and wall pipeline in GPGX
         if: always() && env.PRIVATE != ''
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           rc=0
-          for mode in 0 1 2; do
-            python3 research/ferret-native/test_demo.py "$PRIVATE/verify" "$OUT/core/genesis_plus_gx_libretro.so" "$OUT/public/verify-mode$mode.json" --mode "$mode" --maxframes 12000 || rc=1
+          for spec in alpha-base:1 alpha-base:0 alpha-sram:0 alpha-angle:1; do
+            v="${spec%:*}";mode="${spec#*:}"
+            python3 research/ferret-native/r09_gpgx_time.py run "$OUT/core/genesis_plus_gx_libretro.so" "$PRIVATE/$v" "$OUT/public/$v-gpgx-mode$mode.json" "$mode" || rc=1
           done
           exit "$rc"
       - name: Numeric reports only
