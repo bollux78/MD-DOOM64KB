@@ -9,8 +9,12 @@ from compiler import WAD,Resources,geometry,name,need
 from visibility_compile import Compiler,pack_dag,find_leaf
 from test_visibility import cameras,cell_sector
 from render_scene import make_fixture
-def rows(fsc):
-    if fsc:
+def rows(fsc,source_scale=False):
+    if source_scale:
+        assert not fsc, 'source-derived scaling and private calibration are mutually exclusive'
+        from dread_source_math import generate
+        full,_=generate()
+    elif fsc:
         b=fsc.read_bytes();assert b[:4]==b"FSC1"
         n=struct.unpack_from(">H",b,4)[0];assert len(b)==6+10*n
         full=[]
@@ -36,7 +40,7 @@ def emit(f,ctype,n,values):
     f.write(f"static const {ctype} {n}[{len(values)}] = {{\n")
     for i in range(0,len(values),24):f.write(",".join(map(str,values[i:i+24]))+",\n")
     f.write("};\n")
-def export(wad,k,output,fsc,fixture,asymmetric=False,art=False,dread=False):
+def export(wad,k,output,fsc,fixture,asymmetric=False,art=False,dread=False,source_scale=False):
     g=geometry(wad,k)
     if art:
         if dread:
@@ -107,7 +111,7 @@ def export(wad,k,output,fsc,fixture,asymmetric=False,art=False,dread=False):
         from asymmetric_fixture import POSES
         poses=POSES
     assert poses
-    rs,idx=rows(fsc)
+    rs,idx=rows(fsc,source_scale)
     output.parent.mkdir(parents=True,exist_ok=True)
     with output.open("w") as f:
         f.write("/* Generated locally; no original executable code. */\n")
@@ -127,10 +131,10 @@ def export(wad,k,output,fsc,fixture,asymmetric=False,art=False,dread=False):
         emit(f,"int16_t","sc_poses",(x for p in poses for x in p))
         emit(f,"int16_t","sc_trig",(v for a in range(360) for v in (round(math.cos(math.radians(90-a))*16384),round(math.sin(math.radians(90-a))*16384))))
         emit(f,"uint16_t","sc_palette",((round(b*7/255)<<9)|(round(g*7/255)<<5)|(round(r*7/255)<<1) for r,g,b in r.palette))
-    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":asset_bytes*len(assets),"art_pair":art,"dread_profile":dread,"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"reference_rom_required_at_runtime":False}
+    info={"fixture":fixture,"asymmetric":asymmetric,"map":k,"poses":len(poses),"zigzag_poses":0 if fixture else len(poses)-min(4,len(spawn)),"packed_textures":len(assets),"packed_texture_bytes":asset_bytes*len(assets),"art_pair":art,"dread_profile":dread,"visibility_bytes":len(dag),"scale_rows":len(rs),"scale_table_bytes":144*len(rs)+2048,"calibrated_scalers":bool(fsc),"source_derived_scalers":source_scale,"reference_rom_required_at_runtime":False}
     print("SCENE "+json.dumps(info),flush=True);return info
 def main():
-    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--asymmetric",action="store_true");p.add_argument("--art",action="store_true");p.add_argument("--dread-art",action="store_true");a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("out",type=P);p.add_argument("--wad",type=P);p.add_argument("--fsc",type=P);p.add_argument("--source-scale",action="store_true");p.add_argument("--asymmetric",action="store_true");p.add_argument("--art",action="store_true");p.add_argument("--dread-art",action="store_true");a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=True)
     fixture=not a.wad;wad=a.wad or a.out/"fixture.wad"
     if a.asymmetric:
@@ -139,6 +143,6 @@ def main():
         make(wad)
     elif fixture:make_fixture(wad)
     assert not ((a.art or a.dread_art) and fixture),"art mode needs actual WAD materials"
-    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric,a.art or a.dread_art,a.dread_art)
+    info=export(WAD(wad),"E1M1",a.out/"scene.h",a.fsc,fixture,a.asymmetric,a.art or a.dread_art,a.dread_art,a.source_scale)
     (a.out/"scene.json").write_text(json.dumps(info,indent=2))
 if __name__=="__main__":main()
