@@ -240,6 +240,35 @@ void *memset(void *p,int c,size_t n){uint8_t *d=p;while(n--)*d++=(uint8_t)c;retu
 void *memcpy(void *p,const void *q,size_t n){uint8_t *d=p;const uint8_t *s=q;while(n--)*d++=*s++;return p;}
 /* Read-only debugger checkpoint, after DMA and mailbox update. */
 __attribute__((noinline,used)) void fr_published(void){__asm__ volatile("" ::: "memory");}
+#ifdef FR_ASYNC
+/* Asynchronous presentation: the converted tiles go to the back VRAM buffer in chunks during VBlank interrupts
+ * while the CPU renders the next frame; when complete, the plane map is switched to that buffer in VBlank.
+ * No display-off DMA, no busy wait for VBlank in the render loop. Buffers: tiles 1..720 at 0x20 and
+ * 721..1440 at 0x5a20; the 18 visible map rows of plane A (0xc000) are rewritten by DMA from maps[]. */
+static uint16_t fr_maps[2][18*64];
+static volatile struct {uint32_t src;uint16_t dst,left;uint8_t flip,buf;uint32_t seq;} fr_job;
+void fr_vblank_c(void){
+    if(fr_job.left){
+        uint16_t n=fr_job.left>6144u?6144u:fr_job.left;
+        if(fr_md_dma(fr_job.src,fr_job.dst,n)){MB[36]++;}
+        fr_job.src+=n;fr_job.dst=(uint16_t)(fr_job.dst+n);fr_job.left=(uint16_t)(fr_job.left-n);
+        if(!fr_job.left)fr_job.flip=1;
+        return;
+    }
+    if(fr_job.flip){
+        if(fr_md_dma((uint32_t)(uintptr_t)fr_maps[fr_job.buf],0xc000u+5u*128u,18u*64u*2u)){MB[36]++;}
+        fr_job.flip=0;MB[2]=5;MB[1]=fr_job.seq;
+    }
+}
+static void fr_async_init(void){
+    for(unsigned b=0;b<2;b++)for(unsigned y=0;y<18;y++)for(unsigned x=0;x<64;x++)
+        fr_maps[b][y*64+x]=(uint16_t)(x<40?1u+720u*b+y*40u+x:0u);
+    reg(1,0x74);                                   /* display on, VBlank interrupt on, DMA on */
+    __asm__ volatile("move.w #0x2500,%%sr":::"memory","cc"); /* accept level 6 */
+}
+#else
+void fr_vblank_c(void){} /* interrupts stay masked without FR_ASYNC; boot.s still references it */
+#endif
 void md_main(void){
     for(unsigned i=0;i<64;i++)MB[i]=0;
     MB[0]=0x46523031u;MB[1]=0;MB[2]=1;
@@ -248,6 +277,9 @@ void md_main(void){
     init_vdp();
     int has_sram=probe_sram(),use_sram=0;
     MB[3]=(uint32_t)has_sram;MB[2]=2;
+#ifdef FR_ASYNC
+    unsigned shown=0;fr_async_init();
+#endif
     unsigned seq=0,idx=0,last=0;
     int16_t x=sc_poses[0],y=sc_poses[1],z=sc_poses[2],a=sc_poses[3];
     for(;;){
@@ -273,6 +305,18 @@ void md_main(void){
            claimed as accelerated until a future direct-conversion backend. */
         uint8_t *dst=worktiles;
         MB[2]=4;
+#ifdef FR_ASYNC
+        while(fr_job.left||fr_job.flip){}          /* previous frame still going out: its tiles are the DMA source */
+        if(fr_tiles(frame.pixels,worktiles,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
+        s.tiles_hash=hash_bytes(worktiles,23040);
+        MB[4]=idx;MB[5]=s.hash;MB[6]=s.tiles_hash;MB[7]=s.candidates;MB[8]=s.projected;
+        MB[9]=s.errors;MB[10]=s.closed;MB[11]=0;MB[12]=0;
+        MB[13]=(uint32_t)(uint16_t)x;MB[14]=(uint32_t)(uint16_t)y;MB[15]=(uint32_t)(uint16_t)a;MB[16]=s.tests;
+        {unsigned back=shown^1u;fr_job.src=(uint32_t)(uintptr_t)worktiles;fr_job.dst=(uint16_t)(back?0x5a20u:0x20u);
+         fr_job.buf=(uint8_t)back;fr_job.seq=++seq;fr_job.flip=0;fr_job.left=23040u;shown=back;}
+        (void)dst;(void)use_sram;
+        continue;
+#endif
         if(fr_tiles(frame.pixels,worktiles,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
         s.tiles_hash=hash_bytes(worktiles,23040);
         if(use_sram){
