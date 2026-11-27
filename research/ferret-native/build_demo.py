@@ -8,7 +8,7 @@ def main():
     src=P(__file__).resolve().parent;out=a.out.resolve();gcc=a.gcc.resolve()
     flags=["-m68000","-std=c99","-O2","-ffreestanding","-fno-builtin","-ffunction-sections","-fdata-sections","-fno-common","-fno-pic","-fno-unwind-tables","-fno-asynchronous-unwind-tables",*__import__("os").environ.get("FR_EXTRA_CFLAGS","").split()]
     def run(args):subprocess.run([str(x) for x in args],check=True)
-    run(["cc","-std=c99","-O2","-fPIC","-shared",*[x for x in flags if x in("-DFR_SKY_LEGACY","-DFR_PAIR_PHASE")],"-I",out,src/"demo.c","-o",out/"demo-host.so"])
+    run(["cc","-std=c99","-O2","-fPIC","-shared",*[x for x in flags if x in("-DFR_SKY_LEGACY","-DFR_PAIR_PHASE","-DFR_ORDERED_LISTS")],"-I",out,src/"demo.c","-o",out/"demo-host.so"])
     gen=subprocess.run(["python3",str(src/"gen_scale.py"),str(out/"scene.h"),str(out/"gen_scale.s"),*([] if "-DFR_PAIR_PHASE" in flags else ["nophase"])],check=True,capture_output=True,text=True).stdout
     gflags=["-DFR_GENSCALE"] if not gen.strip().endswith(" 0") else []
     run([gcc,*flags,*gflags,"-I",out,"-c",src/"demo.c","-o",out/"demo.o"])

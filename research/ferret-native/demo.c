@@ -9,6 +9,10 @@
 #include "presentation.c"
 #include "md_video.c"
 #include "scene.h"
+#ifdef FR_ORDERED_LISTS
+#include "scene_lists.h"
+#include "ordered_lists.c"
+#endif
 static Frame frame;
 static uint8_t worktiles[23040] __attribute__((aligned(2)));
 static FRV vis;
@@ -125,12 +129,24 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
     }
 #endif
     if(begin_rc!=1)return -3;
-    uint16_t leaf;int rc;
+    int rc;
+#ifdef FR_ORDERED_LISTS
+    FRListIter list;
+    if((unsigned)cell>=SC_LIST_CELLS)return -6;
+    frl_begin(&list,(unsigned)cell,x,y);
+    const uint16_t *ids;unsigned n;
+    while((rc=frl_next(&list,&ids,&n))>0){
+        if(closed())break;
+        for(unsigned k=0;k<n;k++){
+            unsigned j=ids[k];
+#else
+    uint16_t leaf;
     while((rc=frv_next(&it,&leaf))>0){
         if(closed())break;
         unsigned n=sc_leaves[leaf*2],first=sc_leaves[leaf*2+1];
         for(unsigned j=first;j<first+n;j++){
             if(!frv_keep(&it,(uint16_t)j))continue;
+#endif
             s->candidates++;
             const int16_t *w=sc_walls+14u*j;
             if(w[2]==255)continue;
@@ -165,7 +181,11 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
         }
     }
     if(rc<0)return -4;
+#ifdef FR_ORDERED_LISTS
+    s->tests=list.tests;
+#else
     s->tests=it.tests;
+#endif
     for(unsigned i=0;i<160;i++)s->closed+=!frame.top[i]&&!frame.bottom[i];
     s->hash=hash_bytes(frame.pixels,11520);return 0;
 }
@@ -175,6 +195,14 @@ static int pose(unsigned i,DemoStats *s){
     return render_pose(p[0],p[1],p[2],p[3],s);
 }
 #ifndef __m68k__
+unsigned fr_demo_state_size(void){return sizeof(frame);}
+int fr_demo_camera(int x,int y,int z,int a,DemoStats *s,uint8_t *state){
+    int r=render_pose((int16_t)x,(int16_t)y,(int16_t)z,(int16_t)a,s);
+    if(r)return r;
+    const uint8_t *src=(const uint8_t *)(const void *)&frame;
+    for(unsigned i=0;i<sizeof(frame);i++)state[i]=src[i];
+    return 0;
+}
 int fr_demo_frame(unsigned i,DemoStats *s,uint8_t *fb,uint8_t *tiles){
     int r=pose(i,s);if(r)return r;
     if(fr_tiles(frame.pixels,worktiles,sizeof(worktiles))!=23040)return -5;
