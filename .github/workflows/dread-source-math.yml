@@ -1,7 +1,7 @@
 name: Dread source math port - independent scaler derivation
 on:
   pull_request:
-    branches: [research-ferret-r07-perf-claudio-20261126]
+    branches: [research-dread-source-reference-4729ab3]
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/dread-source-math.yml','research/ferret-native/dread_source_math.py','research/ferret-native/export_scene.py']
   workflow_dispatch:
