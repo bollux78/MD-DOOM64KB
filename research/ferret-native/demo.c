@@ -74,7 +74,7 @@ static void sky_setup(unsigned a){
 #else
     sky_base=(a*1024u/360u)%256u;
 #endif
-    fr_sky_rows=sky_rows;fr_sky_column=sky_column;
+    fr_sky_rows=sky_rows;fr_sky_column=sky_column;fr_sky_cols_ok=0;
 }
 /* Cache transformed shared vertices for one pose; no approximation or
  * visibility change. 5 bytes per vertex, bounded by actual scene size. */
@@ -87,13 +87,23 @@ static void transform_vertex(unsigned i,int32_t cx,int32_t cy,int16_t co,int16_t
         vertex_tx[i]=(int16_t)*tx;vertex_tz[i]=(int16_t)*tz;vertex_valid[i]=1;
     }else{*tx=vertex_tx[i];*tz=vertex_tz[i];}
 }
+static inline int32_t s16i(int32_t v){return (int16_t)v;} /* same wrap as core.c s16() */
+static int span_hidden(int x0,int width){
+    const uint16_t *t=frame.top+x0,*b=frame.bottom+x0;
+    for(int i=0;i<width;i++)if(t[i]|b[i])return 0;
+    return 1;
+}
 static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s){
     if(scene_init())return -1;
     unsigned a=(unsigned)((angle%360+360)%360);
     int16_t co=sc_trig[a*2],si=sc_trig[a*2+1];
-    {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;} /* long stores; pixels is word aligned */
+#ifdef __m68k__
+    {extern void fr_clear11520(void *p);fr_clear11520(frame.pixels);} /* MOVEM clear; pixels is word aligned */
+#else
+    {uint32_t *z=(uint32_t *)(void *)frame.pixels;for(unsigned i=0;i<11520/4;i++)z[i]=0;}
+#endif
     for(unsigned i=0;i<160;i++)frame.depth[i]=0;
-    fr_begin(&frame);closed_scan=0;
+    fr_begin(&frame);closed_scan=0;fr_span_hidden=span_hidden;
     for(unsigned i=0;i<SC_VERTEX_COUNT;i++)vertex_valid[i]=0;
         sky_setup(a);
     s->candidates=s->projected=s->errors=s->closed=s->hash=s->tiles_hash=s->tests=0;
@@ -124,14 +134,29 @@ static int render_pose(int16_t x,int16_t y,int16_t z,int16_t angle,DemoStats *s)
             s->candidates++;
             const int16_t *w=sc_walls+14u*j;
             if(w[2]==255)continue;
+            {   /* Back-face reject before transform/projection: the camera is on the back side of the wall line.
+                 * Such walls never project (measured: 0 of 495 projected walls had cross>0 over the 12 R04 poses); cross==0 still goes to fr_project. Map coordinates fit 16 bits. */
+                const uint16_t i0=(uint16_t)w[0],i1=(uint16_t)w[1];
+                const int16_t X0=sc_vertices[2u*i0],Y0=sc_vertices[2u*i0+1];
+                const int32_t cr=fr_muls16((int16_t)(sc_vertices[2u*i1]-X0),(int16_t)(y-Y0))-fr_muls16((int16_t)(sc_vertices[2u*i1+1]-Y0),(int16_t)(x-X0));
+                if(cr>0)continue;
+            }
             int32_t tx,tz,ux,uz;
             transform_vertex((uint16_t)w[0],(int32_t)x*8,(int32_t)y*8,co,si,&tx,&tz);
             transform_vertex((uint16_t)w[1],(int32_t)x*8,(int32_t)y*8,co,si,&ux,&uz);
+            {   /* Same first two tests as fr_project (left and right of the 90-degree frustum), done inline so the
+                 * ~80% of candidates rejected there skip the call and the job setup. The right test is only
+                 * repeated when no left clip happened (fr_project would have moved the first endpoint). */
+                const int32_t l0=s16i(tx+tz),l1=s16i(ux+uz);
+                if(l0<0&&l1<0)continue;
+                if(l0>=0&&s16i(uz-ux)<0&&s16i(tz-tx)<0)continue;
+            }
             WallJob job;job.variant=w[2];job.z=-z;
             for(unsigned k=0;k<4;k++)job.heights[k]=w[6+k];
             job.ceiling=w[10];job.floor=w[11];
             int r=fr_project(tx,tz,ux,uz,w[3],w[4],w[5],&job);
             if(r<0){s->errors++;continue;}if(!r)continue;s->projected++;
+            if(r==2)continue; /* fully occluded span: nothing to draw */
             #if SC_ART_PAIR
             if(fr_wall_indexed_pair(&frame,&job,texture_at((uint16_t)w[12]),texture_at((uint16_t)w[13]),sc_scalers,sc_indices,sc_sky))s->errors++;
 #else
@@ -215,6 +240,35 @@ void *memset(void *p,int c,size_t n){uint8_t *d=p;while(n--)*d++=(uint8_t)c;retu
 void *memcpy(void *p,const void *q,size_t n){uint8_t *d=p;const uint8_t *s=q;while(n--)*d++=*s++;return p;}
 /* Read-only debugger checkpoint, after DMA and mailbox update. */
 __attribute__((noinline,used)) void fr_published(void){__asm__ volatile("" ::: "memory");}
+#ifdef FR_ASYNC
+/* Asynchronous presentation: the converted tiles go to the back VRAM buffer in chunks during VBlank interrupts
+ * while the CPU renders the next frame; when complete, the plane map is switched to that buffer in VBlank.
+ * No display-off DMA, no busy wait for VBlank in the render loop. Buffers: tiles 1..720 at 0x20 and
+ * 721..1440 at 0x5a20; the 18 visible map rows of plane A (0xc000) are rewritten by DMA from maps[]. */
+static uint16_t fr_maps[2][18*64];
+static volatile struct {uint32_t src;uint16_t dst,left;uint8_t flip,buf;uint32_t seq;} fr_job;
+void fr_vblank_c(void){
+    if(fr_job.left){
+        uint16_t n=fr_job.left>6144u?6144u:fr_job.left;
+        if(fr_md_dma(fr_job.src,fr_job.dst,n)){MB[36]++;}
+        fr_job.src+=n;fr_job.dst=(uint16_t)(fr_job.dst+n);fr_job.left=(uint16_t)(fr_job.left-n);
+        if(!fr_job.left)fr_job.flip=1;
+        return;
+    }
+    if(fr_job.flip){
+        if(fr_md_dma((uint32_t)(uintptr_t)fr_maps[fr_job.buf],0xc000u+5u*128u,18u*64u*2u)){MB[36]++;}
+        fr_job.flip=0;MB[2]=5;MB[1]=fr_job.seq;
+    }
+}
+static void fr_async_init(void){
+    for(unsigned b=0;b<2;b++)for(unsigned y=0;y<18;y++)for(unsigned x=0;x<64;x++)
+        fr_maps[b][y*64+x]=(uint16_t)(x<40?1u+720u*b+y*40u+x:0u);
+    reg(1,0x74);                                   /* display on, VBlank interrupt on, DMA on */
+    __asm__ volatile("move.w #0x2500,%%sr":::"memory","cc"); /* accept level 6 */
+}
+#else
+void fr_vblank_c(void){} /* interrupts stay masked without FR_ASYNC; boot.s still references it */
+#endif
 void md_main(void){
     for(unsigned i=0;i<64;i++)MB[i]=0;
     MB[0]=0x46523031u;MB[1]=0;MB[2]=1;
@@ -223,6 +277,9 @@ void md_main(void){
     init_vdp();
     int has_sram=probe_sram(),use_sram=0;
     MB[3]=(uint32_t)has_sram;MB[2]=2;
+#ifdef FR_ASYNC
+    unsigned shown=0;fr_async_init();
+#endif
     unsigned seq=0,idx=0,last=0;
     int16_t x=sc_poses[0],y=sc_poses[1],z=sc_poses[2],a=sc_poses[3];
     for(;;){
@@ -248,6 +305,18 @@ void md_main(void){
            claimed as accelerated until a future direct-conversion backend. */
         uint8_t *dst=worktiles;
         MB[2]=4;
+#ifdef FR_ASYNC
+        while(fr_job.left||fr_job.flip){}          /* previous frame still going out: its tiles are the DMA source */
+        if(fr_tiles(frame.pixels,worktiles,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
+        s.tiles_hash=hash_bytes(worktiles,23040);
+        MB[4]=idx;MB[5]=s.hash;MB[6]=s.tiles_hash;MB[7]=s.candidates;MB[8]=s.projected;
+        MB[9]=s.errors;MB[10]=s.closed;MB[11]=0;MB[12]=0;
+        MB[13]=(uint32_t)(uint16_t)x;MB[14]=(uint32_t)(uint16_t)y;MB[15]=(uint32_t)(uint16_t)a;MB[16]=s.tests;
+        {unsigned back=shown^1u;fr_job.src=(uint32_t)(uintptr_t)worktiles;fr_job.dst=(uint16_t)(back?0x5a20u:0x20u);
+         fr_job.buf=(uint8_t)back;fr_job.seq=++seq;fr_job.flip=0;fr_job.left=23040u;shown=back;}
+        (void)dst;(void)use_sram;
+        continue;
+#endif
         if(fr_tiles(frame.pixels,worktiles,23040)!=23040){MB[2]=0x80000005u;for(;;){}}
         s.tiles_hash=hash_bytes(worktiles,23040);
         if(use_sram){

@@ -4,7 +4,11 @@
 #include <stdint.h>
 /* 16x16 -> 32 products map to a single MULU.W each */
 static inline uint32_t mulu16(uint16_t a,uint16_t b){uint32_t r=a;__asm__("mulu.w %1,%0":"+d"(r):"dmi"(b):"cc");return r;}
+static inline uint32_t muls16(int16_t a,int16_t b){int32_t r=a;__asm__("muls.w %1,%0":"+d"(r):"dmi"(b):"cc");return (uint32_t)r;}
 uint32_t __mulsi3(uint32_t a,uint32_t b){
+    /* Both operands are sign-extended 16-bit values (the common case: s16 coordinates and scales): one MULS.W
+     * gives the exact 32-bit product. Otherwise three MULU.W partial products. */
+    if(!((a+0x8000u)>>16)&&!((b+0x8000u)>>16))return muls16((int16_t)a,(int16_t)b);
     const uint16_t ah=(uint16_t)(a>>16),al=(uint16_t)a,bh=(uint16_t)(b>>16),bl=(uint16_t)b;
     return mulu16(al,bl)+((mulu16(ah,bl)+mulu16(al,bh))<<16);
 }
