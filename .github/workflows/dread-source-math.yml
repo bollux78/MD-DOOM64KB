@@ -1,0 +1,100 @@
+name: Dread source math port - independent scaler derivation
+on:
+  pull_request:
+    branches: [research-dread-source-reference-4729ab3]
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/dread-source-math.yml','research/ferret-native/dread_source_math.py','research/ferret-native/export_scene.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dread-source-math-x360
+  cancel-in-progress: true
+jobs:
+  x360:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'research-dread-source-study-20261126')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Prepare private directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$HOME/.local/share/ferret-research"
+          private="$root/dread-source-math/$GITHUB_RUN_ID"
+          out="$RUNNER_TEMP/dread-source-math-$GITHUB_RUN_ID"
+          mkdir -p "$private/control" "$private/source" "$private/fixture" "$out/public"
+          echo "PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "GCC68=$HOME/mars/m68k-elf/bin/m68k-elf-gcc" >> "$GITHUB_ENV"
+      - name: Derive all scaler rows without reading private oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 research/ferret-native/dread_source_math.py "$OUT/public/source-only.json"
+          python3 research/ferret-native/export_scene.py "$PRIVATE/fixture" --asymmetric --source-scale
+          python3 research/ferret-native/build_demo.py "$PRIVATE/fixture" "$GCC68" --label "DREAD SOURCE MATH FIXTURE"
+      - name: Independent comparison with private calibrated scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          scene="$ROOT/r04/45818948354/dread"
+          fsc="$ROOT/backend/45715146307/scaler.fsc"
+          cp "$scene/scene.h" "$scene/scene.json" "$PRIVATE/control/"
+          cp "$scene/scene.json" "$PRIVATE/source/scene.json"
+          python3 research/ferret-native/dread_source_math.py "$OUT/public/source-vs-oracle.json" --fsc "$fsc" --scene "$PRIVATE/control/scene.h" --output-scene "$PRIVATE/source/scene.h"
+          for v in control source; do
+            python3 research/ferret-native/build_demo.py "$PRIVATE/$v" "$GCC68" --label "DREAD SOURCE MATH E1M1"
+          done
+          cmp "$PRIVATE/control/FERRET-MD-R01.bin" "$PRIVATE/source/FERRET-MD-R01.bin"
+          python3 - "$PRIVATE" "$OUT/public/rom-parity.json" <<'PY'
+          import hashlib,json,pathlib,sys
+          p,o=map(pathlib.Path,sys.argv[1:])
+          a=(p/"control/FERRET-MD-R01.bin").read_bytes()
+          b=(p/"source/FERRET-MD-R01.bin").read_bytes()
+          assert a==b
+          result={"byte_identical_rom":True,"rom_bytes":len(a),"sha256":hashlib.sha256(a).hexdigest()}
+          o.write_text(json.dumps(result,indent=2));print("SOURCE ROM PARITY "+json.dumps(result))
+          PY
+      - name: Build pinned Genesis Plus GX
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ekeeke/Genesis-Plus-GX.git "$OUT/core"
+          git -C "$OUT/core" checkout 2499cd3e3d1d8b7d0130d8b2825adb4cc608b2c0
+          git -C "$OUT/core" apply --ignore-whitespace "$GITHUB_WORKSPACE/experiments/DREAD_MD/d01/gameplay/ferret/emulator-instrumentation.patch"
+          make -C "$OUT/core" -f Makefile.libretro -j3 platform=unix > "$OUT/build-core.log" 2>&1 || { tail -60 "$OUT/build-core.log"; exit 1; }
+      - name: Validate actual VRAM without SRAM and publish only numeric results
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - "$PRIVATE" "$OUT" <<'PY'
+          import json,pathlib,sys
+          sys.path.insert(0,"research/ferret-native")
+          from test_demo import host,emulate
+          p,o=map(pathlib.Path,sys.argv[1:])
+          for label in ("fixture","source"):
+              d=p/label
+              r=emulate(o/"core/genesis_plus_gx_libretro.so",d,1,host(d),12000)
+              for row in r.get("checks",[]):
+                  row.pop("first_actual",None);row.pop("first_expected",None)
+              (o/"public"/(label+"-verify.json")).write_text(json.dumps(r,indent=2))
+              print("DREAD SOURCE VRAM "+label+" "+json.dumps({"pass":r["pass"],"matched":r["matched"],"expected":r["expected_poses"],"dma_publications":r["dma_publications"],"errors":sum(x["errors"] for x in r["checks"]),"video_frames":r["video_frames"]}))
+              assert r["pass"]
+          PY
+      - name: Numeric reports only
+        if: always() && env.OUT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: dread-source-math-numeric
+          path: ${{ runner.temp }}/dread-source-math-${{ github.run_id }}/public/*.json
+          if-no-files-found: warn
